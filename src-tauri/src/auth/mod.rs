@@ -21,6 +21,7 @@
 //! the only persisted secret is the refresh credential in OS-backed storage.
 
 pub mod accounts;
+pub mod avatar;
 pub mod callback;
 pub mod credentials;
 pub mod flow;

@@ -19,13 +19,13 @@ use super::credentials::SecretString;
 /// it rather than through a launch-time failure.
 const EXPIRY_SKEW: Duration = Duration::from_secs(300);
 
-/// The normalized Minecraft profile Aurora needs — identity only; skins and
-/// capes are ignored deliberately.
+/// Identity plus optional official cosmetic metadata. Cosmetics never authorize play.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MinecraftProfile {
     /// The profile UUID in canonical undashed lowercase-hex form.
     uuid: String,
     name: String,
+    skin: Option<super::avatar::SkinTexture>,
 }
 
 impl MinecraftProfile {
@@ -33,6 +33,7 @@ impl MinecraftProfile {
         Self {
             uuid: uuid.into(),
             name: name.into(),
+            skin: None,
         }
     }
 
@@ -42,6 +43,15 @@ impl MinecraftProfile {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn with_skin(mut self, skin: Option<super::avatar::SkinTexture>) -> Self {
+        self.skin = skin;
+        self
+    }
+
+    pub fn skin(&self) -> Option<&super::avatar::SkinTexture> {
+        self.skin.as_ref()
     }
 }
 

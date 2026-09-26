@@ -833,17 +833,21 @@ impl fmt::Display for ProfileError {
 impl std::error::Error for ProfileError {}
 
 /// The normalized Minecraft profile document: undashed lowercase UUID and a
-/// validated name.
+/// validated name, plus optional validated cosmetic skin metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MinecraftProfileDocument {
     pub id: String,
     pub name: String,
+    pub skin: Option<super::avatar::SkinTexture>,
 }
 
 #[derive(Deserialize)]
 struct MinecraftProfileResponse {
     id: String,
     name: String,
+    // Cosmetic payloads never invalidate an otherwise valid account identity.
+    #[serde(default)]
+    skins: serde_json::Value,
 }
 
 /// Fetches the authenticated profile.
@@ -879,6 +883,7 @@ pub async fn fetch_profile(
     Ok(Some(MinecraftProfileDocument {
         id,
         name: name.to_owned(),
+        skin: super::avatar::SkinTexture::from_profile_skins(&wire.skins),
     }))
 }
 
@@ -1362,6 +1367,35 @@ mod tests {
         ]));
         assert!(!owns_minecraft(&[]));
         assert!(owns_minecraft(&["game_minecraft".to_owned()]));
+    }
+
+    #[tokio::test]
+    async fn profile_skin_metadata_is_optional_and_never_invalidates_identity() {
+        let server = TestServer::spawn(Arc::new(|request| {
+            let skins = if request.path.contains("malformed") {
+                serde_json::json!([{"state":"ACTIVE","url":"file:///untrusted","variant":"SLIM"}])
+            } else {
+                serde_json::json!([{"state":"ACTIVE","url":format!("http://textures.minecraft.net/texture/{}", "a".repeat(64)),"variant":"CLASSIC"}])
+            };
+            TestResponse::ok(&serde_json::to_vec(&serde_json::json!({"id":"986dec87b7ec47ff89ff033fdb95c4b5","name":"PlayerName","skins":skins,"capes":[]})).unwrap())
+        }));
+        let mut endpoints = AuthEndpoints::loopback_for_testing(server.base_url());
+        let valid = fetch_profile(&endpoints, &SecretString::new("FIXTURE-MC-TOKEN"))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(valid.skin.unwrap().model, "classic");
+        endpoints.minecraft_profile = Url::parse(&format!(
+            "{}/minecraft/profile/malformed",
+            server.base_url()
+        ))
+        .unwrap();
+        let fallback = fetch_profile(&endpoints, &SecretString::new("FIXTURE-MC-TOKEN"))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(fallback.name, "PlayerName");
+        assert!(fallback.skin.is_none());
     }
 
     #[tokio::test]

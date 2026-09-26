@@ -285,6 +285,10 @@ pub async fn ensure_session(
 ) -> Result<Arc<MinecraftSession>, AuthError> {
     accounts::AccountId::validate(account_id)?;
 
+    // Play, account checks and cosmetic profile requests share restoration.
+    // Serialize refresh redemption, then recheck the cache inside the gate.
+    let _restoration = session_restoration_guard().await;
+
     if let Some(cached) = SessionCache::usable(account_id) {
         return Ok(cached);
     }
@@ -362,6 +366,16 @@ pub async fn ensure_session(
 // ---------------------------------------------------------------------------
 // Sign-out
 // ---------------------------------------------------------------------------
+
+/// The command boundary also takes this gate before local account removal,
+/// so an in-flight cosmetic restoration cannot recreate a removed credential.
+pub(crate) async fn session_restoration_guard() -> tokio::sync::MutexGuard<'static, ()> {
+    static RESTORATION: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+    RESTORATION
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .lock()
+        .await
+}
 
 /// Removes one account from Aurora: deletes the persisted credential,
 /// removes the non-secret account record, clears the cached session, and
@@ -451,7 +465,7 @@ fn assemble_session(
 ) -> MinecraftSession {
     MinecraftSession::new(
         profile.id.clone(),
-        MinecraftProfile::new(profile.id, profile.name),
+        MinecraftProfile::new(profile.id, profile.name).with_skin(profile.skin),
         minecraft.access_token,
         Duration::from_secs(minecraft.expires_in_seconds),
     )
@@ -1363,6 +1377,52 @@ mod tests {
                 .iter()
                 .any(|record| record.minecraft_name() == "RenamedName")
         );
+    }
+
+    #[tokio::test]
+    async fn concurrent_profile_and_play_restoration_redeem_one_refresh_credential() {
+        let _flow_tests = serialized_flow_tests().await;
+        let setup = TestSetup::new("aurora-auth-profile-play-restore");
+        setup.world.lock().unwrap().mc_expires_in = 1;
+        setup.sign_in(BrowserScript::Complete).await.unwrap();
+        setup.world.lock().unwrap().mc_expires_in = 86400;
+        let browser = scripted_browser(BrowserScript::Nothing);
+        let context = setup.context(&browser);
+        let mut profile_progress = |_| {};
+        let mut play_progress = |_| {};
+        let (profile, play) = tokio::join!(
+            ensure_session(&context, ACCOUNT_A, &mut profile_progress),
+            ensure_session(&context, ACCOUNT_A, &mut play_progress),
+        );
+        assert!(Arc::ptr_eq(&profile.unwrap(), &play.unwrap()));
+        assert_eq!(setup.world.lock().unwrap().refresh_count, 1);
+    }
+
+    #[tokio::test]
+    async fn cosmetic_restoration_finishes_before_local_account_removal() {
+        let _flow_tests = serialized_flow_tests().await;
+        let setup = TestSetup::new("aurora-auth-profile-remove");
+        setup.world.lock().unwrap().mc_expires_in = 1;
+        setup.sign_in(BrowserScript::Complete).await.unwrap();
+        setup.world.lock().unwrap().mc_expires_in = 86400;
+        let browser = scripted_browser(BrowserScript::Nothing);
+        let context = setup.context(&browser);
+        let mut progress = |_| {};
+        let (restored, removed) =
+            tokio::join!(ensure_session(&context, ACCOUNT_A, &mut progress), async {
+                let _guard = session_restoration_guard().await;
+                sign_out(&context, ACCOUNT_A)
+            },);
+        assert!(restored.is_ok());
+        assert!(removed.is_ok());
+        assert!(setup.credentials.load(ACCOUNT_A).unwrap().is_none());
+        assert!(
+            accounts::load(&setup.accounts_path)
+                .unwrap()
+                .find(ACCOUNT_A)
+                .is_none()
+        );
+        assert!(SessionCache::usable(ACCOUNT_A).is_none());
     }
 
     #[tokio::test]

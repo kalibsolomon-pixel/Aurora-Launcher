@@ -901,6 +901,8 @@ export interface InstanceContentContext {
   loaderVersion: string | null;
   auroraVersion: string | null;
   environment: "client";
+  modrinthAvailable: boolean;
+  modsLoadable: boolean;
 }
 
 export interface ModrinthSearchPage {
@@ -1202,6 +1204,13 @@ export interface AccountSummary {
   accountId: string;
   minecraftName: string;
   status: AccountStatus;
+}
+
+/** Native-composited cosmetic head. No URL, token or authentication authority. */
+export interface HeadAvatar { rgba: number[]; model: "classic" | "slim" }
+
+export async function getAccountAvatar(accountId: string, refresh = false): Promise<HeadAvatar | null> {
+  return await invoke<HeadAvatar | null>("get_account_avatar", { request: { accountId, refresh } });
 }
 
 export interface AccountsState {

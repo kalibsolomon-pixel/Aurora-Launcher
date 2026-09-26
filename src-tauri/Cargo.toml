@@ -63,6 +63,9 @@ tauri-plugin-opener = "2"
 # files. Focused maintained implementation (zip-rs); `deflate` covers the
 # compression real native jars use, everything else stays off.
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
+# Bounded decoding of official Minecraft skin PNGs into a cosmetic head avatar.
+# Reuses the version already locked for the icon tests.
+png = "0.17"
 
 # Windows credential storage (Phase 8): the official Microsoft raw bindings,
 # restricted to the generic Windows Credential Manager API. Linux and macOS
@@ -86,12 +89,10 @@ windows = { version = "0.61", default-features = false, features = [
     "Win32_UI_Shell",
 ] }
 
-# Deterministic asset-invariant tests (external icon phase): the PNG decoder
-# already resolved in the dependency tree through Tauri, used in tests only
-# to verify the generated external identity pixels directly.
+# Deterministic async native tests. Icon invariants also use the PNG decoder
+# now shared with production avatar decoding above.
 [dev-dependencies]
 tokio = { version = "1", default-features = false, features = ["macros", "process", "rt", "time"] }
-png = "0.17"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

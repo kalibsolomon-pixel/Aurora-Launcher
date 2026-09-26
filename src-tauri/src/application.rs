@@ -2136,6 +2136,8 @@ pub struct InstanceContentContext {
     loader_version: Option<String>,
     aurora_version: Option<String>,
     environment: String,
+    modrinth_available: bool,
+    mods_loadable: bool,
 }
 
 #[tauri::command]
@@ -2163,6 +2165,11 @@ pub fn get_instance_content_context(
             .as_ref()
             .map(|pin| pin.version.clone()),
         environment: "client".to_owned(),
+        modrinth_available: record.installed().platform.provider_loader().is_ok(),
+        mods_loadable: matches!(
+            record.installed().platform,
+            crate::instances::platform::PlatformPin::Fabric { .. }
+        ),
     })
 }
 
@@ -3431,7 +3438,7 @@ pub fn select_account(app: AppHandle, request: SelectAccountRequest) -> Result<(
 /// the non-secret record, and the cached session. Local removal only — the
 /// Microsoft account session itself is not revoked.
 #[tauri::command]
-pub fn remove_account(app: AppHandle, request: AccountIdRequest) -> Result<(), CommandError> {
+pub async fn remove_account(app: AppHandle, request: AccountIdRequest) -> Result<(), CommandError> {
     let managed = managed_paths(&app)?;
     let account_id = request.account_id.trim().to_owned();
     crate::auth::accounts::AccountId::validate(&account_id)?;
@@ -3447,6 +3454,7 @@ pub fn remove_account(app: AppHandle, request: AccountIdRequest) -> Result<(), C
         browser: &|_url: &str| Ok(()),
     };
 
+    let _restoration = crate::auth::flow::session_restoration_guard().await;
     crate::auth::flow::sign_out(&context, &account_id)?;
 
     Ok(())
@@ -3492,6 +3500,57 @@ pub async fn refresh_account_session(
         minecraft_name: session.profile().name().to_owned(),
         status: "ready".to_owned(),
     })
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AccountAvatarRequest {
+    account_id: String,
+    refresh: bool,
+}
+
+/// Separate cosmetic command: session secrets and remote locators stay native.
+/// A failed image never participates in Play readiness or launch assembly.
+#[tauri::command]
+pub async fn get_account_avatar(
+    app: AppHandle,
+    request: AccountAvatarRequest,
+) -> Result<Option<crate::auth::avatar::HeadAvatar>, CommandError> {
+    refresh_account_session(
+        app,
+        AccountIdRequest {
+            account_id: request.account_id.clone(),
+        },
+    )
+    .await?;
+    let Some(session) = crate::auth::session::SessionCache::usable(&request.account_id) else {
+        return Ok(None);
+    };
+    let refreshed_profile = if request.refresh {
+        // Refresh cosmetic metadata with the existing token, independently of
+        // credential/session lifetime. A mismatching identity is never adopted.
+        crate::auth::metadata::fetch_profile(
+            &crate::auth::AuthEndpoints::official(),
+            session.minecraft_access_token(),
+        )
+        .await
+        .ok()
+        .flatten()
+        .filter(|profile| profile.id == session.account_id())
+    } else {
+        None
+    };
+    let skin = if request.refresh {
+        refreshed_profile
+            .as_ref()
+            .and_then(|profile| profile.skin.as_ref())
+    } else {
+        session.profile().skin()
+    };
+    let Some(skin) = skin else {
+        return Ok(None);
+    };
+    Ok(crate::auth::avatar::head(skin, request.refresh).await)
 }
 
 // ---------------------------------------------------------------------------

@@ -76,6 +76,7 @@ pub fn run() {
             application::get_instance_runtime_status,
             application::ensure_instance_runtime,
             application::get_accounts,
+            application::get_account_avatar,
             application::begin_microsoft_login,
             application::cancel_microsoft_login,
             application::select_account,
