@@ -30,6 +30,10 @@
     try {
       const capability = await getInstanceContentContext(targetId);
       if (instance.id === targetId) context = capability;
+      if (!capability.modrinthAvailable) {
+        if (instance.id === targetId) { lifecycleEntries = []; lifecycleError = ""; }
+        return;
+      }
       const entries = await getProviderLifecycle(targetId);
       if (instance.id === targetId) { lifecycleEntries = entries; lifecycleError = ""; }
     } catch (reason) {
