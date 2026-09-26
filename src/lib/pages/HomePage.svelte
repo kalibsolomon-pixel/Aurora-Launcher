@@ -4,7 +4,7 @@
   import { navigation } from "$lib/launcher/navigation.svelte";
   import InstanceSwitcher from "$lib/launcher/InstanceSwitcher.svelte";
   import { homeLaunchState } from "$lib/launcher/home";
-  import AccountIdentity from "$lib/launcher/AccountIdentity.svelte";
+  import PlayerPreview from "$lib/launcher/PlayerPreview.svelte";
 
   const instance = $derived(launcher.selectedInstance);
   const readiness = $derived(
@@ -77,14 +77,14 @@
       </section>
     {/if}
   {:else}
-    <InstanceSwitcher />
     {#if launcher.instanceError}
       <p class="inline-message inline-message-error" role="alert">{launcher.instanceError.message}<code>{launcher.instanceError.code}</code></p>
     {/if}
     <section class="group" aria-label="Selected instance" aria-live="polite">
-      <div class="group-heading">
+      <div class="launch-card">
+        <div class="launch-main">
         <div class="instance-heading">
-          <h3 class="instance-name">{instance.displayName}</h3>
+          <InstanceSwitcher compact />
           <p class="instance-versions">
             {installedConfigurationLabel(instance)}
           </p>
@@ -107,11 +107,8 @@
             Manage Instance
           </button>
         </div>
-      </div>
-
-      <div class="group-row">
-        <AccountIdentity account={launcher.selectedAccount} />
-        <button type="button" class="btn btn-quiet" onclick={() => navigation.goTo("accounts")}>{launcher.selectedAccount ? "Manage accounts" : "Sign in"}</button>
+        </div>
+        <PlayerPreview />
       </div>
       {#if launch.blockers.length || launcher.playError || launch.failure}
         <div class="group-row">
@@ -134,18 +131,13 @@
 </div>
 
 <style>
+  .launch-card { display: grid; grid-template-columns: minmax(0, 1fr) 200px; min-height: 320px; }
+  .launch-main { padding: var(--space-5); display: flex; flex-direction: column; justify-content: center; gap: var(--space-5); min-width: 0; }
+  @media (max-width: 900px) { .launch-card { grid-template-columns: minmax(0, 1fr); min-height: 260px; } }
   .instance-heading {
     min-width: 0;
-    flex: 1 1 240px;
   }
 
-  .instance-name {
-    margin: 0;
-    font-size: 1.05rem;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    overflow-wrap: anywhere;
-  }
 
   .instance-versions {
     margin: var(--space-1) 0 0;

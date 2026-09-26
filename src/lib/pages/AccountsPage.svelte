@@ -23,16 +23,16 @@
 </script>
 
 <!--
-  Account management surface: one obvious primary task when signed out,
+  Shell dialog contents (the historical filename is retained to preserve the tracked file): one obvious primary task when signed out,
   restrained selected/unselected rows when signed in. The UI speaks in
   actionable language — internal error codes never appear here (see
   authMessages.ts), and tokens never leave Rust in the first place.
 -->
-<div class="page">
+<div class="account-manager">
   <header class="page-header">
     <div>
-      <h2 class="page-title">Accounts</h2>
-      <p class="page-subtitle">Your Minecraft identity. The active account is used for Play.</p>
+      <h2 class="page-title" id="account-dialog-title">Accounts</h2>
+      <p class="page-subtitle">The active account is used across your instances.</p>
     </div>
     {#if signedIn && !launcher.signInBusy}
       <div class="page-header-actions">
@@ -131,7 +131,7 @@
   {:else}
     <section class="group" aria-label="Active Minecraft account">
       <div class="group-heading">
-        <div><h3 class="group-title">Active account</h3><p class="group-subtitle">Used across your instances.</p></div>
+        <div><h3 class="group-title">Active account</h3></div>
         <span class="status-badge {launcher.selectedAccount?.status === 'signedIn' ? 'status-success' : 'status-warning'}">{launcher.selectedAccount?.status === 'signedIn' ? 'Signed in' : launcher.selectedAccount ? 'Sign-in required' : 'No active account'}</span>
       </div>
       <div class="group-row">
@@ -146,7 +146,7 @@
       <div class="group-heading">
         <div>
           <h3 class="group-title">Your accounts</h3>
-          <p class="group-subtitle">Switch accounts here. Instances keep their own configuration.</p>
+
         </div>
       </div>
 
@@ -198,8 +198,8 @@
           {#if removing === account.accountId}
             <div class="remove-confirmation" role="group" aria-label="Confirm account removal">
               <p>Remove {account.minecraftName} from this launcher? You will need to sign in again to use it here.</p>
-              <button type="button" class="btn" onclick={cancelRemoval} onkeydown={(event) => { if (event.key === "Escape") void cancelRemoval(); }}>Cancel</button>
-              <button bind:this={confirmButton} type="button" class="btn btn-danger" disabled={launcher.accountBusy !== null} onkeydown={(event) => { if (event.key === "Escape") void cancelRemoval(); }} onclick={async () => { await launcher.runRemoveAccount(account.accountId); removing = null; }}>Remove account</button>
+              <button type="button" class="btn" onclick={cancelRemoval} onkeydown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); void cancelRemoval(); } }}>Cancel</button>
+              <button bind:this={confirmButton} type="button" class="btn btn-danger" disabled={launcher.accountBusy !== null} onkeydown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); void cancelRemoval(); } }} onclick={async () => { await launcher.runRemoveAccount(account.accountId); removing = null; }}>Remove account</button>
             </div>
           {/if}
         </div>
@@ -218,13 +218,19 @@
       {/if}
 
       <p class="group-footer">
-        Sign-in opens your system browser. Removing an account only signs it out of this launcher; it does not delete your Microsoft account or Minecraft data.
+        Removal signs the account out of this launcher. Your Microsoft account and Minecraft data stay intact.
       </p>
     </section>
   {/if}
 </div>
 
 <style>
+  .account-manager { display: grid; gap: var(--space-4); }
+  .account-manager .page-header { margin-bottom: 0; }
+  .account-manager .group { margin: 0; }
+  .account-manager .group-heading { padding: var(--space-3); }
+  .account-manager .group-row { padding: var(--space-3); }
+  .account-manager .group-footer { padding: var(--space-3); }
   .remove-confirmation { flex-basis: 100%; font-size: var(--text-secondary); }
   .remove-confirmation .btn { margin-right: var(--space-2); }
 </style>

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { after, before, it } from "node:test";
 import { createServer } from "vite";
 
@@ -11,6 +12,8 @@ let render: any;
 let Home: any;
 let Accounts: any;
 let Identity: any;
+let Dialog: any;
+let accountManager: any;
 const id = "a".repeat(32);
 const secondId = "b".repeat(32);
 function instance(platform: any = { kind: "vanilla" }, aurora: any = null) {
@@ -37,6 +40,8 @@ before(async () => {
   ({ render } = await server.ssrLoadModule("svelte/server"));
   Home = (await server.ssrLoadModule("/src/lib/pages/HomePage.svelte")).default;
   Accounts = (await server.ssrLoadModule("/src/lib/pages/AccountsPage.svelte")).default;
+  ({ accountManager } = await server.ssrLoadModule("/src/lib/launcher/accountManager.svelte.ts"));
+  Dialog = (await server.ssrLoadModule("/src/lib/shell/AccountDialog.svelte")).default;
   Identity = (await server.ssrLoadModule("/src/lib/launcher/AccountIdentity.svelte")).default;
 });
 after(async () => { await server?.close(); });
@@ -117,21 +122,21 @@ it("instance selection invokes only native selection and read-only status, prese
   assert(calls.every(command => ["select_instance", "get_launcher_state", "get_instance_runtime_status", "get_play_readiness"].includes(command)));
   assert.match(html(Home), /Second/);
 });
-it("Accounts signed out leaves instance management available", () => {
+it("account dialog signed out leaves instance management available", () => {
   reset(); launcher.accountsState = { accounts: [], selectedAccountId: null };
   assert.match(html(Accounts), /No account signed in/); assert.match(html(Accounts), /still browse and manage your instances/);
 });
 it("signed-out Home explains native authentication requirements and retains Manage Instance", () => {
   reset(); launcher.accountsState = { accounts: [], selectedAccountId: null };
   launcher.playReadiness = { ...readiness(false), accountId: null, accountName: null };
-  const view = html(Home); assert.match(view, /Not signed in/); assert.match(view, /Sign in to play Minecraft/);
+  const view = html(Home); assert.doesNotMatch(view, /Not signed in|Manage accounts|Minecraft account/); assert.match(view, /Sign in to play Minecraft/);
   assert.match(view, /disabled[^>]*>Play/); assert.match(view, /Manage Instance/);
 });
-it("Accounts shows active Minecraft identity and management actions", () => {
+it("account dialog shows active Minecraft identity and management actions", () => {
   reset(); const view = html(Accounts); assert.match(view, /Active account/); assert.match(view, /PlayerName/);
   assert.match(view, />Active</); assert.match(view, /Add account/); assert.match(view, /Remove/);
 });
-it("Accounts with multiple identities distinguishes the active one and switch action", () => {
+it("account dialog with multiple identities distinguishes the active one and switch action", () => {
   reset(); launcher.accountsState.accounts.push({ ...account, accountId: secondId, minecraftName: "SecondPlayer" });
   assert.match(html(Accounts), /SecondPlayer/); assert.match(html(Accounts), /Use account/);
 });
@@ -153,7 +158,7 @@ it("account switching uses Rust selection without assigning accounts to instance
 it("cosmetic avatar failure renders a fallback without disabling native Ready", async () => {
   reset(); (globalThis as any).window = { __TAURI_INTERNALS__: { invoke: async () => { throw new Error("offline"); } } };
   await launcher.refreshAvatar(account.accountId, true);
-  assert.match(html(Home), /Default account avatar/); assert.match(html(Home), /class="btn btn-primary[^>]*>Play/);
+  assert.match(html(Home), /Default Minecraft player/); assert.match(html(Home), /class="btn btn-primary[^>]*>Play/);
   assert.equal(launcher.playReadiness.ready, true); assert.equal(launcher.playError, null);
 });
 it("invalid avatar pixels use a fallback and valid pixels produce the head canvas", () => {
@@ -204,4 +209,48 @@ it("a large instance list and long names retain accessible options and selected 
   reset(); launcher.launcherState.instances = Array.from({length: 80}, (_, index) => ({ ...instance(), id: index === 0 ? id : String(index), displayName: `Long instance name ${index} `.repeat(5) }));
   const view = html(Home); assert.equal((view.match(/<option /g) ?? []).length, 80);
   assert.match(view, /Long instance name 79/); assert.match(view, /— Selected/);
+});
+
+it("shell account modal opens and closes without changing Home, Settings or workspace navigation", () => {
+  reset();
+  for (const open of [() => navigation.goTo("home"), () => navigation.goTo("settings"), () => navigation.openInstance(id)]) {
+    open(); const before=JSON.stringify(navigation.state);
+    accountManager.show(); assert.equal(accountManager.open,true);
+    assert.equal(JSON.stringify(navigation.state),before);
+    assert.match(html(Dialog), /<dialog[^>]*aria-labelledby="account-dialog-title"/);
+    assert.match(html(Dialog), /Close accounts/); assert.match(html(Dialog), /Add account/);
+    accountManager.close(); assert.equal(accountManager.open,false); assert.equal(JSON.stringify(navigation.state),before);
+  }
+});
+it("signed-out account dialog contains Microsoft sign-in without changing the route", () => {
+  reset(); launcher.accountsState={accounts:[],selectedAccountId:null}; accountManager.show();
+  assert.match(html(Dialog), /Sign in with Microsoft/); assert.equal(navigation.state.page,"home"); accountManager.close();
+});
+it("Home integrates its picker within the selected-instance card and has no account management row", () => {
+  reset(); const view=html(Home);
+  assert.match(view, /aria-label="Selected instance"[\s\S]*Select Play instance/);
+  assert.doesNotMatch(view, /Play instance<|Manage accounts|Minecraft account|PlayerName/);
+  assert.match(view, /Default Minecraft player/);
+  launcher.accountAvatars[account.accountId]={rgba:Array(256).fill(255),model:"classic",skinHeight:64,skinRgba:Array(16384).fill(255)};
+  assert.match(html(Home), /Current Minecraft player skin/);
+});
+
+it("Add account and cancellation use the existing native commands and preserve identity", async () => {
+  reset(); const calls:string[]=[]; const state=structuredClone(launcher.accountsState);
+  (globalThis as any).window={__TAURI_INTERNALS__:{invoke:async (command:string) => {
+    calls.push(command); if(command === "get_accounts") return state;
+    if(command === "get_play_readiness") return readiness();
+    if(command === "get_account_avatar") return null;
+  }}};
+  await launcher.runSignIn(); await launcher.runCancelSignIn();
+  assert(calls.includes("begin_microsoft_login")); assert(calls.includes("cancel_microsoft_login"));
+  assert.equal(launcher.selectedAccount.accountId,account.accountId);
+  assert(!calls.some(command => /remove|install|play_instance|select_instance/.test(command)));
+});
+
+it("the bottom-left chip opens the shell modal rather than inventing account navigation", () => {
+  const shell=readFileSync(new URL("../shell/AppShell.svelte",import.meta.url),"utf8");
+  assert.match(shell,/class="account-chip"[\s\S]*onclick=\{\(\) => accountManager.show\(\)\}/);
+  assert.match(shell,/aria-haspopup="dialog"/); assert.match(shell,/<AccountDialog \/>/);
+  assert.doesNotMatch(shell,/navigation.goTo\("accounts"\)/);
 });

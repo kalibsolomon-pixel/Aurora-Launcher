@@ -152,7 +152,7 @@ impl From<String> for OAuthState {
 /// Builds the authorization URL opened in the system browser.
 ///
 /// Parameters follow the Microsoft identity platform authorization-code +
-/// PKCE request exactly: no secret, no prompt manipulation, `query` response
+/// PKCE request exactly: no secret, explicit account selection, `query` response
 /// mode for the loopback redirect receiver. Only the fixed scope set Aurora
 /// needs is requested.
 pub fn build_authorization_url(
@@ -172,7 +172,8 @@ pub fn build_authorization_url(
         .append_pair("state", state.as_str())
         .append_pair("code_challenge", pkce.challenge())
         .append_pair("code_challenge_method", "S256")
-        .append_pair("response_mode", "query");
+        .append_pair("response_mode", "query")
+        .append_pair("prompt", "select_account");
     url
 }
 
@@ -314,7 +315,7 @@ mod tests {
 
         assert_eq!(
             url.as_str(),
-            "https://login.example.invalid/authorize?response_type=code&client_id=aurora-test-client-id&redirect_uri=http%3A%2F%2Flocalhost%3A49152%2F&scope=XboxLive.signin+offline_access&state=state-value&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256&response_mode=query"
+            "https://login.example.invalid/authorize?response_type=code&client_id=aurora-test-client-id&redirect_uri=http%3A%2F%2Flocalhost%3A49152%2F&scope=XboxLive.signin+offline_access&state=state-value&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256&response_mode=query&prompt=select_account"
         );
 
         // No secret parameter ever appears.

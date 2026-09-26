@@ -1000,6 +1000,7 @@ mod tests {
 
         let form = requests.lock().unwrap()[0].body.clone();
         assert!(form.contains("grant_type=refresh_token"));
+        assert!(!form.contains("prompt"));
         assert!(form.contains("refresh_token=FIXTURE-MSA-REFRESH-1"));
         assert!(!form.contains("client_secret"));
     }

@@ -1,5 +1,5 @@
 //! Cosmetic official profile textures. No credential, filesystem or launch authority.
-//! Only validated native profile URLs reach transport; the UI receives 8×8 RGBA pixels.
+//! Only validated native profile URLs reach transport; the UI receives bounded decoded pixels.
 use std::collections::VecDeque;
 use std::io::Cursor;
 use std::sync::{Mutex, OnceLock};
@@ -64,6 +64,17 @@ fn validated_url(value: &str) -> Option<Url> {
 pub struct HeadAvatar {
     pub rgba: Vec<u8>,
     pub model: String,
+    pub skin_rgba: Vec<u8>,
+    pub skin_height: u32,
+}
+
+impl HeadAvatar {
+    fn valid(&self) -> bool {
+        self.rgba.len() == 256
+            && matches!(self.skin_height, 32 | 64)
+            && self.skin_rgba.len() == 64 * self.skin_height as usize * 4
+            && matches!(self.model.as_str(), "classic" | "slim")
+    }
 }
 
 struct CacheEntry {
@@ -77,16 +88,18 @@ struct AvatarCache {
 }
 impl AvatarCache {
     fn get(&mut self, skin: &SkinTexture) -> Option<HeadAvatar> {
-        self.entries.retain(|entry| {
-            entry.checked_at.elapsed() < CACHE_TTL && entry.avatar.rgba.len() == 256
-        });
+        self.entries
+            .retain(|entry| entry.checked_at.elapsed() < CACHE_TTL && entry.avatar.valid());
         self.entries
             .iter()
-            .find(|entry| entry.url == skin.url && entry.avatar.model == skin.model)
+            .find(|entry| {
+                entry.url == skin.url
+                    && (entry.avatar.model == skin.model || entry.avatar.skin_height == 32)
+            })
             .map(|entry| entry.avatar.clone())
     }
     fn put(&mut self, skin: &SkinTexture, avatar: HeadAvatar) {
-        if avatar.rgba.len() != 256 {
+        if !avatar.valid() {
             return;
         }
         self.entries.retain(|entry| entry.url != skin.url);
@@ -154,7 +167,10 @@ async fn fetch(client: &reqwest::Client, url: &Url, model: &str) -> Option<HeadA
 }
 
 fn decode(bytes: &[u8], model: &str) -> Option<HeadAvatar> {
-    if bytes.len() > MAX_BYTES || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+    if !matches!(model, "classic" | "slim")
+        || bytes.len() > MAX_BYTES
+        || !bytes.starts_with(b"\x89PNG\r\n\x1a\n")
+    {
         return None;
     }
     let mut decoder = png::Decoder::new(Cursor::new(bytes));
@@ -174,6 +190,22 @@ fn decode(bytes: &[u8], model: &str) -> Option<HeadAvatar> {
         png::ColorType::Rgba => 4,
         _ => return None,
     };
+    let mut skin_rgba = Vec::with_capacity(64 * info.height as usize * 4);
+    for pixel in pixels[..info.buffer_size()].chunks_exact(channels) {
+        skin_rgba.extend_from_slice(&pixel[..3]);
+        skin_rgba.push(if channels == 4 { pixel[3] } else { 255 });
+    }
+    // Legacy opaque hat backgrounds mean no hat, as in the game renderer.
+    if info.height == 32
+        && (0..32).all(|y| (32..64).all(|x| skin_rgba[(y * 64 + x) * 4 + 3] == 255))
+    {
+        // Only hat UVs are cleared; the lower half contains the base right arm.
+        for y in 0..16 {
+            for x in 32..64 {
+                skin_rgba[(y * 64 + x) * 4 + 3] = 0;
+            }
+        }
+    }
     let mut rgba = Vec::with_capacity(256);
     for y in 8..16 {
         for x in 8..16 {
@@ -184,11 +216,7 @@ fn decode(bytes: &[u8], model: &str) -> Option<HeadAvatar> {
             } else {
                 255
             };
-            let hat_alpha = if channels == 4 {
-                pixels[hat + 3] as u32
-            } else {
-                255
-            };
+            let hat_alpha = skin_rgba[(y * 64 + x + 32) * 4 + 3] as u32;
             let alpha = hat_alpha * 255 + base_alpha * (255 - hat_alpha);
             for channel in 0..3 {
                 let value = if alpha == 0 {
@@ -206,7 +234,13 @@ fn decode(bytes: &[u8], model: &str) -> Option<HeadAvatar> {
     }
     Some(HeadAvatar {
         rgba,
-        model: model.into(),
+        model: if info.height == 32 {
+            "classic".into()
+        } else {
+            model.into()
+        },
+        skin_rgba,
+        skin_height: info.height,
     })
 }
 
@@ -271,8 +305,42 @@ mod tests {
         for height in [32, 64] {
             let head = decode(&fixture(height), "classic").unwrap();
             assert_eq!(head.rgba.len(), 256);
+            assert_eq!(head.skin_rgba.len(), 64 * height as usize * 4);
+            assert_eq!(head.skin_height, height);
+            assert_eq!(
+                &head.skin_rgba[(8 * 64 + 8) * 4..(8 * 64 + 8) * 4 + 4],
+                &[100, 0, 0, 255]
+            );
             assert_eq!(&head.rgba[..4], &[50, 50, 0, 255]);
         }
+    }
+    #[test]
+    fn legacy_is_classic_and_corrupt_body_is_not_cached() {
+        assert_eq!(decode(&fixture(32), "slim").unwrap().model, "classic");
+        let mut avatar = decode(&fixture(64), "slim").unwrap();
+        avatar.skin_rgba.pop();
+        let mut cache = AvatarCache::default();
+        cache.put(&skin(), avatar);
+        assert!(cache.get(&skin()).is_none());
+    }
+    #[test]
+    fn opaque_legacy_hat_background_does_not_erase_the_base_arm() {
+        let mut bytes = Vec::new();
+        let pixels = vec![100u8; 64 * 32 * 3];
+        {
+            let mut encoder = png::Encoder::new(&mut bytes, 64, 32);
+            encoder.set_color(png::ColorType::Rgb);
+            encoder.set_depth(png::BitDepth::Eight);
+            encoder
+                .write_header()
+                .unwrap()
+                .write_image_data(&pixels)
+                .unwrap();
+        }
+        let avatar = decode(&bytes, "classic").unwrap();
+        assert_eq!(avatar.skin_rgba[(8 * 64 + 40) * 4 + 3], 0);
+        assert_eq!(avatar.skin_rgba[(20 * 64 + 44) * 4 + 3], 255);
+        assert_eq!(&avatar.rgba[..4], &[100, 100, 100, 255]);
     }
     #[test]
     fn malformed_oversized_and_wrong_dimensions_are_cosmetic_failures() {

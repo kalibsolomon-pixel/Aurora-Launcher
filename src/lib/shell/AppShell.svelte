@@ -2,6 +2,8 @@
   import { launcher } from "$lib/launcher/store.svelte";
   import { navigation } from "$lib/launcher/navigation.svelte";
   import { activeGlobalPage, globalDestinations } from "$lib/launcher/navigation";
+  import AccountDialog from "$lib/shell/AccountDialog.svelte";
+  import { accountManager } from "$lib/launcher/accountManager.svelte";
   import AccountIdentity from "$lib/launcher/AccountIdentity.svelte";
 
   let { children }: { children: import("svelte").Snippet } = $props();
@@ -87,7 +89,8 @@
     <button
       type="button"
       class="account-chip"
-      onclick={() => navigation.goTo("accounts")}
+      onclick={() => accountManager.show()}
+      aria-haspopup="dialog"
       aria-label={account
         ? `Accounts — signed in as ${account.minecraftName}`
         : "Accounts — not signed in"}
@@ -104,3 +107,5 @@
     {@render children()}
   </main>
 </div>
+
+<AccountDialog />

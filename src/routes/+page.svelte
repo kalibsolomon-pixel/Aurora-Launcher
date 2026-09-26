@@ -5,7 +5,6 @@
   import AppShell from "$lib/shell/AppShell.svelte";
   import HomePage from "$lib/pages/HomePage.svelte";
   import InstancesPage from "$lib/pages/InstancesPage.svelte";
-  import AccountsPage from "$lib/pages/AccountsPage.svelte";
   import SettingsPage from "$lib/pages/SettingsPage.svelte";
   import AboutPage from "$lib/pages/AboutPage.svelte";
   import DeveloperPage from "$lib/pages/DeveloperPage.svelte";
@@ -34,8 +33,6 @@
     <HomePage />
   {:else if state.page === "instances"}
     <InstancesPage />
-  {:else if state.page === "accounts"}
-    <AccountsPage />
   {:else if state.page === "settings"}
     <SettingsPage />
   {:else if state.page === "about"}

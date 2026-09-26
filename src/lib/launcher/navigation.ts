@@ -5,7 +5,7 @@
  *
  * Two levels exist and never blur:
  *
- * - the GLOBAL level (sidebar destinations: Home, Instances, Accounts,
+ * - the GLOBAL level (sidebar destinations: Home, Instances,
  *   Settings, About, and Developer in development builds only);
  * - the INSTANCE WORKSPACE level (one open instance plus its local tab).
  *
@@ -16,7 +16,6 @@
 export const GLOBAL_PAGES = [
   "home",
   "instances",
-  "accounts",
   "settings",
   "about",
   "developer",
@@ -57,7 +56,6 @@ export function globalDestinations(development: boolean): GlobalDestination[] {
   const labels: Record<GlobalPage, string> = {
     home: "Home",
     instances: "Instances",
-    accounts: "Accounts",
     settings: "Settings",
     about: "About",
     developer: "Developer",

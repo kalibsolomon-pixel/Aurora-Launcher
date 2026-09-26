@@ -1,6 +1,6 @@
 <script lang="ts">
   import { launcher } from "$lib/launcher/store.svelte";
-  import { navigation } from "$lib/launcher/navigation.svelte";
+  import { accountManager } from "$lib/launcher/accountManager.svelte";
   import {
     instanceContentStatus,
     javaRuntimeStatus,
@@ -176,7 +176,7 @@
   <div class="group-row-actions">
     <span class="status-badge {accountStatus.tone}">{accountStatus.label}</span>
     {#if !account || account.status === "reauthenticationRequired"}
-      <button type="button" class="btn btn-quiet" onclick={() => navigation.goTo("accounts")}>
+      <button type="button" class="btn btn-quiet" onclick={() => accountManager.show()}>
         {account ? "Fix sign-in" : "Sign in"}
       </button>
     {/if}

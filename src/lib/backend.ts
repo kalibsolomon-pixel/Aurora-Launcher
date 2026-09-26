@@ -1206,8 +1206,8 @@ export interface AccountSummary {
   status: AccountStatus;
 }
 
-/** Native-composited cosmetic head. No URL, token or authentication authority. */
-export interface HeadAvatar { rgba: number[]; model: "classic" | "slim" }
+/** Native head and bounded decoded skin pixels. No URL, token or authentication authority. */
+export interface HeadAvatar { rgba: number[]; model: "classic" | "slim"; skinRgba: number[]; skinHeight: 32 | 64 }
 
 export async function getAccountAvatar(accountId: string, refresh = false): Promise<HeadAvatar | null> {
   return await invoke<HeadAvatar | null>("get_account_avatar", { request: { accountId, refresh } });

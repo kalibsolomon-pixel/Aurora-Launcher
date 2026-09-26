@@ -32,6 +32,8 @@ describe("global navigation", () => {
       state,
     );
     assert.equal(isGlobalPage("nonsense"), false);
+    assert.equal(isGlobalPage("accounts"), false);
+    assert.deepEqual(goToGlobal(state, "accounts" as never), state);
     assert.equal(isGlobalPage("instances"), true);
   });
 
@@ -40,7 +42,6 @@ describe("global navigation", () => {
     assert.deepEqual(production, [
       "home",
       "instances",
-      "accounts",
       "settings",
       "about",
     ]);
@@ -50,7 +51,6 @@ describe("global navigation", () => {
     assert.deepEqual(development, [
       "home",
       "instances",
-      "accounts",
       "settings",
       "about",
       "developer",
@@ -58,7 +58,7 @@ describe("global navigation", () => {
   });
 
   it("reports the workspace as owned by the Instances destination", () => {
-    assert.equal(activeGlobalPage(globalState("accounts")), "accounts");
+    assert.equal(activeGlobalPage(globalState("home")), "home");
     assert.equal(
       activeGlobalPage(openInstance(globalState("home"), "abc123")),
       "instances",
