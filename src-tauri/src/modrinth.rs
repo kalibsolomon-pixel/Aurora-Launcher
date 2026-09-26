@@ -1540,11 +1540,78 @@ mod tests {
     #[tokio::test]
     async fn unsupported_provider_platform_fails_closed_before_network() {
         let mut context = context();
-        context.loader = "forge".into();
         let client = Client::for_testing("http://127.0.0.1:1/v2/");
+        for loader in ["forge", "vanilla"] {
+            context.loader = loader.into();
+            assert!(matches!(
+                client.search(&context, ContentType::Mod, "", 0).await,
+                Err(Error::NoCompatibleVersion)
+            ));
+            let version: VersionDto =
+                serde_json::from_value(version("11112222", FABRIC_API_PROJECT, json!([]))).unwrap();
+            assert!(!compatible(&context, ContentType::Mod, &version));
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_api_dependency_is_external_and_cannot_create_provider_ownership() {
+        let dependency = json!([{"dependency_type":"required","project_id":FABRIC_API_PROJECT,"version_id":null}]);
+        let mut routes = HashMap::new();
+        routes.insert("/v2/project/AAAABBBB".into(), project("AAAABBBB", "mod"));
+        routes.insert(
+            "/v2/version/11112222".into(),
+            version("11112222", "AAAABBBB", dependency),
+        );
+        // No Fabric API provider routes: the validated launcher requirement satisfies it.
+        let server = server(routes);
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        let resolved = client
+            .resolve(
+                &context(),
+                ContentType::Mod,
+                "AAAABBBB",
+                "11112222",
+                &ContentState::empty(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resolved.plans.len(), 1);
+        assert_eq!(resolved.plans[0].project_id, "AAAABBBB");
+        assert_eq!(
+            resolved.plans[0].dependencies[0].project_id,
+            FABRIC_API_PROJECT
+        );
+        assert!(
+            resolved
+                .preview
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("already launcher managed"))
+        );
+    }
+
+    #[tokio::test]
+    async fn protected_api_with_a_provider_version_pin_is_not_assumed_satisfied() {
+        let dependency = json!([{"dependency_type":"required","project_id":FABRIC_API_PROJECT,"version_id":"22223333"}]);
+        let mut routes = HashMap::new();
+        routes.insert("/v2/project/AAAABBBB".into(), project("AAAABBBB", "mod"));
+        routes.insert(
+            "/v2/version/11112222".into(),
+            version("11112222", "AAAABBBB", dependency),
+        );
+        let server = server(routes);
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
         assert!(matches!(
-            client.search(&context, ContentType::Mod, "", 0).await,
-            Err(Error::NoCompatibleVersion)
+            client
+                .resolve(
+                    &context(),
+                    ContentType::Mod,
+                    "AAAABBBB",
+                    "11112222",
+                    &ContentState::empty()
+                )
+                .await,
+            Err(Error::DependencyUnresolved)
         ));
     }
 }

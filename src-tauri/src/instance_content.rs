@@ -1265,7 +1265,7 @@ fn activate_provider_transaction(
                     .map_err(|_| ContentError::HashMismatch)?;
                 verify_file(source, &digest, Some(*bytes))
                     .map_err(|_| ContentError::HashMismatch)?;
-                validate_provider_mod_artifact(record, source, *bytes)?;
+                validate_provider_mod_artifact(managed, instance, record, source, *bytes)?;
                 let temporary =
                     target.with_file_name(format!(".content-installing-{}", uuid::Uuid::new_v4()));
                 if let Err(error) = std::fs::copy(source, &temporary) {
@@ -1443,7 +1443,7 @@ fn apply_lifecycle_state_with_hooks(
                     .map_err(|_| ContentError::HashMismatch)?;
                 verify_file(source, &digest, Some(*size))
                     .map_err(|_| ContentError::HashMismatch)?;
-                validate_provider_mod_artifact(record, source, *size)?;
+                validate_provider_mod_artifact(managed, instance, record, source, *size)?;
                 let stage = directory.join(format!(".content-staged-{}", uuid::Uuid::new_v4()));
                 staged.push((target, stage.clone()));
                 std::fs::copy(source, &stage).map_err(ContentError::Io)?;
@@ -1586,6 +1586,8 @@ fn activate_verified(
 }
 
 fn validate_provider_mod_artifact(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
     record: &ProviderRecord,
     path: &Path,
     bytes: u64,
@@ -1593,12 +1595,41 @@ fn validate_provider_mod_artifact(
     if record.content_type != ContentType::Mod {
         return Ok(());
     }
+    let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
+        .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
+    if let Some(instance_record) = registry.find(instance) {
+        let installed = instance_record.installed();
+        let loader = installed
+            .platform
+            .provider_loader()
+            .map_err(|_| ContentError::UnsupportedAction)?;
+        if record.compatibility.loader.as_deref() != Some(loader)
+            || !record
+                .compatibility
+                .minecraft_versions
+                .contains(&installed.minecraft_version)
+        {
+            return Err(ContentError::UnsupportedAction);
+        }
+    }
     let (metadata, _) = crate::instance_mods::inspect_fabric_metadata(path, bytes);
     let Some(metadata) = metadata else {
         return Err(ContentError::InvalidProviderArtifact);
     };
-    if metadata.id.eq_ignore_ascii_case("aurora") || metadata.id.eq_ignore_ascii_case("fabric-api")
-    {
+    // Ownership is configuration-derived. A provider may supply any otherwise
+    // compatible mod identity unless a verified active launcher requirement owns it.
+    let protected = crate::instance_mods::verified_required_mods(managed, instance)
+        .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
+    let incoming = std::iter::once(&metadata.id).chain(metadata.nested_mod_ids.iter());
+    if incoming.into_iter().any(|id| {
+        protected.iter().any(|required| {
+            required.id.eq_ignore_ascii_case(id)
+                || required
+                    .nested_mod_ids
+                    .iter()
+                    .any(|nested| nested.eq_ignore_ascii_case(id))
+        })
+    }) {
         return Err(ContentError::Collision);
     }
     Ok(())
@@ -1621,7 +1652,7 @@ fn activate_verified_with_commit(
         let bytes = std::fs::metadata(verified_path)
             .map_err(ContentError::Io)?
             .len();
-        validate_provider_mod_artifact(&record, verified_path, bytes)?;
+        validate_provider_mod_artifact(managed, instance, &record, verified_path, bytes)?;
         let kind = record.content_type;
         if kind == ContentType::Mod {
             let required = crate::instance_mods::managed_artifact_file_name(managed, instance)
@@ -1852,15 +1883,518 @@ mod tests {
     }
 
     fn fixture_fabric_jar() -> Vec<u8> {
+        fabric_jar_with_id("fixture")
+    }
+
+    fn fabric_jar_with_id(id: &str) -> Vec<u8> {
         let cursor = std::io::Cursor::new(Vec::new());
         let mut writer = zip::ZipWriter::new(cursor);
         writer
             .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
             .unwrap();
         writer
-            .write_all(br#"{"schemaVersion":1,"id":"fixture","version":"1.0.0"}"#)
+            .write_all(
+                serde_json::json!({"schemaVersion":1,"id":id,"version":"1.0.0"})
+                    .to_string()
+                    .as_bytes(),
+            )
             .unwrap();
         writer.finish().unwrap().into_inner()
+    }
+
+    fn register_no_aurora(fixture: &Fixture, platform: crate::instances::platform::PlatformPin) {
+        use crate::instances::{
+            InstanceRecord, InstanceRegistry, InstanceState,
+            platform::InstalledConfiguration,
+            settings::{InstanceConfiguration, LoaderConfiguration},
+        };
+        let mut config = InstanceConfiguration::for_minecraft_version("1.21.11");
+        config.set_aurora_enabled(false);
+        if matches!(
+            platform,
+            crate::instances::platform::PlatformPin::Vanilla {}
+        ) {
+            config.set_loader(LoaderConfiguration::Vanilla {});
+        }
+        let mut registry = InstanceRegistry::empty();
+        registry.instances_mut().push(
+            InstanceRecord::from_installed(
+                fixture.instance.clone(),
+                "Provider regression",
+                InstanceState::Ready,
+                InstalledConfiguration {
+                    minecraft_version: "1.21.11".into(),
+                    platform,
+                    aurora: None,
+                },
+                config,
+            )
+            .unwrap(),
+        );
+        std::fs::create_dir_all(fixture.managed.launcher_dir()).unwrap();
+        registry
+            .save(&fixture.managed.instance_registry_file())
+            .unwrap();
+    }
+
+    fn no_aurora_fixture() -> Fixture {
+        let fixture = Fixture::new();
+        register_no_aurora(
+            &fixture,
+            crate::instances::platform::PlatformPin::Fabric {
+                version: "0.19.5".into(),
+            },
+        );
+        fixture
+    }
+
+    fn served_mods() -> TestServer {
+        TestServer::spawn(Arc::new(|request: &TestRequest| {
+            TestResponse::ok(&fabric_jar_with_id(request.path.trim_start_matches('/')))
+        }))
+    }
+
+    fn mod_plan(
+        server: &TestServer,
+        project: &str,
+        mod_id: &str,
+        dependency: bool,
+    ) -> ProviderInstallPlan {
+        let bytes = fabric_jar_with_id(mod_id);
+        let hash = format!("{:x}", Sha512::digest(&bytes));
+        ProviderInstallPlan {
+            content_type: ContentType::Mod,
+            provider: "modrinth".into(),
+            project_id: project.into(),
+            version_id: "11112222".into(),
+            file_id: hash.clone(),
+            file_name: format!("{mod_id}.jar"),
+            display_version: Some("1.0.0".into()),
+            compatibility: ContentCompatibility {
+                minecraft_versions: vec!["1.21.11".into()],
+                loader: Some("fabric".into()),
+                environment: Some("client_and_server".into()),
+            },
+            dependencies: if dependency {
+                vec![ProviderDependency {
+                    kind: DependencyKind::Required,
+                    provider: "modrinth".into(),
+                    project_id: "P7dR8mSH".into(),
+                    version_id: None,
+                }]
+            } else {
+                vec![]
+            },
+            source: ProviderArtifactSource::Sha512(
+                Sha512ArtifactSource::loopback_http_for_testing(
+                    &format!("{}/{mod_id}", server.base_url()),
+                    &hash,
+                    Some(bytes.len() as u64),
+                )
+                .unwrap(),
+            ),
+        }
+    }
+
+    async fn install_api_parent(fixture: &Fixture, server: &TestServer) -> ContentState {
+        install_provider_plans(
+            &fixture.managed,
+            &fixture.instance,
+            vec![
+                mod_plan(server, "P7dR8mSH", "fabric-api", false),
+                mod_plan(server, "AAAABBBB", "parent-a", true),
+            ],
+        )
+        .await
+        .unwrap();
+        ContentState::load(&fixture.managed, &fixture.instance).unwrap()
+    }
+
+    fn identity(project: &str) -> ProviderIdentity {
+        ProviderIdentity {
+            content_type: ContentType::Mod,
+            provider: "modrinth".into(),
+            project_id: project.into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn no_aurora_direct_api_and_ordinary_mod_activate_with_provider_ownership() {
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        for (project, id) in [("P7dR8mSH", "fabric-api"), ("AAAABBBB", "ordinary")] {
+            let records = install_provider_plans(
+                &fixture.managed,
+                &fixture.instance,
+                vec![mod_plan(&server, project, id, false)],
+            )
+            .await
+            .unwrap();
+            assert!(records[0].explicitly_retained);
+            assert!(records[0].requires.is_empty());
+        }
+        let inventory = crate::instance_mods::scan(&fixture.managed, &fixture.instance).unwrap();
+        assert_eq!(inventory.entries.len(), 2);
+        assert!(inventory.entries.iter().all(|entry| entry.ownership == crate::instance_mods::ModOwnership::ProviderManaged));
+        assert!(
+            crate::instance_mods::verified_required_mods(&fixture.managed, &fixture.instance)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn no_aurora_api_dependency_graph_survives_reload_and_shared_parent_removal() {
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        let first = install_api_parent(&fixture, &server).await;
+        assert!(
+            !first
+                .find(&identity("P7dR8mSH"))
+                .unwrap()
+                .explicitly_retained
+        );
+        assert_eq!(
+            first.find(&identity("AAAABBBB")).unwrap().requires,
+            vec![identity("P7dR8mSH")]
+        );
+        install_provider_plans(
+            &fixture.managed,
+            &fixture.instance,
+            vec![mod_plan(&server, "BBBBCCCC", "parent-b", true)],
+        )
+        .await
+        .unwrap();
+        let state = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        assert_eq!(state.required_by(&identity("P7dR8mSH")).len(), 2);
+        assert!(matches!(
+            removal_state(&state, &identity("P7dR8mSH")),
+            Err(ContentError::RequiredByInstalledContent)
+        ));
+        let after_a = removal_state(&state, &identity("AAAABBBB")).unwrap();
+        assert!(after_a.find(&identity("P7dR8mSH")).is_some());
+        remove_provider_graph(
+            &fixture.managed,
+            &fixture.instance,
+            &state,
+            &identity("AAAABBBB"),
+        )
+        .unwrap();
+        assert!(
+            fixture
+                .dir(ContentType::Mod)
+                .join("fabric-api.jar")
+                .exists()
+        );
+        let after_b = removal_state(&after_a, &identity("BBBBCCCC")).unwrap();
+        assert!(after_b.entries.is_empty());
+        // Preview determines the orphan set; activation checks exact old bytes.
+        remove_provider_graph(
+            &fixture.managed,
+            &fixture.instance,
+            &after_a,
+            &identity("BBBBCCCC"),
+        )
+        .unwrap();
+        assert!(
+            !fixture
+                .dir(ContentType::Mod)
+                .join("fabric-api.jar")
+                .exists()
+        );
+    }
+
+    #[tokio::test]
+    async fn no_aurora_explicit_api_promotion_reuses_bytes_and_retains_relationships() {
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        let before = install_api_parent(&fixture, &server).await;
+        let path = fixture.dir(ContentType::Mod).join("fabric-api.jar");
+        let bytes = std::fs::read(&path).unwrap();
+        // Promotion is the existing direct-selection path for an already installed identity.
+        drop(server);
+        let promoted =
+            retain_provider(&fixture.managed, &fixture.instance, &identity("P7dR8mSH")).unwrap();
+        assert!(promoted.explicitly_retained);
+        let state = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        assert_eq!(
+            state.find(&identity("AAAABBBB")).unwrap().requires,
+            before.find(&identity("AAAABBBB")).unwrap().requires
+        );
+        let next = remove_provider_graph(
+            &fixture.managed,
+            &fixture.instance,
+            &state,
+            &identity("AAAABBBB"),
+        )
+        .unwrap();
+        assert_eq!(next.entries, vec![promoted]);
+        assert_eq!(std::fs::read(path).unwrap(), bytes);
+    }
+
+    #[tokio::test]
+    async fn no_aurora_api_update_and_rollback_keep_verified_provider_state() {
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        let before = install_api_parent(&fixture, &server).await;
+        let mut plan = mod_plan(&server, "AAAABBBB", "parent-a-v2", true);
+        plan.version_id = "22223333".into();
+        let preview = update_preview_state(&before, &identity("AAAABBBB"), &[plan]).unwrap();
+        assert!(preview.find(&identity("P7dR8mSH")).is_some());
+        let mut plan = mod_plan(&server, "AAAABBBB", "parent-a-v2", true);
+        plan.version_id = "22223333".into();
+        let acquired = acquire_provider_plans(&fixture.managed, vec![plan])
+            .await
+            .unwrap();
+        let next = updated_state(
+            &before,
+            &identity("AAAABBBB"),
+            acquired
+                .iter()
+                .map(|(record, _, _)| record.clone())
+                .collect(),
+        )
+        .unwrap();
+        assert!(
+            apply_lifecycle_state_with_hooks(
+                &fixture.managed,
+                &fixture.instance,
+                &before,
+                &next,
+                &acquired,
+                |_| Err(ContentError::Io(std::io::Error::other(
+                    "injected persistence failure"
+                ))),
+                || Ok(())
+            )
+            .is_err()
+        );
+        assert_eq!(
+            ContentState::load(&fixture.managed, &fixture.instance).unwrap(),
+            before
+        );
+        assert!(fixture.dir(ContentType::Mod).join("parent-a.jar").exists());
+        assert!(
+            !fixture
+                .dir(ContentType::Mod)
+                .join("parent-a-v2.jar")
+                .exists()
+        );
+        apply_lifecycle_state(
+            &fixture.managed,
+            &fixture.instance,
+            &before,
+            &next,
+            &acquired,
+        )
+        .unwrap();
+        assert_eq!(
+            ContentState::load(&fixture.managed, &fixture.instance).unwrap(),
+            next
+        );
+        assert_eq!(
+            next.find(&identity("AAAABBBB")).unwrap().requires,
+            vec![identity("P7dR8mSH")]
+        );
+    }
+
+    #[tokio::test]
+    async fn no_aurora_api_collision_and_tampering_remain_fail_closed() {
+        for directory_target in [false, true] {
+            let fixture = no_aurora_fixture();
+            let path = fixture.dir(ContentType::Mod).join("fabric-api.jar");
+            if directory_target {
+                std::fs::create_dir(&path).unwrap();
+            } else {
+                std::fs::write(&path, b"manual content").unwrap();
+            }
+            let server = served_mods();
+            assert!(matches!(
+                install_provider_plans(
+                    &fixture.managed,
+                    &fixture.instance,
+                    vec![mod_plan(&server, "P7dR8mSH", "fabric-api", false)]
+                )
+                .await,
+                Err(ContentError::Collision)
+            ));
+            assert!(
+                ContentState::load(&fixture.managed, &fixture.instance)
+                    .unwrap()
+                    .entries
+                    .is_empty()
+            );
+            if !directory_target {
+                assert_eq!(std::fs::read(path).unwrap(), b"manual content");
+            }
+        }
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        let state = install_api_parent(&fixture, &server).await;
+        let path = fixture.dir(ContentType::Mod).join("fabric-api.jar");
+        std::fs::write(&path, b"tampered provider bytes").unwrap();
+        assert!(
+            remove_provider_graph(
+                &fixture.managed,
+                &fixture.instance,
+                &state,
+                &identity("AAAABBBB")
+            )
+            .is_err()
+        );
+        assert_eq!(
+            ContentState::load(&fixture.managed, &fixture.instance).unwrap(),
+            state
+        );
+        assert_eq!(std::fs::read(path).unwrap(), b"tampered provider bytes");
+        assert!(fixture.dir(ContentType::Mod).join("parent-a.jar").exists());
+    }
+
+    fn install_protected_fixture(fixture: &Fixture) -> PathBuf {
+        let directory = fixture.dir(ContentType::Mod);
+        let aurora = fabric_jar_with_id("aurora");
+        let api = fabric_jar_with_id("fabric-api");
+        std::fs::write(directory.join("aurora-1.jar"), &aurora).unwrap();
+        let api_path = directory.join("fabric-api-1.jar");
+        std::fs::write(&api_path, &api).unwrap();
+        let state = serde_json::json!({"schemaVersion":1,"auroraVersion":"1","channel":"stable","minecraftVersion":"1.21.11","fabricLoaderVersion":"0.19.5","installationId":"fixture","installedAtUnixSeconds":1,"artifact":{"relativePath":"mods/aurora-1.jar","sizeBytes":aurora.len(),"sha256":format!("{:x}", sha2::Sha256::digest(&aurora))},"fabricApi":{"version":"1","artifact":{"relativePath":"mods/fabric-api-1.jar","sizeBytes":api.len(),"sha256":format!("{:x}", sha2::Sha256::digest(&api))}}});
+        std::fs::write(
+            fixture
+                .managed
+                .instance_paths(&fixture.instance)
+                .root()
+                .join("aurora-installed.json"),
+            state.to_string(),
+        )
+        .unwrap();
+        api_path
+    }
+
+    #[tokio::test]
+    async fn active_managed_mod_identity_is_protected_even_under_a_different_filename() {
+        let fixture = Fixture::new();
+        let path = install_protected_fixture(&fixture);
+        let bytes = std::fs::read(&path).unwrap();
+        let server = served_mods();
+        for id in ["fabric-api", "aurora"] {
+            let mut plan = mod_plan(&server, "P7dR8mSH", id, false);
+            plan.file_name = format!("alternate-{id}.jar");
+            assert!(matches!(
+                install_provider_plans(&fixture.managed, &fixture.instance, vec![plan]).await,
+                Err(ContentError::Collision)
+            ));
+        }
+        assert!(
+            ContentState::load(&fixture.managed, &fixture.instance)
+                .unwrap()
+                .entries
+                .is_empty()
+        );
+        let inventory = crate::instance_mods::scan(&fixture.managed, &fixture.instance).unwrap();
+        assert!(inventory.entries.iter().all(|entry| entry.ownership
+            == crate::instance_mods::ModOwnership::LauncherManagedRequired
+            && !entry.can_remove));
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        let parent = install_provider_plans(
+            &fixture.managed,
+            &fixture.instance,
+            vec![mod_plan(&server, "BBBBCCCC", "parent", true)],
+        )
+        .await
+        .unwrap();
+        // Descriptive dependency metadata survives, but an external launcher
+        // requirement is never forged into a provider-owned graph node.
+        assert_eq!(parent[0].dependencies[0].project_id, "P7dR8mSH");
+        assert!(parent[0].requires.is_empty());
+        let state = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        remove_provider_graph(
+            &fixture.managed,
+            &fixture.instance,
+            &state,
+            &identity("BBBBCCCC"),
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        // Even a forged provider ownership claim cannot remove the protected destination.
+        let mut state = ContentState::empty();
+        state.entries.push(transaction_record(
+            ContentType::Mod,
+            "fabric-api-1.jar",
+            &bytes,
+        ));
+        state.save(&fixture.managed, &fixture.instance).unwrap();
+        assert!(
+            crate::instance_mods::verified_required_mods(&fixture.managed, &fixture.instance)
+                .is_err()
+        );
+        assert!(matches!(
+            remove_provider_graph(
+                &fixture.managed,
+                &fixture.instance,
+                &state,
+                &identity("AAAABBBB")
+            ),
+            Err(ContentError::Collision)
+        ));
+        assert_eq!(std::fs::read(path).unwrap(), bytes);
+    }
+
+    #[test]
+    fn protected_requirement_satisfaction_rejects_tampering_missing_and_ambiguous_state() {
+        for failure in ["tampered", "missing", "directory", "unconfigured"] {
+            let fixture = Fixture::new();
+            let path = install_protected_fixture(&fixture);
+            assert_eq!(
+                crate::instance_mods::verified_required_mods(&fixture.managed, &fixture.instance)
+                    .unwrap()
+                    .len(),
+                2
+            );
+            match failure {
+                "tampered" => std::fs::write(path, b"tampered").unwrap(),
+                "missing" => std::fs::remove_file(path).unwrap(),
+                "directory" => {
+                    std::fs::remove_file(&path).unwrap();
+                    std::fs::create_dir(path).unwrap();
+                }
+                _ => register_no_aurora(
+                    &fixture,
+                    crate::instances::platform::PlatformPin::Fabric {
+                        version: "0.19.5".into(),
+                    },
+                ),
+            }
+            assert!(
+                crate::instance_mods::verified_required_mods(&fixture.managed, &fixture.instance)
+                    .is_err(),
+                "{failure}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn vanilla_cannot_activate_fabric_api_from_a_fabric_provider_plan() {
+        let fixture = Fixture::new();
+        register_no_aurora(
+            &fixture,
+            crate::instances::platform::PlatformPin::Vanilla {},
+        );
+        let server = served_mods();
+        assert!(matches!(
+            install_provider_plans(
+                &fixture.managed,
+                &fixture.instance,
+                vec![mod_plan(&server, "P7dR8mSH", "fabric-api", false)]
+            )
+            .await,
+            Err(ContentError::UnsupportedAction)
+        ));
+        assert!(
+            ContentState::load(&fixture.managed, &fixture.instance)
+                .unwrap()
+                .entries
+                .is_empty()
+        );
     }
 
     #[test]

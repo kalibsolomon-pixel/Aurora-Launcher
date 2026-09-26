@@ -2206,10 +2206,9 @@ fn provider_context(
                 .provider_loader()
                 .map_err(|reason| CommandError::new("provider_platform_unsupported", reason))?
                 .into(),
-            fabric_api_protected: crate::instance_mods::managed_artifact_file_name(
-                managed, &instance,
-            )?
-            .is_some_and(|files| files.iter().any(|name| name.starts_with("fabric-api-"))),
+            fabric_api_protected: crate::instance_mods::verified_required_mods(managed, &instance)?
+                .iter()
+                .any(|metadata| metadata.id == "fabric-api"),
         },
     ))
 }

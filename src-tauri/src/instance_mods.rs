@@ -338,6 +338,143 @@ pub(crate) fn managed_artifact_file_name(
     }))
 }
 
+/// Active launcher ownership, verified before provider reconciliation or mutation.
+/// Read mod identities from the proven artifacts, never reserve an ID globally.
+/// Missing, ambiguous, or damaged requirements cannot satisfy provider dependencies.
+pub(crate) fn verified_required_mods(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<Vec<FabricModMetadata>, ModError> {
+    let manifest = crate::distribution::operational_manifest()
+        .map_err(|error| ModError::InstalledState(error.to_string()))?;
+    verified_required_mods_with_manifest(managed, instance, &manifest)
+}
+
+fn verified_required_mods_with_manifest(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    manifest: &crate::distribution::ReleaseManifest,
+) -> Result<Vec<FabricModMetadata>, ModError> {
+    let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
+        .map_err(|error| ModError::InstalledState(error.to_string()))?;
+    crate::instance_content::validate_directory(
+        managed,
+        instance,
+        crate::instance_content::ContentType::Mod,
+    )
+    .map_err(|error| ModError::InstalledState(error.to_string()))?;
+    let state_path = managed
+        .instance_paths(instance)
+        .root()
+        .join(aurora::AURORA_INSTALLED_FILE_NAME);
+    if let Ok(meta) = std::fs::symlink_metadata(&state_path) {
+        if !meta.is_file() || meta.file_type().is_symlink() || is_reparse_point(&meta) {
+            return Err(ModError::InstalledState(
+                "managed ownership state is not a regular file".into(),
+            ));
+        }
+    }
+    let state = aurora::load_installed_state(managed, instance)
+        .map_err(|error| ModError::InstalledState(error.to_string()))?;
+    if let Some(record) = registry.find(instance) {
+        if !record.configuration().matches_installed(record.installed()) {
+            return Err(ModError::InstalledState(
+                "instance configuration is stale".into(),
+            ));
+        }
+        if record.installed().aurora.is_none() {
+            if state.is_some() {
+                return Err(ModError::InstalledState(
+                    "managed Aurora state remains without an active requirement".into(),
+                ));
+            }
+            return Ok(Vec::new());
+        }
+        let pin = record.installed().aurora.as_ref().expect("checked above");
+        let release = manifest
+            .resolve_exact(&pin.version, Some(pin.channel))
+            .ok_or_else(|| ModError::InstalledState("active release metadata is missing".into()))?;
+        crate::instances::platform::required_content(record.installed(), Some(release))
+            .map_err(ModError::InstalledState)?;
+        let installed = state.as_ref().ok_or_else(|| {
+            ModError::InstalledState("active managed requirements are missing".into())
+        })?;
+        if installed.aurora_version() != pin.version
+            || installed.channel() != pin.channel
+            || installed.minecraft_version() != record.installed().minecraft_version
+            || Some(installed.fabric_loader_version()) != record.installed().platform.version()
+            || installed.artifact().relative_path()
+                != aurora::managed_artifact_relative_path(release)
+                    .map_err(|error| ModError::InstalledState(error.to_string()))?
+            || installed.artifact().sha256() != release.artifact().sha256()
+            || Some(installed.artifact().size_bytes()) != release.artifact().size_bytes()
+            || installed.fabric_api().map(|api| {
+                (
+                    api.version(),
+                    api.artifact().sha256(),
+                    Some(api.artifact().size_bytes()),
+                )
+            }) != release.fabric_api().map(|api| {
+                (
+                    api.version(),
+                    api.artifact().sha256(),
+                    api.artifact().size_bytes(),
+                )
+            })
+        {
+            return Err(ModError::InstalledState(
+                "managed requirements do not match active release metadata".into(),
+            ));
+        }
+    }
+    let Some(state) = state else {
+        return Ok(Vec::new());
+    };
+    let directory = validate_mods_directory(managed, instance)?;
+    let provider_state = crate::instance_content::ContentState::load(managed, instance)
+        .map_err(|error| ModError::ContentState(error.to_string()))?;
+    let artifacts =
+        std::iter::once(state.artifact()).chain(state.fabric_api().map(|api| api.artifact()));
+    let mut identities = Vec::new();
+    for artifact in artifacts {
+        let name = artifact
+            .relative_path()
+            .strip_prefix("mods/")
+            .expect("validated managed artifact path");
+        if provider_state.entries.iter().any(|record| {
+            record.content_type == crate::instance_content::ContentType::Mod
+                && (record.file_name.eq_ignore_ascii_case(name)
+                    || record.sha256 == artifact.sha256())
+        }) {
+            return Err(ModError::InstalledState(
+                "provider state ambiguously claims a launcher requirement".into(),
+            ));
+        }
+        let path = directory.join(name);
+        let meta = std::fs::symlink_metadata(&path)
+            .map_err(|error| ModError::InstalledState(error.to_string()))?;
+        if !meta.is_file() || meta.file_type().is_symlink() || is_reparse_point(&meta) {
+            return Err(ModError::InstalledState(
+                "managed requirement is not a regular file".into(),
+            ));
+        }
+        let digest = ArtifactDigest::parse(artifact.sha256())
+            .map_err(|error| ModError::InstalledState(error.to_string()))?;
+        verify_file(&path, &digest, Some(artifact.size_bytes()))
+            .map_err(|error| ModError::InstalledState(error.to_string()))?;
+        let (metadata, warnings) = inspect_fabric_metadata(&path, artifact.size_bytes());
+        if !warnings.is_empty() {
+            return Err(ModError::InstalledState(
+                "managed requirement metadata is ambiguous".into(),
+            ));
+        }
+        identities.push(metadata.ok_or_else(|| {
+            ModError::InstalledState("managed requirement has no mod identity".into())
+        })?);
+    }
+    Ok(identities)
+}
+
 fn inspect_entry(
     path: &Path,
     managed_files: Option<&[String]>,
@@ -1304,6 +1441,100 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.root);
         }
+    }
+
+    #[test]
+    fn registered_aurora_requirements_match_release_ownership_and_verified_metadata() {
+        use crate::instances::{
+            InstanceRecord, InstanceRegistry, InstanceState, PinnedRelease,
+            settings::InstanceConfiguration,
+        };
+        let fixture = Fixture::new("active-requirements");
+        let aurora_path = fixture.mods().join("aurora-2.1.2.jar");
+        let api_path = fixture.mods().join("fabric-api-0.141.6+1.21.11.jar");
+        jar(&aurora_path, Some(br#"{"id":"aurora","version":"2.1.2"}"#));
+        jar(
+            &api_path,
+            Some(br#"{"id":"fabric-api","version":"0.141.6+1.21.11"}"#),
+        );
+        let mut release: serde_json::Value =
+            serde_json::from_str(include_str!("../production/aurora-releases.json")).unwrap();
+        for (field, path) in [("artifact", &aurora_path), ("fabricApi", &api_path)] {
+            let bytes = std::fs::read(path).unwrap();
+            let artifact = if field == "artifact" {
+                &mut release["releases"][0][field]
+            } else {
+                &mut release["releases"][0][field]["artifact"]
+            };
+            artifact["sha256"] = serde_json::json!(format!("{:x}", sha2::Sha256::digest(&bytes)));
+            artifact["sizeBytes"] = serde_json::json!(bytes.len());
+        }
+        let manifest =
+            crate::distribution::ReleaseManifest::from_json(&release.to_string()).unwrap();
+        let declaration = &release["releases"][0];
+        let state = serde_json::json!({"schemaVersion":1,"auroraVersion":"2.1.2","channel":"stable","minecraftVersion":"1.21.11","fabricLoaderVersion":"0.19.5","installationId":"fixture","installedAtUnixSeconds":1,"artifact":{"relativePath":"mods/aurora-2.1.2.jar","sizeBytes":declaration["artifact"]["sizeBytes"],"sha256":declaration["artifact"]["sha256"]},"fabricApi":{"version":"0.141.6+1.21.11","artifact":{"relativePath":"mods/fabric-api-0.141.6+1.21.11.jar","sizeBytes":declaration["fabricApi"]["artifact"]["sizeBytes"],"sha256":declaration["fabricApi"]["artifact"]["sha256"]}}});
+        let state_path = fixture
+            .managed
+            .instance_paths(&fixture.instance)
+            .root()
+            .join(aurora::AURORA_INSTALLED_FILE_NAME);
+        std::fs::write(&state_path, state.to_string()).unwrap();
+        let mut registry = InstanceRegistry::empty();
+        registry.instances_mut().push(
+            InstanceRecord::new(
+                fixture.instance.clone(),
+                "Active Aurora",
+                InstanceState::Ready,
+                PinnedRelease::new(
+                    crate::distribution::ReleaseChannel::Stable,
+                    "2.1.2",
+                    "1.21.11",
+                    "0.19.5",
+                )
+                .unwrap(),
+                InstanceConfiguration::for_minecraft_version("1.21.11"),
+            )
+            .unwrap(),
+        );
+        std::fs::create_dir_all(fixture.managed.launcher_dir()).unwrap();
+        registry
+            .save(&fixture.managed.instance_registry_file())
+            .unwrap();
+        let verified =
+            verified_required_mods_with_manifest(&fixture.managed, &fixture.instance, &manifest)
+                .unwrap();
+        assert_eq!(
+            verified
+                .iter()
+                .map(|metadata| metadata.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["aurora", "fabric-api"]
+        );
+        for field in ["sha256", "sizeBytes"] {
+            let mut changed = state.clone();
+            changed["fabricApi"]["artifact"][field] = if field == "sha256" {
+                serde_json::json!("f".repeat(64))
+            } else {
+                serde_json::json!(1)
+            };
+            std::fs::write(&state_path, changed.to_string()).unwrap();
+            assert!(
+                verified_required_mods_with_manifest(
+                    &fixture.managed,
+                    &fixture.instance,
+                    &manifest
+                )
+                .is_err()
+            );
+        }
+        std::fs::write(&state_path, state.to_string()).unwrap();
+        // The production manifest cannot be replaced by self-consistent local hashes.
+        assert!(verified_required_mods(&fixture.managed, &fixture.instance).is_err());
+        std::fs::write(api_path, b"tampered").unwrap();
+        assert!(
+            verified_required_mods_with_manifest(&fixture.managed, &fixture.instance, &manifest)
+                .is_err()
+        );
     }
 
     fn jar(path: &Path, metadata: Option<&[u8]>) {
