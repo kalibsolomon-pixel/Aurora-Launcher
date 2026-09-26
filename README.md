@@ -89,3 +89,9 @@ Launcher versioning, Windows installer differences, manual release checks, and t
 Aurora Launcher and Aurora are independent projects and are not affiliated with, endorsed by, or sponsored by Microsoft, Mojang Studios, or Fabric.
 
 Minecraft is a trademark of Microsoft Corporation.
+
+## Home and Minecraft identity
+
+Home lets you switch the selected Play instance directly, shows its installed Minecraft/platform/optional Aurora configuration and native launch state, and opens **Manage Instance** for detailed work. Mods, resource packs, shaders, Modrinth and maintenance belong to that instance's Workspace; launcher appearance remains in Settings. Vanilla and Fabric without Aurora are complete configurations, with Aurora shown as Off.
+
+Accounts shows the active Minecraft name and an optional head avatar from official authenticated profile data, plus browser sign-in, switching, checks and confirmed local removal. The head is validated/decoded in Rust and reused only in bounded memory. Missing or offline imagery falls back locally and cannot disable Play. Credentials and launch authority stay in Rust; the image DTO contains pixels rather than remote URLs or tokens. The original synchronized native Play path is unchanged.

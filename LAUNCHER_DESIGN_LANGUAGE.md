@@ -489,3 +489,9 @@ operating-system surfaces only, and the two are never swapped for each other.
 - Advanced instance operations (logs viewing, repair, runtime details) arrive
   contextual to instances — as workspace tabs or workspace actions — not as
   top-level navigation.
+
+## Phase D hierarchy refinement
+
+Home is the concise selected-instance launch surface: native select with configuration-aware options, installed summary, authoritative Ready/Starting/Running state, dominant Play, Manage Instance and active Minecraft identity. Detailed Java/content/readiness/repair operations stay inside the Workspace. Configuration labels capitalize Vanilla/Fabric and show optional Aurora explicitly as Off/version. Launcher-global navigation and Settings remain stable.
+
+The account chip and Accounts reuse one identity component: a pixelated native-composited Minecraft head when available, an initial-based fallback otherwise, and a name/state text pair. The active-account marker is textual. Removal uses inline confirmation with initial focus, Escape cancellation and focus return. Existing surfaces, controls, tokens and motion remain the visual authority. Home's native select supports keyboard navigation/type-ahead and long registries without an overlay menu implementation.
