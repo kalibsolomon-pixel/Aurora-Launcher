@@ -106,7 +106,7 @@ export function instanceContentStatus(
 
 /** Quiet one-line description of an instance's desired configuration. */
 export function configurationLabel(instance: InstanceSummary): string {
-  const kind = instance.configuration.loader.kind === "fabric" ? "Fabric" : instance.configuration.loader.kind;
+  const kind = instance.configuration.loader.kind === "fabric" ? "Fabric" : instance.configuration.loader.kind === "vanilla" ? "Vanilla" : instance.configuration.loader.kind;
   const loader = "policy" in instance.configuration.loader
     ? instance.configuration.loader.policy.type === "pinned"
       ? `${kind} ${instance.configuration.loader.policy.version}`

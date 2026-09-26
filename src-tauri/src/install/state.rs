@@ -29,18 +29,21 @@ use serde::{Deserialize, Serialize};
 use crate::integrity::{ArtifactDigest, ArtifactTrust, DigestAlgorithm, Sha1Digest};
 
 /// The only installed-state schema version this launcher understands.
-pub const INSTALLED_GAME_SCHEMA_VERSION: u32 = 1;
+pub const INSTALLED_GAME_SCHEMA_VERSION: u32 = 2;
 
 /// The manifest file name at the root of the managed game directory.
 pub const INSTALLED_GAME_FILE_NAME: &str = "installed-game.json";
 
 /// The complete installed-state record of one instance's game directory.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstalledGameManifest {
     schema_version: u32,
     minecraft_version: String,
-    fabric_loader_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fabric_loader_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    platform: Option<crate::instances::platform::PlatformPin>,
     /// The revision identity of this installation (diagnostics only; two
     /// installs of the same plan are distinct revisions).
     installation_id: String,
@@ -107,9 +110,10 @@ impl InstalledGameManifest {
         natives: NativesRecord,
     ) -> Self {
         Self {
-            schema_version: INSTALLED_GAME_SCHEMA_VERSION,
+            schema_version: 1,
             minecraft_version: minecraft_version.into(),
-            fabric_loader_version: fabric_loader_version.into(),
+            fabric_loader_version: Some(fabric_loader_version.into()),
+            platform: None,
             installation_id: installation_id.into(),
             installed_at_unix_seconds,
             files,
@@ -125,8 +129,43 @@ impl InstalledGameManifest {
         &self.minecraft_version
     }
 
-    pub fn fabric_loader_version(&self) -> &str {
-        &self.fabric_loader_version
+    pub fn fabric_loader_version(&self) -> Option<&str> {
+        match &self.platform {
+            Some(crate::instances::platform::PlatformPin::Fabric { version }) => Some(version),
+            Some(_) => None,
+            None => self.fabric_loader_version.as_deref(),
+        }
+    }
+
+    pub fn platform(&self) -> crate::instances::platform::PlatformPin {
+        self.platform
+            .clone()
+            .unwrap_or_else(|| crate::instances::platform::PlatformPin::Fabric {
+                version: self
+                    .fabric_loader_version
+                    .clone()
+                    .expect("validated legacy manifest"),
+            })
+    }
+
+    pub fn for_platform(
+        minecraft_version: impl Into<String>,
+        platform: crate::instances::platform::PlatformPin,
+        installation_id: impl Into<String>,
+        installed_at_unix_seconds: u64,
+        files: Vec<InstalledFile>,
+        natives: NativesRecord,
+    ) -> Self {
+        Self {
+            schema_version: INSTALLED_GAME_SCHEMA_VERSION,
+            minecraft_version: minecraft_version.into(),
+            fabric_loader_version: None,
+            platform: Some(platform),
+            installation_id: installation_id.into(),
+            installed_at_unix_seconds,
+            files,
+            natives,
+        }
     }
 
     pub fn installation_id(&self) -> &str {
@@ -158,15 +197,27 @@ impl InstalledGameManifest {
                 reason: error.to_string(),
             })?;
 
-        if manifest.schema_version != INSTALLED_GAME_SCHEMA_VERSION {
+        if !matches!(manifest.schema_version, 1 | INSTALLED_GAME_SCHEMA_VERSION) {
             return Err(InstalledStateError::UnsupportedSchema {
                 found: manifest.schema_version,
                 supported: INSTALLED_GAME_SCHEMA_VERSION,
             });
         }
 
+        let platform_valid = match (
+            manifest.schema_version,
+            &manifest.platform,
+            &manifest.fabric_loader_version,
+        ) {
+            (1, None, Some(version)) => !version.trim().is_empty(),
+            (2, Some(crate::instances::platform::PlatformPin::Vanilla {}), None) => true,
+            (2, Some(crate::instances::platform::PlatformPin::Fabric { version }), None) => {
+                !version.trim().is_empty()
+            }
+            _ => false,
+        };
         if manifest.minecraft_version.trim().is_empty()
-            || manifest.fabric_loader_version.trim().is_empty()
+            || !platform_valid
             || manifest.installation_id.trim().is_empty()
         {
             return Err(InstalledStateError::Malformed {
@@ -174,6 +225,14 @@ impl InstalledGameManifest {
                     .to_owned(),
             });
         }
+
+        crate::instances::platform::InstalledConfiguration {
+            minecraft_version: manifest.minecraft_version.clone(),
+            platform: manifest.platform(),
+            aurora: None,
+        }
+        .validate()
+        .map_err(|reason| InstalledStateError::Malformed { reason })?;
 
         if manifest.files.is_empty() {
             return Err(InstalledStateError::Malformed {
@@ -392,9 +451,9 @@ mod tests {
     fn the_manifest_round_trips_and_reports_its_parts() {
         let manifest = InstalledGameManifest::from_json(&sample_manifest_json()).unwrap();
 
-        assert_eq!(manifest.schema_version(), INSTALLED_GAME_SCHEMA_VERSION);
+        assert_eq!(manifest.schema_version(), 1);
         assert_eq!(manifest.minecraft_version(), "26.2");
-        assert_eq!(manifest.fabric_loader_version(), "0.19.5");
+        assert_eq!(manifest.fabric_loader_version(), Some("0.19.5"));
         assert_eq!(manifest.installation_id(), "install-1760000000000-4242");
         assert_eq!(manifest.installed_at_unix_seconds(), 1760000000);
         assert_eq!(manifest.files().len(), 2);
@@ -413,10 +472,10 @@ mod tests {
     #[test]
     fn unsupported_schema_versions_and_malformed_documents_fail_deliberately() {
         let unsupported =
-            sample_manifest_json().replace("\"schemaVersion\": 1", "\"schemaVersion\": 2");
+            sample_manifest_json().replace("\"schemaVersion\": 1", "\"schemaVersion\": 99");
         assert!(matches!(
             InstalledGameManifest::from_json(&unsupported),
-            Err(InstalledStateError::UnsupportedSchema { found: 2, .. })
+            Err(InstalledStateError::UnsupportedSchema { found: 99, .. })
         ));
 
         for broken in [

@@ -52,6 +52,25 @@ pub fn snapshot(instance_id: &str) -> ProcessSnapshot {
         .unwrap_or_else(|| ProcessSnapshot::stopped(instance_id))
 }
 
+/// Prevent spawn/starting transitions while a synchronous content transaction
+/// commits. Only process-local exclusion is claimed.
+pub(crate) fn lock_stopped(
+    instance_id: &str,
+) -> Result<std::sync::MutexGuard<'static, HashMap<String, ProcessSnapshot>>, LaunchProcessError> {
+    let states = process_states()
+        .lock()
+        .expect("launch process state is not poisoned");
+    if states
+        .get(instance_id)
+        .is_some_and(|state| state.status.blocks_launch())
+    {
+        return Err(LaunchProcessError::AlreadyRunning {
+            instance_id: instance_id.into(),
+        });
+    }
+    Ok(states)
+}
+
 pub type StateListener = Arc<dyn Fn(ProcessSnapshot) + Send + Sync + 'static>;
 
 /// Starts the exact process described by `LaunchSpec`, then supervises the

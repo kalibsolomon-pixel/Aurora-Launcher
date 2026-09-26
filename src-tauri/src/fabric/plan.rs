@@ -417,7 +417,7 @@ impl GameLibrary {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameInstallPlan {
     minecraft: MinecraftInstallPlan,
-    loader: FabricPlan,
+    loader: Option<FabricPlan>,
     libraries: Vec<GameLibrary>,
     java: GameJavaRequirement,
     main_class: String,
@@ -430,8 +430,39 @@ impl GameInstallPlan {
     }
 
     /// The Fabric half, unchanged by composition.
-    pub fn loader(&self) -> &FabricPlan {
-        &self.loader
+    pub fn loader(&self) -> Option<&FabricPlan> {
+        self.loader.as_ref()
+    }
+
+    pub fn platform(&self) -> crate::instances::platform::PlatformPin {
+        match &self.loader {
+            Some(loader) => crate::instances::platform::PlatformPin::Fabric {
+                version: loader.loader_version().to_owned(),
+            },
+            None => crate::instances::platform::PlatformPin::Vanilla {},
+        }
+    }
+
+    /// A complete Vanilla plan contains only Mojang contributions.
+    pub fn vanilla(minecraft: MinecraftInstallPlan) -> Self {
+        let java = GameJavaRequirement {
+            component: minecraft.java().component().to_owned(),
+            major_version: minecraft.java().major_version(),
+            loader_min_major_version: 0,
+            raised_by_loader: false,
+        };
+        Self {
+            libraries: minecraft
+                .libraries()
+                .iter()
+                .cloned()
+                .map(GameLibrary::Minecraft)
+                .collect(),
+            main_class: minecraft.launch().main_class().to_owned(),
+            minecraft,
+            loader: None,
+            java,
+        }
     }
 
     /// The composed library set in deterministic classpath order: Mojang
@@ -603,7 +634,7 @@ pub fn compose_game_plan(
 
     Ok(GameInstallPlan {
         minecraft,
-        loader: fabric,
+        loader: Some(fabric),
         libraries,
         java,
         main_class,

@@ -2,6 +2,7 @@
   import { launcher } from "$lib/launcher/store.svelte";
   import { configurationRequiresInstall, draftIsDirty } from "$lib/launcher/instanceStatus";
   import type { InstanceConfiguration, InstanceSummary } from "$lib/backend";
+  import AuroraTransitionPanel from "./AuroraTransitionPanel.svelte";
 
   let { instance }: { instance: InstanceSummary } = $props();
 
@@ -19,7 +20,7 @@
   const needsInstall = $derived(configurationRequiresInstall(instance));
 
   function onDraftChange(): void {
-    if (draft && draft.minecraftVersion.trim() !== "") {
+    if (draft && draft.loader.kind === "fabric" && draft.minecraftVersion.trim() !== "") {
       void launcher.loadLoaderVersions(draft.minecraftVersion);
     }
   }
@@ -76,6 +77,7 @@
   settings belong to this instance only; launcher-wide preferences live in
   the sidebar's Settings destination.
 -->
+<AuroraTransitionPanel {instance} />
 <section class="group" aria-labelledby="instance-settings-title">
   <div class="group-heading">
     <div>
@@ -166,12 +168,13 @@
         </label>
         <label class="field">
           <span class="field-label">Mod loader</span>
-          <select value="fabric" disabled>
+          <select value={draft.loader.kind} disabled>
             {#each launcher.launcherState?.platformCapabilities ?? [] as capability (capability.kind)}
               {#if capability.canInstall}<option value={capability.kind}>{capability.kind === "fabric" ? "Fabric" : capability.kind}</option>{/if}
             {/each}
           </select>
         </label>
+        {#if draft.loader.kind === "fabric"}
         <label class="field">
           <span class="field-label">Fabric Loader version</span>
           {#if "policy" in draft.loader && draft.loader.policy.type === "automatic"}
@@ -197,8 +200,8 @@
             </select>
           {/if}
         </label>
+        {/if}
       </div>
-
       <h4 class="detail-section-title">Performance</h4>
       <div class="field-grid">
         <label class="field">

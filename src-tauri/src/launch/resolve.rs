@@ -236,9 +236,7 @@ impl LaunchPlan {
         let minecraft = plan.minecraft();
         Self {
             minecraft_version: minecraft.minecraft_version().to_owned(),
-            platform_contribution: crate::instances::platform::PlatformPin::Fabric {
-                version: plan.loader().loader_version().to_owned(),
-            },
+            platform_contribution: plan.platform(),
             version_type: minecraft.version_type().as_mojang_str().to_owned(),
             main_class: plan.main_class().to_owned(),
             libraries: plan
@@ -290,16 +288,10 @@ pub fn resolve_launch_spec(
             plan.minecraft_version
         )));
     }
-    let planned_loader = plan
-        .platform_contribution
-        .require_fabric()
-        .map_err(LaunchResolveError::Metadata)?;
-    if installed.fabric_loader_version() != planned_loader {
-        return Err(LaunchResolveError::Metadata(format!(
-            "installed Fabric Loader '{}' does not match launch plan '{}'",
-            installed.fabric_loader_version(),
-            planned_loader
-        )));
+    if installed.platform() != plan.platform_contribution {
+        return Err(LaunchResolveError::Metadata(
+            "installed platform does not match launch plan".into(),
+        ));
     }
     if session.account_id() != session.profile().uuid()
         || crate::auth::accounts::AccountId::validate(session.profile().uuid()).is_err()
@@ -991,6 +983,49 @@ mod tests {
     }
 
     #[test]
+    fn vanilla_launch_uses_mojang_entry_point_without_loader_contributions() {
+        let fixture = Fixture::new();
+        let mut vanilla = plan();
+        vanilla.platform_contribution = crate::instances::platform::PlatformPin::Vanilla {};
+        vanilla.main_class = "net.minecraft.client.main.Main".into();
+        vanilla.libraries = vec!["a/first.jar".into()];
+        let manifest = InstalledGameManifest::for_platform(
+            fixture.manifest.minecraft_version(),
+            vanilla.platform_contribution.clone(),
+            "vanilla-test",
+            1,
+            fixture
+                .manifest
+                .files()
+                .iter()
+                .filter(|file| !file.path().contains("fabric.jar"))
+                .cloned()
+                .collect(),
+            fixture.manifest.natives().clone(),
+        );
+        let spec = resolve_launch_spec(
+            &fixture.managed,
+            &fixture.id,
+            &vanilla,
+            &manifest,
+            &fixture.java,
+            &session(),
+            &FeatureProfile::none(),
+            &LaunchOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(spec.main_class(), "net.minecraft.client.main.Main");
+        assert_eq!(spec.classpath().len(), 2);
+        assert!(
+            !spec
+                .classpath()
+                .iter()
+                .any(|path| path.to_string_lossy().contains("fabric"))
+        );
+        assert!(!format!("{spec:?}").contains("minecraft-secret"));
+    }
+
+    #[test]
     fn feature_conditioned_arguments_are_resolved_at_launch() {
         let fixture = Fixture::new();
         let enabled = fixture
@@ -1124,7 +1159,7 @@ mod tests {
         std::fs::write(escaped.join("native.dll"), b"x").unwrap();
         let manifest = InstalledGameManifest::new(
             fixture.manifest.minecraft_version(),
-            fixture.manifest.fabric_loader_version(),
+            fixture.manifest.fabric_loader_version().unwrap(),
             fixture.manifest.installation_id(),
             fixture.manifest.installed_at_unix_seconds(),
             fixture.manifest.files().to_vec(),

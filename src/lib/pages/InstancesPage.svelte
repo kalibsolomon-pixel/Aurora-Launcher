@@ -5,9 +5,23 @@
     configurationLabel,
     instanceContentStatus,
   } from "$lib/launcher/instanceStatus";
-  import type { InstanceSummary } from "$lib/backend";
+  import { getAuroraCompatibility, type AuroraCompatibility, type InstanceLoader, type InstanceSummary } from "$lib/backend";
+  import { creationPlatforms, creationBlocked } from "$lib/instances/configurationChoices";
 
-  const fabricCreation = $derived(launcher.launcherState?.platformCapabilities.some((capability) => capability.kind === "fabric" && capability.canCreate && capability.auroraSupported) ?? false);
+  const platforms = $derived(creationPlatforms(launcher.launcherState?.platformCapabilities ?? []));
+  const selectedCapability = $derived(platforms.find(capability => capability.kind === launcher.createPlatform));
+  let compatibility = $state<AuroraCompatibility | null>(null);
+  let compatibilityError = $state("");
+  const loader = $derived<InstanceLoader>(launcher.createPlatform === "vanilla" ? {kind: "vanilla"} : {kind:"fabric", policy: launcher.createLoaderPolicy});
+  $effect(() => {
+    const version = launcher.createMinecraftVersion;
+    const selection = $state.snapshot(loader);
+    let active = true;
+    compatibility = null;
+    compatibilityError = "";
+    void getAuroraCompatibility(version, selection).then(result => { if (active) compatibility = result; }).catch(error => { if (active) compatibilityError = error.message; });
+    return () => { active = false; };
+  });
   const instances = $derived(launcher.launcherState?.instances ?? []);
   const selectedId = $derived(launcher.launcherState?.config.selectedInstanceId ?? null);
 
@@ -126,7 +140,16 @@
           </select>
         </label>
         <label class="field">
-          <span class="field-label">Loader</span>
+          <span class="field-label">Minecraft platform</span>
+          <select bind:value={launcher.createPlatform} onchange={() => { launcher.createAuroraEnabled = false; }}>
+            {#each platforms as capability (capability.kind)}
+              <option value={capability.kind}>{capability.kind === "vanilla" ? "Vanilla" : "Fabric"}</option>
+            {/each}
+          </select>
+        </label>
+        {#if launcher.createPlatform === "fabric"}
+        <label class="field">
+          <span class="field-label">Fabric Loader version</span>
           <select
             value={launcher.createLoaderPolicy.type === "automatic" ? "" : "pinned"}
             onchange={(event) => {
@@ -145,10 +168,8 @@
               }
             }}
           >
-            {#if fabricCreation}
-              <option value="">Fabric — release version</option>
+              <option value="">{launcher.createAuroraEnabled ? "Aurora release version" : "Newest stable compatible version"}</option>
               <option value="pinned">Fabric — choose version</option>
-            {/if}
           </select>
           {#if launcher.createLoaderPolicy.type === "pinned"}
             <select
@@ -168,7 +189,13 @@
             </select>
           {/if}
         </label>
+        {/if}
       </div>
+      <label class="check-field">
+        <input type="checkbox" bind:checked={launcher.createAuroraEnabled} disabled={!selectedCapability?.auroraSupported || !compatibility?.available || launcher.createBusy} />
+        <span>Enable Aurora{compatibility?.version ? ` ${compatibility.version}` : ""}</span>
+      </label>
+      <p class="group-footer">{compatibilityError || compatibility?.reason || "Checking Aurora compatibility…"} Aurora is optional and off by default. {launcher.createAuroraEnabled && compatibility?.loaderVersion ? `Required Fabric Loader: ${compatibility.loaderVersion}.` : ""}</p>
       <label class="check-field">
         <input
           type="checkbox"
@@ -181,7 +208,7 @@
         <button
           type="submit"
           class="btn btn-primary"
-          disabled={!fabricCreation || launcher.createBusy ||
+          disabled={!selectedCapability || creationBlocked(launcher.createAuroraEnabled, compatibility) || launcher.createBusy ||
             launcher.createDisplayName.trim() === "" ||
             launcher.createMinecraftVersion === ""}
         >
@@ -321,8 +348,8 @@
     {/if}
 
     <p class="group-footer">
-      Instances are complete, isolated installations — game, Fabric, and the Aurora client
-      artifact — validated before they are reported ready. Open an instance to manage its
+      Instances are isolated Minecraft installations with the selected platform and optional
+      Aurora content, validated before they are reported ready. Open an instance to manage its
       configuration and Java runtime. Instance deletion remains deliberately unimplemented.
     </p>
   </section>

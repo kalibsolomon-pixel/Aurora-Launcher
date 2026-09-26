@@ -73,6 +73,7 @@ pub enum ModFileType {
 #[serde(rename_all = "camelCase")]
 pub enum ModOwnership {
     LauncherManagedRequired,
+    LauncherManagedRetained,
     ProviderManaged,
     UserManaged,
     Unknown,
@@ -198,6 +199,36 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
         }
     }
 
+    let retained = crate::instances::transition::retained_files(managed, instance)
+        .map_err(|e| ModError::InstalledState(e.to_string()))?;
+    for file in retained {
+        let name = file
+            .relative_path
+            .strip_prefix("mods/")
+            .expect("validated retained mod path");
+        if let Some(entry) = entries
+            .iter_mut()
+            .find(|entry| entry.file_name.eq_ignore_ascii_case(name))
+        {
+            let matches = entry.file_type == ModFileType::EnabledJar
+                && entry.size_bytes == Some(file.size_bytes)
+                && entry.provenance.is_none()
+                && ArtifactDigest::parse(&file.sha256).is_ok_and(|digest| {
+                    verify_file(&mods.join(name), &digest, Some(file.size_bytes)).is_ok()
+                });
+            if matches {
+                entry.sha256 = Some(file.sha256.clone());
+            }
+            entry.ownership = if matches {
+                ModOwnership::LauncherManagedRetained
+            } else {
+                ModOwnership::Unknown
+            };
+            entry.can_toggle = false;
+            entry.can_remove = false;
+            entry.action_blocked_reason = Some(file.reason);
+        }
+    }
     derive_local_warnings(&mut entries);
     entries.sort_by(|left, right| {
         left.display_name
@@ -350,7 +381,7 @@ pub(crate) fn verified_required_mods(
     verified_required_mods_with_manifest(managed, instance, &manifest)
 }
 
-fn verified_required_mods_with_manifest(
+pub(crate) fn verified_required_mods_with_manifest(
     managed: &ManagedPaths,
     instance: &InstanceId,
     manifest: &crate::distribution::ReleaseManifest,
@@ -598,6 +629,9 @@ fn inspect_entry(
         ));
     }
     let blocked_reason = match ownership {
+        ModOwnership::LauncherManagedRetained => {
+            Some("Retained former launcher artifact; no active launcher requirement.".into())
+        }
         ModOwnership::LauncherManagedRequired => Some(
             "This mod is required and is maintained by the verified installation system."
                 .to_owned(),

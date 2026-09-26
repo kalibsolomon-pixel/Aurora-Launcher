@@ -99,6 +99,50 @@ pub struct AuroraInstalledArtifact {
 }
 
 impl AuroraInstalledState {
+    /// Construct ownership only from authoritative release expectations and
+    /// the byte counts of separately verified materialized artifacts.
+    pub(crate) fn for_verified_release(
+        release: &AuroraRelease,
+        bytes: u64,
+        api_bytes: Option<u64>,
+    ) -> Result<Self, AuroraInstallError> {
+        let artifact = AuroraInstalledArtifact {
+            relative_path: managed_artifact_relative_path(release)?,
+            size_bytes: bytes,
+            sha256: release.artifact().sha256().into(),
+        };
+        let fabric_api = match (release.fabric_api(), api_bytes) {
+            (Some(api), Some(size_bytes)) => Some(InstalledFabricApi {
+                version: api.version().into(),
+                artifact: AuroraInstalledArtifact {
+                    relative_path: format!("mods/fabric-api-{}.jar", api.version()),
+                    size_bytes,
+                    sha256: api.artifact().sha256().into(),
+                },
+            }),
+            (None, None) => None,
+            _ => {
+                return Err(AuroraInstallError::ReleaseInvalid(
+                    "verified requirements do not match release".into(),
+                ));
+            }
+        };
+        let state = Self {
+            schema_version: AURORA_INSTALLED_SCHEMA_VERSION,
+            aurora_version: release.aurora_version().into(),
+            channel: release.channel(),
+            minecraft_version: release.minecraft_version().into(),
+            fabric_loader_version: release.fabric_loader_version().into(),
+            artifact,
+            fabric_api,
+            installation_id: uuid::Uuid::new_v4().to_string(),
+            installed_at_unix_seconds: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        };
+        Self::from_json(&state.to_json()).map_err(AuroraInstallError::State)
+    }
     pub fn aurora_version(&self) -> &str {
         &self.aurora_version
     }

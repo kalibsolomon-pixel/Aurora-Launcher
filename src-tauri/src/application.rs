@@ -1078,11 +1078,18 @@ pub async fn plan_fabric_install(
 
     Ok(FabricPlanSummary {
         minecraft_version: plan.minecraft().minecraft_version().to_owned(),
-        loader_version: plan.loader().loader_version().to_owned(),
+        loader_version: plan
+            .loader()
+            .expect("Fabric resolution")
+            .loader_version()
+            .to_owned(),
         vanilla_library_count: plan.vanilla_library_count(),
         fabric_library_count: plan.fabric_library_count(),
         final_library_count: plan.libraries().len(),
-        fabric_digested_library_count: plan.loader().digested_library_count(),
+        fabric_digested_library_count: plan
+            .loader()
+            .expect("Fabric resolution")
+            .digested_library_count(),
         java_component: plan.java().component().to_owned(),
         java_major_version: plan.java().major_version(),
         java_raised_by_loader: plan.java().raised_by_loader(),
@@ -1152,7 +1159,7 @@ pub struct InstallProgressEvent {
 #[serde(rename_all = "camelCase")]
 pub struct InstalledGameSummary {
     minecraft_version: String,
-    loader_version: String,
+    loader_version: Option<String>,
     installation_id: String,
     file_count: usize,
     total_bytes: u64,
@@ -1217,7 +1224,10 @@ pub async fn install_game(
     eprintln!(
         "[aurora-launcher] installed Minecraft {} + Fabric Loader {} into {} ({} files, {} bytes)",
         installed.manifest().minecraft_version(),
-        installed.manifest().fabric_loader_version(),
+        installed
+            .manifest()
+            .fabric_loader_version()
+            .unwrap_or("Vanilla"),
         installed.game_directory().display(),
         installed.manifest().files().len(),
         installed.total_byte_count(),
@@ -1243,7 +1253,7 @@ pub async fn install_game(
 
     Ok(InstalledGameSummary {
         minecraft_version: manifest.minecraft_version().to_owned(),
-        loader_version: manifest.fabric_loader_version().to_owned(),
+        loader_version: manifest.fabric_loader_version().map(str::to_owned),
         installation_id: manifest.installation_id().to_owned(),
         file_count: manifest.files().len(),
         total_bytes: installed.total_byte_count(),
@@ -1314,7 +1324,7 @@ fn validation_dto(validation: InstalledGameValidation) -> InstalledGameValidatio
     InstalledGameValidationDto {
         status: status.to_owned(),
         minecraft_version: Some(validation.minecraft_version),
-        loader_version: Some(validation.fabric_loader_version),
+        loader_version: validation.fabric_loader_version,
         installation_id: Some(validation.installation_id),
         checked_files: validation.checked_files,
         verified_bytes: validation.verified_bytes,
@@ -1498,7 +1508,8 @@ pub fn list_aurora_releases() -> Result<Vec<AuroraReleaseSummary>, CommandError>
 pub struct CreateInstanceRequest {
     display_name: String,
     minecraft_version: String,
-    loader_policy: InstanceLoaderPolicyDto,
+    loader: crate::instances::settings::LoaderConfiguration,
+    aurora_enabled: bool,
 }
 
 /// The loader policy as it crosses the command boundary.
@@ -1536,16 +1547,14 @@ pub async fn create_instance(
     let endpoints = crate::instances::lifecycle::InstanceEndpoints::creation()
         .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
 
-    let configuration = crate::instances::settings::InstanceConfiguration::from_parts(
+    let mut configuration = crate::instances::settings::InstanceConfiguration::from_parts(
         request.minecraft_version.trim(),
-        crate::instances::settings::LoaderConfiguration::from_parts(
-            crate::instances::settings::LoaderKind::Fabric,
-            (&request.loader_policy).try_into()?,
-        ),
+        request.loader,
         crate::instances::settings::DEFAULT_MEMORY_MIB,
         String::new(),
         None,
     );
+    configuration.set_aurora_enabled(request.aurora_enabled);
 
     let record = crate::instances::lifecycle::create_instance(
         &managed_paths,
@@ -1579,6 +1588,110 @@ pub async fn create_instance(
         record.installed().aurora.is_some(),
     );
 
+    Ok(InstanceSummary::from_record(&record))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AuroraCompatibilityRequest {
+    minecraft_version: String,
+    loader: crate::instances::settings::LoaderConfiguration,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuroraCompatibility {
+    available: bool,
+    reason: String,
+    version: Option<String>,
+    loader_version: Option<String>,
+}
+
+#[tauri::command]
+pub fn get_aurora_compatibility(
+    request: AuroraCompatibilityRequest,
+) -> Result<AuroraCompatibility, CommandError> {
+    use crate::instances::settings::{LoaderConfiguration, LoaderPolicy};
+    let manifest = crate::distribution::creation_manifest()
+        .map_err(|e| CommandError::new("aurora_manifest_invalid", e.to_string()))?;
+    let release = match &request.loader {
+        LoaderConfiguration::Fabric { policy } => manifest.releases().iter().find(|release| {
+            release.minecraft_version() == request.minecraft_version
+                && match policy {
+                    LoaderPolicy::Automatic {} => true,
+                    LoaderPolicy::Pinned { version } => release.fabric_loader_version() == version,
+                }
+        }),
+        _ => None,
+    };
+    Ok(AuroraCompatibility {
+        available: release.is_some(),
+        reason: if release.is_some() {
+            "Compatible reviewed Aurora release available"
+        } else {
+            "No Aurora release supports this Minecraft/platform selection"
+        }
+        .into(),
+        version: release.map(|r| r.aurora_version().into()),
+        loader_version: release.map(|r| r.fabric_loader_version().into()),
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AuroraTransitionRequest {
+    instance_id: String,
+    enabled: bool,
+    fingerprint: Option<String>,
+}
+
+impl From<crate::instances::transition::TransitionError> for CommandError {
+    fn from(error: crate::instances::transition::TransitionError) -> Self {
+        Self::new(error.0, error.1)
+    }
+}
+
+#[tauri::command]
+pub fn preview_aurora_transition(
+    app: AppHandle,
+    request: AuroraTransitionRequest,
+) -> Result<crate::instances::transition::TransitionPreview, CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = crate::instances::InstanceId::new(request.instance_id)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|e| CommandError::new("aurora_manifest_invalid", e.to_string()))?;
+    Ok(crate::instances::transition::preview(
+        &managed,
+        &endpoints,
+        &id,
+        request.enabled,
+    )?)
+}
+
+#[tauri::command]
+pub async fn apply_aurora_transition(
+    app: AppHandle,
+    request: AuroraTransitionRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = crate::instances::InstanceId::new(request.instance_id)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|e| CommandError::new("aurora_manifest_invalid", e.to_string()))?;
+    let fingerprint = request.fingerprint.ok_or_else(|| {
+        CommandError::new(
+            "aurora_transition_stale",
+            "Request and approve a transition preview first.",
+        )
+    })?;
+    let record = crate::instances::transition::apply(
+        &managed,
+        &endpoints,
+        &id,
+        request.enabled,
+        &fingerprint,
+        Default::default(),
+    )
+    .await?;
     Ok(InstanceSummary::from_record(&record))
 }
 
@@ -4496,16 +4609,13 @@ mod tests {
     }
 
     /// Transport-level classifications are exercised on genuine reqwest
-    /// errors produced by a dead loopback endpoint, keeping the mapping
-    /// honest without public internet access. Whether the platform surfaces
-    /// the dead endpoint as a connect error or lets the timeout win the race
-    /// is platform-dependent; both must map to a transport category.
+    /// errors from a reserved loopback listener that never responds, without
+    /// releasing an ephemeral port for another parallel test to reuse.
     #[tokio::test]
     async fn real_transport_errors_map_to_their_machine_codes() {
-        // Bind and drop a listener to obtain a guaranteed-dead port.
+        // Keep the listener reserved until the real request times out.
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        drop(listener);
 
         // Build through the launcher's own client so the rustls crypto
         // provider is installed exactly like in production.
@@ -4523,10 +4633,15 @@ mod tests {
         let error = crate::downloads::download(
             &source,
             &destination,
-            &crate::downloads::DownloadOptions::default(),
+            &crate::downloads::DownloadOptions {
+                connect_timeout: std::time::Duration::from_secs(1),
+                idle_read_timeout: std::time::Duration::from_millis(500),
+                ..Default::default()
+            },
         )
         .await
-        .expect_err("a dead endpoint must fail");
+        .expect_err("a non-responding endpoint must time out");
+        drop(listener);
 
         let command_error = CommandError::from(AcquisitionError::Download(error));
         assert!(

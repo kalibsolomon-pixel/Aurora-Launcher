@@ -89,6 +89,8 @@ class LauncherStore {
   // Instance management. All state comes from Rust.
   createDisplayName = $state("");
   createMinecraftVersion = $state("");
+  createPlatform = $state<"vanilla" | "fabric">("fabric");
+  createAuroraEnabled = $state(false);
   createLoaderPolicy = $state<{ type: "automatic" | "pinned"; version?: string }>({
     type: "automatic",
   });
@@ -382,7 +384,8 @@ class LauncherStore {
       await createInstance({
         displayName: this.createDisplayName.trim(),
         minecraftVersion: this.createMinecraftVersion,
-        loaderPolicy: this.createLoaderPolicy,
+        loader: this.createPlatform === "vanilla" ? {kind: "vanilla"} : {kind: "fabric", policy: this.createLoaderPolicy},
+        auroraEnabled: this.createAuroraEnabled,
       });
       this.createDisplayName = "";
       await this.refreshState();

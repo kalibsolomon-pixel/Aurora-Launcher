@@ -1,5 +1,5 @@
 //! Rust-owned installed configuration and capability authority.
-//! Vanilla and future loaders are representable; only Fabric has an executor.
+//! Vanilla and Fabric have executors; future loaders are representations only.
 use crate::distribution::ReleaseChannel;
 use serde::{Deserialize, Serialize};
 
@@ -127,14 +127,24 @@ pub struct PlatformCapability {
 }
 /// UI choices are this list, never the serialization enum's vocabulary.
 pub fn capabilities() -> Vec<PlatformCapability> {
-    vec![PlatformCapability {
-        kind: "fabric",
-        can_create: true,
-        can_install: true,
-        can_validate: true,
-        can_launch: true,
-        aurora_supported: true,
-    }]
+    vec![
+        PlatformCapability {
+            kind: "vanilla",
+            can_create: true,
+            can_install: true,
+            can_validate: true,
+            can_launch: true,
+            aurora_supported: false,
+        },
+        PlatformCapability {
+            kind: "fabric",
+            can_create: true,
+            can_install: true,
+            can_validate: true,
+            can_launch: true,
+            aurora_supported: true,
+        },
+    ]
 }
 
 /// Requirements are properties of a resolved optional capability, not of Fabric itself.
@@ -222,7 +232,7 @@ mod tests {
         }
         assert_eq!(
             capabilities().iter().map(|c| c.kind).collect::<Vec<_>>(),
-            vec!["fabric"]
+            vec!["vanilla", "fabric"]
         );
         assert!(
             capabilities()

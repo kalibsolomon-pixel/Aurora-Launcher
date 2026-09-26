@@ -1,5 +1,7 @@
 # Aurora Launcher
 
+Phase C2 adds executable Vanilla instances, Fabric instances without Aurora, and compatible optional Aurora. Creation uses the Rust capability catalog; Aurora is off by default. Existing instances change Aurora through an explicit preview and fingerprinted content transaction, with ownership checks and rollback. Provider-managed Fabric API remains provider-managed; a former launcher API still needed by content is retained separately without Required/Protected classification. See [ARCHITECTURE.md](ARCHITECTURE.md) for the supported lifecycle and transition boundaries.
+
 Aurora Launcher is a standalone launcher for the Aurora client mod for Minecraft: Java Edition. It is designed around isolated installations, transparent behavior, low background overhead, and user control.
 
 This repository is the canonical public repository for Aurora Launcher. It contains the launcher implementation (Tauri, Rust, and Svelte) and serves as the public release location. The Aurora client mod itself is developed as a separate project.

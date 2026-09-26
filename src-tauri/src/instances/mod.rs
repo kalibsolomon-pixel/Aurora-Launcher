@@ -21,6 +21,7 @@
 pub mod lifecycle;
 pub mod platform;
 pub mod settings;
+pub mod transition;
 
 use std::fmt;
 use std::path::{Path, PathBuf};

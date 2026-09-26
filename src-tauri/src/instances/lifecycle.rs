@@ -123,6 +123,9 @@ impl InstanceEndpoints {
     pub fn release_manifest(&self) -> &ReleaseManifest {
         &self.release_manifest
     }
+    pub(crate) fn download_options(&self) -> &crate::downloads::DownloadOptions {
+        self.install.download_options()
+    }
 }
 
 /// A typed instance-creation request.
@@ -344,7 +347,10 @@ pub async fn retry_instance_install(
 fn require_executable_configuration(
     configuration: &InstanceConfiguration,
 ) -> Result<(), InstanceError> {
-    if configuration.loader().kind() != super::settings::LoaderKind::Fabric {
+    if !matches!(
+        configuration.loader().kind(),
+        super::settings::LoaderKind::Fabric | super::settings::LoaderKind::Vanilla
+    ) {
         return Err(InstanceError::ReleaseInvalid(
             "this platform has no installation/launch implementation in this build".into(),
         ));
@@ -357,6 +363,14 @@ async fn resolve_installed_configuration(
     configuration: &InstanceConfiguration,
 ) -> Result<super::platform::InstalledConfiguration, InstanceError> {
     require_executable_configuration(configuration)?;
+    if configuration.loader().kind() == super::settings::LoaderKind::Vanilla {
+        configuration.validate()?;
+        return Ok(super::platform::InstalledConfiguration {
+            minecraft_version: configuration.minecraft_version().into(),
+            platform: super::platform::PlatformPin::Vanilla {},
+            aurora: None,
+        });
+    }
     if configuration.aurora_enabled() {
         let release =
             resolve_release_for_configuration(endpoints.release_manifest(), configuration)?;
@@ -553,8 +567,10 @@ pub fn update_instance_configuration(
                 .to_owned(),
         });
     }
-    if record.installed().aurora.is_some() && !configuration.aurora_enabled() {
-        return Err(InstanceError::ReleaseInvalid("removing Aurora from an existing instance is deferred until the explicit content transition in C2".into()));
+    if record.installed().aurora.is_some() != configuration.aurora_enabled() {
+        return Err(InstanceError::ReleaseInvalid(
+            "Changing Aurora requires an approved content transition preview.".into(),
+        ));
     }
     record.set_configuration(configuration);
     let updated = record.clone();
@@ -748,6 +764,17 @@ async fn resolve_record_game_plan(
     let game_version =
         crate::minecraft::metadata::MinecraftVersionId::new(&installed.minecraft_version)
             .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+    if installed.platform == (super::platform::PlatformPin::Vanilla {}) {
+        let minecraft = crate::minecraft::resolve_install_plan(
+            &endpoints.minecraft,
+            &game_version,
+            PlatformProfile::current().map_err(InstanceError::Platform)?,
+            endpoints.install.download_options(),
+        )
+        .await
+        .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+        return Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft));
+    }
     let loader_version = crate::fabric::metadata::LoaderVersionId::new(
         installed
             .platform
@@ -1031,7 +1058,7 @@ pub fn validate_instance(
     // settings (memory, JVM arguments, window, name) never participate.
     if !matches!(
         record.installed().platform,
-        super::platform::PlatformPin::Fabric { .. }
+        super::platform::PlatformPin::Fabric { .. } | super::platform::PlatformPin::Vanilla {}
     ) {
         problems.push(InstanceProblem {
             component: "platform",
@@ -1080,7 +1107,7 @@ pub fn validate_instance(
 
     if let Some(game) = &game_manifest {
         if game.minecraft_version() != record.installed().minecraft_version
-            || Some(game.fabric_loader_version()) != record.installed().platform.version()
+            || game.platform() != record.installed().platform
         {
             problems.push(InstanceProblem {
                 component: "platform",
@@ -1170,14 +1197,14 @@ pub fn validate_instance(
             }
             if let Some(game) = &game_manifest {
                 if game.minecraft_version() != aurora.minecraft_version()
-                    || game.fabric_loader_version() != aurora.fabric_loader_version()
+                    || game.fabric_loader_version() != Some(aurora.fabric_loader_version())
                 {
                     problems.push(InstanceProblem {
                     component: "consistency",
                     reason: format!(
                         "the installed game (Minecraft {} + Fabric Loader {}) does not match the Aurora release (Minecraft {} + Fabric Loader {})",
                         game.minecraft_version(),
-                        game.fabric_loader_version(),
+                        game.fabric_loader_version().unwrap_or("Vanilla"),
                         aurora.minecraft_version(),
                         aurora.fabric_loader_version(),
                     ),
@@ -1429,12 +1456,34 @@ mod tests {
 
     impl SyntheticWorld {
         fn new(name: &str) -> Self {
+            Self::with_api(name, false)
+        }
+
+        fn with_api(name: &str, api: bool) -> Self {
             let client = b"synthetic client jar bytes".to_vec();
             let logging = b"<Configuration status=\"WARN\"></Configuration>".to_vec();
             let mojang_library = b"synthetic mojang library jar".to_vec();
             let fabric_common = b"synthetic digested fabric library jar".to_vec();
             let fabric_loader = b"synthetic digest-less fabric loader jar".to_vec();
-            let aurora_artifact = b"aurora development artifact bytes".to_vec();
+            let mod_jar = |id: &str| {
+                use std::io::Write;
+                let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+                writer
+                    .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                writer
+                    .write_all(
+                        format!(r#"{{"schemaVersion":1,"id":"{id}","version":"1"}}"#).as_bytes(),
+                    )
+                    .unwrap();
+                writer.finish().unwrap().into_inner()
+            };
+            let aurora_artifact = if api {
+                mod_jar("aurora")
+            } else {
+                b"aurora development artifact bytes".to_vec()
+            };
+            let api_artifact = mod_jar("fabric-api");
 
             let mut cursor = std::io::Cursor::new(Vec::new());
             {
@@ -1458,6 +1507,7 @@ mod tests {
             .into_bytes();
 
             let mut bodies: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+            bodies.insert("/aurora/fabric-api.jar".into(), api_artifact.clone());
             bodies.insert("/mojang/client.jar".to_owned(), client.clone());
             bodies.insert(
                 "/mojang/logging/client-1.21.2.xml".to_owned(),
@@ -1640,7 +1690,7 @@ mod tests {
             ]);
 
             let aurora_url = format!("{base}/aurora/aurora-0.3.0-dev.jar");
-            let release_manifest = ReleaseManifest::from_json(&format!(
+            let mut release_manifest = ReleaseManifest::from_json(&format!(
                 r#"{{
                     "schemaVersion": 1,
                     "releases": [
@@ -1658,6 +1708,12 @@ mod tests {
                 aurora_artifact.len(),
             ))
             .unwrap();
+
+            if api {
+                let mut value = serde_json::to_value(&release_manifest).unwrap();
+                value["releases"][0]["fabricApi"] = serde_json::json!({"version":"1","artifact":{"url":format!("{base}/aurora/fabric-api.jar"),"sha256":fabric_sha256(&api_artifact),"sizeBytes":api_artifact.len()}});
+                release_manifest = ReleaseManifest::from_json(&value.to_string()).unwrap();
+            }
 
             let root = std::env::temp_dir()
                 .join("aurora-lifecycle-test")
@@ -3041,7 +3097,10 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(plan.loader().loader_version(), "0.19.5");
+        assert_eq!(
+            plan.loader().expect("Fabric resolution").loader_version(),
+            "0.19.5"
+        );
         assert_eq!(
             plan.main_class(),
             "net.fabricmc.loader.impl.launch.knot.KnotClient"
@@ -3068,12 +3127,446 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn vanilla_lifecycle_uses_only_mojang_and_repairs_from_verified_cache() {
+        let world = SyntheticWorld::new("vanilla-lifecycle");
+        let endpoints = world.endpoints();
+        let mut configuration = InstanceConfiguration::for_minecraft_version("26.2");
+        configuration.set_loader(super::super::settings::LoaderConfiguration::Vanilla {});
+        configuration.set_aurora_enabled(false);
+        let record = world
+            .create_with_configuration("Vanilla", configuration)
+            .await
+            .unwrap();
+        assert_eq!(
+            record.installed().platform,
+            super::super::platform::PlatformPin::Vanilla {}
+        );
+        assert!(record.installed().aurora.is_none());
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        let paths = world.managed.instance_paths(record.id());
+        let state = crate::install::state::load_installed_state(paths.game())
+            .unwrap()
+            .unwrap();
+        assert_eq!(state.schema_version(), 2);
+        assert_eq!(state.fabric_loader_version(), None);
+        assert!(!state.to_json().contains("fabricLoaderVersion"));
+        assert!(
+            !state
+                .files()
+                .iter()
+                .any(|file| file.path().contains("fabric"))
+        );
+        assert!(
+            load_installed_state(&world.managed, record.id())
+                .unwrap()
+                .is_none()
+        );
+        let plan = resolve_instance_game_plan(
+            &world.managed,
+            &world.registry_path(),
+            &endpoints,
+            record.id(),
+        )
+        .await
+        .unwrap();
+        assert!(plan.loader().is_none());
+        assert_eq!(plan.fabric_library_count(), 0);
+        assert_eq!(plan.main_class(), "net.minecraft.client.main.Main");
+        assert_eq!(
+            plan.java().major_version(),
+            plan.minecraft().java().major_version()
+        );
+        let client = state
+            .files()
+            .iter()
+            .find(|file| file.role() == crate::install::state::InstalledFileRole::Client)
+            .unwrap();
+        std::fs::write(paths.game().join(client.path()), b"corrupt").unwrap();
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Damaged);
+        install_instance_configuration(
+            &world.managed,
+            &world.registry_path(),
+            &world.config_path(),
+            &endpoints,
+            record.id(),
+            &mut |_| {},
+            InstanceFaults::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        assert!(std::fs::read_dir(paths.mods()).unwrap().next().is_none());
+        assert_eq!(
+            world.load_registry().find(record.id()).unwrap().installed(),
+            record.installed()
+        );
+    }
+
+    #[tokio::test]
+    async fn aurora_transition_round_trip_reloads_and_preserves_unrelated_content() {
+        use super::super::transition::{TransitionFaults, apply, preview};
+        let world = SyntheticWorld::with_api("transition-round-trip", true);
+        let endpoints = world.endpoints();
+        let record = world.create("Round trip").await.unwrap();
+        let paths = world.managed.instance_paths(record.id());
+        let user = paths.mods().join("user.jar.disabled");
+        std::fs::write(&user, b"unrelated disabled mod").unwrap();
+        for enabled in [false, true] {
+            let plan = preview(&world.managed, &endpoints, record.id(), enabled).unwrap();
+            assert!(plan.blockers.is_empty());
+            assert_eq!(
+                if enabled {
+                    plan.install.len()
+                } else {
+                    plan.remove.len()
+                },
+                2
+            );
+            apply(
+                &world.managed,
+                &endpoints,
+                record.id(),
+                enabled,
+                &plan.fingerprint,
+                TransitionFaults::default(),
+            )
+            .await
+            .unwrap();
+            let loaded = world.load_registry();
+            let stored = loaded.find(record.id()).unwrap();
+            assert_eq!(stored.installed().aurora.is_some(), enabled);
+            assert_eq!(stored.configuration().aurora_enabled(), enabled);
+            assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+            assert_eq!(std::fs::read(&user).unwrap(), b"unrelated disabled mod");
+            let inventory = crate::instance_mods::scan(&world.managed, record.id()).unwrap();
+            assert_eq!(
+                inventory
+                    .entries
+                    .iter()
+                    .filter(|entry| entry.ownership
+                        == crate::instance_mods::ModOwnership::LauncherManagedRequired)
+                    .count(),
+                if enabled { 2 } else { 0 }
+            );
+            assert!(!std::fs::read_dir(paths.mods()).unwrap().any(|entry| {
+                entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".aurora-transition")
+            }));
+        }
+    }
+
+    #[tokio::test]
+    async fn aurora_transition_failures_and_stale_previews_preserve_working_state() {
+        use super::super::transition::{TransitionFaults, apply, preview};
+        let world = SyntheticWorld::with_api("transition-rollback", true);
+        let endpoints = world.endpoints();
+        let record = world.create("Rollback").await.unwrap();
+        let before = std::fs::read(world.registry_path()).unwrap();
+        for enabled in [false, true] {
+            for faults in [
+                TransitionFaults {
+                    fail_stage: true,
+                    ..Default::default()
+                },
+                TransitionFaults {
+                    fail_activation: true,
+                    ..Default::default()
+                },
+                TransitionFaults {
+                    fail_persistence: true,
+                    ..Default::default()
+                },
+            ] {
+                let plan = preview(&world.managed, &endpoints, record.id(), enabled).unwrap();
+                let registry_before = std::fs::read(world.registry_path()).unwrap();
+                assert!(
+                    apply(
+                        &world.managed,
+                        &endpoints,
+                        record.id(),
+                        enabled,
+                        &plan.fingerprint,
+                        faults
+                    )
+                    .await
+                    .is_err()
+                );
+                assert_eq!(
+                    std::fs::read(world.registry_path()).unwrap(),
+                    registry_before
+                );
+                assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+            }
+            let plan = preview(&world.managed, &endpoints, record.id(), enabled).unwrap();
+            let mut configuration = world
+                .load_registry()
+                .find(record.id())
+                .unwrap()
+                .configuration()
+                .clone();
+            configuration.set_memory_mib(4096);
+            update_instance_configuration(
+                &world.registry_path(),
+                &endpoints,
+                record.id(),
+                configuration,
+            )
+            .unwrap();
+            assert_eq!(
+                apply(
+                    &world.managed,
+                    &endpoints,
+                    record.id(),
+                    enabled,
+                    &plan.fingerprint,
+                    Default::default()
+                )
+                .await
+                .unwrap_err()
+                .0,
+                "aurora_transition_stale"
+            );
+            let plan = preview(&world.managed, &endpoints, record.id(), enabled).unwrap();
+            apply(
+                &world.managed,
+                &endpoints,
+                record.id(),
+                enabled,
+                &plan.fingerprint,
+                Default::default(),
+            )
+            .await
+            .unwrap();
+            // Change a fingerprinted field for the next stale test too.
+            let mut configuration = world
+                .load_registry()
+                .find(record.id())
+                .unwrap()
+                .configuration()
+                .clone();
+            configuration.set_memory_mib(2048);
+            update_instance_configuration(
+                &world.registry_path(),
+                &endpoints,
+                record.id(),
+                configuration,
+            )
+            .unwrap();
+        }
+        assert_eq!(std::fs::read(world.registry_path()).unwrap(), before);
+    }
+
+    #[tokio::test]
+    async fn aurora_disable_retains_api_required_by_local_content_and_enable_reuses_exact_ownership()
+     {
+        use super::super::transition::{apply, preview};
+        use std::io::Write;
+        let world = SyntheticWorld::with_api("transition-retention", true);
+        let endpoints = world.endpoints();
+        let record = world.create("Retention").await.unwrap();
+        let paths = world.managed.instance_paths(record.id());
+        let mut writer =
+            zip::ZipWriter::new(std::fs::File::create(paths.mods().join("local.jar")).unwrap());
+        writer
+            .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer
+            .write_all(
+                br#"{"schemaVersion":1,"id":"local","version":"1","depends":{"fabric-api":"*"}}"#,
+            )
+            .unwrap();
+        writer.finish().unwrap();
+        let api = std::fs::read(paths.mods().join("fabric-api-1.jar")).unwrap();
+        let plan = preview(&world.managed, &endpoints, record.id(), false).unwrap();
+        assert_eq!(plan.remove.len(), 1);
+        assert_eq!(plan.retain.len(), 1);
+        apply(
+            &world.managed,
+            &endpoints,
+            record.id(),
+            false,
+            &plan.fingerprint,
+            Default::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            std::fs::read(paths.mods().join("fabric-api-1.jar")).unwrap(),
+            api
+        );
+        assert!(
+            crate::instance_mods::scan(&world.managed, record.id())
+                .unwrap()
+                .entries
+                .iter()
+                .any(|entry| entry.ownership
+                    == crate::instance_mods::ModOwnership::LauncherManagedRetained
+                    && !entry.can_remove)
+        );
+        let plan = preview(&world.managed, &endpoints, record.id(), true).unwrap();
+        assert!(plan.blockers.is_empty());
+        assert!(
+            plan.install
+                .iter()
+                .any(|file| file.reason.contains("Reuse"))
+        );
+        apply(
+            &world.managed,
+            &endpoints,
+            record.id(),
+            true,
+            &plan.fingerprint,
+            Default::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            std::fs::read(paths.mods().join("fabric-api-1.jar")).unwrap(),
+            api
+        );
+        assert!(!paths.root().join("aurora-retained.json").exists());
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+    }
+
+    #[tokio::test]
+    async fn provider_external_api_requirements_survive_disable_without_fabricated_provenance() {
+        use super::super::transition::{apply, preview};
+        use crate::instance_content::{
+            ContentCompatibility, ContentState, ContentType, DependencyKind, ProviderDependency,
+            ProviderRecord,
+        };
+        use sha2::Digest as _;
+        use std::io::Write;
+        let world = SyntheticWorld::with_api("transition-provider-retention", true);
+        let endpoints = world.endpoints();
+        let record = world.create("Provider retention").await.unwrap();
+        let paths = world.managed.instance_paths(record.id());
+        let mut writer =
+            zip::ZipWriter::new(std::fs::File::create(paths.mods().join("parent.jar")).unwrap());
+        writer
+            .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer
+            .write_all(
+                br#"{"schemaVersion":1,"id":"parent","version":"1","depends":{"fabric-api":"*"}}"#,
+            )
+            .unwrap();
+        writer.finish().unwrap();
+        let bytes = std::fs::read(paths.mods().join("parent.jar")).unwrap();
+        let mut state = ContentState::empty();
+        state.entries.push(ProviderRecord {
+            content_type: ContentType::Mod,
+            provider: "modrinth".into(),
+            project_id: "AAAABBBB".into(),
+            version_id: "CCCCDDDD".into(),
+            file_id: "parent".into(),
+            file_name: "parent.jar".into(),
+            sha256: format!("{:x}", sha2::Sha256::digest(&bytes)),
+            display_version: Some("1".into()),
+            compatibility: ContentCompatibility {
+                minecraft_versions: vec!["26.2".into()],
+                loader: Some("fabric".into()),
+                environment: Some("client".into()),
+            },
+            dependencies: vec![ProviderDependency {
+                kind: DependencyKind::Required,
+                provider: "modrinth".into(),
+                project_id: "P7dR8mSH".into(),
+                version_id: None,
+            }],
+            explicitly_retained: true,
+            requires: vec![],
+        });
+        state.save(&world.managed, record.id()).unwrap();
+        for enabled in [false, true] {
+            let plan = preview(&world.managed, &endpoints, record.id(), enabled).unwrap();
+            assert!(plan.blockers.is_empty());
+            if !enabled {
+                assert_eq!(plan.retain.len(), 1);
+            }
+            apply(
+                &world.managed,
+                &endpoints,
+                record.id(),
+                enabled,
+                &plan.fingerprint,
+                Default::default(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                ContentState::load(&world.managed, record.id()).unwrap(),
+                state
+            );
+            assert_eq!(
+                std::fs::read(paths.mods().join("parent.jar")).unwrap(),
+                bytes
+            );
+            assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        }
+    }
+
+    #[tokio::test]
+    async fn transition_tamper_manual_collisions_and_incompatible_versions_fail_closed() {
+        use super::super::transition::{apply, preview};
+        let world = SyntheticWorld::with_api("transition-blockers", true);
+        let endpoints = world.endpoints();
+        let record = world.create("Blockers").await.unwrap();
+        let paths = world.managed.instance_paths(record.id());
+        let before = std::fs::read(world.registry_path()).unwrap();
+        let bytes = std::fs::read(paths.mods().join("aurora-0.3.0.jar")).unwrap();
+        std::fs::write(paths.mods().join("aurora-0.3.0.jar"), b"tampered").unwrap();
+        assert!(preview(&world.managed, &endpoints, record.id(), false).is_err());
+        assert_eq!(std::fs::read(world.registry_path()).unwrap(), before);
+        std::fs::write(paths.mods().join("aurora-0.3.0.jar"), &bytes).unwrap();
+        let plan = preview(&world.managed, &endpoints, record.id(), false).unwrap();
+        apply(
+            &world.managed,
+            &endpoints,
+            record.id(),
+            false,
+            &plan.fingerprint,
+            Default::default(),
+        )
+        .await
+        .unwrap();
+        std::fs::write(paths.mods().join("manual.jar"), &bytes).unwrap();
+        let plan = preview(&world.managed, &endpoints, record.id(), true).unwrap();
+        assert!(!plan.blockers.is_empty());
+        let before = std::fs::read(world.registry_path()).unwrap();
+        assert_eq!(
+            apply(
+                &world.managed,
+                &endpoints,
+                record.id(),
+                true,
+                &plan.fingerprint,
+                Default::default()
+            )
+            .await
+            .unwrap_err()
+            .0,
+            "aurora_transition_blocked"
+        );
+        assert_eq!(std::fs::read(world.registry_path()).unwrap(), before);
+        assert_eq!(
+            std::fs::read(paths.mods().join("manual.jar")).unwrap(),
+            bytes
+        );
+    }
+
+    #[tokio::test]
     async fn unsupported_creation_and_aurora_removal_fail_before_mutation() {
         let world = SyntheticWorld::new("unsupported-platform");
         let endpoints = world.endpoints();
         let mut configuration = InstanceConfiguration::for_minecraft_version("26.2");
         configuration.set_aurora_enabled(false);
-        configuration.set_loader(super::super::settings::LoaderConfiguration::Vanilla {});
+        configuration.set_loader(super::super::settings::LoaderConfiguration::Forge {
+            policy: LoaderPolicy::Automatic {},
+        });
         assert!(
             create_instance(
                 &world.managed,

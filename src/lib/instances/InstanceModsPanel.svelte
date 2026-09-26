@@ -88,6 +88,7 @@
 
   function stateLabel(entry: ModEntry): string {
     if (entry.ownership === "launcherManagedRequired") return "Required";
+    if (entry.ownership === "launcherManagedRetained") return "Retained";
     if (entry.ownership === "providerManaged") return "Managed";
     if (entry.fileType === "enabledJar") return "Enabled";
     if (entry.fileType === "disabledJar") return "Disabled";

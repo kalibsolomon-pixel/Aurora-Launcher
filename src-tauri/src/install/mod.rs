@@ -495,9 +495,9 @@ pub async fn install_game(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|since| since.as_secs())
         .unwrap_or_default();
-    let manifest = InstalledGameManifest::new(
+    let manifest = InstalledGameManifest::for_platform(
         minecraft.minecraft_version(),
-        plan.loader().loader_version(),
+        plan.platform(),
         installation_id,
         installed_at,
         installed_files,
@@ -593,7 +593,7 @@ pub struct InstalledGameValidation {
     pub status: ValidationStatus,
     pub problems: Vec<ValidationProblem>,
     pub minecraft_version: String,
-    pub fabric_loader_version: String,
+    pub fabric_loader_version: Option<String>,
     pub installation_id: String,
     pub checked_files: usize,
     pub verified_bytes: u64,
@@ -668,7 +668,7 @@ pub fn validate_installed_game(
         status,
         problems,
         minecraft_version: manifest.minecraft_version().to_owned(),
-        fabric_loader_version: manifest.fabric_loader_version().to_owned(),
+        fabric_loader_version: manifest.fabric_loader_version().map(str::to_owned),
         installation_id: manifest.installation_id().to_owned(),
         checked_files: manifest.files().len(),
         verified_bytes,
@@ -1613,7 +1613,7 @@ mod tests {
             .unwrap()
             .expect("manifest committed");
         assert_eq!(manifest.minecraft_version(), "26.2");
-        assert_eq!(manifest.fabric_loader_version(), "0.19.5");
+        assert_eq!(manifest.fabric_loader_version(), Some("0.19.5"));
         assert!(manifest.files().len() >= 9);
 
         // Trust classes are distinct and honest.
@@ -2359,7 +2359,10 @@ mod tests {
         eprintln!(
             "[live] installed {} + {} ({} files, {} bytes) into {}",
             installed.manifest().minecraft_version(),
-            installed.manifest().fabric_loader_version(),
+            installed
+                .manifest()
+                .fabric_loader_version()
+                .unwrap_or("Vanilla"),
             installed.manifest().files().len(),
             installed.total_byte_count(),
             installed.game_directory().display()

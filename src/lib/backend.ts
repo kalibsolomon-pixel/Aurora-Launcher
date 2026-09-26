@@ -343,7 +343,7 @@ export interface InstallProgressEvent {
 /** Concise summary of one committed installation. */
 export interface InstalledGameSummary {
   minecraftVersion: string;
-  loaderVersion: string;
+  loaderVersion: string | null;
   installationId: string;
   fileCount: number;
   totalBytes: number;
@@ -489,7 +489,51 @@ export interface InstanceSummary {
 export interface CreateInstanceRequest {
   displayName: string;
   minecraftVersion: string;
-  loaderPolicy: InstanceLoaderPolicy;
+  loader: InstanceLoader;
+  auroraEnabled: boolean;
+}
+
+export interface AuroraCompatibility {
+  available: boolean;
+  reason: string;
+  version: string | null;
+  loaderVersion: string | null;
+}
+export interface TransitionFile {
+  relativePath: string;
+  sha256: string;
+  sizeBytes: number;
+  reason: string;
+}
+export interface AuroraTransitionPreview {
+  instanceId: string;
+  current: { minecraftVersion: string; platform: InstancePlatform; aurora: InstanceSummary["aurora"] };
+  target: { minecraftVersion: string; platform: InstancePlatform; aurora: InstanceSummary["aurora"] };
+  requirementsAdded: string[];
+  requirementsRemoved: string[];
+  install: TransitionFile[];
+  remove: TransitionFile[];
+  retain: TransitionFile[];
+  warnings: string[];
+  blockers: string[];
+  fingerprint: string;
+}
+
+async function transitionCommand<T>(command: string, request: unknown): Promise<T> {
+  try { return await invoke<T>(command, { request }); }
+  catch (error: unknown) {
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    throw new LauncherBackendError("backend_unavailable", "The Aurora operation could not be completed.");
+  }
+}
+export function getAuroraCompatibility(minecraftVersion: string, loader: InstanceLoader): Promise<AuroraCompatibility> {
+  return transitionCommand("get_aurora_compatibility", { minecraftVersion, loader });
+}
+export function previewAuroraTransition(instanceId: string, enabled: boolean): Promise<AuroraTransitionPreview> {
+  return transitionCommand("preview_aurora_transition", { instanceId, enabled, fingerprint: null });
+}
+export function applyAuroraTransition(instanceId: string, enabled: boolean, fingerprint: string): Promise<InstanceSummary> {
+  return transitionCommand("apply_aurora_transition", { instanceId, enabled, fingerprint });
 }
 
 /** One lifecycle progress event; game item progress is embedded verbatim. */
@@ -696,6 +740,7 @@ export type ModFileType =
 
 export type ModOwnership =
   | "launcherManagedRequired"
+  | "launcherManagedRetained"
   | "providerManaged"
   | "userManaged"
   | "unknown";
