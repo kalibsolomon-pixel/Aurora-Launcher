@@ -2,11 +2,14 @@
   import { installedConfigurationLabel } from "$lib/launcher/instanceStatus";
   import { launcher } from "$lib/launcher/store.svelte";
   import { navigation } from "$lib/launcher/navigation.svelte";
-  import ReadinessRows from "$lib/instances/ReadinessRows.svelte";
+  import InstanceSwitcher from "$lib/launcher/InstanceSwitcher.svelte";
+  import { homeLaunchState } from "$lib/launcher/home";
+  import AccountIdentity from "$lib/launcher/AccountIdentity.svelte";
 
   const instance = $derived(launcher.selectedInstance);
   const readiness = $derived(
-    launcher.playReadiness && launcher.playReadiness.instanceId === instance?.id
+    launcher.playReadiness && launcher.playReadiness.instanceId === instance?.id &&
+      launcher.playReadiness.accountId === (launcher.accountsState?.selectedAccountId ?? null)
       ? launcher.playReadiness
       : null,
   );
@@ -16,30 +19,21 @@
       : null,
   );
 
-  const playLabel = $derived(
-    process?.status === "running"
-      ? "Running"
-      : launcher.playBusy
-        ? "Starting…"
-        : "Play",
-  );
-  const playDisabled = $derived(
-    process?.status === "starting" || process?.status === "running" ||
-      launcher.playBusy || launcher.playReadinessBusy || !readiness?.ready,
-  );
+  const launch = $derived(homeLaunchState(instance?.id ?? null, readiness, process,
+    launcher.playBusy, launcher.playReadinessBusy, launcher.instanceBusy !== null || launcher.accountBusy !== null));
 </script>
 
 <!--
   Aurora's fast launch surface: the selected instance and everything Play
   needs, with the readiness decision Rust owns rendered verbatim. The full
   per-instance workspace lives behind Instances — Home stays a launch
-  surface, sharing its readiness rows with the workspace Overview.
+  surface; detailed readiness and maintenance stay in the workspace Overview.
 -->
 <div class="page">
   <header class="page-header">
     <div>
       <h2 class="page-title">Home</h2>
-      <p class="page-subtitle">Your selected instance and everything Play needs.</p>
+      <p class="page-subtitle">Choose your instance and play Minecraft.</p>
     </div>
   </header>
 
@@ -79,46 +73,62 @@
       <section class="empty-state" aria-live="polite">
         <h3 class="empty-title">No instance selected</h3>
         <p class="empty-detail">Choose an instance to launch from.</p>
-        <button type="button" class="btn btn-primary" onclick={() => navigation.goTo("instances")}>
-          Go to Instances
-        </button>
+        <InstanceSwitcher />
       </section>
     {/if}
   {:else}
-    <section class="group" aria-live="polite">
+    <InstanceSwitcher />
+    {#if launcher.instanceError}
+      <p class="inline-message inline-message-error" role="alert">{launcher.instanceError.message}<code>{launcher.instanceError.code}</code></p>
+    {/if}
+    <section class="group" aria-label="Selected instance" aria-live="polite">
       <div class="group-heading">
         <div class="instance-heading">
           <h3 class="instance-name">{instance.displayName}</h3>
           <p class="instance-versions">
             {installedConfigurationLabel(instance)}
           </p>
+          <span class="status-badge {launch.tone}">{launch.label}</span>
         </div>
         <div class="play-actions">
           <button
             type="button"
             class="btn btn-primary"
             onclick={() => launcher.runPlay(instance.id)}
-            disabled={playDisabled}
+            disabled={launch.disabled}
           >
-            {playLabel}
+            {launch.playLabel}
           </button>
           <button
             type="button"
             class="btn btn-quiet"
-            onclick={() => launcher.refreshPlayReadiness()}
-            disabled={launcher.playBusy || launcher.playReadinessBusy}
+            onclick={() => navigation.openInstance(instance.id)}
           >
-            {launcher.playReadinessBusy ? "Checking…" : "Check again"}
+            Manage Instance
           </button>
         </div>
       </div>
 
-      <ReadinessRows {instance} />
-
-      <p class="group-footer">
-        Readiness is decided by Aurora from validated content, the exact managed Java runtime,
-        and a usable authenticated session — the button reflects that decision.
-      </p>
+      <div class="group-row">
+        <AccountIdentity account={launcher.selectedAccount} />
+        <button type="button" class="btn btn-quiet" onclick={() => navigation.goTo("accounts")}>{launcher.selectedAccount ? "Manage accounts" : "Sign in"}</button>
+      </div>
+      {#if launch.blockers.length || launcher.playError || launch.failure}
+        <div class="group-row">
+          <div class="group-row-main">
+            {#each launch.blockers as blocker (blocker.code)}
+              <p class="group-row-detail">{blocker.message}</p>
+              <details><summary>Technical details</summary><code>{blocker.code}</code></details>
+            {/each}
+            {#if launcher.playError}
+              <p class="inline-message inline-message-error" role="alert">{launcher.playError.message}</p>
+              <details><summary>Technical details</summary><code>{launcher.playError.code}</code></details>
+            {:else if launch.failure}<p class="inline-message inline-message-error" role="alert">{launch.failure}</p>{/if}
+          </div>
+          <button type="button" class="btn" onclick={() => launcher.refreshPlayReadiness()} disabled={launcher.playBusy || launcher.playReadinessBusy}>Check again</button>
+        </div>
+      {/if}
+      {#if launch.exitDetail}<p class="group-footer">{launch.exitDetail}</p>{/if}
     </section>
   {/if}
 </div>
@@ -126,6 +136,7 @@
 <style>
   .instance-heading {
     min-width: 0;
+    flex: 1 1 240px;
   }
 
   .instance-name {
@@ -140,6 +151,8 @@
     margin: var(--space-1) 0 0;
     color: var(--color-text-secondary);
     font-size: var(--text-metadata);
+    overflow-wrap: anywhere;
+    margin-bottom: var(--space-3);
   }
 
   .play-actions {
@@ -147,6 +160,8 @@
     align-items: center;
     gap: var(--space-2);
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
+  .play-actions .btn-primary { min-width: 104px; }
+  .group-heading { flex-wrap: wrap; }
 </style>

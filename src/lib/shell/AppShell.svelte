@@ -2,6 +2,7 @@
   import { launcher } from "$lib/launcher/store.svelte";
   import { navigation } from "$lib/launcher/navigation.svelte";
   import { activeGlobalPage, globalDestinations } from "$lib/launcher/navigation";
+  import AccountIdentity from "$lib/launcher/AccountIdentity.svelte";
 
   let { children }: { children: import("svelte").Snippet } = $props();
 
@@ -91,20 +92,7 @@
         ? `Accounts — signed in as ${account.minecraftName}`
         : "Accounts — not signed in"}
     >
-      {#if account}
-        <span
-          class="status-dot"
-          class:status-success={account.status === "signedIn"}
-          class:status-warning={account.status === "reauthenticationRequired"}
-          aria-hidden="true"
-        ></span>
-        <span class="account-chip-name" title={account.minecraftName}>
-          {account.minecraftName}
-        </span>
-      {:else}
-        <span class="status-dot status-muted" aria-hidden="true"></span>
-        <span class="account-chip-name">Not signed in</span>
-      {/if}
+      <AccountIdentity {account} small />
     </button>
 
     <p class="sidebar-version">

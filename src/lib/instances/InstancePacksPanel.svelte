@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { getProviderLifecycle, type ContentEntry, type InstanceSummary, type ProviderLifecycleEntry } from "$lib/backend";
+  import { getInstanceContentContext, getProviderLifecycle, type InstanceContentContext, type ContentEntry, type InstanceSummary, type ProviderLifecycleEntry } from "$lib/backend";
   import { launcher } from "$lib/launcher/store.svelte";
   import { formatModSize } from "./mods";
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
@@ -15,9 +15,12 @@
   let view = $state<"installed" | "browse">("installed");
   let lifecycleEntries = $state<ProviderLifecycleEntry[]>([]);
   let lifecycleError = $state("");
+  let context = $state<InstanceContentContext | null>(null);
 
   async function refreshLifecycle(targetId: string): Promise<void> {
     try {
+      const capability = await getInstanceContentContext(targetId);
+      if (instance.id === targetId) context = capability;
       const entries = await getProviderLifecycle(targetId);
       if (instance.id === targetId) { lifecycleEntries = entries; lifecycleError = ""; }
     } catch (reason) {
@@ -45,6 +48,8 @@
   $effect(() => {
     if (loadedKey !== key) {
       loadedKey = key;
+      context = null;
+      view = "installed";
       if (!launcher.contentInventories[key]) void launcher.runLoadContent(instance.id, kind);
       void refreshLifecycle(instance.id);
     }
@@ -77,7 +82,7 @@
 <section class="packs-panel" aria-label={title}>
   <div class="content-view-tabs" role="group" aria-label={`${title} view`}>
     <button type="button" class="btn btn-quiet" aria-pressed={view === "installed"} onclick={() => view = "installed"}>Installed</button>
-    <button type="button" class="btn btn-quiet" aria-pressed={view === "browse"} onclick={() => view = "browse"}>Browse</button>
+    {#if context?.modrinthAvailable}<button type="button" class="btn btn-quiet" aria-pressed={view === "browse"} onclick={() => view = "browse"}>Browse Modrinth</button>{/if}
   </div>
   {#if view === "browse"}
     <ModrinthBrowse instanceId={instance.id} instanceName={instance.displayName} minecraftVersion={instance.minecraftVersion} {kind} installedProjectIds={entries.filter((entry) => entry.provenance?.provider === "modrinth").map((entry) => entry.provenance!.projectId)} dependencyOnlyProjectIds={lifecycleEntries.filter((entry) => entry.record.contentType === kind && !entry.record.explicitlyRetained).map((entry) => entry.record.projectId)} onInstalled={async (targetId, targetKind) => { if (targetKind !== "mod") await refreshInstalled(targetId, targetKind); }} />
@@ -85,7 +90,7 @@
   <div class="packs-heading">
     <div>
       <h3 class="group-title">{title}</h3>
-      <p class="group-subtitle">Local files in this instance's {directoryName} folder.</p>
+      <p class="group-subtitle">Files for {instance.displayName}, in its {directoryName} folder.{kind === "shaderPack" ? " Shaders require a compatible in-game mod; no shader loader is installed automatically." : ""}</p>
     </div>
     <div class="packs-heading-actions">
       <button type="button" class="btn btn-quiet" onclick={() => launcher.runLoadContent(instance.id, kind)} disabled={launcher.contentBusy === key || launcher.contentMutationBusy !== null}>Refresh</button>

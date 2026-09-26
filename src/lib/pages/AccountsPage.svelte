@@ -1,12 +1,24 @@
 <script lang="ts">
   import { launcher } from "$lib/launcher/store.svelte";
   import { authErrorMessage, authPhaseLabel } from "$lib/authMessages";
+  import AccountIdentity from "$lib/launcher/AccountIdentity.svelte";
+  import { tick } from "svelte";
 
   const accounts = $derived(launcher.accountsState?.accounts ?? []);
   const signedIn = $derived(accounts.length > 0);
 
-  function sessionVerified(id: string): boolean {
-    return launcher.accountSessions[id] !== undefined;
+  let removing = $state<string | null>(null);
+  let confirmButton: HTMLButtonElement | undefined = $state();
+  async function confirmRemoval(id: string): Promise<void> {
+    removing = id;
+    await tick();
+    confirmButton?.focus();
+  }
+  async function cancelRemoval(): Promise<void> {
+    const id = removing;
+    removing = null;
+    await tick();
+    document.getElementById(`remove-account-${id}`)?.focus();
   }
 </script>
 
@@ -20,7 +32,7 @@
   <header class="page-header">
     <div>
       <h2 class="page-title">Accounts</h2>
-      <p class="page-subtitle">Microsoft accounts used to launch Minecraft.</p>
+      <p class="page-subtitle">Your Minecraft identity. The active account is used for Play.</p>
     </div>
     {#if signedIn && !launcher.signInBusy}
       <div class="page-header-actions">
@@ -95,9 +107,7 @@
     <section class="empty-state" aria-live="polite">
       <h3 class="empty-title">No account signed in</h3>
       <p class="empty-detail">
-        Sign in with your Microsoft account to launch Minecraft. Aurora opens the sign-in in your
-        system browser and only stores the refresh credential, in the operating system's credential
-        store.
+        Sign in with Microsoft to play Minecraft: Java Edition. You can still browse and manage your instances while signed out.
       </p>
       <button
         type="button"
@@ -119,11 +129,24 @@
       {/if}
     </section>
   {:else}
+    <section class="group" aria-label="Active Minecraft account">
+      <div class="group-heading">
+        <div><h3 class="group-title">Active account</h3><p class="group-subtitle">Used across your instances.</p></div>
+        <span class="status-badge {launcher.selectedAccount?.status === 'signedIn' ? 'status-success' : 'status-warning'}">{launcher.selectedAccount?.status === 'signedIn' ? 'Signed in' : launcher.selectedAccount ? 'Sign-in required' : 'No active account'}</span>
+      </div>
+      <div class="group-row">
+        <AccountIdentity account={launcher.selectedAccount} />
+        {#if launcher.selectedAccount?.status === "signedIn"}
+          <button type="button" class="btn btn-quiet" onclick={() => launcher.refreshAvatar(launcher.selectedAccount!.accountId, true)} disabled={launcher.avatarBusy !== null || launcher.accountBusy !== null}>Refresh avatar</button>
+        {/if}
+      </div>
+      {#if launcher.selectedAccount && launcher.accountAvatars[launcher.selectedAccount.accountId] === null}<p class="group-footer">Avatar unavailable. Your account and Play are unaffected.</p>{/if}
+    </section>
     <section class="group" aria-live="polite">
       <div class="group-heading">
         <div>
           <h3 class="group-title">Your accounts</h3>
-          <p class="group-subtitle">The selected account is the one Play launches with.</p>
+          <p class="group-subtitle">Switch accounts here. Instances keep their own configuration.</p>
         </div>
       </div>
 
@@ -132,16 +155,12 @@
         {@const busy = launcher.accountBusy === account.accountId}
         <div class="group-row" class:group-row-selected={selected}>
           <div class="group-row-main">
-            <span class="account-name-line">
-              <span class="group-row-title">{account.minecraftName}</span>
-              {#if selected}<span class="row-marker">Selected</span>{/if}
-            </span>
+            <AccountIdentity {account} small />
+            {#if selected}<span class="row-marker">Active</span>{/if}
             {#if account.status === "reauthenticationRequired"}
               <span class="group-row-detail">
                 This account's stored credential is no longer valid — sign in again to use it.
               </span>
-            {:else if sessionVerified(account.accountId)}
-              <span class="group-row-detail">Session verified — ready to launch.</span>
             {/if}
           </div>
           <div class="group-row-actions">
@@ -153,28 +172,36 @@
                 type="button"
                 class="btn"
                 onclick={() => launcher.runSelectAccount(account.accountId)}
-                disabled={busy || launcher.signInBusy}
+                disabled={launcher.accountBusy !== null || launcher.signInBusy}
               >
-                Select
+                Use account
               </button>
             {/if}
             <button
               type="button"
               class="btn"
               onclick={() => launcher.runRefreshAccountSession(account.accountId)}
-              disabled={busy || launcher.signInBusy}
+              disabled={launcher.accountBusy !== null || launcher.signInBusy}
             >
-              {busy ? "Checking…" : "Check session"}
+              {busy ? "Checking…" : account.status === "reauthenticationRequired" ? "Check sign-in" : "Check account"}
             </button>
             <button
               type="button"
               class="btn btn-danger"
-              onclick={() => launcher.runRemoveAccount(account.accountId)}
-              disabled={busy || launcher.signInBusy}
+              id="remove-account-{account.accountId}"
+              onclick={() => confirmRemoval(account.accountId)}
+              disabled={launcher.accountBusy !== null || launcher.signInBusy}
             >
               Remove
             </button>
           </div>
+          {#if removing === account.accountId}
+            <div class="remove-confirmation" role="group" aria-label="Confirm account removal">
+              <p>Remove {account.minecraftName} from this launcher? You will need to sign in again to use it here.</p>
+              <button type="button" class="btn" onclick={cancelRemoval} onkeydown={(event) => { if (event.key === "Escape") void cancelRemoval(); }}>Cancel</button>
+              <button bind:this={confirmButton} type="button" class="btn btn-danger" disabled={launcher.accountBusy !== null} onkeydown={(event) => { if (event.key === "Escape") void cancelRemoval(); }} onclick={async () => { await launcher.runRemoveAccount(account.accountId); removing = null; }}>Remove account</button>
+            </div>
+          {/if}
         </div>
       {/each}
 
@@ -187,23 +214,17 @@
         <p class="inline-message inline-message-error group-row" role="alert">
           {authErrorMessage(launcher.accountError)}
         </p>
+        <details class="group-row"><summary>Technical details</summary><code>{launcher.accountError.code}</code></details>
       {/if}
 
       <p class="group-footer">
-        Sign-in uses your system browser. Aurora stores only the Microsoft refresh credential, in
-        the operating system's credential store — never in plain files — and removing an account
-        here only removes it from Aurora.
+        Sign-in opens your system browser. Removing an account only signs it out of this launcher; it does not delete your Microsoft account or Minecraft data.
       </p>
     </section>
   {/if}
 </div>
 
 <style>
-  .account-name-line {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-2);
-    min-width: 0;
-    flex-wrap: wrap;
-  }
+  .remove-confirmation { flex-basis: 100%; font-size: var(--text-secondary); }
+  .remove-confirmation .btn { margin-right: var(--space-2); }
 </style>

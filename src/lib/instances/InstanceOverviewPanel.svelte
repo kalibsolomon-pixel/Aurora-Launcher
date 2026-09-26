@@ -15,7 +15,7 @@
   const loaderPolicy = $derived(
     "policy" in instance.configuration.loader && instance.configuration.loader.policy.type === "pinned"
       ? `Fabric ${instance.configuration.loader.policy.version}`
-      : instance.configuration.loader.kind === "fabric" ? "Fabric (release version)" : instance.configuration.loader.kind,
+      : instance.configuration.loader.kind === "fabric" ? `Fabric (${instance.configuration.auroraEnabled ? "release version" : "automatic"})` : instance.configuration.loader.kind === "vanilla" ? "Vanilla" : instance.configuration.loader.kind,
   );
 
   function windowLabel(): string {
@@ -121,7 +121,7 @@
     </span>
   </div>
   <div class="group-row">
-    <span class="group-row-title">Mod loader</span>
+      <span class="group-row-title">Platform</span>
     <span class="group-row-value">{loaderPolicy}</span>
   </div>
   <div class="group-row">
@@ -156,7 +156,7 @@
 
   <div class="group-row">
     <span class="group-row-title">Aurora</span>
-    <span class="group-row-value">{instance.aurora ? `${instance.aurora.version} (${instance.aurora.channel})` : "Not configured"}</span>
+    <span class="group-row-value">{instance.aurora ? `${instance.aurora.version} (${instance.aurora.channel})` : "Off"}</span>
   </div>
   <div class="group-row">
     <span class="group-row-title">Minecraft</span>

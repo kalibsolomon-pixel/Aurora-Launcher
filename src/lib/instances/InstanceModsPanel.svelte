@@ -10,7 +10,7 @@
     type ModSort,
     type RemovalCandidate,
   } from "$lib/instances/mods";
-  import { getProviderLifecycle, type InstanceSummary, type ModEntry, type ProviderLifecycleEntry } from "$lib/backend";
+  import { getInstanceContentContext, getProviderLifecycle, type InstanceContentContext, type InstanceSummary, type ModEntry, type ProviderLifecycleEntry } from "$lib/backend";
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
 
@@ -24,9 +24,12 @@
   let view = $state<"installed" | "browse">("installed");
   let lifecycleEntries = $state<ProviderLifecycleEntry[]>([]);
   let lifecycleError = $state("");
+  let context = $state<InstanceContentContext | null>(null);
 
   async function refreshLifecycle(targetId: string): Promise<void> {
     try {
+      const capability = await getInstanceContentContext(targetId);
+      if (instance.id === targetId) context = capability;
       const entries = await getProviderLifecycle(targetId);
       if (instance.id === targetId) { lifecycleEntries = entries; lifecycleError = ""; }
     } catch (reason) {
@@ -50,6 +53,8 @@
   $effect(() => {
     if (loadedInstance !== instance.id) {
       loadedInstance = instance.id;
+      context = null;
+      view = "installed";
       if (launcher.modInventories[instance.id] === undefined) {
         void launcher.runLoadMods(instance.id);
       }
@@ -101,7 +106,7 @@
 <section class="mods-panel" aria-labelledby="mods-title">
   <div class="content-view-tabs" role="group" aria-label="Mods view">
     <button type="button" class="btn btn-quiet" aria-pressed={view === "installed"} onclick={() => view = "installed"}>Installed</button>
-    <button type="button" class="btn btn-quiet" aria-pressed={view === "browse"} onclick={() => view = "browse"}>Browse</button>
+    {#if context?.modrinthAvailable}<button type="button" class="btn btn-quiet" aria-pressed={view === "browse"} onclick={() => view = "browse"}>Browse Modrinth</button>{/if}
   </div>
   {#if view === "browse"}
     <ModrinthBrowse instanceId={instance.id} instanceName={instance.displayName} minecraftVersion={instance.minecraftVersion} kind="mod" installedProjectIds={entries.filter((entry) => entry.provenance?.provider === "modrinth").map((entry) => entry.provenance!.projectId)} dependencyOnlyProjectIds={lifecycleEntries.filter((entry) => entry.record.contentType === "mod" && !entry.record.explicitlyRetained).map((entry) => entry.record.projectId)} onInstalled={async (targetId) => { await refreshInstalled(targetId); }} />
@@ -113,7 +118,7 @@
   <div class="mods-heading">
     <div>
       <h3 id="mods-title" class="group-title">Mods</h3>
-      <p class="group-subtitle">Local files in this instance. Use Browse to find compatible Modrinth mods.</p>
+      <p class="group-subtitle">Files for {instance.displayName}.{context?.modsLoadable ? " Browse compatible mods on Modrinth." : context ? " This platform does not load mods. Files here are only stored locally." : ""}</p>
     </div>
     <div class="mods-heading-actions">
       <button

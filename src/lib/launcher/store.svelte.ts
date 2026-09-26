@@ -7,6 +7,7 @@ import {
   ensureInstanceRuntime,
   getApplicationStatus,
   getAccounts,
+  getAccountAvatar,
   getInstanceRuntimeStatus,
   getLauncherState,
   getInstanceMods,
@@ -40,6 +41,7 @@ import {
   type AccountSession,
   type AccountSummary,
   type AccountsState,
+  type HeadAvatar,
   type ApplicationStatus,
   type AuroraReleaseSummary,
   type AuthProgressEvent,
@@ -151,6 +153,10 @@ class LauncherStore {
   accountBusy = $state<string | null>(null);
   accountError = $state<LauncherBackendError | null>(null);
   accountSessions = $state<Record<string, AccountSession>>({});
+  accountAvatars = $state<Record<string, HeadAvatar | null>>({});
+  avatarBusy = $state<string | null>(null);
+  private avatarSerial = 0;
+  private readinessSerial = 0;
 
   // Play surface. Rust owns the readiness decision and process state; the
   // frontend only renders the non-secret DTOs.
@@ -241,6 +247,7 @@ class LauncherStore {
 
     try {
       this.accountsState = await getAccounts();
+      if (this.selectedAccount?.status === "signedIn") void this.refreshAvatar(this.selectedAccount.accountId);
       void this.refreshPlayReadiness();
     } catch (cause: unknown) {
       this.accountsError = backendError(cause, "The account list could not be loaded.");
@@ -302,29 +309,38 @@ class LauncherStore {
   }
 
   async refreshPlayReadiness(): Promise<void> {
+    const serial = ++this.readinessSerial;
     const instanceId = this.launcherState?.config.selectedInstanceId;
+    const accountId = this.accountsState?.selectedAccountId ?? null;
     if (!instanceId) {
       this.playReadiness = null;
+      this.playReadinessBusy = false;
       return;
     }
     this.playReadinessBusy = true;
     try {
-      this.playReadiness = await getPlayReadiness(
+      const decision = await getPlayReadiness(
         instanceId,
-        this.accountsState?.selectedAccountId ?? null,
+        accountId,
       );
-      this.playError = null;
+      if (serial === this.readinessSerial && this.launcherState?.config.selectedInstanceId === instanceId && (this.accountsState?.selectedAccountId ?? null) === accountId) {
+        this.playReadiness = decision;
+      }
     } catch (cause: unknown) {
-      this.playReadiness = null;
-      this.playError = backendError(cause, "Play readiness could not be loaded.");
+      if (serial === this.readinessSerial) {
+        this.playReadiness = null;
+        this.playError = backendError(cause, "Play readiness could not be loaded.");
+      }
     } finally {
-      this.playReadinessBusy = false;
+      if (serial === this.readinessSerial) this.playReadinessBusy = false;
     }
   }
 
   async runPlay(instanceId: string): Promise<void> {
     const accountId = this.accountsState?.selectedAccountId;
-    if (!accountId || !this.playReadiness?.ready) return;
+    if (!accountId || !this.playReadiness?.ready || this.playBusy || this.instanceBusy !== null || this.accountBusy !== null ||
+      instanceId !== this.launcherState?.config.selectedInstanceId ||
+      this.playReadiness.instanceId !== instanceId || this.playReadiness.accountId !== accountId) return;
     this.playBusy = true;
     this.playProgress = { phase: "checkingPreconditions" };
     this.playError = null;
@@ -595,6 +611,7 @@ class LauncherStore {
   async runSelect(id: string): Promise<void> {
     this.instanceBusy = id;
     this.instanceError = null;
+    this.playError = null;
     try {
       await selectInstance(id);
       await this.refreshState();
@@ -684,6 +701,9 @@ class LauncherStore {
   async refreshAccounts(): Promise<void> {
     try {
       this.accountsState = await getAccounts();
+      if (this.selectedAccount?.status === "signedIn" && this.accountAvatars[this.selectedAccount.accountId] === undefined) {
+        void this.refreshAvatar(this.selectedAccount.accountId);
+      }
       void this.refreshPlayReadiness();
     } catch {
       // Account refresh is best-effort after mutations; load errors surface
@@ -734,6 +754,7 @@ class LauncherStore {
     try {
       await removeAccount(id);
       delete this.accountSessions[id];
+      delete this.accountAvatars[id];
       await this.refreshAccounts();
     } catch (cause: unknown) {
       this.accountError = backendError(cause, "Removing the account failed.");
@@ -753,6 +774,21 @@ class LauncherStore {
       await this.refreshAccounts();
     } finally {
       this.accountBusy = null;
+    }
+  }
+
+  async refreshAvatar(id: string, refresh = false): Promise<void> {
+    const serial = ++this.avatarSerial;
+    this.avatarBusy = id;
+    try {
+      const avatar = await getAccountAvatar(id, refresh);
+      if (serial === this.avatarSerial && this.accountsState?.accounts.some(account => account.accountId === id)) {
+        this.accountAvatars[id] = avatar;
+      }
+    } catch {
+      if (serial === this.avatarSerial) this.accountAvatars[id] = null;
+    } finally {
+      if (serial === this.avatarSerial) this.avatarBusy = null;
     }
   }
 

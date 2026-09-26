@@ -248,6 +248,7 @@ p {
   border-right: 1px solid var(--color-surface-edge);
   background: var(--color-sidebar);
   min-width: 0;
+  min-height: 0;
 }
 
 .brand {
@@ -340,6 +341,21 @@ p {
   padding-top: var(--space-3);
   border-top: 1px solid var(--color-surface-edge);
   min-width: 0;
+  min-height: 0;
+  flex-shrink: 1;
+}
+
+.sidebar-instances .nav {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar > .nav,
+.sidebar .brand,
+.sidebar .account-chip,
+.sidebar .sidebar-version,
+.sidebar .sidebar-label {
+  flex-shrink: 0;
 }
 
 .sidebar-label {

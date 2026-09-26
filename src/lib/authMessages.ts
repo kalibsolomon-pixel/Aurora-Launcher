@@ -14,9 +14,9 @@ export function authPhaseLabel(phase: AuthProgressEvent["phase"]): string {
     case "exchangingMicrosoftToken":
       return "Completing the Microsoft sign-in…";
     case "authenticatingWithXbox":
-      return "Signing in to Xbox Live…";
+      return "Completing sign-in…";
     case "authorizingXsts":
-      return "Authorizing with Xbox…";
+      return "Completing sign-in…";
     case "authenticatingMinecraft":
       return "Signing in to Minecraft services…";
     case "checkingEntitlement":
