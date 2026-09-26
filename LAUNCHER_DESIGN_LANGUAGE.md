@@ -100,8 +100,7 @@ architecture + Aurora's hierarchy, spacing, identity, and restraint*.
 │ ──────   │  Instance name  [status]    folder]  │
 │ Home     │                  [Play]              │
 │ Instances│  Overview │ Mods │ Settings           │
-│ Accounts│  ────────────────────────             │
-│ Settings │                                      │
+│ Settings │  ────────────────────────             │
 │ About    │   grouped content (scrolls           │
 │ ──────   │   vertically)                        │
 │ Instances│                                      │
@@ -117,7 +116,7 @@ architecture + Aurora's hierarchy, spacing, identity, and restraint*.
   labels, selected/focus states, and account identity never feel cramped) and one
   content region (the page). The shell never scrolls; only page content scrolls.
 - **Navigation** reflects *actual current capabilities only*: Home, Instances,
-  Accounts, Settings (launcher-wide preferences — today, appearance and desktop
+  Settings (launcher-wide preferences — today, appearance and desktop
   integration), About (real backend state), plus a Developer page in development
   builds. Future destinations (Library) are documented in this file, not built.
   Instance-local content (Mods, Resource Packs, Shaders, Logs) is **never** a global
@@ -129,8 +128,8 @@ architecture + Aurora's hierarchy, spacing, identity, and restraint*.
   launcher-*selected* instance carries a muted "Selected" text marker; the
   workspace-*open* instance carries the nav selected treatment and the page marker.
 - **Account identity/access**: a compact account chip pinned at the bottom of the
-  sidebar showing the selected Minecraft name and sign-in state; it navigates to
-  Accounts. With no account it offers sign-in.
+  sidebar showing the selected Minecraft name and sign-in state; it opens
+  the shell account dialog without changing the current page. With no account it opens the same dialog for sign-in.
 - **Primary action placement**: the primary action of a page sits at the top-right of
   the content it acts on (Play on Home), with obvious hierarchy but modest size —
   never an oversized promotional object.
@@ -492,6 +491,8 @@ operating-system surfaces only, and the two are never swapped for each other.
 
 ## Phase D hierarchy refinement
 
-Home is the concise selected-instance launch surface: native select with configuration-aware options, installed summary, authoritative Ready/Starting/Running state, dominant Play, Manage Instance and active Minecraft identity. Detailed Java/content/readiness/repair operations stay inside the Workspace. Configuration labels capitalize Vanilla/Fabric and show optional Aurora explicitly as Off/version. Launcher-global navigation and Settings remain stable.
+Home groups the instance name/picker, installed configuration, authoritative Ready/Starting/Running state, dominant Play and Manage Instance inside one card. Picker options show concise names and the selected marker; version details appear once in the card. Detailed Java/content/readiness/repair operations stay inside the Workspace. Vanilla/Fabric and optional Aurora remain explicit. Home has no account row or management controls.
 
-The account chip and Accounts reuse one identity component: a pixelated native-composited Minecraft head when available, an initial-based fallback otherwise, and a name/state text pair. The active-account marker is textual. Removal uses inline confirmation with initial focus, Escape cancellation and focus return. Existing surfaces, controls, tokens and motion remain the visual authority. Home's native select supports keyboard navigation/type-ahead and long registries without an overlay menu implementation.
+Account identity and management are launcher-global at the bottom-left chip. It opens a shell-level native modal over the current Home, Settings or Workspace; there is no dedicated Accounts navigation page. The dialog lists accounts, identifies the active one, adds/checks/switches/removes and refreshes the avatar. Native dialog focus containment, Escape/Close and focus restoration keep navigation stable. Inline removal confirmation is explicit. Add account requests Microsoft account selection in the system browser; refresh remains noninteractive.
+
+Home's right-side player uses native validated full-skin RGBA in a lightweight deterministic 2D canvas, including classic/slim arms, modern outer layers and legacy mirrored limbs. Missing cosmetics use a local default player; narrow layouts collapse the preview first. The small account head remains in the global chip/dialog. Existing tokens, controls and surfaces remain the visual authority.
