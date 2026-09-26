@@ -1,6 +1,6 @@
 //! Exact-child process spawning and process-local supervision.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -73,10 +73,41 @@ pub(crate) fn lock_stopped(
 
 pub type StateListener = Arc<dyn Fn(ProcessSnapshot) + Send + Sync + 'static>;
 
+fn preparations() -> &'static Mutex<HashSet<String>> {
+    static PREPARATIONS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    PREPARATIONS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// A logical per-instance Play reservation, not a filesystem lock. It may
+/// survive awaits; dropping on error or cancellation permits another attempt.
+pub(crate) struct PreparationGuard(String);
+
+impl PreparationGuard {
+    pub(crate) fn acquire(instance_id: &str) -> Result<Self, LaunchProcessError> {
+        let mut preparing = preparations().lock().expect("preparations not poisoned");
+        if preparing.contains(instance_id) || snapshot(instance_id).status.blocks_launch() {
+            return Err(LaunchProcessError::AlreadyRunning {
+                instance_id: instance_id.into(),
+            });
+        }
+        preparing.insert(instance_id.into());
+        Ok(Self(instance_id.into()))
+    }
+}
+
+impl Drop for PreparationGuard {
+    fn drop(&mut self) {
+        preparations()
+            .lock()
+            .expect("preparations not poisoned")
+            .remove(&self.0);
+    }
+}
+
 /// Starts the exact process described by `LaunchSpec`, then supervises the
 /// exact returned child handle in the background. No process-name lookup,
 /// shell, or reconstructed command line exists anywhere in this boundary.
-pub async fn spawn_supervised(
+pub fn spawn_supervised(
     spec: LaunchSpec,
     logs_directory: &Path,
     listener: StateListener,
@@ -417,6 +448,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn preparing_play_is_reserved_once_and_released_on_cancellation() {
+        let id = "preparing-duplicate";
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (_resume_tx, resume_rx) = tokio::sync::oneshot::channel::<()>();
+        let first = tokio::spawn(async move {
+            let _guard = PreparationGuard::acquire(id).unwrap();
+            entered_tx.send(()).unwrap();
+            let _ = resume_rx.await;
+        });
+        entered_rx.await.unwrap();
+        assert!(matches!(
+            PreparationGuard::acquire(id),
+            Err(LaunchProcessError::AlreadyRunning { .. })
+        ));
+        // A preparation reservation has no fake process state.
+        assert_eq!(snapshot(id).status, LaunchProcessStatus::Stopped);
+        first.abort();
+        assert!(first.await.unwrap_err().is_cancelled());
+        assert!(PreparationGuard::acquire(id).is_ok());
+    }
+
+    #[tokio::test]
+    async fn concurrent_preparations_allow_only_one_supervised_spawn() {
+        let root = test_root("preparation-spawn");
+        let id = "preparation-single-spawn";
+        let (paused_tx, paused_rx) = tokio::sync::oneshot::channel();
+        let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
+        let child_root = root.clone();
+        let first = tokio::spawn(async move {
+            let _guard = PreparationGuard::acquire(id).unwrap();
+            paused_tx.send(()).unwrap();
+            resume_rx.await.unwrap();
+            let spec = LaunchSpec::fake_process(
+                id,
+                std::env::current_exe().unwrap(),
+                "launch::process::tests::fake_child_success",
+                child_root.clone(),
+            );
+            spawn_supervised(spec, &child_root.join("logs"), Arc::new(|_| {})).unwrap()
+        });
+        paused_rx.await.unwrap();
+        assert!(matches!(
+            PreparationGuard::acquire(id),
+            Err(LaunchProcessError::AlreadyRunning { .. })
+        ));
+        resume_tx.send(()).unwrap();
+        assert_eq!(first.await.unwrap().status, LaunchProcessStatus::Running);
+        assert_eq!(wait_terminal(id).await.exit_code, Some(0));
+        assert_eq!(std::fs::read_dir(root.join("logs")).unwrap().count(), 1);
+        assert!(PreparationGuard::acquire(id).is_ok());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
     async fn supervised_process_transitions_logs_and_redacts() {
         let root = test_root("success");
         let spec = LaunchSpec::fake_process(
@@ -425,9 +510,7 @@ mod tests {
             "launch::process::tests::fake_child_success",
             root.clone(),
         );
-        let running = spawn_supervised(spec, &root.join("logs"), Arc::new(|_| {}))
-            .await
-            .unwrap();
+        let running = spawn_supervised(spec, &root.join("logs"), Arc::new(|_| {})).unwrap();
         assert_eq!(running.status, LaunchProcessStatus::Running);
         assert!(running.process_id.is_some());
         let exited = wait_terminal("process-success").await;
@@ -457,9 +540,7 @@ mod tests {
             "launch::process::tests::fake_child_failure",
             root.clone(),
         );
-        spawn_supervised(failing, &root.join("logs"), Arc::new(|_| {}))
-            .await
-            .unwrap();
+        spawn_supervised(failing, &root.join("logs"), Arc::new(|_| {})).unwrap();
         let failed = wait_terminal("process-failure").await;
         assert_eq!(failed.status, LaunchProcessStatus::Failed);
         assert_eq!(failed.exit_code, Some(17));
@@ -471,7 +552,7 @@ mod tests {
             root.clone(),
         );
         assert!(matches!(
-            spawn_supervised(missing, &root.join("logs"), Arc::new(|_| {})).await,
+            spawn_supervised(missing, &root.join("logs"), Arc::new(|_| {})),
             Err(LaunchProcessError::Spawn(_))
         ));
 
@@ -481,11 +562,9 @@ mod tests {
             "launch::process::tests::fake_child_slow",
             root.clone(),
         );
-        spawn_supervised(slow.clone(), &root.join("logs"), Arc::new(|_| {}))
-            .await
-            .unwrap();
+        spawn_supervised(slow.clone(), &root.join("logs"), Arc::new(|_| {})).unwrap();
         assert!(matches!(
-            spawn_supervised(slow, &root.join("logs"), Arc::new(|_| {})).await,
+            spawn_supervised(slow, &root.join("logs"), Arc::new(|_| {})),
             Err(LaunchProcessError::AlreadyRunning { .. })
         ));
 
@@ -495,9 +574,7 @@ mod tests {
             "launch::process::tests::fake_child_slow",
             root.clone(),
         );
-        spawn_supervised(other, &root.join("logs"), Arc::new(|_| {}))
-            .await
-            .unwrap();
+        spawn_supervised(other, &root.join("logs"), Arc::new(|_| {})).unwrap();
         wait_terminal("process-duplicate").await;
         wait_terminal("process-other").await;
         std::fs::remove_dir_all(root).unwrap();

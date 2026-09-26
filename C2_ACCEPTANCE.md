@@ -143,3 +143,37 @@ All paths below are beneath **`C:\Users\kalib\AppData\Local\Temp\aurora-c2-evide
 Baseline inventory: `C:\Users\kalib\AppData\Local\Temp\aurora-c2-baseline-5ca91fb4-f125-4dd1-a11a-345ca438bd17`. Complete tracked-file and untracked diagnostic hash snapshots were recorded before implementation. Commit audits found **0 tracked deletions, 0 missing baseline files, 0 changes among all 606 protected diagnostics**, and intact root docs, manifests, lockfiles, native configuration and source trees. No unexpected file mutations occurred. Generated build/game/runtime data and screenshots were not staged. Final untracked state is only the pre-existing `.zcode-diag/`, `.zcode-diag2/`, `.zcode-diag3/`, `.zcode-diag4/`, `.zcode-diag5/`, `.zcode-icon-diag.py` and `.zcodeignore` set. No `git clean` or broad cleanup ran.
 
 Deferred: Forge, NeoForge, Quilt, CurseForge, Home/account/skin restructuring, cross-process mutation locking, automatic dependency conflict resolution, durable crash recovery and instance deletion. No next-phase work was started.
+
+## C2 publication-blocker correction — 2026-09-26
+
+Starting HEAD was `66e85af80301b68f56598c1ee51ffb244bedfb1b`; fetched `origin/main` was `6f51a9c6bb4633f1c08cb210b092b44decbcad43`, ahead 2 / behind 0. This correction is a separate commit above the existing implementation `1afa7e0ec74d907254bafbce2da7fb5871b21053` and acceptance commit; neither was amended.
+
+### Root cause and corrected invariant
+
+Previously `play_instance` deeply validated through `resolve_instance_launch_plans`, then awaited managed-Java validation/diagnostic and possibly authenticated-session restoration. The process remained Stopped until `spawn_supervised` established Starting. An Aurora transaction could acquire the content/registry/process locks and commit during those awaits, leaving Play's already resolved assumptions stale before its later spawn.
+
+Play now reserves preparation once per instance in Rust. Immediately before argument assembly/spawn it takes the existing instance-content lock, then registry lock, compares the complete captured registry/game/Aurora snapshot, and repeats deep, read-only local validation. A changed snapshot returns `launch_configuration_changed` without Starting or spawn; retry uses the current configuration. Damage returns `launch_instance_not_ready`; competing content work returns `launch_instance_busy`. The same exclusion remains held through synchronous LaunchSpec assembly, native Starting reservation, structured spawn and exact-child supervision establishment. Aurora commit uses these same locks and cannot commit underneath that section. Home/workspace Play controls also reflect Starting/Running, with native reservations remaining authoritative.
+
+Network metadata, runtime diagnostic and session work stay outside the mutation locks. Ordering is content -> registry -> short process-state accesses. The preparation mutex briefly reads process state, releases both before awaited work, and is never acquired by transition commit or process-state holders. RAII releases preparation on error/cancellation and releases mutation locks on callback errors. No reverse lock acquisition was found in the reviewed paths.
+
+### Deterministic concurrency and regressions
+
+Five added native tests passed. Channel-controlled tests commit disable and enable while Play is paused after initial validation: both reject stale preparation and never invoke spawn; a fresh snapshot validates the new configuration. Reverse-order tests hold the final boundary and attempt each actual transition: both return conflict with unchanged registry, then succeed after the controlled spawn section releases. Concurrent preparations permit exactly one supervised fake-child spawn/log; a second attempt returns the existing duplicate error. Cancellation releases the reservation. Vanilla final validation rejects damaged client bytes, replaced installed revisions and competing content work, then validates without Fabric/Aurora contributions after restoration.
+
+All prior C2 rollback, stale-preview, tamper, ownership reconciliation, Vanilla lifecycle/LaunchSpec and Fabric/provider tests remain passing. Fabric/no-Aurora and Fabric+Aurora composition are unchanged by the correction; previous live Vanilla and Fabric/no-Aurora launch evidence above remains applicable.
+
+### Corrective live acceptance
+
+The optimized release launched Minecraft 1.21.11 / Fabric 0.19.5 / Aurora 2.1.2 / Fabric API 0.141.6+1.21.11 using managed Java 21.0.7. Starting and Running were observed, the genuine Aurora menu was reached, and the supervised log recorded `Aurora Client ready.`. The user completed normal Quit; supervision reported exit 0 and the launcher returned Ready.
+
+The approved native transition roundtrip completed Fabric+Aurora -> Fabric/no-Aurora Ready -> Fabric+Aurora Ready. Disable removed exact Aurora ownership and retained the former launcher Fabric API for installed content. Enable reused that exact verified API and restored active Aurora ownership. All seven provider artifact SHA-256 values and the provider ownership document remained byte-identical. The acceptance instance remains restored with Aurora enabled.
+
+After the small Play-button presentation correction, a final optimized release rebuild produced both MSI and NSIS successfully. That exact binary booted, launched the restored acceptance instance (supervised child 17884), reached the Aurora menu and recorded `Aurora Client ready.`. Home's Running button was confirmed disabled in the native accessibility tree. Normal menu Quit produced supervised exit 0 and Ready, recorded in `logs/aurora-launch-1790457880-0.log` beneath the acceptance instance. No screenshots were added to the repository.
+
+### Verification and safety
+
+The complete corrected native suite passed **466 tests (460 library + 6 integration), 16 ignored, 0 failed**. Frontend tests passed **56, 0 failed**; Svelte/TypeScript reported **0 errors, 0 warnings**. Rust formatting and all-target checking passed; frontend production build, Tauri production MSI/NSIS build, production boot/normal Quit, version contract **1.0.0**, and whitespace checks passed. Final publication identifiers are recorded in the completion report.
+
+Correction audit baseline is `C:\Users\kalib\AppData\Local\Temp\aurora-c2-correction-840f42de-7a5c-4857-ae50-78892a7a9a60`. Audits found 0 tracked deletions, 0 missing baseline tracked files, and all 606 protected diagnostics unchanged. Generated build/game/runtime data and screenshots are excluded from the commit. The combined C1-to-C2 candidate retains the artifact trust boundaries, strict persisted-state handling, provider provenance, contained mutation and exact-child supervision.
+
+This correction implements no Phase D, cross-process mutation locking, durable crash/power-loss recovery, Forge, NeoForge, Quilt or CurseForge.

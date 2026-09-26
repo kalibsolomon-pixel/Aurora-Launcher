@@ -3575,6 +3575,12 @@ impl From<crate::launch::process::LaunchProcessError> for CommandError {
     }
 }
 
+impl From<crate::launch::boundary::BoundaryError> for CommandError {
+    fn from(error: crate::launch::boundary::BoundaryError) -> Self {
+        Self::new(error.code(), error.to_string())
+    }
+}
+
 fn emit_launch_phase(app: &AppHandle, phase: &'static str) {
     let _ = app.emit("launch-progress", LaunchProgressEvent { phase });
 }
@@ -3766,6 +3772,8 @@ pub async fn play_instance(
     let account_id = request.account_id.trim().to_owned();
     crate::auth::accounts::AccountId::validate(&account_id)?;
 
+    let _preparation = crate::launch::process::PreparationGuard::acquire(instance.as_str())?;
+    let prepared = crate::launch::boundary::LaunchSnapshot::capture(&managed, &instance)?;
     emit_launch_phase(&app, "checkingPreconditions");
     if crate::launch::process::snapshot(instance.as_str())
         .status
@@ -3795,13 +3803,7 @@ pub async fn play_instance(
     // arguments, and the windowed resolution. Stale configuration never
     // reaches this point — resolve_instance_launch_plans performs the deep
     // validation that reports staleness as NotReady.
-    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
-    let record = registry
-        .find(&instance)
-        .ok_or_else(|| {
-            CommandError::new("launch_instance_not_ready", "The instance does not exist.")
-        })?
-        .clone();
+    let record = prepared.record();
     let configuration = record.configuration();
     configuration
         .validate()
@@ -3881,41 +3883,33 @@ pub async fn play_instance(
     };
 
     emit_launch_phase(&app, "assemblingArguments");
-    let game_root = managed.instance_paths(&instance).game().to_path_buf();
-    let installed = crate::install::state::load_installed_state(&game_root)
-        .map_err(|error| CommandError::new("launch_instance_damaged", error.to_string()))?
-        .ok_or_else(|| {
-            CommandError::new(
-                "launch_instance_not_ready",
-                "The instance has no complete installed-game state.",
-            )
-        })?;
     let launch_plan = crate::launch::resolve::LaunchPlan::from_game_plan(
         &game_plan,
         crate::minecraft::rules::PlatformProfile::current()?,
     );
-    let spec = crate::launch::resolve::resolve_launch_spec(
-        &managed,
-        &instance,
-        &launch_plan,
-        &installed,
-        &java_executable,
-        &session,
-        &features,
-        &launch_options,
-    )?;
+    prepared.with_validated(&managed, |installed| {
+        let spec = crate::launch::resolve::resolve_launch_spec(
+            &managed,
+            &instance,
+            &launch_plan,
+            installed,
+            &java_executable,
+            &session,
+            &features,
+            &launch_options,
+        )?;
 
-    emit_launch_phase(&app, "startingProcess");
-    let listener_app = app.clone();
-    let snapshot = crate::launch::process::spawn_supervised(
-        spec,
-        managed.instance_paths(&instance).logs(),
-        Arc::new(move |snapshot| {
-            let _ = listener_app.emit("launch-state", LaunchProcessDto::from(snapshot));
-        }),
-    )
-    .await?;
-    Ok(snapshot.into())
+        emit_launch_phase(&app, "startingProcess");
+        let listener_app = app.clone();
+        let snapshot = crate::launch::process::spawn_supervised(
+            spec,
+            managed.instance_paths(&instance).logs(),
+            Arc::new(move |snapshot| {
+                let _ = listener_app.emit("launch-state", LaunchProcessDto::from(snapshot));
+            }),
+        )?;
+        Ok(snapshot.into())
+    })
 }
 
 #[cfg(test)]

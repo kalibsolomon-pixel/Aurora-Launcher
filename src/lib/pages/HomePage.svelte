@@ -24,7 +24,8 @@
         : "Play",
   );
   const playDisabled = $derived(
-    launcher.playBusy || launcher.playReadinessBusy || !readiness?.ready,
+    process?.status === "starting" || process?.status === "running" ||
+      launcher.playBusy || launcher.playReadinessBusy || !readiness?.ready,
   );
 </script>
 

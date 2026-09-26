@@ -64,7 +64,7 @@
   });
 
   const playDisabled = $derived(
-    process?.status === "running" ||
+    process?.status === "starting" || process?.status === "running" ||
       launcher.playBusy ||
       launcher.playReadinessBusy ||
       launcher.instanceBusy === instanceId ||

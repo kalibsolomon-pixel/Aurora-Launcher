@@ -3203,6 +3203,186 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn launch_preparation_rejects_disable_and_enable_that_commit_before_final_validation() {
+        use super::super::transition::{apply, preview};
+        use crate::launch::boundary::{BoundaryError, LaunchSnapshot};
+        use crate::launch::process::PreparationGuard;
+        let world = SyntheticWorld::with_api("launch-transition-stale", true);
+        let endpoints = world.endpoints();
+        let record = world.create("Race").await.unwrap();
+        for enabled in [false, true] {
+            let managed = world.managed.clone();
+            let id = record.id().clone();
+            let (paused_tx, paused_rx) = tokio::sync::oneshot::channel();
+            let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
+            let play = tokio::spawn(async move {
+                let _reservation = PreparationGuard::acquire(id.as_str()).unwrap();
+                let snapshot = LaunchSnapshot::capture(&managed, &id).unwrap();
+                let registry = InstanceRegistry::load(&managed.instance_registry_file()).unwrap();
+                assert_eq!(
+                    validate_instance(&managed, &registry, &id).unwrap().status,
+                    InstanceStatus::Ready
+                );
+                paused_tx.send(()).unwrap();
+                resume_rx.await.unwrap();
+                snapshot.with_validated::<(), BoundaryError>(&managed, |_| {
+                    panic!("stale preparation reached spawn")
+                })
+            });
+            paused_rx.await.unwrap();
+            let plan = preview(&world.managed, &endpoints, record.id(), enabled).unwrap();
+            apply(
+                &world.managed,
+                &endpoints,
+                record.id(),
+                enabled,
+                &plan.fingerprint,
+                Default::default(),
+            )
+            .await
+            .unwrap();
+            resume_tx.send(()).unwrap();
+            assert!(matches!(play.await.unwrap(), Err(BoundaryError::Stale)));
+            let current = LaunchSnapshot::capture(&world.managed, record.id()).unwrap();
+            current
+                .with_validated::<(), BoundaryError>(&world.managed, |_| {
+                    assert_eq!(current.record().installed().aurora.is_some(), enabled);
+                    Ok(())
+                })
+                .unwrap();
+            // Stale/error paths release both preparation and mutation guards.
+            assert!(PreparationGuard::acquire(record.id().as_str()).is_ok());
+        }
+    }
+
+    #[tokio::test]
+    async fn final_launch_boundary_excludes_disable_and_enable_commit() {
+        use super::super::transition::{apply, preview};
+        use crate::launch::boundary::{BoundaryError, LaunchSnapshot};
+        let world = SyntheticWorld::with_api("launch-transition-boundary", true);
+        let endpoints = world.endpoints();
+        let record = world.create("Boundary").await.unwrap();
+        for enabled in [false, true] {
+            let snapshot = LaunchSnapshot::capture(&world.managed, record.id()).unwrap();
+            let plan = preview(&world.managed, &endpoints, record.id(), enabled).unwrap();
+            let before = std::fs::read(world.registry_path()).unwrap();
+            let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+            let (spawn_tx, spawn_rx) = std::sync::mpsc::channel();
+            let managed = world.managed.clone();
+            let boundary = std::thread::spawn(move || {
+                snapshot.with_validated::<(), BoundaryError>(&managed, |_| {
+                    entered_tx.send(()).unwrap();
+                    spawn_rx.recv().unwrap();
+                    // Controlled synchronous spawn: observe one coherent snapshot
+                    // while the production boundary still holds both locks.
+                    let current =
+                        LaunchSnapshot::capture(&managed, snapshot.record().id()).unwrap();
+                    assert_eq!(current.record(), snapshot.record());
+                    Ok(())
+                })
+            });
+            entered_rx.await.unwrap();
+            let result = apply(
+                &world.managed,
+                &endpoints,
+                record.id(),
+                enabled,
+                &plan.fingerprint,
+                Default::default(),
+            )
+            .await;
+            assert!(
+                result.is_err(),
+                "transition committed beneath the spawn boundary"
+            );
+            assert_eq!(std::fs::read(world.registry_path()).unwrap(), before);
+            spawn_tx.send(()).unwrap();
+            boundary.join().unwrap().unwrap();
+            apply(
+                &world.managed,
+                &endpoints,
+                record.id(),
+                enabled,
+                &plan.fingerprint,
+                Default::default(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        }
+    }
+
+    #[tokio::test]
+    async fn final_launch_validation_rejects_damage_and_changed_manifest_and_releases_locks() {
+        use crate::launch::boundary::{BoundaryError, LaunchSnapshot};
+        let world = SyntheticWorld::new("launch-final-validation");
+        let mut configuration = InstanceConfiguration::for_minecraft_version("26.2");
+        configuration.set_loader(super::super::settings::LoaderConfiguration::Vanilla {});
+        configuration.set_aurora_enabled(false);
+        let record = world
+            .create_with_configuration("Vanilla", configuration)
+            .await
+            .unwrap();
+        let snapshot = LaunchSnapshot::capture(&world.managed, record.id()).unwrap();
+        let root = world.managed.instance_paths(record.id()).game().to_owned();
+        let manifest = crate::install::state::load_installed_state(&root)
+            .unwrap()
+            .unwrap();
+        let client = manifest
+            .files()
+            .iter()
+            .find(|f| f.role() == crate::install::state::InstalledFileRole::Client)
+            .unwrap();
+        let bytes = std::fs::read(root.join(client.path())).unwrap();
+        std::fs::write(root.join(client.path()), b"damage after preparation").unwrap();
+        assert!(matches!(
+            snapshot
+                .with_validated::<(), BoundaryError>(&world.managed, |_| panic!("damaged spawn")),
+            Err(BoundaryError::Invalid)
+        ));
+        std::fs::write(root.join(client.path()), bytes).unwrap();
+        // A spawn/assembly error and a competing content operation cannot
+        // strand either lock or turn a failed launch into Starting.
+        assert!(matches!(
+            snapshot.with_validated::<(), BoundaryError>(&world.managed, |_| Err(
+                BoundaryError::Invalid
+            )),
+            Err(BoundaryError::Invalid)
+        ));
+        crate::instance_content::with_instance_lock(record.id(), || {
+            assert!(matches!(
+                snapshot
+                    .with_validated::<(), BoundaryError>(&world.managed, |_| panic!("busy spawn")),
+                Err(BoundaryError::Busy)
+            ));
+            Ok(())
+        })
+        .unwrap();
+        snapshot
+            .with_validated::<(), BoundaryError>(&world.managed, |installed| {
+                assert_eq!(
+                    installed.platform(),
+                    super::super::platform::PlatformPin::Vanilla {}
+                );
+                assert_eq!(installed.fabric_loader_version(), None);
+                assert!(snapshot.record().installed().aurora.is_none());
+                Ok(())
+            })
+            .unwrap();
+        let state_path = root.join(crate::install::state::INSTALLED_GAME_FILE_NAME);
+        let mut state: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&state_path).unwrap()).unwrap();
+        state["installationId"] = "replacement-revision".into();
+        std::fs::write(state_path, serde_json::to_vec(&state).unwrap()).unwrap();
+        assert!(matches!(
+            snapshot.with_validated::<(), BoundaryError>(&world.managed, |_| panic!(
+                "stale manifest spawn"
+            )),
+            Err(BoundaryError::Stale)
+        ));
+    }
+
+    #[tokio::test]
     async fn aurora_transition_round_trip_reloads_and_preserves_unrelated_content() {
         use super::super::transition::{TransitionFaults, apply, preview};
         let world = SyntheticWorld::with_api("transition-round-trip", true);
