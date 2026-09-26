@@ -6,7 +6,7 @@
   const selectedId = $derived(launcher.launcherState?.config.selectedInstanceId ?? "");
 </script>
 
-<label class="instance-switcher" class:compact>
+<label class="field instance-switcher" class:compact>
   <span class="field-label">Play instance</span>
   <select aria-label="Select Play instance" value={selectedId}
     disabled={launcher.instanceBusy !== null || launcher.playBusy || launcher.createBusy}
