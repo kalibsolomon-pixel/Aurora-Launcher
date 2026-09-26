@@ -8,20 +8,18 @@
 //! rename). Display names are user-facing text only and never influence the
 //! filesystem; the identifier alone derives paths.
 //!
-//! Since schema 3, every record carries the user's desired
-//! [`settings::InstanceConfiguration`] (Minecraft version, loader policy,
-//! memory, additional JVM arguments, window) alongside the concrete release
-//! pin that installed state must match. Schema 2 files migrate
-//! deterministically: identifiers, display names, lifecycle states, and
-//! release pins survive byte-for-byte in meaning, and each migrated
-//! configuration is derived from the record's pin (same Minecraft version,
-//! the installed loader pinned, safe defaults for the new fields).
+//! Schema 4 separates installed Minecraft/platform/optional-Aurora identity
+//! from desired configuration and launch settings. Schemas 2 and 3 migrate
+//! explicitly to equivalent Fabric + Aurora records; unsupported or malformed
+//! state is never overwritten. Startup persists migration atomically, while
+//! ordinary load and complete validation remain read-only.
 //!
 //! Instance lifecycle orchestration (create/retry/rename/select/validate and
 //! configuration updates) lives in [`lifecycle`]; Aurora's own installed state
 //! lives in [`crate::aurora`]. Deletion remains unimplemented by design.
 
 pub mod lifecycle;
+pub mod platform;
 pub mod settings;
 
 use std::fmt;
@@ -32,16 +30,10 @@ use serde::{Deserialize, Serialize};
 use crate::distribution::ReleaseChannel;
 use crate::instances::settings::InstanceConfiguration;
 
-/// The only instance-registry schema version this launcher understands.
-///
-/// Version 3 added the desired user configuration (Minecraft version, loader
-/// kind and policy, memory, additional JVM arguments, window) to every
-/// record; version 2 files migrate deterministically as documented on the
-/// module. Version 1 files — from before any code could write the registry —
-/// fail deliberately as unsupported rather than being migrated.
-pub const INSTANCE_REGISTRY_SCHEMA_VERSION: u32 = 3;
+/// Current schema. Only the explicitly understood schemas 2 and 3 migrate.
+pub const INSTANCE_REGISTRY_SCHEMA_VERSION: u32 = 4;
 
-/// The immediately preceding schema version, the only one that migrates.
+/// Oldest explicitly migratable schema. Schema 3 is also supported.
 const LEGACY_REGISTRY_SCHEMA_VERSION: u32 = 2;
 
 const MAX_INSTANCE_ID_LENGTH: usize = 64;
@@ -99,19 +91,18 @@ impl TryFrom<String> for InstanceId {
 ///
 /// `display_name` is user-facing text only; it is never used to derive paths.
 /// `state` is the record's lifecycle state — a creation that has not yet
-/// completed stays `Installing` and is never reported ready. `release` pins
-/// the concrete Aurora release the installed content matches; "channel only"
-/// pins are deliberately unrepresentable because channels drift over time.
+/// completed stays `Installing` and is never reported ready. `installed` pins
+/// Minecraft, the typed platform, and optional exact Aurora identity.
 /// `configuration` is the user's desired configuration: what the instance
 /// *should be*. The two can disagree after an install-affecting configuration
 /// change; validation reports that as stale, never as ready.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstanceRecord {
     id: InstanceId,
     display_name: String,
     state: InstanceState,
-    release: PinnedRelease,
+    installed: platform::InstalledConfiguration,
     configuration: InstanceConfiguration,
 }
 
@@ -151,7 +142,7 @@ impl fmt::Display for InstanceState {
 /// lives in the instance's Aurora installed-state record next to the
 /// materialized artifact.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PinnedRelease {
     channel: ReleaseChannel,
     aurora_version: String,
@@ -212,7 +203,7 @@ impl InstanceRecord {
             id,
             display_name: display_name.into(),
             state,
-            release,
+            installed: platform::InstalledConfiguration::from_release(&release),
             configuration,
         };
         record.validate_content()?;
@@ -231,8 +222,36 @@ impl InstanceRecord {
         self.state
     }
 
-    pub fn release(&self) -> &PinnedRelease {
-        &self.release
+    pub fn installed(&self) -> &platform::InstalledConfiguration {
+        &self.installed
+    }
+
+    pub fn aurora_release(&self) -> Result<PinnedRelease, InvalidInstanceRecord> {
+        self.installed
+            .aurora_release()
+            .map_err(InvalidInstanceRecord::Configuration)
+    }
+
+    pub fn from_installed(
+        id: InstanceId,
+        display_name: impl Into<String>,
+        state: InstanceState,
+        installed: platform::InstalledConfiguration,
+        configuration: InstanceConfiguration,
+    ) -> Result<Self, InvalidInstanceRecord> {
+        let record = Self {
+            id,
+            display_name: display_name.into(),
+            state,
+            installed,
+            configuration,
+        };
+        record.validate_content()?;
+        Ok(record)
+    }
+
+    pub fn set_installed(&mut self, installed: platform::InstalledConfiguration) {
+        self.installed = installed;
     }
 
     pub fn configuration(&self) -> &InstanceConfiguration {
@@ -255,7 +274,7 @@ impl InstanceRecord {
     /// Replaces the release pin (the installed-content identity) when an
     /// installation completes for a (possibly new) configuration.
     pub fn set_release(&mut self, release: PinnedRelease) {
-        self.release = release;
+        self.installed = platform::InstalledConfiguration::from_release(&release);
     }
 
     /// Renames the instance's display name. This changes metadata only: the
@@ -271,7 +290,9 @@ impl InstanceRecord {
     /// Validates the parts serde cannot enforce by type.
     fn validate_content(&self) -> Result<(), InvalidInstanceRecord> {
         validate_display_name(&self.display_name)?;
-        self.release.validate()
+        self.installed
+            .validate()
+            .map_err(InvalidInstanceRecord::Configuration)
     }
 }
 
@@ -282,7 +303,7 @@ impl InstanceRecord {
 /// silently repaired or overwritten. Saves are atomic: sibling temporary
 /// file plus rename, so a partially written registry can never be observed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstanceRegistry {
     schema_version: u32,
     instances: Vec<InstanceRecord>,
@@ -328,19 +349,33 @@ impl InstanceRegistry {
         Self::from_json(&text)
     }
 
+    /// Startup migration is explicit and atomic; read-only validation uses load instead.
+    pub fn load_and_migrate(path: &Path) -> Result<Self, InstanceRegistryError> {
+        let _guard = lifecycle::registry_lock();
+        let text = match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Self::empty()),
+            Err(e) => return Err(InstanceRegistryError::Read(e)),
+        };
+        let registry = Self::from_json(&text)?;
+        if Self::parse_schema_version(&text)? != Self::SCHEMA_VERSION {
+            registry.save(path)?;
+        }
+        Ok(registry)
+    }
+
     /// Parses and validates registry data from JSON text.
     ///
-    /// Schema 3 parses directly. Schema 2 — the pre-configuration shape —
+    /// Schema 4 parses directly. Schemas 2 and 3 — the Aurora-only shapes —
     /// migrates deterministically: identifiers, display names, lifecycle
-    /// states, and release pins survive, and each record's desired
-    /// configuration is derived from its pin (same Minecraft version, the
-    /// installed loader pinned, safe defaults for memory, JVM arguments, and
-    /// window). Anything older or malformed fails deliberately.
+    /// states, and release pins survive. Schema 2 derives desired settings
+    /// from the pin with safe defaults; schema 3 preserves its desired
+    /// configuration. Anything older or malformed fails deliberately.
     pub fn from_json(text: &str) -> Result<Self, InstanceRegistryError> {
         let registry = match Self::parse_schema_version(text)? {
             Self::SCHEMA_VERSION => serde_json::from_str(text)
                 .map_err(|error| InstanceRegistryError::Malformed(error.to_string()))?,
-            LEGACY_REGISTRY_SCHEMA_VERSION => Self::migrate_v2(text)?,
+            LEGACY_REGISTRY_SCHEMA_VERSION | 3 => Self::migrate_legacy(text)?,
             found => {
                 return Err(InstanceRegistryError::UnsupportedSchema {
                     found,
@@ -389,43 +424,88 @@ impl InstanceRegistry {
         }
     }
 
-    /// The deterministic schema-2 → schema-3 migration.
-    fn migrate_v2(text: &str) -> Result<Self, InstanceRegistryError> {
+    fn migrate_legacy(text: &str) -> Result<Self, InstanceRegistryError> {
         #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
         struct LegacyRecord {
             id: InstanceId,
             display_name: String,
             state: InstanceState,
             release: PinnedRelease,
+            configuration: Option<LegacyConfiguration>,
         }
-
         #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct LegacyConfiguration {
+            minecraft_version: String,
+            loader: settings::LoaderConfiguration,
+            memory_mib: u32,
+            additional_jvm_arguments: String,
+            window: Option<settings::WindowConfiguration>,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
         struct LegacyRegistry {
+            schema_version: u32,
             instances: Vec<LegacyRecord>,
         }
-
         let legacy: LegacyRegistry = serde_json::from_str(text)
-            .map_err(|error| InstanceRegistryError::Malformed(error.to_string()))?;
-
-        let instances = legacy
-            .instances
-            .into_iter()
-            .map(|record| {
-                let configuration = InstanceConfiguration::migrated_from_release_pin(
+            .map_err(|e| InstanceRegistryError::Malformed(e.to_string()))?;
+        if legacy.schema_version == 2 {
+            let value: serde_json::Value = serde_json::from_str(text)
+                .map_err(|e| InstanceRegistryError::Malformed(e.to_string()))?;
+            if value["instances"].as_array().is_some_and(|records| {
+                records
+                    .iter()
+                    .any(|record| record.get("configuration").is_some())
+            }) {
+                return Err(InstanceRegistryError::Malformed(
+                    "schema 2 must not contain desired configuration".into(),
+                ));
+            }
+        }
+        let mut instances = Vec::new();
+        for record in legacy.instances {
+            record
+                .release
+                .validate()
+                .map_err(|e| InstanceRegistryError::Malformed(e.to_string()))?;
+            let configuration = match (legacy.schema_version, record.configuration) {
+                (2, None) => InstanceConfiguration::migrated_from_release_pin(
                     record.release.minecraft_version(),
                     record.release.fabric_loader_version(),
-                );
-                InstanceRecord {
-                    id: record.id,
-                    display_name: record.display_name,
-                    state: record.state,
-                    release: record.release,
-                    configuration,
+                ),
+                (3, Some(configuration)) => {
+                    if configuration.loader.kind() != settings::LoaderKind::Fabric {
+                        return Err(InstanceRegistryError::Malformed(
+                            "legacy mod loader must be Fabric".into(),
+                        ));
+                    }
+                    InstanceConfiguration::from_parts(
+                        configuration.minecraft_version,
+                        configuration.loader,
+                        configuration.memory_mib,
+                        configuration.additional_jvm_arguments,
+                        configuration.window,
+                    )
                 }
-            })
-            .collect();
-
+                _ => {
+                    return Err(InstanceRegistryError::Malformed(
+                        "legacy configuration does not match schema".into(),
+                    ));
+                }
+            };
+            instances.push(
+                InstanceRecord::new(
+                    record.id,
+                    record.display_name,
+                    record.state,
+                    record.release,
+                    configuration,
+                )
+                .map_err(|e| InstanceRegistryError::Malformed(e.to_string()))?,
+            );
+        }
         Ok(Self {
             schema_version: Self::SCHEMA_VERSION,
             instances,
@@ -436,6 +516,8 @@ impl InstanceRegistry {
     /// then rename over the target. Duplicate identifiers are rejected
     /// before anything touches disk.
     pub fn save(&self, path: &Path) -> Result<(), InstanceRegistryError> {
+        Self::load(path)?;
+        Self::from_json(&serde_json::to_string(self).expect("registry serializes"))?;
         if let Some(duplicate) = find_duplicate_id(&self.instances) {
             return Err(InstanceRegistryError::Malformed(format!(
                 "instance identifier '{duplicate}' is registered more than once"
@@ -521,6 +603,7 @@ impl std::error::Error for InvalidInstanceId {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InvalidInstanceRecord {
+    Configuration(String),
     EmptyDisplayName,
     DisplayNameTooLong(usize),
     DisplayNameWhitespacePadding,
@@ -533,6 +616,7 @@ pub enum InvalidInstanceRecord {
 impl fmt::Display for InvalidInstanceRecord {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Configuration(reason) => formatter.write_str(reason),
             Self::EmptyDisplayName => write!(formatter, "instance display name must not be empty"),
             Self::DisplayNameTooLong(length) => write!(
                 formatter,
@@ -965,10 +1049,16 @@ mod tests {
         assert_eq!(first.id().as_str(), "aurora-default");
         assert_eq!(first.display_name(), "Aurora Default");
         assert_eq!(first.state(), InstanceState::Ready);
-        assert_eq!(first.release().channel(), ReleaseChannel::Stable);
-        assert_eq!(first.release().aurora_version(), "0.3.0");
-        assert_eq!(first.release().minecraft_version(), "26.2");
-        assert_eq!(first.release().fabric_loader_version(), "0.19.5");
+        assert_eq!(
+            first.aurora_release().unwrap().channel(),
+            ReleaseChannel::Stable
+        );
+        assert_eq!(first.aurora_release().unwrap().aurora_version(), "0.3.0");
+        assert_eq!(first.aurora_release().unwrap().minecraft_version(), "26.2");
+        assert_eq!(
+            first.aurora_release().unwrap().fabric_loader_version(),
+            "0.19.5"
+        );
         assert_eq!(first.configuration().minecraft_version(), "26.2");
         assert_eq!(first.configuration().memory_mib(), 4096);
         assert_eq!(
@@ -984,7 +1074,7 @@ mod tests {
         );
         assert_eq!(
             first.configuration().loader().policy(),
-            &LoaderPolicy::Automatic
+            &LoaderPolicy::Automatic {}
         );
 
         let second = &registry.instances()[1];
@@ -1012,8 +1102,8 @@ mod tests {
         assert_eq!(first.id().as_str(), "aurora-default");
         assert_eq!(first.display_name(), "Aurora Default");
         assert_eq!(first.state(), InstanceState::Ready);
-        assert_eq!(first.release().aurora_version(), "0.3.0");
-        assert_eq!(first.release().minecraft_version(), "26.2");
+        assert_eq!(first.aurora_release().unwrap().aurora_version(), "0.3.0");
+        assert_eq!(first.aurora_release().unwrap().minecraft_version(), "26.2");
 
         // The derived configuration states exactly what was installed.
         assert_eq!(first.configuration().minecraft_version(), "26.2");
@@ -1046,7 +1136,7 @@ mod tests {
         registry.save(&saved).unwrap();
         assert_eq!(InstanceRegistry::load(&saved).unwrap(), registry);
         let persisted = std::fs::read_to_string(&saved).unwrap();
-        assert!(persisted.contains("\"schemaVersion\": 3"));
+        assert!(persisted.contains("\"schemaVersion\": 4"));
         assert!(persisted.contains("\"configuration\""));
     }
 
@@ -1110,8 +1200,8 @@ mod tests {
             ("{ not json".to_owned(), "malformed"),
             ("{}".to_owned(), "schema version"),
             (
-                r#"{ "schemaVersion": 4, "instances": [] }"#.to_owned(),
-                "schema version 4",
+                r#"{ "schemaVersion": 5, "instances": [] }"#.to_owned(),
+                "schema version 5",
             ),
             (
                 r#"{ "schemaVersion": 1, "instances": [] }"#.to_owned(),
@@ -1140,7 +1230,7 @@ mod tests {
                     valid_release,
                     r#"{ "minecraftVersion": "26.2", "loader": { "kind": "forge", "policy": { "type": "automatic" } }, "memoryMib": 2048, "additionalJvmArguments": "", "window": null }"#,
                 ),
-                "unknown variant",
+                "mod loader",
             ),
             (
                 schema_3_record(
@@ -1192,5 +1282,129 @@ mod tests {
         let path = directory.join(format!("registry-{}.json", std::process::id()));
         std::fs::write(&path, contents).unwrap();
         path
+    }
+    #[test]
+    fn production_schema_three_migration_preserves_identity_and_round_trips() {
+        let old = include_str!("fixtures/registry-v3-production.json");
+        let registry = InstanceRegistry::from_json(old).unwrap();
+        let record = &registry.instances()[0];
+        assert_eq!(record.installed().minecraft_version, "1.21.11");
+        assert_eq!(record.installed().platform.version(), Some("0.19.5"));
+        assert_eq!(record.installed().aurora.as_ref().unwrap().version, "2.1.2");
+        assert_eq!(record.configuration().memory_mib(), 4096);
+        assert!(record.configuration().aurora_enabled());
+        assert!(record.configuration().matches_installed(record.installed()));
+        let root =
+            std::env::temp_dir().join(format!("aurora-c1-migration-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("instances.json");
+        std::fs::write(&path, old).unwrap();
+        assert_eq!(InstanceRegistry::load_and_migrate(&path).unwrap(), registry);
+        assert_eq!(InstanceRegistry::load(&path).unwrap(), registry);
+        let persisted: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(persisted["schemaVersion"], 4);
+        assert!(persisted["instances"][0].get("release").is_none());
+        assert_eq!(
+            persisted["instances"][0]["installed"]["platform"],
+            serde_json::json!({"kind":"fabric","version":"0.19.5"})
+        );
+        std::fs::remove_file(&path).unwrap();
+        std::fs::remove_dir(&root).unwrap();
+    }
+    #[test]
+    fn malformed_legacy_and_future_documents_remain_untouched() {
+        let old: serde_json::Value =
+            serde_json::from_str(include_str!("fixtures/registry-v3-production.json")).unwrap();
+        let mut bad = old.clone();
+        bad["instances"][0]["configuration"]["extra"] = serde_json::json!(true);
+        let mut missing = old.clone();
+        missing["instances"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("configuration");
+        let mut foreign = old;
+        foreign["instances"][0]["release"]["surprise"] = serde_json::json!(true);
+        let mut null_configuration: serde_json::Value =
+            serde_json::from_str(include_str!("fixtures/registry-v3-production.json")).unwrap();
+        null_configuration["schemaVersion"] = serde_json::json!(2);
+        for record in null_configuration["instances"].as_array_mut().unwrap() {
+            record["configuration"] = serde_json::Value::Null;
+        }
+        for text in [
+            bad.to_string(),
+            missing.to_string(),
+            foreign.to_string(),
+            null_configuration.to_string(),
+            include_str!("fixtures/registry-v3-production.json").replace(
+                "\"memoryMib\": 4096",
+                "\"memoryMib\": 4096, \"memoryMib\": 8192",
+            ),
+            include_str!("fixtures/registry-v3-production.json").replace(
+                "\"type\": \"automatic\"",
+                "\"type\": \"automatic\", \"version\": \"discarded\"",
+            ),
+            r#"{"schemaVersion":99,"instances":[]}"#.into(),
+        ] {
+            let root =
+                std::env::temp_dir().join(format!("aurora-c1-malformed-{}", uuid::Uuid::new_v4()));
+            std::fs::create_dir(&root).unwrap();
+            let path = root.join("instances.json");
+            std::fs::write(&path, &text).unwrap();
+            assert!(InstanceRegistry::load(&path).is_err());
+            assert!(InstanceRegistry::empty().save(&path).is_err());
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+            std::fs::remove_file(&path).unwrap();
+            std::fs::remove_dir(&root).unwrap();
+        }
+    }
+    #[test]
+    fn vanilla_and_future_platform_records_round_trip_without_fabric_identity() {
+        for platform in [
+            platform::PlatformPin::Vanilla {},
+            platform::PlatformPin::Forge {
+                version: "1".into(),
+            },
+            platform::PlatformPin::NeoForge {
+                version: "1".into(),
+            },
+            platform::PlatformPin::Quilt {
+                version: "1".into(),
+            },
+        ] {
+            let mut configuration = InstanceConfiguration::for_minecraft_version("1.21.11");
+            configuration.set_aurora_enabled(false);
+            let kind = match platform {
+                platform::PlatformPin::Vanilla {} => settings::LoaderKind::Vanilla,
+                platform::PlatformPin::Forge { .. } => settings::LoaderKind::Forge,
+                platform::PlatformPin::NeoForge { .. } => settings::LoaderKind::NeoForge,
+                _ => settings::LoaderKind::Quilt,
+            };
+            configuration.set_loader(settings::LoaderConfiguration::from_parts(
+                kind,
+                settings::LoaderPolicy::Pinned {
+                    version: "1".into(),
+                },
+            ));
+            let installed = platform::InstalledConfiguration {
+                minecraft_version: "1.21.11".into(),
+                platform,
+                aurora: None,
+            };
+            let record = InstanceRecord::from_installed(
+                InstanceId::new("generic").unwrap(),
+                "Generic",
+                InstanceState::Installing,
+                installed,
+                configuration,
+            )
+            .unwrap();
+            let mut registry = InstanceRegistry::empty();
+            registry.instances_mut().push(record);
+            let text = serde_json::to_string(&registry).unwrap();
+            assert!(!text.contains("fabricLoaderVersion"));
+            assert!(!text.contains("auroraVersion"));
+            assert_eq!(InstanceRegistry::from_json(&text).unwrap(), registry);
+        }
     }
 }

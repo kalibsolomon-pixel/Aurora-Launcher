@@ -13,9 +13,9 @@
   const busy = $derived(launcher.instanceBusy === instance.id);
 
   const loaderPolicy = $derived(
-    instance.configuration.loader.policy.type === "pinned"
+    "policy" in instance.configuration.loader && instance.configuration.loader.policy.type === "pinned"
       ? `Fabric ${instance.configuration.loader.policy.version}`
-      : "Fabric (release version)",
+      : instance.configuration.loader.kind === "fabric" ? "Fabric (release version)" : instance.configuration.loader.kind,
   );
 
   function windowLabel(): string {
@@ -147,24 +147,24 @@
 <section class="group" aria-labelledby="release-title">
   <div class="group-heading">
     <div>
-      <h3 class="group-title" id="release-title">Installed release</h3>
+      <h3 class="group-title" id="release-title">Installed content</h3>
       <p class="group-subtitle">
-        The concrete release pin installed content must match.
+        The concrete Minecraft, platform, and optional Aurora configuration.
       </p>
     </div>
   </div>
 
   <div class="group-row">
     <span class="group-row-title">Aurora</span>
-    <span class="group-row-value">{instance.auroraVersion} ({instance.channel})</span>
+    <span class="group-row-value">{instance.aurora ? `${instance.aurora.version} (${instance.aurora.channel})` : "Not configured"}</span>
   </div>
   <div class="group-row">
     <span class="group-row-title">Minecraft</span>
     <span class="group-row-value">{instance.minecraftVersion}</span>
   </div>
   <div class="group-row">
-    <span class="group-row-title">Fabric Loader</span>
-    <span class="group-row-value">{instance.fabricLoaderVersion}</span>
+    <span class="group-row-title">Platform</span>
+    <span class="group-row-value">{instance.platform.kind}{"version" in instance.platform ? ` ${instance.platform.version}` : ""}</span>
   </div>
 
   <p class="group-footer">

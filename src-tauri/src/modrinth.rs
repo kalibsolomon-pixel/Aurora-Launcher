@@ -25,6 +25,7 @@ const MAX_GRAPH: usize = 64;
 pub struct Context {
     pub minecraft_version: String,
     pub loader: String,
+    pub fabric_api_protected: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -124,6 +125,9 @@ impl Client {
         query: &str,
         offset: u32,
     ) -> Result<SearchPage, Error> {
+        if context.loader != "fabric" {
+            return Err(Error::NoCompatibleVersion);
+        }
         if query.len() > 160 || offset > 10_000 {
             return Err(Error::InvalidRequest);
         }
@@ -134,7 +138,7 @@ impl Client {
             vec![format!("versions:{}", context.minecraft_version)],
         ];
         if kind == ContentType::Mod {
-            facets.push(vec!["categories:fabric".into()]);
+            facets.push(vec![format!("categories:{}", context.loader)]);
             facets.push(
                 CLIENT_ENVIRONMENTS
                     .iter()
@@ -458,6 +462,9 @@ fn content_type(project_type: &str) -> Result<ContentType, Error> {
 }
 
 fn compatible(context: &Context, kind: ContentType, version: &VersionDto) -> bool {
+    if context.loader != "fabric" {
+        return false;
+    }
     version
         .game_versions
         .iter()
@@ -545,10 +552,10 @@ impl Graph<'_> {
             if self.seen.len() >= MAX_GRAPH {
                 return Err(Error::DependencyUnresolved);
             }
-            if project_id == FABRIC_API_PROJECT && root {
+            if self.context.fabric_api_protected && project_id == FABRIC_API_PROJECT && root {
                 return Err(Error::DependencyConflict);
             }
-            if project_id == FABRIC_API_PROJECT && !root {
+            if self.context.fabric_api_protected && project_id == FABRIC_API_PROJECT && !root {
                 if version_id.is_some() {
                     return Err(Error::DependencyUnresolved);
                 }
@@ -913,6 +920,7 @@ mod tests {
         Context {
             minecraft_version: "1.21.11".into(),
             loader: "fabric".into(),
+            fabric_api_protected: true,
         }
     }
 
@@ -1500,5 +1508,43 @@ mod tests {
         let inventory = crate::instance_mods::scan(&managed, &instance).unwrap();
         assert!(inventory.entries.iter().any(|entry| entry.ownership == crate::instance_mods::ModOwnership::ProviderManaged));
         eprintln!("live Modrinth acceptance root: {}", root.display());
+    }
+    #[tokio::test]
+    async fn unprotected_fabric_api_resolves_as_ordinary_provider_content() {
+        let mut routes = HashMap::new();
+        routes.insert(
+            format!("/v2/project/{FABRIC_API_PROJECT}"),
+            project(FABRIC_API_PROJECT, "mod"),
+        );
+        routes.insert(
+            "/v2/version/11112222".into(),
+            version("11112222", FABRIC_API_PROJECT, json!([])),
+        );
+        let server = server(routes);
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        let mut context = context();
+        context.fabric_api_protected = false;
+        let resolved = client
+            .resolve(
+                &context,
+                ContentType::Mod,
+                FABRIC_API_PROJECT,
+                "11112222",
+                &ContentState::empty(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resolved.plans.len(), 1);
+        assert_eq!(resolved.plans[0].project_id, FABRIC_API_PROJECT);
+    }
+    #[tokio::test]
+    async fn unsupported_provider_platform_fails_closed_before_network() {
+        let mut context = context();
+        context.loader = "forge".into();
+        let client = Client::for_testing("http://127.0.0.1:1/v2/");
+        assert!(matches!(
+            client.search(&context, ContentType::Mod, "", 0).await,
+            Err(Error::NoCompatibleVersion)
+        ));
     }
 }

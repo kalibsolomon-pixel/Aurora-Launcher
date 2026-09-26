@@ -255,27 +255,17 @@ pub async fn create_instance(
     request.configuration().validate()?;
 
     progress(report(InstancePhase::ResolvingRelease, None));
-    let release =
-        resolve_release_for_configuration(endpoints.release_manifest(), request.configuration())?;
-    let loader_version =
-        resolve_loader_version(endpoints, request.configuration(), &release).await?;
-
-    let pin = PinnedRelease::new(
-        release.channel(),
-        release.aurora_version(),
-        request.configuration().minecraft_version(),
-        loader_version,
-    )?;
+    let installed = resolve_installed_configuration(endpoints, request.configuration()).await?;
 
     // Allocate the identity and persist the explicit installing record.
     // Display-name validation happens in record construction — before
     // anything is written.
     let instance_id = allocate_instance_id(managed, registry_path)?;
-    let record = InstanceRecord::new(
+    let record = InstanceRecord::from_installed(
         instance_id,
         request.display_name,
         InstanceState::Installing,
-        pin,
+        installed,
         request.configuration,
     )?;
 
@@ -351,6 +341,94 @@ pub async fn retry_instance_install(
     Ok(record)
 }
 
+fn require_executable_configuration(
+    configuration: &InstanceConfiguration,
+) -> Result<(), InstanceError> {
+    if configuration.loader().kind() != super::settings::LoaderKind::Fabric {
+        return Err(InstanceError::ReleaseInvalid(
+            "this platform has no installation/launch implementation in this build".into(),
+        ));
+    }
+    Ok(())
+}
+
+async fn resolve_installed_configuration(
+    endpoints: &InstanceEndpoints,
+    configuration: &InstanceConfiguration,
+) -> Result<super::platform::InstalledConfiguration, InstanceError> {
+    require_executable_configuration(configuration)?;
+    if configuration.aurora_enabled() {
+        let release =
+            resolve_release_for_configuration(endpoints.release_manifest(), configuration)?;
+        let loader = resolve_loader_version(endpoints, configuration, &release).await?;
+        let pin = PinnedRelease::new(
+            release.channel(),
+            release.aurora_version(),
+            configuration.minecraft_version(),
+            loader,
+        )?;
+        return Ok(super::platform::InstalledConfiguration::from_release(&pin));
+    }
+    let game =
+        crate::minecraft::metadata::MinecraftVersionId::new(configuration.minecraft_version())
+            .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+    let entries = crate::fabric::metadata::fetch_game_loader_versions(
+        &endpoints.fabric,
+        &game,
+        endpoints.install.download_options(),
+    )
+    .await
+    .map_err(InstanceError::FabricMetadata)?;
+    let candidates: Vec<_> = entries
+        .iter()
+        .map(|entry| LoaderCandidate {
+            version: entry.version.clone(),
+            stable: entry.stable,
+        })
+        .collect();
+    let version = configuration
+        .loader()
+        .policy()
+        .resolve(&candidates)
+        .ok_or_else(|| InstanceError::LoaderResolution {
+            game: game.to_string(),
+            reason: "the requested Fabric Loader policy has no compatible version".into(),
+        })?;
+    Ok(super::platform::InstalledConfiguration {
+        minecraft_version: configuration.minecraft_version().into(),
+        platform: super::platform::PlatformPin::Fabric {
+            version: version.into(),
+        },
+        aurora: None,
+    })
+}
+
+fn resolve_optional_aurora<'a>(
+    endpoints: &'a InstanceEndpoints,
+    record: &InstanceRecord,
+) -> Result<Option<&'a crate::distribution::AuroraRelease>, InstanceError> {
+    let Some(pin) = &record.installed().aurora else {
+        return Ok(None);
+    };
+    let release = endpoints
+        .release_manifest()
+        .resolve_exact(&pin.version, Some(pin.channel))
+        .ok_or_else(|| InstanceError::AuroraReleaseNotFound {
+            channel: pin.channel,
+            aurora_version: pin.version.clone(),
+        })?;
+    if release.minecraft_version() != record.installed().minecraft_version
+        || Some(release.fabric_loader_version()) != record.installed().platform.version()
+    {
+        return Err(InstanceError::ReleaseInvalid(
+            "Aurora release does not match the configured Minecraft/platform pin".into(),
+        ));
+    }
+    super::platform::required_content(record.installed(), Some(release))
+        .map_err(InstanceError::ReleaseInvalid)?;
+    Ok(Some(release))
+}
+
 /// Resolves the Aurora release a configuration's Minecraft version requires.
 ///
 /// The release manifest maps each release to one Minecraft version; when
@@ -423,7 +501,7 @@ async fn resolve_loader_version(
         .collect();
     let required = release.fabric_loader_version();
     let selected = match configuration.loader().policy() {
-        LoaderPolicy::Automatic => required,
+        LoaderPolicy::Automatic {} => required,
         LoaderPolicy::Pinned { version } => version,
     };
     if selected != required
@@ -456,7 +534,10 @@ pub fn update_instance_configuration(
     configuration: InstanceConfiguration,
 ) -> Result<InstanceRecord, InstanceError> {
     configuration.validate()?;
-    resolve_release_for_configuration(endpoints.release_manifest(), &configuration)?;
+    require_executable_configuration(&configuration)?;
+    if configuration.aurora_enabled() {
+        resolve_release_for_configuration(endpoints.release_manifest(), &configuration)?;
+    }
 
     let _guard = registry_lock();
     let mut registry = InstanceRegistry::load(registry_path)?;
@@ -471,6 +552,9 @@ pub fn update_instance_configuration(
             reason: "finish or retry the current installation before changing the configuration"
                 .to_owned(),
         });
+    }
+    if record.installed().aurora.is_some() && !configuration.aurora_enabled() {
+        return Err(InstanceError::ReleaseInvalid("removing Aurora from an existing instance is deferred until the explicit content transition in C2".into()));
     }
     record.set_configuration(configuration);
     let updated = record.clone();
@@ -518,14 +602,7 @@ pub async fn install_instance_configuration(
     configuration.validate()?;
 
     progress(report(InstancePhase::ResolvingRelease, None));
-    let release = resolve_release_for_configuration(endpoints.release_manifest(), &configuration)?;
-    let loader_version = resolve_loader_version(endpoints, &configuration, &release).await?;
-    let pin = PinnedRelease::new(
-        release.channel(),
-        release.aurora_version(),
-        configuration.minecraft_version(),
-        loader_version,
-    )?;
+    let installed = resolve_installed_configuration(endpoints, &configuration).await?;
 
     let mut record = {
         let _guard = registry_lock();
@@ -535,7 +612,7 @@ pub async fn install_instance_configuration(
             .ok_or_else(|| InstanceError::NotFound {
                 instance_id: instance_id.to_string(),
             })?;
-        stored.set_release(pin.clone());
+        stored.set_installed(installed.clone());
         stored.set_state(InstanceState::Installing);
         let updated = stored.clone();
         registry.save(registry_path)?;
@@ -561,16 +638,7 @@ async fn install_instance_components(
     faults: InstanceFaults,
 ) -> Result<(), InstanceError> {
     let started = std::time::Instant::now();
-    let release = endpoints
-        .release_manifest()
-        .resolve_exact(
-            record.release().aurora_version(),
-            Some(record.release().channel()),
-        )
-        .ok_or_else(|| InstanceError::AuroraReleaseNotFound {
-            channel: record.release().channel(),
-            aurora_version: record.release().aurora_version().to_owned(),
-        })?;
+    let release = resolve_optional_aurora(endpoints, record)?;
     let release_finished = std::time::Instant::now();
 
     progress(report(InstancePhase::ResolvingGame, None));
@@ -588,22 +656,30 @@ async fn install_instance_components(
     )
     .await?;
     let game_finished = std::time::Instant::now();
+    crate::instance_content::ensure_directory(
+        managed,
+        record.id(),
+        crate::instance_content::ContentType::Mod,
+    )
+    .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
 
-    if faults.fail_before_aurora_install {
+    if release.is_some() && faults.fail_before_aurora_install {
         return Err(InstanceError::Aurora(AuroraInstallError::Materialization {
             path: "aurora artifact".to_owned(),
             reason: "deterministic fault injected before Aurora installation".to_owned(),
         }));
     }
 
-    progress(report(InstancePhase::InstallingAurora, None));
-    install_aurora(
-        managed,
-        record.id(),
-        release,
-        endpoints.install.download_options(),
-    )
-    .await?;
+    if let Some(release) = release {
+        progress(report(InstancePhase::InstallingAurora, None));
+        install_aurora(
+            managed,
+            record.id(),
+            release,
+            endpoints.install.download_options(),
+        )
+        .await?;
+    }
     let aurora_finished = std::time::Instant::now();
 
     progress(report(InstancePhase::Validating, None));
@@ -666,23 +742,19 @@ async fn install_instance_components(
 async fn resolve_record_game_plan(
     endpoints: &InstanceEndpoints,
     record: &InstanceRecord,
-    release: &crate::distribution::AuroraRelease,
+    release: Option<&crate::distribution::AuroraRelease>,
 ) -> Result<crate::fabric::plan::GameInstallPlan, InstanceError> {
-    let pin = record.release();
-    if release.minecraft_version() != pin.minecraft_version()
-        || release.fabric_loader_version() != pin.fabric_loader_version()
-    {
-        return Err(InstanceError::ReleaseInvalid(
-            "the resolved release no longer matches the instance's concrete Minecraft/Fabric pin"
-                .to_owned(),
-        ));
-    }
+    let installed = record.installed();
     let game_version =
-        crate::minecraft::metadata::MinecraftVersionId::new(release.minecraft_version())
-            .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
-    let loader_version =
-        crate::fabric::metadata::LoaderVersionId::new(release.fabric_loader_version())
-            .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
+        crate::minecraft::metadata::MinecraftVersionId::new(&installed.minecraft_version)
+            .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+    let loader_version = crate::fabric::metadata::LoaderVersionId::new(
+        installed
+            .platform
+            .require_fabric()
+            .map_err(InstanceError::ReleaseInvalid)?,
+    )
+    .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
     let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
     let plan = crate::fabric::resolve_game_plan(
         &endpoints.minecraft,
@@ -693,7 +765,9 @@ async fn resolve_record_game_plan(
         endpoints.install.download_options(),
     )
     .await?;
-    validate_release_java_major(release.java().major_version(), plan.java().major_version())?;
+    if let Some(release) = release {
+        validate_release_java_major(release.java().major_version(), plan.java().major_version())?;
+    }
     Ok(plan)
 }
 
@@ -793,16 +867,7 @@ pub async fn resolve_instance_game_plan(
             ),
         });
     }
-    let release = endpoints
-        .release_manifest()
-        .resolve_exact(
-            record.release().aurora_version(),
-            Some(record.release().channel()),
-        )
-        .ok_or_else(|| InstanceError::AuroraReleaseNotFound {
-            channel: record.release().channel(),
-            aurora_version: record.release().aurora_version().to_owned(),
-        })?;
+    let release = resolve_optional_aurora(endpoints, &record)?;
     resolve_record_game_plan(endpoints, &record, release).await
 }
 
@@ -964,26 +1029,24 @@ pub fn validate_instance(
     // stale gate: an install-affecting configuration change means the record
     // is never ready until matching content is installed. Launch-only
     // settings (memory, JVM arguments, window, name) never participate.
-    let pin = record.release();
-    let configuration_matches = record
-        .configuration()
-        .matches_release_pin(pin.minecraft_version(), pin.fabric_loader_version());
-    if !configuration_matches {
+    if !matches!(
+        record.installed().platform,
+        super::platform::PlatformPin::Fabric { .. }
+    ) {
         problems.push(InstanceProblem {
-            component: "configuration",
-            reason: format!(
-                "the desired configuration (Minecraft {}{}) does not match the installed content (Minecraft {} + Fabric Loader {}); install the new configuration to restore readiness",
-                record.configuration().minecraft_version(),
-                match record.configuration().loader().policy() {
-                    LoaderPolicy::Automatic => String::new(),
-                    LoaderPolicy::Pinned { version } => format!(" + Fabric Loader {version}"),
-                },
-                pin.minecraft_version(),
-                pin.fabric_loader_version(),
-            ),
+            component: "platform",
+            reason: "this platform has no validation or launch implementation".into(),
         });
     }
+    let configuration_matches = record.configuration().matches_installed(record.installed());
+    if !configuration_matches {
+        problems.push(InstanceProblem {component: "configuration", reason: "the desired configuration differs from installed Minecraft/platform/Aurora content; install the new configuration".into()});
+    }
 
+    if record.installed().aurora.is_none() && load_installed_state(managed, record.id())?.is_some()
+    {
+        problems.push(InstanceProblem {component: "aurora", reason: "a managed Aurora installation remains in an instance configured without Aurora; explicit content transition is required".into()});
+    }
     // Game installation.
     let game_root = managed.instance_paths(record.id()).game().to_path_buf();
     let game_manifest = match validate_game_install(managed, record.id())? {
@@ -1015,69 +1078,82 @@ pub fn validate_instance(
         }
     };
 
-    // Aurora installation.
-    let aurora_state: Option<AuroraInstalledState> =
-        match load_installed_state(managed, record.id())? {
-            Some(state) => {
-                if let Err(reason) = validate_aurora_artifact(managed, record.id(), &state) {
+    if let Some(game) = &game_manifest {
+        if game.minecraft_version() != record.installed().minecraft_version
+            || Some(game.fabric_loader_version()) != record.installed().platform.version()
+        {
+            problems.push(InstanceProblem {
+                component: "platform",
+                reason: "installed game does not match Minecraft/platform identity".into(),
+            });
+        }
+    }
+    if record.installed().aurora.is_some() {
+        let pin = record.aurora_release()?;
+        // Aurora installation.
+        let aurora_state: Option<AuroraInstalledState> =
+            match load_installed_state(managed, record.id())? {
+                Some(state) => {
+                    if let Err(reason) = validate_aurora_artifact(managed, record.id(), &state) {
+                        problems.push(InstanceProblem {
+                            component: "aurora",
+                            reason,
+                        });
+                    }
+                    Some(state)
+                }
+                None => {
                     problems.push(InstanceProblem {
                         component: "aurora",
-                        reason,
+                        reason: "no Aurora installation is present".to_owned(),
                     });
+                    None
                 }
-                Some(state)
-            }
-            None => {
-                problems.push(InstanceProblem {
-                    component: "aurora",
-                    reason: "no Aurora installation is present".to_owned(),
-                });
-                None
-            }
-        };
+            };
 
-    // Cross-component consistency.
-    if let Some(aurora) = &aurora_state {
-        let manifest = crate::distribution::production_manifest()
-            .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
-        if let Some(release) = manifest.resolve_exact(pin.aurora_version(), Some(pin.channel())) {
-            if aurora.artifact().sha256() != release.artifact().sha256()
-                || Some(aurora.artifact().size_bytes()) != release.artifact().size_bytes()
+        // Cross-component consistency.
+        if let Some(aurora) = &aurora_state {
+            let manifest = crate::distribution::production_manifest()
+                .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
+            if let Some(release) = manifest.resolve_exact(pin.aurora_version(), Some(pin.channel()))
             {
-                problems.push(InstanceProblem {
+                if aurora.artifact().sha256() != release.artifact().sha256()
+                    || Some(aurora.artifact().size_bytes()) != release.artifact().size_bytes()
+                {
+                    problems.push(InstanceProblem {
                     component: "aurora",
                     reason:
                         "the installed Aurora artifact does not match production release metadata"
                             .to_owned(),
                 });
-            }
-            let expected_api = release.fabric_api();
-            let installed_api = aurora.fabric_api();
-            if expected_api.map(|api| {
-                (
-                    api.version(),
-                    api.artifact().sha256(),
-                    api.artifact().size_bytes(),
-                )
-            }) != installed_api.map(|api| {
-                (
-                    api.version(),
-                    api.artifact().sha256(),
-                    Some(api.artifact().size_bytes()),
-                )
-            }) {
-                problems.push(InstanceProblem {
+                }
+                let expected_api = release.fabric_api();
+                let installed_api = aurora.fabric_api();
+                if expected_api.map(|api| {
+                    (
+                        api.version(),
+                        api.artifact().sha256(),
+                        api.artifact().size_bytes(),
+                    )
+                }) != installed_api.map(|api| {
+                    (
+                        api.version(),
+                        api.artifact().sha256(),
+                        Some(api.artifact().size_bytes()),
+                    )
+                }) {
+                    problems.push(InstanceProblem {
                         component: "aurora",
                         reason: "the release-required Fabric API installation does not match production metadata".to_owned(),
                     });
+                }
             }
-        }
-        if aurora.aurora_version() != pin.aurora_version()
-            || aurora.channel() != pin.channel()
-            || aurora.minecraft_version() != pin.minecraft_version()
-            || aurora.fabric_loader_version() != pin.fabric_loader_version()
-        {
-            problems.push(InstanceProblem {
+            if aurora.aurora_version() != pin.aurora_version()
+                || aurora.channel() != pin.channel()
+                || aurora.minecraft_version() != pin.minecraft_version()
+                || aurora.fabric_loader_version() != pin.fabric_loader_version()
+            {
+                problems.push(InstanceProblem {
                 component: "consistency",
                 reason: format!(
                     "the pinned release ({} {} for Minecraft {} + Fabric Loader {}) does not match the installed Aurora release ({} {} for Minecraft {} + Fabric Loader {})",
@@ -1091,12 +1167,12 @@ pub fn validate_instance(
                     aurora.fabric_loader_version(),
                 ),
             });
-        }
-        if let Some(game) = &game_manifest {
-            if game.minecraft_version() != aurora.minecraft_version()
-                || game.fabric_loader_version() != aurora.fabric_loader_version()
-            {
-                problems.push(InstanceProblem {
+            }
+            if let Some(game) = &game_manifest {
+                if game.minecraft_version() != aurora.minecraft_version()
+                    || game.fabric_loader_version() != aurora.fabric_loader_version()
+                {
+                    problems.push(InstanceProblem {
                     component: "consistency",
                     reason: format!(
                         "the installed game (Minecraft {} + Fabric Loader {}) does not match the Aurora release (Minecraft {} + Fabric Loader {})",
@@ -1106,33 +1182,10 @@ pub fn validate_instance(
                         aurora.fabric_loader_version(),
                     ),
                 });
+                }
             }
         }
     }
-
-    // Desired configuration versus installed content. This is the deliberate
-    // stale gate: an install-affecting configuration change means the record
-    // is never ready until matching content is installed. Launch-only
-    // settings (memory, JVM arguments, window, name) never participate.
-    let configuration_matches = record
-        .configuration()
-        .matches_release_pin(pin.minecraft_version(), pin.fabric_loader_version());
-    if !configuration_matches {
-        problems.push(InstanceProblem {
-            component: "configuration",
-            reason: format!(
-                "the desired configuration (Minecraft {}{}) does not match the installed content (Minecraft {} + Fabric Loader {}); install the new configuration to restore readiness",
-                record.configuration().minecraft_version(),
-                match record.configuration().loader().policy() {
-                    LoaderPolicy::Automatic => String::new(),
-                    LoaderPolicy::Pinned { version } => format!(" + Fabric Loader {version}"),
-                },
-                pin.minecraft_version(),
-                pin.fabric_loader_version(),
-            ),
-        });
-    }
-
     let status = if record.state() == InstanceState::Installing {
         InstanceStatus::Installing
     } else if !configuration_matches {
@@ -1154,7 +1207,7 @@ pub fn validate_instance(
 /// The process-wide registry mutation lock: registry read-modify-write
 /// windows are serialized so concurrent operations cannot lose updates.
 /// Long installations run outside it.
-fn registry_lock() -> std::sync::MutexGuard<'static, ()> {
+pub(crate) fn registry_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     let lock = LOCK.get_or_init(|| Mutex::new(()));
     lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -1732,9 +1785,12 @@ mod tests {
         let stored = registry.find(record.id()).unwrap();
         assert_eq!(stored.state(), InstanceState::Ready);
         assert_eq!(stored.display_name(), "My Aurora Setup");
-        assert_eq!(stored.release().aurora_version(), "0.3.0");
-        assert_eq!(stored.release().minecraft_version(), "26.2");
-        assert_eq!(stored.release().fabric_loader_version(), "0.19.5");
+        assert_eq!(stored.aurora_release().unwrap().aurora_version(), "0.3.0");
+        assert_eq!(stored.aurora_release().unwrap().minecraft_version(), "26.2");
+        assert_eq!(
+            stored.aurora_release().unwrap().fabric_loader_version(),
+            "0.19.5"
+        );
         assert_eq!(
             stored.id().as_str().len(),
             32,
@@ -1989,7 +2045,10 @@ mod tests {
         assert_eq!(renamed.id(), record.id(), "the identifier is unchanged");
         let stored = world.load_registry().find(record.id()).unwrap().clone();
         assert_eq!(stored.display_name(), "Renamed âœ¨");
-        assert_eq!(stored.release(), record.release());
+        assert_eq!(
+            stored.aurora_release().unwrap(),
+            record.aurora_release().unwrap()
+        );
 
         // The filesystem path is identical and installed state is untouched.
         let instance_paths = world.managed.instance_paths(record.id());
@@ -2115,7 +2174,7 @@ mod tests {
             let mut value: serde_json::Value =
                 serde_json::from_str(&std::fs::read_to_string(world.registry_path()).unwrap())
                     .unwrap();
-            value["instances"][0]["release"]["auroraVersion"] =
+            value["instances"][0]["installed"]["aurora"]["version"] =
                 serde_json::Value::String("0.3.1".to_owned());
             std::fs::write(&world.registry_path(), value.to_string()).unwrap();
         }
@@ -2550,7 +2609,10 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(record.release().fabric_loader_version(), "0.19.5");
+        assert_eq!(
+            record.aurora_release().unwrap().fabric_loader_version(),
+            "0.19.5"
+        );
 
         // A pinned policy for an unlisted loader fails at creation before
         // any record is persisted.
@@ -2837,7 +2899,7 @@ mod tests {
         let registry_path = managed.instance_registry_file();
         let registry = InstanceRegistry::load(&registry_path).unwrap();
         let first = registry.instances().first().unwrap();
-        assert_eq!(first.release().aurora_version(), "2.1.2");
+        assert_eq!(first.aurora_release().unwrap().aurora_version(), "2.1.2");
         let id = first.id().clone();
         let endpoints = InstanceEndpoints::operational().unwrap();
         let started = Instant::now();
@@ -2935,5 +2997,110 @@ mod tests {
                 result.reused()
             );
         }
+    }
+    #[tokio::test]
+    async fn fabric_without_aurora_installs_validates_reinstalls_and_plans_launch() {
+        let world = SyntheticWorld::new("optional-aurora");
+        let endpoints = world.endpoints();
+        let mut configuration = InstanceConfiguration::for_minecraft_version("26.2");
+        configuration.set_aurora_enabled(false);
+        let record = create_instance(
+            &world.managed,
+            &world.registry_path(),
+            &world.config_path(),
+            &endpoints,
+            CreateInstanceRequest::new("Fabric only", configuration),
+            &mut |_| {},
+            InstanceFaults::default(),
+        )
+        .await
+        .unwrap();
+        assert!(record.installed().aurora.is_none());
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        assert!(
+            load_installed_state(&world.managed, record.id())
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            crate::instance_mods::managed_artifact_file_name(&world.managed, record.id())
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            crate::instance_mods::scan(&world.managed, record.id())
+                .unwrap()
+                .entries
+                .is_empty()
+        );
+        let plan = resolve_instance_game_plan(
+            &world.managed,
+            &world.registry_path(),
+            &endpoints,
+            record.id(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(plan.loader().loader_version(), "0.19.5");
+        assert_eq!(
+            plan.main_class(),
+            "net.fabricmc.loader.impl.launch.knot.KnotClient"
+        );
+        let repaired = install_instance_configuration(
+            &world.managed,
+            &world.registry_path(),
+            &world.config_path(),
+            &endpoints,
+            record.id(),
+            &mut |_| {},
+            InstanceFaults::default(),
+        )
+        .await
+        .unwrap();
+        assert!(repaired.installed().aurora.is_none());
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        assert!(
+            std::fs::read_dir(world.managed.instance_paths(record.id()).mods())
+                .unwrap()
+                .next()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn unsupported_creation_and_aurora_removal_fail_before_mutation() {
+        let world = SyntheticWorld::new("unsupported-platform");
+        let endpoints = world.endpoints();
+        let mut configuration = InstanceConfiguration::for_minecraft_version("26.2");
+        configuration.set_aurora_enabled(false);
+        configuration.set_loader(super::super::settings::LoaderConfiguration::Vanilla {});
+        assert!(
+            create_instance(
+                &world.managed,
+                &world.registry_path(),
+                &world.config_path(),
+                &endpoints,
+                CreateInstanceRequest::new("Vanilla", configuration),
+                &mut |_| {},
+                InstanceFaults::default()
+            )
+            .await
+            .is_err()
+        );
+        assert!(world.load_registry().instances().is_empty());
+        let record = world.create("Protected Aurora").await.unwrap();
+        let before = std::fs::read(world.registry_path()).unwrap();
+        let mut configuration = record.configuration().clone();
+        configuration.set_aurora_enabled(false);
+        assert!(
+            update_instance_configuration(
+                &world.registry_path(),
+                &endpoints,
+                record.id(),
+                configuration
+            )
+            .is_err()
+        );
+        assert_eq!(std::fs::read(world.registry_path()).unwrap(), before);
     }
 }

@@ -7,6 +7,7 @@
   } from "$lib/launcher/instanceStatus";
   import type { InstanceSummary } from "$lib/backend";
 
+  const fabricCreation = $derived(launcher.launcherState?.platformCapabilities.some((capability) => capability.kind === "fabric" && capability.canCreate && capability.auroraSupported) ?? false);
   const instances = $derived(launcher.launcherState?.instances ?? []);
   const selectedId = $derived(launcher.launcherState?.config.selectedInstanceId ?? null);
 
@@ -144,8 +145,10 @@
               }
             }}
           >
-            <option value="">Fabric — release version</option>
-            <option value="pinned">Fabric — choose version</option>
+            {#if fabricCreation}
+              <option value="">Fabric — release version</option>
+              <option value="pinned">Fabric — choose version</option>
+            {/if}
           </select>
           {#if launcher.createLoaderPolicy.type === "pinned"}
             <select
@@ -178,7 +181,7 @@
         <button
           type="submit"
           class="btn btn-primary"
-          disabled={launcher.createBusy ||
+          disabled={!fabricCreation || launcher.createBusy ||
             launcher.createDisplayName.trim() === "" ||
             launcher.createMinecraftVersion === ""}
         >

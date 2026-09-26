@@ -260,8 +260,56 @@ pub(crate) fn managed_artifact_file_name(
     managed: &ManagedPaths,
     instance: &InstanceId,
 ) -> Result<Option<Vec<String>>, ModError> {
+    let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
+        .map_err(|error| ModError::InstalledState(error.to_string()))?;
+    if let Some(record) = registry.find(instance) {
+        if record.installed().aurora.is_none() {
+            return Ok(None);
+        }
+        record
+            .installed()
+            .platform
+            .require_fabric()
+            .map_err(ModError::InstalledState)?;
+    }
+    let mut configured_files = Vec::new();
+    if let Some(record) = registry.find(instance) {
+        let manifest = crate::distribution::operational_manifest()
+            .map_err(|e| ModError::InstalledState(e.to_string()))?;
+        let pin = record
+            .installed()
+            .aurora
+            .as_ref()
+            .expect("absence returned above");
+        if let Some(release) = manifest.resolve_exact(&pin.version, Some(pin.channel)) {
+            let requirements =
+                crate::instances::platform::required_content(record.installed(), Some(release))
+                    .map_err(ModError::InstalledState)?;
+            if requirements.aurora {
+                configured_files.push(
+                    aurora::managed_artifact_relative_path(release)
+                        .map_err(|e| ModError::InstalledState(e.to_string()))?
+                        .strip_prefix("mods/")
+                        .expect("managed mod path")
+                        .to_owned(),
+                );
+            }
+            if requirements.fabric_api {
+                configured_files.push(format!(
+                    "fabric-api-{}.jar",
+                    release
+                        .fabric_api()
+                        .expect("requirement derived from release")
+                        .version()
+                ));
+            }
+        }
+    }
     let state = aurora::load_installed_state(managed, instance)
         .map_err(|error| ModError::InstalledState(error.to_string()))?;
+    if state.is_none() {
+        return Ok((!configured_files.is_empty()).then_some(configured_files));
+    }
     Ok(state.map(|state| {
         let mut files = vec![
             state
@@ -280,6 +328,11 @@ pub(crate) fn managed_artifact_file_name(
                     .expect("validated Fabric API state always lives beneath mods")
                     .to_owned(),
             );
+        }
+        for configured in configured_files {
+            if !files.contains(&configured) {
+                files.push(configured);
+            }
         }
         files
     }))

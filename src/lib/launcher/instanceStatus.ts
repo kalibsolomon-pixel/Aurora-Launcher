@@ -42,8 +42,10 @@ export function configurationRequiresInstall(instance: InstanceSummary): boolean
   if (instance.state !== "ready") return false;
   return (
     instance.configuration.minecraftVersion !== instance.minecraftVersion ||
-    (instance.configuration.loader.policy.type === "pinned" &&
-      instance.configuration.loader.policy.version !== instance.fabricLoaderVersion)
+    instance.configuration.loader.kind !== instance.platform.kind ||
+    instance.configuration.auroraEnabled !== (instance.aurora !== null) ||
+    ("policy" in instance.configuration.loader && instance.configuration.loader.policy.type === "pinned" &&
+      instance.configuration.loader.policy.version !== ("version" in instance.platform ? instance.platform.version : undefined))
   );
 }
 
@@ -104,10 +106,12 @@ export function instanceContentStatus(
 
 /** Quiet one-line description of an instance's desired configuration. */
 export function configurationLabel(instance: InstanceSummary): string {
-  const loader =
-    instance.configuration.loader.policy.type === "pinned"
-      ? `Fabric ${instance.configuration.loader.policy.version}`
-      : "Fabric (release version)";
+  const kind = instance.configuration.loader.kind === "fabric" ? "Fabric" : instance.configuration.loader.kind;
+  const loader = "policy" in instance.configuration.loader
+    ? instance.configuration.loader.policy.type === "pinned"
+      ? `${kind} ${instance.configuration.loader.policy.version}`
+      : `${kind} (${instance.configuration.auroraEnabled ? "release version" : "automatic"})`
+    : kind;
   return `Minecraft ${instance.configuration.minecraftVersion} · ${loader}`;
 }
 
@@ -171,4 +175,11 @@ export function javaRuntimeStatus(
     label: "Not installed",
     detail: `${runtime.component} · Java ${runtime.requiredMajorVersion}`,
   };
+}
+
+export function installedConfigurationLabel(instance: InstanceSummary): string {
+  const platform = instance.platform.kind === "fabric" ? "Fabric" : instance.platform.kind;
+  const loader = "version" in instance.platform ? ` ${instance.platform.version}` : "";
+  const aurora = instance.aurora ? ` · Aurora ${instance.aurora.version} (${instance.aurora.channel})` : " · No Aurora";
+  return `Minecraft ${instance.minecraftVersion} · ${platform}${loader}${aurora}`;
 }

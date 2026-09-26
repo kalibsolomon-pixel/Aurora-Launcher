@@ -78,6 +78,7 @@ pub enum BackendStatus {
 pub struct LauncherState {
     config: LauncherConfigSummary,
     instances: Vec<InstanceSummary>,
+    platform_capabilities: Vec<crate::instances::platform::PlatformCapability>,
 }
 
 impl LauncherState {
@@ -105,6 +106,7 @@ impl LauncherState {
                 schema_version: config.schema_version(),
                 selected_instance_id: config.selected_instance_id().map(|id| id.to_string()),
             },
+            platform_capabilities: crate::instances::platform::capabilities(),
             instances: registry
                 .instances()
                 .iter()
@@ -131,10 +133,9 @@ pub struct InstanceSummary {
     /// `validate_instance` command, which performs the deep (hashing)
     /// validation on demand rather than on every state load.
     state: String,
-    channel: ReleaseChannel,
-    aurora_version: String,
+    aurora: Option<crate::instances::platform::AuroraPin>,
     minecraft_version: String,
-    fabric_loader_version: String,
+    platform: crate::instances::platform::PlatformPin,
     /// The desired configuration, verbatim. The UI edits a draft and sends
     /// the whole proposed configuration to `update_instance_configuration`.
     configuration: InstanceConfigurationDto,
@@ -146,10 +147,9 @@ impl InstanceSummary {
             id: record.id().to_string(),
             display_name: record.display_name().to_owned(),
             state: record.state().as_str().to_owned(),
-            channel: record.release().channel(),
-            aurora_version: record.release().aurora_version().to_owned(),
-            minecraft_version: record.release().minecraft_version().to_owned(),
-            fabric_loader_version: record.release().fabric_loader_version().to_owned(),
+            aurora: record.installed().aurora.clone(),
+            minecraft_version: record.installed().minecraft_version.clone(),
+            platform: record.installed().platform.clone(),
             configuration: InstanceConfigurationDto::from_configuration(record.configuration()),
         }
     }
@@ -160,17 +160,11 @@ impl InstanceSummary {
 #[serde(rename_all = "camelCase")]
 pub struct InstanceConfigurationDto {
     pub minecraft_version: String,
-    pub loader: InstanceLoaderDto,
+    pub aurora_enabled: bool,
+    pub loader: crate::instances::settings::LoaderConfiguration,
     pub memory_mib: u32,
     pub additional_jvm_arguments: String,
     pub window: Option<InstanceWindowDto>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InstanceLoaderDto {
-    pub kind: String,
-    pub policy: InstanceLoaderPolicyDto,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -186,19 +180,8 @@ impl InstanceConfigurationDto {
     ) -> Self {
         Self {
             minecraft_version: configuration.minecraft_version().to_owned(),
-            loader: InstanceLoaderDto {
-                kind: configuration.loader().kind().as_str().to_owned(),
-                policy: match configuration.loader().policy() {
-                    crate::instances::settings::LoaderPolicy::Automatic => {
-                        InstanceLoaderPolicyDto::Automatic
-                    }
-                    crate::instances::settings::LoaderPolicy::Pinned { version } => {
-                        InstanceLoaderPolicyDto::Pinned {
-                            version: version.clone(),
-                        }
-                    }
-                },
-            },
+            aurora_enabled: configuration.aurora_enabled(),
+            loader: configuration.loader().clone(),
             memory_mib: configuration.memory_mib(),
             additional_jvm_arguments: configuration.additional_jvm_arguments().to_owned(),
             window: configuration.window().map(|window| InstanceWindowDto {
@@ -211,30 +194,17 @@ impl InstanceConfigurationDto {
     fn into_configuration(
         self,
     ) -> Result<crate::instances::settings::InstanceConfiguration, CommandError> {
-        let kind = match self.loader.kind.as_str() {
-            "fabric" => crate::instances::settings::LoaderKind::Fabric,
-            other => {
-                return Err(CommandError::new(
-                    "instance_configuration_invalid",
-                    format!("mod loader '{other}' is not supported"),
-                ));
-            }
-        };
-        let policy = (&self.loader.policy).try_into()?;
-        Ok(
-            crate::instances::settings::InstanceConfiguration::from_parts(
-                self.minecraft_version.trim(),
-                crate::instances::settings::LoaderConfiguration::from_parts(kind, policy),
-                self.memory_mib,
-                self.additional_jvm_arguments,
-                self.window.map(|window| {
-                    crate::instances::settings::WindowConfiguration::new(
-                        window.width,
-                        window.height,
-                    )
-                }),
-            ),
-        )
+        let mut configuration = crate::instances::settings::InstanceConfiguration::from_parts(
+            self.minecraft_version.trim(),
+            self.loader,
+            self.memory_mib,
+            self.additional_jvm_arguments,
+            self.window.map(|window| {
+                crate::instances::settings::WindowConfiguration::new(window.width, window.height)
+            }),
+        );
+        configuration.set_aurora_enabled(self.aurora_enabled);
+        Ok(configuration)
     }
 }
 
@@ -243,6 +213,12 @@ impl InstanceConfigurationDto {
 pub struct CommandError {
     code: String,
     message: String,
+}
+
+impl From<crate::instances::InvalidInstanceRecord> for CommandError {
+    fn from(error: crate::instances::InvalidInstanceRecord) -> Self {
+        Self::new("instance_configuration_invalid", error.to_string())
+    }
 }
 
 impl CommandError {
@@ -545,7 +521,7 @@ pub fn get_launcher_state(app: AppHandle) -> Result<LauncherState, CommandError>
         );
     }
 
-    let registry = InstanceRegistry::load(&managed_paths.instance_registry_file())?;
+    let registry = InstanceRegistry::load_and_migrate(&managed_paths.instance_registry_file())?;
 
     LauncherState::from_parts(loaded.into_config(), registry)
 }
@@ -1538,7 +1514,7 @@ impl TryFrom<&InstanceLoaderPolicyDto> for crate::instances::settings::LoaderPol
 
     fn try_from(value: &InstanceLoaderPolicyDto) -> Result<Self, CommandError> {
         match value {
-            InstanceLoaderPolicyDto::Automatic => Ok(Self::Automatic),
+            InstanceLoaderPolicyDto::Automatic => Ok(Self::Automatic {}),
             InstanceLoaderPolicyDto::Pinned { version } => Ok(Self::Pinned {
                 version: version.trim().to_owned(),
             }),
@@ -1596,12 +1572,11 @@ pub async fn create_instance(
     .await?;
 
     eprintln!(
-        "[aurora-launcher] created instance '{}' ({} {} for Minecraft {} + Fabric Loader {})",
+        "[aurora-launcher] created instance '{}' (Minecraft {}, platform {}, Aurora configured: {})",
         record.id(),
-        record.release().channel(),
-        record.release().aurora_version(),
-        record.release().minecraft_version(),
-        record.release().fabric_loader_version(),
+        record.installed().minecraft_version,
+        record.installed().platform.kind(),
+        record.installed().aurora.is_some(),
     );
 
     Ok(InstanceSummary::from_record(&record))
@@ -2045,8 +2020,8 @@ pub struct InstanceContentContext {
     instance_id: String,
     minecraft_version: String,
     loader: String,
-    loader_version: String,
-    aurora_version: String,
+    loader_version: Option<String>,
+    aurora_version: Option<String>,
     environment: String,
 }
 
@@ -2066,10 +2041,14 @@ pub fn get_instance_content_context(
     })?;
     Ok(InstanceContentContext {
         instance_id: instance.to_string(),
-        minecraft_version: record.release().minecraft_version().to_owned(),
-        loader: "fabric".to_owned(),
-        loader_version: record.release().fabric_loader_version().to_owned(),
-        aurora_version: record.release().aurora_version().to_owned(),
+        minecraft_version: record.installed().minecraft_version.clone(),
+        loader: record.installed().platform.kind().to_owned(),
+        loader_version: record.installed().platform.version().map(str::to_owned),
+        aurora_version: record
+            .installed()
+            .aurora
+            .as_ref()
+            .map(|pin| pin.version.clone()),
         environment: "client".to_owned(),
     })
 }
@@ -2218,10 +2197,19 @@ fn provider_context(
         ));
     }
     Ok((
-        instance,
+        instance.clone(),
         crate::modrinth::Context {
-            minecraft_version: record.release().minecraft_version().to_owned(),
-            loader: "fabric".into(),
+            minecraft_version: record.installed().minecraft_version.clone(),
+            loader: record
+                .installed()
+                .platform
+                .provider_loader()
+                .map_err(|reason| CommandError::new("provider_platform_unsupported", reason))?
+                .into(),
+            fabric_api_protected: crate::instance_mods::managed_artifact_file_name(
+                managed, &instance,
+            )?
+            .is_some_and(|files| files.iter().any(|name| name.starts_with("fabric-api-"))),
         },
     ))
 }
@@ -2630,6 +2618,7 @@ fn lifecycle_fingerprint(
         instance.to_string(),
         &context.minecraft_version,
         &context.loader,
+        context.fabric_api_protected,
         current,
         next,
         provider_plan,
@@ -3552,12 +3541,7 @@ async fn calculate_play_readiness(
         Some(record) if record.state() == InstanceState::Installing => {
             (LaunchInstanceStatus::Installing, None)
         }
-        Some(record)
-            if !record.configuration().matches_release_pin(
-                record.release().minecraft_version(),
-                record.release().fabric_loader_version(),
-            ) =>
-        {
+        Some(record) if !record.configuration().matches_installed(record.installed()) => {
             // The desired configuration no longer matches the installed
             // content. Stale is distinct from damaged: nothing is wrong with
             // the installed bytes, they are simply no longer what the user
@@ -4717,10 +4701,13 @@ mod tests {
         assert_eq!(state.instances[0].id, "aurora-default");
         assert_eq!(state.instances[0].display_name, "Aurora Default");
         assert_eq!(state.instances[0].state, "ready");
-        assert_eq!(state.instances[0].channel, ReleaseChannel::Stable);
-        assert_eq!(state.instances[0].aurora_version, "0.3.0");
+        assert_eq!(
+            state.instances[0].aurora.as_ref().unwrap().channel,
+            ReleaseChannel::Stable
+        );
+        assert_eq!(state.instances[0].aurora.as_ref().unwrap().version, "0.3.0");
         assert_eq!(state.instances[0].minecraft_version, "26.2");
-        assert_eq!(state.instances[0].fabric_loader_version, "0.19.5");
+        assert_eq!(state.instances[0].platform.version(), Some("0.19.5"));
     }
 
     #[test]

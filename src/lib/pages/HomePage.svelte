@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { installedConfigurationLabel } from "$lib/launcher/instanceStatus";
   import { launcher } from "$lib/launcher/store.svelte";
   import { navigation } from "$lib/launcher/navigation.svelte";
   import ReadinessRows from "$lib/instances/ReadinessRows.svelte";
@@ -88,8 +89,7 @@
         <div class="instance-heading">
           <h3 class="instance-name">{instance.displayName}</h3>
           <p class="instance-versions">
-            Aurora {instance.auroraVersion} ({instance.channel}) · Minecraft
-            {instance.minecraftVersion} · Fabric {instance.fabricLoaderVersion}
+            {installedConfigurationLabel(instance)}
           </p>
         </div>
         <div class="play-actions">

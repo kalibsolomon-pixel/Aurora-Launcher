@@ -61,6 +61,7 @@ export interface LauncherConfigSummary {
 export interface LauncherState {
   config: LauncherConfigSummary;
   instances: InstanceSummary[];
+  platformCapabilities: PlatformCapability[];
 }
 
 export async function getLauncherState(): Promise<LauncherState> {
@@ -442,10 +443,9 @@ export interface InstanceLoaderPolicy {
 }
 
 /** The desired loader kind and version policy of one instance. */
-export interface InstanceLoader {
-  kind: "fabric";
-  policy: InstanceLoaderPolicy;
-}
+export type InstanceLoader =
+  | { kind: "vanilla" }
+  | { kind: "fabric" | "forge" | "neoForge" | "quilt"; policy: InstanceLoaderPolicy };
 
 /** A custom windowed resolution, passed to Minecraft's own launch arguments. */
 export interface InstanceWindow {
@@ -456,20 +456,33 @@ export interface InstanceWindow {
 /** The desired configuration of one instance: what the user wants it to be. */
 export interface InstanceConfiguration {
   minecraftVersion: string;
+  auroraEnabled: boolean;
   loader: InstanceLoader;
   memoryMib: number;
   additionalJvmArguments: string;
   window: InstanceWindow | null;
 }
 
+export type InstancePlatform =
+  | { kind: "vanilla" }
+  | { kind: "fabric" | "forge" | "neoForge" | "quilt"; version: string };
+
+export interface PlatformCapability {
+  kind: InstancePlatform["kind"];
+  canCreate: boolean;
+  canInstall: boolean;
+  canValidate: boolean;
+  canLaunch: boolean;
+  auroraSupported: boolean;
+}
+
 export interface InstanceSummary {
   id: string;
   displayName: string;
   state: "installing" | "ready";
-  channel: AuroraChannel;
-  auroraVersion: string;
+  aurora: { channel: AuroraChannel; version: string } | null;
+  platform: InstancePlatform;
   minecraftVersion: string;
-  fabricLoaderVersion: string;
   configuration: InstanceConfiguration;
 }
 
@@ -839,9 +852,9 @@ export interface ContentInventory {
 export interface InstanceContentContext {
   instanceId: string;
   minecraftVersion: string;
-  loader: "fabric";
-  loaderVersion: string;
-  auroraVersion: string;
+  loader: InstancePlatform["kind"];
+  loaderVersion: string | null;
+  auroraVersion: string | null;
   environment: "client";
 }
 

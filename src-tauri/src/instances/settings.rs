@@ -71,9 +71,10 @@ const MAX_JVM_ARGUMENTS_TEXT_LENGTH: usize = 8_192;
 /// The desired user configuration of one instance: what the user wants it to
 /// be, as opposed to what is installed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstanceConfiguration {
     minecraft_version: String,
+    aurora_enabled: bool,
     loader: LoaderConfiguration,
     memory_mib: u32,
     /// Raw user text; parsed by [`parse_jvm_arguments`] at every trust
@@ -84,31 +85,38 @@ pub struct InstanceConfiguration {
     window: Option<WindowConfiguration>,
 }
 
-/// The mod loader of a desired configuration.
-///
-/// The model is an explicit kind-plus-policy shape so future loader kinds are
-/// additive, but only kinds with a genuinely implemented installation and
-/// launch pipeline are representable. Fabric is that kind today; vanilla is
-/// deferred because the composed plan, installer, and launch assembly are
-/// deliberately Fabric-direct (see ARCHITECTURE.md).
+/// Desired platform policy, separate from the concrete installed platform pin.
+/// Vanilla has no loader policy or version in persistence. Future platform
+/// variants are representations only; lifecycle capability gates reject them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LoaderConfiguration {
-    kind: LoaderKind,
-    policy: LoaderPolicy,
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum LoaderConfiguration {
+    Vanilla {},
+    Fabric { policy: LoaderPolicy },
+    Forge { policy: LoaderPolicy },
+    NeoForge { policy: LoaderPolicy },
+    Quilt { policy: LoaderPolicy },
 }
 
 /// The kind of mod loader an instance wants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LoaderKind {
+    Vanilla,
     Fabric,
+    Forge,
+    NeoForge,
+    Quilt,
 }
 
 impl LoaderKind {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Vanilla => "vanilla",
             Self::Fabric => "fabric",
+            Self::Forge => "forge",
+            Self::NeoForge => "neoForge",
+            Self::Quilt => "quilt",
         }
     }
 }
@@ -127,9 +135,9 @@ impl fmt::Display for LoaderKind {
 /// resolved version is then pinned in installed state and never drifts
 /// afterward; only a deliberate re-installation re-resolves it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
+#[serde(rename_all = "camelCase", tag = "type", deny_unknown_fields)]
 pub enum LoaderPolicy {
-    Automatic,
+    Automatic {},
     Pinned { version: String },
 }
 
@@ -146,9 +154,9 @@ impl Default for InstanceConfiguration {
     fn default() -> Self {
         Self {
             minecraft_version: String::new(),
-            loader: LoaderConfiguration {
-                kind: LoaderKind::Fabric,
-                policy: LoaderPolicy::Automatic,
+            aurora_enabled: true,
+            loader: LoaderConfiguration::Fabric {
+                policy: LoaderPolicy::Automatic {},
             },
             memory_mib: DEFAULT_MEMORY_MIB,
             additional_jvm_arguments: String::new(),
@@ -178,6 +186,7 @@ impl InstanceConfiguration {
     ) -> Self {
         Self {
             minecraft_version: minecraft_version.into(),
+            aurora_enabled: true,
             loader,
             memory_mib,
             additional_jvm_arguments: additional_jvm_arguments.into(),
@@ -191,14 +200,31 @@ impl InstanceConfiguration {
     pub fn migrated_from_release_pin(minecraft_version: &str, fabric_loader_version: &str) -> Self {
         Self {
             minecraft_version: minecraft_version.to_owned(),
-            loader: LoaderConfiguration {
-                kind: LoaderKind::Fabric,
+            loader: LoaderConfiguration::Fabric {
                 policy: LoaderPolicy::Pinned {
                     version: fabric_loader_version.to_owned(),
                 },
             },
             ..Self::default()
         }
+    }
+
+    pub fn aurora_enabled(&self) -> bool {
+        self.aurora_enabled
+    }
+    pub fn set_aurora_enabled(&mut self, enabled: bool) {
+        self.aurora_enabled = enabled;
+    }
+    pub fn matches_installed(&self, installed: &super::platform::InstalledConfiguration) -> bool {
+        self.minecraft_version == installed.minecraft_version
+            && self.loader.kind().as_str() == installed.platform.kind()
+            && self.aurora_enabled == installed.aurora.is_some()
+            && match self.loader.policy() {
+                LoaderPolicy::Automatic {} => true,
+                LoaderPolicy::Pinned { version } => {
+                    installed.platform.version() == Some(version.as_str())
+                }
+            }
     }
 
     pub fn minecraft_version(&self) -> &str {
@@ -259,10 +285,10 @@ impl InstanceConfiguration {
                 },
             ));
         }
-        if self.loader.kind != LoaderKind::Fabric {
+        if self.aurora_enabled && self.loader.kind() != LoaderKind::Fabric {
             return Err(InvalidInstanceConfiguration::UnsupportedLoaderKind);
         }
-        if let LoaderPolicy::Pinned { version } = &self.loader.policy {
+        if let LoaderPolicy::Pinned { version } = self.loader.policy() {
             if version.trim() != version || version.is_empty() {
                 return Err(InvalidInstanceConfiguration::LoaderVersionInvalid);
             }
@@ -293,8 +319,8 @@ impl InstanceConfiguration {
         if self.minecraft_version != minecraft_version {
             return false;
         }
-        match &self.loader.policy {
-            LoaderPolicy::Automatic => true,
+        match self.loader.policy() {
+            LoaderPolicy::Automatic {} => true,
             LoaderPolicy::Pinned { version } => version == fabric_loader_version,
         }
     }
@@ -302,24 +328,35 @@ impl InstanceConfiguration {
 
 impl LoaderConfiguration {
     pub fn fabric(policy: LoaderPolicy) -> Self {
-        Self {
-            kind: LoaderKind::Fabric,
-            policy,
+        Self::Fabric { policy }
+    }
+    pub fn from_parts(kind: LoaderKind, policy: LoaderPolicy) -> Self {
+        match kind {
+            LoaderKind::Vanilla => Self::Vanilla {},
+            LoaderKind::Fabric => Self::Fabric { policy },
+            LoaderKind::Forge => Self::Forge { policy },
+            LoaderKind::NeoForge => Self::NeoForge { policy },
+            LoaderKind::Quilt => Self::Quilt { policy },
         }
     }
-
-    /// Builds a loader configuration from its command-boundary parts; the
-    /// only construction path outside deserialization and [`Self::fabric`].
-    pub fn from_parts(kind: LoaderKind, policy: LoaderPolicy) -> Self {
-        Self { kind, policy }
-    }
-
     pub fn kind(&self) -> LoaderKind {
-        self.kind
+        match self {
+            Self::Vanilla {} => LoaderKind::Vanilla,
+            Self::Fabric { .. } => LoaderKind::Fabric,
+            Self::Forge { .. } => LoaderKind::Forge,
+            Self::NeoForge { .. } => LoaderKind::NeoForge,
+            Self::Quilt { .. } => LoaderKind::Quilt,
+        }
     }
-
+    /// Vanilla carries no serialized policy. This compatibility view means no loader is selected.
     pub fn policy(&self) -> &LoaderPolicy {
-        &self.policy
+        match self {
+            Self::Vanilla {} => &LoaderPolicy::Automatic {},
+            Self::Fabric { policy }
+            | Self::Forge { policy }
+            | Self::NeoForge { policy }
+            | Self::Quilt { policy } => policy,
+        }
     }
 }
 
@@ -331,7 +368,7 @@ impl LoaderPolicy {
     /// Fabric Meta's own); `Pinned` requires its exact version to be present.
     pub fn resolve<'a>(&self, candidates: &'a [LoaderCandidate]) -> Option<&'a str> {
         match self {
-            Self::Automatic => candidates
+            Self::Automatic {} => candidates
                 .iter()
                 .find(|candidate| candidate.stable)
                 .map(|candidate| candidate.version.as_str()),
@@ -650,7 +687,7 @@ mod tests {
         assert_eq!(config.additional_jvm_arguments(), "");
         assert_eq!(config.window(), None);
         assert_eq!(config.loader().kind(), LoaderKind::Fabric);
-        assert_eq!(config.loader().policy(), &LoaderPolicy::Automatic);
+        assert_eq!(config.loader().policy(), &LoaderPolicy::Automatic {});
         assert!(config.validate().is_ok());
     }
 
@@ -857,7 +894,10 @@ mod tests {
         ];
 
         // Automatic: the first (newest) stable entry.
-        assert_eq!(LoaderPolicy::Automatic.resolve(&candidates), Some("0.19.5"));
+        assert_eq!(
+            LoaderPolicy::Automatic {}.resolve(&candidates),
+            Some("0.19.5")
+        );
         // Pinned: the exact version, stable or not.
         assert_eq!(
             LoaderPolicy::Pinned {
@@ -879,7 +919,7 @@ mod tests {
             version: "0.19.4".to_owned(),
             stable: false,
         }];
-        assert_eq!(LoaderPolicy::Automatic.resolve(&unstable_only), None);
+        assert_eq!(LoaderPolicy::Automatic {}.resolve(&unstable_only), None);
     }
 
     #[test]

@@ -1,5 +1,7 @@
 # Aurora Launcher architecture
 
+The phase sections below record the architecture as it evolved. **Phase C1** at the end describes the current instance schema and capability boundaries; it supersedes earlier mandatory-Aurora and Fabric-only instance identity descriptions.
+
 This document is the living source of truth for the launcher's boundaries. It distinguishes the foundation implemented now from future design so planned functionality is never mistaken for a working feature.
 
 ## Product philosophy
@@ -1117,3 +1119,70 @@ Linux/macOS secure credential stores; system-Java discovery or custom Java selec
 ## Known limitations
 
 The launcher reports native status, persists configuration/instances/accounts, acquires verified artifacts, plans and installs modern Minecraft plus Fabric and Aurora, provisions exact shared official Java, implements authenticated launch assembly and process supervision, makes instances configurable — desired Minecraft/loader/memory/JVM-argument/window settings with atomic saves, honest stale-state invalidation, deliberate reconfiguration installs, and a deterministic schema-3 registry migration — carries a launcher-wide appearance system (three built-in dark themes plus validated accent customization, persisted in the schema-2 launcher configuration, applied live and restored before the first shell render), now carries a separate external application identity (the deterministic rounded-square icon for the executable, taskbar, installer, and shortcuts) plus live Windows desktop-integration status with ownership-proven desktop-shortcut management in Settings, and organizes its UI around a typed two-level navigation model: global sidebar destinations plus a contextual instance workspace (Overview/Mods/Resource Packs/Shaders/Settings tabs, breadcrumb header with derived Open folder and the shared-pipeline Play). Mods provides filesystem-authoritative local inventory and safe single-file management; Modrinth Browse supports compatibility-aware installation with durable provenance, while update checks and approvals are explicit. The full production authentication chain is live-verified; the first production Aurora release artifact is integrated as a reviewed bundled manifest entry. New production-build instances select only reviewed production releases; existing fixture-pinned instances remain resolvable. Minecraft, Fabric, and runtime discovery metadata are re-fetched on resolution; installed products and runtime files are reused. Historical Minecraft shapes and unsupported runtime platform/component pairs fail deliberately. Vanilla instances, fullscreen management, and custom Java are deliberately deferred. Independent artifact acquisition uses bounded concurrency, while instance and runtime mutation exclusion remains process-local with no cross-process lock. There is no Stop, pause/resume, runtime garbage collection, instance deletion, or generalized repair. Damaged content is detected but not automatically repaired; a manifest-proven damaged managed runtime is the sole narrow reinstall exception. The TypeScript DTOs still mirror Rust manually.
+
+
+## Phase C1 — generalized instance identity
+
+### Architecture map and ownership
+
+Before C1, a mandatory `PinnedRelease` defined every instance (Minecraft + Fabric Loader + Aurora), while desired configuration separately stored Minecraft and Fabric policy. Creation resolved Aurora first, installation always installed it, validation always required it, provider context hard-coded Fabric, and launch planning held a Fabric version directly.
+
+Schema 4 makes `InstanceRecord.installed` the concrete identity:
+
+```json
+{
+  "minecraftVersion": "1.21.11",
+  "platform": { "kind": "fabric", "version": "0.19.5" },
+  "aurora": { "channel": "stable", "version": "2.1.2" }
+}
+```
+
+`PlatformPin` is a Rust tagged enum. Vanilla serializes as `{ "kind": "vanilla" }` with no loader fields. Fabric and future Forge, NeoForge, and Quilt variants contain their own version. `aurora: null` means Aurora is absent; no invented version or artifact represents absence. `PinnedRelease` remains only a fallible compatibility adapter for the existing Aurora artifact subsystem, not generic instance identity. Desired configuration adds explicit `auroraEnabled`, and its tagged loader configuration also omits policy entirely for Vanilla. Memory, JVM arguments, window settings, names, IDs, provider state, and managed paths retain their existing responsibilities.
+
+The flow is:
+
+```text
+Rust desired configuration
+  -> capability gate -> exact installed Minecraft/platform/optional-Aurora pin
+  -> installing registry record -> official Minecraft + Fabric composition
+  -> verified game executor -> optional Aurora artifact layer
+  -> game/platform/optional-Aurora validation -> ready record
+  -> official runtime plan -> validated runtime/session -> native LaunchSpec
+```
+
+### Capability and compatibility authority
+
+`instances::platform::capabilities` supplies the actual usable platform catalog in `LauncherState.platformCapabilities`; UI creation availability consumes it. It advertises only Fabric. Exact available loader versions still come from official Fabric Meta; exact Aurora combinations come from reviewed release metadata. The serialization vocabulary never becomes a selectable support list. The lifecycle has one platform gate and one composition boundary; unsupported execution and provider combinations fail deliberately.
+
+Aurora is supported only when its exact release metadata agrees with the Minecraft and Fabric pin and its Java assertion agrees with the resolved game plan. The launcher never changes a selected platform to satisfy Aurora. Existing automatic Aurora loader selection keeps the reviewed exact version; generic Fabric without Aurora resolves its explicit pinned policy or the newest stable official compatible loader when installed, and persists that concrete version.
+
+### Migration and persistence
+
+Schemas 2 and 3 migrate explicitly to schema 4 Fabric + Aurora. All IDs, names, states, concrete versions/channels, desired settings, and automatic-versus-pinned policy survive. Schema 2 derives the existing safe defaults and exact pinned loader policy; schema 3 preserves its configuration and adds `auroraEnabled: true`. Unknown fields, invalid legacy shapes, duplicates, malformed data, schema 1, and future schemas are rejected. A schema-3 legacy loader must be Fabric. Startup `load_and_migrate` validates the entire document before atomic persistence under the registry mutation lock. Ordinary `load` and complete validation remain read-only. Save validates existing and proposed state before writing, so malformed or future state is never overwritten.
+
+No game, runtime, Aurora installed-state, or provider lifecycle schema migration is required. The real production schema-3 fixture is tested through save/reload and canonical schema-4 identity. Provider state retains schema 2, `explicitlyRetained`, explicit `requires` edges, derived reverse edges, conservative schema-1 migration, fingerprints, rollback, and orphan behavior.
+
+### Configuration-derived required content
+
+`required_content` derives Aurora and Fabric API requirements from the configured optional Aurora pin and exact release metadata. Fabric itself creates neither requirement. The production 2.1.2 configuration requires and protects Aurora Client and Fabric API 0.141.6+1.21.11. A no-Aurora configuration derives neither. Inventory gates installed ownership on the registry's optional capability and uses validated Aurora installed-state filenames; known bundled release requirements remain protected even when the state/artifact is missing. Previously recorded launcher-owned artifacts remain protected while Aurora is configured.
+
+The provider context derives its Minecraft version and loader tag from the concrete platform. Fabric API's special protected-root and already-satisfied-dependency handling applies only when the instance's launcher-managed requirement protects it. Otherwise Fabric API can resolve as ordinary provider content. Search facets, version filtering, environment checks, and exact dependency checks remain enforced.
+
+### Installation, validation, repair, and launch
+
+The concrete Fabric game executor and independently meaningful vanilla Minecraft plan are retained. The central lifecycle resolves the platform pin, composes official Minecraft + Fabric, checks optional Aurora compatibility, and runs the proven executor. Aurora installation is a separate conditional tail. Generic Fabric creates the content directory without adding managed mods. Runtime resolution follows the game plan, with optional Aurora Java assertions only when configured.
+
+Validation first checks desired-versus-installed identity, then game integrity and Minecraft/platform consistency, then optional Aurora integrity and three-way consistency. It never scans user content for readiness. An unexpected managed Aurora state in a no-Aurora record is explicit damage, not an excuse to remove files. Reinstallation consumes the same configuration-dependent layers and cannot inject Aurora into a no-Aurora instance.
+
+Launch planning now holds a typed platform contribution alongside generic Minecraft launch inputs. The current Fabric adapter supplies the same exact entry point, deterministic libraries, and loader-version consistency check as before. Unsupported contributions fail before LaunchSpec assembly. Authenticated sessions, validated managed Java, argument redaction, structured spawning, exact child supervision, and process-local duplicate exclusion are unchanged.
+
+### Implemented scope and deferred transitions
+
+| Platform/configuration | Schema | Resolve/install/validate/launch backend | Creation UI |
+| --- | --- | --- | --- |
+| Fabric + Aurora | Yes | Yes; production path retained | Yes |
+| Fabric without Aurora | Yes | Backend lifecycle and existing Fabric launch pipeline | No optional-Aurora creation control |
+| Vanilla without Aurora | Yes, no loader metadata | Not implemented; fails closed | No |
+| Forge / NeoForge / Quilt | Yes, without Aurora | Not implemented; fails closed | No |
+
+C2 owns genuine Vanilla execution and user-facing optional-Aurora semantics. Removing Aurora from an existing instance is blocked until C2 defines the explicit managed-content transition: changing a boolean must not leave old Aurora JARs active or delete user content. No Forge, NeoForge, Quilt, CurseForge, background updates, dependency conflict solver, or cross-process mutation locking was added.

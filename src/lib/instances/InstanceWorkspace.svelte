@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { installedConfigurationLabel } from "$lib/launcher/instanceStatus";
   import { launcher } from "$lib/launcher/store.svelte";
   import { navigation } from "$lib/launcher/navigation.svelte";
   import { INSTANCE_TABS, resolveWorkspace } from "$lib/launcher/navigation";
@@ -156,8 +157,7 @@
           {/if}
         </div>
         <p class="page-subtitle">
-          Aurora {instance.auroraVersion} ({instance.channel}) · Minecraft
-          {instance.minecraftVersion} · Fabric {instance.fabricLoaderVersion}
+          {installedConfigurationLabel(instance)}
         </p>
       </div>
       <div class="page-header-actions">

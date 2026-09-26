@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 3,
+  "instances": [{
+    "id": "6cd0cc88e87b43159051ab7b52edcdf3",
+    "displayName": "Aurora performance acceptance",
+    "state": "ready",
+    "release": { "channel": "stable", "auroraVersion": "2.1.2", "minecraftVersion": "1.21.11", "fabricLoaderVersion": "0.19.5" },
+    "configuration": {
+      "minecraftVersion": "1.21.11", "loader": { "kind": "fabric", "policy": { "type": "automatic" } },
+      "memoryMib": 4096, "additionalJvmArguments": "", "window": null
+    }
+  }]
+}

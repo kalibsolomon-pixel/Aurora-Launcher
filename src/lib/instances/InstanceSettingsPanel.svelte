@@ -25,13 +25,13 @@
   }
 
   function loaderVersionValue(configuration: InstanceConfiguration): string {
-    return configuration.loader.policy.type === "pinned"
+    return "policy" in configuration.loader && configuration.loader.policy.type === "pinned"
       ? (configuration.loader.policy.version ?? "")
       : "";
   }
 
   function setLoaderPolicy(event: Event): void {
-    if (!draft) return;
+    if (!draft || !("policy" in draft.loader)) return;
     const value = (event.currentTarget as HTMLSelectElement).value;
     draft.loader.policy =
       value === "" ? { type: "automatic" } : { type: "pinned", version: value };
@@ -39,7 +39,7 @@
   }
 
   function onLoaderVersionChange(event: Event): void {
-    if (!draft) return;
+    if (!draft || !("policy" in draft.loader)) return;
     const value = (event.currentTarget as HTMLSelectElement).value;
     draft.loader.policy = { type: "pinned", version: value };
     onDraftChange();
@@ -167,12 +167,14 @@
         <label class="field">
           <span class="field-label">Mod loader</span>
           <select value="fabric" disabled>
-            <option value="fabric">Fabric</option>
+            {#each launcher.launcherState?.platformCapabilities ?? [] as capability (capability.kind)}
+              {#if capability.canInstall}<option value={capability.kind}>{capability.kind === "fabric" ? "Fabric" : capability.kind}</option>{/if}
+            {/each}
           </select>
         </label>
         <label class="field">
           <span class="field-label">Fabric Loader version</span>
-          {#if draft.loader.policy.type === "automatic"}
+          {#if "policy" in draft.loader && draft.loader.policy.type === "automatic"}
             <select value="" onchange={setLoaderPolicy}>
               <option value="">Release version</option>
               {#each launcher.loaderVersions ?? [] as loader (loader.version)}
@@ -182,7 +184,7 @@
               {/each}
             </select>
             <span class="field-hint">
-              Automatically uses the exact loader version required by the Aurora release.
+              {draft.auroraEnabled ? "Uses the exact loader version required by the Aurora release." : "Resolves the newest stable compatible Fabric Loader when installed."}
             </span>
           {:else}
             <select value={loaderVersionValue(draft)} onchange={onLoaderVersionChange}>

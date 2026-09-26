@@ -214,7 +214,7 @@ impl fmt::Debug for LaunchSpec {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchPlan {
     minecraft_version: String,
-    fabric_loader_version: String,
+    platform_contribution: crate::instances::platform::PlatformPin,
     version_type: String,
     main_class: String,
     libraries: Vec<String>,
@@ -236,7 +236,9 @@ impl LaunchPlan {
         let minecraft = plan.minecraft();
         Self {
             minecraft_version: minecraft.minecraft_version().to_owned(),
-            fabric_loader_version: plan.loader().loader_version().to_owned(),
+            platform_contribution: crate::instances::platform::PlatformPin::Fabric {
+                version: plan.loader().loader_version().to_owned(),
+            },
             version_type: minecraft.version_type().as_mojang_str().to_owned(),
             main_class: plan.main_class().to_owned(),
             libraries: plan
@@ -288,11 +290,15 @@ pub fn resolve_launch_spec(
             plan.minecraft_version
         )));
     }
-    if installed.fabric_loader_version() != plan.fabric_loader_version {
+    let planned_loader = plan
+        .platform_contribution
+        .require_fabric()
+        .map_err(LaunchResolveError::Metadata)?;
+    if installed.fabric_loader_version() != planned_loader {
         return Err(LaunchResolveError::Metadata(format!(
             "installed Fabric Loader '{}' does not match launch plan '{}'",
             installed.fabric_loader_version(),
-            plan.fabric_loader_version
+            planned_loader
         )));
     }
     if session.account_id() != session.profile().uuid()
@@ -785,7 +791,9 @@ mod tests {
     fn plan() -> LaunchPlan {
         LaunchPlan {
             minecraft_version: "26.2".to_owned(),
-            fabric_loader_version: "0.19.5".to_owned(),
+            platform_contribution: crate::instances::platform::PlatformPin::Fabric {
+                version: "0.19.5".into(),
+            },
             version_type: "release".to_owned(),
             main_class: "net.fabricmc.loader.impl.launch.knot.KnotClient".to_owned(),
             libraries: vec!["a/first.jar".to_owned(), "b/fabric.jar".to_owned()],

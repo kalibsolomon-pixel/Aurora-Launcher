@@ -20,6 +20,7 @@ function configuration(
 ): InstanceConfiguration {
   return {
     minecraftVersion: "26.2",
+    auroraEnabled: true,
     loader: { kind: "fabric", policy: { type: "automatic" } },
     memoryMib: 2048,
     additionalJvmArguments: "",
@@ -35,10 +36,9 @@ function instance(
     id: "abc123",
     displayName: "Fixture Instance",
     state: "ready",
-    channel: "stable",
-    auroraVersion: "0.3.0",
+    aurora: {channel: "stable", version: "0.3.0"},
     minecraftVersion: "26.2",
-    fabricLoaderVersion: "0.19.5",
+    platform: {kind: "fabric", version: "0.19.5"},
     configuration: configuration(),
     ...overrides,
   };
@@ -298,5 +298,18 @@ describe("managed Java status decisions", () => {
       javaRuntimeStatus(null, false, "the query failed", null).label,
       "Status failed",
     );
+  });
+});
+
+
+describe("generalized instance presentation", () => {
+  it("treats Aurora presence as install-affecting", () => {
+    assert.equal(configurationRequiresInstall(instance({configuration: configuration({auroraEnabled: false})})), true);
+  });
+  it("accepts Fabric without Aurora without a fake version", () => {
+    assert.equal(configurationRequiresInstall(instance({aurora: null, configuration: configuration({auroraEnabled: false})})), false);
+  });
+  it("compares platform identity even with an automatic loader policy", () => {
+    assert.equal(configurationRequiresInstall(instance({platform: {kind: "vanilla"}})), true);
   });
 });
