@@ -23,9 +23,9 @@ pub const ENVIRONMENT: [&str; 4] = [
 const ACCEPTED: &[u8] = b"{\"type\":\"accepted\",\"schemaVersion\":1}\n";
 const FRAME_TIMEOUT: Duration = Duration::from_secs(2);
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
-/// Reviewed bridge HEAD a1f0ab6 artifact, not the older published 2.1.2 bytes.
+/// Independently verified immutable v2.1.3 artifact; bridge classes match reviewed a1f0ab6.
 pub const BRIDGE_ARTIFACT_SHA256: &str =
-    "eb2b06bc3955881ee9ff0dc561c25ced617de822a276c61fa3a9f79343602777";
+    "4bf78dc1ef8f18e124377575c508ca357327be1c230b203e9f8181bdcb9ebc81";
 
 pub fn supported(active: bool, minecraft: &str, digest: Option<&str>) -> bool {
     active && minecraft == "1.21.11" && digest == Some(BRIDGE_ARTIFACT_SHA256)

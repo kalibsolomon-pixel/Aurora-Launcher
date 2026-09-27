@@ -668,22 +668,27 @@ mod tests {
     fn production_release_is_exact_and_separate_from_the_development_fixture() {
         let production = production_manifest().unwrap();
         assert_eq!(production.schema_version(), 1);
-        assert_eq!(production.releases().len(), 1);
+        assert!(
+            production
+                .resolve_exact("2.1.2", Some(ReleaseChannel::Stable))
+                .is_some()
+        );
+        assert_eq!(production.releases().len(), 2);
         let release = production
-            .resolve_exact("2.1.2", Some(ReleaseChannel::Stable))
+            .resolve_exact("2.1.3", Some(ReleaseChannel::Stable))
             .unwrap();
         assert_eq!(release.minecraft_version(), "1.21.11");
         assert_eq!(release.fabric_loader_version(), "0.19.5");
         assert_eq!(release.java().major_version(), 21);
         assert_eq!(
             release.artifact().url(),
-            "https://github.com/kalibsolomon-pixel/Aurora-Client/releases/download/v2.1.2/aurora-2.1.2.jar"
+            "https://github.com/kalibsolomon-pixel/Aurora-Client/releases/download/v2.1.3/aurora-2.1.3.jar"
         );
         assert_eq!(
             release.artifact().sha256(),
-            "55ac97f7494daa3866bb3b4aa8d23e49b240fe5ced00fbf1742f7214fc77c52a"
+            "4bf78dc1ef8f18e124377575c508ca357327be1c230b203e9f8181bdcb9ebc81"
         );
-        assert_eq!(release.artifact().size_bytes(), Some(2450086));
+        assert_eq!(release.artifact().size_bytes(), Some(2467058));
         let fabric_api = release
             .fabric_api()
             .expect("production Aurora requires Fabric API");
@@ -695,20 +700,20 @@ mod tests {
         assert_eq!(fabric_api.artifact().size_bytes(), Some(2426039));
         assert!(
             production
-                .resolve_exact("2.1.2", Some(ReleaseChannel::Beta))
+                .resolve_exact("2.1.3", Some(ReleaseChannel::Beta))
                 .is_none()
         );
         assert!(production.resolve_exact("2.1.1", None).is_none());
         assert!(
             development_manifest()
                 .unwrap()
-                .resolve_exact("2.1.2", None)
+                .resolve_exact("2.1.3", None)
                 .is_none()
         );
         let operational = operational_manifest().unwrap();
         assert!(
             operational
-                .resolve_exact("2.1.2", Some(ReleaseChannel::Stable))
+                .resolve_exact("2.1.3", Some(ReleaseChannel::Stable))
                 .is_some()
         );
         assert!(operational.resolve_exact("0.3.0", None).is_some());
