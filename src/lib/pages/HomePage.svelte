@@ -133,10 +133,10 @@
 </div>
 
 <style>
-  .home-page { max-width: 1200px; }
-  .home-composition { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(240px, 1fr); gap: var(--space-5); align-items: center; min-height: 520px; }
-  .instance-card { min-width: 0; }
-  .launch-card { min-height: 320px; display: flex; }
+  .home-page { max-width: 1480px; margin-inline: auto; width: 100%; }
+  .home-composition { display: grid; grid-template-columns: minmax(440px, 1.15fr) minmax(300px, 1fr); gap: var(--space-5); align-items: center; min-height: 520px; }
+  .instance-card { min-width: 0; overflow: visible; }
+  .launch-card { min-height: 320px; display: flex; overflow: visible; }
   .launch-main { flex: 1; padding: var(--space-5); display: flex; flex-direction: column; justify-content: center; gap: var(--space-5); min-width: 0; }
   @media (max-width: 1050px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; } .launch-card { min-height: 260px; } }
   .instance-heading {

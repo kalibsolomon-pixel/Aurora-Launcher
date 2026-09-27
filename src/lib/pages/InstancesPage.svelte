@@ -18,10 +18,12 @@
     const selection = $state.snapshot(loader);
     let active = true;
     compatibility = null;
+    launcher.createAuroraEnabled = false;
     compatibilityError = "";
-    void getAuroraCompatibility(version, selection).then(result => { if (active) compatibility = result; }).catch(error => { if (active) compatibilityError = error.message; });
+    void getAuroraCompatibility(version, selection).then(result => { if (active) { compatibility = result; } }).catch(error => { if (active) compatibilityError = error.message; });
     return () => { active = false; };
   });
+  $effect(() => { launcher.createAuroraEnabled = compatibility?.available === true && launcher.createAuroraPreference !== false; });
   const instances = $derived(launcher.launcherState?.instances ?? []);
   const selectedId = $derived(launcher.launcherState?.config.selectedInstanceId ?? null);
 
@@ -76,7 +78,7 @@
   The full configuration editor and Java lifecycle live in each instance's
   workspace, so this page never duplicates the Settings editor.
 -->
-<div class="page">
+<div class="page instances-page">
   <header class="page-header">
     <div>
       <h2 class="page-title">Instances</h2>
@@ -84,6 +86,7 @@
     </div>
   </header>
 
+  <div class="instances-composition">
   <section class="group" aria-labelledby="create-title">
     <div class="group-heading">
       <div>
@@ -141,7 +144,7 @@
         </label>
         <label class="field">
           <span class="field-label">Minecraft platform</span>
-          <select bind:value={launcher.createPlatform} onchange={() => { launcher.createAuroraEnabled = false; }}>
+          <select bind:value={launcher.createPlatform}>
             {#each platforms as capability (capability.kind)}
               <option value={capability.kind}>{capability.kind === "vanilla" ? "Vanilla" : "Fabric"}</option>
             {/each}
@@ -192,10 +195,10 @@
         {/if}
       </div>
       <label class="check-field">
-        <input type="checkbox" bind:checked={launcher.createAuroraEnabled} disabled={!selectedCapability?.auroraSupported || !compatibility?.available || launcher.createBusy} />
-        <span>Enable Aurora{compatibility?.version ? ` ${compatibility.version}` : ""}</span>
+        <input type="checkbox" bind:checked={launcher.createAuroraEnabled} onchange={() => { launcher.createAuroraPreference = launcher.createAuroraEnabled; }} disabled={!selectedCapability?.auroraSupported || !compatibility?.available || launcher.createBusy} />
+        <span>Aurora Client</span>
       </label>
-      <p class="group-footer">{compatibilityError || compatibility?.reason || "Checking Aurora compatibility…"} Aurora is optional and off by default. {launcher.createAuroraEnabled && compatibility?.loaderVersion ? `Required Fabric Loader: ${compatibility.loaderVersion}.` : ""}</p>
+      <p class="group-footer">{compatibilityError || compatibility?.reason || "Checking Aurora compatibility…"} Aurora Client is included by default when compatible. You can turn it off. {launcher.createAuroraEnabled && compatibility?.loaderVersion ? `Required Fabric Loader: ${compatibility.loaderVersion}.` : ""}</p>
       <label class="check-field">
         <input
           type="checkbox"
@@ -208,7 +211,7 @@
         <button
           type="submit"
           class="btn btn-primary"
-          disabled={!selectedCapability || creationBlocked(launcher.createAuroraEnabled, compatibility) || launcher.createBusy ||
+          disabled={!selectedCapability || (compatibility === null || creationBlocked(launcher.createAuroraEnabled, compatibility)) || launcher.createBusy ||
             launcher.createDisplayName.trim() === "" ||
             launcher.createMinecraftVersion === ""}
         >
@@ -350,12 +353,18 @@
     <p class="group-footer">
       Instances are isolated Minecraft installations with the selected platform and optional
       Aurora content, validated before they are reported ready. Open an instance to manage its
-      configuration and Java runtime. Instance deletion remains deliberately unimplemented.
+      configuration, content and Java runtime. Delete an instance from its Settings after reviewing the data warning.
     </p>
   </section>
+  </div>
 </div>
 
 <style>
+  .instances-page { max-width: 1500px; }
+  .instances-composition { display: grid; grid-template-columns: minmax(340px, .8fr) minmax(460px, 1.2fr); gap: var(--space-5); align-items: start; }
+  .instances-composition > .group { min-width: 0; margin: 0; }
+  .instances-composition :global(.field-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 1250px) { .instances-composition { grid-template-columns: 1fr; } }
   .instance-name-line {
     display: flex;
     align-items: baseline;

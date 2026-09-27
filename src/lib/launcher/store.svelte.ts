@@ -93,6 +93,7 @@ class LauncherStore {
   createMinecraftVersion = $state("");
   createPlatform = $state<"vanilla" | "fabric">("fabric");
   createAuroraEnabled = $state(false);
+  createAuroraPreference = $state<boolean | null>(null);
   createLoaderPolicy = $state<{ type: "automatic" | "pinned"; version?: string }>({
     type: "automatic",
   });
@@ -404,6 +405,7 @@ class LauncherStore {
         auroraEnabled: this.createAuroraEnabled,
       });
       this.createDisplayName = "";
+      this.createAuroraPreference = null;
       await this.refreshState();
     } catch (cause: unknown) {
       this.createError = backendError(cause, "The instance creation failed.");
