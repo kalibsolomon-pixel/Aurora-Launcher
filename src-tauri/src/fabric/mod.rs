@@ -22,6 +22,7 @@
 pub mod maven;
 pub mod metadata;
 pub mod plan;
+pub mod versions;
 
 use std::fmt;
 

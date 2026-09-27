@@ -23,6 +23,7 @@ pub struct ProcessSnapshot {
     pub started_at_unix_seconds: Option<u64>,
     pub exit_code: Option<i32>,
     pub message: Option<String>,
+    pub diagnostic: Option<super::diagnostics::LaunchFailureDiagnostic>,
 }
 
 impl ProcessSnapshot {
@@ -34,6 +35,7 @@ impl ProcessSnapshot {
             started_at_unix_seconds: None,
             exit_code: None,
             message: None,
+            diagnostic: None,
         }
     }
 }
@@ -129,6 +131,15 @@ pub fn spawn_supervised(
     logs_directory: &Path,
     listener: StateListener,
 ) -> Result<ProcessSnapshot, LaunchProcessError> {
+    spawn_supervised_with_runtime(spec, logs_directory, listener, None)
+}
+
+pub fn spawn_supervised_with_runtime(
+    spec: LaunchSpec,
+    logs_directory: &Path,
+    listener: StateListener,
+    java_major: Option<u32>,
+) -> Result<ProcessSnapshot, LaunchProcessError> {
     let instance_id = spec.instance_id().to_owned();
     let started_at = unix_seconds();
     let starting = ProcessSnapshot {
@@ -138,6 +149,7 @@ pub fn spawn_supervised(
         started_at_unix_seconds: Some(started_at),
         exit_code: None,
         message: None,
+        diagnostic: None,
     };
     {
         let mut states = process_states()
@@ -223,6 +235,7 @@ pub fn spawn_supervised(
         started_at_unix_seconds: Some(started_at),
         exit_code: None,
         message: None,
+        diagnostic: None,
     };
     process_states()
         .lock()
@@ -249,7 +262,7 @@ pub fn spawn_supervised(
         let stdout = stdout_task.await.unwrap_or_default();
         let stderr = stderr_task.await.unwrap_or_default();
 
-        let (status, exit_code, message) = match exit {
+        let (status, exit_code, mut message) = match exit {
             Ok(status) if status.success() => (LaunchProcessStatus::Exited, status.code(), None),
             Ok(status) => (
                 LaunchProcessStatus::Failed,
@@ -262,6 +275,21 @@ pub fn spawn_supervised(
                 Some("Minecraft process supervision failed after start.".to_owned()),
             ),
         };
+        let diagnostic = if status == LaunchProcessStatus::Failed {
+            let mut output = format!(
+                "{}\n{}",
+                String::from_utf8_lossy(&stdout),
+                String::from_utf8_lossy(&stderr)
+            );
+            for secret in redactions.iter().filter(|s| !s.is_empty()) {
+                output = output.replace(secret, "[redacted]");
+            }
+            let result = super::diagnostics::classify(&output, java_major);
+            message = Some(result.message.clone());
+            Some(result)
+        } else {
+            None
+        };
         if let Err(error) = write_redacted_log(&log_path, exit_code, &stdout, &stderr, &redactions)
         {
             eprintln!("[aurora-launcher] could not write the supervised launch log: {error}");
@@ -273,6 +301,7 @@ pub fn spawn_supervised(
             started_at_unix_seconds: Some(started_at),
             exit_code,
             message,
+            diagnostic,
         };
         process_states()
             .lock()
@@ -308,6 +337,7 @@ fn record_failure(
         started_at_unix_seconds: Some(started_at),
         exit_code,
         message: Some(message),
+        diagnostic: None,
     };
     process_states()
         .lock()
@@ -323,8 +353,13 @@ async fn read_bounded(mut reader: impl AsyncRead + Unpin) -> Vec<u8> {
         match reader.read(&mut buffer).await {
             Ok(0) | Err(_) => break,
             Ok(count) => {
-                let remaining = MAX_CAPTURE_BYTES.saturating_sub(captured.len());
-                captured.extend_from_slice(&buffer[..count.min(remaining)]);
+                captured.extend_from_slice(&buffer[..count]);
+                if captured.len() > MAX_CAPTURE_BYTES {
+                    // Preserve initialization and the fatal tail, draining the
+                    // middle while always consuming child output to EOF.
+                    let overflow = captured.len() - MAX_CAPTURE_BYTES;
+                    captured.drain(MAX_CAPTURE_BYTES / 2..MAX_CAPTURE_BYTES / 2 + overflow);
+                }
             }
         }
     }
@@ -465,6 +500,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn long_child_output_keeps_initialization_and_fatal_tail() {
+        use tokio::io::AsyncWriteExt;
+        let (mut writer, reader) = tokio::io::duplex(8192);
+        let task = tokio::spawn(async move {
+            writer.write_all(b"initialization\n").await.unwrap();
+            writer
+                .write_all(&vec![b'x'; MAX_CAPTURE_BYTES * 2])
+                .await
+                .unwrap();
+            writer
+                .write_all(b"\nException: late fatal evidence")
+                .await
+                .unwrap();
+        });
+        let captured = read_bounded(reader).await;
+        task.await.unwrap();
+        assert_eq!(captured.len(), MAX_CAPTURE_BYTES);
+        assert!(captured.starts_with(b"initialization\n"));
+        assert!(captured.ends_with(b"Exception: late fatal evidence"));
+    }
+    #[tokio::test]
     async fn preparing_play_is_reserved_once_and_released_on_cancellation() {
         let id = "preparing-duplicate";
         let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
@@ -561,6 +617,7 @@ mod tests {
         let failed = wait_terminal("process-failure").await;
         assert_eq!(failed.status, LaunchProcessStatus::Failed);
         assert_eq!(failed.exit_code, Some(17));
+        assert_eq!(failed.diagnostic.as_ref().unwrap().category, "unknownCrash");
 
         let missing = LaunchSpec::fake_process(
             "process-missing",

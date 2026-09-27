@@ -339,6 +339,14 @@ impl From<crate::instance_mods::ModError> for CommandError {
 
 impl From<crate::instance_content::ContentError> for CommandError {
     fn from(error: crate::instance_content::ContentError) -> Self {
+        if let crate::instance_content::ContentError::ModCollision(conflict) = error {
+            let mut response = Self::new("provider_content_collision", conflict.reason.clone());
+            response.conflict = Some(conflict);
+            return response;
+        }
+        if let crate::instance_content::ContentError::DependencyBlocked(ref reason) = error {
+            return Self::new("mod_dependency_blocked", reason.clone());
+        }
         let code = error.code();
         eprintln!("[aurora-launcher] content operation failed ({code}): {error}");
         Self::new(
@@ -2512,6 +2520,108 @@ fn provider_error(error: crate::modrinth::Error) -> CommandError {
     CommandError::new(error.code(), error.to_string())
 }
 
+async fn check_provider_requirements(
+    managed: &ManagedPaths,
+    instance: &crate::instances::InstanceId,
+    context: &crate::modrinth::Context,
+    resolved: &crate::modrinth::Resolved,
+) -> Result<(), CommandError> {
+    if resolved.preview.content_type != crate::instance_content::ContentType::Mod
+        || resolved.plans.is_empty()
+    {
+        return Ok(());
+    }
+    let plan = crate::minecraft::resolve_install_plan(
+        &crate::minecraft::metadata::MetadataEndpoints::official(),
+        &crate::minecraft::metadata::MinecraftVersionId::new(&context.minecraft_version)
+            .map_err(|e| CommandError::new("provider_invalid_response", e.to_string()))?,
+        crate::minecraft::rules::PlatformProfile::current()?,
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|e| CommandError::new("provider_dependency_unresolved", e.to_string()))?;
+    crate::instance_content::preview_provider_requirements(
+        managed,
+        instance,
+        &resolved.plans,
+        plan.java().major_version(),
+    )
+    .await?;
+    Ok(())
+}
+
+/// At most 16 candidates, stable releases first and newest publication first
+/// within each channel. Explicit choices are never substituted. This is a
+/// bounded environment check, not a dependency transition solver.
+async fn resolve_environment_candidate(
+    managed: &ManagedPaths,
+    instance: &crate::instances::InstanceId,
+    context: &crate::modrinth::Context,
+    kind: crate::instance_content::ContentType,
+    project: &str,
+    state: &crate::instance_content::ContentState,
+) -> Result<crate::modrinth::Resolved, CommandError> {
+    let client = crate::modrinth::Client::official();
+    let details = client
+        .details(context, kind, project)
+        .await
+        .map_err(provider_error)?;
+    let mut choices = details.versions;
+    choices.sort_by_key(|v| v.version_type != "release");
+    let mut first_error = None;
+    for choice in choices.into_iter().take(16) {
+        let candidate = async {
+            let mut resolved = client
+                .resolve(context, kind, project, &choice.id, state)
+                .await
+                .map_err(provider_error)?;
+            crate::instance_content::reconcile_provider_resolution(
+                managed,
+                instance,
+                &mut resolved,
+            )
+            .await?;
+            check_provider_requirements(managed, instance, context, &resolved).await?;
+            let conflicts = crate::instance_content::preview_provider_conflicts(
+                managed,
+                instance,
+                &resolved.plans,
+            )
+            .await?;
+            if let Some(conflict) = conflicts.into_iter().next() {
+                return Err(CommandError::from(
+                    crate::instance_content::ContentError::ModCollision(conflict),
+                ));
+            }
+            Ok(resolved)
+        }
+        .await;
+        match candidate {
+            Ok(resolved) => return Ok(resolved),
+            Err(error)
+                if matches!(
+                    error.code.as_str(),
+                    "provider_content_collision"
+                        | "mod_dependency_blocked"
+                        | "provider_dependency_unresolved"
+                        | "provider_no_compatible_version"
+                ) =>
+            {
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(first_error.unwrap_or_else(|| {
+        CommandError::new(
+            "provider_no_compatible_version",
+            "No installable candidate was found within the 16-version review bound.",
+        )
+    }))
+}
+
 #[tauri::command]
 pub async fn search_modrinth(
     app: AppHandle,
@@ -2536,11 +2646,27 @@ pub async fn get_modrinth_project(
     request: ModrinthProjectRequest,
 ) -> Result<crate::modrinth::ProjectDetails, CommandError> {
     let managed = managed_paths(&app)?;
-    let (_, context) = provider_context(&managed, &request.instance_id)?;
-    crate::modrinth::Client::official()
+    let (instance, context) = provider_context(&managed, &request.instance_id)?;
+    let mut details = crate::modrinth::Client::official()
         .details(&context, request.content_type, &request.project_id)
         .await
-        .map_err(provider_error)
+        .map_err(provider_error)?;
+    let state = provider_state(&managed, &instance)?;
+    // Keep Details available even if all candidates are blocked: its explicit
+    // preview supplies the concrete first candidate error.
+    if let Ok(resolved) = resolve_environment_candidate(
+        &managed,
+        &instance,
+        &context,
+        request.content_type,
+        &request.project_id,
+        &state,
+    )
+    .await
+    {
+        details.default_version_id = Some(resolved.preview.version_id);
+    }
+    Ok(details)
 }
 
 #[derive(Deserialize)]
@@ -2567,7 +2693,7 @@ pub async fn preview_modrinth_install(
     let managed = managed_paths(&app)?;
     let (instance, context) = provider_context(&managed, &request.instance_id)?;
     let state = provider_state(&managed, &instance)?;
-    let resolved = crate::modrinth::Client::official()
+    let mut resolved = crate::modrinth::Client::official()
         .resolve(
             &context,
             request.content_type,
@@ -2577,6 +2703,9 @@ pub async fn preview_modrinth_install(
         )
         .await
         .map_err(provider_error)?;
+    crate::instance_content::reconcile_provider_resolution(&managed, &instance, &mut resolved)
+        .await?;
+    check_provider_requirements(&managed, &instance, &context, &resolved).await?;
     let preview_fingerprint = provider_fingerprint(&instance, &resolved);
     let conflicts =
         crate::instance_content::preview_provider_conflicts(&managed, &instance, &resolved.plans)
@@ -2596,7 +2725,7 @@ pub async fn install_modrinth(
     let managed = managed_paths(&app)?;
     let (instance, context) = provider_context(&managed, &request.instance_id)?;
     let state = provider_state(&managed, &instance)?;
-    let resolved = crate::modrinth::Client::official()
+    let mut resolved = crate::modrinth::Client::official()
         .resolve(
             &context,
             request.content_type,
@@ -2606,6 +2735,9 @@ pub async fn install_modrinth(
         )
         .await
         .map_err(provider_error)?;
+    crate::instance_content::reconcile_provider_resolution(&managed, &instance, &mut resolved)
+        .await?;
+    check_provider_requirements(&managed, &instance, &context, &resolved).await?;
     if provider_fingerprint(&instance, &resolved) != request.preview_fingerprint {
         return Err(CommandError::new(
             "provider_install_failed",
@@ -2637,23 +2769,28 @@ async fn install_resolved_provider_plans(
         }
         return Ok(Vec::new());
     }
-    crate::instance_content::install_provider_plans(managed, instance, resolved.plans)
-        .await
-        .map_err(|error| {
-            let code = match error {
-                crate::instance_content::ContentError::Collision
-                | crate::instance_content::ContentError::ModCollision(_) => {
-                    "provider_content_collision"
-                }
-                crate::instance_content::ContentError::HashMismatch => "provider_integrity_failure",
-                _ => "provider_install_failed",
-            };
-            let mut command_error = CommandError::new(code, error.to_string());
-            if let crate::instance_content::ContentError::ModCollision(conflict) = error {
-                command_error.conflict = Some(conflict);
+    crate::instance_content::install_provider_plans_reviewed(
+        managed,
+        instance,
+        resolved.plans,
+        resolved.preview.inventory_revision.as_deref(),
+    )
+    .await
+    .map_err(|error| {
+        let code = match error {
+            crate::instance_content::ContentError::Collision
+            | crate::instance_content::ContentError::ModCollision(_) => {
+                "provider_content_collision"
             }
-            command_error
-        })
+            crate::instance_content::ContentError::HashMismatch => "provider_integrity_failure",
+            _ => "provider_install_failed",
+        };
+        let mut command_error = CommandError::new(code, error.to_string());
+        if let crate::instance_content::ContentError::ModCollision(conflict) = error {
+            command_error.conflict = Some(conflict);
+        }
+        command_error
+    })
 }
 
 /// One-click UX over the same resolution, fingerprint, and transaction path as
@@ -2681,10 +2818,15 @@ pub async fn quick_install_modrinth(
         return Ok(Vec::new());
     }
     let client = crate::modrinth::Client::official();
-    let first = client
-        .resolve_latest(&context, request.content_type, &request.project_id, &state)
-        .await
-        .map_err(provider_error)?;
+    let first = resolve_environment_candidate(
+        &managed,
+        &instance,
+        &context,
+        request.content_type,
+        &request.project_id,
+        &state,
+    )
+    .await?;
     let fingerprint = provider_fingerprint(&instance, &first);
     let version_id = first.preview.version_id;
     let (current_instance, current_context) = provider_context(&managed, &request.instance_id)?;
@@ -2698,7 +2840,7 @@ pub async fn quick_install_modrinth(
         ));
     }
     let current_state = provider_state(&managed, &instance)?;
-    let revalidated = client
+    let mut revalidated = client
         .resolve(
             &current_context,
             request.content_type,
@@ -2708,6 +2850,9 @@ pub async fn quick_install_modrinth(
         )
         .await
         .map_err(provider_error)?;
+    crate::instance_content::reconcile_provider_resolution(&managed, &instance, &mut revalidated)
+        .await?;
+    check_provider_requirements(&managed, &instance, &current_context, &revalidated).await?;
     if provider_fingerprint(&instance, &revalidated) != fingerprint {
         return Err(CommandError::new(
             "provider_install_failed",
@@ -2949,7 +3094,7 @@ async fn resolve_update_preview(
         .await
         .map_err(provider_error)?
         .ok_or_else(|| CommandError::new("provider_no_update", "This project is up to date."))?;
-    let resolved = crate::modrinth::Client::official()
+    let mut resolved = crate::modrinth::Client::official()
         .resolve_update(
             &context,
             request.content_type,
@@ -2959,6 +3104,9 @@ async fn resolve_update_preview(
         )
         .await
         .map_err(provider_error)?;
+    crate::instance_content::reconcile_provider_resolution(managed, &instance, &mut resolved)
+        .await?;
+    check_provider_requirements(managed, &instance, &context, &resolved).await?;
     let root = current.identity();
     let next = crate::instance_content::update_preview_state(&state, &root, &resolved.plans)?;
     let fingerprint = lifecycle_fingerprint(
@@ -3010,12 +3158,13 @@ pub async fn apply_modrinth_update(
         provider: "modrinth".into(),
         project_id: request.project_id,
     };
-    crate::instance_content::update_provider_graph(
+    crate::instance_content::update_provider_graph_reviewed(
         &managed,
         &instance,
         &state,
         &root,
         resolved.plans,
+        resolved.preview.inventory_revision.as_deref(),
     )
     .await
     .map_err(CommandError::from)?;
@@ -3056,7 +3205,15 @@ fn resolve_removal_preview(
     let preview = ProviderRemovalPreview {
         root: LifecycleItem::from(record),
         delta: lifecycle_delta(&state, &next, &root),
-        preview_fingerprint: lifecycle_fingerprint(&instance, &context, &state, &next, None),
+        preview_fingerprint: lifecycle_fingerprint(
+            &instance,
+            &context,
+            &state,
+            &next,
+            Some(&crate::instance_content::local_inventory_revision(
+                managed, &instance,
+            )?),
+        ),
     };
     Ok((instance, state, preview))
 }
@@ -3710,6 +3867,7 @@ pub struct PlayReadinessDto {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchProcessDto {
+    diagnostic: Option<crate::launch::diagnostics::LaunchFailureDiagnostic>,
     instance_id: String,
     status: String,
     process_id: Option<u32>,
@@ -3722,6 +3880,7 @@ impl From<crate::launch::process::ProcessSnapshot> for LaunchProcessDto {
     fn from(snapshot: crate::launch::process::ProcessSnapshot) -> Self {
         Self {
             instance_id: snapshot.instance_id,
+            diagnostic: snapshot.diagnostic,
             status: snapshot.status.as_str().to_owned(),
             process_id: snapshot.process_id,
             started_at_unix_seconds: snapshot.started_at_unix_seconds,
@@ -3869,6 +4028,20 @@ async fn calculate_play_readiness(
         }
     };
 
+    let mut mod_issues = Vec::new();
+    if let (Some(plan), Some(record)) = (&runtime_plan, registry.find(instance_id)) {
+        if record.installed().platform.kind() == "fabric"
+            && managed.instance_paths(instance_id).mods().is_dir()
+        {
+            let inventory = crate::instance_mods::scan(managed, instance_id)?;
+            mod_issues = crate::mod_compatibility::validate(
+                &inventory,
+                &record.installed().minecraft_version,
+                record.installed().platform.version().unwrap_or(""),
+                Some(plan.required_major_version()),
+            );
+        }
+    }
     let runtime = if let Some(plan) = runtime_plan {
         match crate::runtime::install::validate_runtime(
             managed,
@@ -3888,7 +4061,15 @@ async fn calculate_play_readiness(
     };
 
     let (account, account_name) = launch_account_status(managed, account_id)?;
-    let readiness = PlayReadiness::evaluate(instance, runtime, account, process.status);
+    let mut readiness = PlayReadiness::evaluate(instance, runtime, account, process.status);
+    for problem in mod_issues {
+        readiness
+            .blockers
+            .push(crate::launch::state::LaunchBlocker {
+                code: "launch_mod_incompatible",
+                message: problem.message,
+            });
+    }
     Ok(PlayReadinessDto {
         ready: readiness.ready(),
         instance_id: instance_id.to_string(),
@@ -3978,6 +4159,24 @@ pub async fn play_instance(
     // reaches this point — resolve_instance_launch_plans performs the deep
     // validation that reports staleness as NotReady.
     let record = prepared.record();
+    if record.installed().platform.kind() == "fabric"
+        && managed.instance_paths(&instance).mods().is_dir()
+    {
+        let inventory = crate::instance_mods::scan(&managed, &instance)?;
+        if let Some(problem) = crate::mod_compatibility::validate(
+            &inventory,
+            &record.installed().minecraft_version,
+            record.installed().platform.version().unwrap_or(""),
+            Some(game_plan.java().major_version()),
+        )
+        .first()
+        {
+            return Err(CommandError::new(
+                "launch_mod_incompatible",
+                problem.message.clone(),
+            ));
+        }
+    }
     let configuration = record.configuration();
     configuration
         .validate()
@@ -4062,6 +4261,24 @@ pub async fn play_instance(
         crate::minecraft::rules::PlatformProfile::current()?,
     );
     prepared.with_validated(&managed, |installed| {
+        if record.installed().platform.kind() == "fabric"
+            && managed.instance_paths(&instance).mods().is_dir()
+        {
+            let inventory = crate::instance_mods::scan(&managed, &instance)?;
+            if let Some(problem) = crate::mod_compatibility::validate(
+                &inventory,
+                &record.installed().minecraft_version,
+                record.installed().platform.version().unwrap_or(""),
+                Some(game_plan.java().major_version()),
+            )
+            .first()
+            {
+                return Err(CommandError::new(
+                    "launch_mod_incompatible",
+                    problem.message.clone(),
+                ));
+            }
+        }
         let spec = crate::launch::resolve::resolve_launch_spec(
             &managed,
             &instance,
@@ -4087,7 +4304,7 @@ pub async fn play_instance(
             .flatten()
             .as_deref()
             == Some("active");
-        let snapshot = crate::launch::process::spawn_supervised(
+        let snapshot = crate::launch::process::spawn_supervised_with_runtime(
             spec,
             managed.instance_paths(&instance).logs(),
             Arc::new(move |snapshot| {
@@ -4102,6 +4319,7 @@ pub async fn play_instance(
                 });
                 let _ = listener_app.emit("launch-state", LaunchProcessDto::from(snapshot));
             }),
+            Some(game_plan.java().major_version()),
         )?;
         Ok(snapshot.into())
     })
@@ -4175,10 +4393,12 @@ mod tests {
         };
         let mut resolved = crate::modrinth::Resolved {
             preview: crate::modrinth::InstallPreview {
+                inventory_revision: None,
                 project_id: "AAAABBBB".into(),
                 version_id: "11112222".into(),
                 content_type: ContentType::Mod,
                 items: vec![crate::modrinth::PreviewItem {
+                    satisfied_by: None,
                     project_id: "AAAABBBB".into(),
                     title: "Example".into(),
                     version_id: "11112222".into(),

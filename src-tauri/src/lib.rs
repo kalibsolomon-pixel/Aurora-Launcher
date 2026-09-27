@@ -16,6 +16,7 @@ pub mod instances;
 pub mod integrity;
 pub mod launch;
 pub mod minecraft;
+pub mod mod_compatibility;
 pub mod modrinth;
 pub mod paths;
 pub mod runtime;

@@ -1162,8 +1162,18 @@ pub async fn install_provider_plans(
     instance: &InstanceId,
     plans: Vec<ProviderInstallPlan>,
 ) -> Result<Vec<ProviderRecord>, ContentError> {
+    let revision = local_inventory_revision(managed, instance)?;
+    install_provider_plans_reviewed(managed, instance, plans, Some(&revision)).await
+}
+
+pub(crate) async fn install_provider_plans_reviewed(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    plans: Vec<ProviderInstallPlan>,
+    revision: Option<&str>,
+) -> Result<Vec<ProviderRecord>, ContentError> {
     let acquired = acquire_provider_plans(managed, plans).await?;
-    activate_provider_transaction(managed, instance, acquired, |state| {
+    activate_provider_transaction_with_revision(managed, instance, acquired, revision, |state| {
         state.save(managed, instance)
     })
 }
@@ -1175,6 +1185,246 @@ pub struct ProviderConflict {
     pub file_name: String,
     pub ownership: crate::instance_mods::ModOwnership,
     pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencySatisfaction {
+    pub mod_id: String,
+    pub version: String,
+    pub requirement: String,
+    pub file_name: String,
+    pub ownership: crate::instance_mods::ModOwnership,
+}
+
+pub(crate) fn local_inventory_revision(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<String, ContentError> {
+    if !managed.instance_paths(instance).mods().is_dir() {
+        return Ok(String::new());
+    }
+    let inventory = crate::instance_mods::scan(managed, instance)
+        .map_err(|e| ContentError::StateMalformed(e.to_string()))?;
+    let bytes =
+        serde_json::to_vec(&inventory).map_err(|_| ContentError::InvalidProviderArtifact)?;
+    Ok(format!("{:x}", sha2::Sha256::digest(bytes)))
+}
+
+/// Reconcile a provider graph with locally hashed capabilities. A published
+/// SHA-512 match establishes project identity for resolution only; it never
+/// creates ownership. Otherwise verified candidate metadata establishes the
+/// identity and the parent's actual Fabric predicate governs satisfaction.
+pub async fn reconcile_provider_resolution(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    resolved: &mut crate::modrinth::Resolved,
+) -> Result<(), ContentError> {
+    if resolved.preview.content_type != ContentType::Mod || resolved.plans.is_empty() {
+        return Ok(());
+    }
+    let inventory = crate::instance_mods::scan(managed, instance)
+        .map_err(|e| ContentError::StateMalformed(e.to_string()))?;
+    resolved.preview.inventory_revision = Some(local_inventory_revision(managed, instance)?);
+    let cache = ArtifactCache::new(managed.clone());
+    let root = resolved
+        .plans
+        .last()
+        .ok_or(ContentError::InvalidProviderArtifact)?;
+    let artifact = match &root.source {
+        ProviderArtifactSource::Sha256(s) => cache.acquire(s).await,
+        ProviderArtifactSource::Sha512(s) => cache.acquire_sha512(s).await,
+    }
+    .map_err(|e| ContentError::Acquisition(e.to_string()))?;
+    let (root_metadata, warnings) =
+        crate::instance_mods::inspect_fabric_metadata(&artifact.path, artifact.bytes);
+    let root_metadata = root_metadata.ok_or(ContentError::InvalidProviderArtifact)?;
+    let all_dependencies: Vec<_> = resolved
+        .plans
+        .iter()
+        .flat_map(|p| p.dependencies.clone())
+        .collect();
+    let mut candidates = Vec::new();
+    if warnings
+        .iter()
+        .any(|w| w.code.starts_with("nested_") || w.code == "mixin_metadata_invalid")
+    {
+        return Err(ContentError::InvalidProviderArtifact);
+    }
+    let mut retained = Vec::new();
+    let count = resolved.plans.len();
+    for (index, plan) in resolved.plans.iter().enumerate() {
+        if index + 1 == count || plan.content_type != ContentType::Mod {
+            continue;
+        }
+        let exact = inventory.entries.iter().find(|entry| {
+            if !crate::mod_compatibility::usable(entry) {
+                return false;
+            }
+            match &plan.source {
+                ProviderArtifactSource::Sha256(s) => {
+                    entry.sha256.as_deref() == Some(s.sha256().as_hex().as_str())
+                }
+                ProviderArtifactSource::Sha512(s) => {
+                    let path = managed
+                        .instance_paths(instance)
+                        .mods()
+                        .join(&entry.file_name);
+                    std::fs::File::open(path).is_ok_and(|mut file| {
+                        let mut hash = sha2::Sha512::new();
+                        let mut buffer = [0u8; 65536];
+                        loop {
+                            match file.read(&mut buffer) {
+                                Ok(0) => break,
+                                Ok(n) => hash.update(&buffer[..n]),
+                                Err(_) => return false,
+                            }
+                        }
+                        format!("{:x}", hash.finalize()) == s.sha512().as_hex()
+                    })
+                }
+            }
+        });
+        let candidate = if let Some(entry) = exact {
+            entry.metadata.clone().unwrap()
+        } else {
+            let artifact = match &plan.source {
+                ProviderArtifactSource::Sha256(s) => cache.acquire(s).await,
+                ProviderArtifactSource::Sha512(s) => cache.acquire_sha512(s).await,
+            }
+            .map_err(|e| ContentError::Acquisition(e.to_string()))?;
+            let (metadata, warnings) =
+                crate::instance_mods::inspect_fabric_metadata(&artifact.path, artifact.bytes);
+            if warnings
+                .iter()
+                .any(|w| w.code.starts_with("nested_") || w.code == "mixin_metadata_invalid")
+            {
+                return Err(ContentError::InvalidProviderArtifact);
+            }
+            metadata.ok_or(ContentError::InvalidProviderArtifact)?
+        };
+        candidates.push((index, candidate, exact.map(|e| e.entry_id.clone())));
+    }
+    // Evaluate all parents, including transitive parents, before dropping a
+    // download. OR alternatives stay grouped in their normalized predicate.
+    let parents: Vec<_> = std::iter::once(&root_metadata)
+        .chain(candidates.iter().map(|(_, m, _)| m))
+        .collect();
+    let decisions: Vec<_> = candidates
+        .iter()
+        .map(|(index, candidate, exact)| {
+            let constraints: Vec<_> = parents
+                .iter()
+                .flat_map(|m| m.depends.iter())
+                .filter(|r| r.mod_id == candidate.id)
+                .map(|r| r.requirement.clone())
+                .collect();
+            let constraints = if constraints.is_empty() {
+                vec![format!(
+                    "={}",
+                    candidate.version.as_deref().unwrap_or("unknown")
+                )]
+            } else {
+                constraints
+            };
+            (*index, candidate.clone(), exact.clone(), constraints)
+        })
+        .collect();
+    for (index, plan) in resolved.plans.drain(..).enumerate() {
+        let Some((_, candidate, exact, constraints)) =
+            decisions.iter().find(|(i, _, _, _)| *i == index)
+        else {
+            retained.push(plan);
+            continue;
+        };
+        let requirement = constraints
+            .iter()
+            .map(|p| format!("({p})"))
+            .collect::<Vec<_>>()
+            .join(" AND ");
+        let existing = inventory
+            .entries
+            .iter()
+            .filter(|e| crate::mod_compatibility::usable(e))
+            .find(|entry| {
+                entry
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| crate::mod_compatibility::version_for(m, &candidate.id))
+                    .is_some_and(|v| {
+                        constraints
+                            .iter()
+                            .all(|p| crate::fabric::versions::satisfies(v, p) == Ok(true))
+                    })
+            });
+        if let Some(entry) = existing {
+            // Exact Modrinth pins still require the exact published artifact;
+            // no Fabric predicate silently weakens a provider version pin.
+            let pinned = all_dependencies
+                .iter()
+                .any(|d| d.project_id == plan.project_id && d.version_id.is_some());
+            if pinned && exact.is_none() {
+                return Err(ContentError::DependencyBlocked(format!(
+                    "{} requires exact provider version {} of {}; installed {} is a different artifact.",
+                    root_metadata.id, plan.version_id, candidate.id, entry.file_name
+                )));
+            }
+            let version = entry
+                .metadata
+                .as_ref()
+                .and_then(|m| crate::mod_compatibility::version_for(m, &candidate.id))
+                .unwrap()
+                .to_owned();
+            if let Some(item) = resolved
+                .preview
+                .items
+                .iter_mut()
+                .find(|i| i.project_id == plan.project_id)
+            {
+                item.already_installed = true;
+                item.satisfied_by = Some(DependencySatisfaction {
+                    mod_id: candidate.id.clone(),
+                    version,
+                    requirement,
+                    file_name: entry.file_name.clone(),
+                    ownership: entry.ownership,
+                });
+            }
+        } else {
+            if let Some(entry) = inventory.entries.iter().find(|e| {
+                e.metadata.as_ref().is_some_and(|m| {
+                    m.id == candidate.id || m.nested_mod_ids.contains(&candidate.id)
+                })
+            }) {
+                return Err(ContentError::ModCollision(ProviderConflict {
+                    mod_id: Some(candidate.id.clone()),
+                    file_name: entry.file_name.clone(),
+                    ownership: entry.ownership,
+                    reason: format!(
+                        "{} requires {} {}. Installed: {} ({:?}, {}). {} No file will be replaced or adopted.",
+                        root_metadata.id,
+                        candidate.id,
+                        requirement,
+                        entry
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| crate::mod_compatibility::version_for(m, &candidate.id))
+                            .unwrap_or("unreadable version"),
+                        entry.ownership,
+                        entry.file_name,
+                        if !entry.enabled {
+                            "The installed dependency is disabled; re-enable it explicitly."
+                        } else {
+                            "The active artifact does not satisfy the requirement or cannot be verified safely."
+                        }
+                    ),
+                }));
+            }
+            retained.push(plan);
+        }
+    }
+    resolved.plans = retained;
+    Ok(())
 }
 
 /// Review may populate the verified cache, but never changes instance content or ownership.
@@ -1260,13 +1510,29 @@ async fn acquire_provider_plans(
     acquired.into_iter().collect::<Result<Vec<_>, _>>()
 }
 
+#[cfg(test)]
 fn activate_provider_transaction(
     managed: &ManagedPaths,
     instance: &InstanceId,
+    acquired: Vec<(ProviderRecord, PathBuf, u64)>,
+    commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
+) -> Result<Vec<ProviderRecord>, ContentError> {
+    activate_provider_transaction_with_revision(managed, instance, acquired, None, commit)
+}
+
+fn activate_provider_transaction_with_revision(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
     mut acquired: Vec<(ProviderRecord, PathBuf, u64)>,
+    revision: Option<&str>,
     commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
 ) -> Result<Vec<ProviderRecord>, ContentError> {
     with_instance_lock(instance, || {
+        if revision.is_some_and(|expected| {
+            !local_inventory_revision(managed, instance).is_ok_and(|current| current == expected)
+        }) {
+            return Err(ContentError::ChangedSinceScan);
+        }
         let mut state = ContentState::load(managed, instance)?;
         let direct = acquired
             .last()
@@ -1331,6 +1597,7 @@ fn activate_provider_transaction(
             }
             targets.push(target);
         }
+        validate_projected_artifacts(managed, instance, &acquired, None)?;
         let mut created = Vec::new();
         let result = (|| {
             for ((record, source, bytes), target) in acquired.iter().zip(targets.iter()) {
@@ -1382,6 +1649,91 @@ fn same_file(left: &ProviderRecord, right: &ProviderRecord) -> bool {
         && left.sha256 == right.sha256
 }
 
+fn validate_projected_artifacts(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    artifacts: &[(ProviderRecord, PathBuf, u64)],
+    java_major: Option<u32>,
+) -> Result<(), ContentError> {
+    let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
+        .map_err(|e| ContentError::StateMalformed(e.to_string()))?;
+    let Some(record) = registry.find(instance) else {
+        return Ok(());
+    };
+    if record.installed().platform.kind() != "fabric" {
+        return Ok(());
+    }
+    let mut inventory = match std::fs::symlink_metadata(managed.instance_paths(instance).mods()) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            crate::instance_mods::ModInventory {
+                instance_id: instance.to_string(),
+                entries: Vec::new(),
+                missing_managed: Vec::new(),
+            }
+        }
+        _ => crate::instance_mods::scan(managed, instance)
+            .map_err(|e| ContentError::StateMalformed(e.to_string()))?,
+    };
+    for (incoming, path, bytes) in artifacts
+        .iter()
+        .filter(|(r, _, _)| r.content_type == ContentType::Mod)
+    {
+        inventory.entries.retain(|entry| {
+            entry
+                .provenance
+                .as_ref()
+                .is_none_or(|old| old.identity() != incoming.identity())
+        });
+        let (metadata, warnings) = crate::instance_mods::inspect_fabric_metadata(path, *bytes);
+        crate::mod_compatibility::add_artifact(
+            &mut inventory,
+            incoming.file_name.clone(),
+            metadata.ok_or(ContentError::InvalidProviderArtifact)?,
+            incoming.sha256.clone(),
+            warnings,
+        );
+    }
+    if let Some(problem) = crate::mod_compatibility::validate(
+        &inventory,
+        &record.installed().minecraft_version,
+        record.installed().platform.version().unwrap_or(""),
+        java_major,
+    )
+    .first()
+    {
+        return Err(ContentError::ModCollision(ProviderConflict {
+            mod_id: Some(problem.mod_id.clone()),
+            file_name: problem.file_name.clone(),
+            ownership: problem.ownership,
+            reason: problem.message.clone(),
+        }));
+    }
+    Ok(())
+}
+
+pub async fn preview_provider_requirements(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    plans: &[ProviderInstallPlan],
+    java_major: u32,
+) -> Result<(), ContentError> {
+    let cache = ArtifactCache::new(managed.clone());
+    let mut artifacts = Vec::new();
+    for plan in plans.iter().filter(|p| p.content_type == ContentType::Mod) {
+        let artifact = match &plan.source {
+            ProviderArtifactSource::Sha256(s) => cache.acquire(s).await,
+            ProviderArtifactSource::Sha512(s) => cache.acquire_sha512(s).await,
+        }
+        .map_err(|e| ContentError::Acquisition(e.to_string()))?;
+        artifacts.push((
+            plan.record(artifact.sha256.as_hex()),
+            artifact.path,
+            artifact.bytes,
+        ));
+    }
+    validate_projected_artifacts(managed, instance, &artifacts, Some(java_major))
+}
+
 struct RetiredFile {
     target: PathBuf,
     backup: PathBuf,
@@ -1391,6 +1743,7 @@ struct RetiredFile {
 /// Commit one provider-independent lifecycle state transition. Every old file
 /// has a verified rollback copy before any target is moved; every new file is
 /// copied and verified from the content-addressed store before activation.
+#[cfg(test)]
 fn apply_lifecycle_state(
     managed: &ManagedPaths,
     instance: &InstanceId,
@@ -1398,17 +1751,30 @@ fn apply_lifecycle_state(
     next: &ContentState,
     acquired: &[(ProviderRecord, PathBuf, u64)],
 ) -> Result<(), ContentError> {
-    apply_lifecycle_state_with_hooks(
+    apply_lifecycle_state_with_revision(managed, instance, expected, next, acquired, None)
+}
+
+fn apply_lifecycle_state_with_revision(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    expected: &ContentState,
+    next: &ContentState,
+    acquired: &[(ProviderRecord, PathBuf, u64)],
+    revision: Option<&str>,
+) -> Result<(), ContentError> {
+    apply_lifecycle_state_reviewed(
         managed,
         instance,
         expected,
         next,
         acquired,
+        revision,
         |state| state.save(managed, instance),
         || Ok(()),
     )
 }
 
+#[cfg(test)]
 fn apply_lifecycle_state_with_hooks(
     managed: &ManagedPaths,
     instance: &InstanceId,
@@ -1418,8 +1784,38 @@ fn apply_lifecycle_state_with_hooks(
     commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
     before_cleanup: impl FnOnce() -> Result<(), ContentError>,
 ) -> Result<(), ContentError> {
+    apply_lifecycle_state_reviewed(
+        managed,
+        instance,
+        expected,
+        next,
+        acquired,
+        None,
+        commit,
+        before_cleanup,
+    )
+}
+
+fn apply_lifecycle_state_reviewed(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    expected: &ContentState,
+    next: &ContentState,
+    acquired: &[(ProviderRecord, PathBuf, u64)],
+    revision: Option<&str>,
+    commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
+    before_cleanup: impl FnOnce() -> Result<(), ContentError>,
+) -> Result<(), ContentError> {
     with_instance_lock(instance, || {
+        if revision.is_some_and(|expected| {
+            !local_inventory_revision(managed, instance).is_ok_and(|current| current == expected)
+        }) {
+            return Err(ContentError::ChangedSinceScan);
+        }
         let current = ContentState::load(managed, instance)?;
+        if !acquired.is_empty() {
+            validate_projected_artifacts(managed, instance, acquired, None)?;
+        }
         if &current != expected {
             return Err(ContentError::ChangedSinceScan);
         }
@@ -1632,7 +2028,7 @@ pub fn remove_provider_graph(
     identity: &ProviderIdentity,
 ) -> Result<ContentState, ContentError> {
     let next = removal_state(expected, identity)?;
-    apply_lifecycle_state(managed, instance, expected, &next, &[])?;
+    apply_lifecycle_state_with_revision(managed, instance, expected, &next, &[], None)?;
     Ok(next)
 }
 
@@ -1643,6 +2039,18 @@ pub async fn update_provider_graph(
     root: &ProviderIdentity,
     plans: Vec<ProviderInstallPlan>,
 ) -> Result<ContentState, ContentError> {
+    let revision = local_inventory_revision(managed, instance)?;
+    update_provider_graph_reviewed(managed, instance, expected, root, plans, Some(&revision)).await
+}
+
+pub(crate) async fn update_provider_graph_reviewed(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    expected: &ContentState,
+    root: &ProviderIdentity,
+    plans: Vec<ProviderInstallPlan>,
+    revision: Option<&str>,
+) -> Result<ContentState, ContentError> {
     let acquired = acquire_provider_plans(managed, plans).await?;
     let next = updated_state(
         expected,
@@ -1652,7 +2060,7 @@ pub async fn update_provider_graph(
             .map(|(record, _, _)| record.clone())
             .collect(),
     )?;
-    apply_lifecycle_state(managed, instance, expected, &next, &acquired)?;
+    apply_lifecycle_state_with_revision(managed, instance, expected, &next, &acquired, revision)?;
     Ok(next)
 }
 
@@ -1738,18 +2146,34 @@ fn conflicting_mod_identity<'a>(
     incoming: &'a crate::instance_mods::FabricModMetadata,
     existing: &crate::instance_mods::FabricModMetadata,
 ) -> Option<&'a str> {
-    if incoming.id.eq_ignore_ascii_case(&existing.id)
-        || existing
-            .nested_mod_ids
-            .iter()
-            .any(|id| id.eq_ignore_ascii_case(&incoming.id))
-    {
+    if incoming.id.eq_ignore_ascii_case(&existing.id) {
         return Some(&incoming.id);
+    }
+    if existing
+        .nested_mod_ids
+        .iter()
+        .any(|id| id.eq_ignore_ascii_case(&incoming.id))
+    {
+        let same = crate::mod_compatibility::version_for(existing, &incoming.id)
+            .zip(incoming.version.as_deref())
+            .is_some_and(|(a, b)| {
+                crate::fabric::versions::satisfies(a, &format!("={b}")) == Ok(true)
+            });
+        if !same {
+            return Some(&incoming.id);
+        }
     }
     incoming
         .nested_mod_ids
         .iter()
-        .find(|id| id.eq_ignore_ascii_case(&existing.id))
+        .find(|id| {
+            id.eq_ignore_ascii_case(&existing.id)
+                && !crate::mod_compatibility::version_for(incoming, id)
+                    .zip(existing.version.as_deref())
+                    .is_some_and(|(a, b)| {
+                        crate::fabric::versions::satisfies(a, &format!("={b}")) == Ok(true)
+                    })
+        })
         .map(String::as_str)
 }
 
@@ -1908,6 +2332,201 @@ impl fmt::Display for ContentError {
     }
 }
 impl std::error::Error for ContentError {}
+
+#[cfg(test)]
+mod compatibility_acceptance {
+    use super::*;
+
+    /// Explicit live provider acceptance against a session-created disposable
+    /// copy. Never points at the production application-data directory.
+    #[tokio::test]
+    #[ignore = "requires explicit disposable copy and live Modrinth"]
+    async fn reproduce_provider_compatibility() {
+        let root =
+            PathBuf::from(std::env::var_os("AURORA_COMPATIBILITY_ROOT").expect("disposable root"));
+        assert!(root.starts_with(std::env::temp_dir()));
+        assert!(
+            root.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("aurora-compatibility-")
+        );
+        let managed = ManagedPaths::from_app_local_data_dir(root).unwrap();
+        let instance = InstanceId::new("8a59a5fe0a354c3fab444b38fc33d73f").unwrap();
+        let cache = ArtifactCache::new(managed.clone());
+        let source = Sha512ArtifactSource::https(
+            "https://cdn.modrinth.com/data/eXts2L7r/versions/qxjzQ9xY/placeholder-api-2.8.2%2B1.21.10.jar",
+            "507ab10b7938dcd14d33121b8462649bdbe575cef248e917dfdf7566078ab5d0195ca1add95eae4863de3f652eb56db0a8669a67d5b5344e094d086f9dab5a08",
+            Some(268662),
+        ).unwrap();
+        let artifact = cache.acquire_sha512(&source).await.unwrap();
+        let placeholder = managed
+            .instance_paths(&instance)
+            .mods()
+            .join("placeholder-api-2.8.2+1.21.10.jar");
+        if !placeholder.exists() {
+            std::fs::copy(&artifact.path, &placeholder).unwrap();
+        }
+        let (metadata, warnings) =
+            crate::instance_mods::inspect_fabric_metadata(&placeholder, artifact.bytes);
+        println!("Placeholder: {metadata:?}; warnings: {warnings:?}");
+        let context = crate::modrinth::Context {
+            minecraft_version: "1.21.11".into(),
+            loader: "fabric".into(),
+            fabric_api_protected: true,
+        };
+        let state = ContentState::load(&managed, &instance).unwrap();
+        let inventory = crate::instance_mods::scan(&managed, &instance).unwrap();
+        let issues = crate::mod_compatibility::validate(&inventory, "1.21.11", "0.19.5", Some(21));
+        println!("Existing environment issues: {issues:?}");
+        assert!(
+            issues.is_empty(),
+            "known-good environment must remain usable"
+        );
+
+        // Read-only acquisition of exact published diagnostic fixtures. These
+        // are never activated, and all supplied Modrinth bytes use SHA-512.
+        let evidence = managed
+            .launcher_dir()
+            .parent()
+            .unwrap()
+            .parent()
+            .expect("evidence directory")
+            .to_path_buf();
+        for name in ["iris", "chloride"] {
+            let json: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(evidence.join(format!("{name}-metadata.json")))
+                    .unwrap()
+                    .into_iter()
+                    .skip_while(|b| matches!(*b, 0xef | 0xbb | 0xbf))
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+            let file = &json["version"]["files"][0];
+            let source = Sha512ArtifactSource::https(
+                file["url"].as_str().unwrap(),
+                file["hashes"]["sha512"].as_str().unwrap(),
+                file["size"].as_u64(),
+            )
+            .unwrap();
+            let artifact = cache.acquire_sha512(&source).await.unwrap();
+            let (metadata, warnings) =
+                crate::instance_mods::inspect_fabric_metadata(&artifact.path, artifact.bytes);
+            println!(
+                "Verified {name}: sha256={}, metadata={metadata:?}, warnings={warnings:?}",
+                artifact.sha256.as_hex()
+            );
+        }
+        let java25 = evidence.join("java25-inspection.jar");
+        let bytes = std::fs::read(&java25).unwrap();
+        assert_eq!(
+            format!("{:x}", sha2::Sha256::digest(&bytes)),
+            "db9446e3956ac7d7527e470bc8fae89fd48f36605ce792165401135465f18e7c"
+        );
+        let (metadata, warnings) =
+            crate::instance_mods::inspect_fabric_metadata(&java25, bytes.len() as u64);
+        assert!(warnings.is_empty());
+        let metadata = metadata.unwrap();
+        assert_eq!(metadata.mixin_java_requirements.len(), 2);
+        let mut projected = inventory.clone();
+        crate::mod_compatibility::add_artifact(
+            &mut projected,
+            "java25-fixture.jar".into(),
+            metadata,
+            "db9446e3956ac7d7527e470bc8fae89fd48f36605ce792165401135465f18e7c".into(),
+            warnings,
+        );
+        let issues = crate::mod_compatibility::validate(&projected, "1.21.11", "0.19.5", Some(21));
+        assert!(issues.iter().any(|i| i.code == "mod_java_incompatible"));
+        println!("Exact retained Java25 artifact pre-Play issues: {issues:?}");
+        for project in ["mOgUt4GM", "YL57xq9U"] {
+            match crate::modrinth::Client::official()
+                .resolve_latest(&context, ContentType::Mod, project, &state)
+                .await
+            {
+                Ok(mut resolved) => {
+                    reconcile_provider_resolution(&managed, &instance, &mut resolved)
+                        .await
+                        .unwrap();
+                    preview_provider_requirements(&managed, &instance, &resolved.plans, 21)
+                        .await
+                        .unwrap();
+                    println!(
+                        "Project {project}: {}",
+                        serde_json::to_string(&resolved.preview).unwrap()
+                    );
+                    println!(
+                        "Conflicts: {:?}",
+                        preview_provider_conflicts(&managed, &instance, &resolved.plans)
+                            .await
+                            .unwrap()
+                    );
+                    assert_eq!(project, "mOgUt4GM");
+                    let original = std::fs::read(&placeholder).unwrap();
+                    let before = crate::instance_mods::scan(&managed, &instance)
+                        .unwrap()
+                        .entries
+                        .into_iter()
+                        .find(|e| e.file_name == "placeholder-api-2.8.2+1.21.10.jar")
+                        .unwrap();
+                    let records = install_provider_plans_reviewed(
+                        &managed,
+                        &instance,
+                        resolved.plans,
+                        resolved.preview.inventory_revision.as_deref(),
+                    )
+                    .await
+                    .unwrap();
+                    assert_eq!(records.len(), 1);
+                    assert_eq!(std::fs::read(&placeholder).unwrap(), original);
+                    let restarted = ContentState::load(&managed, &instance).unwrap();
+                    let inventory = crate::instance_mods::scan(&managed, &instance).unwrap();
+                    let local = inventory
+                        .entries
+                        .iter()
+                        .find(|e| e.file_name == before.file_name)
+                        .unwrap();
+                    assert_eq!(local.ownership, before.ownership);
+                    assert_eq!(local.provenance, before.provenance);
+                    assert_eq!(
+                        inventory
+                            .entries
+                            .iter()
+                            .filter(|e| e
+                                .metadata
+                                .as_ref()
+                                .is_some_and(|m| m.id == "placeholder-api"))
+                            .count(),
+                        1
+                    );
+                    let installed = inventory
+                        .entries
+                        .iter()
+                        .find(|e| e.metadata.as_ref().is_some_and(|m| m.id == "modmenu"))
+                        .unwrap();
+                    assert_eq!(
+                        installed.ownership,
+                        crate::instance_mods::ModOwnership::ProviderManaged
+                    );
+                    remove_provider_graph(&managed, &instance, &restarted, &records[0].identity())
+                        .unwrap();
+                    assert_eq!(std::fs::read(&placeholder).unwrap(), original);
+                    assert!(
+                        crate::instance_mods::scan(&managed, &instance)
+                            .unwrap()
+                            .entries
+                            .iter()
+                            .all(|e| e.metadata.as_ref().is_none_or(|m| m.id != "modmenu"))
+                    );
+                    println!(
+                        "Mod Menu normal verified install/reload/removal passed; local bytes, ownership, provenance unchanged; one top-level Placeholder API."
+                    );
+                }
+                Err(error) => println!("Project {project}: {}: {error}", error.code()),
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -2146,6 +2765,194 @@ mod tests {
             provider: "modrinth".into(),
             project_id: project.into(),
         }
+    }
+
+    fn document_jar(document: serde_json::Value) -> Vec<u8> {
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        zip.start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(document.to_string().as_bytes()).unwrap();
+        zip.finish().unwrap().into_inner()
+    }
+    fn fixture_plan(
+        server: &TestServer,
+        path: &str,
+        project: &str,
+        bytes: &[u8],
+        dependencies: Vec<ProviderDependency>,
+    ) -> ProviderInstallPlan {
+        let hash = format!("{:x}", Sha512::digest(bytes));
+        ProviderInstallPlan {
+            content_type: ContentType::Mod,
+            provider: "modrinth".into(),
+            project_id: project.into(),
+            version_id: "11112222".into(),
+            file_id: hash.clone(),
+            file_name: format!("{path}.jar"),
+            display_version: Some("1".into()),
+            compatibility: ContentCompatibility {
+                minecraft_versions: vec!["1.21.11".into()],
+                loader: Some("fabric".into()),
+                environment: Some("client_and_server".into()),
+            },
+            dependencies,
+            source: ProviderArtifactSource::Sha512(
+                Sha512ArtifactSource::loopback_http_for_testing(
+                    &format!("{}/{path}", server.base_url()),
+                    &hash,
+                    Some(bytes.len() as u64),
+                )
+                .unwrap(),
+            ),
+        }
+    }
+    #[tokio::test]
+    async fn local_dependency_satisfaction_install_reload_removal_and_changed_update() {
+        let fixture = no_aurora_fixture();
+        let dep = document_jar(serde_json::json!({"id":"dependency","version":"2.5"}));
+        let parent = document_jar(
+            serde_json::json!({"id":"parent","version":"1","depends":{"dependency":">=2 <3"}}),
+        );
+        let update = document_jar(
+            serde_json::json!({"id":"parent","version":"2","depends":{"dependency":">=3"}}),
+        );
+        let dependency_requests = Arc::new(AtomicUsize::new(0));
+        let requests = dependency_requests.clone();
+        let served_dep = dep.clone();
+        let served_parent = parent.clone();
+        let served_update = update.clone();
+        let server = TestServer::spawn(Arc::new(move |r: &TestRequest| {
+            if r.path == "/dependency" {
+                requests.fetch_add(1, Ordering::SeqCst);
+                TestResponse::ok(&served_dep)
+            } else if r.path == "/update" {
+                TestResponse::ok(&served_update)
+            } else {
+                TestResponse::ok(&served_parent)
+            }
+        }));
+        let local = fixture.dir(ContentType::Mod).join("local-custom-name.jar");
+        std::fs::write(&local, &dep).unwrap();
+        let mut resolved = crate::modrinth::Resolved {
+            preview: crate::modrinth::InstallPreview {
+                inventory_revision: None,
+                project_id: "AAAABBBB".into(),
+                version_id: "11112222".into(),
+                content_type: ContentType::Mod,
+                items: vec![crate::modrinth::PreviewItem {
+                    project_id: "BBBBCCCC".into(),
+                    title: "Dependency".into(),
+                    version_id: "11112222".into(),
+                    version_number: "2.5".into(),
+                    file_name: "dependency.jar".into(),
+                    already_installed: false,
+                    satisfied_by: None,
+                }],
+                warnings: vec![],
+            },
+            plans: vec![
+                fixture_plan(&server, "dependency", "BBBBCCCC", &dep, vec![]),
+                fixture_plan(
+                    &server,
+                    "parent",
+                    "AAAABBBB",
+                    &parent,
+                    vec![ProviderDependency {
+                        kind: DependencyKind::Required,
+                        provider: "modrinth".into(),
+                        project_id: "BBBBCCCC".into(),
+                        version_id: None,
+                    }],
+                ),
+            ],
+        };
+        reconcile_provider_resolution(&fixture.managed, &fixture.instance, &mut resolved)
+            .await
+            .unwrap();
+        assert_eq!(resolved.plans.len(), 1);
+        assert_eq!(dependency_requests.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            resolved.preview.items[0]
+                .satisfied_by
+                .as_ref()
+                .unwrap()
+                .ownership,
+            crate::instance_mods::ModOwnership::UserManaged
+        );
+        let records = install_provider_plans_reviewed(
+            &fixture.managed,
+            &fixture.instance,
+            resolved.plans,
+            resolved.preview.inventory_revision.as_deref(),
+        )
+        .await
+        .unwrap();
+        assert!(records[0].requires.is_empty());
+        let restarted = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        let inventory = crate::instance_mods::scan(&fixture.managed, &fixture.instance).unwrap();
+        let local_entry = inventory
+            .entries
+            .iter()
+            .find(|e| e.file_name == "local-custom-name.jar")
+            .unwrap();
+        assert!(matches!(
+            crate::instance_mods::remove(
+                &fixture.managed,
+                &fixture.instance,
+                &local_entry.entry_id
+            ),
+            Err(crate::instance_mods::ModError::DependencyBlocked(_))
+        ));
+        assert!(matches!(
+            update_provider_graph(
+                &fixture.managed,
+                &fixture.instance,
+                &restarted,
+                &records[0].identity(),
+                vec![fixture_plan(&server, "update", "AAAABBBB", &update, vec![])]
+            )
+            .await,
+            Err(ContentError::ModCollision(_))
+        ));
+        assert_eq!(std::fs::read(&local).unwrap(), dep);
+        remove_provider_graph(
+            &fixture.managed,
+            &fixture.instance,
+            &restarted,
+            &records[0].identity(),
+        )
+        .unwrap();
+        let inventory = crate::instance_mods::scan(&fixture.managed, &fixture.instance).unwrap();
+        assert_eq!(inventory.entries.len(), 1);
+        assert_eq!(
+            inventory.entries[0].ownership,
+            crate::instance_mods::ModOwnership::UserManaged
+        );
+        assert!(inventory.entries[0].provenance.is_none());
+        assert_eq!(std::fs::read(&local).unwrap(), dep);
+    }
+    #[tokio::test]
+    async fn reviewed_inventory_revision_excludes_external_mod_changes() {
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        fixture.dir(ContentType::Mod);
+        let revision = local_inventory_revision(&fixture.managed, &fixture.instance).unwrap();
+        std::fs::write(
+            fixture.dir(ContentType::Mod).join("external.jar"),
+            fabric_jar_with_id("external"),
+        )
+        .unwrap();
+        assert!(matches!(
+            install_provider_plans_reviewed(
+                &fixture.managed,
+                &fixture.instance,
+                vec![mod_plan(&server, "AAAABBBB", "ordinary", false)],
+                Some(&revision)
+            )
+            .await,
+            Err(ContentError::ChangedSinceScan)
+        ));
+        assert!(!fixture.dir(ContentType::Mod).join("ordinary.jar").exists());
     }
 
     #[tokio::test]
@@ -2425,6 +3232,23 @@ mod tests {
     }
 
     fn bundled_jar(id: &str, module: &str) -> Vec<u8> {
+        bundled_jar_version(id, module, "1.0.0")
+    }
+    fn fabric_jar_version(id: &str, version: &str) -> Vec<u8> {
+        let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        writer
+            .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer
+            .write_all(
+                serde_json::json!({"schemaVersion":1,"id":id,"version":version})
+                    .to_string()
+                    .as_bytes(),
+            )
+            .unwrap();
+        writer.finish().unwrap().into_inner()
+    }
+    fn bundled_jar_version(id: &str, module: &str, version: &str) -> Vec<u8> {
         let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
         writer
             .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
@@ -2436,7 +3260,9 @@ mod tests {
                 zip::write::SimpleFileOptions::default(),
             )
             .unwrap();
-        writer.write_all(&fabric_jar_with_id(module)).unwrap();
+        writer
+            .write_all(&fabric_jar_version(module, version))
+            .unwrap();
         writer.finish().unwrap().into_inner()
     }
 
@@ -2490,19 +3316,19 @@ mod tests {
     }
 
     #[test]
-    fn root_collisions_with_local_and_bundled_identities_remain_blocked() {
+    fn root_collisions_and_incompatible_bundled_versions_remain_blocked() {
         for (installed, incoming) in [
             (
                 fabric_jar_with_id("ordinary"),
                 fabric_jar_with_id("ordinary"),
             ),
             (
-                bundled_jar("parent", "module"),
+                bundled_jar_version("parent", "module", "2.0"),
                 fabric_jar_with_id("module"),
             ),
             (
                 fabric_jar_with_id("module"),
-                bundled_jar("parent", "module"),
+                bundled_jar_version("parent", "module", "2.0"),
             ),
         ] {
             let fixture = no_aurora_fixture();
@@ -2530,7 +3356,7 @@ mod tests {
     fn incoming_nested_root_of_protected_artifact_is_still_blocked() {
         let fixture = Fixture::new();
         install_protected_fixture(&fixture);
-        let bytes = bundled_jar("ordinary", "aurora");
+        let bytes = bundled_jar_version("ordinary", "aurora", "2.0");
         let path = fixture.root.join("verified.jar");
         std::fs::write(&path, &bytes).unwrap();
         let record = transaction_record(ContentType::Mod, "ordinary.jar", &bytes);

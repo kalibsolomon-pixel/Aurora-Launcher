@@ -772,6 +772,7 @@ export interface FabricModMetadata {
   conflicts: ModRelation[];
   breaks: ModRelation[];
   hasDeclaredIcon: boolean;
+  mixinJavaRequirements?: { modId: string; config: string; javaMajor: number }[];
 }
 
 export interface ModWarning {
@@ -966,9 +967,11 @@ export interface ModrinthPreviewItem {
   versionNumber: string;
   fileName: string;
   alreadyInstalled: boolean;
+  satisfiedBy?: { modId: string; version: string; requirement: string; fileName: string; ownership: ModOwnership } | null;
 }
 
 export interface ModrinthInstallPreview {
+  inventoryRevision?: string | null;
   projectId: string;
   versionId: string;
   contentType: ContentType;
@@ -1382,6 +1385,7 @@ export interface PlayReadiness {
 
 /** Non-secret state of the exact child supervised by this launcher process. */
 export interface LaunchProcess {
+  diagnostic?: { category: string; implicatedModIds: string[]; requirement: string | null; message: string } | null;
   instanceId: string;
   status: LaunchProcessStatus;
   processId: number | null;

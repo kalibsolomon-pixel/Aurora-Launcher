@@ -141,7 +141,16 @@ pub struct FabricModMetadata {
     pub has_declared_icon: bool,
     pub nested_mod_ids: Vec<String>,
     #[serde(skip_serializing)]
-    nested_mod_versions: HashMap<String, Option<String>>,
+    pub(crate) nested_mod_versions: HashMap<String, Option<String>>,
+    pub mixin_java_requirements: Vec<MixinJavaRequirement>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MixinJavaRequirement {
+    pub mod_id: String,
+    pub config: String,
+    pub java_major: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -189,6 +198,8 @@ struct FabricMetadataDocument {
     icon: Option<serde_json::Value>,
     #[serde(default)]
     jars: Vec<NestedJarDeclaration>,
+    #[serde(default)]
+    mixins: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1031,6 +1042,7 @@ pub(crate) fn inspect_fabric_metadata(
             );
         }
     };
+    let valid_relations = valid_relation_documents(&document);
     let Some(id) = document
         .id
         .map(|id| id.trim().to_owned())
@@ -1045,12 +1057,21 @@ pub(crate) fn inspect_fabric_metadata(
         );
     };
     drop(entry);
+    let (mut mixin_java_requirements, mut mixin_warnings) =
+        inspect_mixins(&mut archive, &id, &document.mixins);
     let mut nested_mod_ids = Vec::new();
     let mut nested_mod_versions = HashMap::new();
     let mut known_ids = HashSet::from([id.to_lowercase()]);
     let mut nested_budget = MAX_NESTED_TOTAL_BYTES;
     let mut nested_count = 0;
-    let mut nested_warnings = Vec::new();
+    let mut nested_warnings = if valid_relations {
+        Vec::new()
+    } else {
+        vec![ModWarning::new(
+            "fabric_metadata_malformed",
+            "Invalid Fabric dependency relationship shape.",
+        )]
+    };
     inspect_declared_nested_jars(
         &mut archive,
         &document.jars,
@@ -1061,7 +1082,9 @@ pub(crate) fn inspect_fabric_metadata(
         &mut nested_mod_ids,
         &mut nested_mod_versions,
         &mut nested_warnings,
+        &mut mixin_java_requirements,
     );
+    nested_warnings.append(&mut mixin_warnings);
     let authors = document
         .authors
         .into_iter()
@@ -1099,6 +1122,7 @@ pub(crate) fn inspect_fabric_metadata(
             has_declared_icon: document.icon.is_some(),
             nested_mod_ids,
             nested_mod_versions,
+            mixin_java_requirements,
         }),
         nested_warnings,
     )
@@ -1124,6 +1148,7 @@ fn inspect_declared_nested_jars<R: Read + Seek>(
     found_ids: &mut Vec<String>,
     found_versions: &mut HashMap<String, Option<String>>,
     warnings: &mut Vec<ModWarning>,
+    mixin_requirements: &mut Vec<MixinJavaRequirement>,
 ) {
     let mut declared = HashSet::new();
     for declaration in declarations {
@@ -1249,6 +1274,12 @@ fn inspect_declared_nested_jars<R: Read + Seek>(
                 continue;
             }
         };
+        if !valid_relation_documents(&document) {
+            warnings.push(ModWarning::new(
+                "nested_metadata_malformed",
+                "Invalid nested Fabric relationship shape.",
+            ));
+        }
         let Some(id) = document.id.filter(|id| !id.trim().is_empty()) else {
             warnings.push(ModWarning::new(
                 "nested_metadata_malformed",
@@ -1257,6 +1288,12 @@ fn inspect_declared_nested_jars<R: Read + Seek>(
             continue;
         };
         let normalized_id = id.to_lowercase();
+        if document.environment.as_deref() != Some("server") {
+            let (mut requirements, mut problems) =
+                inspect_mixins(&mut nested, &id, &document.mixins);
+            mixin_requirements.append(&mut requirements);
+            warnings.append(&mut problems);
+        }
         if !known_ids.insert(normalized_id.clone()) {
             warnings.push(ModWarning::new(
                 "duplicate_mod_id",
@@ -1276,14 +1313,214 @@ fn inspect_declared_nested_jars<R: Read + Seek>(
             found_ids,
             found_versions,
             warnings,
+            mixin_requirements,
         );
     }
+}
+
+/// Reads only declared client/common JSON resources. No extraction, plugin
+/// loading, class loading, arbitrary JSON scan, or external path follows.
+// Mixin uses Gson's comment-tolerant reader. Remove comments lexically,
+// preserving quoted strings and line positions; never inspect or execute code.
+fn mixin_json(bytes: &[u8]) -> Result<serde_json::Value, &'static str> {
+    let mut normalized = bytes.to_vec();
+    let mut i = 0;
+    let mut string = false;
+    let mut escaped = false;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if string {
+            if escaped {
+                escaped = false;
+            } else if b == b'\\' {
+                escaped = true;
+            } else if b == b'"' {
+                string = false;
+            }
+            i += 1;
+            continue;
+        }
+        if b == b'"' {
+            string = true;
+            i += 1;
+            continue;
+        }
+        if b == b'/' && bytes.get(i + 1) == Some(&b'/') {
+            while i < bytes.len() && bytes[i] != b'\n' {
+                normalized[i] = b' ';
+                i += 1;
+            }
+        } else if b == b'/' && bytes.get(i + 1) == Some(&b'*') {
+            normalized[i] = b' ';
+            normalized[i + 1] = b' ';
+            i += 2;
+            let mut closed = false;
+            while i < bytes.len() {
+                if bytes[i] == b'*' && bytes.get(i + 1) == Some(&b'/') {
+                    normalized[i] = b' ';
+                    normalized[i + 1] = b' ';
+                    i += 2;
+                    closed = true;
+                    break;
+                }
+                if bytes[i] != b'\n' && bytes[i] != b'\r' {
+                    normalized[i] = b' ';
+                }
+                i += 1;
+            }
+            if !closed {
+                return Err("Declared Mixin comment is unterminated.");
+            }
+        } else {
+            i += 1;
+        }
+    }
+    serde_json::from_slice(&normalized).map_err(|_| "Declared Mixin JSON is malformed.")
+}
+
+fn inspect_mixins<R: Read + Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    mod_id: &str,
+    declarations: &[serde_json::Value],
+) -> (Vec<MixinJavaRequirement>, Vec<ModWarning>) {
+    let mut requirements = Vec::new();
+    let mut warnings = Vec::new();
+    let mut seen = HashSet::new();
+    if declarations.len() > 64 {
+        return (
+            requirements,
+            vec![ModWarning::new(
+                "mixin_metadata_invalid",
+                "Too many declared Mixin configurations (limit 64).",
+            )],
+        );
+    }
+    for declaration in declarations {
+        let config = match declaration {
+            serde_json::Value::String(config) => Some(config.as_str()),
+            serde_json::Value::Object(fields) => {
+                if fields
+                    .get("environment")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("server")
+                {
+                    continue;
+                }
+                if fields
+                    .get("environment")
+                    .is_some_and(|v| !matches!(v.as_str(), Some("client" | "*")))
+                {
+                    warnings.push(ModWarning::new(
+                        "mixin_metadata_invalid",
+                        "Unknown declared Mixin environment.",
+                    ));
+                    continue;
+                }
+                fields.get("config").and_then(serde_json::Value::as_str)
+            }
+            _ => None,
+        };
+        let Some(config) = config.filter(|path| {
+            path.len() <= 256
+                && path.ends_with(".json")
+                && !path.starts_with('/')
+                && !path.contains(['\\', ':'])
+                && path
+                    .split('/')
+                    .all(|p| !p.is_empty() && p != "." && p != "..")
+        }) else {
+            warnings.push(ModWarning::new(
+                "mixin_metadata_invalid",
+                "An unsafe or malformed declared Mixin resource was rejected.",
+            ));
+            continue;
+        };
+        if !seen.insert(config) {
+            continue;
+        }
+        let result = (|| {
+            let indexes: Vec<_> = (0..archive.len())
+                .filter(|&i| archive.by_index(i).is_ok_and(|e| e.name() == config))
+                .collect();
+            if indexes.len() != 1 {
+                return Err("Declared Mixin resource is missing or duplicated.");
+            }
+            let mut entry = archive
+                .by_index(indexes[0])
+                .map_err(|_| "Declared Mixin resource cannot be read.")?;
+            if entry.size() > MAX_METADATA_BYTES {
+                return Err("Declared Mixin resource exceeds the 256 KiB bound.");
+            }
+            let mut bytes = Vec::new();
+            entry
+                .by_ref()
+                .take(MAX_METADATA_BYTES + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|_| "Declared Mixin resource cannot be decompressed.")?;
+            if bytes.len() as u64 > MAX_METADATA_BYTES {
+                return Err("Declared Mixin resource exceeds its read bound.");
+            }
+            let value = mixin_json(&bytes)?;
+            let fields = value
+                .as_object()
+                .ok_or("Declared Mixin JSON must be an object.")?;
+            if let Some(level) = fields.get("compatibilityLevel") {
+                let level = level
+                    .as_str()
+                    .ok_or("Mixin compatibilityLevel must be a string.")?;
+                let major = level
+                    .strip_prefix("JAVA_")
+                    .and_then(|n| n.parse::<u32>().ok())
+                    .filter(|n| (6..=99).contains(n))
+                    .ok_or("Unknown Mixin compatibility level.")?;
+                requirements.push(MixinJavaRequirement {
+                    mod_id: mod_id.into(),
+                    config: config.into(),
+                    java_major: major,
+                });
+            }
+            Ok(())
+        })();
+        if let Err(reason) = result {
+            warnings.push(ModWarning::new(
+                "mixin_metadata_invalid",
+                format!("{mod_id}: {config}: {reason}"),
+            ));
+        }
+    }
+    (requirements, warnings)
 }
 
 fn clean_optional(value: Option<String>) -> Option<String> {
     value
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty())
+}
+
+fn valid_relation_documents(document: &FabricMetadataDocument) -> bool {
+    [
+        &document.depends,
+        &document.recommends,
+        &document.suggests,
+        &document.conflicts,
+        &document.breaks,
+    ]
+    .into_iter()
+    .all(|fields| {
+        fields.iter().all(|(id, value)| {
+            !id.is_empty()
+                && match value {
+                    serde_json::Value::String(v) => !v.is_empty(),
+                    serde_json::Value::Array(values) => {
+                        !values.is_empty()
+                            && values
+                                .iter()
+                                .all(|v| v.as_str().is_some_and(|s| !s.is_empty()))
+                    }
+                    _ => false,
+                }
+        })
+    })
 }
 
 fn relations(fields: serde_json::Map<String, serde_json::Value>) -> Vec<ModRelation> {
@@ -1314,6 +1551,11 @@ fn relations(fields: serde_json::Map<String, serde_json::Value>) -> Vec<ModRelat
 }
 
 fn derive_local_warnings(entries: &mut [ModEntry]) {
+    let module_versions: Vec<_> = entries
+        .iter()
+        .filter(|e| e.enabled)
+        .filter_map(|e| e.metadata.clone())
+        .collect();
     let enabled_ids: HashSet<String> = entries
         .iter()
         .filter(|entry| entry.enabled)
@@ -1339,7 +1581,17 @@ fn derive_local_warnings(entries: &mut [ModEntry]) {
             .find(|id| {
                 declarations
                     .get(&id.to_lowercase())
-                    .is_some_and(|(roots, nested)| *roots > 1 || (*roots > 0 && *nested > 0))
+                    .is_some_and(|(roots, nested)| {
+                        *roots > 1
+                            || (*roots > 0
+                                && *nested > 0
+                                && module_versions
+                                    .iter()
+                                    .filter_map(|m| crate::mod_compatibility::version_for(m, id))
+                                    .collect::<HashSet<_>>()
+                                    .len()
+                                    != 1)
+                    })
             })
         {
             entry.warnings.push(ModWarning::new(
@@ -1372,6 +1624,17 @@ fn derive_local_warnings(entries: &mut [ModEntry]) {
                     "declared_conflict_present",
                     format!(
                         "Metadata declares a conflict with '{}' matching '{}'. That mod is detected; Fabric evaluates the version constraint.",
+                        relation.mod_id, relation.requirement
+                    ),
+                ));
+            }
+        }
+        for relation in &metadata.recommends {
+            if !enabled_ids.contains(&relation.mod_id) {
+                entry.warnings.push(ModWarning::new(
+                    "recommended_dependency_missing",
+                    format!(
+                        "{} {} is recommended, but optional.",
                         relation.mod_id, relation.requirement
                     ),
                 ));
@@ -1636,8 +1899,13 @@ fn dependency_blockers(inventory: &ModInventory, target: &ModEntry) -> Result<()
                         })
                         .filter_map(|alternative| alternative.metadata.as_ref())
                         .any(|alternative| {
-                            alternative.id == relation.mod_id
-                                || alternative.nested_mod_ids.contains(&relation.mod_id)
+                            crate::mod_compatibility::version_for(alternative, &relation.mod_id)
+                                .is_some_and(|version| {
+                                    crate::fabric::versions::satisfies(
+                                        version,
+                                        &relation.requirement,
+                                    ) == Ok(true)
+                                })
                         })
                 {
                     blockers.push(format!(
@@ -2165,6 +2433,153 @@ mod tests {
             writer.write_all(metadata).unwrap();
         }
         writer.finish().unwrap();
+    }
+
+    #[test]
+    fn mixin_comments_preserve_strings_and_do_not_mask_invalid_json() {
+        assert_eq!(
+            mixin_json(
+                br#"{/* block */"compatibilityLevel":"JAVA_21",// comment
+            "url":"https://example.test/a/*literal*/"}"#
+            )
+            .unwrap()["compatibilityLevel"],
+            "JAVA_21"
+        );
+        assert!(mixin_json(b"{/*unterminated").is_err());
+        assert!(mixin_json(b"{garbage//comment\n}").is_err());
+    }
+    #[test]
+    fn declared_mixin_resources_are_bounded_and_only_declared_resources_are_read() {
+        for (name, declarations, resources, expected, bad) in [
+            (
+                "java21",
+                serde_json::json!(["config.json"]),
+                vec![(
+                    "config.json",
+                    r#"{"compatibilityLevel":"JAVA_21"}"#.to_owned(),
+                )],
+                vec![21],
+                false,
+            ),
+            (
+                "java25",
+                serde_json::json!(["config.json"]),
+                vec![(
+                    "config.json",
+                    r#"{"compatibilityLevel":"JAVA_25"}"#.to_owned(),
+                )],
+                vec![25],
+                false,
+            ),
+            (
+                "missing",
+                serde_json::json!(["absent.json"]),
+                vec![],
+                vec![],
+                true,
+            ),
+            (
+                "malformed",
+                serde_json::json!(["config.json"]),
+                vec![("config.json", "invalid".into())],
+                vec![],
+                true,
+            ),
+            (
+                "oversized",
+                serde_json::json!(["config.json"]),
+                vec![("config.json", " ".repeat(256 * 1024 + 1))],
+                vec![],
+                true,
+            ),
+            (
+                "traversal",
+                serde_json::json!(["../config.json"]),
+                vec![("../config.json", "{}".into())],
+                vec![],
+                true,
+            ),
+            (
+                "undeclared",
+                serde_json::json!([]),
+                vec![("arbitrary.json", "invalid".into())],
+                vec![],
+                false,
+            ),
+            (
+                "multiple",
+                serde_json::json!(["first.json",{"config":"second.json","environment":"client"},{"config":"server.json","environment":"server"}]),
+                vec![
+                    ("first.json", r#"{"compatibilityLevel":"JAVA_21"}"#.into()),
+                    ("second.json", r#"{"compatibilityLevel":"JAVA_25"}"#.into()),
+                ],
+                vec![21, 25],
+                false,
+            ),
+        ] {
+            let fixture = Fixture::new(name);
+            let path = fixture.mods().join("mixins.jar");
+            let mut writer = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+            writer
+                .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+                .unwrap();
+            writer
+                .write_all(
+                    serde_json::json!({"id":"fixture","version":"1","mixins":declarations})
+                        .to_string()
+                        .as_bytes(),
+                )
+                .unwrap();
+            for (path, bytes) in resources {
+                writer
+                    .start_file(path, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                writer.write_all(bytes.as_bytes()).unwrap();
+            }
+            writer.finish().unwrap();
+            let (metadata, warnings) =
+                inspect_fabric_metadata(&path, std::fs::metadata(&path).unwrap().len());
+            assert_eq!(
+                warnings.iter().any(|w| w.code == "mixin_metadata_invalid"),
+                bad,
+                "{name}: {warnings:?}"
+            );
+            assert_eq!(
+                metadata
+                    .as_ref()
+                    .unwrap()
+                    .mixin_java_requirements
+                    .iter()
+                    .map(|r| r.java_major)
+                    .collect::<Vec<_>>(),
+                expected,
+                "{name}"
+            );
+            let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+            if name == "java25" {
+                assert!(
+                    crate::mod_compatibility::validate(&inventory, "1.21.11", "0.19.5", Some(21))
+                        .iter()
+                        .any(|i| i.code == "mod_java_incompatible")
+                );
+                std::fs::rename(&path, fixture.mods().join("mixins.jar.disabled")).unwrap();
+                assert!(
+                    crate::mod_compatibility::validate(
+                        &scan(&fixture.managed, &fixture.instance).unwrap(),
+                        "1.21.11",
+                        "0.19.5",
+                        Some(21)
+                    )
+                    .is_empty()
+                );
+            }
+            if name == "java21" {
+                assert!(
+                    crate::mod_compatibility::validate(&inventory, "1.21.11", "0.19.5", Some(21))
+                        .is_empty()
+                );
+            }
+        }
     }
 
     fn metadata(id: &str, name: &str, depends: &str) -> Vec<u8> {

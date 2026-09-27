@@ -334,6 +334,7 @@ impl Client {
             plans: Vec::new(),
             items: Vec::new(),
             visiting: HashSet::new(),
+            titles: HashMap::new(),
             seen: HashMap::new(),
             warnings: Vec::new(),
             replacing,
@@ -350,6 +351,7 @@ impl Client {
             return Err(Error::NoCompatibleVersion);
         }
         let preview = InstallPreview {
+            inventory_revision: None,
             project_id: project_id.to_owned(),
             version_id: version_id.to_owned(),
             content_type: kind,
@@ -532,6 +534,7 @@ struct Graph<'a> {
     plans: Vec<ProviderInstallPlan>,
     items: Vec<PreviewItem>,
     visiting: HashSet<String>,
+    titles: HashMap<String, String>,
     seen: HashMap<String, String>,
     warnings: Vec<String>,
     replacing: Option<ProviderIdentity>,
@@ -577,6 +580,8 @@ impl Graph<'_> {
                     Error::DependencyUnresolved
                 }
             })?;
+            self.titles
+                .insert(project.id.clone(), project.title.clone());
             let kind = content_type(&project.project_type)?;
             if requested_kind.is_some_and(|wanted| wanted != kind) {
                 return Err(if root {
@@ -585,7 +590,17 @@ impl Graph<'_> {
                     Error::DependencyUnresolved
                 });
             }
-            let version = if let Some(id) = &version_id {
+            let installed_version = (!root && version_id.is_none())
+                .then(|| {
+                    self.installed.entries.iter().find(|record| {
+                        record.provider == "modrinth"
+                            && record.project_id == project.id
+                            && record.content_type == kind
+                    })
+                })
+                .flatten()
+                .map(|record| record.version_id.clone());
+            let version = if let Some(id) = version_id.as_ref().or(installed_version.as_ref()) {
                 let version = self.client.version(id).await?;
                 if version.project_id != project.id || !compatible(self.context, kind, &version) {
                     return Err(if root {
@@ -612,14 +627,27 @@ impl Graph<'_> {
             let source =
                 Sha512ArtifactSource::https(&file.url, &file.hashes.sha512, Some(file.size))
                     .map_err(|_| Error::InvalidResponse)?;
-            if self.installed.entries.iter().any(|record| {
+            if let Some(record) = self.installed.entries.iter().find(|record| {
                 record.provider == "modrinth"
                     && record.project_id == project.id
                     && record.version_id != version.id
                     && record.content_type == kind
                     && self.replacing.as_ref() != Some(&record.identity())
             }) {
-                return Err(Error::DependencyConflict);
+                return Err(Error::DependencyVersionConflict(format!(
+                    "{} requires {} provider version {}. Installed: {} (version ID {}) in {}. Review an explicit provider update; no dependency is replaced or downgraded automatically.",
+                    self.visiting
+                        .iter()
+                        .min()
+                        .and_then(|id| self.titles.get(id))
+                        .map(String::as_str)
+                        .unwrap_or("Requested content"),
+                    project.title,
+                    version.version_number,
+                    record.display_version.as_deref().unwrap_or("unknown"),
+                    record.version_id,
+                    record.file_name
+                )));
             }
             let already = self.installed.entries.iter().any(|record| {
                 record.provider == "modrinth"
@@ -686,6 +714,7 @@ impl Graph<'_> {
                 version_number: version.version_number.clone(),
                 file_name: file.filename.clone(),
                 already_installed: already,
+                satisfied_by: None,
             });
             if !already {
                 self.plans.push(ProviderInstallPlan {
@@ -765,6 +794,7 @@ pub struct VersionChoice {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallPreview {
+    pub inventory_revision: Option<String>,
     pub project_id: String,
     pub version_id: String,
     pub content_type: ContentType,
@@ -781,6 +811,7 @@ pub struct PreviewItem {
     pub version_number: String,
     pub file_name: String,
     pub already_installed: bool,
+    pub satisfied_by: Option<crate::instance_content::DependencySatisfaction>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -864,6 +895,7 @@ pub enum Error {
     DependencyUnresolved,
     DependencyCycle,
     DependencyConflict,
+    DependencyVersionConflict(String),
 }
 
 impl Error {
@@ -876,7 +908,9 @@ impl Error {
             Self::NoCompatibleVersion => "provider_no_compatible_version",
             Self::DependencyUnresolved => "provider_dependency_unresolved",
             Self::DependencyCycle => "provider_dependency_cycle",
-            Self::DependencyConflict => "provider_content_collision",
+            Self::DependencyConflict | Self::DependencyVersionConflict(_) => {
+                "provider_content_collision"
+            }
         }
     }
 }
@@ -914,6 +948,7 @@ impl fmt::Display for Error {
                 formatter,
                 "An installed project conflicts with a required dependency."
             ),
+            Self::DependencyVersionConflict(message) => formatter.write_str(message),
         }
     }
 }
