@@ -1,7 +1,19 @@
 <script lang="ts">
   import { launcher } from "$lib/launcher/store.svelte";
   import { configurationRequiresInstall, draftIsDirty } from "$lib/launcher/instanceStatus";
-  import type { InstanceConfiguration, InstanceSummary } from "$lib/backend";
+  import { deleteInstance, type InstanceConfiguration, type InstanceSummary } from "$lib/backend";
+  import { navigation } from "$lib/launcher/navigation.svelte";
+  let confirmation = $state("");
+  let deletionError = $state("");
+  let deleting = $state(false);
+  let deleteDialog: HTMLDialogElement;
+  let deleteTrigger: HTMLButtonElement;
+  async function removeInstance() {
+    deleting = true; deletionError = "";
+    try { await deleteInstance(instance.id, confirmation); deleteDialog.close(); await launcher.refreshState(); navigation.goTo("instances"); }
+    catch (reason) { deletionError = reason instanceof Error ? reason.message : "Deletion did not complete."; }
+    finally { deleting = false; }
+  }
   import AuroraTransitionPanel from "./AuroraTransitionPanel.svelte";
 
   let { instance }: { instance: InstanceSummary } = $props();
@@ -77,7 +89,8 @@
   settings belong to this instance only; launcher-wide preferences live in
   the sidebar's Settings destination.
 -->
-<AuroraTransitionPanel {instance} />
+<div class="instance-settings-composition">
+<div class="settings-main"><AuroraTransitionPanel {instance} />
 <section class="group" aria-labelledby="instance-settings-title">
   <div class="group-heading">
     <div>
@@ -146,7 +159,8 @@
         </div>
       {/if}
 
-      <h4 class="detail-section-title">General</h4>
+      <div class="settings-grid">
+      <section class="settings-section"><h4 class="detail-section-title">General</h4>
       <div class="field-grid">
         <label class="field">
           <span class="field-label">Minecraft version</span>
@@ -202,7 +216,7 @@
         </label>
         {/if}
       </div>
-      <h4 class="detail-section-title">Performance</h4>
+      </section><section class="settings-section"><h4 class="detail-section-title">Performance</h4>
       <div class="field-grid">
         <label class="field">
           <span class="field-label">Memory (MB)</span>
@@ -221,7 +235,7 @@
         </label>
       </div>
 
-      <h4 class="detail-section-title">Java</h4>
+      </section><section class="settings-section"><h4 class="detail-section-title">Java</h4>
       <div class="field-grid">
         <div class="field">
           <span class="field-label">Runtime</span>
@@ -246,7 +260,7 @@
         </label>
       </div>
 
-      <h4 class="detail-section-title">Display</h4>
+      </section><section class="settings-section"><h4 class="detail-section-title">Display</h4>
       <div class="field-grid">
         <div class="field">
           <span class="field-label">Window size</span>
@@ -291,6 +305,7 @@
         </div>
       </div>
 
+      </section></div>
       {#if launcher.detailError}
         <p class="inline-message inline-message-error group-row" role="alert">
           {launcher.detailError.message}
@@ -343,7 +358,53 @@
   </p>
 </section>
 
+</div>
+<aside class="settings-tools">
+  <section class="group"><div class="group-heading"><h3 class="group-title">Content</h3></div>
+    <div class="group-form"><p>Aurora Client: {instance.auroraContentState ?? (instance.aurora ? "Not detected" : "Not configured")}.</p>
+    <p class="field-hint">The original release pin records installation intent. Mods shows the current files and their enabled state.</p>
+    <div class="tool-actions"><button class="btn" type="button" onclick={() => navigation.openInstance(instance.id, "mods")}>Manage mods</button>
+    <button class="btn" type="button" onclick={() => navigation.openInstance(instance.id, "resourcePacks")}>Resource packs</button>
+    <button class="btn" type="button" onclick={() => navigation.openInstance(instance.id, "shaders")}>Shaders</button>
+    <button class="btn btn-quiet" type="button" onclick={() => launcher.runOpenModsFolder(instance.id)}>Open mods folder</button></div></div>
+  </section>
+  <section class="group"><div class="group-heading"><h3 class="group-title">Maintenance</h3></div>
+    <div class="group-form tool-actions"><button class="btn" type="button" onclick={() => launcher.runValidate(instance.id)}>Validate instance</button>
+    <button class="btn" type="button" onclick={() => launcher.runRuntimeStatus(instance.id)}>Check managed Java</button>
+    <button class="btn" type="button" onclick={() => launcher.runEnsureRuntime(instance.id)}>Install / repair Java</button>
+    <details><summary>Reinstall / restore configured content</summary><p class="field-hint">Explicitly reinstalls the saved game configuration and restores its reviewed Aurora Client and Fabric API bootstrap files. Worlds, config and unrelated mods stay untouched. Re-enable disabled bootstrap mods in Mods first; file conflicts require inspection.</p>
+      <button class="btn" type="button" disabled={dirty || launcher.detailInstallBusy !== null} onclick={() => launcher.runInstallConfiguration(instance.id)}>Reinstall configured content</button>
+    </details></div>
+  </section>
+  <section class="group danger-zone"><div class="group-heading"><h3 class="group-title">Delete instance</h3></div>
+    <div class="group-form"><p class="field-hint">Permanently removes this instance's worlds, mods, packs, config and logs. Shared Java, cache and accounts stay available.</p>
+    <button bind:this={deleteTrigger} type="button" class="btn btn-danger" disabled={instance.state !== "ready" || launcher.detailInstallBusy !== null} onclick={() => { confirmation = ""; deletionError = ""; deleteDialog.showModal(); }}>Delete instance…</button></div>
+  </section>
+</aside>
+</div>
+<dialog bind:this={deleteDialog} class="delete-dialog" oncancel={(event) => { if (deleting) event.preventDefault(); }} onclose={() => deleteTrigger?.focus()}>
+  <form onsubmit={(event) => { event.preventDefault(); void removeInstance(); }}>
+    <h3>Delete {instance.displayName}?</h3>
+    <p>All worlds, mods, packs, configuration and logs in this isolated instance will be permanently deleted. This cannot be undone.</p>
+    <label class="field"><span class="field-label">Type {instance.displayName} to confirm</span><input bind:value={confirmation} autocomplete="off" disabled={deleting} /></label>
+    {#if deletionError}<p role="alert" class="inline-message inline-message-error">{deletionError}</p>{/if}
+    <div class="tool-actions"><button class="btn btn-quiet" type="button" disabled={deleting} onclick={() => deleteDialog.close()}>Cancel</button><button class="btn btn-danger" type="submit" disabled={deleting || confirmation !== instance.displayName}>{deleting ? "Deleting…" : "Delete permanently"}</button></div>
+  </form>
+</dialog>
+
 <style>
+  .instance-settings-composition { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr); gap: var(--space-5); align-items: start; }
+  .settings-main, .settings-tools { min-width: 0; }
+  .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+  .settings-section { min-width: 0; }
+  .settings-section :global(.field-grid) { grid-template-columns: 1fr; }
+  .tool-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+  .danger-zone { border-color: var(--color-error); }
+  .delete-dialog { max-width: 520px; width: calc(100vw - 64px); padding: var(--space-5); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); color: var(--color-text); background: var(--color-surface-raised); }
+  .delete-dialog::backdrop { background: #0009; }
+  .delete-dialog .tool-actions { margin-top: var(--space-4); justify-content: end; }
+  @media (max-width: 1250px) { .instance-settings-composition { grid-template-columns: 1fr; } .settings-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); } }
+  @media (max-width: 850px) { .settings-grid, .settings-tools { grid-template-columns: 1fr; } }
   .detail-section-title {
     font-size: 0.95rem;
     font-weight: 600;

@@ -87,7 +87,7 @@
   the implemented preferences; the page stays sparse and purposeful rather
   than inventing settings; future launcher-wide preferences belong here.
 -->
-<div class="page">
+<div class="page launcher-settings">
   <header class="page-header">
     <div>
       <h2 class="page-title">Settings</h2>
@@ -304,6 +304,10 @@
 </div>
 
 <style>
+  .launcher-settings { max-width: 1360px; display: grid; grid-template-columns: minmax(350px, 1fr) minmax(350px, 1fr); gap: var(--space-5); align-items: start; }
+  .launcher-settings > .page-header { grid-column: 1 / -1; margin-bottom: 0; }
+  .launcher-settings > .group { min-width: 0; margin: 0; }
+  @media (max-width: 1150px) { .launcher-settings { grid-template-columns: 1fr; } }
   .appearance-row {
     align-items: flex-start;
   }

@@ -226,6 +226,7 @@
 </div>
 
 <style>
+  .page { max-width: 1500px; width: 100%; }
   .workspace-header {
     align-items: flex-start;
   }
