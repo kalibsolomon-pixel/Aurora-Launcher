@@ -2,6 +2,11 @@
 
 Date: 2026-09-27. No release is accepted or published by this audit.
 
+Current status: the aggregate 39-commit audit has passed; see the appended
+final-gate sections. The historical client/version and workflow blockers below
+were resolved by the recorded 2.1.3 preparation. Installer installation and the
+complete production GUI game sequence still block publication.
+
 ## Mandatory stop conditions
 
 1. Aurora Client source still declares `mod_version=2.1.2` in
@@ -262,3 +267,133 @@ This report is intentionally committed as repository acceptance documentation,
 consistent with the existing tracked phase acceptance reports. Original stopped
 history is preserved above. Generated binaries, installer artifacts, screenshots,
 and protected diagnostics are excluded from commits.
+
+## Aggregate Unpublished-Range Audit — Passed
+
+Reviewed on 2026-09-27: all 39 commits and the combined changes from
+`1bf2e14edea3ba706d2d34b5aa8c72f82987ccdf` through
+`9b54e88efae2f24815febe08122aecb56922fd60`. This section supersedes the
+previous statement that the aggregate audit was incomplete; historical evidence
+above is retained. No concrete release blocker was found in the reviewed code.
+
+- Filesystem: opaque registered instance IDs and native-derived paths remain
+  authoritative. Instance deletion requires stopped state, matching confirmation,
+  managed containment and a recursive link/reparse preflight. Mod removal uses
+  a fresh native inventory, exact regular-file identity/hash and dependency
+  blockers. Provider removal targets verified owned records. Transaction cleanup
+  is confined to its exact staged/backup files; normal `.minecraft` is unused.
+- Downloads: official metadata boundaries and expected-digest cache acquisition
+  remain intact. Provider graphs are bounded to 64 nodes and acquisition to eight
+  concurrent artifacts. Activation rehashes cache and staged bytes, rejects
+  collisions and uses no-clobber promotion with rollback. Nested JAR/Mixin reads
+  are bounded and do not extract or execute archive content. Public 2.1.3 pins
+  match the previously independently verified immutable artifact.
+- Authentication: OAuth/PKCE, downstream tokens and Windows Credential Manager
+  remain native. Cosmetic requests expose bounded pixels only. Refresh redemption
+  and account removal share the restoration gate; texture requests carry no
+  bearer credential. Tokens do not enter frontend DTOs or ordinary persistence.
+- Launch/process: managed Java and session validation precede structured spawn.
+  Final checks share content/registry/process serialization. Arguments remain
+  Rust-only; bounded output is redacted before logs and diagnostics. Bridge state
+  is owned by the supervised child lifecycle and cleared on failure/exit.
+- Content: provider, local and bootstrap ownership remain separate. Satisfaction
+  does not adopt files; disabled/damaged artifacts do not satisfy active needs.
+  Exact pins cannot silently downgrade. Restart reconstructs local requirements;
+  shared dependencies and explicit retention survive graph removal. Preview
+  revisions and native commit checks prevent stale in-process activation.
+- Compatibility: metadata predicates, fatal `breaks`, resolved Java and declared
+  Mixin requirements are checked without mod-specific exceptions. Root collisions
+  remain blocked; nested capabilities remain descriptive. ClassNotFound warnings
+  alone do not establish a failed launch. This remains a conservative checker,
+  not a complete Fabric solver or universal compatibility guarantee.
+- Bridge: exclusive IPv4 loopback binding, fresh UUID and 256-bit capability,
+  constant-time authentication, bounded attempts/frames/timeouts, strict schema
+  and monotonic sequences remain enforced. Snapshots replace whole identities;
+  EOF and child exit clear them. No persistence, frontend secret or control channel.
+- Discord/privacy: independent native IPC worker failures do not authorize or
+  block Play. Master and extra details default off; address sharing requires
+  server sharing and explicit address consent. Address-shaped display names are
+  filtered while address sharing is off. The asset key is `aurora-logo`.
+- Configuration: supported schema 1/2/3 documents migrate to 4 preserving their
+  existing fields; new privacy fields default false. Registry/accounts remain
+  separate. Malformed/future documents fail without speculative overwrite.
+- Release: the build job supplies and asserts public Application ID
+  `1553653987545317396` before the exact Tauri compilation producing installers.
+  The publish job verifies transferred bytes without rebuilding. Authoritative
+  version fields are 1.1.0; no updater or signing infrastructure was invented.
+
+Process-local exclusion does not protect against arbitrary external filesystem
+writers or another launcher process. Deferred nested selection and dynamic Mixin
+behavior remain documented limitations. Passing this audit does not substitute
+for installer installation or the required GUI game acceptance.
+
+### Required manual acceptance before publication
+
+Native GUI automation remains unavailable in this session. The previously
+identified computer-use runtime limitation is retained without rediscovery.
+Neither installer installation nor the complete game sequence is claimed passed.
+
+1. In a disposable Windows environment, run the generated 1.1.0 MSI or NSIS
+   installer (preferably test both). Confirm name/version/icon, successful install,
+   expected installation directory and no unexpected file placement. Launch the
+   installed executable and verify 1.1.0 plus production Discord configuration in
+   Settings. Record the installer hash, installed executable identity and results.
+2. Through that installed production launcher, sign in normally and create the
+   pinned production instance without replacing JARs. Hash `aurora-2.1.3.jar`:
+   `4bf78dc1ef8f18e124377575c508ca357327be1c230b203e9f8181bdcb9ebc81`.
+   Record Ready -> Play -> Starting -> Running -> Aurora main menu -> normal Quit
+   -> supervised exit 0 -> Ready, including gameplay identity clearing.
+3. Uninstall the controlled installation and confirm program cleanup preserves
+   unrelated files and existing user/game data. Do not recursively remove managed
+   data as a substitute for uninstall acceptance.
+4. If available, use disposable singleplayer/local multiplayer state to exercise
+   each world/server/address toggle, pause/disconnect clearing and master
+   clear/restore. This live gameplay Discord check remains an unverified limitation;
+   prior accepted generic presence/logo/master evidence is unchanged.
+
+Publication remains STOPPED until required steps 1–3 pass. No push, tag, release
+dispatch or publication is authorized while those gates remain unperformed.
+
+### Final regression and artifact verification — 2026-09-27
+
+After the aggregate review: Rust library 538 passed / 20 ignored / 0 failed,
+icon integration 6 passed / 0 failed; total **544 passed / 20 ignored / 0 failed**.
+Frontend **116 passed / 0 failed**. Svelte/TypeScript **0 errors / 0 warnings**.
+Rust formatting, all-target check, frontend production build and release version
+contract **1.1.0** passed. Configured Tauri production build passed (optimized
+compilation 2m 59s), producing both MSI and NSIS.
+
+The existing release artifact verifier rejected the working bundle directories
+because historical 0.1.0 and 1.0.0 installers coexist there. They were preserved.
+Exact new 1.1.0 artifacts, executable and generated NSIS script were copied into
+a uniquely created external temporary projection; the unchanged release verifier
+then passed its metadata, shortcut-hook and artifact-manifest checks. This is
+artifact inspection, not installer installation acceptance.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| aurora-launcher.exe | 10169344 | `7935bdb20776798d1fa6e1d88e83872ab874f5ce891a66d9b76bcba85e5ab7cc` |
+| Aurora Launcher_1.1.0_x64_en-US.msi | 5771264 | `883f7615ecee19795e9f023c92f742c1d5b53d20df57a464463d5ee2a9f48b44` |
+| Aurora Launcher_1.1.0_x64-setup.exe | 4212146 | `02a00dfb5c584cf271b6e96879c082e64ecb5a6c04f12f5f76ba64ac1ff25c54` |
+
+Both installer product identities were accepted as Aurora Launcher 1.1.0 by
+the release verifier. The exact build-tree executable contains the public Discord
+ID and bridge-enabled 2.1.3 digest; it created a live native window and closed
+normally with launcher exit 0. This does not establish Minecraft exit 0 or
+installed-executable acceptance. Installer install/uninstall and GUI game states
+remain unperformed. Prior cold native production installation/Ready/hash evidence
+is retained without rerunning it.
+
+Logs: `%TEMP%/aurora-finalgate-{rust,check,frontend,svelte,webbuild,tauri}.log`.
+Artifact inspection location is recorded in
+`%TEMP%/aurora-finalgate-artifacts.json`. These are external evidence, not tracked
+release assets. Rebuilt installer hashes supersede earlier candidate hashes.
+
+Remote refetch still resolved main to
+`1bf2e14edea3ba706d2d34b5aa8c72f82987ccdf`. All 183 original tracked paths
+and all 185 candidate tracked paths remain; all 607 protected untracked files
+were rehashed unchanged. Only this report and candidate release notes changed.
+The pre-existing Cargo.toml status entry has no content diff and was preserved.
+Client HEAD remains `e978d0b5545e4991137e0fc1387e9897e752dfc7`, with no tracked
+content diff; its existing Python cache remains untracked. No client build,
+publication, deletion, repository cleanup, launcher push, tag or release occurred.

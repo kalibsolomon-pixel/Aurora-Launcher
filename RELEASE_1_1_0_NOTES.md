@@ -1,6 +1,7 @@
-# Aurora Launcher 1.1.0 — draft release notes
+# Aurora Launcher 1.1.0 — release notes
 
 Publication remains gated by `RELEASE_1_1_0_ACCEPTANCE.md`.
+These notes are finalized for the candidate; they have not been published.
 
 - Improved Home, account presentation, player preview, and instance navigation.
 - Customizable Home widgets and persisted layout preferences.
