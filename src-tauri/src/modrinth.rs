@@ -562,15 +562,12 @@ impl Graph<'_> {
             if self.seen.len() >= MAX_GRAPH {
                 return Err(Error::DependencyUnresolved);
             }
-            if self.context.fabric_api_protected && project_id == FABRIC_API_PROJECT && root {
-                return Err(Error::DependencyConflict);
-            }
             if self.context.fabric_api_protected && project_id == FABRIC_API_PROJECT && !root {
                 if version_id.is_some() {
                     return Err(Error::DependencyUnresolved);
                 }
                 self.warnings
-                    .push("Fabric API is already launcher managed and protected.".into());
+                    .push("Fabric API is already present as verified bootstrap content; no provider ownership is assigned.".into());
                 return Ok(());
             }
             let project = self.client.project(&project_id).await.map_err(|error| {
@@ -1469,20 +1466,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn protected_fabric_api_cannot_be_a_provider_root() {
-        let client = Client::for_testing("http://127.0.0.1:1/v2/");
-        assert!(matches!(
-            client
-                .resolve(
-                    &context(),
-                    ContentType::Mod,
-                    FABRIC_API_PROJECT,
-                    "11112222",
-                    &ContentState::empty()
-                )
-                .await,
-            Err(Error::DependencyConflict)
-        ));
+    async fn bootstrap_api_does_not_reserve_a_provider_root() {
+        let mut routes = HashMap::new();
+        routes.insert(
+            format!("/v2/project/{FABRIC_API_PROJECT}"),
+            project(FABRIC_API_PROJECT, "mod"),
+        );
+        routes.insert(
+            "/v2/version/11112222".into(),
+            version("11112222", FABRIC_API_PROJECT, json!([])),
+        );
+        let server = server(routes);
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        let resolved = client
+            .resolve(
+                &context(),
+                ContentType::Mod,
+                FABRIC_API_PROJECT,
+                "11112222",
+                &ContentState::empty(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resolved.plans.len(), 1);
+        assert_eq!(resolved.plans[0].project_id, FABRIC_API_PROJECT);
+        // Physical collisions are still checked by native verified activation.
     }
 
     #[tokio::test]
@@ -1617,7 +1625,7 @@ mod tests {
                 .preview
                 .warnings
                 .iter()
-                .any(|warning| warning.contains("already launcher managed"))
+                .any(|warning| warning.contains("verified bootstrap content"))
         );
     }
 

@@ -34,7 +34,6 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::aurora::{
     AuroraInstallError, AuroraInstalledState, install_aurora, load_installed_state,
-    validate_artifact as validate_aurora_artifact,
 };
 use crate::config::{self, ConfigError, LauncherConfig};
 use crate::distribution::{ManifestError, ReleaseChannel, ReleaseManifest};
@@ -619,6 +618,16 @@ pub async fn install_instance_configuration(
 
     progress(report(InstancePhase::ResolvingRelease, None));
     let installed = resolve_installed_configuration(endpoints, &configuration).await?;
+    if let Some(pin) = &installed.aurora {
+        let release = endpoints
+            .release_manifest()
+            .resolve_exact(&pin.version, Some(pin.channel))
+            .ok_or_else(|| InstanceError::AuroraReleaseNotFound {
+                channel: pin.channel,
+                aurora_version: pin.version.clone(),
+            })?;
+        crate::aurora::preflight_bootstrap(managed, instance_id, release)?;
+    }
 
     let mut record = {
         let _guard = registry_lock();
@@ -1121,11 +1130,80 @@ pub fn validate_instance(
         let aurora_state: Option<AuroraInstalledState> =
             match load_installed_state(managed, record.id())? {
                 Some(state) => {
-                    if let Err(reason) = validate_aurora_artifact(managed, record.id(), &state) {
-                        problems.push(InstanceProblem {
-                            component: "aurora",
-                            reason,
-                        });
+                    // The ownership document is bootstrap evidence, not an
+                    // immutable-presence requirement. Disabled/missing files
+                    // stay absent; only active original files must reverify.
+                    for artifact in std::iter::once(state.artifact())
+                        .chain(state.fabric_api().map(|api| api.artifact()))
+                    {
+                        let mods =
+                            crate::instance_mods::validate_mods_directory(managed, record.id())
+                                .map_err(|error| {
+                                    InstanceError::ReleaseInvalid(error.to_string())
+                                })?;
+                        let file_name = artifact
+                            .relative_path()
+                            .strip_prefix("mods/")
+                            .expect("validated bootstrap path");
+                        let providers =
+                            crate::instance_content::ContentState::load(managed, record.id())
+                                .map_err(|error| {
+                                    InstanceError::ReleaseInvalid(error.to_string())
+                                })?;
+                        if let Some(provider) = providers.entries.iter().find(|provider| {
+                            provider.content_type == crate::instance_content::ContentType::Mod
+                                && provider.file_name.eq_ignore_ascii_case(file_name)
+                        }) {
+                            if let Err(error) = crate::instance_content::validate_provider_file(
+                                managed,
+                                record.id(),
+                                provider,
+                            ) {
+                                problems.push(InstanceProblem {
+                                    component: "mods",
+                                    reason: error.to_string(),
+                                });
+                            }
+                            continue;
+                        }
+                        let path = managed
+                            .instance_paths(record.id())
+                            .root()
+                            .join(artifact.relative_path());
+                        match std::fs::symlink_metadata(&path) {
+                            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                            Ok(meta) if meta.is_file() && !meta.file_type().is_symlink() => {
+                                if let Err(error) =
+                                    crate::instance_mods::validate_current_regular_file(
+                                        &mods, file_name,
+                                    )
+                                {
+                                    problems.push(InstanceProblem {
+                                        component: "aurora",
+                                        reason: error.to_string(),
+                                    });
+                                    continue;
+                                }
+                                if let Err(error) = crate::integrity::verify_file(
+                                    &path,
+                                    &crate::integrity::ArtifactDigest::parse(artifact.sha256())
+                                        .map_err(|e| {
+                                            InstanceError::ReleaseInvalid(e.to_string())
+                                        })?,
+                                    Some(artifact.size_bytes()),
+                                ) {
+                                    problems.push(InstanceProblem {
+                                        component: "aurora",
+                                        reason: error.to_string(),
+                                    });
+                                }
+                            }
+                            _ => problems.push(InstanceProblem {
+                                component: "aurora",
+                                reason: "Bootstrap artifact is not a regular contained file."
+                                    .into(),
+                            }),
+                        }
                     }
                     Some(state)
                 }
@@ -1210,6 +1288,24 @@ pub fn validate_instance(
                     ),
                 });
                 }
+            }
+        }
+    }
+    if record.installed().platform.kind() == "fabric"
+        && managed.instance_paths(record.id()).mods().is_dir()
+    {
+        let inventory = crate::instance_mods::scan(managed, record.id())
+            .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+        for entry in inventory.entries.iter().filter(|entry| entry.enabled) {
+            for warning in entry
+                .warnings
+                .iter()
+                .filter(|warning| warning.code == "required_dependency_missing")
+            {
+                problems.push(InstanceProblem {
+                    component: "mods",
+                    reason: format!("{}: {}", entry.display_name, warning.message),
+                });
             }
         }
     }
@@ -1424,6 +1520,136 @@ impl From<RuntimeInstallError> for InstanceError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn explicit_restore_keeps_a_verified_compatible_provider_api_replacement() {
+        use crate::instance_content::{
+            ContentCompatibility, ContentState, ContentType, ProviderRecord,
+        };
+        use sha2::Digest as _;
+        let world = SyntheticWorld::with_api("restore-provider-api", true);
+        let record = world.create("Replacement API").await.unwrap();
+        let paths = world.managed.instance_paths(record.id());
+        let original = crate::instance_mods::scan(&world.managed, record.id()).unwrap();
+        for entry in original.entries {
+            crate::instance_mods::remove(&world.managed, record.id(), &entry.entry_id).unwrap();
+        }
+        let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        writer
+            .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer
+            .write_all(br#"{"schemaVersion":1,"id":"fabric-api","version":"2"}"#)
+            .unwrap();
+        let bytes = writer.finish().unwrap().into_inner();
+        std::fs::write(paths.mods().join("replacement-api.jar"), &bytes).unwrap();
+        let mut state = ContentState::empty();
+        state.entries.push(ProviderRecord {
+            content_type: ContentType::Mod,
+            provider: "modrinth".into(),
+            project_id: "P7dR8mSH".into(),
+            version_id: "replacement".into(),
+            file_id: "replacement-api.jar".into(),
+            file_name: "replacement-api.jar".into(),
+            sha256: format!("{:x}", sha2::Sha256::digest(&bytes)),
+            display_version: Some("2".into()),
+            compatibility: ContentCompatibility {
+                minecraft_versions: vec!["26.2".into()],
+                loader: Some("fabric".into()),
+                environment: Some("client".into()),
+            },
+            dependencies: vec![],
+            explicitly_retained: true,
+            requires: vec![],
+        });
+        state.save(&world.managed, record.id()).unwrap();
+        let provenance_path = paths.root().join("content-managed.json");
+        let provenance = std::fs::read(&provenance_path).unwrap();
+        install_instance_configuration(
+            &world.managed,
+            &world.registry_path(),
+            &world.config_path(),
+            &world.endpoints(),
+            record.id(),
+            &mut |_| {},
+            InstanceFaults::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        assert_eq!(std::fs::read(provenance_path).unwrap(), provenance);
+        assert_eq!(
+            std::fs::read(paths.mods().join("replacement-api.jar")).unwrap(),
+            bytes
+        );
+        assert!(!paths.mods().join("fabric-api-1.jar").exists());
+        assert!(paths.mods().join("aurora-0.3.0.jar").exists());
+    }
+
+    #[tokio::test]
+    async fn bootstrap_migration_preserves_evidence_and_respects_user_toggle_and_removal() {
+        let world = SyntheticWorld::with_api("bootstrap-user-control", true);
+        let record = world.create("Controlled").await.unwrap();
+        let paths = world.managed.instance_paths(record.id());
+        let evidence_path = paths.root().join("aurora-installed.json");
+        let evidence = std::fs::read(&evidence_path).unwrap();
+        let registry = std::fs::read(world.registry_path()).unwrap();
+        let original = crate::instance_mods::scan(&world.managed, record.id()).unwrap();
+        assert_eq!(original.entries.len(), 2);
+        assert!(original.entries.iter().all(|entry| entry.ownership
+            == crate::instance_mods::ModOwnership::LauncherBootstrap
+            && entry.can_toggle
+            && entry.can_remove
+            && entry.provenance.is_none()));
+        let aurora = original
+            .entries
+            .iter()
+            .find(|entry| entry.file_name.starts_with("aurora-"))
+            .unwrap();
+        let bytes = std::fs::read(paths.mods().join(&aurora.file_name)).unwrap();
+        crate::instance_mods::set_enabled(&world.managed, record.id(), &aurora.entry_id, false)
+            .unwrap();
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        assert_eq!(
+            crate::instance_mods::bootstrap_status(&world.managed, record.id())
+                .unwrap()
+                .as_deref(),
+            Some("disabled")
+        );
+        let after_restart = crate::instance_mods::scan(&world.managed, record.id()).unwrap();
+        let disabled = after_restart
+            .entries
+            .iter()
+            .find(|entry| entry.file_name.starts_with("aurora-"))
+            .unwrap();
+        crate::instance_mods::set_enabled(&world.managed, record.id(), &disabled.entry_id, true)
+            .unwrap();
+        assert_eq!(
+            std::fs::read(paths.mods().join(&aurora.file_name)).unwrap(),
+            bytes
+        );
+        let inventory = crate::instance_mods::scan(&world.managed, record.id()).unwrap();
+        for entry in inventory.entries {
+            crate::instance_mods::remove(&world.managed, record.id(), &entry.entry_id).unwrap();
+        }
+        for _ in 0..2 {
+            assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+            assert!(
+                crate::instance_mods::scan(&world.managed, record.id())
+                    .unwrap()
+                    .entries
+                    .is_empty()
+            );
+        }
+        assert_eq!(
+            crate::instance_mods::bootstrap_status(&world.managed, record.id())
+                .unwrap()
+                .as_deref(),
+            Some("missing")
+        );
+        assert_eq!(std::fs::read(evidence_path).unwrap(), evidence);
+        assert_eq!(std::fs::read(world.registry_path()).unwrap(), registry);
+    }
     use crate::install::assets::AssetObjectEndpoints;
     use crate::minecraft::metadata::AssetIndexObjectsDocument;
     use crate::test_support::{TestResponse, TestServer};
@@ -2247,7 +2473,7 @@ mod tests {
             validation.problems
         );
 
-        // A missing Aurora artifact (deleted after install) is aurora damage.
+        // Removing optional bootstrap bytes does not erase the independent pin consistency blocker.
         std::fs::remove_file(
             world
                 .managed
@@ -2262,7 +2488,7 @@ mod tests {
             validation
                 .problems
                 .iter()
-                .any(|problem| problem.component == "aurora"),
+                .any(|problem| problem.component == "consistency"),
             "{:?}",
             validation.problems
         );
@@ -3424,7 +3650,7 @@ mod tests {
                     .entries
                     .iter()
                     .filter(|entry| entry.ownership
-                        == crate::instance_mods::ModOwnership::LauncherManagedRequired)
+                        == crate::instance_mods::ModOwnership::LauncherBootstrap)
                     .count(),
                 if enabled { 2 } else { 0 }
             );
@@ -3583,8 +3809,9 @@ mod tests {
                 .entries
                 .iter()
                 .any(|entry| entry.ownership
-                    == crate::instance_mods::ModOwnership::LauncherManagedRetained
-                    && !entry.can_remove)
+                    == crate::instance_mods::ModOwnership::LauncherBootstrap
+                    && entry.can_remove
+                    && entry.can_toggle)
         );
         let plan = preview(&world.managed, &endpoints, record.id(), true).unwrap();
         assert!(plan.blockers.is_empty());

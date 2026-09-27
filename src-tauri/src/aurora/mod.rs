@@ -353,6 +353,11 @@ pub async fn install_aurora(
     release: &AuroraRelease,
     options: &DownloadOptions,
 ) -> Result<InstalledAurora, AuroraInstallError> {
+    // Bootstrap state remains strict even when its artifacts are optional.
+    // Explicit restoration never overwrites malformed ownership evidence.
+    let previous_state = load_installed_state(managed, instance)?;
+    preflight_bootstrap(managed, instance, release)?;
+    let provider_api = compatible_provider_api(managed, instance, release)?;
     let expected = ArtifactDigest::parse(release.artifact().sha256())
         .map_err(|error| AuroraInstallError::ReleaseInvalid(error.to_string()))?;
     let source = ArtifactSource::https_or_loopback(
@@ -370,7 +375,7 @@ pub async fn install_aurora(
 
     // Acquire every required mod through the verified store before touching
     // the instance. A failed dependency cannot leave a completed state.
-    let fabric_api = if let Some(dependency) = release.fabric_api() {
+    let fabric_api = if let Some(dependency) = release.fabric_api().filter(|_| !provider_api) {
         let digest = ArtifactDigest::parse(dependency.artifact().sha256())
             .map_err(|error| AuroraInstallError::ReleaseInvalid(error.to_string()))?;
         let source = ArtifactSource::https_or_loopback(
@@ -406,12 +411,14 @@ pub async fn install_aurora(
             reason: error.to_string(),
         })?;
     }
-    std::fs::copy(&verified.path, &artifact_path).map_err(|error| {
-        AuroraInstallError::Materialization {
-            path: relative.clone(),
-            reason: error.to_string(),
-        }
-    })?;
+    materialize_bootstrap(
+        managed,
+        instance,
+        &verified.path,
+        &artifact_path,
+        &expected,
+        verified.bytes,
+    )?;
 
     // Re-verify the materialized copy — a successful copy call is not
     // itself trusted content.
@@ -435,12 +442,14 @@ pub async fn install_aurora(
                 reason: "the derived path escaped the managed mods directory".to_owned(),
             });
         }
-        std::fs::copy(&verified.path, &path).map_err(|error| {
-            AuroraInstallError::Materialization {
-                path: relative_path.clone(),
-                reason: error.to_string(),
-            }
-        })?;
+        materialize_bootstrap(
+            managed,
+            instance,
+            &verified.path,
+            &path,
+            &digest,
+            verified.bytes,
+        )?;
         let size_bytes = verify_file(&path, &digest, Some(verified.bytes)).map_err(|error| {
             AuroraInstallError::Materialization {
                 path: relative_path.clone(),
@@ -455,6 +464,10 @@ pub async fn install_aurora(
                 sha256: digest.as_hex(),
             },
         })
+    } else if provider_api {
+        previous_state
+            .as_ref()
+            .and_then(|state| state.fabric_api().cloned())
     } else {
         None
     };
@@ -490,6 +503,138 @@ pub async fn install_aurora(
         state,
         artifact_path,
     })
+}
+
+/// Read-only collision check, also used before changing a ready registry record.
+fn compatible_provider_api(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    release: &AuroraRelease,
+) -> Result<bool, AuroraInstallError> {
+    // Only reuse an explicitly provider-owned active replacement in an existing
+    // bootstrap installation. Never manufacture provenance for a local file.
+    if release.fabric_api().is_none()
+        || load_installed_state(managed, instance)?.is_none()
+        || !managed.instance_paths(instance).mods().is_dir()
+    {
+        return Ok(false);
+    }
+    let state = crate::instance_content::ContentState::load(managed, instance)
+        .map_err(|error| AuroraInstallError::ReleaseInvalid(error.to_string()))?;
+    for record in state.entries.iter().filter(|record| {
+        record.content_type == crate::instance_content::ContentType::Mod
+            && record.compatibility.loader.as_deref() == Some("fabric")
+            && record
+                .compatibility
+                .minecraft_versions
+                .iter()
+                .any(|version| version == release.minecraft_version())
+    }) {
+        let path = crate::instance_content::validate_provider_file(managed, instance, record)
+            .map_err(|error| AuroraInstallError::ReleaseInvalid(error.to_string()))?;
+        if path
+            .extension()
+            .is_some_and(|extension| extension == "disabled")
+        {
+            continue;
+        }
+        let (metadata, warnings) = crate::instance_mods::inspect_fabric_metadata(
+            &path,
+            std::fs::metadata(&path)
+                .map_err(AuroraInstallError::StateRead)?
+                .len(),
+        );
+        if warnings.is_empty() && metadata.is_some_and(|metadata| metadata.id == "fabric-api") {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+pub(crate) fn preflight_bootstrap(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    release: &AuroraRelease,
+) -> Result<(), AuroraInstallError> {
+    load_installed_state(managed, instance)?;
+    let paths = managed.instance_paths(instance);
+    if !paths.mods().exists() {
+        return Ok(());
+    }
+    let mods =
+        crate::instance_mods::validate_mods_directory(managed, instance).map_err(|error| {
+            AuroraInstallError::Materialization {
+                path: "mods".into(),
+                reason: error.to_string(),
+            }
+        })?;
+    let mut files = vec![(
+        managed_artifact_relative_path(release)?,
+        release.artifact().sha256(),
+        release.artifact().size_bytes(),
+    )];
+    let provider_api = compatible_provider_api(managed, instance, release)?;
+    if let Some(api) = release.fabric_api().filter(|_| !provider_api) {
+        files.push((
+            format!("mods/fabric-api-{}.jar", api.version()),
+            api.artifact().sha256(),
+            api.artifact().size_bytes(),
+        ));
+    }
+    for (relative, hash, size) in files {
+        let name = relative
+            .strip_prefix("mods/")
+            .expect("validated bootstrap path");
+        if std::fs::symlink_metadata(mods.join(format!("{name}.disabled"))).is_ok() {
+            return Err(AuroraInstallError::ReleaseInvalid("Re-enable disabled bootstrap content in Mods before restoring it. No duplicate will be created.".into()));
+        }
+        if std::fs::symlink_metadata(mods.join(name)).is_ok() {
+            let target = crate::instance_mods::validate_current_regular_file(&mods, name)
+                .map_err(|error| AuroraInstallError::ReleaseInvalid(error.to_string()))?;
+            let digest = ArtifactDigest::parse(hash)
+                .map_err(|error| AuroraInstallError::ReleaseInvalid(error.to_string()))?;
+            verify_file(&target, &digest, size).map_err(|_| AuroraInstallError::ReleaseInvalid("Existing bootstrap content differs. Inspect or remove it explicitly before restoration; it will not be overwritten.".into()))?;
+        }
+    }
+    Ok(())
+}
+
+fn materialize_bootstrap(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    source: &std::path::Path,
+    target: &std::path::Path,
+    digest: &ArtifactDigest,
+    bytes: u64,
+) -> Result<(), AuroraInstallError> {
+    let fail = |reason: String| AuroraInstallError::Materialization {
+        path: "bootstrap mod".into(),
+        reason,
+    };
+    let mods = crate::instance_mods::validate_mods_directory(managed, instance)
+        .map_err(|e| fail(e.to_string()))?;
+    let name = target
+        .file_name()
+        .ok_or_else(|| fail("Invalid bootstrap destination.".into()))?
+        .to_string_lossy();
+    if std::fs::symlink_metadata(mods.join(format!("{name}.disabled"))).is_ok() {
+        return Err(fail("A disabled bootstrap file exists. Re-enable it in Mods before restoring; no duplicate will be created.".into()));
+    }
+    if std::fs::symlink_metadata(target).is_ok() {
+        crate::instance_mods::validate_current_regular_file(&mods, &name)
+            .map_err(|e| fail(e.to_string()))?;
+        verify_file(target, digest, Some(bytes)).map_err(|_| fail("Existing mod bytes differ. Inspect the file before restoring; user content will not be overwritten.".into()))?;
+        return Ok(());
+    }
+    let stage = mods.join(format!(".aurora-bootstrap-stage-{}", uuid::Uuid::new_v4()));
+    let result = (|| {
+        std::fs::copy(source, &stage).map_err(|e| fail(e.to_string()))?;
+        verify_file(&stage, digest, Some(bytes)).map_err(|e| fail(e.to_string()))?;
+        std::fs::hard_link(&stage, target).map_err(|e| fail(e.to_string()))?;
+        Ok(())
+    })();
+    let _ = std::fs::remove_file(&stage);
+    result
 }
 
 /// Writes the installed-state record atomically (sibling temporary file plus

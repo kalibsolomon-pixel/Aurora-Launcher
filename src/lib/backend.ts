@@ -480,6 +480,7 @@ export interface PlatformCapability {
 }
 
 export interface InstanceSummary {
+  auroraContentState?: string | null;
   id: string;
   displayName: string;
   state: "installing" | "ready";
@@ -742,6 +743,7 @@ export type ModFileType =
   | "link";
 
 export type ModOwnership =
+  | "launcherBootstrap"
   | "launcherManagedRequired"
   | "launcherManagedRetained"
   | "providerManaged"

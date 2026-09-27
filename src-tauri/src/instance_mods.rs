@@ -72,11 +72,55 @@ pub enum ModFileType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ModOwnership {
+    LauncherBootstrap,
     LauncherManagedRequired,
     LauncherManagedRetained,
     ProviderManaged,
     UserManaged,
     Unknown,
+}
+
+pub(crate) fn bootstrap_status(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<Option<String>, ModError> {
+    let Some(state) = aurora::load_installed_state(managed, instance)
+        .map_err(|e| ModError::InstalledState(e.to_string()))?
+    else {
+        return Ok(None);
+    };
+    let mods = validate_mods_directory(managed, instance)?;
+    let name = state
+        .artifact()
+        .relative_path()
+        .strip_prefix("mods/")
+        .expect("validated path");
+    let active = mods.join(name);
+    let disabled = mods.join(format!("{name}.disabled"));
+    let has_active = std::fs::symlink_metadata(&active).is_ok();
+    let has_disabled = std::fs::symlink_metadata(&disabled).is_ok();
+    if has_active && has_disabled {
+        return Ok(Some("modified".into()));
+    }
+    if !has_active && !has_disabled {
+        return Ok(Some("missing".into()));
+    }
+    let path = if has_active { active } else { disabled };
+    let name = path.file_name().expect("mod filename").to_string_lossy();
+    let valid = validate_current_regular_file(&mods, &name).is_ok()
+        && ArtifactDigest::parse(state.artifact().sha256()).is_ok_and(|digest| {
+            verify_file(&path, &digest, Some(state.artifact().size_bytes())).is_ok()
+        });
+    Ok(Some(
+        if !valid {
+            "modified"
+        } else if has_active {
+            "active"
+        } else {
+            "disabled"
+        }
+        .into(),
+    ))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -166,7 +210,8 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
                 let name = child.file_name().to_string_lossy().into_owned();
                 let provider = content_state.entries.iter().find(|record| {
                     record.content_type == ContentType::Mod
-                        && record.file_name.eq_ignore_ascii_case(&name)
+                        && (record.file_name.eq_ignore_ascii_case(&name)
+                            || format!("{}.disabled", record.file_name).eq_ignore_ascii_case(&name))
                 });
                 entries.push(inspect_entry(
                     &child.path(),
@@ -199,6 +244,57 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
         }
     }
 
+    // Legacy ownership documents now describe bootstrap provenance. This is
+    // an idempotent interpretation migration: original records and bytes stay
+    // recoverable, and no provider identities or files are manufactured.
+    let bootstrap = aurora::load_installed_state(managed, instance)
+        .map_err(|e| ModError::InstalledState(e.to_string()))?;
+    if managed_file.is_none()
+        && let Some(state) = &bootstrap
+    {
+        for artifact in
+            std::iter::once(state.artifact()).chain(state.fabric_api().map(|api| api.artifact()))
+        {
+            let name = artifact
+                .relative_path()
+                .strip_prefix("mods/")
+                .expect("validated mod path");
+            for entry in entries.iter_mut().filter(|entry| {
+                entry.file_name.eq_ignore_ascii_case(name)
+                    || entry
+                        .file_name
+                        .eq_ignore_ascii_case(&format!("{name}.disabled"))
+            }) {
+                if entry.ownership == ModOwnership::ProviderManaged {
+                    continue;
+                }
+                let matches = matches!(
+                    entry.file_type,
+                    ModFileType::EnabledJar | ModFileType::DisabledJar
+                ) && !content_state.entries.iter().any(|record| {
+                    record.content_type == ContentType::Mod
+                        && (record.file_name.eq_ignore_ascii_case(name)
+                            || record.sha256 == artifact.sha256())
+                }) && ArtifactDigest::parse(artifact.sha256()).is_ok_and(|digest| {
+                    verify_file(
+                        &mods.join(&entry.file_name),
+                        &digest,
+                        Some(artifact.size_bytes()),
+                    )
+                    .is_ok()
+                });
+                entry.ownership = if matches {
+                    ModOwnership::LauncherBootstrap
+                } else {
+                    ModOwnership::Unknown
+                };
+                entry.sha256 = matches.then(|| artifact.sha256().to_owned());
+                entry.can_toggle = matches;
+                entry.can_remove = matches;
+                entry.action_blocked_reason = (!matches).then(|| "The bootstrap file was modified; inspect it in the instance folder before changing it.".into());
+            }
+        }
+    }
     let retained = crate::instances::transition::retained_files(managed, instance)
         .map_err(|e| ModError::InstalledState(e.to_string()))?;
     for file in retained {
@@ -206,30 +302,70 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
             .relative_path
             .strip_prefix("mods/")
             .expect("validated retained mod path");
-        if let Some(entry) = entries
-            .iter_mut()
-            .find(|entry| entry.file_name.eq_ignore_ascii_case(name))
-        {
-            let matches = entry.file_type == ModFileType::EnabledJar
-                && entry.size_bytes == Some(file.size_bytes)
+        if let Some(entry) = entries.iter_mut().find(|entry| {
+            entry.file_name.eq_ignore_ascii_case(name)
+                || entry
+                    .file_name
+                    .eq_ignore_ascii_case(&format!("{name}.disabled"))
+        }) {
+            let matches = matches!(
+                entry.file_type,
+                ModFileType::EnabledJar | ModFileType::DisabledJar
+            ) && entry.size_bytes == Some(file.size_bytes)
                 && entry.provenance.is_none()
                 && ArtifactDigest::parse(&file.sha256).is_ok_and(|digest| {
-                    verify_file(&mods.join(name), &digest, Some(file.size_bytes)).is_ok()
+                    verify_file(&mods.join(&entry.file_name), &digest, Some(file.size_bytes))
+                        .is_ok()
                 });
             if matches {
                 entry.sha256 = Some(file.sha256.clone());
             }
             entry.ownership = if matches {
-                ModOwnership::LauncherManagedRetained
+                ModOwnership::LauncherBootstrap
             } else {
                 ModOwnership::Unknown
             };
-            entry.can_toggle = false;
-            entry.can_remove = false;
-            entry.action_blocked_reason = Some(file.reason);
+            entry.can_toggle = matches;
+            entry.can_remove = matches;
+            entry.action_blocked_reason = (!matches).then_some(file.reason);
         }
     }
     derive_local_warnings(&mut entries);
+    let active_providers: HashSet<_> = entries
+        .iter()
+        .filter(|entry| entry.enabled)
+        .filter_map(|entry| entry.provenance.as_ref().map(ProviderRecord::identity))
+        .collect();
+    for entry in entries.iter_mut().filter(|entry| entry.enabled) {
+        if entry.provenance.as_ref().is_some_and(|provider| {
+            provider
+                .requires
+                .iter()
+                .any(|required| !active_providers.contains(required))
+        }) {
+            entry.warnings.push(ModWarning::new(
+                "required_dependency_missing",
+                "A recorded required provider dependency is disabled or missing.",
+            ));
+        }
+    }
+    let disabled = DisabledState::load(managed, instance)?;
+    for entry in &mut entries {
+        if let Some(expected) = disabled.files.get(&entry.file_name) {
+            if entry.file_type != ModFileType::DisabledJar
+                || !ArtifactDigest::parse(expected).is_ok_and(|digest| {
+                    verify_file(&mods.join(&entry.file_name), &digest, entry.size_bytes).is_ok()
+                })
+            {
+                entry.ownership = ModOwnership::Unknown;
+                entry.can_toggle = false;
+                entry.can_remove = false;
+                entry.action_blocked_reason = Some("Disabled bytes changed. Inspect the file in the instance folder; the launcher will not activate it.".into());
+            } else {
+                entry.sha256 = Some(expected.clone());
+            }
+        }
+    }
     entries.sort_by(|left, right| {
         left.display_name
             .to_lowercase()
@@ -247,9 +383,12 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
             .iter()
             .filter(|record| {
                 record.content_type == ContentType::Mod
-                    && !entries
-                        .iter()
-                        .any(|entry| entry.file_name.eq_ignore_ascii_case(&record.file_name))
+                    && !entries.iter().any(|entry| {
+                        entry.file_name.eq_ignore_ascii_case(&record.file_name)
+                            || entry
+                                .file_name
+                                .eq_ignore_ascii_case(&format!("{}.disabled", record.file_name))
+                    })
             })
             .cloned()
             .collect(),
@@ -293,6 +432,14 @@ pub(crate) fn managed_artifact_file_name(
 ) -> Result<Option<Vec<String>>, ModError> {
     let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
         .map_err(|error| ModError::InstalledState(error.to_string()))?;
+    // Registered instances use user-controllable bootstrap provenance. Keeping
+    // the legacy fallback for isolated component callers does not authorize
+    // any application operation: commands require registry membership.
+    if registry.find(instance).is_some() {
+        aurora::load_installed_state(managed, instance)
+            .map_err(|error| ModError::InstalledState(error.to_string()))?;
+        return Ok(None);
+    }
     if let Some(record) = registry.find(instance) {
         if record.installed().aurora.is_none() {
             return Ok(None);
@@ -427,9 +574,9 @@ pub(crate) fn verified_required_mods_with_manifest(
             .ok_or_else(|| ModError::InstalledState("active release metadata is missing".into()))?;
         crate::instances::platform::required_content(record.installed(), Some(release))
             .map_err(ModError::InstalledState)?;
-        let installed = state.as_ref().ok_or_else(|| {
-            ModError::InstalledState("active managed requirements are missing".into())
-        })?;
+        let Some(installed) = state.as_ref() else {
+            return Ok(Vec::new());
+        };
         if installed.aurora_version() != pin.version
             || installed.channel() != pin.channel
             || installed.minecraft_version() != record.installed().minecraft_version
@@ -477,13 +624,24 @@ pub(crate) fn verified_required_mods_with_manifest(
                 && (record.file_name.eq_ignore_ascii_case(name)
                     || record.sha256 == artifact.sha256())
         }) {
+            if registry.find(instance).is_some() {
+                continue;
+            }
             return Err(ModError::InstalledState(
                 "provider state ambiguously claims a launcher requirement".into(),
             ));
         }
         let path = directory.join(name);
-        let meta = std::fs::symlink_metadata(&path)
-            .map_err(|error| ModError::InstalledState(error.to_string()))?;
+        let meta = match std::fs::symlink_metadata(&path) {
+            Ok(meta) => meta,
+            Err(error)
+                if error.kind() == std::io::ErrorKind::NotFound
+                    && registry.find(instance).is_some() =>
+            {
+                continue;
+            }
+            Err(error) => return Err(ModError::InstalledState(error.to_string())),
+        };
         if !meta.is_file() || meta.file_type().is_symlink() || is_reparse_point(&meta) {
             return Err(ModError::InstalledState(
                 "managed requirement is not a regular file".into(),
@@ -554,7 +712,10 @@ fn inspect_entry(
     let mut provenance = None;
     let provider_mismatch = if !is_managed {
         if let Some(provider) = provider {
-            if matches!(file_type, ModFileType::EnabledJar) {
+            if matches!(
+                file_type,
+                ModFileType::EnabledJar | ModFileType::DisabledJar
+            ) {
                 if let Ok(digest) = ArtifactDigest::parse(&provider.sha256) {
                     if verify_file(path, &digest, None).is_ok() {
                         ownership = ModOwnership::ProviderManaged;
@@ -590,6 +751,19 @@ fn inspect_entry(
     id_material.extend_from_slice(
         format!("|{file_type:?}|{:?}|{modified_unix_millis:?}", size_bytes).as_bytes(),
     );
+    if matches!(
+        file_type,
+        ModFileType::EnabledJar | ModFileType::DisabledJar
+    ) {
+        if let Ok(hash) = file_digest(path) {
+            id_material.extend_from_slice(hash.as_bytes());
+            if sha256.is_none() {
+                sha256 = Some(hash);
+            }
+        } else {
+            ownership = ModOwnership::Unknown;
+        }
+    }
     let entry_id = opaque_id(&id_material);
 
     let (fabric_metadata, mut warnings) = if matches!(
@@ -629,6 +803,7 @@ fn inspect_entry(
         ));
     }
     let blocked_reason = match ownership {
+        ModOwnership::LauncherBootstrap => None,
         ModOwnership::LauncherManagedRetained => {
             Some("Retained former launcher artifact; no active launcher requirement.".into())
         }
@@ -677,7 +852,10 @@ fn inspect_entry(
         provenance,
         metadata: fabric_metadata,
         warnings,
-        can_toggle: ownership == ModOwnership::UserManaged,
+        can_toggle: matches!(
+            ownership,
+            ModOwnership::UserManaged | ModOwnership::ProviderManaged
+        ),
         can_remove: ownership == ModOwnership::UserManaged,
         action_blocked_reason: blocked_reason,
     }
@@ -1193,11 +1371,58 @@ pub fn set_enabled(
     entry_id: &str,
     enabled: bool,
 ) -> Result<ModInventory, ModError> {
+    set_enabled_with_commit(managed, instance, entry_id, enabled, |state| {
+        state.save(managed, instance)
+    })
+}
+
+fn set_enabled_with_commit(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    entry_id: &str,
+    enabled: bool,
+    commit: impl FnOnce(&DisabledState) -> Result<(), ModError>,
+) -> Result<ModInventory, ModError> {
     with_mutation_lock(instance, || {
         let inventory = scan(managed, instance)?;
         let entry = resolve_mutable_entry(&inventory, entry_id, true)?;
         if entry.enabled == enabled {
             return Ok(inventory);
+        }
+        if !enabled {
+            dependency_blockers(&inventory, entry)?;
+        } else {
+            let mut proposed = inventory.entries.clone();
+            proposed
+                .iter_mut()
+                .find(|candidate| candidate.entry_id == entry.entry_id)
+                .expect("resolved entry")
+                .enabled = true;
+            derive_local_warnings(&mut proposed);
+            let candidate = proposed
+                .iter()
+                .find(|candidate| candidate.entry_id == entry.entry_id)
+                .expect("resolved entry");
+            if let Some(warning) = candidate
+                .warnings
+                .iter()
+                .find(|warning| warning.code == "required_dependency_missing")
+            {
+                return Err(ModError::DependencyBlocked(warning.message.clone()));
+            }
+            if let Some(provider) = &candidate.provenance {
+                for required in &provider.requires {
+                    if !proposed.iter().any(|entry| {
+                        entry.enabled
+                            && entry
+                                .provenance
+                                .as_ref()
+                                .is_some_and(|dependency| dependency.identity() == *required)
+                    }) {
+                        return Err(ModError::DependencyBlocked("A required provider dependency is disabled or missing. Re-enable or install it first.".into()));
+                    }
+                }
+            }
         }
         let mods = validate_mods_directory(managed, instance)?;
         let source = validate_current_regular_file(&mods, &entry.file_name)?;
@@ -1215,9 +1440,108 @@ pub fn set_enabled(
         if std::fs::symlink_metadata(&target).is_ok() {
             return Err(ModError::TargetConflict(target_name));
         }
-        std::fs::rename(&source, &target).map_err(|source| ModError::MutationIo { source })?;
-        scan(managed, instance)
+        if let Some(hash) = &entry.sha256 {
+            verify_file(
+                &source,
+                &ArtifactDigest::parse(hash).map_err(|e| ModError::State(e.to_string()))?,
+                entry.size_bytes,
+            )
+            .map_err(|_| ModError::StaleEntry)?;
+        }
+        let mut disabled = DisabledState::load(managed, instance)?;
+        let previous_disabled = disabled.clone();
+        if enabled {
+            disabled.files.remove(&entry.file_name);
+        } else {
+            disabled.files.insert(
+                target_name.clone(),
+                file_digest(&source).map_err(|source| ModError::MutationIo { source })?,
+            );
+        }
+        // No-clobber activation, including an external collision after the
+        // preflight. The two names briefly refer to the same instance bytes.
+        std::fs::hard_link(&source, &target).map_err(|source| ModError::MutationIo { source })?;
+        if let Err(source_error) = std::fs::remove_file(&source) {
+            let _ = std::fs::remove_file(&target);
+            return Err(ModError::MutationIo {
+                source: source_error,
+            });
+        }
+        let result = commit(&disabled).and_then(|()| scan(managed, instance));
+        match result {
+            Ok(result) => Ok(result),
+            Err(error) => {
+                std::fs::hard_link(&target, &source)
+                    .map_err(|source| ModError::MutationIo { source })?;
+                std::fs::remove_file(&target).map_err(|source| ModError::MutationIo { source })?;
+                previous_disabled.save(managed, instance)?;
+                Err(error)
+            }
+        }
     })
+}
+
+/// Exact-byte receipts for launcher-disabled mods. Provider and bootstrap
+/// records remain unchanged; these receipts make local activation fail closed
+/// when disabled bytes have changed between launcher restarts.
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DisabledState {
+    schema_version: u32,
+    files: HashMap<String, String>,
+}
+impl DisabledState {
+    fn load(managed: &ManagedPaths, instance: &InstanceId) -> Result<Self, ModError> {
+        let path = managed
+            .instance_paths(instance)
+            .root()
+            .join("mods-disabled.json");
+        let meta = match std::fs::symlink_metadata(&path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self {
+                    schema_version: 1,
+                    files: HashMap::new(),
+                });
+            }
+            Err(source) => return Err(ModError::MutationIo { source }),
+            Ok(meta) => meta,
+        };
+        if !meta.is_file() || meta.file_type().is_symlink() || is_reparse_point(&meta) {
+            return Err(ModError::UnsafeEntry);
+        }
+        let bytes = std::fs::read(path).map_err(|source| ModError::MutationIo { source })?;
+        let state: Self =
+            serde_json::from_slice(&bytes).map_err(|e| ModError::State(e.to_string()))?;
+        if state.schema_version != 1 {
+            return Err(ModError::State(
+                "Unsupported disabled-content schema.".into(),
+            ));
+        }
+        for (name, hash) in &state.files {
+            validate_file_name(name)?;
+            if !is_disabled_jar(name) {
+                return Err(ModError::State("Invalid disabled-content name.".into()));
+            }
+            ArtifactDigest::parse(hash).map_err(|e| ModError::State(e.to_string()))?;
+        }
+        Ok(state)
+    }
+    fn save(&self, managed: &ManagedPaths, instance: &InstanceId) -> Result<(), ModError> {
+        Self::load(managed, instance)?;
+        let path = managed
+            .instance_paths(instance)
+            .root()
+            .join("mods-disabled.json");
+        let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+        let bytes = serde_json::to_vec_pretty(self).map_err(|e| ModError::State(e.to_string()))?;
+        if let Err(source) =
+            std::fs::write(&temporary, bytes).and_then(|()| std::fs::rename(&temporary, &path))
+        {
+            let _ = std::fs::remove_file(&temporary);
+            return Err(ModError::MutationIo { source });
+        }
+        Ok(())
+    }
 }
 
 /// Permanently removes one exact current user-owned local JAR, then returns
@@ -1231,8 +1555,17 @@ pub fn remove(
     with_mutation_lock(instance, || {
         let inventory = scan(managed, instance)?;
         let entry = resolve_mutable_entry(&inventory, entry_id, false)?;
+        dependency_blockers(&inventory, entry)?;
         let mods = validate_mods_directory(managed, instance)?;
         let target = validate_current_regular_file(&mods, &entry.file_name)?;
+        if let Some(hash) = &entry.sha256 {
+            verify_file(
+                &target,
+                &ArtifactDigest::parse(hash).map_err(|error| ModError::State(error.to_string()))?,
+                entry.size_bytes,
+            )
+            .map_err(|_| ModError::StaleEntry)?;
+        }
         std::fs::remove_file(target).map_err(|source| ModError::MutationIo { source })?;
         scan(managed, instance)
     })
@@ -1251,13 +1584,107 @@ fn resolve_mutable_entry<'a>(
     if entry.ownership == ModOwnership::LauncherManagedRequired {
         return Err(ModError::RequiredArtifact);
     }
-    if !entry.can_remove || (toggle && !entry.can_toggle) {
+    if (toggle && !entry.can_toggle) || (!toggle && !entry.can_remove) {
         return Err(ModError::UnsafeEntry);
     }
     Ok(entry)
 }
 
-fn validate_current_regular_file(mods: &Path, file_name: &str) -> Result<PathBuf, ModError> {
+fn dependency_blockers(inventory: &ModInventory, target: &ModEntry) -> Result<(), ModError> {
+    if !target.enabled {
+        return Ok(());
+    }
+    let ids: HashSet<&str> = target
+        .metadata
+        .iter()
+        .flat_map(|metadata| {
+            std::iter::once(metadata.id.as_str())
+                .chain(metadata.nested_mod_ids.iter().map(String::as_str))
+        })
+        .collect();
+    let mut blockers = Vec::new();
+    for entry in inventory
+        .entries
+        .iter()
+        .filter(|entry| entry.enabled && entry.entry_id != target.entry_id)
+    {
+        if let Some(meta) = &entry.metadata {
+            for relation in &meta.depends {
+                if ids.contains(relation.mod_id.as_str())
+                    && !inventory
+                        .entries
+                        .iter()
+                        .filter(|alternative| {
+                            alternative.enabled && alternative.entry_id != target.entry_id
+                        })
+                        .filter_map(|alternative| alternative.metadata.as_ref())
+                        .any(|alternative| {
+                            alternative.id == relation.mod_id
+                                || alternative.nested_mod_ids.contains(&relation.mod_id)
+                        })
+                {
+                    blockers.push(format!(
+                        "{} requires {}",
+                        entry.display_name, relation.mod_id
+                    ));
+                }
+            }
+        }
+        if let (Some(parent), Some(dependency)) = (&entry.provenance, &target.provenance)
+            && parent.requires.contains(&dependency.identity())
+        {
+            blockers.push(format!(
+                "{} requires this provider artifact",
+                entry.display_name
+            ));
+        }
+    }
+    if blockers.is_empty() {
+        Ok(())
+    } else {
+        Err(ModError::DependencyBlocked(blockers.join("; ")))
+    }
+}
+
+pub(crate) fn validate_provider_removals(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    removed: &[ProviderRecord],
+) -> Result<(), ModError> {
+    if !removed
+        .iter()
+        .any(|record| record.content_type == ContentType::Mod)
+    {
+        return Ok(());
+    }
+    let mut inventory = scan(managed, instance)?;
+    let targets: Vec<_> = inventory
+        .entries
+        .iter()
+        .filter(|entry| {
+            entry.provenance.as_ref().is_some_and(|record| {
+                removed
+                    .iter()
+                    .any(|removed| removed.identity() == record.identity())
+            })
+        })
+        .cloned()
+        .collect();
+    inventory.entries.retain(|entry| {
+        !targets
+            .iter()
+            .any(|target| target.entry_id == entry.entry_id)
+    });
+    for target in targets {
+        dependency_blockers(&inventory, &target)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_current_regular_file(
+    mods: &Path,
+    file_name: &str,
+) -> Result<PathBuf, ModError> {
     validate_file_name(file_name)?;
     let target = mods.join(file_name);
     let metadata = std::fs::symlink_metadata(&target).map_err(|_| ModError::StaleEntry)?;
@@ -1309,6 +1736,24 @@ fn opaque_id(material: &[u8]) -> String {
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+fn file_digest(path: &Path) -> Result<String, std::io::Error> {
+    let mut input = std::fs::File::open(path)?;
+    let mut hash = sha2::Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let bytes = input.read(&mut buffer)?;
+        if bytes == 0 {
+            break;
+        }
+        hash.update(&buffer[..bytes]);
+    }
+    Ok(hash
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
+}
+
 #[cfg(windows)]
 fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
     use std::os::windows::fs::MetadataExt as _;
@@ -1322,6 +1767,7 @@ fn is_reparse_point(_metadata: &std::fs::Metadata) -> bool {
 
 #[derive(Debug)]
 pub enum ModError {
+    DependencyBlocked(String),
     DirectoryMissing,
     DirectoryRead { source: std::io::Error },
     Boundary { source: std::io::Error },
@@ -1340,6 +1786,7 @@ pub enum ModError {
 impl ModError {
     pub fn code(&self) -> &'static str {
         match self {
+            Self::DependencyBlocked(_) => "mod_dependency_blocked",
             Self::DirectoryMissing | Self::DirectoryRead { .. } | Self::Boundary { .. } => {
                 "mod_inventory_unavailable"
             }
@@ -1358,6 +1805,9 @@ impl ModError {
 impl fmt::Display for ModError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::DependencyBlocked(reason) => {
+                write!(formatter, "Cannot change this mod: {reason}.")
+            }
             Self::DirectoryMissing => {
                 write!(formatter, "the instance mods directory does not exist")
             }
@@ -1413,7 +1863,119 @@ impl std::error::Error for ModError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn toggle_receipt_failure_rolls_back_exact_bytes_and_filename() {
+        let fixture = Fixture::new("toggle-rollback");
+        jar(
+            &fixture.mods().join("rollback.jar"),
+            Some(&metadata("rollback", "Rollback", "{}")),
+        );
+        let before = std::fs::read(fixture.mods().join("rollback.jar")).unwrap();
+        let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+        let entry = inventory
+            .entries
+            .iter()
+            .find(|entry| entry.file_name == "rollback.jar")
+            .unwrap();
+        let result = set_enabled_with_commit(
+            &fixture.managed,
+            &fixture.instance,
+            &entry.entry_id,
+            false,
+            |_| Err(ModError::State("injected receipt write failure".into())),
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            std::fs::read(fixture.mods().join("rollback.jar")).unwrap(),
+            before
+        );
+        assert!(!fixture.mods().join("rollback.jar.disabled").exists());
+        assert!(
+            scan(&fixture.managed, &fixture.instance)
+                .unwrap()
+                .entries
+                .iter()
+                .find(|entry| entry.file_name == "rollback.jar")
+                .unwrap()
+                .enabled
+        );
+    }
     use std::io::Write as _;
+
+    #[test]
+    fn disabling_known_dependency_is_blocked_and_changed_disabled_bytes_never_activate() {
+        let fixture = Fixture::new("dependency-toggle");
+        jar(
+            &fixture.mods().join("api.jar"),
+            Some(br#"{"id":"fabric-api","version":"1"}"#),
+        );
+        jar(
+            &fixture.mods().join("parent.jar"),
+            Some(br#"{"id":"parent","depends":{"fabric-api":"*"}}"#),
+        );
+        let before = std::fs::read(fixture.mods().join("api.jar")).unwrap();
+        let snapshot = scan(&fixture.managed, &fixture.instance).unwrap();
+        let api = snapshot
+            .entries
+            .iter()
+            .find(|entry| {
+                entry
+                    .metadata
+                    .as_ref()
+                    .is_some_and(|meta| meta.id == "fabric-api")
+            })
+            .unwrap();
+        assert_eq!(
+            set_enabled(&fixture.managed, &fixture.instance, &api.entry_id, false)
+                .unwrap_err()
+                .code(),
+            "mod_dependency_blocked"
+        );
+        assert_eq!(
+            std::fs::read(fixture.mods().join("api.jar")).unwrap(),
+            before
+        );
+        let parent = snapshot
+            .entries
+            .iter()
+            .find(|entry| {
+                entry
+                    .metadata
+                    .as_ref()
+                    .is_some_and(|meta| meta.id == "parent")
+            })
+            .unwrap();
+        set_enabled(&fixture.managed, &fixture.instance, &parent.entry_id, false).unwrap();
+        let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+        let api = inventory
+            .entries
+            .iter()
+            .find(|entry| entry.file_name == "api.jar")
+            .unwrap();
+        let disabled =
+            set_enabled(&fixture.managed, &fixture.instance, &api.entry_id, false).unwrap();
+        let entry = disabled
+            .entries
+            .iter()
+            .find(|entry| entry.file_name == "api.jar.disabled")
+            .unwrap();
+        std::fs::write(fixture.mods().join("api.jar.disabled"), b"changed").unwrap();
+        assert!(set_enabled(&fixture.managed, &fixture.instance, &entry.entry_id, true).is_err());
+        assert!(!fixture.mods().join("api.jar").exists());
+        std::fs::write(fixture.mods().join("api.jar.disabled"), &before).unwrap();
+        let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+        let entry = inventory
+            .entries
+            .iter()
+            .find(|entry| entry.file_name == "api.jar.disabled")
+            .unwrap();
+        set_enabled(&fixture.managed, &fixture.instance, &entry.entry_id, true).unwrap();
+        assert_eq!(
+            std::fs::read(fixture.mods().join("api.jar")).unwrap(),
+            before
+        );
+    }
 
     struct Fixture {
         root: PathBuf,
@@ -1756,12 +2318,37 @@ mod tests {
             entry.provenance.as_ref().unwrap().project_id,
             "project-opaque"
         );
-        assert!(!entry.can_toggle && !entry.can_remove);
+        assert!(entry.can_toggle && !entry.can_remove);
+        let before = std::fs::read(
+            fixture
+                .managed
+                .instance_paths(&fixture.instance)
+                .root()
+                .join("content-managed.json"),
+        )
+        .unwrap();
+        let disabled =
+            set_enabled(&fixture.managed, &fixture.instance, &entry.entry_id, false).unwrap();
+        assert!(!disabled.entries[0].enabled);
+        assert_eq!(disabled.entries[0].provenance.as_ref(), Some(&record));
+        let enabled = set_enabled(
+            &fixture.managed,
+            &fixture.instance,
+            &disabled.entries[0].entry_id,
+            true,
+        )
+        .unwrap();
+        assert!(enabled.entries[0].enabled);
         assert_eq!(
-            set_enabled(&fixture.managed, &fixture.instance, &entry.entry_id, false)
-                .unwrap_err()
-                .code(),
-            "mod_entry_unsafe"
+            std::fs::read(
+                fixture
+                    .managed
+                    .instance_paths(&fixture.instance)
+                    .root()
+                    .join("content-managed.json")
+            )
+            .unwrap(),
+            before
         );
         std::fs::write(&path, b"tampered").unwrap();
         let tampered = scan(&fixture.managed, &fixture.instance).unwrap();

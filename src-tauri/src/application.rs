@@ -134,6 +134,7 @@ pub struct InstanceSummary {
     /// validation on demand rather than on every state load.
     state: String,
     aurora: Option<crate::instances::platform::AuroraPin>,
+    aurora_content_state: Option<String>,
     minecraft_version: String,
     platform: crate::instances::platform::PlatformPin,
     /// The desired configuration, verbatim. The UI edits a draft and sends
@@ -148,6 +149,7 @@ impl InstanceSummary {
             display_name: record.display_name().to_owned(),
             state: record.state().as_str().to_owned(),
             aurora: record.installed().aurora.clone(),
+            aurora_content_state: None,
             minecraft_version: record.installed().minecraft_version.clone(),
             platform: record.installed().platform.clone(),
             configuration: InstanceConfigurationDto::from_configuration(record.configuration()),
@@ -295,6 +297,7 @@ impl From<crate::instance_mods::ModError> for CommandError {
         let code = error.code();
         eprintln!("[aurora-launcher] local mod operation failed ({code}): {error}");
         let message = match &error {
+            crate::instance_mods::ModError::DependencyBlocked(reason) => format!("This mod is needed by active content: {reason}. Disable the dependent mods first."),
             crate::instance_mods::ModError::DirectoryMissing
             | crate::instance_mods::ModError::DirectoryRead { .. } => {
                 "This instance's mods folder is unavailable. Check the folder and try Refresh."
@@ -526,7 +529,13 @@ pub fn get_launcher_state(app: AppHandle) -> Result<LauncherState, CommandError>
 
     let registry = InstanceRegistry::load_and_migrate(&managed_paths.instance_registry_file())?;
 
-    LauncherState::from_parts(loaded.into_config(), registry)
+    let mut state = LauncherState::from_parts(loaded.into_config(), registry)?;
+    for summary in &mut state.instances {
+        let id = crate::instances::InstanceId::new(summary.id.clone())?;
+        summary.aurora_content_state = crate::instance_mods::bootstrap_status(&managed_paths, &id)?
+            .or_else(|| summary.aurora.as_ref().map(|_| "missing".into()));
+    }
+    Ok(state)
 }
 
 /// Typed request for updating the launcher-wide appearance preferences.
@@ -1512,7 +1521,29 @@ pub struct CreateInstanceRequest {
     display_name: String,
     minecraft_version: String,
     loader: crate::instances::settings::LoaderConfiguration,
-    aurora_enabled: bool,
+    aurora_enabled: Option<bool>,
+}
+
+fn creation_aurora_choice(
+    manifest: &crate::distribution::ReleaseManifest,
+    minecraft: &str,
+    loader: &crate::instances::settings::LoaderConfiguration,
+    requested: Option<bool>,
+) -> bool {
+    requested.unwrap_or_else(|| match loader {
+        crate::instances::settings::LoaderConfiguration::Fabric { policy } => {
+            manifest.releases().iter().any(|release| {
+                release.minecraft_version() == minecraft
+                    && match policy {
+                        crate::instances::settings::LoaderPolicy::Automatic {} => true,
+                        crate::instances::settings::LoaderPolicy::Pinned { version } => {
+                            release.fabric_loader_version() == version
+                        }
+                    }
+            })
+        }
+        _ => false,
+    })
 }
 
 /// The loader policy as it crosses the command boundary.
@@ -1557,7 +1588,12 @@ pub async fn create_instance(
         String::new(),
         None,
     );
-    configuration.set_aurora_enabled(request.aurora_enabled);
+    configuration.set_aurora_enabled(creation_aurora_choice(
+        endpoints.release_manifest(),
+        configuration.minecraft_version(),
+        configuration.loader(),
+        request.aurora_enabled,
+    ));
 
     let record = crate::instances::lifecycle::create_instance(
         &managed_paths,
@@ -2341,46 +2377,11 @@ fn provider_state(
     managed: &ManagedPaths,
     instance: &crate::instances::InstanceId,
 ) -> Result<crate::instance_content::ContentState, CommandError> {
-    use crate::integrity::{ArtifactDigest, verify_file};
     let state = crate::instance_content::ContentState::load_and_migrate(managed, instance)?;
     for record in &state.entries {
-        let directory =
-            crate::instance_content::validate_directory(managed, instance, record.content_type)?;
-        let path = directory.join(&record.file_name);
-        let metadata = std::fs::symlink_metadata(&path).map_err(|_| {
-            CommandError::new(
-                "provider_content_collision",
-                "An installed provider file is missing or changed.",
-            )
+        crate::instance_content::validate_provider_file(managed, instance, record).map_err(|_| {
+            CommandError::new("provider_content_collision", "An installed provider file is missing, changed, or unsafe. Inspect local content before installing.")
         })?;
-        if !metadata.is_file() || metadata.file_type().is_symlink() {
-            return Err(CommandError::new(
-                "provider_content_collision",
-                "An installed provider file is not a regular file.",
-            ));
-        }
-        #[cfg(windows)]
-        if {
-            use std::os::windows::fs::MetadataExt as _;
-            metadata.file_attributes() & 0x400 != 0
-        } {
-            return Err(CommandError::new(
-                "provider_content_collision",
-                "An installed provider file is a reparse point.",
-            ));
-        }
-        let digest = ArtifactDigest::parse(&record.sha256).map_err(|_| {
-            CommandError::new(
-                "content_state_malformed",
-                "Provider content state has an invalid digest.",
-            )
-        })?;
-        if verify_file(&path, &digest, None).is_err() {
-            return Err(CommandError::new(
-                "provider_content_collision",
-                "An installed provider file is missing or changed. Inspect local content before installing.",
-            ));
-        }
     }
     Ok(state)
 }
@@ -2969,6 +2970,13 @@ fn resolve_removal_preview(
     let record = lifecycle_record(&state, request)?;
     let root = record.identity();
     let next = crate::instance_content::removal_state(&state, &root)?;
+    let removed: Vec<_> = state
+        .entries
+        .iter()
+        .filter(|record| next.find(&record.identity()).is_none())
+        .cloned()
+        .collect();
+    crate::instance_mods::validate_provider_removals(managed, &instance, &removed)?;
     let preview = ProviderRemovalPreview {
         root: LifecycleItem::from(record),
         delta: lifecycle_delta(&state, &next, &root),
@@ -4005,6 +4013,50 @@ pub async fn play_instance(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_instance_aurora_defaults_are_compatible_and_respect_explicit_off() {
+        use crate::instances::settings::{LoaderConfiguration, LoaderPolicy};
+        let manifest = crate::distribution::production_manifest().unwrap();
+        let release = &manifest.releases()[0];
+        let fabric = LoaderConfiguration::Fabric {
+            policy: LoaderPolicy::Automatic {},
+        };
+        assert!(creation_aurora_choice(
+            &manifest,
+            release.minecraft_version(),
+            &fabric,
+            None
+        ));
+        assert!(!creation_aurora_choice(
+            &manifest,
+            release.minecraft_version(),
+            &fabric,
+            Some(false)
+        ));
+        assert!(!creation_aurora_choice(
+            &manifest,
+            release.minecraft_version(),
+            &LoaderConfiguration::Vanilla {},
+            None
+        ));
+        assert!(!creation_aurora_choice(
+            &manifest,
+            "unsupported",
+            &fabric,
+            None
+        ));
+        assert!(!creation_aurora_choice(
+            &manifest,
+            release.minecraft_version(),
+            &LoaderConfiguration::Fabric {
+                policy: LoaderPolicy::Pinned {
+                    version: "incompatible".into()
+                }
+            },
+            None
+        ));
+    }
 
     #[test]
     fn provider_preview_fingerprint_changes_with_integrity_and_dependency_metadata() {

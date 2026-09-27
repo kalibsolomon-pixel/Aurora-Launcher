@@ -373,7 +373,22 @@ pub fn validate_provider_file(
     record: &ProviderRecord,
 ) -> Result<PathBuf, ContentError> {
     let directory = validate_directory(managed, instance, record.content_type)?;
-    let path = directory.join(&record.file_name);
+    let active = directory.join(&record.file_name);
+    let disabled = directory.join(format!("{}.disabled", record.file_name));
+    if record.content_type == ContentType::Mod
+        && std::fs::symlink_metadata(&active).is_ok()
+        && std::fs::symlink_metadata(&disabled).is_ok()
+    {
+        return Err(ContentError::Collision);
+    }
+    let path = if record.content_type == ContentType::Mod
+        && std::fs::symlink_metadata(&active)
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+    {
+        disabled
+    } else {
+        active
+    };
     let metadata = std::fs::symlink_metadata(&path).map_err(ContentError::Io)?;
     if !metadata.is_file() || metadata.file_type().is_symlink() || is_reparse_point(&metadata) {
         return Err(ContentError::UnsafePath);
@@ -1441,6 +1456,13 @@ fn apply_lifecycle_state_with_hooks(
                     .is_none_or(|old| !same_file(old, record))
             })
             .collect();
+        let removed_mods: Vec<_> = retired
+            .iter()
+            .filter(|record| next.find(&record.identity()).is_none())
+            .map(|record| (*record).clone())
+            .collect();
+        crate::instance_mods::validate_provider_removals(managed, instance, &removed_mods)
+            .map_err(|error| ContentError::DependencyBlocked(error.to_string()))?;
         if incoming.len() != acquired.len() {
             return Err(ContentError::StateMalformed(
                 "acquired graph does not match lifecycle state".into(),
@@ -1448,10 +1470,7 @@ fn apply_lifecycle_state_with_hooks(
         }
         let retired_paths: HashSet<_> = retired
             .iter()
-            .map(|record| {
-                validate_directory(managed, instance, record.content_type)
-                    .map(|dir| dir.join(&record.file_name))
-            })
+            .map(|record| validate_provider_file(managed, instance, record))
             .collect::<Result<_, _>>()?;
         let mut staged = Vec::<(PathBuf, PathBuf)>::new();
         let mut rollback = Vec::<RetiredFile>::new();
@@ -1481,6 +1500,17 @@ fn apply_lifecycle_state_with_hooks(
                     ));
                 }
                 let directory = ensure_directory(managed, instance, record.content_type)?;
+                if record.content_type == ContentType::Mod
+                    && current.entries.iter().any(|old| {
+                        old.identity() == record.identity()
+                            && validate_provider_file(managed, instance, old).is_ok_and(|path| {
+                                path.extension()
+                                    .is_some_and(|extension| extension == "disabled")
+                            })
+                    })
+                {
+                    return Err(ContentError::DependencyBlocked("Re-enable this mod before updating it. Removing a disabled mod is supported.".into()));
+                }
                 let target = directory.join(&record.file_name);
                 if !retired_paths.contains(&target)
                     && (std::fs::symlink_metadata(&target).is_ok()
@@ -1806,6 +1836,7 @@ fn is_reparse_point(_: &std::fs::Metadata) -> bool {
 
 #[derive(Debug)]
 pub enum ContentError {
+    DependencyBlocked(String),
     Io(std::io::Error),
     UnsafePath,
     StateMalformed(String),
@@ -1823,6 +1854,7 @@ pub enum ContentError {
 impl ContentError {
     pub fn code(&self) -> &'static str {
         match self {
+            Self::DependencyBlocked(_) => "mod_dependency_blocked",
             Self::Io(_) => "content_unavailable",
             Self::UnsafePath => "content_unsafe_path",
             Self::StateMalformed(_) | Self::StateVersion(_) => "content_state_malformed",
@@ -1840,6 +1872,7 @@ impl ContentError {
 impl fmt::Display for ContentError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::DependencyBlocked(reason) => formatter.write_str(reason),
             Self::Io(error) => write!(formatter, "content I/O failed: {error}"),
             Self::UnsafePath => formatter.write_str("content path is unsafe"),
             Self::StateMalformed(reason) => {
@@ -2227,6 +2260,46 @@ mod tests {
         .unwrap();
         assert_eq!(next.entries, vec![promoted]);
         assert_eq!(std::fs::read(path).unwrap(), bytes);
+    }
+
+    #[tokio::test]
+    async fn disabled_provider_removal_uses_verified_disabled_bytes_and_preserves_graph_rules() {
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        let state = install_api_parent(&fixture, &server).await;
+        let inventory = crate::instance_mods::scan(&fixture.managed, &fixture.instance).unwrap();
+        let parent = inventory
+            .entries
+            .iter()
+            .find(|entry| entry.file_name == "parent-a.jar")
+            .unwrap();
+        crate::instance_mods::set_enabled(
+            &fixture.managed,
+            &fixture.instance,
+            &parent.entry_id,
+            false,
+        )
+        .unwrap();
+        let record = state.find(&identity("AAAABBBB")).unwrap();
+        assert!(
+            validate_provider_file(&fixture.managed, &fixture.instance, record)
+                .unwrap()
+                .ends_with("parent-a.jar.disabled")
+        );
+        let next = remove_provider_graph(
+            &fixture.managed,
+            &fixture.instance,
+            &state,
+            &identity("AAAABBBB"),
+        )
+        .unwrap();
+        assert!(next.entries.is_empty());
+        assert!(
+            !fixture
+                .dir(ContentType::Mod)
+                .join("parent-a.jar.disabled")
+                .exists()
+        );
     }
 
     #[tokio::test]

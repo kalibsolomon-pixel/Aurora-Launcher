@@ -169,9 +169,23 @@ pub fn preview(
             "the current working configuration must validate before a transition",
         ));
     }
-    let retained = retained_files(managed, id)?;
-    for file in &retained {
-        verify(managed, id, file)?;
+    let mut retained = Vec::new();
+    for file in retained_files(managed, id)? {
+        let path = file_path(managed, id, &file)?;
+        match std::fs::symlink_metadata(&path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if std::fs::symlink_metadata(path.with_extension("jar.disabled")).is_ok() {
+                    return Err(invalid(
+                        "Re-enable disabled retained bootstrap content in Mods before changing the original Aurora configuration.",
+                    ));
+                }
+            }
+            Err(error) => return Err(invalid(error)),
+            Ok(_) => {
+                verify(managed, id, &file)?;
+                retained.push(file);
+            }
+        }
     }
     let inventory = instance_mods::scan(managed, id).map_err(invalid)?;
     let provider = instance_content::ContentState::load(managed, id).map_err(invalid)?;
@@ -299,7 +313,7 @@ pub fn preview(
                         .retain(|old| old.relative_path != file.relative_path);
                     let mut reused = file.clone();
                     reused.reason =
-                        "Reuse exact verified former launcher artifact; restore Required/Protected"
+                        "Reuse exact verified bootstrap artifact; it remains user controllable"
                             .into();
                     result.install.push(reused);
                 } else {
@@ -405,6 +419,45 @@ pub fn preview(
             }
         }
     }
+    // An explicit configuration change reconciles missing bootstrap artifacts
+    // without recreating them. Disabled bytes require a deliberate Mods action;
+    // this transaction never creates a second active copy beside them.
+    let mut present_removals = Vec::new();
+    for file in result.remove.drain(..) {
+        let path = file_path(managed, id, &file)?;
+        match std::fs::symlink_metadata(&path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if std::fs::symlink_metadata(path.with_extension("jar.disabled")).is_ok() {
+                    return Err(invalid(
+                        "Re-enable disabled bootstrap content in Mods before changing the original Aurora configuration.",
+                    ));
+                }
+                result.warnings.push(format!(
+                    "{} is already absent; it will not be recreated.",
+                    file.relative_path
+                ));
+            }
+            Err(error) => return Err(invalid(error)),
+            Ok(_) => present_removals.push(file),
+        }
+    }
+    result.remove = present_removals;
+    let mut present_retained = Vec::new();
+    for file in result.retain.drain(..) {
+        let path = file_path(managed, id, &file)?;
+        match std::fs::symlink_metadata(&path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if std::fs::symlink_metadata(path.with_extension("jar.disabled")).is_ok() {
+                    return Err(invalid(
+                        "Re-enable disabled retained bootstrap content in Mods before changing the original Aurora configuration.",
+                    ));
+                }
+            }
+            Err(error) => return Err(invalid(error)),
+            Ok(_) => present_retained.push(file),
+        }
+    }
+    result.retain = present_retained;
     for file in &result.remove {
         verify(managed, id, file)?;
         let name = file
