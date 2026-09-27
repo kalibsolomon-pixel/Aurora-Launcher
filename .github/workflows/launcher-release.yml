@@ -76,6 +76,9 @@ jobs:
   build:
     needs: resolve
     runs-on: windows-latest
+    env:
+      # Public Aurora Client application identity, embedded by Rust at compile time.
+      AURORA_DISCORD_APPLICATION_ID: '1553653987545317396'
     permissions:
       contents: read
     steps:
@@ -102,6 +105,7 @@ jobs:
       - name: Test, check, and build
         shell: pwsh
         run: |
+          if ($env:AURORA_DISCORD_APPLICATION_ID -ne '1553653987545317396') { throw 'Production Discord application configuration is missing or incorrect' }
           npm test
           if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed' }
           npm run check
