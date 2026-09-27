@@ -1,90 +1,108 @@
-# Phase D corrective acceptance — 2026-09-26
+# Final Phase D corrective acceptance — 2026-09-26
 
-This report replaces the rejected Accounts-page/Home design. The user waived further automated window-size checks, performed the game launch themselves, and confirmed that window sizes were fine and the game launched properly. All work remains local.
+Phase D remains unpublished. This final pass replaces the flat player presentation, supplies installed provider artwork, and corrects a generic nested-module conflict rule. Earlier account chooser/dialog acceptance remains valid. Spxcterr remains active; both existing account records are preserved. No credentials, authorization codes or launch arguments are included in this report.
 
-## Git
+## Git and repository preservation
 
-Starting HEAD: `3dad55c17228268bd88289c262f8cc95d20977e6`. Fetched origin/main and merge-base: `1bf2e14edea3ba706d2d34b5aa8c72f82987ccdf`; starting ahead/behind **5/0**. Fetch immediately before committing confirmed the same remote. The five existing Phase D commits (e591a38, 5c130d7, 9c967ed, 6cfc8c4, 3dad55c) are preserved without amendments. Corrective implementation commit: `27220fa` — `fix: center Home on instances and move accounts into shell dialog`. Documentation receives a separate corrective commit; exact final hashes are in the final response/external Git audit. Nothing is pushed.
+Starting HEAD: `4905206e1fe404dff3464d3e19dd6580a07b4e8f`. Fetched origin/main and merge-base: `1bf2e14edea3ba706d2d34b5aa8c72f82987ccdf`; starting ahead/behind **7/0**. The seven preceding Phase D commits, including `27220fa` and `4905206`, remain intact without amendments. Final fetch confirmed the same remote. New commits are recorded below; the documentation commit's hash is provided in the final response. Final ahead/behind after the six new commits is **13/0**. Nothing is pushed.
 
-## Account correction
+- `12c1363`: static 3D player beside the Home launch card.
+- `2d4656e`: installed provider artwork and typed native lookup.
+- `fd9ccf1`: generic install collision correction and structured conflict presentation.
+- `0598d1d`: inventory warnings use the same root/nested distinction. `a6231a5`: declared-conflict diagnostics preserve version constraints.
 
-Automatic reuse occurred because the authorization request lacked an interaction prompt. Add account now requests `prompt=select_account`, Microsoft's supported chooser behavior. Refresh grants omit prompt and remain noninteractive; Check account does not start an account chooser. PKCE S256, state, scopes, loopback validation, Xbox/Minecraft exchanges, Credential Manager and token redaction remain unchanged. [Microsoft authorization-code documentation](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow) describes the prompt behavior.
+Before each commit the original 153 tracked paths and all 606 protected diagnostic files were audited. No baseline file is missing; diagnostic bytes remain unchanged and untracked. No source deletion, dependency addition, lockfile change, identifier change or generated build/game/runtime staging occurred.
 
-Global navigation is Home, Instances, Settings and About. Bottom-left identity opens a shell-level native dialog over the current surface without navigation. Native modal focus entry/containment, inert background, Escape/Close and focus restoration apply. Inline removal confirmation consumes Escape first. Current identity, multiple accounts, switching, Add, Check, avatar refresh and confirmed local removal remain available. Signed-out identity opens the same dialog with Microsoft sign-in. No real account was removed.
+## Home and player
 
-The existing AccountsPage.svelte file is retained as live dialog contents only, with no page route, root-page import or duplicate hidden destination. Rust retains account/profile/auth authority.
+The functional instance card sits center-left, containing the integrated name/chevron picker, native configuration, status, Play, Manage Instance and exit information. Its former player column is gone. The substantial player stands separately in the right Home canvas without a second card or interactive control.
 
-## Home correction
+A purpose-built software canvas projects textured cuboid faces with perspective, depth sorting, face culling, shading, nearest texels and alpha. It draws only when validated skin/model data changes; there is no animation loop, WebGL context or engine dependency. Rust supplies validated RGBA skin pixels and authoritative classic/slim metadata. Classic arms are four pixels wide and slim arms three; legacy skins mirror the original limbs and omit nonexistent body overlays. Modern skins include distinct limbs, hat and outer body layers. The body is slightly angled, the head turns toward the content, and opposite arms/legs use a restrained static walking pose. Missing or malformed imagery uses a local 3D default player without affecting readiness or Play.
 
-The name/chevron picker is inside the primary instance card. Concise options show instance names/selection; the card shows authoritative Minecraft/platform/loader/Aurora configuration, status, Play and Manage Instance. The standalone selector, account row and Manage accounts action are removed. Workspace owns detailed management; sidebar shortcuts retain Workspace access without changing the Play target.
+Actual production Home and the open picker were inspected at 2048×1152 desktop dimensions without overlap or obvious overflow. The decorative player hides below the existing narrow-layout threshold so functional controls retain priority. Extensive window-size checks remain waived by the user.
 
-The right side shows a cosmetic full-body canvas from Rust-validated skin pixels. UV fixtures cover head, torso, arms, legs, classic/slim geometry, outer layers/transparency, modern distinct limbs and legacy mirrored limbs. Legacy opaque hat normalization preserves base-arm pixels. Existing PNG/locator/allocation restrictions and bounded native memory reuse remain. No frontend texture URL, disk image cache, dependency or heavyweight renderer was added. Missing/malformed skin uses a local player fallback without blocking Play.
+## Installed artwork
 
-Narrow layouts hide the decorative player before squeezing primary controls; the dialog has bounded sizing/scrolling. Empty-instance states remain coherent. Selection and Play retain the synchronized native C2 path, readiness authority and duplicate prevention.
+Persisted provider provenance already contains provider, project ID and version ID. Installed rows now use the native inventory's providerManaged classification and Modrinth project ID to request official project metadata through `get_modrinth_project_artwork`. No filenames, usernames, local mod IDs or frontend URLs identify projects. The native policy reuses Browse's HTTPS/CDN restrictions: `cdn.modrinth.com`, `/data/`, no userinfo, custom port or fragment.
 
-## Provider review — 9c967ed
+The frontend shares a bounded 128-entry promise cache with request deduplication, a ten-minute successful lookup lifetime and a one-minute failure lifetime. Browser image caching supplies image reuse. Request/image failures quietly show the existing M/J fallback; inventory and ownership never depend on artwork. Local, Unknown and required artifacts without Modrinth provenance do not acquire invented provider identity.
 
-Phase D exposed Vanilla local content. The panels previously requested Fabric-only provider lifecycle data despite native Modrinth capability being unavailable, creating a misleading Vanilla error. This commit checks the existing native capability first and skips only the unavailable lifecycle read, clearing stale entries/errors. Local inspection remains available; Fabric keeps its existing lifecycle path.
+The release displayed actual AppleSkin, Mod Menu and Placeholder API artwork. Fabric's `fabric.mod.json` icon declaration exists, but safely extracting/decoding embedded local images would introduce another archive/image boundary. That optional secondary source is deferred; Local/Unknown retain the safe glyph.
 
-The correction belongs to the exposed Phase D surface. It changes no Rust mutation/ownership, protected content, manifests, dependency previews or rollback and introduces no future loader/provider behavior. The full native capability/lifecycle/ownership/C2 suite passes; compiled configuration surfaces pass. Actual release Vanilla Mods showed local-only content, no Browse claim and no Fabric-only lifecycle error.
+## Exact Sodium false conflict
+
+The original selected production instance was reproduced safely before activation: Minecraft **1.21.11**, Fabric **0.19.5**, Aurora **2.1.2**. Its eleven mod files and provider document remained unchanged after the rejected old-release attempt. Native metadata inspection found no existing top-level Sodium and no target filename duplicate.
+
+The old provider activation rule combined every incoming root/nested Fabric identity and rejected any intersection with a required artifact's root/nested identities. Sodium bundles nine Fabric modules also bundled by the required Fabric API JAR:
+
+`fabric-api-base`, `fabric-block-view-api-v2`, `fabric-lifecycle-events-v1`, `fabric-renderer-api-v1`, `fabric-rendering-fluids-v1`, `fabric-rendering-v1`, `fabric-resource-loader-v0`, `fabric-resource-loader-v1`, `fabric-transitive-access-wideners-v1`.
+
+That nested-to-nested overlap was incorrectly treated as replacing a launcher-owned top-level artifact. The generic correction allows shared nested declarations to remain Fabric loader resolution inputs. Incoming root/root, root/nested and nested/root collisions remain blocked. Required artifact validation, provider hashes/provenance, exact filename containment/collision rules, compatibility checks, mutation locks and activation rollback remain authoritative. There is no Sodium/project-ID exception and no adoption, overwrite or removal of protected/local content.
+
+Live Installed inventory also exposed a descriptive warning based on different versions of those shared nested modules. The final inventory correction applies the same distinction: multiple roots or a root plus a nested declaration warn; nested-only declarations do not become fabricated top-level conflicts. The existing nested fixture now proves differing nested versions remain descriptive and that adding an actual root copy still warns for both artifacts. Declared-conflict messages also retain the metadata version constraint and state that Fabric evaluates applicability, instead of treating the mere presence of an ID as proof that its installed version conflicts. A fixture with an API outside the declared break range verifies this honest diagnostic; no version resolver or admission bypass is introduced.
+
+Native preflight acquires expected-digest artifacts into the trusted cache, reads bounded metadata and returns structured conflicting mod ID, filename, ownership and reason without activating instance content. Details renders those native fields and disables blocked previews. A quick-install collision records a blocked state with Details instead of leaving a misleading arrow. Browse's Installed state continues to use actual provider provenance, separately from local identity collisions. Activation repeats its safety checks. Genuine local/protected collision details are covered by deterministic native fixtures and compiled presentation tests; no artificial local JAR was added to the user's instances solely for a screenshot.
+
+## Sodium live acceptance
+
+Controlled target: **Aurora performance acceptance**, instance `6cd0cc88e87b43159051ab7b52edcdf3`, Minecraft **1.21.11**, Fabric **0.19.5**, Aurora **2.1.2**. Baseline: five mod files and seven provider records across mods, resource packs and shaders. Existing content was snapshotted before this test.
+
+Official Modrinth project **AANobbMI**, version **rkdTcxoT**, version number **mc1.21.11-0.8.14-fabric**, file **sodium-fabric-0.8.14+mc1.21.11.jar**. Official version metadata selects Minecraft 1.21.11/Fabric; the archive's loader requirement is satisfied by 0.19.5 and its Fabric API lower bound by installed 0.141.6. Modrinth declares no extra dependencies for this release. The native reviewed provider path proposed and installed exactly one file.
+
+Published SHA-512 and actual installed bytes:
+
+`04c43f9e8534b87a52c42ffd51b0e344d4ef92dc9cc52da33d13af6a18bf74b05380d2027f1e0db982698d0aff274c42741c1e21b313b0cd75ed3af005fc98d9`
+
+Recorded local SHA-256 and actual installed bytes:
+
+`fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d`
+
+Provenance recorded Modrinth/project/version/expected file hash/local hash, client-only Fabric compatibility and explicit retention. Browse became Installed; native inventory classified Sodium as Managed. The controlled mod directory contained six files, with no second Sodium artifact.
+
+The supervised native launch started process 22164. Its game log confirms `Loading Minecraft 1.21.11 with Fabric Loader 0.19.5`, `sodium 0.8.14+mc1.21.11`, `Loaded configuration file for Sodium: 36 options available, 0 override(s) found`, and `Aurora Client ready.` The user confirmed the title screen and performed normal Quit. The menu was also captured visually. The launcher then reported **Exit code 0**, **Exited**, content/runtime **Ready**, and Play available.
+
+The UI tool could not target the game's foreground window reliably; normal Quit was therefore performed by the user. A menu image obtained while the game occluded the launcher is explicitly indexed as game evidence, not Home evidence. This limit does not replace the native process/log/exit checks.
+
+After the final production rebuild and boot, Installed showed the authoritative Sodium artwork, Managed classification, and version-qualified diagnostic with no shared nested-module duplicate. The existing provider removal preview named only the test Sodium JAR; its approved native lifecycle removed exactly that file. Cleanup restored all five original mod files and the complete seven-entry provider document byte-for-byte, including resource packs/shaders. Production retains its eleven original mod files and byte-identical provider document. No duplicate Sodium or stale staging remains. Home restored the original `413e831999bd444a8e0df2d22fc6d134` selection and Ready; accounts, registry and appearance match their snapshots. The successful game launch preceded only descriptive inventory diagnostic changes; final boot, inventory and cleanup used the final MSI/NSIS release.
 
 ## Verification
 
 | Check | Result |
 |---|---|
-| Full Rust suite | **477 passed / 16 ignored / 0 failed**: 471 library + 6 integration |
-| Frontend suite | **92 passed / 0 failed**, 13 suites |
+| Full Rust suite | **483 passed / 16 ignored / 0 failed**: 477 library + 6 integration |
+| Frontend suite | **102 passed / 0 failed**, 13 suites |
 | Svelte/TypeScript | **0 errors / 0 warnings** |
 | Rust formatting / all-target check | Passed |
 | Frontend production build | Passed |
-| Tauri MSI/NSIS production build | Passed |
+| Tauri MSI/NSIS production build | Passed; 1.0.0 MSI and NSIS artifacts |
 | Version contract | **1.0.0**, passed |
+| Real production boot | Passed from the repository release executable |
 | Whitespace / preservation audits | Passed |
-| Real production boot | Passed; earlier corrective launcher normal close returned exit 0 |
 
-Exact authorization URL/security coverage and refresh-grant prompt exclusion pass. Native additions cover legacy normalization and full-body cache corruption; all previous tests remain. Five pixel fixtures cover UVs, slim geometry, legacy mirroring, all outer layers and malformed fallback. Compiled Svelte tests cover modal state without navigation, signed-out surfaces, account commands, integrated selection, account-row removal, configuration/fallback and existing Play targeting/races.
+Six new native cases cover shared nested activation, local/root identity collision, protected-root collision, read-only preflight, restricted artwork lookup and version-qualified conflict diagnostics. The full prior ownership, tamper, filename, compatibility, C1/C2 transition, capability, launch, nested parser, avatar and OAuth tests remain. Frontend additions cover cuboid/raster UVs, slim/legacy/overlays/fallback, outside-card composition, artwork identity/cache/failure and native conflict details. The final warning correction re-runs the full Rust suite and release build; frontend sources are unchanged after their passing checks.
 
-## Live release acceptance and limits
+The review of `9c967ed` remains unchanged: native capability gates unsupported lifecycle reads while local inventory stays available. This pass preserves that gate and does not broaden supported platform/content activation. Account selection still uses the earlier explicit Microsoft chooser; refresh remains noninteractive. Both accounts are retained.
 
-The repository release executable was booted directly without installing over the user's older shortcut. Final-build Add account from signed-in state opened the actual Microsoft **Choose an account** interaction with **Sign in with a different account**, rather than silently completing. Cancellation safely preserved the original identity. Browser evidence is cropped to interaction labels, excluding URLs/codes/remembered-account details; no authentication-dialog input was automated.
+## Screenshot and evidence index
 
-The user added **WWolfram** during acceptance. Native switching between both real accounts succeeded with distinct heads. Per explicit user preference, **Spxcterr is restored and active**, with both records preserved. Dialog behavior was checked over Home, Workspace and Settings, including Close, Escape, keyboard entry, inert background and focus restoration.
+Evidence root: `C:\Users\kalib\AppData\Local\Temp\aurora-phase-d-final-evidence` (outside Git).
 
-Vanilla/no-Aurora, Fabric/no-Aurora and Fabric+Aurora Home selections all reached Ready with accurate configurations, integrated selection and matching Manage Instance destinations. Selection-only comparison before gameplay and later user content interaction found **19,347 instance files unchanged and registry byte-identical**. Selection did not reinstall or alter content.
+- `home-3d-original.jpg`: substantial angled active skin outside the functional card at desktop dimensions.
+- `home-3d-picker.jpg`: integrated picker open with the player outside the card.
+- `installed-provider-artwork.jpg`: actual provider icons and unchanged Required/Managed ownership presentation.
+- `before-sodium-rejection.txt` / `.jpg`: old-release rejection on the original instance; text retains the transient toast.
+- `sodium-installable-preview.jpg`: native compatible one-file preview with no false blocker.
+- `sodium-browse-installed.jpg`: provider installation changes Browse to Installed.
+- `sodium-installed-artwork.jpg`: final-release Sodium artwork, Managed ownership and native version-qualified declaration.
+- `sodium-only-removal-preview.jpg` / `sodium-removed.jpg`: native one-file cleanup preview and absent test mod.
+- `home-3d-restored-final.jpg`: final release, original selection restored, Ready and active Spxcterr.
+- `sodium-game-menu-observed.jpg`: actual Aurora/Minecraft menu observed while it occluded the launcher; not launcher evidence.
+- `sodium-exit-zero-ready.jpg` / `.txt`: native process exit 0 and returned readiness.
+- `sodium-installed-provenance.json`, `sodium-installed-hashes.json`, `sodium-root-cause.json`: exact identity, hashes and nested-module diagnosis.
+- `rust-tests-final.txt`, `rust-check-final.txt`, `frontend-tests.txt`, `frontend-check.txt`, `production-build-final.txt`: final automated/build results.
+- `restoration-proof.json`: five/seven controlled baseline, eleven production mods, byte-identical provider/account/registry records and unchanged appearance.
+- Baseline inventories/hashes and preservation audit scripts: non-secret proof of retained repository/instance state.
 
-The user performed the final game launch and confirmed success and acceptable window sizes. The original 1.21.11 Fabric+Aurora instance's new log independently records:
+## Deferred scope
 
-```text
-[19:26:04] [main/INFO]: Loading Minecraft 1.21.11 with Fabric Loader 0.19.5
-[19:26:10] [Render thread/INFO]: Aurora Client ready.
-[19:26:26] [Render thread/INFO]: Stopping!
-```
-
-Afterward no managed game window remained and Workspace displayed Ready. Intermediate Starting/Running, disabled duplicate Play, game menu and supervised game exit code were **not captured during this user-operated corrective run**; Stopping alone does not prove exit 0. They retain deterministic coverage and earlier Phase D live evidence, which is not represented as a new corrective observation. Vanilla/Fabric-without-Aurora received Home inspection but no new live launches. Further sizing checks and narrow screenshots were explicitly waived; no unperformed observations are claimed.
-
-Final read-only checks confirm the original selected instance, full launcher configuration (OLED/custom accent) and registry are byte-identical to starting snapshots. Both accounts remain, Spxcterr selected. User-driven content interactions and game writes are preserved, never rolled back.
-
-## Evidence
-
-All corrective files are outside Git at `C:\Users\kalib\AppData\Local\Temp\aurora-phase-d-corrective-evidence`. User screenshots are before-change references.
-
-| Filename | Purpose |
-|---|---|
-| home-aurora-player.jpg | Revised Fabric+Aurora Home/full-body player |
-| home-vanilla.jpg; home-fabric-no-aurora.jpg | Other accurate Ready configurations |
-| integrated-picker-open.jpg | Concise integrated picker/readable options |
-| account-dialog-home.jpg | Bottom-left modal over Home |
-| account-dialog-workspace-two-accounts.jpg; account-dialog-final-two-accounts.jpg | Workspace modal/both identities/restored Spxcterr |
-| account-dialog-settings.jpg; account-keyboard-focus.jpg | Settings overlay/keyboard focus |
-| browser-choose-account-heading.jpg; browser-different-account-option.jpg | Actual final-build chooser, privacy-cropped |
-| account-awaiting-browser.jpg; account-after-cancel.jpg | Native progress/safe cancellation |
-| workspace-aurora.jpg; workspace-fabric.jpg; vanilla-local-content.jpg | Management entry/provider capability |
-| selection-invariance.txt; user-launch-aurora-log.txt | Content invariance/new ready-stop log |
-| rust-tests.txt; rust-check.txt; frontend-tests.txt; frontend-check.txt; production-build.txt | Automated/build results |
-| production-exit.txt | Earlier corrective launcher normal close, exit 0 |
-
-## Repository safety and deferred work
-
-Baseline: **148 tracked files**, **606 protected untracked diagnostics**. Precommit audits compare every original tracked path and all 606 SHA-256 values. No tracked deletion or missing baseline file occurred; diagnostics remain unchanged/untracked. Root docs, manifests, lockfiles, frontend metadata and native configuration remain present. No generated build/game/runtime data or screenshots are staged. No broad cleanup, git clean, credential-file restore, .minecraft access or user-content rollback occurred. The second account was added by the user.
-
-No Forge, NeoForge, Quilt, CurseForge, cross-process locking, durable crash recovery, automatic dependency conflict resolution, per-instance account binding, instance deletion or unrelated future work began. Stop after corrective Phase D for review. Do not publish.
+No Forge, NeoForge, Quilt, CurseForge, modpack compatibility framework, cross-process locking, durable crash recovery, animation engine or unrelated feature work began. Embedded Local/Unknown JAR icons remain deferred. No publication or push is authorized or performed.
