@@ -42,7 +42,7 @@ sha2 = "0.10"
 # Phase 7's `process` + `time` bound structured managed-Java diagnostics;
 # Phase 8's `macros` provides the `select!` used to race the OAuth callback
 # receiver against login cancellation and timeout.
-tokio = { version = "1", default-features = false, features = ["fs", "io-util", "macros", "process", "rt", "sync", "time"] }
+tokio = { version = "1", default-features = false, features = ["fs", "io-util", "macros", "net", "process", "rt", "sync", "time"] }
 url = "2"
 # Instance identifier generation (Phase 6): opaque, collision-resistant UUIDv4
 # in the canonical simple (hyphen-less) lowercase-hex form. Focused and

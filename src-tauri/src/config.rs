@@ -13,12 +13,14 @@ use serde::{Deserialize, Serialize};
 use crate::appearance::AppearancePreferences;
 use crate::instances::InstanceId;
 
-/// The only launcher-configuration schema version this launcher understands.
+/// Schema 3 adds declarative Home widgets and opt-in Discord preferences.
+/// Schemas 1 and 2 migrate explicitly; malformed documents remain untouched.
+/// The current launcher-configuration schema version.
 ///
 /// Version 2 added the launcher-wide appearance preferences. Version 1 files
 /// (selected instance only) migrate deterministically on load with the
 /// default appearance; anything else fails deliberately.
-pub const CONFIG_SCHEMA_VERSION: u32 = 2;
+pub const CONFIG_SCHEMA_VERSION: u32 = 3;
 /// The schema version before appearance preferences existed.
 const LEGACY_CONFIG_SCHEMA_VERSION: u32 = 1;
 
@@ -32,6 +34,8 @@ pub struct LauncherConfig {
     schema_version: u32,
     selected_instance_id: Option<InstanceId>,
     appearance: AppearancePreferences,
+    home_widgets: crate::home_widgets::HomeLayout,
+    discord: crate::discord::DiscordPreferences,
 }
 
 impl Default for LauncherConfig {
@@ -40,6 +44,8 @@ impl Default for LauncherConfig {
             schema_version: CONFIG_SCHEMA_VERSION,
             selected_instance_id: None,
             appearance: AppearancePreferences::new(),
+            home_widgets: Default::default(),
+            discord: Default::default(),
         }
     }
 }
@@ -71,6 +77,19 @@ impl LauncherConfig {
         self.appearance = appearance;
     }
 
+    pub fn home_widgets(&self) -> &crate::home_widgets::HomeLayout {
+        &self.home_widgets
+    }
+    pub fn set_home_widgets(&mut self, layout: crate::home_widgets::HomeLayout) {
+        self.home_widgets = layout;
+    }
+    pub fn discord(&self) -> &crate::discord::DiscordPreferences {
+        &self.discord
+    }
+    pub fn set_discord(&mut self, preferences: crate::discord::DiscordPreferences) {
+        self.discord = preferences;
+    }
+
     /// Parses and validates a configuration from JSON text.
     ///
     /// Schema 1 (the pre-appearance shape) migrates deterministically: the
@@ -94,6 +113,17 @@ impl LauncherConfig {
                 serde_json::from_value::<Self>(document)
                     .map_err(|error| ConfigError::Malformed(error.to_string()))?
             }
+            2 => {
+                let legacy: AppearanceLauncherConfig = serde_json::from_value(document)
+                    .map_err(|error| ConfigError::Malformed(error.to_string()))?;
+                Self {
+                    schema_version: CONFIG_SCHEMA_VERSION,
+                    selected_instance_id: legacy.selected_instance_id,
+                    appearance: legacy.appearance,
+                    home_widgets: Default::default(),
+                    discord: Default::default(),
+                }
+            }
             version if version == u64::from(LEGACY_CONFIG_SCHEMA_VERSION) => {
                 let legacy: LegacyLauncherConfig = serde_json::from_value(document)
                     .map_err(|error| ConfigError::Malformed(error.to_string()))?;
@@ -101,6 +131,8 @@ impl LauncherConfig {
                     schema_version: CONFIG_SCHEMA_VERSION,
                     selected_instance_id: legacy.selected_instance_id,
                     appearance: AppearancePreferences::new(),
+                    home_widgets: Default::default(),
+                    discord: Default::default(),
                 }
             }
             found => {
@@ -118,6 +150,10 @@ impl LauncherConfig {
             });
         }
 
+        config
+            .home_widgets
+            .validate()
+            .map_err(|detail| ConfigError::Malformed(detail.into()))?;
         Ok(Self {
             appearance: config.appearance.normalized(),
             ..config
@@ -131,6 +167,13 @@ impl LauncherConfig {
         json.push('\n');
         json
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppearanceLauncherConfig {
+    selected_instance_id: Option<InstanceId>,
+    appearance: AppearancePreferences,
 }
 
 /// The schema-1 configuration shape (before appearance preferences).
@@ -267,6 +310,69 @@ impl std::error::Error for ConfigError {
 mod tests {
     use super::*;
 
+    #[test]
+    fn schema_two_migration_preserves_unrelated_preferences_and_is_idempotent() {
+        let json = r##"{"schemaVersion":2,"selectedInstanceId":"aurora-default","appearance":{"theme":"oled","accent":{"type":"custom","hex":"#7300d1"}}}"##;
+        let config = LauncherConfig::from_json(json).unwrap();
+        assert_eq!(
+            config.selected_instance_id().unwrap().as_str(),
+            "aurora-default"
+        );
+        assert_eq!(config.appearance().theme, "oled");
+        assert_eq!(
+            config.home_widgets(),
+            &crate::home_widgets::HomeLayout::default()
+        );
+        assert!(!config.discord().enabled);
+        assert_eq!(
+            LauncherConfig::from_json(&config.to_json()).unwrap(),
+            config
+        );
+    }
+
+    #[test]
+    fn layout_and_privacy_changes_preserve_selection_appearance_and_unknown_ids() {
+        let mut config = LauncherConfig::default();
+        config.set_selected_instance_id(Some(InstanceId::new("selected").unwrap()));
+        let appearance = config.appearance().clone();
+        let mut layout = config.home_widgets().clone();
+        layout.widgets.swap(0, 1);
+        layout.widgets[0].size = crate::home_widgets::WidgetSize::Large;
+        layout.widgets[1].enabled = false;
+        layout.widgets.push(crate::home_widgets::WidgetPlacement {
+            id: "future-widget".into(),
+            enabled: true,
+            size: crate::home_widgets::WidgetSize::Small,
+        });
+        config.set_home_widgets(layout.clone());
+        config.set_discord(crate::discord::DiscordPreferences {
+            enabled: true,
+            instance_name: true,
+            ..Default::default()
+        });
+        let loaded = LauncherConfig::from_json(&config.to_json()).unwrap();
+        assert_eq!(loaded.home_widgets(), &layout);
+        assert_eq!(loaded.appearance(), &appearance);
+        assert_eq!(loaded.selected_instance_id().unwrap().as_str(), "selected");
+        assert!(loaded.discord().instance_name);
+        assert!(!loaded.discord().elapsed_time);
+    }
+
+    #[test]
+    fn malformed_widget_document_is_never_reset_or_overwritten() {
+        let directory = test_directory("aurora-config-malformed-widget");
+        let path = directory.join("config.json");
+        let mut document = serde_json::to_value(LauncherConfig::default()).unwrap();
+        document["homeWidgets"]["widgets"][2]["size"] = "large".into();
+        let damaged = document.to_string();
+        std::fs::write(&path, &damaged).unwrap();
+        assert!(matches!(
+            load_or_initialize(&path),
+            Err(ConfigError::Malformed(_))
+        ));
+        assert_eq!(std::fs::read_to_string(path).unwrap(), damaged);
+    }
+
     fn test_directory(name: &str) -> PathBuf {
         let directory = std::env::temp_dir()
             .join(name)
@@ -289,6 +395,8 @@ mod tests {
         let config = LauncherConfig {
             schema_version: CONFIG_SCHEMA_VERSION,
             selected_instance_id: Some(InstanceId::new("aurora-default").unwrap()),
+            home_widgets: Default::default(),
+            discord: Default::default(),
             appearance: AppearancePreferences {
                 theme: "oled".to_owned(),
                 accent: crate::appearance::AccentSelection::Custom {
@@ -314,7 +422,7 @@ mod tests {
     fn serializes_to_inspectable_camel_case_json() {
         let json = LauncherConfig::default().to_json();
 
-        assert!(json.contains("\"schemaVersion\": 2"));
+        assert!(json.contains("\"schemaVersion\": 3"));
         assert!(json.contains("\"selectedInstanceId\": null"));
         assert!(json.contains("\"appearance\": {"));
         assert!(json.contains("\"theme\": \"aurora-dark\""));
@@ -337,15 +445,15 @@ mod tests {
 
     #[test]
     fn unsupported_schema_versions_fail_deliberately() {
-        let json = r#"{ "schemaVersion": 3, "selectedInstanceId": null }"#;
+        let json = r#"{ "schemaVersion": 4, "selectedInstanceId": null }"#;
 
         let error = LauncherConfig::from_json(json).unwrap_err();
 
         assert!(matches!(
             error,
             ConfigError::UnsupportedSchema {
-                found: 3,
-                supported: 2
+                found: 4,
+                supported: 3
             }
         ));
     }
@@ -366,7 +474,7 @@ mod tests {
         assert_eq!(config.appearance(), &AppearancePreferences::new());
         let reserialized = LauncherConfig::from_json(&config.to_json()).unwrap();
         assert_eq!(reserialized, config);
-        assert!(config.to_json().contains("\"schemaVersion\": 2"));
+        assert!(config.to_json().contains("\"schemaVersion\": 3"));
     }
 
     #[test]
@@ -461,6 +569,8 @@ mod tests {
         let updated = LauncherConfig {
             schema_version: CONFIG_SCHEMA_VERSION,
             selected_instance_id: Some(InstanceId::new("beta-playground").unwrap()),
+            home_widgets: Default::default(),
+            discord: Default::default(),
             appearance: AppearancePreferences {
                 theme: "midnight".to_owned(),
                 accent: crate::appearance::AccentSelection::Preset {

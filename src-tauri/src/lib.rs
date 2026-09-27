@@ -4,9 +4,11 @@ pub mod aurora;
 pub mod auth;
 pub mod cache;
 pub mod config;
+pub mod discord;
 pub mod distribution;
 pub mod downloads;
 pub mod fabric;
+pub mod home_widgets;
 pub mod install;
 pub mod instance_content;
 pub mod instance_mods;
@@ -26,10 +28,31 @@ mod test_support;
 pub fn run() {
     eprintln!("[aurora-launcher] starting native backend");
 
-    tauri::Builder::default()
+    use tauri::Manager;
+    let app = tauri::Builder::default()
+        .setup(|app| {
+            // Optional integration failure never changes startup or Play authority.
+            if let Ok(root) = app.path().app_local_data_dir() {
+                if let Ok(paths) = crate::paths::ManagedPaths::from_app_local_data_dir(root) {
+                    if let Ok(config) = crate::config::load(&paths.config_file()) {
+                        crate::discord::initialize(
+                            app.handle().clone(),
+                            config.unwrap_or_default().discord().clone(),
+                        );
+                    }
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             application::get_application_status,
             application::get_launcher_state,
+            application::get_home_widgets,
+            application::set_home_widgets,
+            application::reset_home_widgets,
+            application::get_discord_state,
+            application::connect_discord,
+            application::set_discord_preferences,
             application::get_appearance,
             application::set_appearance,
             application::get_desktop_integration,
@@ -88,6 +111,11 @@ pub fn run() {
             application::get_launch_state,
             application::play_instance
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("failed to run Aurora Launcher");
+    app.run(|_, event| {
+        if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+            tauri::async_runtime::block_on(crate::discord::shutdown());
+        }
+    });
 }

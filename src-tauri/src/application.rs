@@ -564,6 +564,55 @@ pub async fn delete_instance(
     })?
 }
 
+/// Home layout and Discord preferences use the same registry/config write lock
+/// as selection, so unrelated preferences cannot be lost to concurrent writes.
+#[tauri::command]
+pub fn get_home_widgets(app: AppHandle) -> Result<crate::home_widgets::HomeLayout, CommandError> {
+    let paths = managed_paths(&app)?;
+    let config = crate::config::load(&paths.config_file())?.unwrap_or_default();
+    Ok(config.home_widgets().clone())
+}
+#[tauri::command]
+pub fn set_home_widgets(
+    app: AppHandle,
+    request: crate::home_widgets::HomeLayout,
+) -> Result<crate::home_widgets::HomeLayout, CommandError> {
+    request
+        .validate()
+        .map_err(|message| CommandError::new("home_widgets_invalid", message))?;
+    let paths = managed_paths(&app)?;
+    let _guard = crate::instances::lifecycle::registry_lock();
+    let mut config = crate::config::load(&paths.config_file())?.unwrap_or_default();
+    config.set_home_widgets(request.clone());
+    crate::config::save(&paths.config_file(), &config)?;
+    Ok(request)
+}
+#[tauri::command]
+pub fn reset_home_widgets(app: AppHandle) -> Result<crate::home_widgets::HomeLayout, CommandError> {
+    set_home_widgets(app, Default::default())
+}
+#[tauri::command]
+pub fn get_discord_state() -> crate::discord::DiscordState {
+    crate::discord::state()
+}
+#[tauri::command]
+pub async fn connect_discord() -> crate::discord::DiscordState {
+    crate::discord::connect().await
+}
+#[tauri::command]
+pub fn set_discord_preferences(
+    app: AppHandle,
+    request: crate::discord::DiscordPreferences,
+) -> Result<crate::discord::DiscordState, CommandError> {
+    let paths = managed_paths(&app)?;
+    let _guard = crate::instances::lifecycle::registry_lock();
+    let mut config = crate::config::load(&paths.config_file())?.unwrap_or_default();
+    config.set_discord(request.clone());
+    crate::config::save(&paths.config_file(), &config)?;
+    crate::discord::preferences_changed(request);
+    Ok(crate::discord::state())
+}
+
 /// Typed request for updating the launcher-wide appearance preferences.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -711,6 +760,7 @@ pub fn set_appearance(
         accent: request.accent,
     };
 
+    let _guard = crate::instances::lifecycle::registry_lock();
     let mut config = match crate::config::load(&managed_paths.config_file())? {
         Some(config) => config,
         None => crate::config::LauncherConfig::default(),
@@ -4025,10 +4075,31 @@ pub async fn play_instance(
 
         emit_launch_phase(&app, "startingProcess");
         let listener_app = app.clone();
+        let presence_name = record.display_name().to_owned();
+        let presence_version = record.installed().minecraft_version.clone();
+        let presence_platform = match &record.installed().platform {
+            crate::instances::platform::PlatformPin::Vanilla {} => "Vanilla",
+            _ => "Fabric",
+        }
+        .to_owned();
+        let presence_aurora = crate::instance_mods::bootstrap_status(&managed, &instance)
+            .ok()
+            .flatten()
+            .as_deref()
+            == Some("active");
         let snapshot = crate::launch::process::spawn_supervised(
             spec,
             managed.instance_paths(&instance).logs(),
             Arc::new(move |snapshot| {
+                crate::discord::process_changed(crate::discord::GameActivity {
+                    instance_id: snapshot.instance_id.clone(),
+                    instance_name: presence_name.clone(),
+                    minecraft_version: presence_version.clone(),
+                    platform: presence_platform.clone(),
+                    aurora_active: presence_aurora,
+                    status: snapshot.status,
+                    started_at: snapshot.started_at_unix_seconds,
+                });
                 let _ = listener_app.emit("launch-state", LaunchProcessDto::from(snapshot));
             }),
         )?;
@@ -4968,7 +5039,7 @@ mod tests {
 
         // The schema-1 input migrated deterministically to schema 2 with the
         // selection preserved and default appearance.
-        assert_eq!(state.config.schema_version, 2);
+        assert_eq!(state.config.schema_version, 3);
         assert_eq!(
             state.config.selected_instance_id.as_deref(),
             Some("aurora-default")
