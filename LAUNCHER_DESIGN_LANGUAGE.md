@@ -11,6 +11,14 @@ invent a new visual language. It synthesizes three inputs:
 - the realities of **this codebase**: a Tauri 2 desktop window (default 920×640,
   minimum 720×520), Svelte presentation only, and real Rust-owned launcher state.
 
+## Current final-pass composition
+
+The final pass supersedes the earlier Required/Protected row description for registered Aurora instances. Bootstrap mods are ordinary user-controllable rows with source evidence in Details; enabled provider/bootstrap rows do not carry permanent Required/Protected/No toggle clutter. Artwork, name/version, quiet author metadata, switch and overflow are the primary row; exact filenames, size, provenance, dependencies and updates/removal are disclosed on demand.
+
+The Home card owns an Aurora-styled listbox popover with visible selected/focus state and bounded scrolling. Creation uses the concise Aurora Client label and truthful compatibility/default behavior. Settings separates the original configured release from currently detected content, and puts irreversible deletion in a distinct danger area with name confirmation.
+
+Wide-window composition is screen-specific: Home 1480 px with launch/player columns, Instances and Workspace 1500 px with practical creation/content regions, launcher Settings 1360 px with parallel sections, and instance Settings with editor/tools regions. These are readable bounds rather than full-width stretched fields. Browse uses two result columns above 1150 px; other regions stack at their own breakpoints. Narrow windows retain the shell and ordinary control sizes. Pandora screenshots inform only grouping and density; Aurora's neutral surfaces, restrained accent and semantic tokens remain unchanged.
+
 ## A. Design principles
 
 1. **Functionality before decoration.** Every visual element explains or enables real

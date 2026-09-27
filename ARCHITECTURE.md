@@ -1,8 +1,42 @@
 # Aurora Launcher architecture
 
-The phase sections below record the architecture as it evolved. **Phases C1/C2** describe current instance and lifecycle capability boundaries; **Phase D** describes the current Home/account experience. They supersede earlier mandatory-Aurora, Fabric-only and diagnostic Home descriptions.
+The phase sections below record the architecture as it evolved. **The final pre-publication pass below** defines current bootstrap ownership, mod toggles, deletion and spatial behavior. **Phases C1/C2** and **Phase D** retain the history of the instance/lifecycle and Home/account boundaries. They supersede earlier mandatory-Aurora, Fabric-only and diagnostic Home descriptions.
 
 This document is the living source of truth for the launcher's boundaries. It distinguishes the foundation implemented now from future design so planned functionality is never mistaken for a working feature.
+
+## Final pre-publication ownership and lifecycle pass
+
+The launcher installs Aurora Client and its reviewed Fabric API initially; it does not permanently protect their presence. A registered instance's `aurora-installed.json` is strict bootstrap evidence: original release identity, paths, expected hashes and sizes. Registry schema 4 still records the original installed configuration and desired launcher intent. The new `auroraContentState` projection separately reports active, disabled, missing or modified Aurora bytes. It is read-only and never authorizes launch by itself.
+
+Existing registered instances migrate by an idempotent interpretation of their existing documents, without rewriting records or files. Exact original bytes become `launcherBootstrap`, user controllable and without fabricated provider identity. Genuine provider records retain their own identity and expected hash. Replaced bytes at an original bootstrap filename become Unknown, with explicit inspection required; arbitrary local replacements are never adopted as bootstrap or provider content. Unknown schemas and malformed documents still fail deliberately. Unregistered legacy component fixtures retain their required-file safeguards; application commands require registered instance membership.
+
+Deep validation continues to verify the installed game, release consistency, managed Java and real Rust-owned session boundaries. Missing or disabled original bootstrap JARs no longer make an otherwise usable Fabric instance incomplete. Active original files must still be contained regular files and match their expected size/hash; a proven provider replacement uses its own expected hash. Active known missing mod or provider dependencies block readiness. Validation, startup, restart and ordinary Play never acquire or restore mods. Fabric's normal loading uses the actual instance mods directory, independently of the deterministic Java classpath.
+
+Explicit reinstall remains a separate user action. Read-only preflight rejects disabled destinations and modified bytes before changing a ready record. It materializes only verified cache objects through a private copy and no-clobber activation. An existing compatible active provider-owned Fabric API is left intact; a restoration of Aurora does not add a duplicate API or change provider provenance. C2 previews and fingerprinted transactions remain deliberate changes to original configuration intent, with their existing staging, ownership and rollback checks. Absent bootstrap removals are reconciled without restoration. Disabled bootstrap/retained content must first be re-enabled in Mods for a configuration transition. Existing local/provider conflicts still require inspection; transitions never adopt them into bootstrap provenance.
+
+### Native mod toggles
+
+Every toggle accepts a validated instance identifier, an opaque scan token and a boolean, never an arbitrary path. Tokens include current file SHA-256 in addition to file metadata. Local, bootstrap and verified provider JARs can move between `.jar` and `.jar.disabled`. Provider records retain the original canonical filename, graph edges and hash; resolution also recognizes the verified disabled counterpart. Two simultaneous counterparts are a collision. A disabled provider may be removed through its ordinary graph transaction; update of a disabled target requires re-enabling first.
+
+`mods-disabled.json` is a strict schema-1 receipt mapping disabled single filenames to expected SHA-256. Scan and re-enable hash the disabled bytes across restarts; tampering blocks mutation. Old manually disabled files without a receipt remain local files whose current bytes are scanned, rather than acquiring invented historical verification. Receipts for subsequently removed files are harmless absent-file evidence and confer no ownership on active replacements.
+
+Disabling/removing an active mod checks known root/nested Fabric IDs and recorded provider edges against the remaining enabled inventory. Re-enable checks known missing requirements before activation. Version expressions remain descriptive where the existing bounded metadata boundary does not evaluate them; no new dependency solver is implied. Provider removal also checks active local/bootstrap dependents outside the provider graph at preview and commit. Unknown metadata is not guessed into a dependency declaration.
+
+Mutation uses a same-directory no-clobber hard link followed by removal of the source name, then atomic receipt commit and rescan. Ordinary write/rescan failure restores the original name, bytes and receipt. This temporarily gives the same instance-owned bytes two names, never links the shared cache into user content, and never overwrites a collision. It is process-local transactional behavior, not a durable crash journal or cross-process lock. Existing provider update/removal rollback remains unchanged except for resolving disabled targets and the additional dependency checks.
+
+### Native instance deletion
+
+`delete_instance` receives only `instanceId` and the exact confirmed display name, runs on a blocking worker and resolves the fixed managed root natively. It requires registry membership and Ready state, holds the content/registry/process boundary, refuses Starting/Running children, and preflights every child with symlink metadata. Links, Windows reparse points, redirected instance roots and redirected instances directories are rejected. No `.minecraft`, external root, shared runtime, cache, account or unrelated instance is a deletion target.
+
+Selection is cleared atomically before removing the exact root, without selecting an arbitrary replacement. Registry removal occurs only after filesystem removal. A filesystem failure reports failure, retains the row and remaining bytes for retry and attempts to restore selection. A registry commit failure after filesystem removal leaves the row, clears selection and reports failure; retry safely finishes the registry step for the absent exact root. No partial operation is reported as successful. Incomplete installations must be finished/retried before deletion; generalized interrupted-install disposal and durable deletion journals are deferred.
+
+### Creation and presentation
+
+New compatible Fabric instances default Aurora on; explicit off wins and survives compatibility recomputation. Vanilla and unsupported combinations remain off, and existing records are not enabled by migration. Native omission of the new-instance choice uses the same reviewed compatibility policy; the frontend presents the concise Aurora Client checkbox.
+
+Home uses a custom keyboard/mouse listbox inside its selected-instance card, with exact native selection authority, selected marker, arrows/Home/End/typeahead, Escape/outside dismissal and focus return. It retains the existing 3D player. Compact Mods rows put artwork, identity, switch and overflow first, with files/provenance/details and provider actions behind explicit disclosure. Settings combines existing General/Performance/Java/Display controls with content, native maintenance and a separate name-confirmed deletion danger area. No unsupported settings are exposed.
+
+Each major screen owns its composition: Home has balanced launch/player columns; Instances has creation and registry columns; the workspace expands content independently; settings has editor and tools regions; Mods keeps full-width aligned rows; Browse uses two compact result columns at wide windows; launcher Settings has parallel real preference sections. Breakpoints collapse these regions without changing the global shell contract. Pandora supplied density/composition references only; Aurora tokens, identity, typography and focus semantics remain authoritative.
 
 ## Product philosophy
 
