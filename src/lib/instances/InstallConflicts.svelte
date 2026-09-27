@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ProviderConflict } from "$lib/backend";
   let { conflicts }: { conflicts: ProviderConflict[] } = $props();
-  const ownership = { launcherManagedRequired: "Launcher Required / Protected", launcherManagedRetained: "Launcher Retained", providerManaged: "Provider Managed", userManaged: "Local", unknown: "Unknown" };
+  const ownership = { launcherBootstrap: "Launcher bootstrap", launcherManagedRequired: "Launcher Required / Protected", launcherManagedRetained: "Launcher Retained", providerManaged: "Provider Managed", userManaged: "Local", unknown: "Unknown" };
 </script>
 {#if conflicts.length}
   <div class="inline-message inline-message-error" role="alert">

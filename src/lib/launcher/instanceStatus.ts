@@ -180,6 +180,6 @@ export function javaRuntimeStatus(
 export function installedConfigurationLabel(instance: InstanceSummary): string {
   const platform = instance.platform.kind === "fabric" ? "Fabric" : instance.platform.kind === "vanilla" ? "Vanilla" : instance.platform.kind;
   const loader = "version" in instance.platform ? ` ${instance.platform.version}` : "";
-  const aurora = instance.aurora ? ` · Aurora ${instance.aurora.version}` : " · Aurora Off";
+  const aurora = instance.aurora ? ` · Aurora ${instance.aurora.version}${instance.auroraContentState && instance.auroraContentState !== "active" ? ` (${instance.auroraContentState})` : ""}` : " · Aurora Off";
   return `Minecraft ${instance.minecraftVersion} · ${platform}${loader}${aurora}`;
 }

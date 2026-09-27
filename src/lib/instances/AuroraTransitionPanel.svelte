@@ -33,7 +33,7 @@
 </script>
 <section class="group" aria-labelledby="aurora-transition-title">
   <div class="group-heading">
-    <div><h3 id="aurora-transition-title" class="group-title">Optional Aurora</h3><p class="group-subtitle">{instance.aurora ? `Aurora ${instance.aurora.version} enabled` : "Aurora disabled"}</p></div>
+    <div><h3 id="aurora-transition-title" class="group-title">Aurora configuration</h3><p class="group-subtitle">{instance.aurora ? `Originally configured with Aurora ${instance.aurora.version} · Content ${instance.auroraContentState ?? "not detected"}` : "No Aurora bootstrap configured"}</p></div>
     <button class="btn" type="button" onclick={() => void prepare()} disabled={busy || instance.state !== "ready" || !launcher.launcherState?.platformCapabilities.find(capability => capability.kind === instance.platform.kind)?.auroraSupported}>
       {busy ? "Working…" : instance.aurora ? "Preview disable" : "Preview enable"}
     </button>

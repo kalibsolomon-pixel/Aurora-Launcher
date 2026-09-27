@@ -156,7 +156,7 @@
 
   <div class="group-row">
     <span class="group-row-title">Aurora</span>
-    <span class="group-row-value">{instance.aurora ? `${instance.aurora.version} (${instance.aurora.channel})` : "Off"}</span>
+    <span class="group-row-value">{instance.aurora ? `${instance.aurora.version} (${instance.aurora.channel}) · ${instance.auroraContentState ?? "not detected"}` : "Not configured"}</span>
   </div>
   <div class="group-row">
     <span class="group-row-title">Minecraft</span>

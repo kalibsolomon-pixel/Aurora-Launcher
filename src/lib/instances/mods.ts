@@ -49,7 +49,7 @@ export function visibleMods(
 }
 
 export function beginRemoval(entry: ModEntry): RemovalCandidate | null {
-  if (!entry.canRemove || !["userManaged", "providerManaged"].includes(entry.ownership)) return null;
+  if (!entry.canRemove || !["userManaged", "providerManaged", "launcherBootstrap"].includes(entry.ownership)) return null;
   return {
     entryId: entry.entryId,
     displayName: entry.displayName,
@@ -64,7 +64,7 @@ export function confirmedRemovalId(
 ): string | null {
   if (!candidate) return null;
   const current = entries.find((entry) => entry.entryId === candidate.entryId);
-  return current?.canRemove && ["userManaged", "providerManaged"].includes(current.ownership)
+  return current?.canRemove && ["userManaged", "providerManaged", "launcherBootstrap"].includes(current.ownership)
     ? current.entryId
     : null;
 }

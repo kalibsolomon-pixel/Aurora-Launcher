@@ -524,6 +524,8 @@ class LauncherStore {
     this.modError = null;
     try {
       this.modInventories[id] = await setInstanceModEnabled(id, entryId, enabled);
+      await this.refreshState();
+      await this.refreshPlayReadiness();
     } catch (cause: unknown) {
       const error = backendError(cause, "The mod state could not be changed.");
       await this.runLoadMods(id);
@@ -539,6 +541,8 @@ class LauncherStore {
     this.modError = null;
     try {
       this.modInventories[id] = await removeInstanceMod(id, entryId);
+      await this.refreshState();
+      await this.refreshPlayReadiness();
     } catch (cause: unknown) {
       const error = backendError(cause, "The mod could not be removed.");
       await this.runLoadMods(id);

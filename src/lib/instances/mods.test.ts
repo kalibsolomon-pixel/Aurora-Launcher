@@ -108,6 +108,8 @@ describe("remove confirmation state", () => {
       fileName: "zeta.jar",
     });
     assert.equal(beginRemoval(entry("managed", "Managed", { ownership: "providerManaged" }))?.entryId, "managed");
+    const bootstrap = entry("bootstrap", "Aurora Client", { ownership: "launcherBootstrap" });
+    assert.equal(confirmedRemovalId(beginRemoval(bootstrap), [bootstrap]), "bootstrap");
     assert.equal(beginRemoval(entry("unknown", "Unknown", { ownership: "unknown", canRemove: false })), null);
   });
 
