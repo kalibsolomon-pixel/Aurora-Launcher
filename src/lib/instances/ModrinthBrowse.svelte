@@ -210,7 +210,7 @@
   {#if error}
     <p class="inline-message inline-message-error" role="alert">{error.message} <code>{error.code}</code></p>
   {/if}
-  {#if busy && busy !== "install"}<p class="browse-status" class:browse-loading={busy === "search" && !page} role="status"><span class="spinner" aria-hidden="true"></span> {busy === "search" ? "Loading Modrinth projects…" : busy === "details" ? "Loading compatible versions…" : "Resolving dependencies…"}</p>{/if}
+  {#if busy && busy !== "install"}<p class="browse-status" class:browse-loading={busy === "search" && !page} role="status"><span class="spinner" aria-hidden="true"></span> {busy === "search" ? "Loading Modrinth projects…" : busy === "details" ? "Loading Minecraft / loader versions…" : "Resolving dependencies…"}</p>{/if}
   {#if busy === "install"}<p class="browse-status" role="status"><span class="spinner" aria-hidden="true"></span> Downloading and verifying content…</p>{/if}
 
   {#if project}
@@ -226,7 +226,7 @@
       <p class="browse-meta">Minecraft {minecraftVersion} · {project.loaders.join(", ") || "No loader listed"}</p>
       {#if kind === "shaderPack"}<p class="browse-note">The file can be installed. This instance may need a compatible shader loader before Minecraft can use it.</p>{/if}
       {#if project.versions.length}
-        <label class="version-choice"><span class="field-label">Compatible version</span>
+        <label class="version-choice"><span class="field-label">Minecraft / loader version</span>
           <select bind:value={versionId} onchange={() => preview = null}>
             {#each project.versions as version}
               <option value={version.id}>{version.versionNumber} · {version.versionType} · {version.name}</option>
@@ -256,7 +256,7 @@
               <span class="browse-meta">By {hit.author} · {hit.downloads.toLocaleString()} downloads</span>
             </div>
             <div class="browse-actions">
-              <button type="button" class="btn btn-quiet install-action" title={blockedProjects[hit.projectId]?.message ?? (installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : `Install latest compatible version of ${hit.title}`)} aria-label={blockedProjects[hit.projectId] ? `${hit.title} installation blocked; review Details` : dependencyOnlyProjectIds.includes(hit.projectId) ? `Keep ${hit.title} installed directly` : installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : quickBusyProjectId === hit.projectId ? `Installing ${hit.title}` : `Install latest compatible version of ${hit.title}`} disabled={quickBusyProjectId !== null || !!blockedProjects[hit.projectId] || (installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId))} onclick={() => quickInstall(hit.projectId, hit.title)}>
+              <button type="button" class="btn btn-quiet install-action" title={blockedProjects[hit.projectId]?.message ?? (installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : `Install newest eligible version of ${hit.title}`)} aria-label={blockedProjects[hit.projectId] ? `${hit.title} installation blocked; review Details` : dependencyOnlyProjectIds.includes(hit.projectId) ? `Keep ${hit.title} installed directly` : installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : quickBusyProjectId === hit.projectId ? `Installing ${hit.title}` : `Install newest eligible version of ${hit.title}`} disabled={quickBusyProjectId !== null || !!blockedProjects[hit.projectId] || (installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId))} onclick={() => quickInstall(hit.projectId, hit.title)}>
                 {#if quickBusyProjectId === hit.projectId}<span class="spinner" aria-hidden="true"></span><span class="action-state">Installing…</span>{:else if installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Installed</span>{:else if blockedProjects[hit.projectId]}<span class="action-state">Blocked</span>{:else if dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Keep</span>{:else}<span aria-hidden="true">↓</span>{/if}
               </button>
               <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => openProject(hit.projectId)}>Details</button>
@@ -265,7 +265,7 @@
         {/each}
       </div>
     {:else}
-      <p class="browse-note">{page.totalHits > 0 ? "No compatible projects on this page." : "No matching projects for this instance."}</p>
+      <p class="browse-note">{page.totalHits > 0 ? "No matching Minecraft / loader projects on this page." : "No matching projects for this instance."}</p>
     {/if}
     {#if nextOffset < page.totalHits}
       <button type="button" class="btn btn-quiet more" disabled={busy !== null} onclick={() => search(nextOffset)}>Load more</button>
@@ -281,7 +281,13 @@
       <p>{installCount} file{installCount === 1 ? "" : "s"} will be installed. Required dependencies appear below.</p>
       <ul>
         {#each previewItems as item}
-          <li><strong>{item.title}</strong> {item.versionNumber} · {item.fileName}{item.alreadyInstalled ? " · already installed" : ""}</li>
+          <li><strong>{item.title}</strong>
+            {#if item.satisfiedBy}
+              {item.satisfiedBy.version} · Already satisfied by {item.satisfiedBy.fileName} ({item.satisfiedBy.ownership}) · requires {item.satisfiedBy.requirement}. Ownership and bytes stay unchanged.
+            {:else}
+              {item.versionNumber} · {item.fileName}{item.alreadyInstalled ? " · already installed" : " · will install"}
+            {/if}
+          </li>
         {/each}
       </ul>
       {#each preview.preview.warnings as warning}<p class="browse-note">⚠ {warning}</p>{/each}
