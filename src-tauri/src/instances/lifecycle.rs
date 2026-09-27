@@ -1521,6 +1521,23 @@ impl From<RuntimeInstallError> for InstanceError {
 mod tests {
     use super::*;
 
+    #[test]
+    fn production_creation_selects_verified_bridge_release_and_retains_old_pins() {
+        let manifest = crate::distribution::production_manifest().unwrap();
+        let configuration = InstanceConfiguration::for_minecraft_version("1.21.11");
+        let selected = resolve_release_for_configuration(&manifest, &configuration).unwrap();
+        assert_eq!(selected.aurora_version(), "2.1.3");
+        assert_eq!(
+            selected.artifact().sha256(),
+            crate::launch::activity_bridge::BRIDGE_ARTIFACT_SHA256
+        );
+        assert!(
+            manifest
+                .resolve_exact("2.1.2", Some(ReleaseChannel::Stable))
+                .is_some()
+        );
+    }
+
     #[tokio::test]
     async fn explicit_restore_keeps_a_verified_compatible_provider_api_replacement() {
         use crate::instance_content::{
