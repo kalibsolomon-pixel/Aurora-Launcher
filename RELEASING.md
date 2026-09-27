@@ -1,5 +1,21 @@
 # Aurora Launcher release baseline
 
+## Current 1.1.0 candidate
+
+The synchronized local candidate version is 1.1.0. New compatible production
+instances select the verified immutable Aurora Client 2.1.3 entry; historical
+2.1.2 pins remain resolvable. The release build job supplies public Discord
+Application ID `1553653987545317396` and rejects a missing or different value
+before compiling. The asset remains `aurora-logo`. Development builds may omit
+Discord configuration.
+
+The acceptance report records outstanding publication gates. No 1.1.0 installer
+has been published. The 1.0.0-specific format restrictions below describe the
+initial release baseline; 1.1.0 publication still requires acceptance of its
+selected installer format in a disposable environment. Existing installer files
+must be preserved during local verification, even when older versions coexist
+in the build output directory.
+
 Aurora Launcher and Aurora Client are separate products. Launcher releases live in this repository; the launcher currently bundles a reviewed production entry for Aurora Client 2.1.2. Publishing a new Aurora Client artifact alone does not change launcher availability or any existing instance pin.
 
 ## Version and identity
