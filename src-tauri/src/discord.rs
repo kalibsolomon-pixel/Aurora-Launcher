@@ -139,7 +139,7 @@ pub fn activity(preferences: &DiscordPreferences, game: Option<&GameActivity>) -
             .and_then(|g| g.started_at)
             .map(|start| Timestamps { start }),
         assets: Assets {
-            large_image: "aurora_icon",
+            large_image: "aurora-logo",
             large_text: "Aurora Client",
         },
     })
@@ -191,7 +191,7 @@ mod tests {
         assert_eq!(value.details, "Playing Minecraft");
         assert!(value.state.is_none());
         assert!(value.timestamps.is_none());
-        assert_eq!(value.assets.large_image, "aurora_icon");
+        assert_eq!(value.assets.large_image, "aurora-logo");
         assert_eq!(value.assets.large_text, "Aurora Client");
     }
     #[test]

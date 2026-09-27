@@ -1,16 +1,28 @@
 # Aurora Client activity bridge acceptance
 
-## Production Discord follow-up — 2026-09-27 (incomplete)
+## Production Discord follow-up — 2026-09-27 (incomplete; corrected below)
 
-The requested production asset key is now `aurora_icon`; the earlier results below remain historical and do not establish live Discord acceptance. The existing compile-time `AURORA_DISCORD_APPLICATION_ID` mechanism is unchanged. The open Developer Portal identified Aurora Client as application `1553653987545317396`, used for the new acceptance build.
+The preceding attempt changed the requested production key to `aurora_icon`; that assumption was incorrect. The existing compile-time `AURORA_DISCORD_APPLICATION_ID` mechanism is unchanged. The open Developer Portal identified Aurora Client as application `1553653987545317396`, used for the acceptance build.
 
-Live acceptance stopped at a configuration discrepancy: that application's Art Assets page showed **Assets (1 of 300)** and **aurora-logo**, rather than the requested `aurora_icon`. No portal configuration was changed and no alternate key was substituted. The owner must resolve this discrepancy before logo, generic/gameplay presence, privacy toggles, reconnect and lifecycle acceptance can be claimed. No new live Discord acceptance screenshots or separate Java/game acceptance passes are claimed here.
+At the time of the preceding attempt, its Art Assets page showed **Assets (1 of 300)** and **aurora-logo**. The follow-up instruction confirmed `aurora-logo` is correct. The corrective implementation and production acceptance results follow; earlier acceptance results below remain historical.
 
 Regression checks passed: Rust formatting and all-target check; **543 Rust tests passed, 20 ignored, 0 failed**; **116 frontend tests passed, 0 failed**; Svelte/TypeScript **0 errors, 0 warnings**; frontend production build and version contract **1.0.0**. The configured production Tauri build passed (optimized compilation 3m 09s), producing `src-tauri/target/release/aurora-launcher.exe` (10,165,248 bytes), MSI (5,771,264 bytes) and NSIS (4,213,111 bytes). Bundles were neither installed nor published. Build log: `C:\Users\kalib\AppData\Local\Temp\aurora-discord-production-build.txt`.
 
 The exact repository executable was started directly and its process path verified; its accessibility state exposed the current Home/Settings navigation. The desktop helper initially opened the older installed executable, and subsequent screenshot/input targeting was unreliable with both launcher windows present. No configured Settings, Connect, connected state, asset rendering or gameplay lifecycle result is claimed. No user configuration was reset to work around the older executable's schema error.
 
 The starting baseline was HEAD `25efaef7a11391863c88ce0d7f2cfe0a3201110b`, origin/main and merge-base `1bf2e14edea3ba706d2d34b5aa8c72f82987ccdf`, 31 ahead / 0 behind, 183 tracked files and 607 protected untracked files. Hash inventory: `C:\Users\kalib\AppData\Local\Temp\aurora-discord-baseline-60b495f6-a8d5-4233-8536-664a5622f894\files.json`. Fetch left origin/main unchanged; all baseline paths remain, protected hashes are unchanged, and the client repository remains clean at its expected HEAD. No screenshots or game/runtime data are committed.
+
+## Corrective Discord acceptance — 2026-09-27
+
+The owner confirmed the Aurora Client Application ID `1553653987545317396` and registered Rich Presence key `aurora-logo`. The previous commit temporarily used `aurora_icon`; this correction restores `aurora-logo` in the projection and keeps a direct test assertion for it. Production configuration remains compile-time `AURORA_DISCORD_APPLICATION_ID` via Rust `option_env!`. No Developer Portal or Aurora Client changes were made.
+
+With Discord desktop running, the exact release executable at `C:\Dev\aurora-launcher\src-tauri\target\release\aurora-launcher.exe` was opened. Settings recognized the application (no setup-required state), showed **Connected** and offered **Reconnect to Discord**. Explicit Reconnect returned to **Connected**. Discord displayed **Aurora Client — In Launcher**, and the Aurora mark rendered in the profile activity card. Turning the master toggle off cleared the activity card; turning it back on restored generic activity. No private world/server details appeared in the generic activity.
+
+At inspection, the existing saved preferences had the master on; elapsed time and instance name on; Minecraft version, platform, Aurora-active, Show World, Show Server and Show Server Address off. The generic In Launcher activity contained no instance or elapsed fields. These saved preferences were retained. A running game was not used to exercise each optional detail toggle.
+
+The reviewed bridge-enabled artifact at `C:\Users\kalib\AppData\Local\Temp\aurora-bridge-audit-df564935-7bf6-46d1-9f16-91def5a7c7c3\managed-fixture-v3\instances\bridge-fixture\mods\aurora-2.1.2.jar` independently hashed to `eb2b06bc3955881ee9ff0dc561c25ced617de822a276c61fa3a9f79343602777`. This correction did not launch its disposable game fixture, so singleplayer/multiplayer privacy, paused-world persistence, gameplay master-clear, gameplay reconnect, normal game exit and stale bridge cleanup remain unverified. The computer-use capture showed live Settings and Discord activity, but no screenshot file was saved; there are no screenshot paths to cite.
+
+The corrected production rebuild passed after closing the executable that had held the target file open. Optimized compile completed in 3m 00s. The release executable is 10,165,248 bytes; MSI is 5,771,264 bytes; NSIS is 4,212,696 bytes. The exact rebuilt executable was started directly and Settings again showed **Connected**, **Reconnect to Discord**, and no application-setup warning. A byte scan of the executable confirmed both public ID `1553653987545317396` and asset key `aurora-logo`. The full regression results above also passed on the corrected source: 543 Rust passed, 20 ignored; 116 frontend passed; 0 Svelte/TypeScript errors or warnings; format/check and production frontend build passed.
 
 Acceptance date: 2026-09-27, Windows x64. Nothing pushed or published. Aurora Client was inspected read-only, without a client build or source change.
 
