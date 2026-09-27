@@ -56,6 +56,7 @@ pub struct ModEntry {
     pub warnings: Vec<ModWarning>,
     pub can_toggle: bool,
     pub can_remove: bool,
+    pub removal_blocked_reason: Option<String>,
     pub action_blocked_reason: Option<String>,
 }
 
@@ -237,6 +238,7 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
                 )],
                 can_toggle: false,
                 can_remove: false,
+                removal_blocked_reason: None,
                 action_blocked_reason: Some(
                     "Aurora cannot safely identify this directory entry.".to_owned(),
                 ),
@@ -376,7 +378,7 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
                     .cmp(&right.file_name.to_lowercase())
             })
     });
-    Ok(ModInventory {
+    let mut inventory = ModInventory {
         instance_id: instance.to_string(),
         missing_managed: content_state
             .entries
@@ -393,7 +395,20 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
             .cloned()
             .collect(),
         entries,
-    })
+    };
+    let blockers: Vec<_> = inventory
+        .entries
+        .iter()
+        .map(|entry| {
+            dependency_blockers(&inventory, entry)
+                .err()
+                .map(|reason| reason.to_string())
+        })
+        .collect();
+    for (entry, reason) in inventory.entries.iter_mut().zip(blockers) {
+        entry.removal_blocked_reason = reason;
+    }
+    Ok(inventory)
 }
 
 /// Proves that the mods directory is the exact derived directory beneath the
@@ -857,6 +872,7 @@ fn inspect_entry(
             ModOwnership::UserManaged | ModOwnership::ProviderManaged
         ),
         can_remove: ownership == ModOwnership::UserManaged,
+        removal_blocked_reason: None,
         action_blocked_reason: blocked_reason,
     }
 }
@@ -877,6 +893,7 @@ fn unavailable_entry(file_name: String, reason: String) -> ModEntry {
         warnings: vec![ModWarning::new("entry_unreadable", reason)],
         can_toggle: false,
         can_remove: false,
+        removal_blocked_reason: None,
         action_blocked_reason: Some("Aurora cannot safely inspect this entry.".to_owned()),
     }
 }
@@ -1926,6 +1943,12 @@ mod tests {
                     .is_some_and(|meta| meta.id == "fabric-api")
             })
             .unwrap();
+        assert!(
+            api.removal_blocked_reason
+                .as_deref()
+                .unwrap()
+                .contains("parent requires fabric-api")
+        );
         assert_eq!(
             set_enabled(&fixture.managed, &fixture.instance, &api.entry_id, false)
                 .unwrap_err()

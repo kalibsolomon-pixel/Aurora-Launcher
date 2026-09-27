@@ -6,7 +6,8 @@
     type ProviderRemovalPreview, type ProviderUpdatePreview,
   } from "$lib/backend";
 
-  let { instanceId, kind, title, lifecycle, onChanged }: {
+  let { instanceId, kind, title, lifecycle, onChanged, showRemoval = true }: {
+    showRemoval?: boolean;
     instanceId: string;
     kind: ContentType;
     title: string;
@@ -97,7 +98,7 @@
       {#if checked}<span role="status">{candidate ? `Update available: ${candidate.versionNumber} (${candidate.versionType})` : "Up to date"}</span>{/if}
       {#if candidate}<button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={previewUpdate}>Update…</button>{/if}
     {/if}
-    {#if record.explicitlyRetained || !requiredBy.length}
+    {#if showRemoval && (record.explicitlyRetained || !requiredBy.length)}
       <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={previewRemove}>Remove…</button>
     {/if}
   </div>

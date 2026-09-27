@@ -10,7 +10,7 @@
     type ModSort,
     type RemovalCandidate,
   } from "$lib/instances/mods";
-  import { getInstanceContentContext, getProviderLifecycle, type InstanceContentContext, type InstanceSummary, type ModEntry, type ProviderLifecycleEntry } from "$lib/backend";
+  import { applyProviderRemoval, previewProviderRemoval, type ProviderRemovalPreview, getInstanceContentContext, getProviderLifecycle, type InstanceContentContext, type InstanceSummary, type ModEntry, type ProviderLifecycleEntry } from "$lib/backend";
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
   import InstalledArtwork from "./InstalledArtwork.svelte";
@@ -20,6 +20,9 @@
   let filter = $state<ModFilter>("all");
   let sort = $state<ModSort>("name");
   let loadedInstance = $state("");
+  let providerRemoval = $state<ProviderRemovalPreview | null>(null);
+  let providerRemovalEntry = $state<ModEntry | null>(null);
+  let removalBusy = $state(false);
   let removal = $state<RemovalCandidate | null>(null);
   let confirmButton: HTMLButtonElement | null = $state(null);
   let expanded = $state<string | null>(null);
@@ -59,6 +62,7 @@
   $effect(() => {
     if (loadedInstance !== instance.id) {
       loadedInstance = instance.id;
+      removal = null; providerRemoval = null; providerRemovalEntry = null; expanded = null;
       context = null;
       view = "installed";
       if (launcher.modInventories[instance.id] === undefined) {
@@ -69,6 +73,17 @@
   });
 
   async function askRemove(entry: ModEntry): Promise<void> {
+    if (entry.removalBlockedReason) { lifecycleError = entry.removalBlockedReason; return; }
+    if (entry.ownership === "providerManaged" && entry.provenance) {
+      removalBusy = true; lifecycleError = "";
+      const targetId = instance.id;
+      try {
+        const preview = await previewProviderRemoval(targetId, "mod", entry.provenance.projectId);
+        if (instance.id === targetId) { providerRemoval = preview; providerRemovalEntry = entry; }
+      } catch (reason) { lifecycleError = reason instanceof Error ? reason.message : "Removal preview failed."; }
+      finally { removalBusy = false; }
+      return;
+    }
     removal = beginRemoval(entry);
     await tick();
     confirmButton?.focus();
@@ -84,10 +99,23 @@
     removal = null;
   }
 
+  async function confirmProviderRemove(): Promise<void> {
+    if (!providerRemoval || !providerRemovalEntry?.provenance) return;
+    removalBusy = true;
+    const targetId = instance.id;
+    try {
+      await applyProviderRemoval(targetId, "mod", providerRemovalEntry.provenance.projectId, providerRemoval.previewFingerprint);
+      providerRemoval = null; providerRemovalEntry = null;
+      await refreshInstalled(targetId);
+      await launcher.refreshState(); await launcher.refreshPlayReadiness();
+    } catch (reason) { lifecycleError = reason instanceof Error ? reason.message : "Removal failed."; }
+    finally { removalBusy = false; }
+  }
+
   function cancelRemove(): void {
     const triggerId = removal?.entryId;
     removal = null;
-    void tick().then(() => document.getElementById(`actions-${triggerId}`)?.focus());
+    void tick().then(() => document.getElementById(`remove-${triggerId}`)?.focus());
   }
 
   function onConfirmationKeydown(event: KeyboardEvent): void {
@@ -253,29 +281,24 @@
                   {entry.ownership === "launcherManagedRequired" ? "Protected" : entry.ownership === "providerManaged" ? "No toggle" : "Unavailable"}
                 </span>
               {/if}
+              {#if entry.canRemove || entry.ownership === "providerManaged"}
+                <button id="remove-{entry.entryId}" type="button" class="mod-trash"
+                  aria-label={`Remove ${entry.displayName}`} title={entry.removalBlockedReason ?? `Remove ${entry.displayName}`}
+                  disabled={launcher.modMutationBusy !== null || removalBusy || !!entry.removalBlockedReason}
+                  onclick={() => askRemove(entry)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" /></svg>
+                </button>
+                {#if entry.removalBlockedReason}<span class="removal-blocker">{entry.removalBlockedReason}</span>{/if}
+              {/if}
               <details class="mod-actions-menu">
                 <summary id="actions-{entry.entryId}" aria-label={`Actions for ${entry.displayName}`}>•••</summary>
                 <div class="mod-actions-popover">
                   <button type="button" class="menu-action" onclick={(event) => { expanded = expanded === entry.entryId ? null : entry.entryId; const menu = event.currentTarget.closest("details"); if (menu) menu.open = false; }}>Details</button>
             {#if entry.provenance?.provider === "modrinth"}
               {@const lifecycle = lifecycleEntries.find((item) => item.record.contentType === "mod" && item.record.projectId === entry.provenance?.projectId)}
-              {#if lifecycle}<div><ProviderLifecycleActions instanceId={instance.id} kind="mod" title={entry.displayName} {lifecycle} onChanged={async () => { await refreshInstalled(instance.id); }} /></div>{/if}
+              {#if lifecycle}<div><ProviderLifecycleActions instanceId={instance.id} kind="mod" title={entry.displayName} {lifecycle} showRemoval={false} onChanged={async () => { await refreshInstalled(instance.id); }} /></div>{/if}
             {/if}
 
-                  {#if entry.canRemove}
-                    <button
-                      type="button"
-                      class="menu-action menu-action-danger"
-                      disabled={launcher.modMutationBusy !== null}
-                      onclick={(event) => {
-                        const menu = event.currentTarget.closest("details") as HTMLDetailsElement | null;
-                        if (menu) menu.open = false;
-                        void askRemove(entry);
-                      }}
-                    >Remove…</button>
-                  {:else}
-                    <p>{entry.actionBlockedReason}</p>
-                  {/if}
                 </div>
               </details>
             </div>
@@ -296,6 +319,16 @@
               </dl>
             </div>{/if}
 
+            {#if providerRemovalEntry?.entryId === entry.entryId && providerRemoval}
+              <div class="remove-confirmation" role="group" aria-label={`Remove ${entry.displayName} preview`}>
+                <div><strong>{providerRemoval.delta.willRemove.length ? `Remove ${entry.displayName}?` : `Stop retaining ${entry.displayName}?`}</strong>
+                  <p>Will remove: {providerRemoval.delta.willRemove.map(item => item.fileName).join(", ") || "No files; required content stays installed."}</p>
+                  {#if providerRemoval.delta.willRetain.length}<p>Retained: {providerRemoval.delta.willRetain.map(item => item.fileName).join(", ")}</p>{/if}
+                </div>
+                <div class="remove-actions"><button type="button" class="btn btn-quiet" disabled={removalBusy} onclick={() => { providerRemoval = null; providerRemovalEntry = null; }}>Cancel</button>
+                  <button type="button" class="btn btn-danger" disabled={removalBusy} onclick={confirmProviderRemove}>Approve removal</button></div>
+              </div>
+            {/if}
             {#if removal?.entryId === entry.entryId}
               <div
                 class="remove-confirmation"
@@ -383,9 +416,11 @@
   .mod-actions-menu summary::-webkit-details-marker { display: none; }
   .mod-actions-menu summary:hover { background: var(--color-surface-raised); color: var(--color-text); }
   .mod-actions-popover { position: absolute; z-index: 2; top: calc(100% + var(--space-1)); right: 0; min-width: 180px; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); box-shadow: var(--shadow-group); }
-  .mod-actions-popover p { margin: 0; color: var(--color-text-muted); font-size: var(--text-metadata); line-height: 1.4; }
   .menu-action { width: 100%; padding: var(--space-2); border: none; border-radius: var(--radius-sm); background: transparent; color: var(--color-text); font: inherit; text-align: left; cursor: pointer; }
-  .menu-action-danger { color: var(--color-error); }
+  .mod-trash { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+  .mod-trash:hover { background: var(--color-error-soft); color: var(--color-error); }
+  .mod-trash:disabled { opacity: .45; cursor: default; }
+  .removal-blocker { max-width: 200px; font-size: var(--text-metadata); color: var(--color-text-muted); }
   .menu-action:hover { background: var(--color-surface-hover); }
   .mod-details { grid-column: 1 / -1; margin-left: 46px; color: var(--color-text-secondary); font-size: var(--text-metadata); }
   .mod-details dl { display: grid; gap: var(--space-1); margin: var(--space-2) 0 0; }
