@@ -796,6 +796,7 @@ export interface ModEntry {
   warnings: ModWarning[];
   canToggle: boolean;
   canRemove: boolean;
+  removalBlockedReason?: string | null;
   actionBlockedReason: string | null;
 }
 
