@@ -1,0 +1,30 @@
+import type { HomeLayout, WidgetPlacement, WidgetSize } from "$lib/backend";
+
+export interface WidgetDefinition { id: string; title: string; description: string; sizes: readonly WidgetSize[] }
+/** Registry entries are code-owned. Persistence contains IDs and layout only. */
+export const widgetCatalog: readonly WidgetDefinition[] = [
+  { id: "instance-details", title: "Instance Details", description: "Installed Minecraft, platform and current Aurora content state.", sizes: ["small", "wide", "large"] },
+  { id: "content-summary", title: "Content Summary", description: "Local enabled/disabled mod and pack counts. No provider network requests.", sizes: ["small", "wide", "large"] },
+  { id: "session", title: "Session", description: "The selected instance's latest process state in this launcher session. Not a saved play history.", sizes: ["small", "wide"] },
+];
+export function registeredWidgets(layout: HomeLayout): WidgetPlacement[] {
+  return layout.widgets.filter(widget => widget.enabled && widgetCatalog.some(item => item.id === widget.id));
+}
+export function moveWidget(layout: HomeLayout, id: string, direction: -1 | 1): HomeLayout {
+  const widgets = layout.widgets.map(widget => ({ ...widget }));
+  const visible = registeredWidgets(layout);
+  const index = visible.findIndex(widget => widget.id === id);
+  const neighbor = visible[index + direction];
+  if (!neighbor) return { widgets };
+  const a = widgets.findIndex(widget => widget.id === id);
+  const b = widgets.findIndex(widget => widget.id === neighbor.id);
+  [widgets[a], widgets[b]] = [widgets[b], widgets[a]];
+  return { widgets };
+}
+export function setWidget(layout: HomeLayout, id: string, changes: Partial<Pick<WidgetPlacement, "enabled" | "size">>): HomeLayout {
+  const definition = widgetCatalog.find(widget => widget.id === id);
+  if (!definition || (changes.size && !definition.sizes.includes(changes.size))) return layout;
+  const widgets = layout.widgets.map(widget => widget.id === id ? { ...widget, ...changes } : { ...widget });
+  if (!widgets.some(widget => widget.id === id)) widgets.push({ id, enabled: false, size: definition.sizes[0], ...changes });
+  return { widgets };
+}

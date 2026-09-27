@@ -1,4 +1,6 @@
 <script lang="ts">
+  import HomeWidgetSettings from "$lib/launcher/HomeWidgetSettings.svelte";
+  import DiscordSettings from "$lib/launcher/DiscordSettings.svelte";
   import { onMount } from "svelte";
   import { appearance } from "$lib/launcher/appearance.svelte";
   import { desktopIntegration } from "$lib/launcher/desktopIntegration.svelte";
@@ -301,6 +303,8 @@
       name is left alone. Pinning Aurora to the taskbar stays a Windows choice.
     </p>
   </section>
+  <HomeWidgetSettings />
+  <DiscordSettings />
 </div>
 
 <style>

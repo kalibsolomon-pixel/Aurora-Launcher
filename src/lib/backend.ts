@@ -1433,3 +1433,28 @@ export async function playInstance(
     throw new LauncherBackendError("backend_unavailable", "Minecraft could not be started.");
   }
 }
+
+
+export type WidgetSize = "small" | "wide" | "large";
+export interface WidgetPlacement { id: string; enabled: boolean; size: WidgetSize }
+export interface HomeLayout { widgets: WidgetPlacement[] }
+export interface DiscordPreferences { enabled: boolean; instanceName: boolean; minecraftVersion: boolean; platform: boolean; auroraActive: boolean; elapsedTime: boolean }
+export interface DiscordState {
+  connection: "configurationMissing" | "ready" | "connected" | "notDetected" | "closed" | "failed";
+  configured: boolean;
+  preferences: DiscordPreferences;
+  gameplayCapability: boolean;
+}
+async function preferenceCommand<T>(command: string, request?: unknown): Promise<T> {
+  try { return await invoke<T>(command, request === undefined ? undefined : { request }); }
+  catch (reason) {
+    if (isBackendCommandError(reason)) throw new LauncherBackendError(reason.code, reason.message);
+    throw new LauncherBackendError("preferences_unavailable", "Launcher preferences are unavailable. Try again.");
+  }
+}
+export const getHomeWidgets = (): Promise<HomeLayout> => preferenceCommand("get_home_widgets");
+export const saveHomeWidgets = (request: HomeLayout): Promise<HomeLayout> => preferenceCommand("set_home_widgets", request);
+export const resetHomeWidgets = (): Promise<HomeLayout> => preferenceCommand("reset_home_widgets");
+export const getDiscordState = (): Promise<DiscordState> => preferenceCommand("get_discord_state");
+export const connectDiscord = (): Promise<DiscordState> => preferenceCommand("connect_discord");
+export const saveDiscordPreferences = (request: DiscordPreferences): Promise<DiscordState> => preferenceCommand("set_discord_preferences", request);

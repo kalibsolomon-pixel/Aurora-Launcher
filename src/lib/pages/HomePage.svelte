@@ -4,6 +4,7 @@
   import { navigation } from "$lib/launcher/navigation.svelte";
   import InstanceSwitcher from "$lib/launcher/InstanceSwitcher.svelte";
   import { homeLaunchState } from "$lib/launcher/home";
+  import HomeWidgets from "$lib/launcher/HomeWidgets.svelte";
   import PlayerPreview from "$lib/launcher/PlayerPreview.svelte";
 
   const instance = $derived(launcher.selectedInstance);
@@ -130,6 +131,7 @@
     <PlayerPreview />
     </div>
   {/if}
+  <HomeWidgets />
 </div>
 
 <style>
