@@ -9,6 +9,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tokio::io::{AsyncRead, AsyncReadExt};
+use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 use super::resolve::LaunchSpec;
 use super::state::LaunchProcessStatus;
@@ -140,6 +142,16 @@ pub fn spawn_supervised_with_runtime(
     listener: StateListener,
     java_major: Option<u32>,
 ) -> Result<ProcessSnapshot, LaunchProcessError> {
+    spawn_supervised_with_bridge(spec, logs_directory, listener, java_major, None)
+}
+
+pub(crate) fn spawn_supervised_with_bridge(
+    spec: LaunchSpec,
+    logs_directory: &Path,
+    listener: StateListener,
+    java_major: Option<u32>,
+    bridge: Option<super::activity_bridge::Session>,
+) -> Result<ProcessSnapshot, LaunchProcessError> {
     let instance_id = spec.instance_id().to_owned();
     let started_at = unix_seconds();
     let starting = ProcessSnapshot {
@@ -200,7 +212,7 @@ pub fn spawn_supervised_with_runtime(
     })?;
 
     let arguments = spec.command_arguments();
-    let redactions = spec.sensitive_values();
+    let mut redactions = Zeroizing::new(spec.sensitive_values());
     let mut command = tokio::process::Command::new(spec.java_executable());
     command
         .args(arguments.iter().map(|argument| argument.expose()))
@@ -215,6 +227,13 @@ pub fn spawn_supervised_with_runtime(
         .env_remove("JAVA_TOOL_OPTIONS")
         .env_remove("_JAVA_OPTIONS")
         .env_remove("JDK_JAVA_OPTIONS");
+    for name in super::activity_bridge::ENVIRONMENT {
+        command.env_remove(name);
+    }
+    if let Some(bridge) = &bridge {
+        bridge.inject(&mut command);
+        redactions.push(bridge.redaction());
+    }
 
     let mut child = match command.spawn() {
         Ok(child) => child,
@@ -242,6 +261,9 @@ pub fn spawn_supervised_with_runtime(
         .expect("launch process state is not poisoned")
         .insert(instance_id.clone(), running.clone());
     listener(running.clone());
+    let receiver = bridge.map(super::activity_bridge::Session::start);
+    // Command retains the environment; release it immediately after spawn.
+    drop(command);
 
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
@@ -259,6 +281,8 @@ pub fn spawn_supervised_with_runtime(
             }
         });
         let exit = child.wait().await;
+        // Invalidate identity immediately, before waiting for output drains.
+        drop(receiver);
         let stdout = stdout_task.await.unwrap_or_default();
         let stderr = stderr_task.await.unwrap_or_default();
 
@@ -294,6 +318,7 @@ pub fn spawn_supervised_with_runtime(
         {
             eprintln!("[aurora-launcher] could not write the supervised launch log: {error}");
         }
+        redactions.zeroize();
         let snapshot = ProcessSnapshot {
             instance_id: instance_id.clone(),
             status,
@@ -651,6 +676,106 @@ mod tests {
         spawn_supervised(other, &root.join("logs"), Arc::new(|_| {})).unwrap();
         wait_terminal("process-duplicate").await;
         wait_terminal("process-other").await;
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    #[ignore = "supervised fixture subprocess"]
+    fn fake_activity_child() {
+        use std::io::{Read, Write};
+        let env = |name| std::env::var(name).expect("fixture bootstrap");
+        let capability = env(super::super::activity_bridge::ENVIRONMENT[2]);
+        println!("{capability}");
+        eprintln!("{capability}");
+        let mut stream =
+            std::net::TcpStream::connect(env(super::super::activity_bridge::ENVIRONMENT[0]))
+                .unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let id = env(super::super::activity_bridge::ENVIRONMENT[1]);
+        let hello = serde_json::json!({"type":"hello","schemaVersion":1,"sessionId":id,"capability":capability});
+        writeln!(stream, "{hello}").unwrap();
+        let expected = b"{\"type\":\"accepted\",\"schemaVersion\":1}\n";
+        let mut ack = vec![0; expected.len()];
+        stream.read_exact(&mut ack).unwrap();
+        assert_eq!(ack, expected);
+        writeln!(stream,"{}",serde_json::json!({"type":"activity","schemaVersion":1,"sessionId":id,"sequence":1,"state":"MAIN_MENU"})).unwrap();
+        writeln!(stream,"{}",serde_json::json!({"type":"activity","schemaVersion":1,"sessionId":id,"sequence":2,"state":"SINGLEPLAYER","worldDisplayName":"Fixture World"})).unwrap();
+        std::thread::sleep(Duration::from_millis(350));
+    }
+    #[tokio::test]
+    async fn supervised_bridge_exit_and_spawn_failure_release_identity_listener_and_secret() {
+        use super::super::activity_bridge::Session;
+        let root = test_root("bridge");
+        let bridge = Session::prepare().unwrap();
+        let handle = bridge.handle();
+        let secret = bridge.redaction();
+        let spec = LaunchSpec::fake_process(
+            "bridge-child",
+            std::env::current_exe().unwrap(),
+            "launch::process::tests::fake_activity_child",
+            root.clone(),
+        );
+        assert!(!format!("{spec:?}").contains(&secret));
+        spawn_supervised_with_bridge(
+            spec,
+            &root.join("logs"),
+            Arc::new(|_| {}),
+            Some(21),
+            Some(bridge),
+        )
+        .unwrap();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while handle.snapshot().is_none() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(wait_terminal("bridge-child").await.exit_code, Some(0));
+        assert!(handle.snapshot().is_none());
+        let log = std::fs::read_to_string(
+            std::fs::read_dir(root.join("logs"))
+                .unwrap()
+                .next()
+                .unwrap()
+                .unwrap()
+                .path(),
+        )
+        .unwrap();
+        assert!(!log.contains(&secret));
+        assert!(log.contains("[redacted]"));
+        let bridge = Session::prepare().unwrap();
+        let handle = bridge.handle();
+        let mut command = tokio::process::Command::new("unused");
+        bridge.inject(&mut command);
+        let address = command
+            .as_std()
+            .get_envs()
+            .find(|(key, _)| *key == super::super::activity_bridge::ENVIRONMENT[0])
+            .unwrap()
+            .1
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+        let spec = LaunchSpec::fake_process(
+            "bridge-missing",
+            root.join("missing"),
+            "unused",
+            root.clone(),
+        );
+        assert!(
+            spawn_supervised_with_bridge(
+                spec,
+                &root.join("logs"),
+                Arc::new(|_| {}),
+                Some(21),
+                Some(bridge)
+            )
+            .is_err()
+        );
+        assert!(tokio::net::TcpStream::connect(address).await.is_err());
+        assert!(handle.snapshot().is_none());
         std::fs::remove_dir_all(root).unwrap();
     }
 }

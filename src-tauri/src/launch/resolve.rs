@@ -166,6 +166,24 @@ impl LaunchSpec {
     }
 
     #[cfg(test)]
+    pub(crate) fn fixture_command(
+        executable: PathBuf,
+        working_directory: PathBuf,
+        arguments: Vec<String>,
+    ) -> Self {
+        let mut spec =
+            Self::fake_process("actual-client-worker", executable, "", working_directory);
+        spec.jvm_arguments.clear();
+        spec.main_class = arguments.first().expect("fixture arguments").clone();
+        spec.game_arguments = arguments
+            .into_iter()
+            .skip(1)
+            .map(ResolvedArgument::Plain)
+            .collect();
+        spec
+    }
+
+    #[cfg(test)]
     pub(crate) fn fake_process(
         instance_id: &str,
         executable: PathBuf,
@@ -1449,5 +1467,153 @@ mod tests {
             );
             std::fs::remove_dir_all(root).unwrap();
         }
+    }
+    /// Explicit disposable offline acceptance only; never a production auth fallback.
+    #[tokio::test]
+    #[ignore = "requires prepared disposable installed game/runtime and loopback server"]
+    async fn live_bridge_enabled_jar_gameplay_acceptance() {
+        use crate::launch::{
+            activity_bridge::{self, GameplayState},
+            process,
+        };
+        use std::{sync::Arc, time::Duration};
+        let root = PathBuf::from(
+            std::env::var("AURORA_TEST_GAME_ROOT").expect("explicit disposable managed root"),
+        );
+        assert!(root.is_absolute() && root.starts_with(std::env::temp_dir()));
+        let managed = ManagedPaths::from_app_local_data_dir(root).unwrap();
+        let id = InstanceId::new("bridge-fixture").unwrap();
+        let paths = managed.instance_paths(&id);
+        let validated = crate::install::validate_installed_game(&managed, &id).unwrap();
+        assert!(
+            matches!(validated,crate::install::ValidationOutcome::Installed(report) if report.status==crate::install::ValidationStatus::Valid)
+        );
+        let digest =
+            crate::integrity::ArtifactDigest::parse(activity_bridge::BRIDGE_ARTIFACT_SHA256)
+                .unwrap();
+        crate::integrity::verify_file(
+            &paths.mods().join("aurora-2.1.2.jar"),
+            &digest,
+            Some(2_467_058),
+        )
+        .unwrap();
+        let platform = PlatformProfile::current().unwrap();
+        let options = crate::downloads::DownloadOptions::default();
+        let plan = crate::fabric::resolve_game_plan(
+            &crate::minecraft::metadata::MetadataEndpoints::official(),
+            &crate::fabric::metadata::FabricMetaEndpoints::official(),
+            &crate::minecraft::metadata::MinecraftVersionId::new("1.21.11").unwrap(),
+            &crate::fabric::metadata::LoaderVersionId::new("0.19.5").unwrap(),
+            platform,
+            &options,
+        )
+        .await
+        .unwrap();
+        let runtime_plan = crate::runtime::resolve_runtime_plan(
+            &managed,
+            &crate::runtime::RuntimeMetadataEndpoints::official(),
+            plan.java().component(),
+            plan.java().major_version(),
+            crate::runtime::RuntimePlatform::current().unwrap(),
+            &options,
+        )
+        .await
+        .unwrap();
+        let runtime =
+            crate::runtime::validate_runtime(&managed, &runtime_plan, true, Duration::from_secs(5))
+                .await
+                .unwrap();
+        assert_eq!(
+            runtime.status,
+            crate::runtime::RuntimeValidationStatus::Ready
+        );
+        let installed = crate::install::state::load_installed_state(paths.game())
+            .unwrap()
+            .unwrap();
+        let launch = LaunchPlan::from_game_plan(&plan, platform);
+        let spec = resolve_launch_spec(
+            &managed,
+            &id,
+            &launch,
+            &installed,
+            &runtime.launch_executable.unwrap(),
+            &session(),
+            &FeatureProfile::none(),
+            &LaunchOptions::new(2048, vec![], Some((960, 540))),
+        )
+        .unwrap();
+        let bridge = activity_bridge::Session::prepare().unwrap();
+        let handle = bridge.handle();
+        println!("Disposable game and runtime validated: Ready");
+        process::spawn_supervised_with_bridge(
+            spec,
+            paths.logs(),
+            Arc::new(|s| println!("supervised status: {:?}; exit: {:?}", s.status, s.exit_code)),
+            Some(21),
+            Some(bridge),
+        )
+        .unwrap();
+        let mut states = Vec::new();
+        let mut server_verified = false;
+        tokio::time::timeout(Duration::from_secs(240), async {
+            loop {
+                if let Some(snapshot) = handle.snapshot() {
+                    if snapshot.state == GameplayState::Singleplayer {
+                        assert_eq!(snapshot.world.as_deref(), Some("Activity Bridge Fixture"));
+                    }
+                    if snapshot.state == GameplayState::Multiplayer
+                        && snapshot.server_name.is_some()
+                    {
+                        assert_eq!(
+                            snapshot.server_name.as_deref(),
+                            Some("Activity Fixture SMP")
+                        );
+                        assert!(
+                            snapshot.server_address.as_deref()
+                                == Some(
+                                    std::env::var("ACTIVITY_ACCEPTANCE_SERVER")
+                                        .unwrap()
+                                        .as_str()
+                                )
+                        );
+                        if !server_verified {
+                            println!("Multiplayer separate name/address verified");
+                            server_verified = true;
+                        }
+                    }
+                    if states.last() != Some(&snapshot.state) {
+                        println!(
+                            "authenticated gameplay: {}",
+                            match snapshot.state {
+                                GameplayState::MainMenu => "MAIN_MENU",
+                                GameplayState::Singleplayer => "SINGLEPLAYER",
+                                GameplayState::Multiplayer => "MULTIPLAYER",
+                            }
+                        );
+                        states.push(snapshot.state);
+                    }
+                }
+                if !process::snapshot(id.as_str()).status.blocks_launch() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(
+            states
+                == vec![
+                    GameplayState::MainMenu,
+                    GameplayState::Singleplayer,
+                    GameplayState::MainMenu,
+                    GameplayState::Multiplayer,
+                    GameplayState::MainMenu
+                ]
+        );
+        assert!(server_verified);
+        assert_eq!(process::snapshot(id.as_str()).exit_code, Some(0));
+        assert!(handle.snapshot().is_none());
+        println!("Normal quit: exit 0; activity cleared; disposable game remains valid");
     }
 }

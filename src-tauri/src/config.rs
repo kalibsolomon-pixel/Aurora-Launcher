@@ -13,14 +13,14 @@ use serde::{Deserialize, Serialize};
 use crate::appearance::AppearancePreferences;
 use crate::instances::InstanceId;
 
-/// Schema 3 adds declarative Home widgets and opt-in Discord preferences.
-/// Schemas 1 and 2 migrate explicitly; malformed documents remain untouched.
+/// Schema 4 adds independently opt-in world/server/address preferences.
+/// Schemas 1, 2 and 3 migrate explicitly; malformed documents remain untouched.
 /// The current launcher-configuration schema version.
 ///
 /// Version 2 added the launcher-wide appearance preferences. Version 1 files
 /// (selected instance only) migrate deterministically on load with the
 /// default appearance; anything else fails deliberately.
-pub const CONFIG_SCHEMA_VERSION: u32 = 3;
+pub const CONFIG_SCHEMA_VERSION: u32 = 4;
 /// The schema version before appearance preferences existed.
 const LEGACY_CONFIG_SCHEMA_VERSION: u32 = 1;
 
@@ -98,7 +98,7 @@ impl LauncherConfig {
     /// default look — appearance is cosmetic launcher-wide state and must
     /// never block startup.
     pub fn from_json(json: &str) -> Result<Self, ConfigError> {
-        let document: serde_json::Value = serde_json::from_str(json)
+        let mut document: serde_json::Value = serde_json::from_str(json)
             .map_err(|error| ConfigError::Malformed(error.to_string()))?;
 
         let schema_version = document
@@ -110,6 +110,38 @@ impl LauncherConfig {
 
         let config = match schema_version {
             version if version == u64::from(CONFIG_SCHEMA_VERSION) => {
+                serde_json::from_value::<Self>(document)
+                    .map_err(|error| ConfigError::Malformed(error.to_string()))?
+            }
+            3 => {
+                let preferences = document
+                    .get_mut("discord")
+                    .and_then(|d| d.as_object_mut())
+                    .ok_or_else(|| {
+                        ConfigError::Malformed("the Discord preferences are missing".into())
+                    })?;
+                // Schema 3 has exactly six required booleans. Never normalize damage.
+                let old_fields = [
+                    "enabled",
+                    "instanceName",
+                    "minecraftVersion",
+                    "platform",
+                    "auroraActive",
+                    "elapsedTime",
+                ];
+                if preferences.len() != old_fields.len()
+                    || old_fields
+                        .iter()
+                        .any(|key| !preferences.get(*key).is_some_and(|v| v.is_boolean()))
+                {
+                    return Err(ConfigError::Malformed(
+                        "the schema-3 Discord preferences are malformed".into(),
+                    ));
+                }
+                for key in ["world", "server", "serverAddress"] {
+                    preferences.insert(key.into(), false.into());
+                }
+                document["schemaVersion"] = CONFIG_SCHEMA_VERSION.into();
                 serde_json::from_value::<Self>(document)
                     .map_err(|error| ConfigError::Malformed(error.to_string()))?
             }
@@ -422,7 +454,7 @@ mod tests {
     fn serializes_to_inspectable_camel_case_json() {
         let json = LauncherConfig::default().to_json();
 
-        assert!(json.contains("\"schemaVersion\": 3"));
+        assert!(json.contains("\"schemaVersion\": 4"));
         assert!(json.contains("\"selectedInstanceId\": null"));
         assert!(json.contains("\"appearance\": {"));
         assert!(json.contains("\"theme\": \"aurora-dark\""));
@@ -445,15 +477,15 @@ mod tests {
 
     #[test]
     fn unsupported_schema_versions_fail_deliberately() {
-        let json = r#"{ "schemaVersion": 4, "selectedInstanceId": null }"#;
+        let json = r#"{ "schemaVersion": 5, "selectedInstanceId": null }"#;
 
         let error = LauncherConfig::from_json(json).unwrap_err();
 
         assert!(matches!(
             error,
             ConfigError::UnsupportedSchema {
-                found: 4,
-                supported: 3
+                found: 5,
+                supported: 4
             }
         ));
     }
@@ -474,7 +506,7 @@ mod tests {
         assert_eq!(config.appearance(), &AppearancePreferences::new());
         let reserialized = LauncherConfig::from_json(&config.to_json()).unwrap();
         assert_eq!(reserialized, config);
-        assert!(config.to_json().contains("\"schemaVersion\": 3"));
+        assert!(config.to_json().contains("\"schemaVersion\": 4"));
     }
 
     #[test]
@@ -597,5 +629,65 @@ mod tests {
         save(&path, &LauncherConfig::default()).unwrap();
 
         assert!(path.is_file());
+    }
+    #[test]
+    fn schema_three_privacy_migration_preserves_every_existing_value() {
+        for mask in 0..64 {
+            let mut config = LauncherConfig::default();
+            config.set_selected_instance_id(Some(InstanceId::new("selected").unwrap()));
+            let mut document = serde_json::to_value(&config).unwrap();
+            document["schemaVersion"] = 3.into();
+            let prefs = document["discord"].as_object_mut().unwrap();
+            for key in ["world", "server", "serverAddress"] {
+                prefs.remove(key);
+            }
+            for (bit, key) in [
+                "enabled",
+                "instanceName",
+                "minecraftVersion",
+                "platform",
+                "auroraActive",
+                "elapsedTime",
+            ]
+            .iter()
+            .enumerate()
+            {
+                prefs.insert((*key).into(), (mask & (1 << bit) != 0).into());
+            }
+            let original = document.clone();
+            let migrated = LauncherConfig::from_json(&document.to_string()).unwrap();
+            let output = serde_json::to_value(&migrated).unwrap();
+            for key in ["selectedInstanceId", "appearance", "homeWidgets"] {
+                assert_eq!(output[key], original[key]);
+            }
+            for key in [
+                "enabled",
+                "instanceName",
+                "minecraftVersion",
+                "platform",
+                "auroraActive",
+                "elapsedTime",
+            ] {
+                assert_eq!(output["discord"][key], original["discord"][key]);
+            }
+            assert!(
+                !migrated.discord().world
+                    && !migrated.discord().server
+                    && !migrated.discord().server_address
+            );
+            assert_eq!(
+                migrated,
+                LauncherConfig::from_json(&migrated.to_json()).unwrap()
+            );
+        }
+    }
+    #[test]
+    fn missing_new_current_schema_privacy_is_damage_not_a_migration() {
+        let mut document = serde_json::to_value(LauncherConfig::default()).unwrap();
+        document["discord"].as_object_mut().unwrap().remove("world");
+        assert!(LauncherConfig::from_json(&document.to_string()).is_err());
+        document["schemaVersion"] = 3.into();
+        document["discord"]["enabled"] = "yes".into();
+        assert!(LauncherConfig::from_json(&document.to_string()).is_err());
     }
 }

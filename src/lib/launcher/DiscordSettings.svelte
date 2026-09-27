@@ -8,6 +8,9 @@
     { id: "auroraActive", label: "Aurora Client active state", detail: "Verified Aurora bootstrap active at launch; not a live client health signal." },
     { id: "elapsedTime", label: "Elapsed play time", detail: "Time since the supervised game process started." },
     { id: "instanceName", label: "Instance name", detail: "Shares your chosen instance name with Discord." },
+    { id: "world", label: "Show World", detail: "Displays the singleplayer world’s name when a compatible Aurora Client reports it." },
+    { id: "server", label: "Show Server", detail: "Displays the multiplayer server’s saved/display name when available." },
+    { id: "serverAddress", label: "Show Server Address", detail: "Also allows the raw hostname/address to appear. Requires Show Server." },
   ];
   onMount(() => {
     let disposed = false; let stop: (() => void) | undefined;
@@ -26,10 +29,10 @@
   </label>
   {#each fields as field}
     <label class="group-row"><div class="group-row-main"><span class="group-row-title">{field.label}</span><span class="group-row-detail">{field.detail}</span></div>
-      <input type="checkbox" aria-label={`Display ${field.label}`} checked={discord.state?.preferences[field.id] ?? false} disabled={discord.busy || !discord.state} onchange={event => discord.change(field.id, event.currentTarget.checked)} />
+      <input type="checkbox" aria-label={`Display ${field.label}`} checked={discord.state?.preferences[field.id] ?? false} disabled={discord.busy || !discord.state || (field.id === "serverAddress" && !discord.state.preferences.server)} onchange={event => discord.change(field.id, event.currentTarget.checked)} />
     </label>
   {/each}
-  <div class="group-row"><div class="group-row-main"><span class="group-row-title">World and server · unavailable</span><span class="group-row-detail">Aurora Client does not currently report authoritative gameplay activity to this launcher. World names and server names/addresses are never published.</span></div></div>
+  <p class="group-footer">World and server details require a compatible, active Aurora Client. Without its authenticated activity, Discord shows generic process activity.</p>
   {#if discord.error}<p class="group-row inline-message inline-message-error" role="alert">{discord.error}</p>{/if}
   <p class="group-footer">Off by default. All extra details require opt-in. Discord’s own activity visibility settings also apply. Connection problems never block Play.</p>
 </section>

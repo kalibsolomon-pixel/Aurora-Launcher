@@ -12,7 +12,7 @@ const defaults = () => ({ widgets: [
   { id: "content-summary", enabled: true, size: "small" },
   { id: "session", enabled: false, size: "small" },
 ] });
-const prefs = () => ({ enabled: false, instanceName: false, minecraftVersion: false, platform: false, auroraActive: false, elapsedTime: false });
+const prefs = () => ({ enabled: false, instanceName: false, minecraftVersion: false, platform: false, auroraActive: false, elapsedTime: false, world: false, server: false, serverAddress: false });
 function reset() {
   launcher.launcherState = { config: { schemaVersion: 3, selectedInstanceId: id }, instances: [{ id, displayName: "Controlled", state: "ready", minecraftVersion: "1.21.11", platform: { kind: "fabric", version: "0.19.5" }, aurora: { version: "2.1.2" }, auroraContentState: "active" }], platformCapabilities: [] };
   launcher.stateError = null; launcher.instanceError = null; launcher.playReadiness = { instanceId: id, ready: true, accountId: null, blockers: [], processStatus: "stopped" };
@@ -21,7 +21,7 @@ function reset() {
   launcher.modInventories = { [id]: { instanceId: id, entries: [], missingManaged: [] } };
   launcher.contentInventories = { [`${id}:resourcePack`]: { entries: [] }, [`${id}:shaderPack`]: { entries: [] } };
   homeWidgets.layout = defaults(); homeWidgets.busy = false; homeWidgets.error = "";
-  discord.state = { configured: true, connection: "ready", preferences: prefs(), gameplayCapability: false }; discord.busy = false; discord.error = "";
+  discord.state = { configured: true, connection: "ready", preferences: prefs(), gameplayCapability: true }; discord.busy = false; discord.error = "";
 }
 before(async () => {
   server = await createServer({ server: { middlewareMode: true }, logLevel: "silent" });
@@ -88,7 +88,7 @@ it("Discord accurately offers Connect and Reconnect with native connection statu
 it("missing application configuration disables connection honestly without hiding privacy choices", () => {
   reset(); discord.state.configured = false; discord.state.connection = "configurationMissing";
   const view = html(DiscordSettings); assert.match(view, /Application setup required/); assert.match(view, /disabled[^>]*>Connect to Discord/);
-  assert.match(view, /Enable Discord Rich Presence/); assert.match(view, /Display Instance name/); assert.match(view, /World and server · unavailable/);
+  assert.match(view, /Enable Discord Rich Presence/); assert.match(view, /Display Instance name/); assert.match(view, /Display Show World/); assert.match(view, /Display Show Server/); assert.match(view, /Display Show Server Address/);
 });
 it("Discord preferences and reconnect invoke only native commands and never disturb Play", async () => {
   reset(); const calls: string[] = []; const previous = JSON.stringify(launcher.launcherState);
@@ -118,4 +118,13 @@ it("trash reuses native local confirmation and provider fingerprint lifecycle", 
   assert.match(source, /launcher.runRemoveMod\(instance.id, entryId\)/); assert.match(source, /previewProviderRemoval\(targetId, "mod", entry.provenance.projectId\)/);
   assert.match(source, /applyProviderRemoval\(targetId, "mod", providerRemovalEntry.provenance.projectId, providerRemoval.previewFingerprint\)/);
   assert.match(source, /showRemoval=\{false\}/); assert.match(source, /Remove permanently/); assert.match(source, /Cancel/);
+});
+
+it("gameplay preferences are separate opt-ins and address control requires server consent", () => {
+  reset(); const view=html(DiscordSettings);
+  for(const label of ["Show World","Show Server","Show Server Address"]) assert.match(view,new RegExp(`aria-label="Display ${label}"`));
+  assert.match(view,/aria-label="Display Show Server Address" disabled/);
+  discord.state.preferences.server=true;
+  assert.doesNotMatch(html(DiscordSettings),/aria-label="Display Show Server Address" disabled/);
+  assert.equal(discord.state.preferences.serverAddress,false);
 });

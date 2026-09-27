@@ -11,6 +11,9 @@ pub struct DiscordPreferences {
     pub platform: bool,
     pub aurora_active: bool,
     pub elapsed_time: bool,
+    pub world: bool,
+    pub server: bool,
+    pub server_address: bool,
 }
 
 /// Only explicitly permitted non-secret facts can enter the presence builder.
@@ -24,6 +27,7 @@ pub struct GameActivity {
     pub aurora_active: bool,
     pub status: LaunchProcessStatus,
     pub started_at: Option<u64>,
+    pub(crate) gameplay: Option<crate::launch::activity_bridge::ActivityHandle>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -46,9 +50,8 @@ pub struct Assets {
 }
 
 fn display_text(value: &str) -> String {
-    value
+    crate::launch::activity_bridge::sanitize(value)
         .chars()
-        .filter(|c| !c.is_control())
         .take(100)
         .collect()
 }
@@ -64,6 +67,54 @@ pub fn activity(preferences: &DiscordPreferences, game: Option<&GameActivity>) -
     };
     let mut fields = Vec::new();
     if let Some(game) = game {
+        if game.status == LaunchProcessStatus::Running {
+            if let Some(snapshot) = game.gameplay.as_ref().and_then(|h| h.snapshot()) {
+                use crate::launch::activity_bridge::GameplayState;
+                match snapshot.state {
+                    GameplayState::Singleplayer if preferences.world => {
+                        if let Some(world) = snapshot.world {
+                            fields.push(format!("World: {}", display_text(&world)));
+                        }
+                    }
+                    GameplayState::Multiplayer if preferences.server => {
+                        // Minecraft display names may themselves equal/contain the raw address.
+                        // Never send such a name without the separate address consent.
+                        if let Some(name) = snapshot.server_name {
+                            if preferences.server_address
+                                || !snapshot.server_address.as_ref().is_some_and(|address| {
+                                    let name = crate::launch::activity_bridge::sanitize(&name)
+                                        .to_lowercase();
+                                    let address = crate::launch::activity_bridge::sanitize(address)
+                                        .to_lowercase();
+                                    let host = address
+                                        .strip_prefix('[')
+                                        .and_then(|s| s.split_once(']').map(|(host, _)| host))
+                                        .or_else(|| {
+                                            address
+                                                .rsplit_once(':')
+                                                .filter(|(_, port)| {
+                                                    port.bytes().all(|b| b.is_ascii_digit())
+                                                })
+                                                .map(|(host, _)| host)
+                                        })
+                                        .unwrap_or(&address);
+                                    name.contains(&address)
+                                        || (!host.is_empty() && name.contains(host))
+                                })
+                            {
+                                fields.push(format!("Server: {}", display_text(&name)));
+                            }
+                        }
+                        if preferences.server_address {
+                            if let Some(address) = snapshot.server_address {
+                                fields.push(format!("Address: {}", display_text(&address)));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
         if preferences.minecraft_version {
             fields.push(format!(
                 "Minecraft {}",
@@ -107,7 +158,8 @@ pub fn application_id() -> Option<&'static str> {
 mod transport;
 mod worker;
 pub use worker::{
-    DiscordState, connect, initialize, preferences_changed, process_changed, shutdown, state,
+    DiscordState, connect, gameplay_changed, initialize, preferences_changed, process_changed,
+    shutdown, state,
 };
 
 #[cfg(test)]
@@ -122,6 +174,7 @@ mod tests {
             aurora_active: true,
             status: LaunchProcessStatus::Running,
             started_at: Some(123),
+            gameplay: None,
         }
     }
     #[test]
@@ -210,6 +263,93 @@ mod tests {
             "accountId",
         ] {
             assert!(json.get(key).is_none());
+        }
+    }
+    #[test]
+    fn all_gameplay_privacy_combinations_filter_before_serialization() {
+        use crate::launch::activity_bridge::{ActivityHandle, GameplayState, Snapshot};
+        for state in [
+            GameplayState::MainMenu,
+            GameplayState::Singleplayer,
+            GameplayState::Multiplayer,
+        ] {
+            for mask in 0..16 {
+                let prefs = DiscordPreferences {
+                    enabled: mask & 1 != 0,
+                    world: mask & 2 != 0,
+                    server: mask & 4 != 0,
+                    server_address: mask & 8 != 0,
+                    ..Default::default()
+                };
+                let mut game = game();
+                game.gameplay = Some(ActivityHandle::fixture(Snapshot {
+                    state,
+                    world: (state == GameplayState::Singleplayer).then(|| "Fixture World".into()),
+                    server_name: (state == GameplayState::Multiplayer)
+                        .then(|| "Fixture SMP".into()),
+                    server_address: (state == GameplayState::Multiplayer)
+                        .then(|| "example.invalid".into()),
+                }));
+                let projected = activity(&prefs, Some(&game));
+                assert_eq!(projected.is_some(), prefs.enabled);
+                let json = serde_json::to_string(&projected).unwrap();
+                assert_eq!(
+                    json.contains("Fixture World"),
+                    prefs.enabled && prefs.world && state == GameplayState::Singleplayer
+                );
+                assert_eq!(
+                    json.contains("Fixture SMP"),
+                    prefs.enabled && prefs.server && state == GameplayState::Multiplayer
+                );
+                assert_eq!(
+                    json.contains("example.invalid"),
+                    prefs.enabled
+                        && prefs.server
+                        && prefs.server_address
+                        && state == GameplayState::Multiplayer
+                );
+            }
+        }
+    }
+    #[test]
+    fn address_is_never_a_name_fallback_or_hidden_in_the_name() {
+        use crate::launch::activity_bridge::{ActivityHandle, GameplayState, Snapshot};
+        let prefs = DiscordPreferences {
+            enabled: true,
+            server: true,
+            ..Default::default()
+        };
+        for (name, address) in [
+            (None, "example.invalid"),
+            (Some("example.invalid"), "example.invalid"),
+            (Some("EXAMPLE.INVALID"), "example.invalid"),
+            (Some("My example.invalid server"), "example.invalid"),
+            (Some("example.invalid"), "example.invalid:25565"),
+            (Some("My 127.0.0.1 server"), "127.0.0.1:25565"),
+            (Some("My ::1 server"), "[::1]:25565"),
+            (Some("example\u{200b}.invalid"), "example.invalid:25565"),
+        ] {
+            let mut game = game();
+            game.gameplay = Some(ActivityHandle::fixture(Snapshot {
+                state: GameplayState::Multiplayer,
+                world: None,
+                server_name: name.map(str::to_owned),
+                server_address: Some(address.into()),
+            }));
+            assert!(activity(&prefs, Some(&game)).unwrap().state.is_none());
+            game.status = LaunchProcessStatus::Starting;
+            assert!(
+                activity(
+                    &DiscordPreferences {
+                        server_address: true,
+                        ..prefs.clone()
+                    },
+                    Some(&game)
+                )
+                .unwrap()
+                .state
+                .is_none()
+            );
         }
     }
 }

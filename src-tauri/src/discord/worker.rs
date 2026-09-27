@@ -39,7 +39,7 @@ impl Default for DiscordState {
             },
             configured: application_id().is_some(),
             preferences: Default::default(),
-            gameplay_capability: false,
+            gameplay_capability: true,
         }
     }
 }
@@ -57,6 +57,13 @@ enum Message {
     Shutdown(oneshot::Sender<()>),
 }
 static SENDER: OnceLock<mpsc::UnboundedSender<Message>> = OnceLock::new();
+static GAMEPLAY_WAKE: OnceLock<mpsc::Sender<()>> = OnceLock::new();
+/// Coalesced wakeup only; private snapshots stay in native handles.
+pub fn gameplay_changed() {
+    if let Some(sender) = GAMEPLAY_WAKE.get() {
+        let _ = sender.try_send(());
+    }
+}
 pub async fn connect() -> DiscordState {
     if let Some(sender) = SENDER.get() {
         let (tx, rx) = oneshot::channel();
@@ -154,6 +161,8 @@ impl<T: Transport> Worker<T> {
     }
 }
 pub fn initialize(app: tauri::AppHandle, preferences: DiscordPreferences) {
+    let (wake, mut gameplay_wake) = mpsc::channel(1);
+    let _ = GAMEPLAY_WAKE.set(wake);
     let (sender, mut receiver) = mpsc::unbounded_channel();
     if SENDER.set(sender).is_err() {
         return;
@@ -175,13 +184,14 @@ pub fn initialize(app: tauri::AppHandle, preferences: DiscordPreferences) {
                     None=>{worker.stop().await;break;},
                 },
                 _=timer.tick()=>{},
+                _=gameplay_wake.recv()=>{},
             }
             worker.reconcile(application_id(), reconnect).await;
             let new = DiscordState {
                 connection: worker.connection,
                 configured: application_id().is_some(),
                 preferences: worker.preferences.clone(),
-                gameplay_capability: false,
+                gameplay_capability: true,
             };
             let changed = {
                 let mut current = status().lock().unwrap();
@@ -299,7 +309,7 @@ mod tests {
         assert!(!worker.transport.connected);
     }
     #[test]
-    fn world_and_server_capability_is_explicitly_unavailable() {
-        assert!(!DiscordState::default().gameplay_capability);
+    fn world_and_server_capability_is_available_independently_of_discord_setup() {
+        assert!(DiscordState::default().gameplay_capability);
     }
 }

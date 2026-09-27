@@ -4304,7 +4304,19 @@ pub async fn play_instance(
             .flatten()
             .as_deref()
             == Some("active");
-        let snapshot = crate::launch::process::spawn_supervised_with_runtime(
+        let bridge_digest = crate::aurora::load_installed_state(&managed, &instance)
+            .ok()
+            .flatten()
+            .map(|state| state.artifact().sha256().to_owned());
+        let bridge = crate::launch::activity_bridge::supported(
+            presence_aurora,
+            &presence_version,
+            bridge_digest.as_deref(),
+        )
+        .then(|| crate::launch::activity_bridge::Session::prepare().ok())
+        .flatten();
+        let gameplay = bridge.as_ref().map(|session| session.handle());
+        let snapshot = crate::launch::process::spawn_supervised_with_bridge(
             spec,
             managed.instance_paths(&instance).logs(),
             Arc::new(move |snapshot| {
@@ -4316,10 +4328,12 @@ pub async fn play_instance(
                     aurora_active: presence_aurora,
                     status: snapshot.status,
                     started_at: snapshot.started_at_unix_seconds,
+                    gameplay: gameplay.clone(),
                 });
                 let _ = listener_app.emit("launch-state", LaunchProcessDto::from(snapshot));
             }),
             Some(game_plan.java().major_version()),
+            bridge,
         )?;
         Ok(snapshot.into())
     })
@@ -5259,7 +5273,7 @@ mod tests {
 
         // The schema-1 input migrated deterministically to schema 2 with the
         // selection preserved and default appearance.
-        assert_eq!(state.config.schema_version, 3);
+        assert_eq!(state.config.schema_version, 4);
         assert_eq!(
             state.config.selected_instance_id.as_deref(),
             Some("aurora-default")

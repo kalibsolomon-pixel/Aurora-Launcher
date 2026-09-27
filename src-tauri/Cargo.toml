@@ -52,6 +52,9 @@ uuid = { version = "1.26", features = ["v4"] }
 # `uuid` dependency already reaches for v4 randomness, pinned as a direct
 # dependency because Aurora generates its own challenge material.
 getrandom = "0.3"
+# Fixed-length constant-time comparison for the ephemeral activity capability.
+subtle = "2.6"
+zeroize = "1"
 # Unpadded base64url for PKCE S256 challenges and OAuth state (Phase 8).
 # RustCrypto implementation matching the existing sha1/sha2 dependency family.
 base64ct = { version = "1", features = ["alloc"] }
@@ -81,6 +84,7 @@ png = "0.17"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security_Credentials",
+    "Win32_Networking_WinSock",
 ] }
 windows = { version = "0.61", default-features = false, features = [
     "Win32_Foundation",
