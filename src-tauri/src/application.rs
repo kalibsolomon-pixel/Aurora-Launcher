@@ -213,6 +213,8 @@ impl InstanceConfigurationDto {
 pub struct CommandError {
     code: String,
     message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    conflict: Option<crate::instance_content::ProviderConflict>,
 }
 
 impl From<crate::instances::InvalidInstanceRecord> for CommandError {
@@ -230,6 +232,7 @@ impl CommandError {
         Self {
             code: code.into(),
             message: message.into(),
+            conflict: None,
         }
     }
 }
@@ -2296,6 +2299,7 @@ pub struct ModrinthQuickInstallRequest {
 pub struct ModrinthPreviewResponse {
     preview: crate::modrinth::InstallPreview,
     preview_fingerprint: String,
+    conflicts: Vec<crate::instance_content::ProviderConflict>,
 }
 
 fn provider_context(
@@ -2497,9 +2501,13 @@ pub async fn preview_modrinth_install(
         .await
         .map_err(provider_error)?;
     let preview_fingerprint = provider_fingerprint(&instance, &resolved);
+    let conflicts =
+        crate::instance_content::preview_provider_conflicts(&managed, &instance, &resolved.plans)
+            .await?;
     Ok(ModrinthPreviewResponse {
         preview: resolved.preview,
         preview_fingerprint,
+        conflicts,
     })
 }
 
@@ -2556,11 +2564,18 @@ async fn install_resolved_provider_plans(
         .await
         .map_err(|error| {
             let code = match error {
-                crate::instance_content::ContentError::Collision => "provider_content_collision",
+                crate::instance_content::ContentError::Collision
+                | crate::instance_content::ContentError::ModCollision(_) => {
+                    "provider_content_collision"
+                }
                 crate::instance_content::ContentError::HashMismatch => "provider_integrity_failure",
                 _ => "provider_install_failed",
             };
-            CommandError::new(code, error.to_string())
+            let mut command_error = CommandError::new(code, error.to_string());
+            if let crate::instance_content::ContentError::ModCollision(conflict) = error {
+                command_error.conflict = Some(conflict);
+            }
+            command_error
         })
 }
 

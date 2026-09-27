@@ -12,7 +12,9 @@
     LauncherBackendError,
     type ContentType, type ModrinthPreviewResponse,
     type ModrinthProjectDetails, type ModrinthSearchPage,
+    type ProviderConflict,
   } from "$lib/backend";
+  import InstallConflicts from "./InstallConflicts.svelte";
 
   let {
     instanceId, instanceName, minecraftVersion, kind, installedProjectIds, dependencyOnlyProjectIds, onInstalled,
@@ -38,6 +40,7 @@
   let notice = $state("");
   let noticeExiting = $state(false);
   let failedIcons = $state<Record<string, true>>({});
+  let blockedProjects = $state<Record<string, { message: string; conflict: ProviderConflict | null }>>({});
   let requestSerial = 0;
 
   // A brief in-memory reuse avoids fetching the same default page on a quick
@@ -82,6 +85,7 @@
     preview = null;
     error = null;
     const cached = defaultPages.get(instanceId, kind, minecraftVersion);
+    blockedProjects = {};
     if (cached) {
       page = cached;
       nextOffset = 20;
@@ -95,7 +99,7 @@
     if (!(reason instanceof LauncherBackendError)) return "Modrinth is unavailable. Try again later.";
     switch (reason.code) {
       case "provider_no_compatible_version": return "No compatible version is available for this instance.";
-      case "provider_content_collision": return "This project conflicts with installed or local content. Review Details.";
+      case "provider_content_collision": return reason.message;
       case "provider_rate_limited": return "Modrinth's rate limit was reached. Try again shortly.";
       case "provider_network_error": return "Modrinth is unavailable. Try again later.";
       case "provider_dependency_unresolved": return "A required dependency has no compatible version.";
@@ -119,7 +123,12 @@
         if (instanceId === targetInstanceId && kind === targetKind) notifications.show(`${title} is already installed.`);
       }
     } catch (reason) {
-      if (instanceId === targetInstanceId && kind === targetKind) notifications.show(quickMessage(reason));
+      if (instanceId === targetInstanceId && kind === targetKind) {
+        notifications.show(quickMessage(reason));
+        if(reason instanceof LauncherBackendError && reason.code === "provider_content_collision") {
+          blockedProjects = { ...blockedProjects, [projectId]: { message: reason.message, conflict: reason.conflict } };
+        }
+      }
     } finally {
       quickBusyProjectId = null;
     }
@@ -208,6 +217,10 @@
     <div class="project">
       <button type="button" class="btn btn-quiet" onclick={() => { project = null; preview = null; }}>← Results</button>
       <h4>{project.title}</h4>
+      {#if blockedProjects[project.projectId]}
+        {@const blocker = blockedProjects[project.projectId]}
+        {#if blocker.conflict}<InstallConflicts conflicts={[blocker.conflict]} />{:else}<p class="inline-message inline-message-error">{blocker.message}</p>{/if}
+      {/if}
       <p>{project.summary}</p>
       <p class="browse-meta">License {project.license} · Modrinth project {project.projectId}</p>
       <p class="browse-meta">Minecraft {minecraftVersion} · {project.loaders.join(", ") || "No loader listed"}</p>
@@ -243,8 +256,8 @@
               <span class="browse-meta">By {hit.author} · {hit.downloads.toLocaleString()} downloads</span>
             </div>
             <div class="browse-actions">
-              <button type="button" class="btn btn-quiet install-action" title={dependencyOnlyProjectIds.includes(hit.projectId) ? `Keep ${hit.title} installed directly` : installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : `Install latest compatible version of ${hit.title}`} aria-label={dependencyOnlyProjectIds.includes(hit.projectId) ? `Keep ${hit.title} installed directly` : installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : quickBusyProjectId === hit.projectId ? `Installing ${hit.title}` : `Install latest compatible version of ${hit.title}`} disabled={quickBusyProjectId !== null || (installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId))} onclick={() => quickInstall(hit.projectId, hit.title)}>
-                {#if quickBusyProjectId === hit.projectId}<span class="spinner" aria-hidden="true"></span><span class="action-state">Installing…</span>{:else if dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Keep</span>{:else if installedProjectIds.includes(hit.projectId)}<span class="action-state">Installed</span>{:else}<span aria-hidden="true">↓</span>{/if}
+              <button type="button" class="btn btn-quiet install-action" title={blockedProjects[hit.projectId]?.message ?? (installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : `Install latest compatible version of ${hit.title}`)} aria-label={blockedProjects[hit.projectId] ? `${hit.title} installation blocked; review Details` : dependencyOnlyProjectIds.includes(hit.projectId) ? `Keep ${hit.title} installed directly` : installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : quickBusyProjectId === hit.projectId ? `Installing ${hit.title}` : `Install latest compatible version of ${hit.title}`} disabled={quickBusyProjectId !== null || !!blockedProjects[hit.projectId] || (installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId))} onclick={() => quickInstall(hit.projectId, hit.title)}>
+                {#if quickBusyProjectId === hit.projectId}<span class="spinner" aria-hidden="true"></span><span class="action-state">Installing…</span>{:else if installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Installed</span>{:else if blockedProjects[hit.projectId]}<span class="action-state">Blocked</span>{:else if dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Keep</span>{:else}<span aria-hidden="true">↓</span>{/if}
               </button>
               <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => openProject(hit.projectId)}>Details</button>
             </div>
@@ -264,6 +277,7 @@
   {#if preview}
     <div class="preview" role="group" aria-label="Installation preview">
       <h4>Install into {instanceName}</h4>
+      <InstallConflicts conflicts={preview.conflicts ?? []} />
       <p>{installCount} file{installCount === 1 ? "" : "s"} will be installed. Required dependencies appear below.</p>
       <ul>
         {#each previewItems as item}
@@ -273,7 +287,7 @@
       {#each preview.preview.warnings as warning}<p class="browse-note">⚠ {warning}</p>{/each}
       <div class="preview-actions">
         <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => preview = null}>Cancel</button>
-        <button type="button" class="btn" disabled={busy !== null || installCount === 0} onclick={confirmInstall}>Install {installCount} file{installCount === 1 ? "" : "s"}</button>
+        <button type="button" class="btn" disabled={busy !== null || installCount === 0 || !!preview.conflicts?.length} onclick={confirmInstall}>Install {installCount} file{installCount === 1 ? "" : "s"}</button>
       </div>
     </div>
   {/if}

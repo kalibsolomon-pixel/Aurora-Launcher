@@ -14,6 +14,8 @@ let Accounts: any;
 let Identity: any;
 let Dialog: any;
 let accountManager: any;
+let Conflicts: any;
+let Artwork: any;
 const id = "a".repeat(32);
 const secondId = "b".repeat(32);
 function instance(platform: any = { kind: "vanilla" }, aurora: any = null) {
@@ -43,12 +45,26 @@ before(async () => {
   ({ accountManager } = await server.ssrLoadModule("/src/lib/launcher/accountManager.svelte.ts"));
   Dialog = (await server.ssrLoadModule("/src/lib/shell/AccountDialog.svelte")).default;
   Identity = (await server.ssrLoadModule("/src/lib/launcher/AccountIdentity.svelte")).default;
+  Conflicts = (await server.ssrLoadModule("/src/lib/instances/InstallConflicts.svelte")).default;
+  Artwork = (await server.ssrLoadModule("/src/lib/instances/InstalledArtwork.svelte")).default;
 });
 after(async () => { await server?.close(); });
 function html(component: any, props = {}) { return render(component, { props }).body; }
 
 it("Home with no selected instance offers creation and keeps local navigation", () => {
   reset(null); assert.match(html(Home), /No instances yet/); assert.match(html(Home), /Create instance/);
+});
+
+it("installation blockers render native identity, filename, ownership and reason", () => {
+  const conflicts=[{modId:"fixture",fileName:"manual-fixture.jar",ownership:"userManaged",reason:"Native duplicate reason"}];
+  const view=html(Conflicts,{conflicts});
+  assert.match(view,/Installation blocked/);assert.match(view,/fixture.*manual-fixture.jar.*Local/);assert.match(view,/Native duplicate reason/);
+  assert.equal(html(Conflicts,{conflicts:[]}).includes("Installation blocked"),false);
+});
+it("installed artwork failure and Local/Unknown rows preserve a nonfatal glyph", () => {
+  for(const ownership of ["providerManaged","userManaged","unknown"]) {
+    assert.match(html(Artwork,{entry:{ownership,provenance:null,metadata:{id:"fixture"}}}).replace(/<!--.*?-->/g,""),/installed-artwork[^>]*>M/);
+  }
 });
 it("Home permits selection when instances exist without a selected target", () => {
   reset(); launcher.launcherState.config.selectedInstanceId = null;
@@ -231,6 +247,9 @@ it("Home integrates its picker within the selected-instance card and has no acco
   assert.match(view, /aria-label="Selected instance"[\s\S]*Select Play instance/);
   assert.doesNotMatch(view, /Play instance<|Manage accounts|Minecraft account|PlayerName/);
   assert.match(view, /Default Minecraft player/);
+  const card=view.slice(view.indexOf('aria-label="Selected instance"'),view.indexOf('</section>',view.indexOf('aria-label="Selected instance"')));
+  assert.doesNotMatch(card,/player-preview|<canvas/);
+  assert.match(view,/width="420" height="600"/);
   launcher.accountAvatars[account.accountId]={rgba:Array(256).fill(255),model:"classic",skinHeight:64,skinRgba:Array(16384).fill(255)};
   assert.match(html(Home), /Current Minecraft player skin/);
 });

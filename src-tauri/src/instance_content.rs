@@ -1153,6 +1153,64 @@ pub async fn install_provider_plans(
     })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderConflict {
+    pub mod_id: Option<String>,
+    pub file_name: String,
+    pub ownership: crate::instance_mods::ModOwnership,
+    pub reason: String,
+}
+
+/// Review may populate the verified cache, but never changes instance content or ownership.
+pub async fn preview_provider_conflicts(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    plans: &[ProviderInstallPlan],
+) -> Result<Vec<ProviderConflict>, ContentError> {
+    let cache = ArtifactCache::new(managed.clone());
+    let mut conflicts = Vec::new();
+    for plan in plans {
+        validate_file_name(&plan.file_name)?;
+        let artifact = match &plan.source {
+            ProviderArtifactSource::Sha256(source) => cache.acquire(source).await,
+            ProviderArtifactSource::Sha512(source) => cache.acquire_sha512(source).await,
+        }
+        .map_err(|error| ContentError::Acquisition(error.to_string()))?;
+        let record = plan.record(artifact.sha256.as_hex());
+        record.validate()?;
+        match validate_provider_mod_artifact(
+            managed,
+            instance,
+            &record,
+            &artifact.path,
+            artifact.bytes,
+        ) {
+            Err(ContentError::ModCollision(conflict)) => {
+                conflicts.push(conflict);
+                continue;
+            }
+            other => other?,
+        }
+        let directory = validate_directory(managed, instance, record.content_type)?;
+        if let Some(name) = std::fs::read_dir(directory)
+            .map_err(ContentError::Io)?
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .find(|name| name.eq_ignore_ascii_case(&record.file_name))
+        {
+            conflicts.push(ProviderConflict {
+                mod_id: None,
+                file_name: name,
+                ownership: crate::instance_mods::ModOwnership::Unknown,
+                reason: "A destination file already exists; it will not be overwritten or adopted."
+                    .into(),
+            });
+        }
+    }
+    Ok(conflicts)
+}
+
 async fn acquire_provider_plans(
     managed: &ManagedPaths,
     plans: Vec<ProviderInstallPlan>,
@@ -1618,21 +1676,51 @@ fn validate_provider_mod_artifact(
     };
     // Ownership is configuration-derived. A provider may supply any otherwise
     // compatible mod identity unless a verified active launcher requirement owns it.
-    let protected = crate::instance_mods::verified_required_mods(managed, instance)
+    crate::instance_mods::verified_required_mods(managed, instance)
         .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
-    let incoming = std::iter::once(&metadata.id).chain(metadata.nested_mod_ids.iter());
-    if incoming.into_iter().any(|id| {
-        protected.iter().any(|required| {
-            required.id.eq_ignore_ascii_case(id)
-                || required
-                    .nested_mod_ids
-                    .iter()
-                    .any(|nested| nested.eq_ignore_ascii_case(id))
-        })
-    }) {
-        return Err(ContentError::Collision);
+    let inventory = crate::instance_mods::scan(managed, instance)
+        .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
+    for entry in &inventory.entries {
+        // Lifecycle updates may replace only their own verified provider record.
+        if entry.ownership == crate::instance_mods::ModOwnership::ProviderManaged
+            && entry
+                .provenance
+                .as_ref()
+                .is_some_and(|old| old.identity() == record.identity())
+        {
+            continue;
+        }
+        if let Some(existing) = &entry.metadata {
+            if let Some(id) = conflicting_mod_identity(&metadata, existing) {
+                return Err(ContentError::ModCollision(ProviderConflict {
+                    mod_id: Some(id.into()), file_name: entry.file_name.clone(), ownership: entry.ownership,
+                    reason: "A top-level mod identity would duplicate an installed mod or bundled module. Neither file will be replaced or adopted.".into(),
+                }));
+            }
+        }
     }
+    // Required content was deeply verified above; shared nested modules are descriptive
+    // declarations, not independently owned top-level artifacts. Fabric resolves them.
     Ok(())
+}
+
+fn conflicting_mod_identity<'a>(
+    incoming: &'a crate::instance_mods::FabricModMetadata,
+    existing: &crate::instance_mods::FabricModMetadata,
+) -> Option<&'a str> {
+    if incoming.id.eq_ignore_ascii_case(&existing.id)
+        || existing
+            .nested_mod_ids
+            .iter()
+            .any(|id| id.eq_ignore_ascii_case(&incoming.id))
+    {
+        return Some(&incoming.id);
+    }
+    incoming
+        .nested_mod_ids
+        .iter()
+        .find(|id| id.eq_ignore_ascii_case(&existing.id))
+        .map(String::as_str)
 }
 
 fn activate_verified_with_commit(
@@ -1725,6 +1813,7 @@ pub enum ContentError {
     ChangedSinceScan,
     UnsupportedAction,
     Collision,
+    ModCollision(ProviderConflict),
     HashMismatch,
     OperationInProgress,
     Acquisition(String),
@@ -1739,7 +1828,7 @@ impl ContentError {
             Self::StateMalformed(_) | Self::StateVersion(_) => "content_state_malformed",
             Self::ChangedSinceScan => "content_changed_since_scan",
             Self::UnsupportedAction => "unsupported_content_action",
-            Self::Collision => "content_collision",
+            Self::Collision | Self::ModCollision(_) => "content_collision",
             Self::HashMismatch => "content_hash_mismatch",
             Self::OperationInProgress => "content_operation_in_progress",
             Self::Acquisition(_) => "content_acquisition_failed",
@@ -1762,6 +1851,14 @@ impl fmt::Display for ContentError {
             Self::ChangedSinceScan => formatter.write_str("content changed since the scan"),
             Self::UnsupportedAction => formatter.write_str("this content action is unsupported"),
             Self::Collision => formatter.write_str("content target already exists"),
+            Self::ModCollision(conflict) => write!(
+                formatter,
+                "{} conflicts with {:?} file '{}': {}",
+                conflict.mod_id.as_deref().unwrap_or("Content"),
+                conflict.ownership,
+                conflict.file_name,
+                conflict.reason
+            ),
             Self::HashMismatch => formatter.write_str("content hash does not match"),
             Self::OperationInProgress => {
                 formatter.write_str("another content operation is in progress")
@@ -2251,9 +2348,171 @@ mod tests {
     }
 
     fn install_protected_fixture(fixture: &Fixture) -> PathBuf {
+        install_protected_api(fixture, &fabric_jar_with_id("fabric-api"))
+    }
+
+    fn bundled_jar(id: &str, module: &str) -> Vec<u8> {
+        let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        writer
+            .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(serde_json::json!({"id":id,"version":"1.0","jars":[{"file":"META-INF/jars/module.jar"}]}).to_string().as_bytes()).unwrap();
+        writer
+            .start_file(
+                "META-INF/jars/module.jar",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+        writer.write_all(&fabric_jar_with_id(module)).unwrap();
+        writer.finish().unwrap().into_inner()
+    }
+
+    #[test]
+    fn shared_nested_modules_do_not_fabricate_protected_top_level_ownership() {
+        let fixture = Fixture::new();
+        let required = bundled_jar("fabric-api", "shared-api-module");
+        let protected_path = install_protected_api(&fixture, &required);
+        let incoming = bundled_jar("ordinary-renderer", "shared-api-module");
+        let source = fixture.root.join("verified-renderer.jar");
+        std::fs::write(&source, &incoming).unwrap();
+        let record = transaction_record(ContentType::Mod, "renderer.jar", &incoming);
+        // The former rule rejected this exact nested/nested intersection.
+        let (metadata, _) =
+            crate::instance_mods::inspect_fabric_metadata(&source, incoming.len() as u64);
+        assert_eq!(metadata.unwrap().nested_mod_ids, ["shared-api-module"]);
+        activate_provider_transaction(
+            &fixture.managed,
+            &fixture.instance,
+            vec![(record.clone(), source, incoming.len() as u64)],
+            |state| state.save(&fixture.managed, &fixture.instance),
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(protected_path).unwrap(), required);
+        assert_eq!(
+            ContentState::load(&fixture.managed, &fixture.instance)
+                .unwrap()
+                .entries,
+            [record]
+        );
+        let inventory = crate::instance_mods::scan(&fixture.managed, &fixture.instance).unwrap();
+        assert_eq!(
+            inventory
+                .entries
+                .iter()
+                .filter(|entry| entry.ownership
+                    == crate::instance_mods::ModOwnership::LauncherManagedRequired)
+                .count(),
+            2
+        );
+        assert_eq!(
+            inventory
+                .entries
+                .iter()
+                .filter(
+                    |entry| entry.ownership == crate::instance_mods::ModOwnership::ProviderManaged
+                )
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn root_collisions_with_local_and_bundled_identities_remain_blocked() {
+        for (installed, incoming) in [
+            (
+                fabric_jar_with_id("ordinary"),
+                fabric_jar_with_id("ordinary"),
+            ),
+            (
+                bundled_jar("parent", "module"),
+                fabric_jar_with_id("module"),
+            ),
+            (
+                fabric_jar_with_id("module"),
+                bundled_jar("parent", "module"),
+            ),
+        ] {
+            let fixture = no_aurora_fixture();
+            let local = fixture.dir(ContentType::Mod).join("local.jar");
+            std::fs::write(&local, &installed).unwrap();
+            let source = fixture.root.join("verified.jar");
+            std::fs::write(&source, &incoming).unwrap();
+            let record = transaction_record(ContentType::Mod, "different-name.jar", &incoming);
+            let error = validate_provider_mod_artifact(
+                &fixture.managed,
+                &fixture.instance,
+                &record,
+                &source,
+                incoming.len() as u64,
+            )
+            .unwrap_err();
+            assert!(
+                matches!(error,ContentError::ModCollision(ProviderConflict {file_name,ownership:crate::instance_mods::ModOwnership::UserManaged,..}) if file_name=="local.jar")
+            );
+            assert_eq!(std::fs::read(local).unwrap(), installed);
+        }
+    }
+
+    #[test]
+    fn incoming_nested_root_of_protected_artifact_is_still_blocked() {
+        let fixture = Fixture::new();
+        install_protected_fixture(&fixture);
+        let bytes = bundled_jar("ordinary", "aurora");
+        let path = fixture.root.join("verified.jar");
+        std::fs::write(&path, &bytes).unwrap();
+        let record = transaction_record(ContentType::Mod, "ordinary.jar", &bytes);
+        assert!(matches!(
+            validate_provider_mod_artifact(
+                &fixture.managed,
+                &fixture.instance,
+                &record,
+                &path,
+                bytes.len() as u64
+            ),
+            Err(ContentError::ModCollision(ProviderConflict {
+                ownership: crate::instance_mods::ModOwnership::LauncherManagedRequired,
+                ..
+            }))
+        ));
+    }
+
+    #[tokio::test]
+    async fn review_reports_structured_local_collision_without_installing() {
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        let local = fixture.dir(ContentType::Mod).join("manual.jar");
+        std::fs::write(&local, fabric_jar_with_id("ordinary")).unwrap();
+        let conflicts = preview_provider_conflicts(
+            &fixture.managed,
+            &fixture.instance,
+            &[mod_plan(&server, "AAAABBBB", "ordinary", false)],
+        )
+        .await
+        .unwrap();
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(conflicts[0].file_name, "manual.jar");
+        assert_eq!(conflicts[0].mod_id.as_deref(), Some("ordinary"));
+        assert_eq!(
+            conflicts[0].ownership,
+            crate::instance_mods::ModOwnership::UserManaged
+        );
+        assert_eq!(
+            std::fs::read_dir(fixture.dir(ContentType::Mod))
+                .unwrap()
+                .count(),
+            1
+        );
+        assert!(
+            ContentState::load(&fixture.managed, &fixture.instance)
+                .unwrap()
+                .entries
+                .is_empty()
+        );
+    }
+
+    fn install_protected_api(fixture: &Fixture, api: &[u8]) -> PathBuf {
         let directory = fixture.dir(ContentType::Mod);
         let aurora = fabric_jar_with_id("aurora");
-        let api = fabric_jar_with_id("fabric-api");
         std::fs::write(directory.join("aurora-1.jar"), &aurora).unwrap();
         let api_path = directory.join("fabric-api-1.jar");
         std::fs::write(&api_path, &api).unwrap();
@@ -2281,7 +2540,10 @@ mod tests {
             plan.file_name = format!("alternate-{id}.jar");
             assert!(matches!(
                 install_provider_plans(&fixture.managed, &fixture.instance, vec![plan]).await,
-                Err(ContentError::Collision)
+                Err(ContentError::ModCollision(ProviderConflict {
+                    ownership: crate::instance_mods::ModOwnership::LauncherManagedRequired,
+                    ..
+                }))
             ));
         }
         assert!(
