@@ -1126,20 +1126,12 @@ fn derive_local_warnings(entries: &mut [ModEntry]) {
         .flat_map(|metadata| std::iter::once(&metadata.id).chain(metadata.nested_mod_ids.iter()))
         .map(|id| id.to_lowercase())
         .collect();
-    let mut declarations = HashMap::<String, (usize, HashSet<Option<String>>)>::new();
+    let mut declarations = HashMap::<String, (usize, usize)>::new();
     for metadata in entries.iter().filter_map(|entry| entry.metadata.as_ref()) {
         let root = declarations.entry(metadata.id.to_lowercase()).or_default();
         root.0 += 1;
-        root.1.insert(metadata.version.clone());
         for id in &metadata.nested_mod_ids {
-            let key = id.to_lowercase();
-            declarations.entry(key.clone()).or_default().1.insert(
-                metadata
-                    .nested_mod_versions
-                    .get(&key)
-                    .cloned()
-                    .unwrap_or(None),
-            );
+            declarations.entry(id.to_lowercase()).or_default().1 += 1;
         }
     }
     let builtins = ["minecraft", "fabricloader", "java"];
@@ -1152,7 +1144,7 @@ fn derive_local_warnings(entries: &mut [ModEntry]) {
             .find(|id| {
                 declarations
                     .get(&id.to_lowercase())
-                    .is_some_and(|(roots, versions)| *roots > 1 || versions.len() > 1)
+                    .is_some_and(|(roots, nested)| *roots > 1 || (*roots > 0 && *nested > 0))
             })
         {
             entry.warnings.push(ModWarning::new(
@@ -2030,8 +2022,8 @@ mod tests {
                 .any(|warning| warning.code == "required_dependency_missing")
         );
 
-        // Fabric bundles commonly overlap: identical nested modules are one
-        // loader identity, while different versions remain a real conflict.
+        // Fabric resolves shared nested modules, including differing versions.
+        // Descriptive nested identities do not become top-level ownership.
         let overlapping = fixture.mods().join("overlapping.jar");
         let mut writer = zip::ZipWriter::new(std::fs::File::create(&overlapping).unwrap());
         writer
@@ -2077,7 +2069,7 @@ mod tests {
         writer.finish().unwrap();
         let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
         assert!(
-            inventory
+            !inventory
                 .entries
                 .iter()
                 .find(|entry| entry.file_name == "divergent.jar")
@@ -2086,6 +2078,25 @@ mod tests {
                 .iter()
                 .any(|warning| warning.code == "duplicate_mod_id")
         );
+
+        let root_copy = fixture.mods().join("root-copy.jar");
+        jar(
+            &root_copy,
+            Some(br#"{"schemaVersion":1,"id":"fabric-resource-loader-v1","version":"2.0"}"#),
+        );
+        let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+        for name in ["root-copy.jar", "divergent.jar"] {
+            assert!(
+                inventory
+                    .entries
+                    .iter()
+                    .find(|entry| entry.file_name == name)
+                    .unwrap()
+                    .warnings
+                    .iter()
+                    .any(|warning| warning.code == "duplicate_mod_id")
+            );
+        }
 
         let missing = fixture.mods().join("missing-nested.jar");
         jar(&missing, Some(br#"{"schemaVersion":1,"id":"missing-nested","version":"1.0","jars":[{"file":"nested/absent.jar"}]}"#));
