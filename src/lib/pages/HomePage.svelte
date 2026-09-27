@@ -29,7 +29,7 @@
   per-instance workspace lives behind Instances — Home stays a launch
   surface; detailed readiness and maintenance stay in the workspace Overview.
 -->
-<div class="page">
+<div class="page home-page">
   <header class="page-header">
     <div>
       <h2 class="page-title">Home</h2>
@@ -80,7 +80,8 @@
     {#if launcher.instanceError}
       <p class="inline-message inline-message-error" role="alert">{launcher.instanceError.message}<code>{launcher.instanceError.code}</code></p>
     {/if}
-    <section class="group" aria-label="Selected instance" aria-live="polite">
+    <div class="home-composition">
+    <section class="group instance-card" aria-label="Selected instance" aria-live="polite">
       <div class="launch-card">
         <div class="launch-main">
         <div class="instance-heading">
@@ -108,7 +109,6 @@
           </button>
         </div>
         </div>
-        <PlayerPreview />
       </div>
       {#if launch.blockers.length || launcher.playError || launch.failure}
         <div class="group-row">
@@ -127,13 +127,18 @@
       {/if}
       {#if launch.exitDetail}<p class="group-footer">{launch.exitDetail}</p>{/if}
     </section>
+    <PlayerPreview />
+    </div>
   {/if}
 </div>
 
 <style>
-  .launch-card { display: grid; grid-template-columns: minmax(0, 1fr) 200px; min-height: 320px; }
-  .launch-main { padding: var(--space-5); display: flex; flex-direction: column; justify-content: center; gap: var(--space-5); min-width: 0; }
-  @media (max-width: 900px) { .launch-card { grid-template-columns: minmax(0, 1fr); min-height: 260px; } }
+  .home-page { max-width: 1200px; }
+  .home-composition { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(240px, 1fr); gap: var(--space-5); align-items: center; min-height: 520px; }
+  .instance-card { min-width: 0; }
+  .launch-card { min-height: 320px; display: flex; }
+  .launch-main { flex: 1; padding: var(--space-5); display: flex; flex-direction: column; justify-content: center; gap: var(--space-5); min-width: 0; }
+  @media (max-width: 1050px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; } .launch-card { min-height: 260px; } }
   .instance-heading {
     min-width: 0;
   }
