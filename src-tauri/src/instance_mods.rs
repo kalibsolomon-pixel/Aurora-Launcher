@@ -1176,8 +1176,8 @@ fn derive_local_warnings(entries: &mut [ModEntry]) {
                 entry.warnings.push(ModWarning::new(
                     "declared_conflict_present",
                     format!(
-                        "Declared conflict '{}' is present and enabled locally.",
-                        relation.mod_id
+                        "Metadata declares a conflict with '{}' matching '{}'. That mod is detected; Fabric evaluates the version constraint.",
+                        relation.mod_id, relation.requirement
                     ),
                 ));
             }
@@ -1959,6 +1959,36 @@ mod tests {
             inventory.entries.first().unwrap().file_name,
             "entry-000.txt"
         );
+    }
+
+    #[test]
+    fn conflict_declarations_report_the_constraint_without_claiming_version_applicability() {
+        let fixture = Fixture::new("conditional-conflict");
+        jar(
+            &fixture.mods().join("consumer.jar"),
+            Some(br#"{"schemaVersion":1,"id":"consumer","version":"1.0","breaks":{"api":"<2.0"}}"#),
+        );
+        jar(
+            &fixture.mods().join("api.jar"),
+            Some(br#"{"schemaVersion":1,"id":"api","version":"2.0"}"#),
+        );
+        let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+        let warning = inventory
+            .entries
+            .iter()
+            .find(|entry| entry.file_name == "consumer.jar")
+            .unwrap()
+            .warnings
+            .iter()
+            .find(|warning| warning.code == "declared_conflict_present")
+            .unwrap();
+        assert!(warning.message.contains("'<2.0'"));
+        assert!(
+            warning
+                .message
+                .contains("Fabric evaluates the version constraint")
+        );
+        assert!(!warning.message.contains("is present and enabled locally"));
     }
 
     #[test]
