@@ -1,14 +1,16 @@
 # Discord Rich Presence setup
 
-Aurora implements optional local desktop IPC presence, without Discord account linking or OAuth tokens. No production Discord application ID is configured. **Live presence/logo activation is blocked until Aurora's owner supplies one.**
+Aurora implements optional local desktop IPC presence, without Discord account linking or OAuth tokens. The owner reports that the **Aurora Client** application now exists with the registered **aurora_icon** asset. Its public numeric Application ID must still be supplied to the build environment; registration alone does not configure an executable.
 
 1. Create/select an Aurora-owned application in the [Discord Developer Portal](https://discord.com/developers/applications), named **Aurora Client**. Never borrow another application's ID.
 2. Copy its public Application ID. Activity-only IPC needs no bot token, client secret or redirect registration.
-3. Under **Rich Presence → Art Assets**, upload the existing canonical 1024×1024 `static/aurora-app-icon.png` or owner-approved canonical mark composition. Register its lowercase key as **aurora-logo** and wait for availability. See [Discord's asset guide](https://discord.com/developers/discord-social-sdk/development-guides/setting-rich-presence#uploading-assets).
+3. Under **Rich Presence → Art Assets**, confirm the owner's registered **aurora_icon** key and wait for availability. The launcher requests that exact key. See [Discord's asset guide](https://discord.com/developers/discord-social-sdk/development-guides/setting-rich-presence#uploading-assets).
 4. Set `AURORA_DISCORD_APPLICATION_ID` to that legitimate public ID in the build environment, then run `npm run tauri build`. Users do not supply arbitrary application identities or IPC paths through Settings. A public ID may later be checked in after ownership review; no secret belongs in source/config.
 5. Open desktop Discord and the resulting production build. In **Settings → Discord**, choose **Connect to Discord**. Connected requires actual READY/command acknowledgement. Reconnect handles ordinary drops without restarting Aurora.
 6. Connection alone publishes nothing. Explicitly enable **Discord Rich Presence** and verify Aurora Client/In Launcher/logo in Discord. Exercise Starting/Running/normal exit with the supervised game. Extra details default off and opt in separately. Turn master off and verify clear. Discord's own activity visibility settings also apply.
 7. Complete real Discord acceptance before treating this feature as publication-ready. IPC acknowledgement alone does not prove the remote profile/logo rendered.
+
+For a Windows PowerShell production build, set `$env:AURORA_DISCORD_APPLICATION_ID = '<owner-supplied numeric Application ID>'`, then run `npm run tauri build` in the same session. Rust reads this variable at compile time through `option_env!`; setting it only when launching an already-built executable has no effect. Use the generated `src-tauri/target/release/aurora-launcher.exe`, MSI and NSIS bundles for acceptance. No private credential or persistent environment setting is needed.
 
 Settings now exposes **Show World**, **Show Server** and **Show Server Address**, all defaulting off. Address sharing additionally requires Show Server. They use only authenticated native snapshots from the reviewed client protocol v1; nothing is inferred from arguments or logs. Missing bridge data leaves generic presence. World paths are never published. Raw addresses require explicit address consent, and display names containing the address/host are suppressed while that consent is off. There is no Unlink control because there is no account link.
 
