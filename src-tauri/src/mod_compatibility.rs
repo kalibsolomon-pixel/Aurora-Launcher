@@ -219,6 +219,38 @@ pub fn validate(
         // Fabric conflicts are advisory; breaks are fatal. Recommendations and
         // suggestions never become hard requirements.
         for relation in &metadata.breaks {
+            let builtin = match relation.mod_id.as_str() {
+                "minecraft" => Some(minecraft.to_owned()),
+                "fabricloader" => Some(loader.to_owned()),
+                "java" => {
+                    if java_major.is_none() {
+                        continue;
+                    }
+                    java_major.map(|v| v.to_string())
+                }
+                _ => None,
+            };
+            if let Some(version) = builtin {
+                if satisfies(&version, &relation.requirement) != Ok(false) {
+                    issues.push(issue(
+                        entry,
+                        "mod_declared_break",
+                        Some(relation.requirement.clone()),
+                        Some(version.clone()),
+                        format!(
+                            "{} {} declares breaks {} {}. This instance uses {} {}.",
+                            metadata.id,
+                            metadata.version.as_deref().unwrap_or("unknown"),
+                            relation.mod_id,
+                            relation.requirement,
+                            relation.mod_id,
+                            version
+                        ),
+                    ));
+                }
+                continue;
+            }
+
             for other in inventory.entries.iter().filter(|e| usable(e)) {
                 if let Some(version) = other
                     .metadata
@@ -474,6 +506,30 @@ mod tests {
             )
             .is_empty()
         );
+    }
+    #[test]
+    fn builtin_breaks_use_the_resolved_instance_versions() {
+        for (id, predicate) in [
+            ("minecraft", ">=1.21.11"),
+            ("fabricloader", "<0.20"),
+            ("java", "<25"),
+        ] {
+            let value = entry(
+                serde_json::json!({"id":"builtin-break","version":"1","breaks":{id:predicate}}),
+                ModOwnership::UserManaged,
+                true,
+            );
+            assert_eq!(
+                validate(&inventory(vec![value]), "1.21.11", "0.19.5", Some(21))[0].code,
+                "mod_declared_break"
+            );
+        }
+        let value = entry(
+            serde_json::json!({"id":"builtin-break","version":"1","breaks":{"java":"<21","minecraft":"<1.21"}}),
+            ModOwnership::UserManaged,
+            true,
+        );
+        assert!(validate(&inventory(vec![value]), "1.21.11", "0.19.5", Some(21)).is_empty());
     }
     #[test]
     fn duplicate_roots_and_java_are_deterministic() {
