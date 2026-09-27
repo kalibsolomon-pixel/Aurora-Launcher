@@ -16,8 +16,10 @@
 //!
 //! Instance lifecycle orchestration (create/retry/rename/select/validate and
 //! configuration updates) lives in [`lifecycle`]; Aurora's own installed state
-//! lives in [`crate::aurora`]. Deletion remains unimplemented by design.
+//! lives in [`crate::aurora`]. Deliberate registered-instance deletion lives in
+//! [`deletion`] and preserves shared launcher resources.
 
+pub mod deletion;
 pub mod lifecycle;
 pub mod platform;
 pub mod settings;

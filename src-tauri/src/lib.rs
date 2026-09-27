@@ -74,6 +74,7 @@ pub fn run() {
             application::preview_provider_removal,
             application::apply_provider_removal,
             application::validate_instance,
+            application::delete_instance,
             application::get_instance_runtime_status,
             application::ensure_instance_runtime,
             application::get_accounts,

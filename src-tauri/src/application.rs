@@ -538,6 +538,32 @@ pub fn get_launcher_state(app: AppHandle) -> Result<LauncherState, CommandError>
     Ok(state)
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeleteInstanceRequest {
+    instance_id: String,
+    confirmed_name: String,
+}
+#[tauri::command]
+pub async fn delete_instance(
+    app: AppHandle,
+    request: DeleteInstanceRequest,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = crate::instances::InstanceId::new(request.instance_id)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::instances::deletion::delete(&managed, &id, &request.confirmed_name)
+            .map_err(|error| CommandError::new(error.0, error.1))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "instance_delete_failed",
+            "Deletion worker did not complete.",
+        )
+    })?
+}
+
 /// Typed request for updating the launcher-wide appearance preferences.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]

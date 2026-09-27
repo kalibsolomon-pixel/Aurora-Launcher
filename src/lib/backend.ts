@@ -750,6 +750,10 @@ export type ModOwnership =
   | "userManaged"
   | "unknown";
 
+export function deleteInstance(instanceId: string, confirmedName: string): Promise<void> {
+  return contentInvoke("delete_instance", { instanceId, confirmedName });
+}
+
 export interface ModRelation {
   modId: string;
   requirement: string;

@@ -73,6 +73,23 @@ pub(crate) fn lock_stopped(
 
 pub type StateListener = Arc<dyn Fn(ProcessSnapshot) + Send + Sync + 'static>;
 
+#[cfg(test)]
+pub(crate) fn with_test_state<T>(
+    instance_id: &str,
+    status: LaunchProcessStatus,
+    operation: impl FnOnce() -> T,
+) -> T {
+    let mut state = ProcessSnapshot::stopped(instance_id);
+    state.status = status;
+    process_states()
+        .lock()
+        .unwrap()
+        .insert(instance_id.into(), state);
+    let result = operation();
+    process_states().lock().unwrap().remove(instance_id);
+    result
+}
+
 fn preparations() -> &'static Mutex<HashSet<String>> {
     static PREPARATIONS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
     PREPARATIONS.get_or_init(|| Mutex::new(HashSet::new()))
