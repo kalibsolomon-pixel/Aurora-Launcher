@@ -2462,6 +2462,22 @@ pub async fn get_modrinth_project(
         .map_err(provider_error)
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthArtworkRequest {
+    project_id: String,
+}
+
+#[tauri::command]
+pub async fn get_modrinth_project_artwork(request: ModrinthArtworkRequest) -> Option<String> {
+    // Failure is cosmetic. No frontend URL or filesystem locator is accepted.
+    crate::modrinth::Client::official()
+        .artwork(&request.project_id)
+        .await
+        .ok()
+        .flatten()
+}
+
 #[tauri::command]
 pub async fn preview_modrinth_install(
     app: AppHandle,

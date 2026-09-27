@@ -13,6 +13,7 @@
   import { getInstanceContentContext, getProviderLifecycle, type InstanceContentContext, type InstanceSummary, type ModEntry, type ProviderLifecycleEntry } from "$lib/backend";
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
+  import InstalledArtwork from "./InstalledArtwork.svelte";
 
   let { instance }: { instance: InstanceSummary } = $props();
   let query = $state("");
@@ -203,7 +204,7 @@
         {#each shown as entry (entry.entryId)}
           <article class="mod-row" class:mod-row-disabled={!entry.enabled}>
             <div class="mod-row-main">
-              <div class="mod-glyph" aria-hidden="true">{entry.metadata ? "M" : "J"}</div>
+              <InstalledArtwork {entry} />
               <div class="mod-identity">
                 <div class="mod-title-line">
                   <h4>{entry.displayName}</h4>
@@ -359,7 +360,6 @@
   .mod-row:last-child { border-bottom: none; }
   .mod-row-disabled .mod-identity { opacity: 0.7; }
   .mod-row-main { display: flex; gap: var(--space-3); min-width: 0; }
-  .mod-glyph { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text-secondary); font-size: var(--text-metadata); font-weight: 700; }
   .mod-identity { min-width: 0; }
   .mod-title-line { gap: var(--space-2); min-width: 0; }
   .mod-title-line h4 { margin: 0; overflow: hidden; color: var(--color-text); font-size: var(--text-body); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }

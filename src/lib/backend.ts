@@ -17,15 +17,18 @@ export interface ApplicationStatus {
 interface BackendCommandError {
   code: string;
   message: string;
+  conflict?: ProviderConflict;
 }
 
 export class LauncherBackendError extends Error {
   readonly code: string;
+  readonly conflict: ProviderConflict | null;
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, conflict: ProviderConflict | null = null) {
     super(message);
     this.name = "LauncherBackendError";
     this.code = code;
+    this.conflict = conflict;
   }
 }
 
@@ -796,6 +799,11 @@ export interface ModInventory {
   missingManaged: ProviderRecord[];
 }
 
+/** Cosmetic lookup through native official project metadata; no URL input. */
+export async function getModrinthProjectArtwork(projectId: string): Promise<string | null> {
+  return contentInvoke("get_modrinth_project_artwork", { projectId });
+}
+
 export type ContentType = "mod" | "resourcePack" | "shaderPack";
 export type ContentOwnership = ModOwnership;
 export type DependencyKind = "required" | "optional" | "incompatible";
@@ -964,6 +972,14 @@ export interface ModrinthInstallPreview {
 export interface ModrinthPreviewResponse {
   preview: ModrinthInstallPreview;
   previewFingerprint: string;
+  conflicts: ProviderConflict[];
+}
+
+export interface ProviderConflict {
+  modId: string | null;
+  fileName: string;
+  ownership: ModOwnership;
+  reason: string;
 }
 
 export function searchModrinth(instanceId: string, contentType: ContentType, query: string, offset: number): Promise<ModrinthSearchPage> {
@@ -1014,7 +1030,7 @@ async function contentInvoke<T>(command: string, request: Record<string, unknown
   try {
     return await invoke<T>(command, { request });
   } catch (error: unknown) {
-    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message, error.conflict ?? null);
     throw new LauncherBackendError("backend_unavailable", "Instance content is unavailable.");
   }
 }

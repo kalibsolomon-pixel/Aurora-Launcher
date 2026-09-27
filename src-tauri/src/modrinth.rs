@@ -269,6 +269,16 @@ impl Client {
         })
     }
 
+    /// Cosmetic metadata only, using the same project authority and CDN policy as Browse.
+    pub async fn artwork(&self, project_id: &str) -> Result<Option<String>, Error> {
+        Ok(self
+            .project(project_id)
+            .await?
+            .icon_url
+            .as_deref()
+            .and_then(safe_icon_url))
+    }
+
     pub async fn resolve(
         &self,
         context: &Context,
@@ -805,6 +815,8 @@ struct ProjectDto {
     game_versions: Vec<String>,
     loaders: Vec<String>,
     environment: Vec<String>,
+    #[serde(default)]
+    icon_url: Option<String>,
 }
 #[derive(Debug, Deserialize)]
 struct LicenseDto {
@@ -1063,6 +1075,25 @@ mod tests {
         assert!(page.hits[2].icon_url.is_none());
         assert!(safe_icon_url("javascript:alert(1)").is_none());
         assert!(safe_icon_url("https://cdn.modrinth.com.evil.example/data/a.png").is_none());
+    }
+
+    #[tokio::test]
+    async fn installed_artwork_uses_authoritative_project_and_same_cdn_policy() {
+        let server = TestServer::spawn(Arc::new(|request: &TestRequest| {
+            let icon = if request.path.ends_with("AAAABBBB") {
+                "https://cdn.modrinth.com/data/AAAABBBB/icon.png"
+            } else {
+                "https://untrusted.example/icon.png"
+            };
+            TestResponse::ok(&serde_json::to_vec(&serde_json::json!({"id":if request.path.ends_with("AAAABBBB"){"AAAABBBB"}else{"BBBBCCCC"},"project_type":"mod","title":"Fixture","description":"","license":{"id":"MIT"},"game_versions":["1.21.11"],"loaders":["fabric"],"environment":["client_only"],"icon_url":icon})).unwrap())
+        }));
+        let client = Client::for_testing(&server.base_url());
+        assert_eq!(
+            client.artwork("AAAABBBB").await.unwrap().as_deref(),
+            Some("https://cdn.modrinth.com/data/AAAABBBB/icon.png")
+        );
+        assert!(client.artwork("BBBBCCCC").await.unwrap().is_none());
+        assert!(client.artwork("../unsafe").await.is_err());
     }
 
     #[tokio::test]

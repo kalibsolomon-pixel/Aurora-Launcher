@@ -63,6 +63,7 @@ pub fn run() {
             application::open_instance_content_folder,
             application::search_modrinth,
             application::get_modrinth_project,
+            application::get_modrinth_project_artwork,
             application::preview_modrinth_install,
             application::install_modrinth,
             application::quick_install_modrinth,
