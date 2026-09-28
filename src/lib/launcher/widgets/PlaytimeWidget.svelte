@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { getDailyPlaytime, getPlaytimeSummary, type DailyPlaytime, type PlaytimeSummary, type WidgetSize } from "$lib/backend";
   import { formatPlaytime } from "../homeHistory";
+  import { launcher } from "../store.svelte";
   let { size }: { size: WidgetSize } = $props();
   let range = $state<"7d" | "30d" | "all">("7d");
   let summary = $state<PlaytimeSummary | null>(null);
@@ -14,12 +15,22 @@
   function dayLabel(day: number): string {
     return new Date(day * 86400000).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
   }
-  onMount(async () => {
+  async function load(): Promise<void> {
     try {
       [summary, daily] = await Promise.all([getPlaytimeSummary(), getDailyPlaytime(30)]);
+      error = "";
     } catch (cause) { error = cause instanceof Error ? cause.message : "Playtime is unavailable."; }
     finally { loading = false; }
+  }
+  let lastCompleted = launcher.playProcess;
+  $effect(() => {
+    const process = launcher.playProcess;
+    if (process && process !== lastCompleted && (process.status === "exited" || process.status === "failed")) {
+      lastCompleted = process;
+      void load();
+    }
   });
+  onMount(() => { void load(); });
 </script>
 
 <div class="range" role="group" aria-label="Playtime range">

@@ -24,11 +24,20 @@
     if (launcher.playError) error = launcher.playError.message;
     pending = null;
   }
-  onMount(async () => {
-    try { entries = await (mode === "world" ? getRecentWorlds(null, 5) : getRecentServers(null, 5)); }
+  async function load(): Promise<void> {
+    try { entries = await (mode === "world" ? getRecentWorlds(null, 5) : getRecentServers(null, 5)); error = ""; }
     catch (cause) { error = cause instanceof Error ? cause.message : "Recent history is unavailable."; }
     finally { loading = false; }
+  }
+  let lastCompleted = launcher.playProcess;
+  $effect(() => {
+    const process = launcher.playProcess;
+    if (process && process !== lastCompleted && (process.status === "exited" || process.status === "failed")) {
+      lastCompleted = process;
+      void load();
+    }
   });
+  onMount(() => { void load(); });
 </script>
 
 {#if loading}<p class="note">Loading recent {mode === "world" ? "worlds" : "servers"}…</p>
@@ -49,6 +58,9 @@
   </ul>
 {/if}
 {#if error}<p class="error" role="alert">{error}</p>{/if}
+{#if launcher.playProcess?.status === "failed" && shown.some(entry => entry.instanceId === launcher.playProcess?.instanceId)}
+  <p class="error" role="alert">{launcher.playProcess.message ?? "Minecraft could not be started."}</p>
+{/if}
 <style>
   ul { list-style: none; margin: 0; padding: 0; }
   li { display: flex; align-items: center; gap: var(--space-2); min-width: 0; padding: var(--space-2) 0; border-top: 1px solid var(--color-border); }
