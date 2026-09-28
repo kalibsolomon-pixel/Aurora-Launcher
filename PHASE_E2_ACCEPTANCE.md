@@ -20,7 +20,7 @@ Both target kinds call the ordinary Play pipeline, including the preparation gua
 
 ## Verification and visual acceptance
 
-Automated checks cover opaque target lookup, mode separation, malformed IDs, canonical server values, safe world identity, missing world state, daily UTC buckets, LaunchSpec preservation and redaction, widget registration and layout behavior, readable durations, and existing Play/Discord/privacy regression suites. Full test and build counts are recorded in the final report.
+Automated checks cover opaque target lookup, mode separation, malformed IDs, canonical server values, safe world identity, missing world state, daily UTC buckets, LaunchSpec preservation and redaction, widget registration and layout behavior, readable durations, rendered populated/empty widget markup, row bounds, unavailable controls, long labels, and the exact native Quick Launch DTO. Existing Play/Discord/privacy regression suites still run. Full test and build counts are recorded in the final report.
 
 Native Windows screenshot control is unavailable in this session. **Visual acceptance is pending.** No screenshots are claimed. To complete it, boot `npm run tauri dev` with disposable E1 history fixtures in managed app data and inspect: populated, compact, and empty Playtime; populated and empty Recent Worlds and Servers; all three together; minimum supported, normal, and wide windows; long names and duplicate instance names; unavailable world; hover and keyboard focus. Capture ten actual app screenshots for those states and pair them with DOM/state assertions for totals, row counts, disabled controls, and range switching. Confirm no clipping or horizontal overflow in compact layouts before marking visual acceptance passed.
 

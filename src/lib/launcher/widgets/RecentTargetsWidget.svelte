@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { getRecentWorlds, getRecentServers, type RecentGameplayTarget, type WidgetSize } from "$lib/backend";
   import { launcher } from "../store.svelte";
   import { recentLabel } from "../homeHistory";
-  let { mode, size }: { mode: "world" | "server"; size: WidgetSize } = $props();
-  let entries = $state<RecentGameplayTarget[]>([]);
-  let loading = $state(true);
+  let { mode, size, testFixture }: { mode: "world" | "server"; size: WidgetSize; testFixture?: RecentGameplayTarget[] } = $props();
+  const initialFixture = untrack(() => testFixture);
+  let entries = $state<RecentGameplayTarget[]>(initialFixture ?? []);
+  let loading = $state(!initialFixture);
   let error = $state("");
   let pending = $state<string | null>(null);
   const shown = $derived(entries.slice(0, size === "small" ? 3 : 5));
@@ -37,7 +38,7 @@
       void load();
     }
   });
-  onMount(() => { void load(); });
+  onMount(() => { if (!initialFixture) void load(); });
 </script>
 
 {#if loading}<p class="note">Loading recent {mode === "world" ? "worlds" : "servers"}…</p>

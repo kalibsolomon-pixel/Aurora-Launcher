@@ -1,14 +1,15 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { getDailyPlaytime, getPlaytimeSummary, type DailyPlaytime, type PlaytimeSummary, type WidgetSize } from "$lib/backend";
   import { formatPlaytime } from "../homeHistory";
   import { launcher } from "../store.svelte";
-  let { size }: { size: WidgetSize } = $props();
+  let { size, testFixture }: { size: WidgetSize; testFixture?: { summary: PlaytimeSummary; daily: DailyPlaytime[] } } = $props();
+  const initialFixture = untrack(() => testFixture);
   let range = $state<"7d" | "30d" | "all">("7d");
-  let summary = $state<PlaytimeSummary | null>(null);
-  let daily = $state<DailyPlaytime[]>([]);
+  let summary = $state<PlaytimeSummary | null>(initialFixture?.summary ?? null);
+  let daily = $state<DailyPlaytime[]>(initialFixture?.daily ?? []);
   let error = $state("");
-  let loading = $state(true);
+  let loading = $state(!initialFixture);
   const total = $derived(range === "7d" ? summary?.last7DaysMs : range === "30d" ? summary?.last30DaysMs : summary?.allTimeMs);
   const shown = $derived(range === "7d" ? daily.slice(-7) : daily);
   const peak = $derived(Math.max(1, ...shown.map(day => day.durationMs)));
@@ -30,7 +31,7 @@
       void load();
     }
   });
-  onMount(() => { void load(); });
+  onMount(() => { if (!initialFixture) void load(); });
 </script>
 
 <div class="range" role="group" aria-label="Playtime range">
