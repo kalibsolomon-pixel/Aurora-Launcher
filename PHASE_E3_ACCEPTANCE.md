@@ -1,6 +1,6 @@
 # Phase E3 acceptance record
 
-Status: **stopped at the remaining visual and voluntary live-mutation gate**. The implementation is present, automated regression is passing, and no agent-issued real-account skin or cape mutation was performed.
+Status: **PASSED**. Implementation acceptance and automated acceptance passed, and rendered visual acceptance passed through the combination of the prior agent native inspection and the owner's final manual inspection of the remaining required states. Live remote skin/cape mutation was optional and was not performed, so no live mutation is claimed. The earlier continuation session stopped further native interaction because its accessibility tree became unsafe (another application's elements mixed into the launcher's tree and unintended local state changes showed a real risk of an accidental genuine mutation); that record is preserved below.
 
 ## Implementation and trust boundary
 
@@ -45,7 +45,19 @@ These states were **not** all visually witnessed in the native window: multiple 
 3. Inspect the system file picker, keyboard Tab focus, hover, default/Midnight/OLED themes, a no-account state and an offline profile state. For no-cape, error and loading visuals, use a disposable deterministic native/mock fixture or a controlled account state; do not alter the owner's cape merely to create screenshots.
 4. Record screenshots or a clear owner statement identifying each of the sixteen required visual states and any issues fixed. Until that evidence exists, report E3 as stopped at the visual gate.
 
+### Owner visual acceptance (completed)
+
+The repository owner has manually completed the remaining E3 visual acceptance. Owner attestation, recorded verbatim:
+
+> "E3 visual acceptance passed. I checked the remaining required visual states and found no issues. I did not perform the optional live skin/cape mutation."
+
+This is owner-supplied manual evidence. The owner-inspected states were those the agent had not witnessed in the native window: multiple saved presets, Slim model presentation/selection, apply loading state, apply error state, disabled/no-active-cape state, no-owned-capes state, offline state, second-account cosmetic presentation, small/wide/large widget sizes, the minimum 720×520 window, long preset-name truncation/ellipsis, and additional theme presentation. The owner also confirmed overall that the required E3 visual acceptance states were checked and no visual issues were found. No screenshots of the owner's pass are claimed, no computer-vision verification of owner-only states is claimed, and no detail beyond the attestation above is asserted.
+
+Evidence attribution: agent-gathered evidence covers the states listed under "Native-window visual inspection" above (combined E2+E3 layout, current skin, one preset, three owned capes with one active, native cape thumbnails, import file picker, keyboard focus ring, normal and maximized windows, Skin Manager and Cape Selector controls, and an account switch). Everything else rests on the owner's manual inspection recorded in this section. The two agent screenshots under `.zcode-diag6/e3-visual/` remain protected local diagnostics and are not committed.
+
 ## Voluntary live mutation
+
+LIVE REMOTE COSMETIC MUTATION: **NOT PERFORMED**. No real skin was changed, no real cape was selected, and no real cape was disabled for acceptance — neither by the agent in any session nor by the owner. The owner explicitly declined the optional live mutation in the attestation above, and this is acceptable: E3 acceptance does not require it. The mutation paths are instead supported by deterministic native service tests (multipart model mapping, owned-cape recheck, PUT/DELETE refresh confirmation, structured redacted failures) plus the authentication-boundary, profile-refresh, frontend and rendered UI acceptance above. Mojang/Minecraft production mutation behavior has therefore not been manually proven; if a live check is ever wanted, the owner-only steps below remain the template.
 
 The agent did not invoke a real-account skin or cape mutation. If the owner elects to verify remote behavior, they should explicitly choose a local preset, note the current skin/cape for restoration, Apply once, and confirm the official Minecraft profile plus launcher preview update. Separately select one owned cape and Disable once, checking the official profile after each. These actions affect the real Minecraft account and were not authorized for automated acceptance. No remote mutation is needed to keep the code or automated tests.
 
