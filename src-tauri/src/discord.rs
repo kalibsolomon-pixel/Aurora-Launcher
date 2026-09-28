@@ -291,6 +291,8 @@ mod tests {
                         .then(|| "Fixture SMP".into()),
                     server_address: (state == GameplayState::Multiplayer)
                         .then(|| "example.invalid".into()),
+                    world_save_id: None,
+                    server_target: None,
                 }));
                 let projected = activity(&prefs, Some(&game));
                 assert_eq!(projected.is_some(), prefs.enabled);
@@ -312,6 +314,44 @@ mod tests {
                 );
             }
         }
+    }
+    #[test]
+    fn validated_history_targets_never_enter_discord_projection() {
+        use crate::launch::activity_bridge::{ActivityHandle, GameplayState, Snapshot};
+        let mut game = game();
+        game.gameplay = Some(ActivityHandle::fixture(Snapshot {
+            state: GameplayState::Singleplayer,
+            world: Some("Friendly title".into()),
+            server_name: None,
+            server_address: None,
+            world_save_id: Some(
+                crate::gameplay_history::WorldSaveId::parse("private-save".into()).unwrap(),
+            ),
+            server_target: None,
+        }));
+        let prefs = DiscordPreferences {
+            enabled: true,
+            world: true,
+            server: true,
+            server_address: true,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&activity(&prefs, Some(&game))).unwrap();
+        assert!(json.contains("Friendly title"));
+        assert!(!json.contains("private-save"));
+        game.gameplay = Some(ActivityHandle::fixture(Snapshot {
+            state: GameplayState::Multiplayer,
+            world: None,
+            server_name: Some("Friendly server".into()),
+            server_address: None,
+            world_save_id: None,
+            server_target: Some(
+                crate::gameplay_history::ServerTarget::parse("private.invalid".into()).unwrap(),
+            ),
+        }));
+        let json = serde_json::to_string(&activity(&prefs, Some(&game))).unwrap();
+        assert!(json.contains("Friendly server"));
+        assert!(!json.contains("private.invalid"));
     }
     #[test]
     fn address_is_never_a_name_fallback_or_hidden_in_the_name() {
@@ -337,6 +377,8 @@ mod tests {
                 world: None,
                 server_name: name.map(str::to_owned),
                 server_address: Some(address.into()),
+                world_save_id: None,
+                server_target: None,
             }));
             assert!(activity(&prefs, Some(&game)).unwrap().state.is_none());
             game.status = LaunchProcessStatus::Starting;

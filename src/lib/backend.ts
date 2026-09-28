@@ -82,6 +82,38 @@ export async function getLauncherState(): Promise<LauncherState> {
   }
 }
 
+/** Local, native gameplay history. Target IDs are opaque and are not launch authority. */
+export interface PlaytimeSummary {
+  todayMs: number;
+  last7DaysMs: number;
+  last30DaysMs: number;
+  allTimeMs: number;
+}
+export interface RecentGameplayTarget {
+  id: string;
+  instanceId: string;
+  displayName: string;
+  lastPlayedAt: number;
+  durationMs: number;
+}
+async function invokeHistory<T>(command: string, args: Record<string, unknown>): Promise<T> {
+  try {
+    return await invoke<T>(command, args);
+  } catch (error: unknown) {
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    throw new LauncherBackendError("backend_unavailable", "Aurora's local gameplay history could not be loaded.");
+  }
+}
+export async function getPlaytimeSummary(instanceId: string | null = null): Promise<PlaytimeSummary> {
+  return invokeHistory<PlaytimeSummary>("get_playtime_summary", { instanceId });
+}
+export async function getRecentWorlds(instanceId: string | null = null, limit = 10): Promise<RecentGameplayTarget[]> {
+  return invokeHistory<RecentGameplayTarget[]>("get_recent_worlds", { instanceId, limit });
+}
+export async function getRecentServers(instanceId: string | null = null, limit = 10): Promise<RecentGameplayTarget[]> {
+  return invokeHistory<RecentGameplayTarget[]>("get_recent_servers", { instanceId, limit });
+}
+
 /** One selectable built-in launcher theme. */
 export interface ThemeOption {
   id: string;

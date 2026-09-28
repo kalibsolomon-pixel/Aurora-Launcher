@@ -21,6 +21,7 @@ pub const ENVIRONMENT: [&str; 4] = [
     "AURORA_ACTIVITY_PROTOCOL",
 ];
 const ACCEPTED: &[u8] = b"{\"type\":\"accepted\",\"schemaVersion\":1}\n";
+const ACCEPTED_V2: &[u8] = b"{\"type\":\"accepted\",\"schemaVersion\":2}\n";
 const FRAME_TIMEOUT: Duration = Duration::from_secs(2);
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
 /// Independently verified immutable v2.1.3 artifact; bridge classes match reviewed a1f0ab6.
@@ -46,6 +47,8 @@ pub struct Snapshot {
     pub world: Option<String>,
     pub server_name: Option<String>,
     pub server_address: Option<String>,
+    pub world_save_id: Option<crate::gameplay_history::WorldSaveId>,
+    pub server_target: Option<crate::gameplay_history::ServerTarget>,
 }
 impl fmt::Debug for Snapshot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -55,6 +58,7 @@ impl fmt::Debug for Snapshot {
 struct ActivityState {
     valid: bool,
     snapshot: Option<Snapshot>,
+    observer: Option<Arc<dyn Fn(Option<Snapshot>) + Send + Sync>>,
 }
 #[derive(Clone)]
 pub struct ActivityHandle(Arc<Mutex<ActivityState>>);
@@ -63,6 +67,7 @@ impl Default for ActivityHandle {
         Self(Arc::new(Mutex::new(ActivityState {
             valid: true,
             snapshot: None,
+            observer: None,
         })))
     }
 }
@@ -72,6 +77,9 @@ impl fmt::Debug for ActivityHandle {
     }
 }
 impl ActivityHandle {
+    pub fn set_observer(&self, observer: Arc<dyn Fn(Option<Snapshot>) + Send + Sync>) {
+        self.0.lock().unwrap().observer = Some(observer);
+    }
     pub fn snapshot(&self) -> Option<Snapshot> {
         self.0.lock().unwrap().snapshot.clone()
     }
@@ -81,14 +89,23 @@ impl ActivityHandle {
             return;
         }
         current.snapshot = snapshot;
+        let observer = current.observer.clone();
+        let observed = current.snapshot.clone();
         drop(current);
+        if let Some(observer) = observer {
+            observer(observed);
+        }
         crate::discord::gameplay_changed();
     }
     fn invalidate(&self) {
         let mut current = self.0.lock().unwrap();
         current.valid = false;
         current.snapshot = None;
+        let observer = current.observer.clone();
         drop(current);
+        if let Some(observer) = observer {
+            observer(None);
+        }
         crate::discord::gameplay_changed();
     }
     #[cfg(test)]
@@ -96,6 +113,7 @@ impl ActivityHandle {
         Self(Arc::new(Mutex::new(ActivityState {
             valid: true,
             snapshot: Some(snapshot),
+            observer: None,
         })))
     }
 }
@@ -106,6 +124,7 @@ pub struct Session {
     session: String,
     capability: Zeroizing<String>,
     activity: ActivityHandle,
+    protocol: u32,
 }
 impl fmt::Debug for Session {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -114,6 +133,12 @@ impl fmt::Debug for Session {
 }
 impl Session {
     pub fn prepare() -> Result<Self, ()> {
+        Self::prepare_for_protocol(1)
+    }
+    pub fn prepare_for_protocol(protocol: u32) -> Result<Self, ()> {
+        if protocol != 1 && protocol != 2 {
+            return Err(());
+        }
         let mut entropy = [0u8; 32];
         getrandom::fill(&mut entropy).map_err(|_| ())?;
         let capability = Zeroizing::new(entropy.iter().map(|byte| format!("{byte:02x}")).collect());
@@ -150,6 +175,7 @@ impl Session {
             session: uuid::Uuid::new_v4().to_string(),
             capability,
             activity: ActivityHandle::default(),
+            protocol,
         })
     }
     pub fn handle(&self) -> ActivityHandle {
@@ -166,7 +192,7 @@ impl Session {
             )
             .env(ENVIRONMENT[1], &self.session)
             .env(ENVIRONMENT[2], self.capability.as_str())
-            .env(ENVIRONMENT[3], "1");
+            .env(ENVIRONMENT[3], self.protocol.to_string());
     }
     pub fn redaction(&self) -> String {
         self.capability.to_string()
@@ -194,7 +220,7 @@ impl Session {
                 let bytes = frame(&mut stream, 1024, false).await?;
                 let hello: Hello = serde_json::from_slice(&bytes).map_err(|_| ())?;
                 if hello.kind != "hello"
-                    || hello.schema_version != 1
+                    || hello.schema_version != self.protocol
                     || hello.session_id != self.session
                     || hello.capability.len() != 64
                     || !bool::from(
@@ -206,7 +232,14 @@ impl Session {
                 {
                     return Err(());
                 }
-                stream.write_all(ACCEPTED).await.map_err(|_| ())
+                stream
+                    .write_all(if self.protocol == 2 {
+                        ACCEPTED_V2
+                    } else {
+                        ACCEPTED
+                    })
+                    .await
+                    .map_err(|_| ())
             })
             .await;
             if !matches!(authenticated, Ok(Ok(()))) {
@@ -220,7 +253,9 @@ impl Session {
                 let Ok(bytes) = frame(&mut stream, 4096, true).await else {
                     return;
                 };
-                let Ok(snapshot) = parse_activity(&bytes, &self.session, &mut sequence) else {
+                let Ok(snapshot) =
+                    parse_activity_version(&bytes, &self.session, &mut sequence, self.protocol)
+                else {
                     return;
                 };
                 self.activity.replace(Some(snapshot));
@@ -269,35 +304,64 @@ struct WireActivity {
     server_display_name: Option<String>,
     #[serde(default, deserialize_with = "present_string")]
     server_address: Option<String>,
+    #[serde(default, deserialize_with = "present_string")]
+    world_save_id: Option<String>,
+    #[serde(default, deserialize_with = "present_string")]
+    server_target: Option<String>,
 }
 fn present_string<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
     String::deserialize(d).map(Some)
 }
+#[cfg(test)]
 fn parse_activity(bytes: &[u8], session: &str, previous: &mut i64) -> Result<Snapshot, ()> {
+    parse_activity_version(bytes, session, previous, 1)
+}
+fn parse_activity_version(
+    bytes: &[u8],
+    session: &str,
+    previous: &mut i64,
+    protocol: u32,
+) -> Result<Snapshot, ()> {
     let wire: WireActivity = serde_json::from_slice(bytes).map_err(|_| ())?;
     if wire.kind != "activity"
-        || wire.schema_version != 1
+        || wire.schema_version != protocol
         || wire.session_id != session
         || wire.sequence <= *previous
         || (*previous == 0 && (wire.sequence != 1 || wire.state != GameplayState::MainMenu))
     {
         return Err(());
     }
-    if (wire.state != GameplayState::Singleplayer && wire.world_display_name.is_some())
+    if (wire.state != GameplayState::Singleplayer
+        && (wire.world_display_name.is_some() || wire.world_save_id.is_some()))
         || (wire.state != GameplayState::Multiplayer
-            && (wire.server_display_name.is_some() || wire.server_address.is_some()))
+            && (wire.server_display_name.is_some()
+                || wire.server_address.is_some()
+                || wire.server_target.is_some()))
+        || (protocol == 1 && (wire.world_save_id.is_some() || wire.server_target.is_some()))
     {
         return Err(());
     }
     let world = validate_text(wire.world_display_name, 128)?;
     let server_name = validate_text(wire.server_display_name, 128)?;
     let server_address = validate_text(wire.server_address, 255)?;
+    let world_save_id = wire
+        .world_save_id
+        .map(crate::gameplay_history::WorldSaveId::parse)
+        .transpose()
+        .map_err(|_| ())?;
+    let server_target = wire
+        .server_target
+        .map(crate::gameplay_history::ServerTarget::parse)
+        .transpose()
+        .map_err(|_| ())?;
     *previous = wire.sequence;
     Ok(Snapshot {
         state: wire.state,
         world,
         server_name,
         server_address,
+        world_save_id,
+        server_target,
     })
 }
 fn validate_text(text: Option<String>, limit: usize) -> Result<Option<String>, ()> {
@@ -352,6 +416,154 @@ async fn frame(stream: &mut TcpStream, limit: usize, idle_allowed: bool) -> Resu
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Run only with an explicit external Java 21 runtime, client test classpath,
+    /// and disposable run root. The client source is not imported into this repo.
+    #[tokio::test]
+    #[ignore = "requires explicit external client test classpath and Java 21"]
+    async fn compiled_java_v2_worker_interoperates_with_rust_receiver() {
+        use crate::launch::{process, resolve::LaunchSpec};
+        let java =
+            std::path::PathBuf::from(std::env::var("AURORA_TEST_JAVA").expect("explicit Java"));
+        let classpath =
+            std::env::var("AURORA_TEST_CLIENT_CLASSPATH").expect("explicit client classpath");
+        let root = std::path::PathBuf::from(
+            std::env::var("AURORA_TEST_RUN_ROOT").expect("explicit disposable root"),
+        );
+        std::fs::create_dir_all(&root).unwrap();
+        let spec = LaunchSpec::fixture_command(
+            java,
+            root.clone(),
+            vec![
+                "-cp".into(),
+                classpath,
+                "com.aurora.client.launcher.LauncherHistoryContractHarness".into(),
+            ],
+        );
+        let session = Session::prepare_for_protocol(2).unwrap();
+        let handle = session.handle();
+        let running = process::spawn_supervised_with_bridge(
+            spec,
+            &root.join("logs"),
+            Arc::new(|_| {}),
+            Some(21),
+            Some(session),
+        )
+        .unwrap();
+        let mut saw_world = false;
+        let mut saw_server = false;
+        timeout(Duration::from_secs(15), async {
+            loop {
+                if let Some(snapshot) = handle.snapshot() {
+                    if snapshot
+                        .world_save_id
+                        .as_ref()
+                        .is_some_and(|id| id.as_str() == "stable-save")
+                    {
+                        saw_world = true;
+                    }
+                    if snapshot
+                        .server_target
+                        .as_ref()
+                        .is_some_and(|target| target.as_str() == "example.invalid:25565")
+                    {
+                        saw_server = true;
+                    }
+                }
+                if saw_world && saw_server {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("Java v2 transitions");
+        assert!(running.status.blocks_launch());
+        timeout(Duration::from_secs(15), async {
+            while process::snapshot(&running.instance_id)
+                .status
+                .blocks_launch()
+            {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("Java harness exit");
+        assert_eq!(
+            process::snapshot(&running.instance_id).status,
+            crate::launch::state::LaunchProcessStatus::Exited
+        );
+    }
+
+    #[tokio::test]
+    async fn v2_authenticated_loopback_accepts_validated_identity() {
+        let session = Session::prepare_for_protocol(2).unwrap();
+        let addr = session.listener.local_addr().unwrap();
+        let id = session.session.clone();
+        let mut hello = serde_json::to_vec(&json!({"type":"hello","schemaVersion":2,"sessionId":id,"capability":session.capability.as_str()})).unwrap();
+        hello.push(b'\n');
+        let handle = session.handle();
+        let receiver = session.start();
+        let mut stream = TcpStream::connect(addr).await.unwrap();
+        stream.write_all(&hello).await.unwrap();
+        let mut ack = vec![0; ACCEPTED_V2.len()];
+        stream.read_exact(&mut ack).await.unwrap();
+        assert_eq!(ack, ACCEPTED_V2);
+        send(&mut stream, json!({"type":"activity","schemaVersion":2,"sessionId":id,"sequence":1,"state":"MAIN_MENU"})).await;
+        send(&mut stream, json!({"type":"activity","schemaVersion":2,"sessionId":id,"sequence":2,"state":"SINGLEPLAYER","worldDisplayName":"Title","worldSaveId":"stable-save"})).await;
+        wait_state(&handle, true).await;
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while handle
+                .snapshot()
+                .and_then(|snapshot| snapshot.world_save_id)
+                .is_none()
+            {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            handle.snapshot().unwrap().world_save_id.unwrap().as_str(),
+            "stable-save"
+        );
+        drop(receiver);
+    }
+
+    #[test]
+    fn v2_identity_requires_negotiation_and_native_validation() {
+        let id = "4b609826-a9a8-4fa6-a7d4-57e7f373900e";
+        let mut sequence = 0;
+        let menu = json!({"type":"activity","schemaVersion":2,"sessionId":id,"sequence":1,"state":"MAIN_MENU"});
+        assert!(
+            parse_activity_version(&serde_json::to_vec(&menu).unwrap(), id, &mut sequence, 2)
+                .is_ok()
+        );
+        let world = json!({"type":"activity","schemaVersion":2,"sessionId":id,"sequence":2,"state":"SINGLEPLAYER","worldDisplayName":"Title","worldSaveId":"stable-save"});
+        let parsed =
+            parse_activity_version(&serde_json::to_vec(&world).unwrap(), id, &mut sequence, 2)
+                .unwrap();
+        assert_eq!(parsed.world_save_id.unwrap().as_str(), "stable-save");
+        assert_eq!(parsed.world.as_deref(), Some("Title"));
+        let mut old_sequence = 1;
+        assert!(
+            parse_activity_version(
+                &serde_json::to_vec(&world).unwrap(),
+                id,
+                &mut old_sequence,
+                1
+            )
+            .is_err()
+        );
+        let mut bad = world.clone();
+        bad["sequence"] = json!(3);
+        bad["worldSaveId"] = json!("../escape");
+        assert!(
+            parse_activity_version(&serde_json::to_vec(&bad).unwrap(), id, &mut sequence, 2)
+                .is_err()
+        );
+        assert_eq!(sequence, 2);
+    }
 
     fn hello(session: &Session) -> Vec<u8> {
         let mut bytes = serde_json::to_vec(&json!({"type":"hello","schemaVersion":1,"sessionId":session.session,"capability":session.capability.as_str()})).unwrap();
@@ -610,6 +822,8 @@ mod tests {
                 world: Some("late".into()),
                 server_name: None,
                 server_address: None,
+                world_save_id: None,
+                server_target: None,
             }));
             assert!(handle.snapshot().is_none());
             let replacement = ActivityHandle::default();

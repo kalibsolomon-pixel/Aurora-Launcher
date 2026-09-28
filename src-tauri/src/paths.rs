@@ -39,6 +39,9 @@ impl ManagedPaths {
     pub fn instance_registry_file(&self) -> PathBuf {
         self.launcher_dir().join("instances.json")
     }
+    pub fn gameplay_history_file(&self) -> PathBuf {
+        self.launcher_dir().join("gameplay-history.json")
+    }
 
     /// Non-secret account summaries and the account selection. The matching
     /// secret lives in the OS-backed credential store, never in this file.

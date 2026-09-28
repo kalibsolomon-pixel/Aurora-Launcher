@@ -1,5 +1,7 @@
 # Aurora Launcher architecture
 
+Phase E1 gameplay-history ownership, retention, v2 identity protocol and deferred Quick Launch are recorded in [PHASE_E1_DESIGN.md](PHASE_E1_DESIGN.md). The three future Home IDs remain unregistered.
+
 The phase sections below record the architecture as it evolved. **The final pre-publication pass below** defines current bootstrap ownership, mod toggles, deletion and spatial behavior. **Phases C1/C2** and **Phase D** retain the history of the instance/lifecycle and Home/account boundaries. They supersede earlier mandatory-Aurora, Fabric-only and diagnostic Home descriptions.
 
 This document is the living source of truth for the launcher's boundaries. It distinguishes the foundation implemented now from future design so planned functionality is never mistaken for a working feature.

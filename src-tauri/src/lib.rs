@@ -8,6 +8,7 @@ pub mod discord;
 pub mod distribution;
 pub mod downloads;
 pub mod fabric;
+pub mod gameplay_history;
 pub mod home_widgets;
 pub mod install;
 pub mod instance_content;
@@ -49,6 +50,9 @@ pub fn run() {
             application::get_application_status,
             application::get_launcher_state,
             application::get_home_widgets,
+            application::get_playtime_summary,
+            application::get_recent_worlds,
+            application::get_recent_servers,
             application::set_home_widgets,
             application::reset_home_widgets,
             application::get_discord_state,

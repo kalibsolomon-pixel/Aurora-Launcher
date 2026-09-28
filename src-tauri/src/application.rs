@@ -580,6 +580,90 @@ pub fn get_home_widgets(app: AppHandle) -> Result<crate::home_widgets::HomeLayou
     let config = crate::config::load(&paths.config_file())?.unwrap_or_default();
     Ok(config.home_widgets().clone())
 }
+fn history_query(
+    app: &AppHandle,
+    instance_id: Option<String>,
+) -> Result<
+    (
+        crate::gameplay_history::Store,
+        Option<crate::instances::InstanceId>,
+    ),
+    CommandError,
+> {
+    let paths = managed_paths(app)?;
+    let instance = instance_id
+        .map(crate::instances::InstanceId::new)
+        .transpose()?;
+    let store =
+        crate::gameplay_history::Store::open(paths.gameplay_history_file()).map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Local gameplay history is unavailable or damaged.",
+            )
+        })?;
+    Ok((store, instance))
+}
+#[tauri::command]
+pub fn get_playtime_summary(
+    app: AppHandle,
+    instance_id: Option<String>,
+) -> Result<crate::gameplay_history::Playtime, CommandError> {
+    let (store, instance) = history_query(&app, instance_id)?;
+    store
+        .playtime(
+            instance.as_ref(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        )
+        .map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Local gameplay history is unavailable or damaged.",
+            )
+        })
+}
+#[tauri::command]
+pub fn get_recent_worlds(
+    app: AppHandle,
+    instance_id: Option<String>,
+    limit: usize,
+) -> Result<Vec<crate::gameplay_history::RecentTarget>, CommandError> {
+    let (store, instance) = history_query(&app, instance_id)?;
+    store
+        .recent(
+            crate::gameplay_history::Mode::Singleplayer,
+            instance.as_ref(),
+            limit,
+        )
+        .map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Local gameplay history is unavailable or damaged.",
+            )
+        })
+}
+#[tauri::command]
+pub fn get_recent_servers(
+    app: AppHandle,
+    instance_id: Option<String>,
+    limit: usize,
+) -> Result<Vec<crate::gameplay_history::RecentTarget>, CommandError> {
+    let (store, instance) = history_query(&app, instance_id)?;
+    store
+        .recent(
+            crate::gameplay_history::Mode::Multiplayer,
+            instance.as_ref(),
+            limit,
+        )
+        .map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Local gameplay history is unavailable or damaged.",
+            )
+        })
+}
 #[tauri::command]
 pub fn set_home_widgets(
     app: AppHandle,
@@ -4316,10 +4400,74 @@ pub async fn play_instance(
         .then(|| crate::launch::activity_bridge::Session::prepare().ok())
         .flatten();
         let gameplay = bridge.as_ref().map(|session| session.handle());
+        let recorder = Arc::new(std::sync::Mutex::new(
+            None::<Arc<crate::gameplay_history::Recorder>>,
+        ));
+        if let Some(handle) = &gameplay {
+            let recorder = recorder.clone();
+            handle.set_observer(Arc::new(move |snapshot| {
+                let active = recorder.lock().ok().and_then(|guard| guard.clone());
+                if let Some(active) = active {
+                    use crate::gameplay_history::Mode;
+                    let (mode, world, server, display) = match snapshot {
+                        Some(snapshot) => match snapshot.state {
+                            crate::launch::activity_bridge::GameplayState::MainMenu => {
+                                (Mode::MainMenu, None, None, None)
+                            }
+                            crate::launch::activity_bridge::GameplayState::Singleplayer => (
+                                Mode::Singleplayer,
+                                snapshot.world_save_id,
+                                None,
+                                snapshot.world,
+                            ),
+                            crate::launch::activity_bridge::GameplayState::Multiplayer => (
+                                Mode::Multiplayer,
+                                None,
+                                snapshot.server_target,
+                                snapshot.server_name,
+                            ),
+                        },
+                        None => (Mode::Unknown, None, None, None),
+                    };
+                    let _ = active.observe(mode, world, server, display);
+                }
+            }));
+        }
+        let history_path = managed.gameplay_history_file();
+        let history_instance = instance.clone();
         let snapshot = crate::launch::process::spawn_supervised_with_bridge(
             spec,
             managed.instance_paths(&instance).logs(),
             Arc::new(move |snapshot| {
+                match snapshot.status {
+                    crate::launch::state::LaunchProcessStatus::Running => {
+                        if let Ok(store) =
+                            crate::gameplay_history::Store::open(history_path.clone())
+                        {
+                            if let Ok(active) = store.start(history_instance.clone()) {
+                                if let Ok(mut guard) = recorder.lock() {
+                                    *guard = Some(Arc::new(active));
+                                }
+                            }
+                        }
+                    }
+                    crate::launch::state::LaunchProcessStatus::Exited
+                    | crate::launch::state::LaunchProcessStatus::Failed => {
+                        if let Some(active) =
+                            recorder.lock().ok().and_then(|mut guard| guard.take())
+                        {
+                            let outcome = if snapshot.status
+                                == crate::launch::state::LaunchProcessStatus::Exited
+                            {
+                                crate::gameplay_history::Outcome::Normal
+                            } else {
+                                crate::gameplay_history::Outcome::Abnormal
+                            };
+                            let _ = active.finish(outcome);
+                        }
+                    }
+                    _ => {}
+                }
                 crate::discord::process_changed(crate::discord::GameActivity {
                     instance_id: snapshot.instance_id.clone(),
                     instance_name: presence_name.clone(),
