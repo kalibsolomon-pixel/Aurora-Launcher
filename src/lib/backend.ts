@@ -95,6 +95,18 @@ export interface RecentGameplayTarget {
   displayName: string;
   lastPlayedAt: number;
   durationMs: number;
+  available: boolean;
+}
+export interface DailyPlaytime { day: number; durationMs: number }
+export async function getDailyPlaytime(days: 7 | 30, instanceId: string | null = null): Promise<DailyPlaytime[]> {
+  return invokeHistory<DailyPlaytime[]>("get_daily_playtime", { instanceId, days });
+}
+export async function quickPlayHistory(targetId: string, mode: "world" | "server", accountId: string): Promise<LaunchProcess> {
+  try { return await invoke<LaunchProcess>("quick_play_history", { request: { targetId, mode, accountId } }); }
+  catch (error: unknown) {
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    throw new LauncherBackendError("backend_unavailable", "The recent target could not be launched.");
+  }
 }
 async function invokeHistory<T>(command: string, args: Record<string, unknown>): Promise<T> {
   try {

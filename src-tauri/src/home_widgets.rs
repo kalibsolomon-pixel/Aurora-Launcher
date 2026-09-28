@@ -29,6 +29,7 @@ pub fn supported_sizes(id: &str) -> Option<&'static [WidgetSize]> {
     match id {
         "instance-details" | "content-summary" => Some(&[Small, Wide, Large]),
         "session" => Some(&[Small, Wide]),
+        "playtime" | "recent-worlds" | "recent-servers" => Some(&[Small, Wide, Large]),
         _ => None,
     }
 }
@@ -50,6 +51,21 @@ impl Default for HomeLayout {
                 WidgetPlacement {
                     id: "session".into(),
                     enabled: false,
+                    size: WidgetSize::Small,
+                },
+                WidgetPlacement {
+                    id: "playtime".into(),
+                    enabled: true,
+                    size: WidgetSize::Small,
+                },
+                WidgetPlacement {
+                    id: "recent-worlds".into(),
+                    enabled: true,
+                    size: WidgetSize::Small,
+                },
+                WidgetPlacement {
+                    id: "recent-servers".into(),
+                    enabled: true,
                     size: WidgetSize::Small,
                 },
             ],
@@ -89,7 +105,7 @@ mod tests {
     fn defaults_are_restrained_and_valid() {
         let layout = HomeLayout::default();
         layout.validate().unwrap();
-        assert_eq!(layout.widgets.iter().filter(|w| w.enabled).count(), 2);
+        assert_eq!(layout.widgets.iter().filter(|w| w.enabled).count(), 5);
     }
     #[test]
     fn declarative_changes_round_trip_and_reset() {

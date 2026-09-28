@@ -24,6 +24,7 @@ import {
   planFabricInstall,
   planMinecraftInstall,
   playInstance,
+  quickPlayHistory,
   refreshAccountSession,
   removeAccount,
   removeInstanceMod,
@@ -354,6 +355,23 @@ class LauncherStore {
       this.playBusy = false;
       this.playProgress = null;
       void this.refreshPlayReadiness();
+    }
+  }
+
+  async runQuickPlay(targetId: string, mode: "world" | "server"): Promise<void> {
+    const accountId = this.accountsState?.selectedAccountId;
+    if (!accountId || this.playBusy || this.instanceBusy !== null || this.accountBusy !== null) return;
+    this.playBusy = true;
+    this.playProgress = { phase: "checkingPreconditions" };
+    this.playError = null;
+    try {
+      this.playProcess = await quickPlayHistory(targetId, mode, accountId);
+    } catch (cause: unknown) {
+      this.playError = backendError(cause, "The recent target could not be started.");
+      void this.refreshPlayReadiness();
+    } finally {
+      this.playBusy = false;
+      this.playProgress = null;
     }
   }
 

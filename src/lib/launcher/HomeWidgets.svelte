@@ -6,6 +6,8 @@
   import InstanceDetailsWidget from "./widgets/InstanceDetailsWidget.svelte";
   import ContentSummaryWidget from "./widgets/ContentSummaryWidget.svelte";
   import SessionWidget from "./widgets/SessionWidget.svelte";
+  import PlaytimeWidget from "./widgets/PlaytimeWidget.svelte";
+  import RecentTargetsWidget from "./widgets/RecentTargetsWidget.svelte";
   import type { WidgetSize } from "$lib/backend";
   const components = { "instance-details": InstanceDetailsWidget, "content-summary": ContentSummaryWidget, session: SessionWidget };
   let editing = $state(false);
@@ -20,10 +22,12 @@
     <div class="widget-grid">
       {#each widgets as widget, index (widget.id)}
         {@const definition = widgetCatalog.find(item => item.id === widget.id)!}
-        {@const Component = components[widget.id as keyof typeof components]}
         <article class="group widget" class:widget-wide={widget.size !== "small"} class:widget-large={widget.size === "large"} aria-label={definition.title}>
           <div class="widget-heading"><h4>{definition.title}</h4></div>
-          <Component instance={launcher.selectedInstance} />
+          {#if widget.id === "playtime"}<PlaytimeWidget size={widget.size} />
+          {:else if widget.id === "recent-worlds"}<RecentTargetsWidget mode="world" size={widget.size} />
+          {:else if widget.id === "recent-servers"}<RecentTargetsWidget mode="server" size={widget.size} />
+          {:else}{@const Component = components[widget.id as keyof typeof components]}<Component instance={launcher.selectedInstance} />{/if}
           {#if editing}
             <div class="widget-editor" role="group" aria-label={`Customize ${definition.title}`}>
               <button class="btn btn-quiet" type="button" aria-label={`Move ${definition.title} earlier`} disabled={homeWidgets.busy || index === 0} onclick={() => homeWidgets.move(widget.id, -1)}>←</button>
