@@ -423,3 +423,36 @@ installer format(s) used during that manual check were not supplied; public
 distribution follows the established NSIS format. No agent-observed GUI result
 is claimed. At this point the release is still unpublished pending the final
 remote, repository-safety and workflow gates.
+
+## Partial publication recovery — 2026-09-28
+
+GitHub Actions run `36375843103` passed the `resolve` and `build` jobs, including
+the established production tests and installer verification, but failed in the
+`publish` job after creating a draft and uploading its assets. Release ID
+`397949176` was the sole `v1.1.0` candidate, with target commit
+`97b9849e2fb023af74baed01b6b79d15d3165d80`, `draft=true`,
+`prerelease=false`, and no public tag ref. The release-by-ID API returned the
+draft; the release-by-tag API returned HTTP 404 before publication. The prior
+script relied on that draft-by-tag lookup and therefore stopped. It also
+expected the exact uploaded filename with spaces, while GitHub stored it as
+`Aurora.Launcher_1.1.0_x64-setup.exe`.
+
+The existing installer asset was downloaded independently from GitHub asset ID
+`594474444`: **4,212,306 bytes**, SHA-256
+`d9e3b1cac40b0e73289a730b3d0215fe6e0fdfdcbefcb81d10d0ab8211ed5cf5`.
+Its PE product identity is Aurora Launcher 1.1.0. The draft body names Aurora
+Client 2.1.3 and contains that installer checksum. The release manifest asset
+is also present. No draft or asset was deleted, recreated, or reuploaded.
+
+The publication logic now selects releases from the authenticated releases
+listing, requires a unique exact tag/commit/draft identity, and carries the
+numeric release ID through draft verification and publication. It accepts only
+the expected filename or GitHub's space-to-dot normalization, then checks
+candidate uniqueness, size, advertised digest, and independently downloaded
+SHA-256 bytes. A rerun distinguishes no release, matching draft, matching
+public release, and conflicting release/tag states. Deterministic tests cover
+the draft-by-tag 404 condition, both asset identities, corrupt bytes, duplicate
+assets, conflicting drafts and tags, and an existing public release.
+
+This is a release-tooling and documentation correction only. The audited
+production launcher source and installer were not rebuilt or modified.

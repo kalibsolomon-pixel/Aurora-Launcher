@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       source_ref:
-        description: Exact 40-character commit SHA currently at origin/main
+        description: Exact audited commit SHA (current main for a new release)
         required: true
         type: string
       installer_format:
@@ -19,6 +19,10 @@ on:
           - nsis
           - msi
           - both
+      resume_release_id:
+        description: Existing draft release ID to resume (leave empty for a new release)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -48,6 +52,7 @@ jobs:
           SOURCE_REF: ${{ inputs.source_ref }}
           VERSION: ${{ inputs.version }}
           INSTALLER_FORMAT: ${{ inputs.installer_format }}
+          RESUME_RELEASE_ID: ${{ inputs.resume_release_id }}
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = 'refs/heads/main'
@@ -58,20 +63,25 @@ jobs:
           [[ "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]
           git cat-file -e "$SOURCE_REF^{commit}"
           git fetch --no-tags origin main
-          test "$SOURCE_REF" = "$(git rev-parse refs/remotes/origin/main)"
+          if [[ -z "$RESUME_RELEASE_ID" ]]; then
+            test "$SOURCE_REF" = "$(git rev-parse refs/remotes/origin/main)"
+          else
+            git merge-base --is-ancestor "$SOURCE_REF" refs/remotes/origin/main
+          fi
           git checkout --detach "$SOURCE_REF"
           node tools/release/verify-version.mjs --release "$VERSION"
           echo "sha=$SOURCE_REF" >> "$GITHUB_OUTPUT"
-      - name: Reject an existing tag or release
+      - name: Check exact release state
         shell: bash
         env:
           VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ inputs.source_ref }}
+          RESUME_RELEASE_ID: ${{ inputs.resume_release_id }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          matches="$(git ls-remote --tags origin "refs/tags/v$VERSION")"
-          test -z "$matches"
-          node tools/release/check-collision.mjs "$VERSION"
+          git checkout main
+          node tools/release/check-collision.mjs "$VERSION" "$SOURCE_SHA" "$RESUME_RELEASE_ID"
 
   build:
     needs: resolve
@@ -151,7 +161,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve.outputs.sha }}
+          ref: main
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -166,11 +176,10 @@ jobs:
           VERSION: ${{ inputs.version }}
           FORMAT: ${{ inputs.installer_format }}
           SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
+          RESUME_RELEASE_ID: ${{ inputs.resume_release_id }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          $matches = git ls-remote --tags origin "refs/tags/v$env:VERSION"
-          if ($LASTEXITCODE -ne 0 -or $matches) { throw 'Release tag already exists or could not be checked' }
-          node tools/release/check-collision.mjs $env:VERSION
+          node tools/release/check-collision.mjs $env:VERSION $env:SOURCE_SHA $env:RESUME_RELEASE_ID
           if ($LASTEXITCODE -ne 0) { throw 'Release collision check failed' }
           & ./tools/release/windows-artifacts.ps1 -Version $env:VERSION -Format $env:FORMAT -Mode Verify -SourceSha $env:SOURCE_SHA -OutputDirectory (Join-Path $env:RUNNER_TEMP 'aurora-release-assets')
           if (-not $?) { throw 'Transferred installer verification failed' }
@@ -180,7 +189,9 @@ jobs:
           VERSION: ${{ inputs.version }}
           FORMAT: ${{ inputs.installer_format }}
           SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
+          RESUME_RELEASE_ID: ${{ inputs.resume_release_id }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          & ./tools/release/publish.ps1 -Version $env:VERSION -Format $env:FORMAT -SourceSha $env:SOURCE_SHA -AssetsDirectory (Join-Path $env:RUNNER_TEMP 'aurora-release-assets')
+          $resume = if ($env:RESUME_RELEASE_ID) { [long]$env:RESUME_RELEASE_ID } else { 0 }
+          & ./tools/release/publish.ps1 -Version $env:VERSION -Format $env:FORMAT -SourceSha $env:SOURCE_SHA -AssetsDirectory (Join-Path $env:RUNNER_TEMP 'aurora-release-assets') -ResumeReleaseId $resume
           if (-not $?) { throw 'Release publication or public-byte verification failed' }
