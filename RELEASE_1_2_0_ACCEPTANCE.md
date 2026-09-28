@@ -1,0 +1,153 @@
+# Aurora Launcher 1.2.0 release acceptance record
+
+Date: 2026-09-28. This record covers the pre-publication release-candidate
+gates for Aurora Launcher 1.2.0 (scope: E1 + E2 + E3 + Aurora Client 2.1.5
+bridge-v2 activation, plus release-process hardening). Publication itself
+follows the established draft-first immutable procedure and is recorded
+separately; nothing here claims a published release.
+
+## Baseline and repository safety
+
+Starting state: local HEAD and `origin/main` both at
+`eed3c9983c1e0f99c8d945cd838218a4b746ecc7`, 0 ahead / 0 behind, 206 tracked
+paths. The pre-existing working-tree entry for `src-tauri/Cargo.toml`
+(line-ending-only, empty content diff) and the 609 protected local
+diagnostic/evidence files were preserved byte-for-byte. No `git clean`,
+reset, restore, recursive cleanup, or line-ending normalization occurred at
+any point. Historical 0.1.0/1.0.0/1.1.0 installers coexisting in the bundle
+output directories were preserved.
+
+## Release scope audit (Gate 2)
+
+Public 1.1.0 resolves to tag `v1.1.0` → commit
+`97b9849e2fb023af74baed01b6b79d15d3165d80` (release ID 397949176, NSIS
+setup plus `release-assets.json`, draft=false, prerelease=false). The
+fifteen commits from there to `eed3c99` categorize completely:
+
+- Release/process hardening (1): `33713a9` partial-release recovery — the
+  publish state machine (`release-state.mjs` + deterministic tests),
+  draft-by-listing selection, asset name normalization; recorded in
+  `RELEASE_1_1_0_ACCEPTANCE.md`.
+- E1 gameplay history (2): `572b151`, `762c886`.
+- E2 widgets and Quick Launch (7): `8688a48`, `edef685`, `7406fa4`,
+  `086eb59`, `114919e`, `2ecf393`, `b7b5abc`.
+- E3 cosmetics (4): `382437a`, `87b5274`, `1b0fe72`, `8196d07`.
+- Aurora Client 2.1.5 activation (1): `eed3c99`.
+
+No unexplained functional change exists in the range.
+
+## Acceptance states (Gates 3–4)
+
+- E1 `PHASE_E1_ACCEPTANCE.md`: accepted.
+- E2 `PHASE_E2_ACCEPTANCE.md`: PASSED; visual acceptance passed via owner
+  manual inspection of all ten states (owner attestation recorded verbatim).
+- E3 `PHASE_E3_ACCEPTANCE.md`: PASSED; agent-native inspection of the
+  combined E2+E3 window plus owner manual attestation of the remaining
+  states; live cosmetic mutation deliberately not performed.
+- 2.1.5 activation `AURORA_CLIENT_2_1_5_ACTIVATION.md`: accepted with
+  independent public download verification, JAR audit, live acquisition
+  through the native pipeline, and the public-artifact bridge-v2 interop
+  smoke.
+- Production trust re-verified for this release: `src-tauri/production/
+  aurora-releases.json` first stable entry is 2.1.5 with exactly
+  2,468,545 bytes and SHA-256
+  `fdc344e28c95a93b84af4b4fb1e61f9d3cc5774339f753f45f603c901df324d6`;
+  the public `v2.1.5` release still resolves to tag target
+  `a5497f680a38883a40afc2011fe418c59821029b` with that exact asset digest.
+  `BRIDGE_ARTIFACT_SHA256` equals that digest and the eligibility tests
+  prove: correct 2.1.5 hash trusted; wrong hash, 2.1.3 digest, unknown
+  artifact, and absent digest all denied; 2.1.3 is not reclassified as
+  bridge v2.
+
+## Version collision check (Gate 5)
+
+Authenticated GitHub state at preparation time: exactly one release
+(`v1.1.0`, public) and exactly one tag ref (`v1.1.0`). No `v1.2.0` tag,
+release, draft, or installer asset exists anywhere. The workflow's
+collision check re-verifies this at publication time.
+
+## Release workflow immutability (Gate 6)
+
+The current workflow already enforces the mandatory sequence: read-only
+resolve on the exact audited SHA (equal to `origin/main`, version contract,
+collision check), Windows build from that exact SHA with the full test suite
+and exact-value production Discord configuration, reviewer-gated publish
+(`launcher-production` environment) that transfers and re-hashes the same
+bytes, creates a draft with explicit `target_commitish`, verifies draft
+assets byte-exactly, publishes the existing draft once, and re-downloads the
+public bytes for read-only verification. The hardened state machine carries
+deterministic tests (`release-state.test.mjs`).
+
+One stale hardcode was corrected before preparing 1.2.0: `publish.mjs`
+required release notes to mention Aurora Client **2.1.3**. The notes
+identity check now derives the current production client version from the
+first entry of `src-tauri/production/aurora-releases.json` and lives in
+`release-state.mjs` as `verifyNotesIdentity` with deterministic tests
+(pass/stale-client/wrong-launcher-version). 14/14 release-state tests pass.
+
+## Version and notes (Gates 7–8)
+
+`1.2.0` synchronized in `package.json`, both root fields of
+`package-lock.json`, `src-tauri/Cargo.toml`, and the `aurora-launcher`
+entry of `src-tauri/Cargo.lock`; `tauri.conf.json` already derives from
+`package.json`. `npm run verify:version` passes: 1.2.0. No source file
+hardcoded 1.1.0. `RELEASE_1_2_0_NOTES.md` records the user-facing changes
+without overclaiming; it satisfies the identity contract (launcher 1.2.0,
+current production client 2.1.5).
+
+## Release-candidate test suite (Gates 9–10)
+
+| Check | Result |
+| --- | --- |
+| Rust library tests | 562 passed, 21 ignored, 0 failed |
+| Icon integration tests | 6 passed, 0 failed |
+| Frontend tests | 130 passed, 0 failed |
+| Svelte/TypeScript | 0 errors, 0 warnings |
+| `cargo fmt --check` | passed |
+| `cargo check --all-targets` | passed |
+| Frontend production build | passed |
+| Tauri production build | passed (MSI + NSIS emitted) |
+| Version contract | 1.2.0 |
+
+Counts equal the recorded production-activation baseline exactly. The
+targeted regression areas (config migration, instance registry, account
+persistence and reauthentication, credential integration, Minecraft/Fabric
+install, Java runtime acquisition, Aurora acquisition and exact-pin trust,
+local mods and provider lifecycle including Modrinth, Home widget
+persistence, E1 history, E2 widgets, Quick Launch validation, E3 preset and
+cape persistence, account switching, Discord privacy filtering, Play and
+duplicate-launch guards, release/version metadata) are all covered by the
+passing suite above.
+
+## Visual sanity gate (Gate 11)
+
+The exact release-candidate executable (1.2.0, public Discord application
+ID and 2.1.5 bridge digest verified embedded) was launched against the
+existing launcher-managed data. Captured evidence (kept local/uncommitted
+under `%TEMP%/aurora-1_2_0-visual/`): Home at 1168×847 with the full widget
+layout; Skin Manager populated (current account skin · Classic, one local
+preset, model and import controls) side-by-side with Cape Selector
+populated (three owned capes, active cape shown disabled/Selected, Disable
+action); Home at the enforced logical minimum 720×520 (900×650 physical at
+125% DPI); Settings at that minimum size. The E2 widgets displayed their
+honest empty states because no bridge-v2 gameplay history exists on this
+machine yet — recorded accurately rather than fabricated. No clipping,
+overlap, broken scrolling, unreadable text, incorrect ellipsis, missing
+artwork, broken previews, widget overflow, or minimum-size regression was
+found. After the session every launcher state file (config, accounts,
+instances, skin presets) was re-hashed byte-identical; the owner's live
+installed 1.1.0 process and its running session were never touched.
+
+## Install and upgrade smoke (Gate 15) — environment-limited
+
+A destructive installer test was NOT performed: this machine's only Aurora
+Launcher installation is the owner's live per-user 1.1.0 with a running
+supervised session, and no disposable Windows profile or VM is available
+here. Installing 1.2.0 over it would terminate the live session, and an
+isolated-directory install is refused by design by the product shortcut
+guard. Substitute evidence recorded: the exact candidate binary booted
+against the real 1.1.0-created data root and rendered accounts, instances,
+selection, settings schema 4, widget layout, and skin presets correctly
+(the upgrade-relevant data compatibility), leaving all state byte-identical.
+Installer-level fresh-install and in-place upgrade acceptance remains an
+owner manual gate on a disposable environment, exactly as it was for 1.1.0.
