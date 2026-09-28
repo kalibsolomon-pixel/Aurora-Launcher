@@ -22,22 +22,15 @@ Both target kinds call the ordinary Play pipeline, including the preparation gua
 
 Automated checks cover opaque target lookup, mode separation, malformed IDs, canonical server values, safe world identity, missing world state, daily UTC buckets, LaunchSpec preservation and redaction, widget registration and layout behavior, readable durations, rendered populated/empty widget markup, row bounds, unavailable controls, long labels, and the exact native Quick Launch DTO. Existing Play/Discord/privacy regression suites still run. Full test and build counts are recorded in the final report.
 
-Native Windows screenshot control is unavailable in this session. **Visual acceptance is pending.** No screenshots are claimed. To complete it, boot `npm run tauri dev` with disposable E1 history fixtures in managed app data and inspect: populated, compact, and empty Playtime; populated and empty Recent Worlds and Servers; all three together; minimum supported, normal, and wide windows; long names and duplicate instance names; unavailable world; hover and keyboard focus. Capture ten actual app screenshots for those states and pair them with DOM/state assertions for totals, row counts, disabled controls, and range switching. Confirm no clipping or horizontal overflow in compact layouts before marking visual acceptance passed.
+The prior agent's native Windows screenshot control did not expose the Tauri window, so the earlier acceptance record left this gate pending and proposed a ten-state manual inspection and screenshot procedure. The agent did not capture or inspect native-window screenshots. Automated DOM/state assertions had already passed for rendered widget states and the Quick Launch DTO.
 
-Use a disposable Windows user profile for fixture data; do not replace a real user's launcher data. Create E1 history through the native test store with a seven-day daily sequence, more than five world and server targets, one deleted world, one deleted instance, duplicate instance display names, and long names. Include one zero-history fixture. With the actual Tauri dev window:
+The repository owner subsequently supplied this manual rendered-window acceptance, recorded verbatim: "E2 visual acceptance passed. I checked all ten required states and didn't find any visual issues." This is owner-supplied evidence, not an agent screenshot or independent computer-vision result. The ten required states cover populated, compact, and empty Playtime; populated and empty Recent Worlds; populated and empty Recent Servers; all three widgets together at normal and compact sizes; and the wide layout. Visual acceptance therefore consists of the passed automated UI assertions plus the owner's manual inspection of all ten states, with no visual issues reported. **Visual acceptance: PASSED.**
 
-1. At 920×640, capture populated Playtime in 7D and switch to 30D and All; assert the text totals and UTC day count against the fixture.
-2. Resize to 720×520 and capture compact Playtime; assert seven distinct bars, labels, no horizontal scroll, and no clipped controls.
-3. Load zero-history data and capture the Playtime empty state.
-4. Restore populated data at 920×640 and capture Recent Worlds with three rows; assert recency order, owning instance labels, disabled missing world, and an ellipsized long title with full title tooltip.
-5. Load zero-history data and capture Recent Worlds empty.
-6. Restore populated data and capture Recent Servers with three rows; assert no raw address is displayed, recency order, and the Quick Launch control.
-7. Load zero-history data and capture Recent Servers empty.
-8. Restore populated data, show all three widgets, and capture the combined Home layout with the original Play area still usable.
-9. Capture the combined layout at 720×520 and inspect scroll, focus outlines, hover, disabled state, and long names.
-10. Resize to at least 1440×900, expand world/server widgets to five rows, and capture the wide layout. Assert row counts and keyboard focus order.
+The earlier screenshot procedure was a proposed way to resolve the agent's visibility limit; the owner's manual acceptance closes that gate without claiming that the agent obtained screenshots. The proposed disposable-profile fixture and Quick Launch interaction steps were not reported as separately completed by the owner.
 
-The fixture must remain confined to the disposable profile. Quick Launch interaction must use a test account/session and a disposable world or server; verify its owning instance launches without changing saved selection and that repeated clicks do not start a second process. Do not mark visual acceptance complete until all ten screenshots and matching assertions are recorded.
+## Final E2 status
+
+**Phase E2: PASSED.** Native and frontend tests, Svelte/TypeScript checks, and production builds passed; the final closeout verification counts are recorded in the closeout report. The Quick Launch trust boundary and widget persistence were covered by the automated checks described above. This is E2 launcher acceptance, not production bridge-v2 acceptance.
 
 ## Limits
 
