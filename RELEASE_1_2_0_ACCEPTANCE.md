@@ -138,16 +138,41 @@ found. After the session every launcher state file (config, accounts,
 instances, skin presets) was re-hashed byte-identical; the owner's live
 installed 1.1.0 process and its running session were never touched.
 
-## Install and upgrade smoke (Gate 15) — environment-limited
+## Install and upgrade smoke (Gate 15) — performed
 
-A destructive installer test was NOT performed: this machine's only Aurora
-Launcher installation is the owner's live per-user 1.1.0 with a running
-supervised session, and no disposable Windows profile or VM is available
-here. Installing 1.2.0 over it would terminate the live session, and an
-isolated-directory install is refused by design by the product shortcut
-guard. Substitute evidence recorded: the exact candidate binary booted
-against the real 1.1.0-created data root and rendered accounts, instances,
-selection, settings schema 4, widget layout, and skin presets correctly
-(the upgrade-relevant data compatibility), leaving all state byte-identical.
-Installer-level fresh-install and in-place upgrade acceptance remains an
-owner manual gate on a disposable environment, exactly as it was for 1.1.0.
+The owner ended the live 1.1.0 session and authorized performing the smoke
+on this machine, and chose the public asset set MSI + NSIS +
+`release-assets.json`. The complete installer cycle then ran against the
+real per-user 1.1.0 installation and launcher-managed data root:
+
+- **Upgrade 1.1.0 → 1.2.0 (NSIS, silent, in place)**: installed exe became
+  exactly the release-candidate 1.2.0 binary (10,482,176 bytes,
+  ProductVersion 1.2.0). `config.json`, `accounts.json`, `instances.json`
+  and skin presets were re-hashed byte-identical after installation; the
+  Start shortcut survived; the desktop shortcut was (re)created by the
+  documented silent-install default with the slot empty and unowned. The
+  upgraded install launched, reported **Aurora Launcher 1.2.0**, showed the
+  signed-in account, the selected instance **Ready** still pinned to
+  Aurora 2.1.2 (existing pins are never silently upgraded), and the E2/E3
+  widget layout. Screenshots kept local under
+  `%TEMP%/aurora-1_2_0-visual/06-…` and `07-…`.
+- **Uninstall (silent)**: program executable, uninstaller registration
+  (HKCU), Start and desktop shortcuts were removed;
+  `aurora_launcher_lib.dll` initially remained because WebView2 teardown
+  still held it seconds after app close — the lock was verified transient
+  (the file opened exclusively immediately after) and is an environmental
+  timing artifact, not an installer defect. The launcher-managed data root
+  was preserved untouched.
+- **Fresh install (NSIS, silent)**: installed 1.2.0 with correct
+  registration (DisplayName Aurora Launcher, DisplayVersion 1.2.0,
+  Publisher aurora), shortcuts, launch verified reporting 1.2.0 with the
+  preserved account and Ready instance. The 1.2.0 installation was left in
+  place on this machine.
+- **MSI**: a quiet per-machine install fails fast with Windows Installer
+  error 1925 (elevation required), as expected for its machine-wide scope;
+  no elevated interactive install was forced on the owner's desktop. A
+  non-mutating administrative extraction (`msiexec /a`) succeeded and
+  unpacked the exact release executable (`PFiles\Aurora Launcher\
+  aurora-launcher.exe`, 10,482,176 bytes), proving database and payload
+  integrity. Interactive elevated MSI acceptance remains an owner step, as
+  RELEASING.md already records for the MSI format.
