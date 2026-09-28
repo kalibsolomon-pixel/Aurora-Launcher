@@ -4450,6 +4450,12 @@ async fn play_instance_with_target(
     // reaches this point — resolve_instance_launch_plans performs the deep
     // validation that reports staleness as NotReady.
     let record = prepared.record();
+    if quick_target.is_some() && record.installed().minecraft_version != "1.21.11" {
+        return Err(CommandError::new(
+            "quick_version_unsupported",
+            "Quick Launch is currently supported for Minecraft 1.21.11 only.",
+        ));
+    }
     if record.installed().platform.kind() == "fabric"
         && managed.instance_paths(&instance).mods().is_dir()
     {
