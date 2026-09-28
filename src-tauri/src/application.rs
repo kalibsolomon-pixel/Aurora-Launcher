@@ -625,13 +625,33 @@ pub fn get_playtime_summary(
         })
 }
 #[tauri::command]
+pub fn get_daily_playtime(
+    app: AppHandle,
+    instance_id: Option<String>,
+    days: usize,
+) -> Result<Vec<crate::gameplay_history::DailyPlaytime>, CommandError> {
+    let (store, instance) = history_query(&app, instance_id)?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    store
+        .daily_playtime(instance.as_ref(), now, days)
+        .map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Daily playtime is unavailable.",
+            )
+        })
+}
+#[tauri::command]
 pub fn get_recent_worlds(
     app: AppHandle,
     instance_id: Option<String>,
     limit: usize,
 ) -> Result<Vec<crate::gameplay_history::RecentTarget>, CommandError> {
     let (store, instance) = history_query(&app, instance_id)?;
-    store
+    let mut entries = store
         .recent(
             crate::gameplay_history::Mode::Singleplayer,
             instance.as_ref(),
@@ -642,7 +662,23 @@ pub fn get_recent_worlds(
                 "gameplay_history_unavailable",
                 "Local gameplay history is unavailable or damaged.",
             )
-        })
+        })?;
+    let managed = managed_paths(&app)?;
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+    for entry in &mut entries {
+        entry.available =
+            match store.quick_target(crate::gameplay_history::Mode::Singleplayer, &entry.id) {
+                Ok(Some(crate::gameplay_history::QuickLaunchTarget::Singleplayer {
+                    instance,
+                    world,
+                })) => {
+                    registry.find(&instance).is_some()
+                        && validate_quick_world(&managed, &instance, &world).is_ok()
+                }
+                _ => false,
+            };
+    }
+    Ok(entries)
 }
 #[tauri::command]
 pub fn get_recent_servers(
@@ -651,7 +687,7 @@ pub fn get_recent_servers(
     limit: usize,
 ) -> Result<Vec<crate::gameplay_history::RecentTarget>, CommandError> {
     let (store, instance) = history_query(&app, instance_id)?;
-    store
+    let mut entries = store
         .recent(
             crate::gameplay_history::Mode::Multiplayer,
             instance.as_ref(),
@@ -662,7 +698,25 @@ pub fn get_recent_servers(
                 "gameplay_history_unavailable",
                 "Local gameplay history is unavailable or damaged.",
             )
-        })
+        })?;
+    let managed = managed_paths(&app)?;
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+    for entry in &mut entries {
+        entry.available = match store
+            .quick_target(crate::gameplay_history::Mode::Multiplayer, &entry.id)
+        {
+            Ok(Some(crate::gameplay_history::QuickLaunchTarget::Multiplayer {
+                instance,
+                server,
+            })) => {
+                registry.find(&instance).is_some()
+                    && crate::gameplay_history::ServerTarget::try_from(server.as_str().to_owned())
+                        .is_ok()
+            }
+            _ => false,
+        };
+    }
+    Ok(entries)
 }
 #[tauri::command]
 pub fn set_home_widgets(
@@ -3927,6 +3981,139 @@ pub struct PlayRequest {
     account_id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct QuickPlayRequest {
+    target_id: String,
+    mode: String,
+    account_id: String,
+}
+
+fn validate_quick_world(
+    managed: &ManagedPaths,
+    instance: &crate::instances::InstanceId,
+    world: &crate::gameplay_history::WorldSaveId,
+) -> Result<(), CommandError> {
+    let world =
+        crate::gameplay_history::WorldSaveId::parse(world.as_str().to_owned()).map_err(|_| {
+            CommandError::new(
+                "quick_world_invalid",
+                "The saved world identity is invalid.",
+            )
+        })?;
+    let root = managed.instance_paths(instance).root().join("saves");
+    let target = root.join(world.as_str());
+    let metadata = std::fs::symlink_metadata(&target).map_err(|_| {
+        CommandError::new("quick_world_missing", "This world is no longer available.")
+    })?;
+    let level = std::fs::symlink_metadata(target.join("level.dat"));
+    if !metadata.file_type().is_dir() || !level.is_ok_and(|item| item.file_type().is_file()) {
+        return Err(CommandError::new(
+            "quick_world_missing",
+            "This world is no longer available.",
+        ));
+    }
+    let root_real = std::fs::canonicalize(&root).map_err(|_| {
+        CommandError::new("quick_world_missing", "This world is no longer available.")
+    })?;
+    let instance_real =
+        std::fs::canonicalize(managed.instance_paths(instance).root()).map_err(|_| {
+            CommandError::new(
+                "quick_instance_missing",
+                "The instance for this recent target no longer exists.",
+            )
+        })?;
+    if !std::fs::symlink_metadata(&root).is_ok_and(|item| item.file_type().is_dir())
+        || !root_real.starts_with(instance_real)
+    {
+        return Err(CommandError::new(
+            "quick_world_invalid",
+            "The saved world is outside this instance.",
+        ));
+    }
+    let target_real = std::fs::canonicalize(&target).map_err(|_| {
+        CommandError::new(
+            "quick_world_invalid",
+            "The saved world is outside this instance.",
+        )
+    })?;
+    if !target_real.starts_with(root_real) {
+        return Err(CommandError::new(
+            "quick_world_invalid",
+            "The saved world is outside this instance.",
+        ));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn quick_play_history(
+    app: AppHandle,
+    request: QuickPlayRequest,
+) -> Result<LaunchProcessDto, CommandError> {
+    use crate::gameplay_history::{Mode, QuickLaunchTarget, ServerTarget};
+    let mode = match request.mode.as_str() {
+        "world" => Mode::Singleplayer,
+        "server" => Mode::Multiplayer,
+        _ => {
+            return Err(CommandError::new(
+                "quick_target_invalid",
+                "Choose a recent world or server.",
+            ));
+        }
+    };
+    let managed = managed_paths(&app)?;
+    let store =
+        crate::gameplay_history::Store::open(managed.gameplay_history_file()).map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Local gameplay history is unavailable or damaged.",
+            )
+        })?;
+    let target = store
+        .quick_target(mode, &request.target_id)
+        .map_err(|_| CommandError::new("quick_target_invalid", "The recent target is invalid."))?
+        .ok_or_else(|| {
+            CommandError::new(
+                "quick_target_stale",
+                "This recent target is no longer in local history.",
+            )
+        })?;
+    let instance = match &target {
+        QuickLaunchTarget::Singleplayer { instance, world } => {
+            validate_quick_world(&managed, instance, world)?;
+            instance
+        }
+        QuickLaunchTarget::Multiplayer { instance, server } => {
+            ServerTarget::try_from(server.as_str().to_owned()).map_err(|_| {
+                CommandError::new(
+                    "quick_server_invalid",
+                    "The saved server target is invalid.",
+                )
+            })?;
+            instance
+        }
+    };
+    if InstanceRegistry::load(&managed.instance_registry_file())?
+        .find(instance)
+        .is_none()
+    {
+        return Err(CommandError::new(
+            "quick_instance_missing",
+            "The instance for this recent target no longer exists.",
+        ));
+    }
+    play_instance_with_target(
+        app,
+        PlayRequest {
+            instance_id: instance.as_str().to_owned(),
+            account_id: request.account_id,
+        },
+        Some(target),
+    )
+    .await
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayBlockerDto {
@@ -4203,11 +4390,31 @@ pub async fn play_instance(
     app: AppHandle,
     request: PlayRequest,
 ) -> Result<LaunchProcessDto, CommandError> {
+    play_instance_with_target(app, request, None).await
+}
+
+async fn play_instance_with_target(
+    app: AppHandle,
+    request: PlayRequest,
+    quick_target: Option<crate::gameplay_history::QuickLaunchTarget>,
+) -> Result<LaunchProcessDto, CommandError> {
     use crate::runtime::install::RuntimeValidationStatus;
     use std::sync::Arc;
 
     let managed = managed_paths(&app)?;
     let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    if let Some(target) = &quick_target {
+        let owner = match target {
+            crate::gameplay_history::QuickLaunchTarget::Singleplayer { instance, .. }
+            | crate::gameplay_history::QuickLaunchTarget::Multiplayer { instance, .. } => instance,
+        };
+        if owner != &instance {
+            return Err(CommandError::new(
+                "quick_instance_mismatch",
+                "The recent target belongs to a different instance.",
+            ));
+        }
+    }
     let account_id = request.account_id.trim().to_owned();
     crate::auth::accounts::AccountId::validate(&account_id)?;
 
@@ -4373,6 +4580,14 @@ pub async fn play_instance(
             &features,
             &launch_options,
         )?;
+        let spec = if let Some(target) = &quick_target {
+            if let crate::gameplay_history::QuickLaunchTarget::Singleplayer { world, .. } = target {
+                validate_quick_world(&managed, &instance, world)?;
+            }
+            spec.with_quick_target(target)
+        } else {
+            spec
+        };
 
         emit_launch_phase(&app, "startingProcess");
         let listener_app = app.clone();
@@ -4490,6 +4705,29 @@ pub async fn play_instance(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quick_world_requires_a_real_save_inside_the_owning_instance() {
+        let root = std::env::temp_dir().join(format!("aurora-e2-world-{}", uuid::Uuid::new_v4()));
+        let managed = ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let instance =
+            crate::instances::InstanceId::new("1234567890abcdef1234567890abcdef").unwrap();
+        let saves = managed.instance_paths(&instance).root().join("saves");
+        std::fs::create_dir_all(saves.join("safe-save")).unwrap();
+        std::fs::write(saves.join("safe-save").join("level.dat"), b"fixture").unwrap();
+        let world = crate::gameplay_history::WorldSaveId::parse("safe-save".into()).unwrap();
+        assert!(validate_quick_world(&managed, &instance, &world).is_ok());
+        std::fs::remove_file(saves.join("safe-save").join("level.dat")).unwrap();
+        assert_eq!(
+            validate_quick_world(&managed, &instance, &world)
+                .unwrap_err()
+                .code,
+            "quick_world_missing"
+        );
+        assert!(crate::gameplay_history::WorldSaveId::parse("../escape".into()).is_err());
+        assert!(crate::gameplay_history::WorldSaveId::parse("C:/escape".into()).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn new_instance_aurora_defaults_are_compatible_and_respect_explicit_off() {

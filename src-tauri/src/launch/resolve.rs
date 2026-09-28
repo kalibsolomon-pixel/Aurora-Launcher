@@ -105,6 +105,33 @@ pub struct LaunchSpec {
 }
 
 impl LaunchSpec {
+    /// Append Minecraft 1.21.11's reviewed direct-start arguments to an
+    /// otherwise ordinary validated launch specification.
+    pub(crate) fn with_quick_target(
+        mut self,
+        target: &crate::gameplay_history::QuickLaunchTarget,
+    ) -> Self {
+        use crate::gameplay_history::QuickLaunchTarget;
+        let (switch, value) = match target {
+            QuickLaunchTarget::Singleplayer { world, .. } => {
+                ("--quickPlaySingleplayer", world.as_str())
+            }
+            QuickLaunchTarget::Multiplayer { server, .. } => {
+                ("--quickPlayMultiplayer", server.as_str())
+            }
+        };
+        self.game_arguments
+            .push(ResolvedArgument::Plain(switch.into()));
+        self.game_arguments
+            .push(ResolvedArgument::Sensitive(SecretString::new(
+                value.to_owned(),
+            )));
+        self.game_arguments
+            .push(ResolvedArgument::Plain("--quickPlayPath".into()));
+        self.game_arguments
+            .push(ResolvedArgument::Plain("logs/quickplay.txt".into()));
+        self
+    }
     pub fn instance_id(&self) -> &str {
         &self.instance_id
     }
@@ -776,6 +803,44 @@ impl std::error::Error for LaunchResolveError {}
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn quick_target_augments_the_normal_spec_without_changing_java_or_jvm() {
+        let spec = super::LaunchSpec::fake_process(
+            "1234567890abcdef1234567890abcdef",
+            std::path::PathBuf::from("java"),
+            "token",
+            std::path::PathBuf::from("instance"),
+        );
+        let java = spec.java_executable().to_owned();
+        let jvm = spec.jvm_arguments().to_vec();
+        let target = crate::gameplay_history::QuickLaunchTarget::Multiplayer {
+            instance: crate::instances::InstanceId::new("1234567890abcdef1234567890abcdef")
+                .unwrap(),
+            server: crate::gameplay_history::ServerTarget::parse("private.invalid".into()).unwrap(),
+        };
+        let quick = spec.with_quick_target(&target);
+        assert_eq!(quick.java_executable(), java);
+        assert_eq!(quick.jvm_arguments(), jvm);
+        assert!(
+            quick
+                .game_arguments()
+                .iter()
+                .any(|value| value.expose() == "--quickPlayMultiplayer")
+        );
+        assert!(
+            quick
+                .game_arguments()
+                .iter()
+                .any(|value| value.expose() == "--quickPlayPath")
+        );
+        assert!(!format!("{quick:?}").contains("private.invalid"));
+        assert!(
+            quick
+                .sensitive_values()
+                .iter()
+                .any(|value| value == "private.invalid:25565")
+        );
+    }
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use super::*;

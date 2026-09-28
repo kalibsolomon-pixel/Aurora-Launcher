@@ -399,6 +399,58 @@ pub struct Store {
     path: PathBuf,
 }
 impl Store {
+    /// Resolves an opaque history ID against persisted visits. The caller must
+    /// validate the returned target again against current managed state.
+    pub fn quick_target(&self, mode: Mode, id: &str) -> Result<Option<QuickLaunchTarget>, ()> {
+        use sha2::{Digest, Sha256};
+        if id.len() != 64
+            || !id.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || !matches!(mode, Mode::Singleplayer | Mode::Multiplayer)
+        {
+            return Err(());
+        }
+        let map = memory().lock().map_err(|_| ())?;
+        let doc = map.get(&self.path).ok_or(())?;
+        for session in &doc.sessions {
+            for visit in &session.visits {
+                if visit.mode != mode {
+                    continue;
+                }
+                let target = match mode {
+                    Mode::Singleplayer => visit.world.as_ref().map(WorldSaveId::as_str),
+                    Mode::Multiplayer => visit.server.as_ref().map(ServerTarget::as_str),
+                    _ => None,
+                };
+                let Some(target) = target else {
+                    continue;
+                };
+                let mut digest = Sha256::new();
+                digest.update(if mode == Mode::Singleplayer {
+                    b"world".as_slice()
+                } else {
+                    b"server".as_slice()
+                });
+                digest.update([0]);
+                digest.update(session.instance.as_str().as_bytes());
+                digest.update([0]);
+                digest.update(target.as_bytes());
+                if format!("{:x}", digest.finalize()) == id {
+                    return Ok(Some(match mode {
+                        Mode::Singleplayer => QuickLaunchTarget::Singleplayer {
+                            instance: session.instance.clone(),
+                            world: WorldSaveId::parse(target.to_owned()).map_err(|_| ())?,
+                        },
+                        Mode::Multiplayer => QuickLaunchTarget::Multiplayer {
+                            instance: session.instance.clone(),
+                            server: ServerTarget::try_from(target.to_owned()).map_err(|_| ())?,
+                        },
+                        _ => unreachable!(),
+                    }));
+                }
+            }
+        }
+        Ok(None)
+    }
     pub fn open(path: PathBuf) -> Result<Self, ()> {
         let mut map = memory().lock().map_err(|_| ())?;
         if !map.contains_key(&path) {
@@ -492,6 +544,40 @@ impl Store {
             all_time_ms: buckets.values().sum(),
         })
     }
+    pub fn daily_playtime(
+        &self,
+        instance: Option<&InstanceId>,
+        at: u64,
+        days: usize,
+    ) -> Result<Vec<DailyPlaytime>, ()> {
+        if !(1..=30).contains(&days) {
+            return Err(());
+        }
+        let map = memory().lock().map_err(|_| ())?;
+        let doc = map.get(&self.path).ok_or(())?;
+        let mut buckets = BTreeMap::new();
+        for day in &doc.archive {
+            if instance.is_none_or(|id| *id == day.instance) {
+                *buckets.entry(day.day).or_insert(0u64) += day.duration_ms;
+            }
+        }
+        for session in &doc.sessions {
+            if instance.is_none_or(|id| *id == session.instance) {
+                add_daily(&mut buckets, session.started_at, session.duration_ms);
+            }
+        }
+        let today = at / 86400;
+        Ok((0..days)
+            .rev()
+            .map(|back| {
+                let day = today.saturating_sub(back as u64);
+                DailyPlaytime {
+                    day,
+                    duration_ms: *buckets.get(&day).unwrap_or(&0),
+                }
+            })
+            .collect())
+    }
     pub fn recent(
         &self,
         mode: Mode,
@@ -538,6 +624,7 @@ impl Store {
                     display_name: String::new(),
                     last_played_at: 0,
                     duration_ms: 0,
+                    available: true,
                 });
                 entry.duration_ms = entry.duration_ms.saturating_add(visit.duration_ms);
                 if visit.ended_at >= entry.last_played_at {
@@ -592,6 +679,13 @@ pub struct RecentTarget {
     pub instance_id: String,
     pub display_name: String,
     pub last_played_at: u64,
+    pub duration_ms: u64,
+    pub available: bool,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyPlaytime {
+    pub day: u64,
     pub duration_ms: u64,
 }
 pub struct Recorder {
@@ -795,6 +889,71 @@ mod tests {
                 summary.all_time_ms
             ),
             (1000, 7000, 30000, 31000)
+        );
+        let daily = store.daily_playtime(Some(&id()), now(), 7).unwrap();
+        assert_eq!(daily.len(), 7);
+        assert!(daily.iter().all(|bucket| bucket.duration_ms == 1000));
+        assert!(store.daily_playtime(None, now(), 31).is_err());
+        let _ = fs::remove_file(file);
+    }
+    #[test]
+    fn opaque_recent_ids_resolve_only_the_stored_instance_and_target() {
+        let file = path();
+        let store = Store::open(file.clone()).unwrap();
+        let record = store.start(id()).unwrap();
+        record
+            .observe(
+                Mode::Singleplayer,
+                Some(WorldSaveId::parse("safe-save".into()).unwrap()),
+                None,
+                Some("Friendly title".into()),
+            )
+            .unwrap();
+        record
+            .observe(
+                Mode::Multiplayer,
+                None,
+                Some(ServerTarget::parse("EXAMPLE.invalid".into()).unwrap()),
+                Some("Private server".into()),
+            )
+            .unwrap();
+        record.finish(Outcome::Normal).unwrap();
+        let worlds = store.recent(Mode::Singleplayer, None, 5).unwrap();
+        let servers = store.recent(Mode::Multiplayer, None, 5).unwrap();
+        assert_eq!(worlds.len(), 1);
+        assert_eq!(servers.len(), 1);
+        assert!(
+            matches!(store.quick_target(Mode::Singleplayer, &worlds[0].id).unwrap(), Some(QuickLaunchTarget::Singleplayer { instance, world }) if instance == id() && world.as_str() == "safe-save")
+        );
+        assert!(
+            matches!(store.quick_target(Mode::Multiplayer, &servers[0].id).unwrap(), Some(QuickLaunchTarget::Multiplayer { instance, server }) if instance == id() && server.as_str() == "example.invalid:25565")
+        );
+        assert!(
+            store
+                .quick_target(Mode::Multiplayer, &worlds[0].id)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            store
+                .quick_target(Mode::Singleplayer, &"0".repeat(64))
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            store
+                .quick_target(Mode::Singleplayer, "../../world")
+                .is_err()
+        );
+        assert!(
+            !format!(
+                "{:?}",
+                store
+                    .quick_target(Mode::Multiplayer, &servers[0].id)
+                    .unwrap()
+                    .unwrap()
+            )
+            .contains("example.invalid")
         );
         let _ = fs::remove_file(file);
     }
