@@ -1526,10 +1526,15 @@ mod tests {
         let manifest = crate::distribution::production_manifest().unwrap();
         let configuration = InstanceConfiguration::for_minecraft_version("1.21.11");
         let selected = resolve_release_for_configuration(&manifest, &configuration).unwrap();
-        assert_eq!(selected.aurora_version(), "2.1.3");
+        assert_eq!(selected.aurora_version(), "2.1.5");
         assert_eq!(
             selected.artifact().sha256(),
             crate::launch::activity_bridge::BRIDGE_ARTIFACT_SHA256
+        );
+        assert!(
+            manifest
+                .resolve_exact("2.1.3", Some(ReleaseChannel::Stable))
+                .is_some()
         );
         assert!(
             manifest

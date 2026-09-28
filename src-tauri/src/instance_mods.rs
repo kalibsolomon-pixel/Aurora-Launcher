@@ -2329,9 +2329,9 @@ mod tests {
             settings::InstanceConfiguration,
         };
         let fixture = Fixture::new("active-requirements");
-        let aurora_path = fixture.mods().join("aurora-2.1.3.jar");
+        let aurora_path = fixture.mods().join("aurora-2.1.5.jar");
         let api_path = fixture.mods().join("fabric-api-0.141.6+1.21.11.jar");
-        jar(&aurora_path, Some(br#"{"id":"aurora","version":"2.1.3"}"#));
+        jar(&aurora_path, Some(br#"{"id":"aurora","version":"2.1.5"}"#));
         jar(
             &api_path,
             Some(br#"{"id":"fabric-api","version":"0.141.6+1.21.11"}"#),
@@ -2351,7 +2351,7 @@ mod tests {
         let manifest =
             crate::distribution::ReleaseManifest::from_json(&release.to_string()).unwrap();
         let declaration = &release["releases"][0];
-        let state = serde_json::json!({"schemaVersion":1,"auroraVersion":"2.1.3","channel":"stable","minecraftVersion":"1.21.11","fabricLoaderVersion":"0.19.5","installationId":"fixture","installedAtUnixSeconds":1,"artifact":{"relativePath":"mods/aurora-2.1.3.jar","sizeBytes":declaration["artifact"]["sizeBytes"],"sha256":declaration["artifact"]["sha256"]},"fabricApi":{"version":"0.141.6+1.21.11","artifact":{"relativePath":"mods/fabric-api-0.141.6+1.21.11.jar","sizeBytes":declaration["fabricApi"]["artifact"]["sizeBytes"],"sha256":declaration["fabricApi"]["artifact"]["sha256"]}}});
+        let state = serde_json::json!({"schemaVersion":1,"auroraVersion":"2.1.5","channel":"stable","minecraftVersion":"1.21.11","fabricLoaderVersion":"0.19.5","installationId":"fixture","installedAtUnixSeconds":1,"artifact":{"relativePath":"mods/aurora-2.1.5.jar","sizeBytes":declaration["artifact"]["sizeBytes"],"sha256":declaration["artifact"]["sha256"]},"fabricApi":{"version":"0.141.6+1.21.11","artifact":{"relativePath":"mods/fabric-api-0.141.6+1.21.11.jar","sizeBytes":declaration["fabricApi"]["artifact"]["sizeBytes"],"sha256":declaration["fabricApi"]["artifact"]["sha256"]}}});
         let state_path = fixture
             .managed
             .instance_paths(&fixture.instance)
@@ -2366,7 +2366,7 @@ mod tests {
                 InstanceState::Ready,
                 PinnedRelease::new(
                     crate::distribution::ReleaseChannel::Stable,
-                    "2.1.3",
+                    "2.1.5",
                     "1.21.11",
                     "0.19.5",
                 )

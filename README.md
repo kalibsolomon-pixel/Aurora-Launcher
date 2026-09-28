@@ -1,10 +1,12 @@
 # Aurora Launcher
 
 The current local release candidate is **1.1.0**, with independently verified
-Aurora Client **2.1.3** selected for new compatible production instances. The
-immutable 2.1.2 entry remains available for existing pins. Publication is still
+Aurora Client **2.1.5** selected for new compatible production instances. The
+immutable 2.1.3 and 2.1.2 entries remain available for existing pins. Publication is still
 gated by [RELEASE_1_1_0_ACCEPTANCE.md](RELEASE_1_1_0_ACCEPTANCE.md); candidate notes
-are in [RELEASE_1_1_0_NOTES.md](RELEASE_1_1_0_NOTES.md).
+are in [RELEASE_1_1_0_NOTES.md](RELEASE_1_1_0_NOTES.md). The production
+activation of Aurora Client 2.1.5 (bridge v2) is recorded in
+[AURORA_CLIENT_2_1_5_ACTIVATION.md](AURORA_CLIENT_2_1_5_ACTIVATION.md).
 
 The launcher supports executable Vanilla instances, Fabric instances without Aurora, and compatible optional Aurora. Creation uses the Rust capability catalog; compatible Fabric instances include Aurora Client by default, and an explicit off choice is respected. Existing instances change configured Aurora through an explicit preview and fingerprinted content transaction, while Mods supports ordinary bootstrap enable, disable and removal. Provider-managed Fabric API remains provider-managed. See [ARCHITECTURE.md](ARCHITECTURE.md) for the supported lifecycle and transition boundaries.
 

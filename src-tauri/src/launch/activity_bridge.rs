@@ -1,4 +1,4 @@
-//! Client protocol v1. Private, ephemeral, exact-child activity; never game controls.
+//! Client protocol v1/v2. Private, ephemeral, exact-child activity; never game controls.
 use serde::Deserialize;
 use std::{
     fmt,
@@ -24,9 +24,11 @@ const ACCEPTED: &[u8] = b"{\"type\":\"accepted\",\"schemaVersion\":1}\n";
 const ACCEPTED_V2: &[u8] = b"{\"type\":\"accepted\",\"schemaVersion\":2}\n";
 const FRAME_TIMEOUT: Duration = Duration::from_secs(2);
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
-/// Independently verified immutable v2.1.3 artifact; bridge classes match reviewed a1f0ab6.
+/// Independently verified immutable v2.1.5 artifact; bridge classes match
+/// reviewed a5497f6 (byte-identical to the reviewed 2.1.4 candidate except
+/// the embedded version string). Production bridge protocol is v2.
 pub const BRIDGE_ARTIFACT_SHA256: &str =
-    "4bf78dc1ef8f18e124377575c508ca357327be1c230b203e9f8181bdcb9ebc81";
+    "fdc344e28c95a93b84af4b4fb1e61f9d3cc5774339f753f45f603c901df324d6";
 
 pub fn supported(active: bool, minecraft: &str, digest: Option<&str>) -> bool {
     active && minecraft == "1.21.11" && digest == Some(BRIDGE_ARTIFACT_SHA256)
@@ -132,6 +134,9 @@ impl fmt::Debug for Session {
     }
 }
 impl Session {
+    /// Protocol-1 convenience for the retained v1 regression tests; production
+    /// sessions are prepared for protocol 2 (`prepare_for_protocol(2)`).
+    #[cfg(test)]
     pub fn prepare() -> Result<Self, ()> {
         Self::prepare_for_protocol(1)
     }
@@ -868,6 +873,13 @@ mod tests {
             true,
             "1.21.11",
             Some("55ac97f7494daa3866bb3b4aa8d23e49b240fe5ced00fbf1742f7214fc77c52a")
+        ));
+        // The previously reviewed 2.1.3 digest no longer opens a bridge: the
+        // former production artifact is not silently reclassified as v2.
+        assert!(!supported(
+            true,
+            "1.21.11",
+            Some("4bf78dc1ef8f18e124377575c508ca357327be1c230b203e9f8181bdcb9ebc81")
         ));
         assert!(!supported(true, "other", Some(BRIDGE_ARTIFACT_SHA256)));
         assert!(!supported(true, "1.21.11", None));

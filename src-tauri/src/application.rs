@@ -4743,7 +4743,7 @@ async fn play_instance_with_target(
             &presence_version,
             bridge_digest.as_deref(),
         )
-        .then(|| crate::launch::activity_bridge::Session::prepare().ok())
+        .then(|| crate::launch::activity_bridge::Session::prepare_for_protocol(2).ok())
         .flatten();
         let gameplay = bridge.as_ref().map(|session| session.handle());
         let recorder = Arc::new(std::sync::Mutex::new(

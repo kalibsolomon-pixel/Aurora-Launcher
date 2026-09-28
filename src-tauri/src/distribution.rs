@@ -673,7 +673,7 @@ mod tests {
                 .resolve_exact("2.1.2", Some(ReleaseChannel::Stable))
                 .is_some()
         );
-        assert_eq!(production.releases().len(), 2);
+        assert_eq!(production.releases().len(), 3);
         let release = production
             .resolve_exact("2.1.3", Some(ReleaseChannel::Stable))
             .unwrap();
@@ -689,6 +689,21 @@ mod tests {
             "4bf78dc1ef8f18e124377575c508ca357327be1c230b203e9f8181bdcb9ebc81"
         );
         assert_eq!(release.artifact().size_bytes(), Some(2467058));
+        let production_215 = production
+            .resolve_exact("2.1.5", Some(ReleaseChannel::Stable))
+            .unwrap();
+        assert_eq!(production_215.minecraft_version(), "1.21.11");
+        assert_eq!(production_215.fabric_loader_version(), "0.19.5");
+        assert_eq!(production_215.java().major_version(), 21);
+        assert_eq!(
+            production_215.artifact().url(),
+            "https://github.com/kalibsolomon-pixel/Aurora-Client/releases/download/v2.1.5/aurora-2.1.5.jar"
+        );
+        assert_eq!(
+            production_215.artifact().sha256(),
+            "fdc344e28c95a93b84af4b4fb1e61f9d3cc5774339f753f45f603c901df324d6"
+        );
+        assert_eq!(production_215.artifact().size_bytes(), Some(2468545));
         let fabric_api = release
             .fabric_api()
             .expect("production Aurora requires Fabric API");
