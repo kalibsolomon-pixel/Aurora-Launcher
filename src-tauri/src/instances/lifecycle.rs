@@ -4005,7 +4005,20 @@ mod tests {
             .is_err()
         );
         assert!(world.load_registry().instances().is_empty());
-        let record = world.create("Protected Aurora").await.unwrap();
+        // This assertion exercises the metadata-only transition guard. A
+        // synthetic ready registry record avoids downloading Fabric Loader
+        // from the fixed production Maven URL in an otherwise loopback test.
+        let record = InstanceRecord::new(
+            InstanceId::new(uuid::Uuid::new_v4().simple().to_string()).unwrap(),
+            "Protected Aurora",
+            InstanceState::Ready,
+            PinnedRelease::new(ReleaseChannel::Stable, "0.3.0", "26.2", "0.19.5").unwrap(),
+            InstanceConfiguration::for_minecraft_version("26.2"),
+        )
+        .unwrap();
+        let mut registry = InstanceRegistry::empty();
+        registry.instances_mut().push(record.clone());
+        registry.save(&world.registry_path()).unwrap();
         let before = std::fs::read(world.registry_path()).unwrap();
         let mut configuration = record.configuration().clone();
         configuration.set_aurora_enabled(false);

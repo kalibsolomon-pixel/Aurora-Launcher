@@ -655,8 +655,11 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_shortcut_lifecycle_in_scratch_directory() {
-        let scratch =
-            std::env::temp_dir().join(format!("aurora-shortcut-test-{}", std::process::id()));
+        let scratch = std::env::temp_dir().join(format!(
+            "aurora-shortcut-test-{}-{}",
+            std::process::id(),
+            uuid::Uuid::new_v4().simple()
+        ));
         std::fs::create_dir_all(&scratch).expect("create scratch root");
 
         let outcome = (|| -> Result<(), Box<dyn std::error::Error>> {
@@ -665,10 +668,11 @@ mod tests {
             std::fs::create_dir_all(&desktop)?;
             std::fs::create_dir_all(&programs)?;
 
-            // A stand-in "installed production executable" as the target.
+            // Give the shell a real PE target. Some Windows runners refuse to
+            // resolve a shortcut back to a file containing arbitrary bytes.
             let target = scratch.join("install").join("aurora-launcher.exe");
             std::fs::create_dir_all(target.parent().unwrap())?;
-            std::fs::write(&target, b"test exe")?;
+            std::fs::copy(std::env::current_exe()?, &target)?;
 
             let context = ShortcutContext {
                 desktop_dir: desktop.clone(),
@@ -686,7 +690,12 @@ mod tests {
                 context.create_desktop_shortcut()?,
                 ShortcutPresence::Present
             );
-            assert_eq!(context.desktop_presence(), ShortcutPresence::Present);
+            assert_eq!(
+                context.desktop_presence(),
+                ShortcutPresence::Present,
+                "target={target:?}, shell target={:?}",
+                windows_impl::read_shortcut_target(&desktop_slot(&desktop))
+            );
 
             // Creation is idempotent and refreshes the existing owned link.
             assert_eq!(
