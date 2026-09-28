@@ -1,11 +1,11 @@
-# Aurora Launcher 1.1.0 release gate — stopped
+# Aurora Launcher 1.1.0 release acceptance record
 
 Date: 2026-09-27. No release is accepted or published by this audit.
 
-Current status: the aggregate 39-commit audit has passed; see the appended
-final-gate sections. The historical client/version and workflow blockers below
-were resolved by the recorded 2.1.3 preparation. Installer installation and the
-complete production GUI game sequence still block publication.
+Current status: the aggregate 39-commit audit and deterministic release gates
+passed. The historical client/version blockers below were resolved by the
+recorded 2.1.3 preparation. The owner subsequently attested the remaining manual
+installer and game gates; see the appended record for its evidentiary limits.
 
 ## Mandatory stop conditions
 
@@ -397,3 +397,29 @@ The pre-existing Cargo.toml status entry has no content diff and was preserved.
 Client HEAD remains `e978d0b5545e4991137e0fc1387e9897e752dfc7`, with no tracked
 content diff; its existing Python cache remains untracked. No client build,
 publication, deletion, repository cleanup, launcher push, tag or release occurred.
+
+## Owner-reported manual acceptance and release-body correction
+
+After the prior report, the owner stated that the two remaining manual gates had
+been completed successfully and, when asked about the enumerated checks, replied
+"everything checks out" and then "i have verified all of the above". This is
+owner-reported acceptance of the installer and production-game checklist, not
+independent agent observation. No installer format, test-environment details,
+screenshots, logs, installed-file hash output or individual state timestamps were
+provided. This report does not attribute any such measurements to the owner.
+
+The resumed pre-publication inspection found and corrected a separate release
+blocker: `tools/release/publish.ps1` had hard-coded Aurora Client **2.1.2** into
+the public release body and omitted `RELEASE_1_1_0_NOTES.md`. It now loads the
+versioned notes source and appends verified installer metadata. A local rendering
+check using the exact built installer manifest confirmed the body includes 1.1.0,
+Aurora Client 2.1.3 and the installer checksum, without the old 2.1.2 claim.
+The PowerShell script parsed, the version contract remained 1.1.0, and
+`git diff --check` passed. This changes release publishing text only; it does
+not change the compiled launcher, production pins or installer bytes.
+
+The owner's manual attestation is accepted as the manual gate report. Exact
+installer format(s) used during that manual check were not supplied; public
+distribution follows the established NSIS format. No agent-observed GUI result
+is claimed. At this point the release is still unpublished pending the final
+remote, repository-safety and workflow gates.

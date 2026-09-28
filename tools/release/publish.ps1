@@ -14,10 +14,18 @@ $manifestPath = Join-Path $AssetsDirectory 'release-assets.json'
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 $tag = "v$Version"
 $notesPath = Join-Path $env:RUNNER_TEMP 'aurora-launcher-release-notes.md'
+$sourceNotesPath = Join-Path $PSScriptRoot "../../RELEASE_$($Version.Replace('.', '_'))_NOTES.md"
+if (-not (Test-Path -LiteralPath $sourceNotesPath -PathType Leaf)) {
+    throw "Release notes are missing for $Version"
+}
+$sourceNotes = (Get-Content -LiteralPath $sourceNotesPath -Raw).Trim()
+if ($sourceNotes -notmatch "^# Aurora Launcher $([regex]::Escape($Version))(\s|$)") {
+    throw "Release notes do not identify Aurora Launcher $Version"
+}
 $notes = @(
-    "Aurora Launcher $Version",
+    $sourceNotes,
     '',
-    'Windows installer artifacts are listed below with SHA-256 checksums. This launcher build includes the reviewed Aurora Client 2.1.2 production manifest for new instances; existing instances remain pinned.',
+    '## Installer artifacts',
     '',
     '| File | Architecture | Bytes | SHA-256 |',
     '| --- | --- | ---: | --- |'

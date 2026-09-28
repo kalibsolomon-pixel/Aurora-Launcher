@@ -1,7 +1,8 @@
 # Aurora Launcher 1.1.0 — release notes
 
-Publication remains gated by `RELEASE_1_1_0_ACCEPTANCE.md`.
-These notes are finalized for the candidate; they have not been published.
+New compatible Aurora instances use the verified Aurora Client 2.1.3 release
+with Minecraft 1.21.11, Fabric Loader 0.19.5, Fabric API 0.141.6+1.21.11,
+and managed Java 21. Existing instances remain pinned.
 
 - Improved Home, account presentation, player preview, and instance navigation.
 - Customizable Home widgets and persisted layout preferences.
