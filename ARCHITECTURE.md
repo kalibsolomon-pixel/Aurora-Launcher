@@ -1,6 +1,6 @@
 # Aurora Launcher architecture
 
-Phase E1 gameplay-history ownership, retention, v2 identity protocol and deferred Quick Launch are recorded in [PHASE_E1_DESIGN.md](PHASE_E1_DESIGN.md). The three future Home IDs remain unregistered.
+Phase E1 gameplay-history ownership, retention and v2 identity protocol are recorded in [PHASE_E1_DESIGN.md](PHASE_E1_DESIGN.md). Phase E2 registers the three Home history widgets and resolves opaque recent-target IDs in Rust before adding reviewed direct-start arguments to the ordinary Play pipeline; see [PHASE_E2_ACCEPTANCE.md](PHASE_E2_ACCEPTANCE.md). Persisted selection stays unchanged when a recent target belongs to another instance.
 
 The phase sections below record the architecture as it evolved. **The final pre-publication pass below** defines current bootstrap ownership, mod toggles, deletion and spatial behavior. **Phases C1/C2** and **Phase D** retain the history of the instance/lifecycle and Home/account boundaries. They supersede earlier mandatory-Aurora, Fabric-only and diagnostic Home descriptions.
 
