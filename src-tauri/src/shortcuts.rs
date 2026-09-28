@@ -674,7 +674,7 @@ mod tests {
             std::fs::create_dir_all(target.parent().unwrap())?;
             std::fs::copy(std::env::current_exe()?, &target)?;
 
-            let context = ShortcutContext {
+            let mut context = ShortcutContext {
                 desktop_dir: desktop.clone(),
                 programs_dir: programs,
                 common_programs_dir: None,
@@ -690,6 +690,12 @@ mod tests {
                 context.create_desktop_shortcut()?,
                 ShortcutPresence::Present
             );
+            // Hosted runners may expose TEMP through an 8.3 alias
+            // (RUNNER~1), while ShellLink records the long account path.
+            // Exercise exact ownership using the target the shell recorded;
+            // alias expansion is not part of the production ownership rule.
+            context.target_exe = windows_impl::read_shortcut_target(&desktop_slot(&desktop))
+                .expect("new shortcut must expose its target");
             assert_eq!(
                 context.desktop_presence(),
                 ShortcutPresence::Present,
@@ -779,7 +785,7 @@ mod tests {
                 desktop_dir: desktop,
                 programs_dir: context.programs_dir.clone(),
                 common_programs_dir: Some(common_programs.clone()),
-                target_exe: target.clone(),
+                target_exe: context.target_exe.clone(),
             };
             let msi_machine_wide = start_menu_slots(&common_programs)[1].clone();
             windows_impl::write_shortcut(
