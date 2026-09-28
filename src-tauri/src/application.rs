@@ -3963,6 +3963,131 @@ pub async fn get_account_avatar(
     Ok(crate::auth::avatar::head(skin, request.refresh).await)
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportSkinPresetRequest {
+    name: String,
+    model: crate::cosmetics::SkinModel,
+    bytes: Vec<u8>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PresetIdRequest {
+    preset_id: String,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplySkinPresetRequest {
+    account_id: String,
+    preset_id: String,
+    model: crate::cosmetics::SkinModel,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SelectCapeRequest {
+    account_id: String,
+    cape_id: String,
+}
+fn cosmetic_error(error: crate::cosmetics::CosmeticsError) -> CommandError {
+    CommandError::new(error.code, error.message)
+}
+
+async fn cosmetic_session(
+    app: &AppHandle,
+    account_id: &str,
+) -> Result<std::sync::Arc<crate::auth::session::MinecraftSession>, CommandError> {
+    refresh_account_session(
+        app.clone(),
+        AccountIdRequest {
+            account_id: account_id.to_owned(),
+        },
+    )
+    .await?;
+    crate::auth::session::SessionCache::usable(account_id).ok_or_else(|| {
+        CommandError::new(
+            "cosmetics_authentication_required",
+            "Sign in to this Minecraft account to manage cosmetics.",
+        )
+    })
+}
+
+#[tauri::command]
+pub async fn get_cosmetics(
+    app: AppHandle,
+    request: AccountIdRequest,
+) -> Result<crate::cosmetics::CosmeticsState, CommandError> {
+    let session = cosmetic_session(&app, &request.account_id).await?;
+    crate::cosmetics::fetch(&request.account_id, session.minecraft_access_token())
+        .await
+        .map_err(cosmetic_error)
+}
+#[tauri::command]
+pub fn list_skin_presets(
+    app: AppHandle,
+) -> Result<Vec<crate::cosmetics::SkinPreset>, CommandError> {
+    crate::cosmetics::list_presets(&managed_paths(&app)?).map_err(cosmetic_error)
+}
+#[tauri::command]
+pub fn import_skin_preset(
+    app: AppHandle,
+    request: ImportSkinPresetRequest,
+) -> Result<crate::cosmetics::SkinPreset, CommandError> {
+    crate::cosmetics::import_preset(
+        &managed_paths(&app)?,
+        &request.name,
+        request.model,
+        &request.bytes,
+    )
+    .map_err(cosmetic_error)
+}
+#[tauri::command]
+pub fn remove_skin_preset(app: AppHandle, request: PresetIdRequest) -> Result<(), CommandError> {
+    crate::cosmetics::remove_preset(&managed_paths(&app)?, &request.preset_id)
+        .map_err(cosmetic_error)
+}
+#[tauri::command]
+pub async fn apply_skin_preset(
+    app: AppHandle,
+    request: ApplySkinPresetRequest,
+) -> Result<crate::cosmetics::CosmeticsState, CommandError> {
+    let session = cosmetic_session(&app, &request.account_id).await?;
+    let (_preset, bytes) =
+        crate::cosmetics::preset_for_upload(&managed_paths(&app)?, &request.preset_id)
+            .map_err(cosmetic_error)?;
+    crate::cosmetics::apply_skin(
+        &request.account_id,
+        session.minecraft_access_token(),
+        &bytes,
+        request.model,
+    )
+    .await
+    .map_err(cosmetic_error)
+}
+#[tauri::command]
+pub async fn select_cape(
+    app: AppHandle,
+    request: SelectCapeRequest,
+) -> Result<crate::cosmetics::CosmeticsState, CommandError> {
+    let session = cosmetic_session(&app, &request.account_id).await?;
+    crate::cosmetics::select_cape(
+        &request.account_id,
+        session.minecraft_access_token(),
+        &request.cape_id,
+    )
+    .await
+    .map_err(cosmetic_error)
+}
+#[tauri::command]
+pub async fn disable_cape(
+    app: AppHandle,
+    request: AccountIdRequest,
+) -> Result<crate::cosmetics::CosmeticsState, CommandError> {
+    let session = cosmetic_session(&app, &request.account_id).await?;
+    crate::cosmetics::disable_cape(&request.account_id, session.minecraft_access_token())
+        .await
+        .map_err(cosmetic_error)
+}
+
 // ---------------------------------------------------------------------------
 // Launch (Phase 9)
 // ---------------------------------------------------------------------------

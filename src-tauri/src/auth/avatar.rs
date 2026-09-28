@@ -37,7 +37,7 @@ impl SkinTexture {
     }
 }
 
-fn validated_url(value: &str) -> Option<Url> {
+pub(crate) fn validated_url(value: &str) -> Option<Url> {
     let mut url = Url::parse(value).ok()?;
     if !matches!(url.scheme(), "https" | "http")
         || url.host_str() != Some("textures.minecraft.net")

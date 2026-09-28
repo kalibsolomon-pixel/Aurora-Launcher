@@ -20,6 +20,8 @@ pub struct TestRequest {
     pub path: String,
     /// The request body as sent (`Content-Length` framing only).
     pub body: Vec<u8>,
+    /// Credential presence only; secret header values are never retained.
+    pub has_bearer_authorization: bool,
     /// `http://127.0.0.1:<port>` for the server handling this request.
     pub base_url: String,
 }
@@ -199,6 +201,11 @@ fn read_request(stream: &mut std::net::TcpStream) -> std::io::Result<TestRequest
     };
 
     let head = String::from_utf8_lossy(&buffer[..head_end]);
+    let has_bearer_authorization = head.lines().any(|line| {
+        line.split_once(':').is_some_and(|(name, value)| {
+            name.eq_ignore_ascii_case("Authorization") && value.trim_start().starts_with("Bearer ")
+        })
+    });
     let mut parts = head.split_whitespace();
     let method = parts.next().unwrap_or_default().to_owned();
     let path = parts.next().unwrap_or_default().to_owned();
@@ -229,6 +236,7 @@ fn read_request(stream: &mut std::net::TcpStream) -> std::io::Result<TestRequest
         method,
         path,
         body,
+        has_bearer_authorization,
         base_url,
     })
 }

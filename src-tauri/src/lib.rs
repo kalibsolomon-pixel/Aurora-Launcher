@@ -4,6 +4,7 @@ pub mod aurora;
 pub mod auth;
 pub mod cache;
 pub mod config;
+pub mod cosmetics;
 pub mod discord;
 pub mod distribution;
 pub mod downloads;
@@ -109,6 +110,13 @@ pub fn run() {
             application::ensure_instance_runtime,
             application::get_accounts,
             application::get_account_avatar,
+            application::get_cosmetics,
+            application::list_skin_presets,
+            application::import_skin_preset,
+            application::remove_skin_preset,
+            application::apply_skin_preset,
+            application::select_cape,
+            application::disable_cape,
             application::begin_microsoft_login,
             application::cancel_microsoft_login,
             application::select_account,
