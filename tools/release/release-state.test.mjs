@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { selectRelease, selectAsset, verifyBytes, expectedAssetName } from "./release-state.mjs";
+import { selectRelease, selectAsset, verifyBytes, verifyNotesIdentity, expectedAssetName } from "./release-state.mjs";
 import { createHash } from "node:crypto";
 
 const sha = "a".repeat(40);
@@ -22,3 +22,12 @@ test("conflicting draft fails", () => assert.throws(() => selectRelease([{ ...dr
 test("existing public release is reported complete", () => assert.equal(selectRelease([publicRelease], "v1.1.0", sha, null, sha).kind, "public"));
 test("conflicting tag fails", () => assert.throws(() => selectRelease([draft], "v1.1.0", sha, 9, "b".repeat(40))));
 test("multiple releases fail", () => assert.throws(() => selectRelease([draft, { ...draft, id: 10 }], "v1.1.0", sha, 9)));
+test("notes naming the launcher and current client pass", () => {
+  verifyNotesIdentity("# Aurora Launcher 1.2.0 — release notes\n\nUses Aurora Client 2.1.5.", "1.2.0", "2.1.5");
+});
+test("notes with a stale client version fail", () => {
+  assert.throws(() => verifyNotesIdentity("# Aurora Launcher 1.2.0 — release notes\n\nUses Aurora Client 2.1.3.", "1.2.0", "2.1.5"));
+});
+test("notes with the wrong launcher version fail", () => {
+  assert.throws(() => verifyNotesIdentity("# Aurora Launcher 1.1.0 — release notes\n\nUses Aurora Client 2.1.5.", "1.2.0", "2.1.5"));
+});

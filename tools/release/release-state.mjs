@@ -26,6 +26,12 @@ export function expectedAssetName(name) {
   return name.replaceAll(" ", ".");
 }
 
+export function verifyNotesIdentity(sourceNotes, version, clientVersion) {
+  if (!sourceNotes.startsWith(`# Aurora Launcher ${version}`) || !sourceNotes.includes(`Aurora Client ${clientVersion}`)) {
+    throw new Error(`Release notes identity mismatch: expected Aurora Launcher ${version} naming the current production Aurora Client ${clientVersion}`);
+  }
+}
+
 export function selectAsset(assets, expected) {
   const expectedName = expectedAssetName(expected.name);
   const candidates = assets.filter((asset) => asset.name === expected.name || asset.name === expectedName);

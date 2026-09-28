@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { selectRelease, selectAsset, verifyBytes } from "./release-state.mjs";
+import { selectRelease, selectAsset, verifyBytes, verifyNotesIdentity } from "./release-state.mjs";
 
 const [version, sourceSha, assetsDirectory, resumeIdText, mode] = process.argv.slice(2);
 if (!/^\d+\.\d+\.\d+$/.test(version ?? "") || !/^[0-9a-f]{40}$/.test(sourceSha ?? "") || !assetsDirectory) {
@@ -49,7 +49,10 @@ const expected = [...manifest.artifacts, { name: "release-assets.json", sizeByte
 for (const entry of expected) verifyBytes(await readFile(join(directory, entry.name)), entry);
 const notesFile = join(import.meta.dirname, `../../RELEASE_${version.replaceAll(".", "_")}_NOTES.md`);
 const sourceNotes = (await readFile(notesFile, "utf8")).trim();
-if (!sourceNotes.startsWith(`# Aurora Launcher ${version}`) || !sourceNotes.includes("Aurora Client 2.1.3")) throw new Error("Release notes identity mismatch");
+const productionManifest = JSON.parse((await readFile(join(import.meta.dirname, "../../src-tauri/production/aurora-releases.json"), "utf8")).toString("utf8"));
+const productionClient = productionManifest.releases?.[0]?.auroraVersion;
+if (typeof productionClient !== "string" || productionClient === "") throw new Error("Production Aurora Client selection is missing");
+verifyNotesIdentity(sourceNotes, version, productionClient);
 const notes = `${sourceNotes}\n\n## Installer artifacts\n\n| File | Architecture | Bytes | SHA-256 |\n| --- | --- | ---: | --- |\n${manifest.artifacts.map((a) => `| ${a.name} | ${a.architecture} | ${a.sizeBytes} | \`${a.sha256}\` |`).join("\n")}\n`;
 const normalized = (value) => value.replaceAll("\r\n", "\n").trim();
 async function verifyRelease(release, publicDownload = false) {
