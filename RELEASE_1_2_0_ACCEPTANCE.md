@@ -176,3 +176,37 @@ real per-user 1.1.0 installation and launcher-managed data root:
   aurora-launcher.exe`, 10,482,176 bytes), proving database and payload
   integrity. Interactive elevated MSI acceptance remains an owner step, as
   RELEASING.md already records for the MSI format.
+
+## Publication record — 2026-09-28
+
+Published through the hardened draft-first procedure: collision check clean
+(`v1.2.0: create`), draft created with explicit target
+`2b68091a0837b395f12c3b0ccec8bd2d08a18e42` (an empty-draft rediscovery
+hiccup from GitHub listing lag was resolved through the designed
+existing-draft path — no release was deleted or recreated), the approved
+NSIS, MSI and `release-assets.json` uploaded once, verified byte-exactly
+inside the draft, and the existing verified draft published exactly once
+(**release ID 398171262**,
+https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/v1.2.0).
+The lightweight tag `v1.2.0` was created by publication at exactly
+`2b68091a0837b395f12c3b0ccec8bd2d08a18e42` and verified independently.
+One local-only packing note: Windows PowerShell 5.1 wrote a UTF-8 BOM into
+`release-assets.json` (CI's pwsh does not); the BOM was stripped before
+upload so the published manifest is BOM-less, 891 bytes, SHA-256
+`a6c96021b6b30e5ae7ea823c53c06dca823e109ae7fb475cc752700a77429ed7`.
+
+Post-publication verification was read-only: public metadata (draft false,
+prerelease false, title and exact target SHA), GitHub's advertised asset
+digests, and fresh unauthenticated downloads of all three assets re-hashed
+byte-exact against the approved values (GitHub stores asset names with
+spaces normalized to dots; the manifest agrees with the downloaded bytes
+under that documented normalization). The publicly downloaded NSIS setup
+silently reinstalled over the existing 1.2.0 installation and the installed
+launcher booted the full Home layout and closed cleanly. As with 1.1.0, the
+bare build-tree exe, the MSI payload exe, and the NSIS-delivered exe differ
+in Tauri bundle-type bytes and PE timestamps; installer-byte identity is
+carried by the hash-pinned installers, not exe byte-equality. Launcher 1.1.0
+(release, tag, both assets) and the Aurora Client 2.1.5 public release were
+re-verified untouched. No force push occurred; working tree, tracked set
+(208), and the 609 protected untracked diagnostics are unchanged; no
+installer or screenshot was committed.
