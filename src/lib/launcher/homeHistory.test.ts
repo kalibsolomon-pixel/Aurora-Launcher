@@ -25,3 +25,17 @@ test("the three stable history widgets obey show, size, ordering, and unknown-ID
   assert.equal(setWidget(moved, "playtime", { enabled: false }).widgets[0].enabled, false);
   assert.equal(moved.widgets[1].id, "future-widget");
 });
+
+test("E3 cosmetics entries append only when explicitly enabled in an existing E2 layout", () => {
+  for (const id of ["skin-manager", "cape-selector"]) assert.deepEqual(widgetCatalog.find(item => item.id === id)?.sizes, ["small", "wide", "large"]);
+  const e2 = { widgets: [
+    { id: "recent-servers", enabled: false, size: "large" as const },
+    { id: "playtime", enabled: true, size: "wide" as const },
+    { id: "recent-worlds", enabled: true, size: "small" as const },
+  ] };
+  assert.deepEqual(registeredWidgets(e2).map(item => item.id), ["playtime", "recent-worlds"]);
+  const added = setWidget(e2, "skin-manager", { enabled: true, size: "wide" });
+  assert.deepEqual(added.widgets.slice(0, e2.widgets.length), e2.widgets);
+  assert.equal(added.widgets.at(-1)?.id, "skin-manager");
+  assert.equal(added.widgets.at(-1)?.size, "wide");
+});

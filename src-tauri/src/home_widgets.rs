@@ -29,7 +29,9 @@ pub fn supported_sizes(id: &str) -> Option<&'static [WidgetSize]> {
     match id {
         "instance-details" | "content-summary" => Some(&[Small, Wide, Large]),
         "session" => Some(&[Small, Wide]),
-        "playtime" | "recent-worlds" | "recent-servers" => Some(&[Small, Wide, Large]),
+        "playtime" | "recent-worlds" | "recent-servers" | "skin-manager" | "cape-selector" => {
+            Some(&[Small, Wide, Large])
+        }
         _ => None,
     }
 }
@@ -65,6 +67,16 @@ impl Default for HomeLayout {
                 },
                 WidgetPlacement {
                     id: "recent-servers".into(),
+                    enabled: true,
+                    size: WidgetSize::Small,
+                },
+                WidgetPlacement {
+                    id: "skin-manager".into(),
+                    enabled: true,
+                    size: WidgetSize::Wide,
+                },
+                WidgetPlacement {
+                    id: "cape-selector".into(),
                     enabled: true,
                     size: WidgetSize::Small,
                 },
@@ -105,7 +117,7 @@ mod tests {
     fn defaults_are_restrained_and_valid() {
         let layout = HomeLayout::default();
         layout.validate().unwrap();
-        assert_eq!(layout.widgets.iter().filter(|w| w.enabled).count(), 5);
+        assert_eq!(layout.widgets.iter().filter(|w| w.enabled).count(), 7);
     }
     #[test]
     fn declarative_changes_round_trip_and_reset() {
@@ -132,6 +144,29 @@ mod tests {
         });
         layout.validate().unwrap();
         assert!(supported_sizes("future-cosmetics").is_none());
+    }
+    #[test]
+    fn saved_e2_layout_keeps_exact_order_visibility_and_sizes() {
+        let saved = r#"{"widgets":[{"id":"recent-servers","enabled":false,"size":"large"},{"id":"playtime","enabled":true,"size":"wide"},{"id":"recent-worlds","enabled":true,"size":"small"}]}"#;
+        let layout: HomeLayout = serde_json::from_str(saved).unwrap();
+        layout.validate().unwrap();
+        assert_eq!(layout.widgets.len(), 3);
+        assert_eq!(layout.widgets[0].id, "recent-servers");
+        assert!(!layout.widgets[0].enabled);
+        assert_eq!(layout.widgets[1].size, WidgetSize::Wide);
+        assert_eq!(layout.widgets[2].id, "recent-worlds");
+        assert!(
+            HomeLayout::default()
+                .widgets
+                .iter()
+                .any(|w| w.id == "skin-manager")
+        );
+        assert!(
+            HomeLayout::default()
+                .widgets
+                .iter()
+                .any(|w| w.id == "cape-selector")
+        );
     }
     #[test]
     fn malformed_and_out_of_bounds_layouts_fail() {

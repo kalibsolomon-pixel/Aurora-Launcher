@@ -8,6 +8,8 @@
   import SessionWidget from "./widgets/SessionWidget.svelte";
   import PlaytimeWidget from "./widgets/PlaytimeWidget.svelte";
   import RecentTargetsWidget from "./widgets/RecentTargetsWidget.svelte";
+  import SkinManagerWidget from "./widgets/SkinManagerWidget.svelte";
+  import CapeSelectorWidget from "./widgets/CapeSelectorWidget.svelte";
   import type { WidgetSize } from "$lib/backend";
   const components = { "instance-details": InstanceDetailsWidget, "content-summary": ContentSummaryWidget, session: SessionWidget };
   let editing = $state(false);
@@ -27,6 +29,8 @@
           {#if widget.id === "playtime"}<PlaytimeWidget size={widget.size} />
           {:else if widget.id === "recent-worlds"}<RecentTargetsWidget mode="world" size={widget.size} />
           {:else if widget.id === "recent-servers"}<RecentTargetsWidget mode="server" size={widget.size} />
+          {:else if widget.id === "skin-manager"}<SkinManagerWidget size={widget.size} />
+          {:else if widget.id === "cape-selector"}<CapeSelectorWidget size={widget.size} />
           {:else}{@const Component = components[widget.id as keyof typeof components]}<Component instance={launcher.selectedInstance} />{/if}
           {#if editing}
             <div class="widget-editor" role="group" aria-label={`Customize ${definition.title}`}>

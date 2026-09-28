@@ -1283,6 +1283,25 @@ export async function getAccountAvatar(accountId: string, refresh = false): Prom
   return await invoke<HeadAvatar | null>("get_account_avatar", { request: { accountId, refresh } });
 }
 
+export type SkinModel = "classic" | "slim";
+export interface SkinPreset { id: string; name: string; model: SkinModel; importedAt: number; sha256: string }
+export interface CapePreview { width: number; height: number; rgba: number[] }
+export interface OwnedCape { id: string; name: string; selected: boolean; preview?: CapePreview }
+export interface CosmeticsState { accountId: string; currentSkinModel: SkinModel | null; hasCurrentSkin: boolean; capes: OwnedCape[] }
+function cosmeticsCommand<T>(name: string, request?: object): Promise<T> {
+  return invoke<T>(name, request === undefined ? undefined : { request }).catch((cause: unknown) => {
+    if (isBackendCommandError(cause)) throw new LauncherBackendError(cause.code, cause.message);
+    throw new LauncherBackendError("backend_unavailable", "Minecraft cosmetics are unavailable.");
+  });
+}
+export const getCosmetics = (accountId: string): Promise<CosmeticsState> => cosmeticsCommand("get_cosmetics", { accountId });
+export const listSkinPresets = (): Promise<SkinPreset[]> => cosmeticsCommand("list_skin_presets");
+export const importSkinPreset = (name: string, model: SkinModel, bytes: number[]): Promise<SkinPreset> => cosmeticsCommand("import_skin_preset", { name, model, bytes });
+export const removeSkinPreset = (presetId: string): Promise<void> => cosmeticsCommand("remove_skin_preset", { presetId });
+export const applySkinPreset = (accountId: string, presetId: string, model: SkinModel): Promise<CosmeticsState> => cosmeticsCommand("apply_skin_preset", { accountId, presetId, model });
+export const selectOwnedCape = (accountId: string, capeId: string): Promise<CosmeticsState> => cosmeticsCommand("select_cape", { accountId, capeId });
+export const disableOwnedCape = (accountId: string): Promise<CosmeticsState> => cosmeticsCommand("disable_cape", { accountId });
+
 export interface AccountsState {
   accounts: AccountSummary[];
   selectedAccountId: string | null;
