@@ -7,6 +7,8 @@
   import Icon from '$lib/shell/Icon.svelte';
   const categories = ['Appearance', 'Home', 'Discord & privacy'] as const;
   let category = $state<(typeof categories)[number]>('Appearance');
+  let motionSpeed = $state(50);
+  $effect(() => { motionSpeed = appearance.auroraMotionSpeed; });
   let customHex = $state('#8b80ff');
   $effect(() => { if (appearance.accent.type === 'custom') customHex = appearance.accent.hex; });
   onMount(() => { void homeWidgets.load(); });
@@ -20,7 +22,7 @@
     </nav>
     <div class="settings-body">
       {#if category === 'Appearance'}
-        <section aria-labelledby="appearance-title">
+        <section class="appearance-surface f-surface" aria-labelledby="appearance-title">
           <div class="section-intro"><h3 id="appearance-title">Appearance</h3><p>Three choices. One atmosphere.</p></div>
           {#if !appearance.state && !appearance.error}<p role="status">Loading appearance…</p>{/if}
           <fieldset class="choice-section"><legend>Theme</legend>
@@ -45,6 +47,13 @@
             </div>
             <p class="choice-note">Borealis adds gentle motion and frosted surfaces. Motion rests when Aurora is inactive and follows your system’s reduced-motion setting.</p>
           </fieldset>
+          {#if appearance.background === 'borealis'}
+            <div class="motion-setting">
+              <label for="aurora-motion">Aurora motion</label>
+              <div class="motion-scale"><span>Slow</span><input id="aurora-motion" type="range" min="0" max="100" step="1" bind:value={motionSpeed} disabled={appearance.busy} aria-valuetext={motionSpeed < 30 ? 'Slow' : motionSpeed > 70 ? 'Fast' : 'Balanced'} onchange={() => appearance.setAuroraMotionSpeed(motionSpeed)} /><span>Fast</span></div>
+              <p class="choice-note">Follows your system’s reduced-motion setting.</p>
+            </div>
+          {/if}
           <fieldset class="choice-section accent-section"><legend>Accent</legend>
             <div class="accent-picker">
               {#each appearance.state?.accents ?? [] as accent}
@@ -59,7 +68,13 @@
                 <span class="accent-swatch custom-swatch" style:background={customHex}>+</span><span>Custom</span>
               </label>
             </div>
-            {#if appearance.accent.type === 'custom'}<label class="custom-color">Custom color<input type="color" aria-label="Custom accent color" value={customHex} disabled={appearance.busy} onchange={event => appearance.setAccent({ type: 'custom', hex: event.currentTarget.value })} /></label>{/if}
+            {#if appearance.accent.type === 'custom'}
+              <div class="custom-color">
+                <label>Custom color<input type="color" aria-label="Custom accent color" bind:value={customHex} disabled={appearance.busy} onchange={() => appearance.setAccent({ type: 'custom', hex: customHex })} /></label>
+                <input class="custom-hex" aria-label="Custom accent hex" type="text" bind:value={customHex} maxlength="7" spellcheck="false" disabled={appearance.busy} />
+                <button class="btn" disabled={appearance.busy} onclick={() => appearance.setAccent({type:'custom',hex:customHex})}>Apply color</button>
+              </div>
+            {/if}
             <p class="choice-note">Selection and primary actions follow your accent. Status colors keep their meaning.</p>
           </fieldset>
           {#if appearance.error}<p class="inline-message inline-message-error" role="alert">{appearance.error.message}</p>{/if}
@@ -77,9 +92,11 @@
       {/if}
     </div>
   </div>
+  <footer class="settings-footer">Aurora Launcher · MIT licensed · Independent of Microsoft, Mojang Studios and Fabric. Minecraft requires your own entitled account.</footer>
 </div>
 <style>
-  .launcher-settings { max-width: 1120px; margin-inline: auto; }
+  .launcher-settings { width: 100%; max-width: 1120px; margin-inline: auto; }
+  .settings-footer { margin-top: 32px; color: var(--color-text-secondary); font-size: 11px; line-height: 1.6; }
   .page-header { margin-bottom: 32px; }
   .settings-layout { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 36px; align-items: start; }
   .settings-nav { display: grid; gap: 6px; position: sticky; top: 0; }
@@ -87,13 +104,20 @@
   .settings-nav button:hover { background: var(--color-surface-raised); }
   .settings-nav button[aria-current] { background: var(--color-accent-soft); color: var(--color-text); box-shadow: inset 3px 0 var(--color-accent); }
   .settings-body { min-width: 0; }
+  .appearance-surface { padding: 28px; }
+  .motion-setting { margin: 0 0 28px; padding-bottom: 26px; border-bottom: 1px solid var(--f-edge); }
+  .motion-setting > label { font-size: 14px; font-weight: 600; }
+  .motion-scale { display: flex; align-items: center; gap: 18px; margin: 16px 0 8px; font-size: 12px; color: var(--color-text-secondary); }
+  .motion-scale input { width: 100%; min-width: 60px; accent-color: var(--color-accent); cursor: pointer; }
+  @media (max-width: 760px) { .appearance-surface { padding: 20px; } }
+
   .section-intro { margin-bottom: 26px; }
   .section-intro h3 { font-size: 20px; font-weight: 600; letter-spacing: -.025em; margin: 0 0 6px; }
   .section-intro p, .choice-note { margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.6; }
   .choice-section { border: 0; border-bottom: 1px solid var(--f-edge); padding: 0 0 26px; margin: 0 0 26px; min-width: 0; }
   legend { font-size: 14px; font-weight: 600; padding: 0; margin-bottom: 14px; }
   .theme-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-  .theme-tile, .background-tile { display: grid; gap: 10px; position: relative; padding: 8px; border: 1px solid var(--f-edge); border-radius: 14px; background: var(--f-panel); cursor: pointer; min-width: 0; }
+  .theme-tile, .background-tile { display: grid; gap: 10px; position: relative; padding: 8px; border: 1px solid var(--f-edge); border-radius: 14px; background: rgb(8 15 25 / 24%); cursor: pointer; min-width: 0; }
   .chosen { border-color: var(--color-accent); }
   .theme-tile:focus-within, .background-tile:focus-within, .accent-option:focus-within { outline: 2px solid var(--color-accent); outline-offset: 3px; }
   .theme-tile input, .background-tile input, .accent-option input { position: absolute; width: 1px; height: 1px; opacity: 0; }
@@ -114,8 +138,10 @@
   .swatch-check { background: #101116; color: white; border-radius: 50%; width: 15px; height: 15px; text-align: center; font-size: 11px; }
   .custom-swatch { color: #08090c; font-size: 20px; }
   .accent-section .choice-note { margin-top: 20px; }
-  .custom-color { margin-top: 20px; display: flex; gap: 12px; align-items: center; font-size: 13px; }
-  .custom-color input { width: 42px; height: 30px; background: none; border: 0; }
+  .custom-color { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 13px; }
+  .custom-color label { display: flex; align-items: center; gap: 12px; }
+  .custom-color .custom-hex { width: 96px; padding: 9px; background: var(--color-surface-sunken); color: var(--color-text); border: 1px solid var(--f-edge); border-radius: 8px; font: inherit; }
+  .custom-color input[type="color"] { width: 42px; height: 30px; background: none; border: 0; }
   @media (max-width: 1050px) { .settings-layout { grid-template-columns: 1fr; gap: 26px; } .settings-nav { display: flex; flex-wrap: wrap; position: static; } }
   @media (max-width: 760px) { .theme-preview { height: 65px; } .theme-grid { gap: 8px; } .choice-label { font-size: 11px; } }
 </style>

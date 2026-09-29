@@ -312,7 +312,7 @@
   .browse-status { display: flex; align-items: center; gap: var(--space-2); }
   .browse-loading { min-height: 96px; }
   .browse-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-  .browse-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-surface-edge); border-radius: var(--radius-md); background: var(--color-surface); }
+  .browse-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-surface-edge); border-radius: var(--radius-md); background: var(--f-panel); }
   .browse-glyph { display: grid; place-items: center; width: 34px; height: 34px; flex: none; overflow: hidden; border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text-secondary); font-weight: 700; }
   .browse-glyph img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .browse-actions { display: flex; align-items: center; gap: var(--space-2); flex: none; }
@@ -324,7 +324,7 @@
   .browse-copy h4, .project h4, .preview h4 { margin: 0; }
   .browse-copy p, .project p { margin: 2px 0; font-size: var(--text-metadata); color: var(--color-text-secondary); }
   .browse-note { color: var(--color-text-secondary); font-size: var(--text-metadata); }
-  .project, .preview { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--color-surface-edge); border-radius: var(--radius-lg); background: var(--color-surface); }
+  .project, .preview { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--color-surface-edge); border-radius: var(--radius-lg); background: var(--f-panel); }
   .project > .btn, .preview-actions .btn { justify-self: start; }
   .preview { margin-top: var(--space-4); }
   .preview ul { margin: 0; padding-left: var(--space-4); }

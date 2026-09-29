@@ -45,7 +45,7 @@
   .player-preview { display: grid; justify-items: center; min-width: 0; position: relative; }
   .player-model { width: 100%; display: grid; place-items: center; cursor: grab; touch-action: pan-y; }
   .player-model:active { cursor: grabbing; }
-  canvas { display: block; width: min(100%, 310px); height: auto; filter: drop-shadow(0 14px 18px rgb(0 0 0 / 25%)); }
+  canvas { display: block; width: min(100%, 390px); height: auto; filter: drop-shadow(0 14px 18px rgb(0 0 0 / 25%)); }
   .player-controls { display: flex; align-items: center; gap: 12px; opacity: 0; transition: opacity var(--f-duration); }
   .player-preview:hover .player-controls, .player-preview:focus-within .player-controls { opacity: 1; }
   .player-controls .f-icon-button { width: 28px; height: 28px; }

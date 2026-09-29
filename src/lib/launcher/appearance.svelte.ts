@@ -48,6 +48,8 @@ class AppearanceStore {
     return this.state?.background ?? "simple";
   }
 
+  get auroraMotionSpeed(): number { return this.state?.auroraMotionSpeed ?? 50; }
+
   get accent(): AccentSelection {
     return this.state?.accent ?? { type: "preset", id: "violet" };
   }
@@ -77,27 +79,17 @@ class AppearanceStore {
 
     if (state.accent.type === "preset") {
       delete root.dataset.accentCustom;
-      for (const property of ACCENT_PROPERTIES) {
-        root.style.removeProperty(property);
-      }
       root.dataset.accent = state.accent.id;
     } else {
       delete root.dataset.accent;
       root.dataset.accentCustom = "true";
-      const palette = state.palette;
-      const values: Record<(typeof ACCENT_PROPERTIES)[number], string> = {
-        "--color-accent": palette.accent,
-        "--color-accent-strong": palette.accentStrong,
-        "--color-accent-hover": palette.accentHover,
-        "--color-accent-pressed": palette.accentPressed,
-        "--color-accent-contrast": palette.accentContrast,
-        "--color-accent-soft": palette.accentSoft,
-        "--color-accent-outline": palette.accentOutline,
-      };
-      for (const property of ACCENT_PROPERTIES) {
-        root.style.setProperty(property, values[property]);
-      }
     }
+    // Both preset and custom selections use the native-derived palette. CSS
+    // presets are only the pre-initialization fallback, never a separate path.
+    const palette = state.palette;
+    const values = [palette.accent, palette.accentStrong, palette.accentHover,
+      palette.accentPressed, palette.accentContrast, palette.accentSoft, palette.accentOutline];
+    ACCENT_PROPERTIES.forEach((property, index) => root.style.setProperty(property, values[index]));
   }
 
   /** Switches the built-in theme: applied live, persisted by Rust. */
@@ -105,7 +97,7 @@ class AppearanceStore {
     if (this.busy || theme === this.theme) return;
     this.busy = true;
     try {
-      this.apply(await setAppearance(theme, this.accent, this.background));
+      this.apply(await setAppearance(theme, this.accent, this.background, this.auroraMotionSpeed));
     } catch (cause: unknown) {
       this.error = backendError(cause, "The theme could not be saved.");
     } finally {
@@ -116,8 +108,18 @@ class AppearanceStore {
   async setBackground(background: BackgroundId): Promise<void> {
     if (this.busy || background === this.background) return;
     this.busy = true;
-    try { this.apply(await setAppearance(this.theme, this.accent, background)); }
+    try { this.apply(await setAppearance(this.theme, this.accent, background, this.auroraMotionSpeed)); }
     catch (cause: unknown) { this.error = backendError(cause, "The background could not be saved."); }
+    finally { this.busy = false; }
+  }
+
+  async setAuroraMotionSpeed(speed: number): Promise<void> {
+    if (this.busy || !Number.isFinite(speed)) return;
+    const bounded = Math.round(Math.max(0, Math.min(100, speed)));
+    if (bounded === this.auroraMotionSpeed) return;
+    this.busy = true;
+    try { this.apply(await setAppearance(this.theme, this.accent, this.background, bounded)); }
+    catch (cause: unknown) { this.error = backendError(cause, "Aurora motion could not be saved."); }
     finally { this.busy = false; }
   }
 
@@ -126,7 +128,7 @@ class AppearanceStore {
     if (this.busy) return;
     this.busy = true;
     try {
-      this.apply(await setAppearance(this.theme, accent, this.background));
+      this.apply(await setAppearance(this.theme, accent, this.background, this.auroraMotionSpeed));
     } catch (cause: unknown) {
       this.error = backendError(cause, "The accent could not be saved.");
     } finally {

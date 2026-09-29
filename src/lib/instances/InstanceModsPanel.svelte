@@ -230,7 +230,7 @@
         No mods match the current search and filter.
       </div>
     {:else}
-      <div class="mod-list" aria-label={`${shown.length} local mod entries`}>
+      <div class="mod-list f-surface" aria-label={`${shown.length} local mod entries`}>
         {#each shown as entry (entry.entryId)}
           <article class="mod-row" class:mod-row-disabled={!entry.enabled}>
             <div class="mod-row-main">
@@ -390,7 +390,7 @@
   .mods-search { flex: 1; min-width: 180px; }
   .mods-control { width: 128px; }
   .mods-toolbar input, .mods-toolbar select { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; font-size: var(--text-body); }
-  .mod-list { overflow: visible; border: 1px solid var(--color-surface-edge); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-group); }
+  .mod-list { overflow: visible; border: 1px solid var(--color-surface-edge); border-radius: var(--radius-lg); background: var(--f-panel); box-shadow: var(--f-shadow); }
   .mod-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2) var(--space-4); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border); min-width: 0; }
   .mod-row:last-child { border-bottom: none; }
   .mod-row-disabled .mod-identity { opacity: 0.7; }

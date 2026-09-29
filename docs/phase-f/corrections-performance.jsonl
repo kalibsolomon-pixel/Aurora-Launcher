@@ -1,0 +1,4 @@
+{"label":"final-organic-home-speed50-maximized","seconds":15.0,"processes":8,"cpuOneCorePercent":7.5,"workingSetMiB":562.2,"privateMiB":522.7}
+{"label":"final-organic-minimized","seconds":15.01,"processes":8,"cpuOneCorePercent":0.0,"workingSetMiB":560.0,"privateMiB":522.5}
+{"label":"final-organic-home-speed100-maximized","seconds":15.0,"processes":8,"cpuOneCorePercent":11.14,"workingSetMiB":560.7,"privateMiB":545.3}
+{"label":"final-simple-oled-home-maximized","seconds":15.01,"processes":8,"cpuOneCorePercent":2.29,"workingSetMiB":575.2,"privateMiB":505.1}

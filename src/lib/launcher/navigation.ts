@@ -6,7 +6,7 @@
  * Two levels exist and never blur:
  *
  * - the GLOBAL level (sidebar destinations: Home, Instances,
- *   Settings, About, and Developer in development builds only);
+ *   Settings, and Developer in development builds only);
  * - the INSTANCE WORKSPACE level (one open instance plus its local tab).
  *
  * Instance-local content (Mods, Resource Packs, Shaders, and future Logs)
@@ -17,7 +17,6 @@ export const GLOBAL_PAGES = [
   "home",
   "instances",
   "settings",
-  "about",
   "developer",
 ] as const;
 
@@ -57,7 +56,6 @@ export function globalDestinations(development: boolean): GlobalDestination[] {
     home: "Home",
     instances: "Instances",
     settings: "Settings",
-    about: "About",
     developer: "Developer",
   };
 

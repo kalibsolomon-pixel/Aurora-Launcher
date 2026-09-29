@@ -26,7 +26,6 @@
 {#if custom}
   <header class="aurora-titlebar" aria-label="Window controls">
     <div class="titlebar-drag" data-tauri-drag-region>
-      <img src="/aurora-icon.png" alt="" draggable="false" />
       <span>Aurora Launcher</span>
     </div>
     <button class="window-control" aria-label="Minimize" title="Minimize" onclick={() => action('minimize')}><Icon name="minimize" size={16} /></button>

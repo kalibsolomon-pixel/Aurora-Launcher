@@ -38,7 +38,7 @@ after(async () => { await server?.close(); });
 it('theme, accent and background writes preserve the other dimensions and failed saves preserve state', async () => {
   const root = {dataset: {},style:{removeProperty() {},setProperty() {}}};
   (globalThis as any).document = {documentElement:root};
-  let persisted = {theme:'oled',background:'simple',accent:{type:'preset',id:'cyan'},themes:[],accents:[],palette:{}};
+  let persisted = {auroraMotionSpeed:50,theme:'oled',background:'simple',accent:{type:'preset',id:'cyan'},themes:[],accents:[],palette:{}};
   const calls: any[] = [];
   (globalThis as any).window = {__TAURI_INTERNALS__:{invoke:async (command:string,args:any) => {
     calls.push({command,args}); persisted = {...persisted,...args.request}; return structuredClone(persisted);
@@ -51,7 +51,34 @@ it('theme, accent and background writes preserve the other dimensions and failed
   await appearance.setAccent({type:'preset',id:'rose'});
   assert.equal(appearance.background,'borealis'); assert.equal(appearance.theme,'midnight');
   assert(calls.every(call => call.command === 'set_appearance' && call.args.request.background === 'borealis'));
+  await appearance.setAuroraMotionSpeed(200);
+  assert.equal(appearance.auroraMotionSpeed,100);
+  assert.equal(appearance.background,'borealis'); assert.equal(appearance.theme,'midnight');
+  await appearance.setBackground('simple'); await appearance.setTheme('oled');
+  assert.equal(appearance.auroraMotionSpeed,100);
+  appearance.apply(structuredClone(persisted));
+  assert.equal(appearance.auroraMotionSpeed,100); assert.equal(appearance.background,'simple');
+  await appearance.setBackground('borealis');
+  await appearance.setAuroraMotionSpeed(-5); assert.equal(appearance.auroraMotionSpeed,0);
+  await appearance.setAuroraMotionSpeed(37); assert.equal(persisted.auroraMotionSpeed,37);
   (globalThis as any).window.__TAURI_INTERNALS__.invoke = async () => { throw {code:'config_malformed',message:'Configuration needs attention.'}; };
+  await appearance.setAuroraMotionSpeed(80); assert.equal(appearance.auroraMotionSpeed,37);
   await appearance.setBackground('simple');
   assert.equal(appearance.background,'borealis'); assert.match(appearance.error.message,/needs attention/);
+});
+
+it('custom and preset colors apply all seven native palette tokens and survive reload', () => {
+  const tokens = new Map<string,string>();
+  const root = {dataset:{} as Record<string,string>,style:{setProperty:(key:string,value:string)=>tokens.set(key,value)}};
+  (globalThis as any).document={documentElement:root};
+  const palette={accent:'#ff5533',accentStrong:'#d43b20',accentHover:'#df4327',accentPressed:'#c73319',accentContrast:'#ffffff',accentSoft:'rgba(255,85,51,.14)',accentOutline:'rgba(255,85,51,.55)'};
+  const state={auroraMotionSpeed:37,theme:'oled',background:'borealis',accent:{type:'custom',hex:'#ff5533'},palette,themes:[],accents:[]};
+  appearance.apply(state);
+  assert.equal(root.dataset.accentCustom,'true'); assert.equal(root.dataset.accent,undefined);
+  assert.equal(tokens.size,7); assert.equal(tokens.get('--color-accent'),'#ff5533');
+  assert.equal(tokens.get('--color-accent-strong'),'#d43b20');
+  appearance.apply(structuredClone(state)); assert.equal(tokens.get('--color-accent-outline'),palette.accentOutline);
+  appearance.apply({...state,accent:{type:'preset',id:'cyan'},palette:{...palette,accent:'#5bd0e0',accentStrong:'#37b3c6'}});
+  assert.equal(root.dataset.accent,'cyan'); assert.equal(root.dataset.accentCustom,undefined);
+  assert.equal(tokens.get('--color-accent-strong'),'#37b3c6');
 });

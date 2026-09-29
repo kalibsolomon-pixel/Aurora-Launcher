@@ -763,6 +763,7 @@ pub fn set_discord_preferences(
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetAppearanceRequest {
+    aurora_motion_speed: i32,
     background: crate::appearance::BackgroundId,
     theme: String,
     accent: crate::appearance::AccentSelection,
@@ -820,6 +821,7 @@ pub struct AccentOptionDto {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppearanceDto {
+    aurora_motion_speed: u8,
     background: crate::appearance::BackgroundId,
     theme: &'static str,
     accent: crate::appearance::AccentSelection,
@@ -837,6 +839,7 @@ impl AppearanceDto {
 
         Ok(Self {
             background: preferences.background,
+            aurora_motion_speed: preferences.aurora_motion_speed,
             theme: preferences.theme_id().as_str(),
             accent: preferences.accent.clone(),
             palette: AccentPaletteDto::from(&palette),
@@ -906,6 +909,7 @@ pub fn set_appearance(
 
     let preferences = crate::appearance::AppearancePreferences {
         background: request.background,
+        aurora_motion_speed: crate::appearance::clamp_motion_speed(request.aurora_motion_speed),
         theme: theme.as_str().to_owned(),
         accent: request.accent,
     };
@@ -5794,7 +5798,10 @@ mod tests {
 
         // The schema-1 input migrated deterministically to schema 2 with the
         // selection preserved and default appearance.
-        assert_eq!(state.config.schema_version, 5);
+        assert_eq!(
+            state.config.schema_version,
+            crate::config::CONFIG_SCHEMA_VERSION
+        );
         assert_eq!(
             state.config.selected_instance_id.as_deref(),
             Some("aurora-default")
@@ -5863,6 +5870,7 @@ mod tests {
         // An unknown theme id is already normalized by the time the DTO is
         // built (config load normalizes); only an unusable accent fails here.
         let bad_theme = crate::appearance::AppearancePreferences {
+            aurora_motion_speed: 50,
             background: crate::appearance::BackgroundId::Simple,
             theme: "neon".to_owned(),
             accent: crate::appearance::AccentSelection::default(),
@@ -5871,6 +5879,7 @@ mod tests {
         assert_eq!(dto.theme, "aurora-dark");
 
         let bad_accent = crate::appearance::AppearancePreferences {
+            aurora_motion_speed: 50,
             background: crate::appearance::BackgroundId::Simple,
             theme: "oled".to_owned(),
             accent: crate::appearance::AccentSelection::Custom {

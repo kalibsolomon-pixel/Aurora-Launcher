@@ -54,7 +54,7 @@
     <div class="widget-grid">
       {#each widgets as widget, index (widget.id)}
         {@const definition = widgetCatalog.find(item => item.id === widget.id)!}
-        <article class="group widget" class:widget-wide={widget.size !== "small"} class:widget-large={widget.size === "large"} aria-label={definition.title} data-home-widget={widget.id}
+        <article class="group f-surface widget" class:widget-wide={widget.size !== "small"} class:widget-large={widget.size === "large"} aria-label={definition.title} data-home-widget={widget.id}
           class:widget-editing={editing} class:widget-dragged={dragged === widget.id}>
           <div class="widget-heading"><h4>{definition.title}</h4>{#if editing}<button type="button" class="f-icon-button drag-handle" disabled={homeWidgets.busy} aria-label={`Drag ${definition.title} to reorder; arrow buttons below also change order`} title="Drag to reorder" onpointerdown={event => { if (event.button !== 0) return; dragged = widget.id; event.currentTarget.setPointerCapture(event.pointerId); }} onpointerup={event => { const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-home-widget]')?.dataset.homeWidget; if (target) void drop(target); else dragged = null; }} onlostpointercapture={() => dragged = null}><Icon name="grip" size={16} /></button>{/if}</div>
           {#if widget.id === "playtime"}<PlaytimeWidget size={widget.size} />

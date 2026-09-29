@@ -492,14 +492,20 @@ pub enum BackgroundId {
     Borealis,
 }
 
+/// Clamp explicit UI requests; persisted malformed data is rejected by config.
+pub fn clamp_motion_speed(value: i32) -> u8 {
+    value.clamp(0, 100) as u8
+}
+
 /// The launcher-wide appearance preferences persisted in the configuration.
 ///
-/// Deliberately minimal: the theme and the accent. Further appearance
+/// Theme, background, motion speed and accent. Further appearance
 /// options are added only when implemented behavior needs them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AppearancePreferences {
     pub background: BackgroundId,
+    pub aurora_motion_speed: u8,
     pub theme: String,
     pub accent: AccentSelection,
 }
@@ -508,6 +514,7 @@ impl AppearancePreferences {
     /// Preferences with the default Aurora look.
     pub fn new() -> Self {
         Self {
+            aurora_motion_speed: 50,
             background: BackgroundId::default(),
             theme: ThemeId::default().as_str().to_owned(),
             accent: AccentSelection::default(),
@@ -688,6 +695,7 @@ mod tests {
     #[test]
     fn appearance_preferences_normalize_unknown_values_to_the_default_look() {
         let hand_edited = AppearancePreferences {
+            aurora_motion_speed: 50,
             background: BackgroundId::Simple,
             theme: "neon".to_owned(),
             accent: AccentSelection::Preset {
@@ -699,6 +707,7 @@ mod tests {
         assert_eq!(normalized.accent, AccentSelection::default());
 
         let unusable_custom = AppearancePreferences {
+            aurora_motion_speed: 50,
             background: BackgroundId::Simple,
             theme: "oled".to_owned(),
             accent: AccentSelection::Custom {
@@ -713,6 +722,7 @@ mod tests {
 
         // Valid preferences survive normalization untouched.
         let valid = AppearancePreferences {
+            aurora_motion_speed: 50,
             background: BackgroundId::Simple,
             theme: "midnight".to_owned(),
             accent: AccentSelection::Custom {

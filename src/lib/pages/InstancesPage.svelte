@@ -78,7 +78,7 @@
   The full configuration editor and Java lifecycle live in each instance's
   workspace, so this page never duplicates the Settings editor.
 -->
-<div class="page instances-page">
+<div class="page instances-page f-pilot">
   <header class="page-header">
     <div>
       <h2 class="page-title">Instances</h2>
@@ -360,7 +360,7 @@
 </div>
 
 <style>
-  .instances-page { max-width: 1500px; }
+  .instances-page { max-width: 1500px; width: 100%; margin-inline: auto; }
   .instances-composition { display: grid; grid-template-columns: minmax(340px, .8fr) minmax(460px, 1.2fr); gap: var(--space-5); align-items: start; }
   .instances-composition > .group { min-width: 0; margin: 0; }
   .instances-composition :global(.field-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }

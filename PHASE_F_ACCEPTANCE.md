@@ -1,5 +1,7 @@
 # Phase F pilot acceptance — 28 September 2026
 
+This records the original pilot. See [the 29 September correction report](PHASE_F_CORRECTIONS.md) for the current implementation and verification; the motion design and performance samples below do not describe the replacement video.
+
 ## Design direction
 
 The pilot is ready for owner visual review, not approved for full rollout. Shell, Home and launcher Settings now use a quiet atmospheric stage, the unchanged Aurora mark, a wide Play action, restrained glass, and independent appearance choices. [The design proposal](PHASE_F_DESIGN.md) records the composition and scope decisions. The supplied third screenshot shows window controls rather than a Home sketch; the written brief guided the Home hierarchy.

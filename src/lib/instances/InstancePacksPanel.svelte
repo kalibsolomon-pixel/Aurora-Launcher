@@ -120,7 +120,7 @@
     {:else if shown.length === 0}
       <p role="status">No entries match the current search and filter.</p>
     {:else}
-      <div class="packs-list">
+      <div class="packs-list f-surface">
         {#each shown as entry (entry.entryId)}
           <article class="pack-row">
             <div class="pack-main">
@@ -178,7 +178,7 @@
   .packs-toolbar label:first-child { flex: 1; min-width: 180px; }
   .packs-toolbar select { min-width: 128px; }
   .packs-toolbar input, .packs-toolbar select { padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; }
-  .packs-list { border: 1px solid var(--color-surface-edge); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-group); }
+  .packs-list { border: 1px solid var(--color-surface-edge); border-radius: var(--radius-lg); background: var(--f-panel); box-shadow: var(--f-shadow); }
   .pack-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); }
   .pack-row:last-child { border-bottom: none; }
   .pack-main { min-width: 0; align-items: flex-start; }

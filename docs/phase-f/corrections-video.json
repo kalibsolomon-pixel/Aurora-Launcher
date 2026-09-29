@@ -1,0 +1,18 @@
+{
+  "resolution": [
+    1920,
+    1080
+  ],
+  "sourceResolution": [
+    1672,
+    941
+  ],
+  "fps": 30,
+  "seconds": 20,
+  "frames": 600,
+  "bytes": 4471527,
+  "periodEndpointMaxDifference": 0,
+  "seamMeanStep": 0.009979102366255144,
+  "firstStepMean": 0.010144675925925927,
+  "technique": "soft irregular emission fluctuations in a fixed aurora silhouette; no linear phase bands, translation or image warp"
+}

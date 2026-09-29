@@ -13,7 +13,8 @@ use serde::{Deserialize, Serialize};
 use crate::appearance::AppearancePreferences;
 use crate::instances::InstanceId;
 
-/// Schema 5 adds the independent bundled background selection.
+/// Schema 6 adds bounded Aurora motion speed; schemas 1–5 migrate explicitly.
+/// Schema 5 added the independent bundled background selection.
 /// Schema 4 added independently opt-in world/server/address preferences.
 /// Schemas 1, 2 and 3 migrate explicitly; malformed documents remain untouched.
 /// The current launcher-configuration schema version.
@@ -21,7 +22,7 @@ use crate::instances::InstanceId;
 /// Version 2 added the launcher-wide appearance preferences. Version 1 files
 /// (selected instance only) migrate deterministically on load with the
 /// default appearance; anything else fails deliberately.
-pub const CONFIG_SCHEMA_VERSION: u32 = 5;
+pub const CONFIG_SCHEMA_VERSION: u32 = 6;
 /// The schema version before appearance preferences existed.
 const LEGACY_CONFIG_SCHEMA_VERSION: u32 = 1;
 
@@ -122,12 +123,22 @@ impl LauncherConfig {
             appearance.insert("background".into(), "simple".into());
         }
 
+        if matches!(schema_version, 2..=5) {
+            let appearance = document
+                .get_mut("appearance")
+                .and_then(serde_json::Value::as_object_mut)
+                .ok_or_else(|| {
+                    ConfigError::Malformed("the appearance preferences are missing".into())
+                })?;
+            appearance.insert("auroraMotionSpeed".into(), 50.into());
+        }
+
         let config = match schema_version {
             version if version == u64::from(CONFIG_SCHEMA_VERSION) => {
                 serde_json::from_value::<Self>(document)
                     .map_err(|error| ConfigError::Malformed(error.to_string()))?
             }
-            4 => {
+            4 | 5 => {
                 document["schemaVersion"] = CONFIG_SCHEMA_VERSION.into();
                 serde_json::from_value::<Self>(document)
                     .map_err(|error| ConfigError::Malformed(error.to_string()))?
@@ -201,6 +212,11 @@ impl LauncherConfig {
             });
         }
 
+        if config.appearance.aurora_motion_speed > 100 {
+            return Err(ConfigError::Malformed(
+                "Aurora motion speed must be between 0 and 100".into(),
+            ));
+        }
         config
             .home_widgets
             .validate()
@@ -480,6 +496,53 @@ mod tests {
     }
 
     #[test]
+    fn schema_five_migrates_speed_only_and_current_speed_is_strict() {
+        let mut original = LauncherConfig::default();
+        original.appearance.background = crate::appearance::BackgroundId::Borealis;
+        original.appearance.theme = "oled".into();
+        original.discord.enabled = true;
+        let mut legacy = serde_json::to_value(&original).unwrap();
+        legacy["schemaVersion"] = 5.into();
+        legacy["appearance"]
+            .as_object_mut()
+            .unwrap()
+            .remove("auroraMotionSpeed");
+        let migrated = LauncherConfig::from_json(&legacy.to_string()).unwrap();
+        assert_eq!(migrated, original);
+        for speed in [0, 37, 50, 100] {
+            original.appearance.aurora_motion_speed = speed;
+            assert_eq!(
+                LauncherConfig::from_json(&original.to_json()).unwrap(),
+                original
+            );
+        }
+        let current = serde_json::to_value(&original).unwrap();
+        for invalid in [
+            serde_json::json!(-1),
+            serde_json::json!(101),
+            serde_json::json!(1.5),
+            serde_json::json!("fast"),
+            serde_json::Value::Null,
+        ] {
+            let mut damaged = current.clone();
+            damaged["appearance"]["auroraMotionSpeed"] = invalid;
+            assert!(matches!(
+                LauncherConfig::from_json(&damaged.to_string()),
+                Err(ConfigError::Malformed(_))
+            ));
+        }
+        let mut missing = current.clone();
+        missing["appearance"]
+            .as_object_mut()
+            .unwrap()
+            .remove("auroraMotionSpeed");
+        assert!(LauncherConfig::from_json(&missing.to_string()).is_err());
+        assert_eq!(crate::appearance::clamp_motion_speed(-1), 0);
+        assert_eq!(crate::appearance::clamp_motion_speed(37), 37);
+        assert_eq!(crate::appearance::clamp_motion_speed(101), 100);
+    }
+
+    #[test]
     fn default_uses_the_current_schema_version_and_no_selection() {
         let config = LauncherConfig::default();
 
@@ -496,6 +559,7 @@ mod tests {
             home_widgets: Default::default(),
             discord: Default::default(),
             appearance: AppearancePreferences {
+                aurora_motion_speed: 50,
                 background: crate::appearance::BackgroundId::Simple,
                 theme: "oled".to_owned(),
                 accent: crate::appearance::AccentSelection::Custom {
@@ -521,7 +585,7 @@ mod tests {
     fn serializes_to_inspectable_camel_case_json() {
         let json = LauncherConfig::default().to_json();
 
-        assert!(json.contains("\"schemaVersion\": 5"));
+        assert!(json.contains("\"schemaVersion\": 6"));
         assert!(json.contains("\"selectedInstanceId\": null"));
         assert!(json.contains("\"appearance\": {"));
         assert!(json.contains("\"theme\": \"aurora-dark\""));
@@ -544,15 +608,15 @@ mod tests {
 
     #[test]
     fn unsupported_schema_versions_fail_deliberately() {
-        let json = r#"{ "schemaVersion": 6, "selectedInstanceId": null }"#;
+        let json = r#"{ "schemaVersion": 7, "selectedInstanceId": null }"#;
 
         let error = LauncherConfig::from_json(json).unwrap_err();
 
         assert!(matches!(
             error,
             ConfigError::UnsupportedSchema {
-                found: 6,
-                supported: 5
+                found: 7,
+                supported: 6
             }
         ));
     }
@@ -573,7 +637,7 @@ mod tests {
         assert_eq!(config.appearance(), &AppearancePreferences::new());
         let reserialized = LauncherConfig::from_json(&config.to_json()).unwrap();
         assert_eq!(reserialized, config);
-        assert!(config.to_json().contains("\"schemaVersion\": 5"));
+        assert!(config.to_json().contains("\"schemaVersion\": 6"));
     }
 
     #[test]
@@ -671,6 +735,7 @@ mod tests {
             home_widgets: Default::default(),
             discord: Default::default(),
             appearance: AppearancePreferences {
+                aurora_motion_speed: 50,
                 background: crate::appearance::BackgroundId::Simple,
                 theme: "midnight".to_owned(),
                 accent: crate::appearance::AccentSelection::Preset {

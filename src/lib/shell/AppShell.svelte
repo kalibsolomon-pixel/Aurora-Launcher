@@ -26,7 +26,6 @@
 <TitleBar />
 <div class="app-frame">
   <nav class="sidebar" aria-label="Aurora Launcher">
-    <img class="rail-brand" src="/aurora-icon.png" alt="Aurora" />
     <div class="rail-navigation">
       {#each destinations as destination (destination.id)}
         <button type="button" class="rail-link" aria-label={destination.label}

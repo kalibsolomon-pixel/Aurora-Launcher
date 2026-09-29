@@ -104,7 +104,7 @@
   local tab row, and the active tab's content. The shell stays mounted
   while tabs switch, so switching never rebuilds the page or loses state.
 -->
-<div class="page workspace-page">
+<div class="page workspace-page f-pilot">
   {#if launcher.stateError}
     <section class="group" aria-live="polite">
       <div class="group-heading">
@@ -226,7 +226,7 @@
 </div>
 
 <style>
-  .page { max-width: 1500px; width: 100%; }
+  .page { max-width: 1500px; width: 100%; margin-inline: auto; }
   .workspace-header {
     align-items: flex-start;
   }

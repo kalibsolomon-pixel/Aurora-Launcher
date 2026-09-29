@@ -22,7 +22,7 @@ describe("global navigation", () => {
   it("navigates between global destinations and leaves any workspace", () => {
     const workspace = openInstance(globalState("home"), "abc123");
     assert.deepEqual(goToGlobal(workspace, "settings"), globalState("settings"));
-    assert.deepEqual(goToGlobal(globalState("home"), "about"), globalState("about"));
+    assert.deepEqual(goToGlobal(globalState("home"), "settings"), globalState("settings"));
   });
 
   it("ignores unknown pages instead of inventing navigation state", () => {
@@ -33,6 +33,7 @@ describe("global navigation", () => {
     );
     assert.equal(isGlobalPage("nonsense"), false);
     assert.equal(isGlobalPage("accounts"), false);
+    assert.equal(isGlobalPage("about"), false);
     assert.deepEqual(goToGlobal(state, "accounts" as never), state);
     assert.equal(isGlobalPage("instances"), true);
   });
@@ -43,7 +44,6 @@ describe("global navigation", () => {
       "home",
       "instances",
       "settings",
-      "about",
     ]);
     assert.ok(!production.includes("developer"));
 
@@ -52,7 +52,6 @@ describe("global navigation", () => {
       "home",
       "instances",
       "settings",
-      "about",
       "developer",
     ]);
   });

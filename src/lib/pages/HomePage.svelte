@@ -77,7 +77,7 @@
     <div class="home-composition">
     <div class="home-launch-column">
     <img class="hero-logo" src="/aurora-icon.png" alt="Aurora" draggable="false" />
-    <section class="group instance-card" aria-label="Selected instance" aria-live="polite">
+    <section class="group f-surface instance-card" aria-label="Selected instance" aria-live="polite">
       <div class="launch-card">
         <div class="launch-main">
         <button type="button" class="btn btn-primary play-hero" onclick={() => launcher.runPlay(instance.id)} disabled={launch.disabled}>{launch.playLabel}</button>
@@ -117,10 +117,10 @@
 
 <style>
   .home-page { max-width: 1280px; margin-inline: auto; width: 100%; }
-  .home-composition { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(220px, .85fr); gap: clamp(24px, 5vw, 88px); align-items: center; min-height: min(56vh, 660px); padding: 8px 0 28px; }
+  .home-composition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: center; min-height: min(56vh, 660px); padding: 8px 0 28px; }
   .home-launch-column { display: flex; flex-direction: column; align-items: center; gap: 22px; min-width: 0; }
-  .hero-logo { width: clamp(128px, 15vw, 208px); height: auto; }
-  .instance-card { width: 100%; max-width: 540px; min-width: 0; overflow: visible; margin: 0; position: relative; z-index: 2; }
+  .hero-logo { width: clamp(200px, 22vw, 280px); height: auto; }
+  .instance-card { width: 100%; max-width: none; min-width: 0; overflow: visible; margin: 0; position: relative; z-index: 2; }
   .launch-main { padding: 12px; display: grid; gap: 10px; min-width: 0; }
   .play-hero { width: 100%; min-height: 78px; font-size: 30px; font-weight: 700; letter-spacing: -.03em; border-radius: 15px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 16%), 0 5px 16px rgb(0 0 0 / 15%); }
   .instance-heading { min-width: 0; padding: 4px 14px 12px; text-align: center; }
@@ -128,5 +128,5 @@
   .instance-heading :global(.picker-menu) { text-align: left; }
   .instance-versions { margin: 2px 0 12px; color: var(--color-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
   @media (min-width: 1500px) { .home-composition { min-height: 660px; } }
-  @media (max-width: 900px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 16px; } .hero-logo { width: 120px; } .home-launch-column { gap: 12px; } .instance-card { max-width: 480px; } .play-hero { min-height: 68px; font-size: 28px; } }
+  @media (max-width: 900px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 16px; } .hero-logo { width: 168px; } .home-launch-column { gap: 12px; } .instance-card { max-width: none; } .play-hero { min-height: 68px; font-size: 28px; } }
 </style>

@@ -160,6 +160,7 @@ export interface AccentPalette {
 export type BackgroundId = "simple" | "borealis";
 
 export interface AppearanceState {
+  auroraMotionSpeed: number;
   background: BackgroundId;
   theme: string;
   accent: AccentSelection;
@@ -187,10 +188,11 @@ export async function setAppearance(
   theme: string,
   accent: AccentSelection,
   background: BackgroundId,
+  auroraMotionSpeed: number,
 ): Promise<AppearanceState> {
   try {
     return await invoke<AppearanceState>("set_appearance", {
-      request: { theme, accent, background },
+      request: { theme, accent, background, auroraMotionSpeed },
     });
   } catch (error: unknown) {
     if (isBackendCommandError(error)) {
