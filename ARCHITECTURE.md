@@ -1,5 +1,15 @@
 # Aurora Launcher architecture
 
+## Phase F visual pilot (current)
+
+Shell, Home and launcher Settings use the bounded Phase F system described in [PHASE_F_DESIGN.md](PHASE_F_DESIGN.md). Other page interiors retain their existing design pending owner approval. Windows uses a custom title bar backed by Tauri window operations; other platforms retain native decorations. The default window is 1120×760; the minimum remains 720×520.
+
+Launcher configuration is now **schema 5**. `appearance.background` is a native enum (`simple` or `borealis`), independent of theme and accent. Explicit migrations from schemas 1–4 preserve prior supported state and select Simple. Schema 5 requires a valid background; malformed/unknown-schema documents remain untouched. Existing atomic persistence and configuration locking are unchanged. No new trusted launch, authentication, filesystem or provider authority enters Svelte.
+
+The pencil on Home enters direct widget editing, with pointer-handle reorder, keyboard earlier/later controls, sizing, add/hide, a persistent Done bar, and the existing native save/reset path. An all-hidden layout retains its edit entry point. Settings holds the edit shortcut and reset, rather than a duplicate checklist. The player redraws on skin/rotation/visibility changes and has no idle loop. The locally bundled Borealis still image drifts at ten small steps per second, pauses when hidden/unfocused, and becomes static under reduced motion. It is a pilot treatment, not recorded aurora footage. See [PHASE_F_ACCEPTANCE.md](PHASE_F_ACCEPTANCE.md) for evidence, measurements and rollout limits.
+
+The earlier phase sections below remain historical records; the Phase F section supersedes their schema-4 and Home/Settings presentation descriptions.
+
 Phase E3 adds Rust-owned Minecraft cosmetic requests and launcher-global local skin presets. The native boundary accepts selected PNG bytes, validates full PNG structure and supported Java dimensions, stores generated-ID preset files and atomic schema-1 metadata, and never accepts a frontend filesystem path. Account skin and owned capes come from the selected authenticated Minecraft profile; native refresh uses the existing credential/session flow. Cape selection rechecks ownership immediately before mutation. Profile responses are refreshed after skin/cape changes, and the existing 3D skin preview bypasses its texture cache after a successful skin apply. Cape textures are fetched from validated official texture hosts, decoded under strict bounds in Rust, and returned as pixels for a small selector thumbnail; the 3D renderer remains skin-only. See [PHASE_E3_DESIGN.md](PHASE_E3_DESIGN.md) and [PHASE_E3_ACCEPTANCE.md](PHASE_E3_ACCEPTANCE.md).
 
 Phase E1 gameplay-history ownership, retention and v2 identity protocol are recorded in [PHASE_E1_DESIGN.md](PHASE_E1_DESIGN.md). Phase E2 registers the three Home history widgets and resolves opaque recent-target IDs in Rust before adding reviewed direct-start arguments to the ordinary Play pipeline; see [PHASE_E2_ACCEPTANCE.md](PHASE_E2_ACCEPTANCE.md). Persisted selection stays unchanged when a recent target belongs to another instance.
