@@ -42,10 +42,10 @@ it("default widgets sit below the unchanged primary card and 3D player", () => {
   assert.match(view, /Instance Details/); assert.match(view, /Content Summary/); assert.doesNotMatch(view, /Current launcher session only/);
   assert(view.indexOf("home-widgets") > view.indexOf("instance-card")); assert.match(view, /Default Minecraft player/);
 });
-it("available session is real, hidden widgets disappear, and all-off collapses the region", () => {
+it("available session is real, hidden widgets disappear, and all-off retains the edit entry point", () => {
   reset(); homeWidgets.layout.widgets[2].enabled = true; assert.match(html(Home), /Current launcher session only/);
   homeWidgets.layout.widgets[0].enabled = false; assert.doesNotMatch(html(Home), /aria-label="Instance Details"/);
-  homeWidgets.layout.widgets.forEach((widget: any) => widget.enabled = false); assert.doesNotMatch(html(Home), /aria-label="Home widgets"/);
+  homeWidgets.layout.widgets.forEach((widget: any) => widget.enabled = false); assert.match(html(Home), /aria-label="Edit Home widgets"/);
   assert.match(html(WidgetSettings), /Show Instance Details/);
 });
 it("unknown and removed widget IDs stay persisted but never render components", () => {

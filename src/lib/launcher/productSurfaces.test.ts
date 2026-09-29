@@ -111,8 +111,8 @@ it("Home ignores readiness and process belonging to another instance", () => {
   reset(); launcher.playReadiness.instanceId = secondId; launcher.playProcess = { instanceId: secondId, status: "running" };
   assert.match(html(Home), /disabled[^>]*>Play/); assert.doesNotMatch(html(Home), />Running</);
 });
-it("Home exposes Manage Instance and the typed Workspace navigation keeps selection", () => {
-  reset(); assert.match(html(Home), /Manage Instance/);
+it("Home keeps management in Instances and typed Workspace navigation keeps selection", () => {
+  reset(); assert.doesNotMatch(html(Home), /Manage Instance/);
   navigation.openInstance(id);
   assert.equal(navigation.state.kind, "instance"); assert.equal(navigation.state.instanceId, id);
   assert.equal(launcher.launcherState.config.selectedInstanceId, id);
@@ -142,11 +142,11 @@ it("account dialog signed out leaves instance management available", () => {
   reset(); launcher.accountsState = { accounts: [], selectedAccountId: null };
   assert.match(html(Accounts), /No account signed in/); assert.match(html(Accounts), /still browse and manage your instances/);
 });
-it("signed-out Home explains native authentication requirements and retains Manage Instance", () => {
+it("signed-out Home explains native authentication requirements without management clutter", () => {
   reset(); launcher.accountsState = { accounts: [], selectedAccountId: null };
   launcher.playReadiness = { ...readiness(false), accountId: null, accountName: null };
   const view = html(Home); assert.doesNotMatch(view, /Not signed in|Manage accounts|Minecraft account/); assert.match(view, /Sign in to play Minecraft/);
-  assert.match(view, /disabled[^>]*>Play/); assert.match(view, /Manage Instance/);
+  assert.match(view, /disabled[^>]*>Play/); assert.doesNotMatch(view, /Manage Instance/);
 });
 it("account dialog shows active Minecraft identity and management actions", () => {
   reset(); const view = html(Accounts); assert.match(view, /Active account/); assert.match(view, /PlayerName/);

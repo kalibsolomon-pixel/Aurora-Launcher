@@ -1,8 +1,9 @@
 import { getHomeWidgets, saveHomeWidgets, resetHomeWidgets, type HomeLayout } from "$lib/backend";
-import { moveWidget, setWidget } from "./widgets";
+import { moveWidget, reorderWidget, setWidget } from "./widgets";
 import type { WidgetSize } from "$lib/backend";
 
 class HomeWidgetsStore {
+  editing = $state(false);
   layout = $state<HomeLayout | null>(null);
   busy = $state(false);
   error = $state("");
@@ -29,6 +30,7 @@ class HomeWidgetsStore {
   }
   enable(id: string, enabled: boolean): Promise<void> { return this.layout ? this.save(setWidget(this.layout, id, { enabled })) : Promise.resolve(); }
   resize(id: string, size: WidgetSize): Promise<void> { return this.layout ? this.save(setWidget(this.layout, id, { size })) : Promise.resolve(); }
+  reorder(id: string, target: string): Promise<void> { return this.layout ? this.save(reorderWidget(this.layout, id, target)) : Promise.resolve(); }
   move(id: string, direction: -1 | 1): Promise<void> { return this.layout ? this.save(moveWidget(this.layout, id, direction)) : Promise.resolve(); }
 }
 export const homeWidgets = new HomeWidgetsStore();

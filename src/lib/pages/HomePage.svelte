@@ -30,14 +30,7 @@
   per-instance workspace lives behind Instances — Home stays a launch
   surface; detailed readiness and maintenance stay in the workspace Overview.
 -->
-<div class="page home-page">
-  <header class="page-header">
-    <div>
-      <h2 class="page-title">Home</h2>
-      <p class="page-subtitle">Choose your instance and play Minecraft.</p>
-    </div>
-  </header>
-
+<div class="page home-page f-pilot" aria-label="Home">
   {#if launcher.stateError}
     <section class="group" aria-live="polite">
       <div class="group-heading">
@@ -82,32 +75,16 @@
       <p class="inline-message inline-message-error" role="alert">{launcher.instanceError.message}<code>{launcher.instanceError.code}</code></p>
     {/if}
     <div class="home-composition">
+    <div class="home-launch-column">
+    <img class="hero-logo" src="/aurora-icon.png" alt="Aurora" draggable="false" />
     <section class="group instance-card" aria-label="Selected instance" aria-live="polite">
       <div class="launch-card">
         <div class="launch-main">
+        <button type="button" class="btn btn-primary play-hero" onclick={() => launcher.runPlay(instance.id)} disabled={launch.disabled}>{launch.playLabel}</button>
         <div class="instance-heading">
           <InstanceSwitcher compact />
-          <p class="instance-versions">
-            {installedConfigurationLabel(instance)}
-          </p>
+          <p class="instance-versions">{installedConfigurationLabel(instance)}</p>
           <span class="status-badge {launch.tone}">{launch.label}</span>
-        </div>
-        <div class="play-actions">
-          <button
-            type="button"
-            class="btn btn-primary"
-            onclick={() => launcher.runPlay(instance.id)}
-            disabled={launch.disabled}
-          >
-            {launch.playLabel}
-          </button>
-          <button
-            type="button"
-            class="btn btn-quiet"
-            onclick={() => navigation.openInstance(instance.id)}
-          >
-            Manage Instance
-          </button>
         </div>
         </div>
       </div>
@@ -128,6 +105,7 @@
       {/if}
       {#if launch.exitDetail}<p class="group-footer">{launch.exitDetail}</p>{/if}
     </section>
+    </div>
     <PlayerPreview />
     </div>
   {/if}
@@ -138,32 +116,17 @@
 </div>
 
 <style>
-  .home-page { max-width: 1480px; margin-inline: auto; width: 100%; }
-  .home-composition { display: grid; grid-template-columns: minmax(440px, 1.15fr) minmax(300px, 1fr); gap: var(--space-5); align-items: center; min-height: 520px; }
-  .instance-card { min-width: 0; overflow: visible; }
-  .launch-card { min-height: 320px; display: flex; overflow: visible; }
-  .launch-main { flex: 1; padding: var(--space-5); display: flex; flex-direction: column; justify-content: center; gap: var(--space-5); min-width: 0; }
-  @media (max-width: 1050px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; } .launch-card { min-height: 260px; } }
-  .instance-heading {
-    min-width: 0;
-  }
-
-
-  .instance-versions {
-    margin: var(--space-1) 0 0;
-    color: var(--color-text-secondary);
-    font-size: var(--text-metadata);
-    overflow-wrap: anywhere;
-    margin-bottom: var(--space-3);
-  }
-
-  .play-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
-  .play-actions .btn-primary { min-width: 104px; }
-  .group-heading { flex-wrap: wrap; }
+  .home-page { max-width: 1280px; margin-inline: auto; width: 100%; }
+  .home-composition { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(220px, .85fr); gap: clamp(24px, 5vw, 88px); align-items: center; min-height: min(56vh, 660px); padding: 8px 0 28px; }
+  .home-launch-column { display: flex; flex-direction: column; align-items: center; gap: 22px; min-width: 0; }
+  .hero-logo { width: clamp(128px, 15vw, 208px); height: auto; }
+  .instance-card { width: 100%; max-width: 540px; min-width: 0; overflow: visible; margin: 0; position: relative; z-index: 2; }
+  .launch-main { padding: 12px; display: grid; gap: 10px; min-width: 0; }
+  .play-hero { width: 100%; min-height: 78px; font-size: 30px; font-weight: 700; letter-spacing: -.03em; border-radius: 15px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 16%), 0 5px 16px rgb(0 0 0 / 15%); }
+  .instance-heading { min-width: 0; padding: 4px 14px 12px; text-align: center; }
+  .instance-heading :global(.picker-trigger) { font-size: 16px; font-weight: 550; margin: 0; padding: 12px; }
+  .instance-heading :global(.picker-menu) { text-align: left; }
+  .instance-versions { margin: 2px 0 12px; color: var(--color-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+  @media (min-width: 1500px) { .home-composition { min-height: 660px; } }
+  @media (max-width: 900px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 16px; } .hero-logo { width: 120px; } .home-launch-column { gap: 12px; } .instance-card { max-width: 480px; } .play-hero { min-height: 68px; font-size: 28px; } }
 </style>

@@ -33,3 +33,16 @@ export function setWidget(layout: HomeLayout, id: string, changes: Partial<Pick<
   if (!widgets.some(widget => widget.id === id)) widgets.push({ id, enabled: false, size: definition.sizes[0], ...changes });
   return { widgets };
 }
+
+/** Reorder visible slots only; hidden and unavailable registrations stay intact. */
+export function reorderWidget(layout: HomeLayout, id: string, target: string): HomeLayout {
+  const visible = registeredWidgets(layout);
+  const from = visible.findIndex(widget => widget.id === id);
+  const to = visible.findIndex(widget => widget.id === target);
+  if (from < 0 || to < 0 || from === to) return layout;
+  const reordered = visible.map(widget => ({ ...widget }));
+  reordered.splice(to, 0, reordered.splice(from, 1)[0]);
+  const ids = new Set(visible.map(widget => widget.id));
+  let index = 0;
+  return { widgets: layout.widgets.map(widget => ids.has(widget.id) ? reordered[index++] : { ...widget }) };
+}

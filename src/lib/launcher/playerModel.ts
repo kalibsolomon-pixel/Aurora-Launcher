@@ -60,10 +60,10 @@ function defaultSkin(): number[] {
 }
 
 /** Painter's-order rasterization of visible faces; nearest texels preserve skin detail. */
-export function renderPlayer(context: CanvasRenderingContext2D, model: PlayerModel): void {
+export function renderPlayer(context: CanvasRenderingContext2D, model: PlayerModel, yaw = -.42): void {
   const width = 420, height = 600;
   const image = context.createImageData(width,height);
-  const yaw = -.42, tilt = .10;
+  const tilt = .10;
   function project([x,y,z]: Point) {
     const px=x*Math.cos(yaw)+z*Math.sin(yaw), pz=-x*Math.sin(yaw)+z*Math.cos(yaw);
     const py=y*Math.cos(tilt)-pz*Math.sin(tilt), depth=y*Math.sin(tilt)+pz*Math.cos(tilt);

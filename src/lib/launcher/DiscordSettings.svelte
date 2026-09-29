@@ -28,6 +28,8 @@
     <input type="checkbox" aria-label="Enable Discord Rich Presence" checked={discord.state?.preferences.enabled ?? false} disabled={discord.busy || !discord.state} onchange={event => discord.change("enabled", event.currentTarget.checked)} />
   </label>
   {#each fields as field}
+    {#if field.id === "minecraftVersion"}<h4 class="privacy-heading">Game details</h4>{/if}
+    {#if field.id === "world"}<h4 class="privacy-heading">World &amp; server privacy</h4>{/if}
     <label class="group-row"><div class="group-row-main"><span class="group-row-title">{field.label}</span><span class="group-row-detail">{field.detail}</span></div>
       <input type="checkbox" aria-label={`Display ${field.label}`} checked={discord.state?.preferences[field.id] ?? false} disabled={discord.busy || !discord.state || (field.id === "serverAddress" && !discord.state.preferences.server)} onchange={event => discord.change(field.id, event.currentTarget.checked)} />
     </label>
@@ -36,3 +38,7 @@
   {#if discord.error}<p class="group-row inline-message inline-message-error" role="alert">{discord.error}</p>{/if}
   <p class="group-footer">Off by default. All extra details require opt-in. Discord’s own activity visibility settings also apply. Connection problems never block Play.</p>
 </section>
+
+<style>
+  .privacy-heading { margin: 0; padding: 20px 24px 12px; font-size: 12px; color: var(--color-text-secondary); font-weight: 600; border-top: 1px solid var(--color-border); }
+</style>

@@ -1,476 +1,121 @@
 <script lang="ts">
-  import HomeWidgetSettings from "$lib/launcher/HomeWidgetSettings.svelte";
-  import DiscordSettings from "$lib/launcher/DiscordSettings.svelte";
-  import { onMount } from "svelte";
-  import { appearance } from "$lib/launcher/appearance.svelte";
-  import { desktopIntegration } from "$lib/launcher/desktopIntegration.svelte";
-  import type { AccentSelection, ShortcutStatus } from "$lib/backend";
-
-  const appearanceState = $derived(appearance.state);
-  const themes = $derived(appearanceState?.themes ?? []);
-  const accents = $derived(appearanceState?.accents ?? []);
-  const isCustomAccent = $derived(appearance.accent.type === "custom");
-  const integrationState = $derived(desktopIntegration.state);
-
-  // The custom picker's resting value: the active custom color, or a
-  // reasonable starting point when a preset is active.
-  let customHex = $state("#8b80ff");
-  $effect(() => {
-    const accent = appearance.accent;
-    if (accent.type === "custom") customHex = accent.hex;
-  });
-
-  // Shortcut status is live OS state: query it whenever Settings is shown so
-  // a shortcut deleted outside Aurora is reflected immediately.
-  onMount(() => {
-    void desktopIntegration.refresh();
-  });
-
-  function selectTheme(event: Event): void {
-    const value = (event.currentTarget as HTMLInputElement).value;
-    void appearance.setTheme(value);
-  }
-
-  function selectPresetAccent(event: Event): void {
-    const value = (event.currentTarget as HTMLInputElement).value;
-    void appearance.setAccent({ type: "preset", id: value });
-  }
-
-  function selectCustomAccent(event: Event): void {
-    const value = (event.currentTarget as HTMLInputElement).value;
-    void appearance.setAccent({ type: "custom", hex: value });
-  }
-
-  const desktopStatusText = $derived.by(() => {
-    const status = integrationState?.desktopShortcut;
-    if (!status || status.state === "unknown") {
-      return "Status unavailable right now.";
-    }
-    switch (status.state) {
-      case "present":
-        return "Aurora's shortcut is on the desktop.";
-      case "absent":
-        return "No Aurora shortcut on the desktop.";
-      case "conflict":
-        return "Another item is already using this name, so Aurora left it untouched.";
-    }
-  });
-
-  const startMenuStatusText = $derived.by(() => {
-    const status = integrationState?.startMenuShortcut;
-    if (!status || status.state === "unknown") {
-      return "Status unavailable right now.";
-    }
-    switch (status.state) {
-      case "present":
-        return "Present — created and removed by the Aurora installer.";
-      case "absent":
-        return "Created when Aurora is installed with its setup.";
-      case "conflict":
-        return "An item is using the Aurora name, but Aurora did not create it.";
-    }
-  });
-
-  function shortcutStatusLabel(status: ShortcutStatus | undefined): string {
-    if (!status || status.state === "unknown") return "Unknown";
-    switch (status.state) {
-      case "present":
-        return "Present";
-      case "absent":
-        return "Not present";
-      case "conflict":
-        return "Name in use";
-    }
-  }
+  import { onMount } from 'svelte';
+  import DiscordSettings from '$lib/launcher/DiscordSettings.svelte';
+  import { appearance } from '$lib/launcher/appearance.svelte';
+  import { homeWidgets } from '$lib/launcher/homeLayout.svelte';
+  import { navigation } from '$lib/launcher/navigation.svelte';
+  import Icon from '$lib/shell/Icon.svelte';
+  const categories = ['Appearance', 'Home', 'Discord & privacy'] as const;
+  let category = $state<(typeof categories)[number]>('Appearance');
+  let customHex = $state('#8b80ff');
+  $effect(() => { if (appearance.accent.type === 'custom') customHex = appearance.accent.hex; });
+  onMount(() => { void homeWidgets.load(); });
+  function editHome() { homeWidgets.editing = true; navigation.goTo('home'); }
 </script>
-
-<!--
-  Launcher-wide preferences. Appearance and Windows desktop integration are
-  the implemented preferences; the page stays sparse and purposeful rather
-  than inventing settings; future launcher-wide preferences belong here.
--->
-<div class="page launcher-settings">
-  <header class="page-header">
-    <div>
-      <h2 class="page-title">Settings</h2>
-      <p class="page-subtitle">Launcher-wide preferences.</p>
+<div class="page launcher-settings f-pilot">
+  <header class="page-header"><div><h2 class="page-title">Settings</h2><p class="page-subtitle">Make yourself at home.</p></div></header>
+  <div class="settings-layout">
+    <nav class="settings-nav" aria-label="Settings categories">
+      {#each categories as item}<button type="button" aria-current={category === item ? 'page' : undefined} onclick={() => category = item}>{item}</button>{/each}
+    </nav>
+    <div class="settings-body">
+      {#if category === 'Appearance'}
+        <section aria-labelledby="appearance-title">
+          <div class="section-intro"><h3 id="appearance-title">Appearance</h3><p>Three choices. One atmosphere.</p></div>
+          {#if !appearance.state && !appearance.error}<p role="status">Loading appearance…</p>{/if}
+          <fieldset class="choice-section"><legend>Theme</legend>
+            <div class="theme-grid">
+              {#each appearance.state?.themes ?? [] as theme}
+                <label class="theme-tile" class:chosen={appearance.theme === theme.id}>
+                  <input type="radio" name="theme" value={theme.id} checked={appearance.theme === theme.id} disabled={appearance.busy} onchange={() => appearance.setTheme(theme.id)} />
+                  <span class="theme-preview" data-preview={theme.id}><span class="mini-rail"></span><span class="mini-card"></span><span class="mini-play"></span></span>
+                  <span class="choice-label">{theme.label}{#if appearance.theme === theme.id}<Icon name="check" size={15} />{/if}</span>
+                </label>
+              {/each}
+            </div>
+          </fieldset>
+          <fieldset class="choice-section"><legend>Background</legend>
+            <div class="background-grid">
+              {#each [{id:'simple',label:'Simple'},{id:'borealis',label:'Aurora Borealis'}] as background}
+                <label class="background-tile" class:chosen={appearance.background === background.id}>
+                  <input type="radio" name="background" checked={appearance.background === background.id} disabled={appearance.busy} onchange={() => appearance.setBackground(background.id as 'simple' | 'borealis')} />
+                  <span class="background-preview" class:borealis-preview={background.id === 'borealis'}></span><span class="choice-label">{background.label}{#if appearance.background === background.id}<Icon name="check" size={15} />{/if}</span>
+                </label>
+              {/each}
+            </div>
+            <p class="choice-note">Borealis adds gentle motion and frosted surfaces. Motion rests when Aurora is inactive and follows your system’s reduced-motion setting.</p>
+          </fieldset>
+          <fieldset class="choice-section accent-section"><legend>Accent</legend>
+            <div class="accent-picker">
+              {#each appearance.state?.accents ?? [] as accent}
+                {@const selected = appearance.accent.type === 'preset' && appearance.accent.id === accent.id}
+                <label class="accent-option" class:chosen={selected}>
+                  <input type="radio" name="accent" checked={selected} disabled={appearance.busy} onchange={() => appearance.setAccent({ type: 'preset', id: accent.id })} />
+                  <span class="accent-swatch" style:background={accent.hex}>{#if selected}<span class="swatch-check">✓</span>{/if}</span><span>{accent.label}</span>
+                </label>
+              {/each}
+              <label class="accent-option" class:chosen={appearance.accent.type === 'custom'}>
+                <input type="radio" name="accent" checked={appearance.accent.type === 'custom'} disabled={appearance.busy} onchange={() => appearance.setAccent({ type: 'custom', hex: customHex })} />
+                <span class="accent-swatch custom-swatch" style:background={customHex}>+</span><span>Custom</span>
+              </label>
+            </div>
+            {#if appearance.accent.type === 'custom'}<label class="custom-color">Custom color<input type="color" aria-label="Custom accent color" value={customHex} disabled={appearance.busy} onchange={event => appearance.setAccent({ type: 'custom', hex: event.currentTarget.value })} /></label>{/if}
+            <p class="choice-note">Selection and primary actions follow your accent. Status colors keep their meaning.</p>
+          </fieldset>
+          {#if appearance.error}<p class="inline-message inline-message-error" role="alert">{appearance.error.message}</p>{/if}
+        </section>
+      {:else if category === 'Home'}
+        <section aria-labelledby="home-title">
+          <div class="section-intro"><h3 id="home-title">Your space to play</h3><p>Arrange widgets directly on Home.</p></div>
+          <div class="group"><div class="group-row"><div class="group-row-main"><span class="group-row-title">Edit Home</span><span class="group-row-detail">Add, hide, reorder and resize your widgets.</span></div><button class="btn btn-primary" onclick={editHome}><Icon name="pencil" size={16} /> Edit Home</button></div>
+          <div class="group-row"><div class="group-row-main"><span class="group-row-title">Start fresh</span><span class="group-row-detail">Restore the default widget layout.</span></div><button class="btn btn-quiet" disabled={homeWidgets.busy || !homeWidgets.layout} onclick={() => homeWidgets.reset()}>Reset layout</button></div></div>
+          {#if homeWidgets.error}<p role="alert" class="inline-message inline-message-error">{homeWidgets.error}</p>{/if}
+        </section>
+      {:else}
+        <div class="section-intro"><h3>Discord & privacy</h3><p>You decide what leaves the launcher.</p></div>
+        <DiscordSettings />
+      {/if}
     </div>
-  </header>
-
-  <section class="group" aria-labelledby="appearance-title">
-    <div class="group-heading">
-      <div>
-        <h3 class="group-title" id="appearance-title">Appearance</h3>
-        <p class="group-subtitle">
-          Applies immediately and is remembered across restarts.
-        </p>
-      </div>
-    </div>
-
-    {#if appearanceState === null && appearance.error === null}
-      <div class="group-row group-row-loading">
-        <span class="spinner" aria-hidden="true"></span>
-        <span class="group-row-detail">Loading appearance…</span>
-      </div>
-    {:else}
-      <div class="group-row appearance-row">
-        <div class="group-row-main">
-          <span class="group-row-title">Theme</span>
-          <span class="group-row-detail">
-            Every theme is dark; they differ through their surface palette.
-          </span>
-        </div>
-        <fieldset class="theme-picker" role="radiogroup" aria-label="Theme">
-          {#each themes as theme (theme.id)}
-            <label class="theme-option">
-              <input
-                type="radio"
-                name="theme"
-                value={theme.id}
-                checked={appearance.theme === theme.id}
-                onchange={selectTheme}
-                disabled={appearance.busy}
-              />
-              <span class="theme-option-text">
-                <span class="theme-option-name">{theme.label}</span>
-                <span class="theme-option-description">{theme.description}</span>
-              </span>
-            </label>
-          {/each}
-        </fieldset>
-      </div>
-
-      <div class="group-row appearance-row">
-        <div class="group-row-main">
-          <span class="group-row-title">Accent</span>
-          <span class="group-row-detail">
-            Colors selection, focus, and primary actions — status colors stay
-            semantic.
-          </span>
-        </div>
-        <div class="accent-picker" role="radiogroup" aria-label="Accent color">
-          {#each accents as accent (accent.id)}
-            {@const selected =
-              appearance.accent.type === "preset" && appearance.accent.id === accent.id}
-            <label class="accent-option">
-              <input
-                type="radio"
-                name="accent"
-                value={accent.id}
-                checked={selected}
-                onchange={selectPresetAccent}
-                disabled={appearance.busy}
-              />
-              <span
-                class="accent-swatch"
-                class:accent-swatch-selected={selected}
-                style={`background: ${accent.hex}`}
-                aria-hidden="true"
-              ></span>
-              <span class="accent-option-name">
-                {selected ? "✓ " : ""}{accent.label}
-              </span>
-            </label>
-          {/each}
-          <label class="accent-option accent-option-custom">
-            <input
-              type="radio"
-              name="accent"
-              value="custom"
-              checked={isCustomAccent}
-              onchange={() => void appearance.setAccent({ type: "custom", hex: customHex })}
-              disabled={appearance.busy}
-            />
-            <span class="accent-custom-controls">
-              <input
-                type="color"
-                class="accent-color-input"
-                value={customHex}
-                onchange={selectCustomAccent}
-                disabled={appearance.busy}
-                aria-label="Custom accent color"
-              />
-            </span>
-            <span class="accent-option-name">
-              {isCustomAccent ? "✓ " : ""}Custom
-            </span>
-          </label>
-        </div>
-      </div>
-    {/if}
-
-    {#if appearance.error}
-      <p class="inline-message inline-message-error group-row" role="alert">
-        {appearance.error.message}
-      </p>
-    {/if}
-
-    <p class="group-footer">
-      The accent affects selected navigation, focus rings, selected states, and
-      primary buttons. Success, warning, and error colors keep their meaning in
-      every theme.
-    </p>
-  </section>
-
-  <section class="group" aria-labelledby="desktop-integration-title">
-    <div class="group-heading">
-      <div>
-        <h3 class="group-title" id="desktop-integration-title">
-          Desktop integration
-        </h3>
-        <p class="group-subtitle">
-          Windows shortcuts for launching Aurora, reflecting the system as it
-          is right now.
-        </p>
-      </div>
-    </div>
-
-    {#if integrationState === null && desktopIntegration.error === null}
-      <div class="group-row group-row-loading">
-        <span class="spinner" aria-hidden="true"></span>
-        <span class="group-row-detail">Reading shortcut status…</span>
-      </div>
-    {:else if integrationState !== null && !integrationState.supported}
-      <div class="group-row">
-        <div class="group-row-main">
-          <span class="group-row-title">Windows shortcuts</span>
-          <span class="group-row-detail">
-            Shortcut integration is not available on this platform.
-          </span>
-        </div>
-      </div>
-    {:else if integrationState !== null}
-      <div class="group-row integration-row">
-        <div class="group-row-main">
-          <span class="group-row-title">Desktop shortcut</span>
-          <span class="group-row-detail" role="status">
-            {desktopStatusText}
-          </span>
-          {#if integrationState.desktopShortcut.state === "conflict"}
-            <span class="status-badge status-warning">
-              {shortcutStatusLabel(integrationState.desktopShortcut)}
-            </span>
-          {/if}
-        </div>
-        <div class="group-row-actions">
-          {#if !integrationState.manageable}
-            <span class="integration-note">Requires an installed production build.</span>
-          {:else if integrationState.desktopShortcut.state === "absent"}
-            <button
-              type="button"
-              class="btn"
-              onclick={() => void desktopIntegration.create()}
-              disabled={desktopIntegration.busy}
-            >
-              Create desktop shortcut
-            </button>
-          {:else if integrationState.desktopShortcut.state === "present"}
-            <button
-              type="button"
-              class="btn btn-danger"
-              onclick={() => void desktopIntegration.remove()}
-              disabled={desktopIntegration.busy}
-            >
-              Remove desktop shortcut
-            </button>
-          {/if}
-        </div>
-      </div>
-
-      <div class="group-row integration-row">
-        <div class="group-row-main">
-          <span class="group-row-title">Start menu</span>
-          <span class="group-row-detail" role="status">
-            {startMenuStatusText}
-          </span>
-        </div>
-        <div class="group-row-actions">
-          {#if integrationState.startMenuShortcut.state === "present"}
-            <span class="integration-note">Managed by the installer.</span>
-          {/if}
-        </div>
-      </div>
-    {/if}
-
-    {#if desktopIntegration.error}
-      <p class="inline-message inline-message-error group-row" role="alert">
-        {desktopIntegration.error.message}
-      </p>
-    {/if}
-
-    <p class="group-footer">
-      Aurora only manages shortcuts it created; anything else with the same
-      name is left alone. Pinning Aurora to the taskbar stays a Windows choice.
-    </p>
-  </section>
-  <HomeWidgetSettings />
-  <DiscordSettings />
+  </div>
 </div>
-
 <style>
-  .launcher-settings { max-width: 1360px; display: grid; grid-template-columns: minmax(350px, 1fr) minmax(350px, 1fr); gap: var(--space-5); align-items: start; }
-  .launcher-settings > .page-header { grid-column: 1 / -1; margin-bottom: 0; }
-  .launcher-settings > .group { min-width: 0; margin: 0; }
-  @media (max-width: 1150px) { .launcher-settings { grid-template-columns: 1fr; } }
-  .appearance-row {
-    align-items: flex-start;
-  }
-
-  /* Desktop-integration rows: the status text wraps under the title on
-     narrow widths while actions keep their own line. */
-  .integration-row {
-    align-items: center;
-  }
-
-  .integration-note {
-    font-size: var(--text-metadata);
-    color: var(--color-text-muted);
-  }
-
-  /* Theme choices: one stacked radio per built-in theme. */
-  .theme-picker {
-    display: grid;
-    gap: var(--space-2);
-    margin: 0;
-    padding: 0;
-    border: none;
-    min-width: 0;
-    flex: none;
-  }
-
-  .theme-option {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-3);
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: background-color var(--motion-fast) var(--motion-ease);
-  }
-
-  .theme-option:hover {
-    background: var(--color-surface-raised);
-  }
-
-  .theme-option input {
-    margin: 0;
-    margin-top: 3px;
-    flex: none;
-  }
-
-  .theme-option-text {
-    display: grid;
-    gap: 1px;
-    min-width: 0;
-  }
-
-  .theme-option-name {
-    font-size: var(--text-body);
-    font-weight: 500;
-    color: var(--color-text);
-  }
-
-  .theme-option-description {
-    font-size: var(--text-secondary);
-    color: var(--color-text-secondary);
-  }
-
-  /* Accent choices: a wrapped row of swatch radios with text labels, so the
-     selection is never communicated by color alone (checked radio, ✓ in the
-     label, and a ring on the swatch). */
-  .accent-picker {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3) var(--space-4);
-    min-width: 0;
-    flex: none;
-    max-width: 100%;
-  }
-
-  .accent-option {
-    display: grid;
-    justify-items: center;
-    gap: var(--space-1);
-    width: 76px;
-    cursor: pointer;
-  }
-
-  /* Keep the native radio reachable and visible for focus, but let the
-     swatch carry the visual weight. */
-  .accent-option input[type="radio"] {
-    margin: 0;
-  }
-
-  .accent-swatch {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 1px solid var(--color-border-strong);
-    /* An offset gap keeps the ring readable on any swatch color. */
-    box-shadow: 0 0 0 2px var(--color-surface);
-  }
-
-  .accent-swatch-selected {
-    box-shadow:
-      0 0 0 2px var(--color-surface),
-      0 0 0 4px var(--color-accent);
-  }
-
-  .accent-option-name {
-    font-size: var(--text-metadata);
-    color: var(--color-text-secondary);
-    text-align: center;
-    overflow-wrap: anywhere;
-  }
-
-  .accent-custom-controls {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-  }
-
-  .accent-color-input {
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    border: 1px solid var(--color-border-strong);
-    border-radius: 50%;
-    background: var(--color-surface-sunken);
-    cursor: pointer;
-  }
-
-  .accent-color-input::-webkit-color-swatch-wrapper {
-    padding: 2px;
-  }
-
-  .accent-color-input::-webkit-color-swatch {
-    border: none;
-    border-radius: 50%;
-  }
-
-  @media (max-width: 800px) {
-    .appearance-row {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .theme-picker,
-    .accent-picker {
-      width: 100%;
-    }
-
-    .integration-row {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: var(--space-2);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .theme-option {
-      transition: none;
-    }
-  }
+  .launcher-settings { max-width: 1120px; margin-inline: auto; }
+  .page-header { margin-bottom: 32px; }
+  .settings-layout { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 36px; align-items: start; }
+  .settings-nav { display: grid; gap: 6px; position: sticky; top: 0; }
+  .settings-nav button { border: 0; border-radius: 10px; padding: 12px 14px; background: transparent; color: var(--color-text-secondary); text-align: left; font: inherit; font-size: 13px; cursor: pointer; }
+  .settings-nav button:hover { background: var(--color-surface-raised); }
+  .settings-nav button[aria-current] { background: var(--color-accent-soft); color: var(--color-text); box-shadow: inset 3px 0 var(--color-accent); }
+  .settings-body { min-width: 0; }
+  .section-intro { margin-bottom: 26px; }
+  .section-intro h3 { font-size: 20px; font-weight: 600; letter-spacing: -.025em; margin: 0 0 6px; }
+  .section-intro p, .choice-note { margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.6; }
+  .choice-section { border: 0; border-bottom: 1px solid var(--f-edge); padding: 0 0 26px; margin: 0 0 26px; min-width: 0; }
+  legend { font-size: 14px; font-weight: 600; padding: 0; margin-bottom: 14px; }
+  .theme-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .theme-tile, .background-tile { display: grid; gap: 10px; position: relative; padding: 8px; border: 1px solid var(--f-edge); border-radius: 14px; background: var(--f-panel); cursor: pointer; min-width: 0; }
+  .chosen { border-color: var(--color-accent); }
+  .theme-tile:focus-within, .background-tile:focus-within, .accent-option:focus-within { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+  .theme-tile input, .background-tile input, .accent-option input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .theme-preview { display: block; height: 84px; border-radius: 8px; background: #101116; position: relative; overflow: hidden; }
+  .theme-preview[data-preview="midnight"] { background: #10192a; }
+  .theme-preview[data-preview="oled"] { background: #000; }
+  .mini-rail { position: absolute; left: 0; height: 100%; width: 18%; background: rgb(0 0 0 / 30%); border-right: 1px solid rgb(255 255 255 / 6%); }
+  .mini-card { position: absolute; left: 28%; top: 22%; width: 60%; height: 56%; border-radius: 6px; background: rgb(255 255 255 / 6%); }
+  .mini-play { position: absolute; left: 35%; top: 34%; width: 46%; height: 20%; border-radius: 3px; background: var(--color-accent); opacity: .85; }
+  .choice-label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 0 3px 3px; }
+  .background-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .background-preview { height: 106px; border-radius: 8px; display: block; background: var(--color-background); }
+  .borealis-preview { background: url('/backgrounds/borealis.webp') center 30% / cover; }
+  .accent-picker { display: flex; flex-wrap: wrap; gap: 18px; }
+  .accent-option { display: grid; justify-items: center; gap: 9px; font-size: 11px; color: var(--color-text-secondary); width: 56px; cursor: pointer; position: relative; border-radius: 8px; }
+  .accent-swatch { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; }
+  .chosen .accent-swatch { outline: 2px solid var(--color-accent); outline-offset: 4px; }
+  .swatch-check { background: #101116; color: white; border-radius: 50%; width: 15px; height: 15px; text-align: center; font-size: 11px; }
+  .custom-swatch { color: #08090c; font-size: 20px; }
+  .accent-section .choice-note { margin-top: 20px; }
+  .custom-color { margin-top: 20px; display: flex; gap: 12px; align-items: center; font-size: 13px; }
+  .custom-color input { width: 42px; height: 30px; background: none; border: 0; }
+  @media (max-width: 1050px) { .settings-layout { grid-template-columns: 1fr; gap: 26px; } .settings-nav { display: flex; flex-wrap: wrap; position: static; } }
+  @media (max-width: 760px) { .theme-preview { height: 65px; } .theme-grid { gap: 8px; } .choice-label { font-size: 11px; } }
 </style>
