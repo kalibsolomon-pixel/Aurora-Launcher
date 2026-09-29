@@ -34,6 +34,10 @@ pub fn run() {
     use tauri::Manager;
     let app = tauri::Builder::default()
         .setup(|app| {
+            #[cfg(target_os = "windows")]
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_decorations(false)?;
+            }
             // Optional integration failure never changes startup or Play authority.
             if let Ok(root) = app.path().app_local_data_dir() {
                 if let Ok(paths) = crate::paths::ManagedPaths::from_app_local_data_dir(root) {

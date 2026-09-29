@@ -3,6 +3,7 @@ import {
   setAppearance,
   LauncherBackendError,
   type AccentSelection,
+  type BackgroundId,
   type AppearanceState,
 } from "$lib/backend";
 
@@ -43,6 +44,10 @@ class AppearanceStore {
     return this.state?.theme ?? "aurora-dark";
   }
 
+  get background(): BackgroundId {
+    return this.state?.background ?? "simple";
+  }
+
   get accent(): AccentSelection {
     return this.state?.accent ?? { type: "preset", id: "violet" };
   }
@@ -68,6 +73,7 @@ class AppearanceStore {
 
     const root = document.documentElement;
     root.dataset.theme = state.theme;
+    root.dataset.background = state.background;
 
     if (state.accent.type === "preset") {
       delete root.dataset.accentCustom;
@@ -99,7 +105,7 @@ class AppearanceStore {
     if (this.busy || theme === this.theme) return;
     this.busy = true;
     try {
-      this.apply(await setAppearance(theme, this.accent));
+      this.apply(await setAppearance(theme, this.accent, this.background));
     } catch (cause: unknown) {
       this.error = backendError(cause, "The theme could not be saved.");
     } finally {
@@ -107,12 +113,20 @@ class AppearanceStore {
     }
   }
 
+  async setBackground(background: BackgroundId): Promise<void> {
+    if (this.busy || background === this.background) return;
+    this.busy = true;
+    try { this.apply(await setAppearance(this.theme, this.accent, background)); }
+    catch (cause: unknown) { this.error = backendError(cause, "The background could not be saved."); }
+    finally { this.busy = false; }
+  }
+
   /** Switches the accent: Rust derives and validates, then this applies it. */
   async setAccent(accent: AccentSelection): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     try {
-      this.apply(await setAppearance(this.theme, accent));
+      this.apply(await setAppearance(this.theme, accent, this.background));
     } catch (cause: unknown) {
       this.error = backendError(cause, "The accent could not be saved.");
     } finally {

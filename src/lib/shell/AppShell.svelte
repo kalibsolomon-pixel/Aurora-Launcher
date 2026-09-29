@@ -1,4 +1,8 @@
 <script lang="ts">
+  import "./phase-f.css";
+  import Icon from "./Icon.svelte";
+  import TitleBar from "./TitleBar.svelte";
+  import Background from "./Background.svelte";
   import { launcher } from "$lib/launcher/store.svelte";
   import { navigation } from "$lib/launcher/navigation.svelte";
   import { activeGlobalPage, globalDestinations } from "$lib/launcher/navigation";
@@ -12,78 +16,27 @@
   // with its page; the list is static per bundle.
   const destinations = globalDestinations(import.meta.env.DEV);
 
-  /** How many instances the sidebar lists before pointing at Instances. */
-  const SIDEBAR_INSTANCE_LIMIT = 4;
-
   const state = $derived(navigation.state);
-  const inWorkspace = $derived(state.kind === "instance");
-  const workspaceInstanceId = $derived(
-    state.kind === "instance" ? state.instanceId : null,
-  );
-  const currentPage = $derived(activeGlobalPage(state));
-  const instances = $derived(launcher.launcherState?.instances ?? []);
-  const sidebarInstances = $derived(instances.slice(0, SIDEBAR_INSTANCE_LIMIT));
-  const selectedId = $derived(launcher.launcherState?.config.selectedInstanceId ?? null);
+  const currentPage = $derived(state.kind === "instance" ? "instances" : activeGlobalPage(state));
   const account = $derived(launcher.selectedAccount);
 </script>
 
+<div class="aurora-shell">
+<Background />
+<TitleBar />
 <div class="app-frame">
   <nav class="sidebar" aria-label="Aurora Launcher">
-    <div class="brand">
-      <img class="brand-icon" src="/aurora-icon.png" alt="" aria-hidden="true" />
-      <h1 class="brand-name">Aurora</h1>
-    </div>
-
-    <div class="nav">
+    <img class="rail-brand" src="/aurora-icon.png" alt="Aurora" />
+    <div class="rail-navigation">
       {#each destinations as destination (destination.id)}
-        <button
-          type="button"
-          class="nav-item"
-          aria-current={!inWorkspace && currentPage === destination.id ? "page" : undefined}
-          onclick={() => navigation.goTo(destination.id)}
-        >
-          {destination.label}
+        <button type="button" class="rail-link" aria-label={destination.label}
+          aria-current={currentPage === destination.id ? "page" : undefined}
+          onclick={() => navigation.goTo(destination.id)}>
+          <Icon name={destination.id} />
+          <span class="f-tooltip" aria-hidden="true">{destination.label}</span>
         </button>
       {/each}
     </div>
-
-    {#if instances.length > 0}
-      <!--
-        A restrained instance shortcut list. The registry records no
-        last-played or last-opened timestamps, so entries appear in registry
-        (creation) order under an honest "Instances" label — never a
-        "Recent" claim the data cannot support.
-      -->
-      <div class="sidebar-instances">
-        <p class="sidebar-label" id="sidebar-instances-label">Instances</p>
-        <div class="nav">
-          {#each sidebarInstances as instance (instance.id)}
-            <button
-              type="button"
-              class="nav-item sidebar-instance-item"
-              aria-current={workspaceInstanceId === instance.id ? "page" : undefined}
-              title={instance.displayName}
-              onclick={() => navigation.openInstance(instance.id)}
-            >
-              <span class="sidebar-instance-name">{instance.displayName}</span>
-              {#if selectedId === instance.id}
-                <span class="sidebar-instance-marker">Selected</span>
-              {/if}
-            </button>
-          {/each}
-          {#if instances.length > SIDEBAR_INSTANCE_LIMIT}
-            <button
-              type="button"
-              class="nav-item sidebar-all-instances"
-              onclick={() => navigation.goTo("instances")}
-            >
-              All instances
-            </button>
-          {/if}
-        </div>
-      </div>
-    {/if}
-
     <div class="sidebar-spacer"></div>
 
     <button
@@ -99,7 +52,7 @@
     </button>
 
     <p class="sidebar-version">
-      {launcher.status ? `Aurora Launcher ${launcher.status.launcherVersion}` : "Aurora Launcher"}
+      {launcher.status ? `v${launcher.status.launcherVersion}` : "Aurora Launcher"}
     </p>
   </nav>
 
@@ -108,4 +61,5 @@
   </main>
 </div>
 
+</div>
 <AccountDialog />

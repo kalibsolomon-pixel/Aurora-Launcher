@@ -1,0 +1,78 @@
+/* Phase F pilot. Existing page interiors keep their approved system. */
+:root {
+  --f-space-stage: clamp(24px, 4vw, 64px);
+  --f-radius-panel: 22px;
+  --f-radius-control: 14px;
+  --f-duration: 180ms;
+  --f-fast: 120ms;
+  --f-ease: cubic-bezier(.2,.8,.2,1);
+  --f-panel: var(--color-surface);
+  --f-edge: rgb(255 255 255 / 7%);
+  --f-shadow: 0 12px 36px rgb(0 0 0 / 16%);
+  --f-blur: none;
+  --f-rail-width: 112px;
+}
+:root[data-background="borealis"] {
+  --f-panel: rgb(12 17 25 / 76%);
+  --f-edge: rgb(222 242 255 / 13%);
+  --f-shadow: 0 16px 48px rgb(0 0 0 / 22%);
+  --f-blur: blur(16px);
+}
+.aurora-shell { height: 100dvh; display: flex; flex-direction: column; isolation: isolate; overflow: hidden; }
+.aurora-background { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: #080e18; }
+/* Ten tiny drift updates per second cap glass recomposition cost. */
+.aurora-background img { width: 100%; height: 100%; object-fit: cover; animation: borealis-drift 45s steps(450, end) infinite alternate; animation-play-state: paused; opacity: .8; }
+.aurora-background.background-active img { animation-play-state: running; }
+.aurora-background::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(4 8 15 / 16%), rgb(4 8 15 / 32%) 50%, rgb(4 8 15 / 90%)); }
+@keyframes borealis-drift { from { transform: scale(1.04) translate(-.5%, 0); } to { transform: scale(1.1) translate(.5%, 1%); } }
+.aurora-titlebar { height: 40px; flex: none; display: flex; align-items: stretch; user-select: none; z-index: 40; }
+.titlebar-drag { display: flex; flex: 1; align-items: center; gap: 10px; padding-left: 20px; font-size: 11px; color: var(--color-text-secondary); }
+.titlebar-drag > * { pointer-events: none; }
+.titlebar-drag img { width: 18px; height: 18px; }
+.window-control { width: 48px; background: transparent; border: 0; color: var(--color-text-secondary); display: grid; place-items: center; }
+.window-control:hover { background: rgb(255 255 255 / 9%); color: white; }
+.window-close:hover { background: #c42b3b; }
+.chrome-error { position: fixed; right: 12px; top: 40px; z-index: 100; background: var(--color-surface); padding: 12px; }
+.aurora-shell .app-frame { grid-template-columns: var(--f-rail-width) minmax(0, 1fr); flex: 1; height: auto; min-height: 0; }
+.aurora-shell .sidebar { padding: 18px 10px 14px; border: 0; background: transparent; gap: 20px; align-items: center; z-index: 30; }
+.rail-brand { width: 34px; height: 34px; margin: 4px 0 18px; }
+.rail-navigation { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.rail-link { width: 48px; height: 48px; display: grid; place-items: center; position: relative; border: 1px solid transparent; border-radius: 15px; background: transparent; color: var(--color-text-secondary); cursor: pointer; transition: background var(--f-fast), color var(--f-fast); }
+.rail-link:hover { background: rgb(255 255 255 / 6%); color: var(--color-text); }
+.rail-link[aria-current="page"] { color: var(--color-accent); background: var(--color-accent-soft); border-color: var(--color-accent-outline); }
+.rail-link[aria-current="page"]::before { content: ''; position: absolute; left: -12px; top: 16px; width: 3px; height: 16px; background: var(--color-accent); border-radius: 2px; }
+.f-tooltip { position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); padding: 7px 11px; border: 1px solid var(--color-border-strong); border-radius: 8px; color: var(--color-text); background: var(--color-surface-raised); font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; box-shadow: var(--f-shadow); }
+.rail-link:hover .f-tooltip, .rail-link:focus-visible .f-tooltip { opacity: 1; }
+.aurora-shell .account-chip { padding: 10px 5px; margin-top: auto; border-color: var(--f-edge); border-radius: 16px; background: var(--f-panel); backdrop-filter: var(--f-blur); }
+.aurora-shell .account-chip .account-identity { flex-direction: column; gap: 7px; width: 100%; text-align: center; }
+.aurora-shell .account-chip .identity-text { width: 100%; }
+.aurora-shell .account-chip .identity-name { font-size: 11px; }
+.aurora-shell .account-chip .identity-detail { font-size: 10px; line-height: 1.3; }
+.aurora-shell .sidebar-version { padding: 0; font-size: 10px; text-align: center; }
+.aurora-shell .content { min-width: 0; padding: 24px var(--f-space-stage) 40px; overflow: auto; }
+.f-pilot .group, .f-surface { background: var(--f-panel); border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); box-shadow: var(--f-shadow); backdrop-filter: var(--f-blur); }
+.f-pilot.page { padding: 0; }
+.f-pilot .btn { border-radius: var(--f-radius-control); transition: background var(--f-fast), transform var(--f-fast); }
+.f-pilot .btn:active:not(:disabled) { transform: translateY(1px); }
+.f-icon-button { width: 40px; height: 40px; padding: 0; display: inline-grid; place-items: center; flex: none; border: 1px solid var(--f-edge); border-radius: 12px; color: var(--color-text-secondary); background: var(--f-panel); cursor: pointer; }
+.f-icon-button:hover { background: var(--color-surface-hover); color: var(--color-text); }
+.aurora-shell button:focus-visible, .f-pilot input:focus-visible, .f-pilot select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.f-pilot .group-row { padding: 20px 24px; }
+.f-pilot .group-heading { padding: 24px; }
+.f-pilot .group-footer { padding: 16px 24px; }
+.f-pilot input[type="checkbox"] { width: 18px; height: 18px; flex: none; cursor: pointer; }
+.f-pilot .page-title { font-size: 28px; letter-spacing: -.035em; }
+.f-pilot .page-subtitle { margin-top: 6px; }
+.f-pilot .group-row-detail { line-height: 1.5; }
+@media (max-width: 800px) { :root { --f-rail-width: 96px; } .aurora-shell .content { padding: 16px 20px 28px; } .aurora-shell .sidebar { padding-inline: 6px; } }
+@media (prefers-reduced-motion: reduce) { .aurora-background img { animation: none; } .f-pilot *, .rail-link { transition: none !important; } .f-pilot .btn:active:not(:disabled) { transform: none; } }
+@media (prefers-reduced-transparency: reduce) { :root[data-background="borealis"] { --f-panel: var(--color-surface); --f-blur: none; } }
+
+@media (max-height: 650px) {
+  .aurora-shell .sidebar { padding-block: 10px; gap: 8px; }
+  .rail-brand { width: 24px; height: 24px; margin: 0; }
+  .rail-navigation { gap: 4px; }
+  .rail-link { width: 40px; height: 40px; border-radius: 12px; }
+  .rail-link[aria-current="page"]::before { top: 12px; }
+  .aurora-shell .account-chip { padding-block: 6px; }
+}

@@ -157,7 +157,10 @@ export interface AccentPalette {
 }
 
 /** Launcher-wide appearance state plus the catalogs Settings renders. */
+export type BackgroundId = "simple" | "borealis";
+
 export interface AppearanceState {
+  background: BackgroundId;
   theme: string;
   accent: AccentSelection;
   palette: AccentPalette;
@@ -183,10 +186,11 @@ export async function getAppearance(): Promise<AppearanceState> {
 export async function setAppearance(
   theme: string,
   accent: AccentSelection,
+  background: BackgroundId,
 ): Promise<AppearanceState> {
   try {
     return await invoke<AppearanceState>("set_appearance", {
-      request: { theme, accent },
+      request: { theme, accent, background },
     });
   } catch (error: unknown) {
     if (isBackendCommandError(error)) {

@@ -483,6 +483,15 @@ pub fn derive_custom_accent(hex: &str) -> Result<AccentPalette, InvalidAccent> {
     })
 }
 
+/// A bundled visual treatment, independent of surface theme and accent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum BackgroundId {
+    #[default]
+    Simple,
+    Borealis,
+}
+
 /// The launcher-wide appearance preferences persisted in the configuration.
 ///
 /// Deliberately minimal: the theme and the accent. Further appearance
@@ -490,6 +499,7 @@ pub fn derive_custom_accent(hex: &str) -> Result<AccentPalette, InvalidAccent> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AppearancePreferences {
+    pub background: BackgroundId,
     pub theme: String,
     pub accent: AccentSelection,
 }
@@ -498,6 +508,7 @@ impl AppearancePreferences {
     /// Preferences with the default Aurora look.
     pub fn new() -> Self {
         Self {
+            background: BackgroundId::default(),
             theme: ThemeId::default().as_str().to_owned(),
             accent: AccentSelection::default(),
         }
@@ -677,6 +688,7 @@ mod tests {
     #[test]
     fn appearance_preferences_normalize_unknown_values_to_the_default_look() {
         let hand_edited = AppearancePreferences {
+            background: BackgroundId::Simple,
             theme: "neon".to_owned(),
             accent: AccentSelection::Preset {
                 id: "hotdog".to_owned(),
@@ -687,6 +699,7 @@ mod tests {
         assert_eq!(normalized.accent, AccentSelection::default());
 
         let unusable_custom = AppearancePreferences {
+            background: BackgroundId::Simple,
             theme: "oled".to_owned(),
             accent: AccentSelection::Custom {
                 hex: "#000000".to_owned(),
@@ -700,6 +713,7 @@ mod tests {
 
         // Valid preferences survive normalization untouched.
         let valid = AppearancePreferences {
+            background: BackgroundId::Simple,
             theme: "midnight".to_owned(),
             accent: AccentSelection::Custom {
                 hex: "#FF5533".to_owned(),

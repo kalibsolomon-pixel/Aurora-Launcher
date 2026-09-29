@@ -13,14 +13,15 @@ use serde::{Deserialize, Serialize};
 use crate::appearance::AppearancePreferences;
 use crate::instances::InstanceId;
 
-/// Schema 4 adds independently opt-in world/server/address preferences.
+/// Schema 5 adds the independent bundled background selection.
+/// Schema 4 added independently opt-in world/server/address preferences.
 /// Schemas 1, 2 and 3 migrate explicitly; malformed documents remain untouched.
 /// The current launcher-configuration schema version.
 ///
 /// Version 2 added the launcher-wide appearance preferences. Version 1 files
 /// (selected instance only) migrate deterministically on load with the
 /// default appearance; anything else fails deliberately.
-pub const CONFIG_SCHEMA_VERSION: u32 = 4;
+pub const CONFIG_SCHEMA_VERSION: u32 = 5;
 /// The schema version before appearance preferences existed.
 const LEGACY_CONFIG_SCHEMA_VERSION: u32 = 1;
 
@@ -108,8 +109,26 @@ impl LauncherConfig {
                 ConfigError::Malformed("the schemaVersion field is missing".to_owned())
             })?;
 
+        // Explicit Phase F migration: previous appearance documents have no
+        // background dimension. Preserve every existing choice and use Simple.
+        // Schema 5 requires the field; malformed/unknown values fail closed.
+        if matches!(schema_version, 2..=4) {
+            let appearance = document
+                .get_mut("appearance")
+                .and_then(serde_json::Value::as_object_mut)
+                .ok_or_else(|| {
+                    ConfigError::Malformed("the appearance preferences are missing".into())
+                })?;
+            appearance.insert("background".into(), "simple".into());
+        }
+
         let config = match schema_version {
             version if version == u64::from(CONFIG_SCHEMA_VERSION) => {
+                serde_json::from_value::<Self>(document)
+                    .map_err(|error| ConfigError::Malformed(error.to_string()))?
+            }
+            4 => {
+                document["schemaVersion"] = CONFIG_SCHEMA_VERSION.into();
                 serde_json::from_value::<Self>(document)
                     .map_err(|error| ConfigError::Malformed(error.to_string()))?
             }
@@ -414,6 +433,53 @@ mod tests {
     }
 
     #[test]
+    fn phase_f_migration_preserves_existing_choices_and_requires_current_background() {
+        let mut original = LauncherConfig::default();
+        original.set_selected_instance_id(Some(InstanceId::new("selected").unwrap()));
+        original.appearance.theme = "oled".into();
+        original.appearance.accent =
+            crate::appearance::AccentSelection::Preset { id: "cyan".into() };
+        original.discord.server = true;
+        let mut legacy = serde_json::to_value(&original).unwrap();
+        legacy["schemaVersion"] = 4.into();
+        legacy["appearance"]
+            .as_object_mut()
+            .unwrap()
+            .remove("background");
+        let migrated = LauncherConfig::from_json(&legacy.to_string()).unwrap();
+        assert_eq!(migrated, original);
+        assert_eq!(
+            LauncherConfig::from_json(&migrated.to_json()).unwrap(),
+            migrated
+        );
+        let mut current = serde_json::to_value(&migrated).unwrap();
+        for bad in [
+            serde_json::Value::Null,
+            serde_json::json!(17),
+            serde_json::json!("file:///other"),
+        ] {
+            current["appearance"]["background"] = bad;
+            assert!(matches!(
+                LauncherConfig::from_json(&current.to_string()),
+                Err(ConfigError::Malformed(_))
+            ));
+        }
+        current["appearance"]
+            .as_object_mut()
+            .unwrap()
+            .remove("background");
+        assert!(matches!(
+            LauncherConfig::from_json(&current.to_string()),
+            Err(ConfigError::Malformed(_))
+        ));
+        original.appearance.background = crate::appearance::BackgroundId::Borealis;
+        assert_eq!(
+            LauncherConfig::from_json(&original.to_json()).unwrap(),
+            original
+        );
+    }
+
+    #[test]
     fn default_uses_the_current_schema_version_and_no_selection() {
         let config = LauncherConfig::default();
 
@@ -430,6 +496,7 @@ mod tests {
             home_widgets: Default::default(),
             discord: Default::default(),
             appearance: AppearancePreferences {
+                background: crate::appearance::BackgroundId::Simple,
                 theme: "oled".to_owned(),
                 accent: crate::appearance::AccentSelection::Custom {
                     hex: "#FF5533".to_owned(),
@@ -454,7 +521,7 @@ mod tests {
     fn serializes_to_inspectable_camel_case_json() {
         let json = LauncherConfig::default().to_json();
 
-        assert!(json.contains("\"schemaVersion\": 4"));
+        assert!(json.contains("\"schemaVersion\": 5"));
         assert!(json.contains("\"selectedInstanceId\": null"));
         assert!(json.contains("\"appearance\": {"));
         assert!(json.contains("\"theme\": \"aurora-dark\""));
@@ -477,15 +544,15 @@ mod tests {
 
     #[test]
     fn unsupported_schema_versions_fail_deliberately() {
-        let json = r#"{ "schemaVersion": 5, "selectedInstanceId": null }"#;
+        let json = r#"{ "schemaVersion": 6, "selectedInstanceId": null }"#;
 
         let error = LauncherConfig::from_json(json).unwrap_err();
 
         assert!(matches!(
             error,
             ConfigError::UnsupportedSchema {
-                found: 5,
-                supported: 4
+                found: 6,
+                supported: 5
             }
         ));
     }
@@ -506,7 +573,7 @@ mod tests {
         assert_eq!(config.appearance(), &AppearancePreferences::new());
         let reserialized = LauncherConfig::from_json(&config.to_json()).unwrap();
         assert_eq!(reserialized, config);
-        assert!(config.to_json().contains("\"schemaVersion\": 4"));
+        assert!(config.to_json().contains("\"schemaVersion\": 5"));
     }
 
     #[test]
@@ -604,6 +671,7 @@ mod tests {
             home_widgets: Default::default(),
             discord: Default::default(),
             appearance: AppearancePreferences {
+                background: crate::appearance::BackgroundId::Simple,
                 theme: "midnight".to_owned(),
                 accent: crate::appearance::AccentSelection::Preset {
                     id: "blue".to_owned(),
