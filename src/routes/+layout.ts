@@ -11,4 +11,8 @@ export const ssr = false;
 export const load = async () => {
   const { appearance } = await import("$lib/launcher/appearance.svelte");
   await appearance.initialize();
+  // Connects the native minimize signal used to pause decorative playback;
+  // the subscription itself is failure-proof and defaults to "not minimized".
+  const { windowActivity } = await import("$lib/shell/windowActivity");
+  await windowActivity.initialize();
 };

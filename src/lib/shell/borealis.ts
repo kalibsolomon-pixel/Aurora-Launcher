@@ -3,17 +3,19 @@
 export function motionRate(speed: number): number {
   return .5 + Math.max(0, Math.min(100, Number.isFinite(speed) ? speed : 50)) / 100;
 }
-export function motionAllowed(hidden: boolean, focused: boolean, reduced: boolean): boolean {
-  return !hidden && focused && !reduced;
+export function motionAllowed(hidden: boolean, focused: boolean, reduced: boolean, minimized = false): boolean {
+  return !hidden && focused && !reduced && !minimized;
 }
 export interface BorealisReview { time?: number; reducedMotion?: boolean; source?: string }
+/** Pushes native minimize transitions; seeds the current state on subscribe. */
+export type MinimizedObserver = (change: (minimized: boolean) => void) => () => void;
 
 /** Local, muted loop. Hiding/unmounting releases work; accessibility overrides speed. */
-export function mountBorealis(video: HTMLVideoElement, review: BorealisReview = {}): () => void {
+export function mountBorealis(video: HTMLVideoElement, review: BorealisReview = {}, observeMinimized?: MinimizedObserver): () => void {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  let disposed = false, failed = false, loaded = false, playRejected = false, reportedPlayFailure = false;
+  let disposed = false, failed = false, loaded = false, playRejected = false, reportedPlayFailure = false, minimized = false;
   function still() { return reduced.matches || review.reducedMotion === true; }
-  function allowed() { return motionAllowed(document.hidden, document.hasFocus(), still()) && review.time === undefined; }
+  function allowed() { return motionAllowed(document.hidden, document.hasFocus(), still(), minimized) && review.time === undefined; }
   function sync() {
     if (disposed || failed) return;
     if (still()) {
@@ -51,7 +53,11 @@ export function mountBorealis(video: HTMLVideoElement, review: BorealisReview = 
   video.addEventListener('playing', playing); video.addEventListener('pause', pause); video.addEventListener('error', fail);
   document.addEventListener('visibilitychange', sync);
   window.addEventListener('focus', sync); window.addEventListener('blur', sync);
-  reduced.addEventListener('change', sync); sync();
+  reduced.addEventListener('change', sync);
+  // A minimized window can still look visible+focused to WebView2; native
+  // state is the only reliable pause signal for that case.
+  const stopMinimized = observeMinimized?.(change => { if (change !== minimized) { minimized = change; sync(); } });
+  sync();
   return () => {
     disposed = true;
     video.removeEventListener('loadedmetadata', metadata);
@@ -60,6 +66,7 @@ export function mountBorealis(video: HTMLVideoElement, review: BorealisReview = 
     document.removeEventListener('visibilitychange', sync);
     window.removeEventListener('focus', sync); window.removeEventListener('blur', sync);
     reduced.removeEventListener('change', sync);
+    stopMinimized?.();
     video.pause(); video.removeAttribute('src'); video.load();
   };
 }

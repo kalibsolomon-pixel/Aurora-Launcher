@@ -23,6 +23,7 @@ pub mod modrinth;
 pub mod paths;
 pub mod runtime;
 pub mod shortcuts;
+pub mod window_activity;
 
 #[cfg(test)]
 mod test_support;
@@ -34,9 +35,13 @@ pub fn run() {
     use tauri::Manager;
     let app = tauri::Builder::default()
         .setup(|app| {
-            #[cfg(target_os = "windows")]
             if let Some(window) = app.get_webview_window("main") {
+                #[cfg(target_os = "windows")]
                 window.set_decorations(false)?;
+                // WebView2 never reports a minimized host window as hidden and
+                // its blur can race minimization, so native window state owns
+                // pausing decorative playback.
+                window_activity::attach(app.handle(), &window);
             }
             // Optional integration failure never changes startup or Play authority.
             if let Ok(root) = app.path().app_local_data_dir() {

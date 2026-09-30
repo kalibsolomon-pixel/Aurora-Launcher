@@ -9,6 +9,8 @@ it('video speed is bounded independently from motion accessibility policy', () =
   for (const state of [[true,true,false],[false,false,false],[false,true,true]]) {
     assert.equal(motionAllowed(...state as [boolean,boolean,boolean]),false);
   }
+  assert.equal(motionAllowed(false,true,false,true),false,'native minimized pauses decorative motion');
+  assert.equal(motionAllowed(false,true,false),true,'absent native signal keeps the documented behavior');
 });
 it('video pauses on hidden/blur/reduced motion, preserves rate and releases decoder on unmount', async () => {
   const names = ['document','window','matchMedia'] as const;
@@ -37,6 +39,37 @@ it('video pauses on hidden/blur/reduced motion, preserves rate and releases deco
     const final=plays; win.dispatchEvent(new Event('focus')); assert.equal(plays,final);
     dispose(); assert.equal(video.src,''); assert.equal(loads,2);
     win.dispatchEvent(new Event('focus')); assert.equal(plays,final);
+  } finally {
+    for(const name of names){ const descriptor=originals.get(name); if(descriptor) Object.defineProperty(globalThis,name,descriptor); else delete (globalThis as any)[name]; }
+  }
+});
+
+it('native minimized pauses playback even while WebView2 still reports focused+visible', async () => {
+  const names = ['document','window','matchMedia'] as const;
+  const originals = new Map(names.map(name=>[name,Object.getOwnPropertyDescriptor(globalThis,name)]));
+  let plays=0, pauses=0, stopped=false;
+  let nativeChange: ((minimized: boolean) => void) | undefined;
+  const doc=Object.assign(new EventTarget(),{hidden:false,hasFocus:()=>true});
+  const win=new EventTarget(), media=Object.assign(new EventTarget(),{matches:false});
+  const video=Object.assign(new EventTarget(),{dataset:{} as Record<string,string>,style:{opacity:''},src:'',
+    play:async()=>{plays++;},pause:()=>{pauses++;},load:()=>{},removeAttribute:()=>{video.src='';}});
+  try {
+    Object.assign(globalThis,{document:doc,window:win,matchMedia:()=>media});
+    const dispose=mountBorealis(video as unknown as HTMLVideoElement,{},change=>{
+      nativeChange=change;
+      return ()=>{stopped=true;};
+    });
+    await Promise.resolve();
+    assert.equal(plays,1); assert.equal(pauses,0); assert.equal(video.dataset.motion,'starting');
+    // The window is minimized but WebView2 never flipped hidden/hasFocus.
+    nativeChange!(true); assert.equal(video.dataset.motion,'paused'); assert.equal(pauses,1);
+    video.dispatchEvent(new Event('pause'));
+    // Stale focus events arriving while minimized must not resume playback.
+    win.dispatchEvent(new Event('focus')); assert.equal(plays,1); assert.equal(video.dataset.motion,'paused');
+    nativeChange!(false); await Promise.resolve();
+    assert.equal(plays,2); assert.equal(video.dataset.motion,'starting');
+    video.dispatchEvent(new Event('playing')); assert.equal(video.dataset.motion,'running');
+    dispose(); assert.ok(stopped,'unmount stops the native observer');
   } finally {
     for(const name of names){ const descriptor=originals.get(name); if(descriptor) Object.defineProperty(globalThis,name,descriptor); else delete (globalThis as any)[name]; }
   }

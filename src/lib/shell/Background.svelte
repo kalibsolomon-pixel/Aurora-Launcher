@@ -2,10 +2,11 @@
   import { getContext, untrack } from 'svelte';
   import { appearance } from '$lib/launcher/appearance.svelte';
   import { mountBorealis, motionRate, type BorealisReview } from './borealis';
+  import { windowActivity } from './windowActivity';
   const review = getContext<BorealisReview | undefined>('borealis-review');
   let video = $state<HTMLVideoElement>();
   $effect(() => {
-    if (video) return untrack(() => mountBorealis(video!, review));
+    if (video) return untrack(() => mountBorealis(video!, review, change => windowActivity.subscribe(change)));
   });
   $effect(() => { if (video) video.playbackRate = motionRate(appearance.auroraMotionSpeed); });
 </script>
