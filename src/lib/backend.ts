@@ -892,6 +892,16 @@ export interface ProviderRecord {
   dependencies: ProviderDependency[];
   explicitlyRetained: boolean;
   requires: ProviderIdentity[];
+  origin: ProviderOrigin;
+  installedAtUnixSeconds: number | null;
+}
+
+export type ProviderOrigin = "direct" | "dependency" | "recovered";
+
+export function providerOriginLabel(origin: ProviderOrigin): string {
+  if (origin === "direct") return "Installed directly";
+  if (origin === "dependency") return "Installed as dependency";
+  return "Recovered from local file";
 }
 
 export interface ProviderIdentity {
@@ -1084,6 +1094,71 @@ export function previewProviderRemoval(instanceId: string, contentType: ContentT
 
 export function applyProviderRemoval(instanceId: string, contentType: ContentType, projectId: string, previewFingerprint: string): Promise<void> {
   return contentInvoke("apply_provider_removal", { instanceId, contentType, projectId, previewFingerprint });
+}
+
+export type RecognitionStatus = "recognized" | "unrecognized" | "skipped";
+
+/** Verified adapter data for one recognized local file. */
+export interface RecognizedFile {
+  queriedSha512: string;
+  projectId: string;
+  versionId: string;
+  versionNumber: string;
+  versionName: string;
+  versionType: string;
+  datePublished: string;
+  gameVersions: string[];
+  loaders: string[];
+  environment: string;
+  dependencies: ProviderDependency[];
+  fileName: string;
+  fileSize: number;
+}
+
+export interface ScanCandidate {
+  status: RecognitionStatus;
+  fileName: string;
+  canonicalFileName: string;
+  sizeBytes: number | null;
+  disabled: boolean;
+  recognition: RecognizedFile | null;
+  filenameMatches: boolean | null;
+  sha256: string | null;
+  sha512: string | null;
+  reason: string | null;
+}
+
+export interface RecognitionScan {
+  instanceId: string;
+  contentType: ContentType;
+  inventoryRevision: string;
+  scanFingerprint: string;
+  candidates: ScanCandidate[];
+}
+
+export interface RecoveredFileApproval {
+  fileName: string;
+  sha512: string;
+}
+
+export interface RecoveredContentApproval {
+  instanceId: string;
+  contentType: ContentType;
+  inventoryRevision: string;
+  files: RecoveredFileApproval[];
+}
+
+export function scanInstanceContent(instanceId: string, contentType: ContentType): Promise<RecognitionScan> {
+  return contentInvoke("scan_instance_content", { instanceId, contentType });
+}
+
+export function registerRecoveredContent(approval: RecoveredContentApproval): Promise<ProviderRecord[]> {
+  return contentInvoke("register_recovered_content", {
+    instanceId: approval.instanceId,
+    contentType: approval.contentType,
+    inventoryRevision: approval.inventoryRevision,
+    files: approval.files,
+  });
 }
 
 async function contentInvoke<T>(command: string, request: Record<string, unknown>): Promise<T> {

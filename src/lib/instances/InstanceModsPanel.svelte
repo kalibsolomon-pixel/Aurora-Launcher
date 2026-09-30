@@ -10,10 +10,11 @@
     type ModSort,
     type RemovalCandidate,
   } from "$lib/instances/mods";
-  import { applyProviderRemoval, previewProviderRemoval, type ProviderRemovalPreview, getInstanceContentContext, getProviderLifecycle, type InstanceContentContext, type InstanceSummary, type ModEntry, type ProviderLifecycleEntry } from "$lib/backend";
+  import { applyProviderRemoval, previewProviderRemoval, type ProviderRemovalPreview, getInstanceContentContext, getProviderLifecycle, providerOriginLabel, type InstanceContentContext, type InstanceSummary, type ModEntry, type ProviderLifecycleEntry } from "$lib/backend";
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
   import InstalledArtwork from "./InstalledArtwork.svelte";
+  import ContentRecognition from "./ContentRecognition.svelte";
 
   let { instance }: { instance: InstanceSummary } = $props();
   let query = $state("");
@@ -181,6 +182,10 @@
     </p>
   {/if}
 
+  {#if context?.modrinthAvailable && view === "installed"}
+    <ContentRecognition {instance} kind="mod" onChanged={async () => { await refreshInstalled(instance.id); }} />
+  {/if}
+
   {#if launcher.modError}
     <div class="mods-error" role="alert">
       <p>{launcher.modError.message}</p>
@@ -307,7 +312,7 @@
               <dl>
                 <div><dt>File</dt><dd>{entry.fileName}</dd></div>
                 <div><dt>Ownership</dt><dd>{entry.ownership === "launcherManagedRequired" ? "Managed by Aurora · required" : entry.ownership === "providerManaged" ? `Managed · ${entry.provenance?.provider}` : entry.ownership === "launcherBootstrap" ? "Installed initially by Aurora; user controlled" : entry.ownership === "userManaged" ? "Local mod" : "Unclassified"}</dd></div>
-                {#if entry.provenance}<div><dt>Provider</dt><dd>{entry.provenance.provider} · {entry.provenance.projectId} · {entry.provenance.displayVersion ?? entry.provenance.versionId}</dd></div>{/if}
+                {#if entry.provenance}<div><dt>Provider</dt><dd>{entry.provenance.provider} · {entry.provenance.projectId} · {entry.provenance.displayVersion ?? entry.provenance.versionId}</dd></div><div><dt>Origin</dt><dd>{providerOriginLabel(entry.provenance.origin)}</dd></div>{/if}
                 {#if entry.metadata}
                   <div><dt>Mod ID</dt><dd>{entry.metadata.id}</dd></div>
                   {#if entry.metadata.environment}<div><dt>Environment</dt><dd>{entry.metadata.environment}</dd></div>{/if}

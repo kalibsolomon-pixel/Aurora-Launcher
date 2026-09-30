@@ -20,6 +20,9 @@ const BASE: &str = "https://api.modrinth.com/v2/";
 const FABRIC_API_PROJECT: &str = "P7dR8mSH";
 const MAX_RESPONSE: usize = 4 * 1024 * 1024;
 const MAX_GRAPH: usize = 64;
+/// Recognition hash lookups are batched; the audit bound keeps one request
+/// and one bounded response body per lookup round.
+const MAX_HASH_BATCH: usize = 64;
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -46,7 +49,7 @@ impl Client {
     }
 
     #[cfg(test)]
-    fn for_testing(base: &str) -> Self {
+    pub(crate) fn for_testing(base: &str) -> Self {
         Self {
             base: Url::parse(base).unwrap(),
             http: crate::downloads::build_client(&DownloadOptions::default()),
@@ -116,6 +119,56 @@ impl Client {
             body.extend_from_slice(&chunk);
         }
         serde_json::from_slice(&body).map_err(|_| Error::InvalidResponse)
+    }
+
+    /// POST with the same transport guards as GET: one attempt, rate-limit
+    /// surfacing, bounded body. No automatic retry behavior.
+    async fn post_json<T: serde::de::DeserializeOwned>(
+        &self,
+        url: Url,
+        body: &serde_json::Value,
+    ) -> Result<T, Error> {
+        let payload = serde_json::to_vec(body).map_err(|_| Error::InvalidRequest)?;
+        let mut response = self
+            .http
+            .post(url)
+            .header(
+                reqwest::header::USER_AGENT,
+                concat!(
+                    "kalibsolomon-pixel/aurora-launcher/",
+                    env!("CARGO_PKG_VERSION")
+                ),
+            )
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(payload)
+            .send()
+            .await
+            .map_err(|_| Error::Network)?;
+        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            let reset_seconds = response
+                .headers()
+                .get("x-ratelimit-reset")
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.parse::<u64>().ok());
+            return Err(Error::RateLimited(reset_seconds));
+        }
+        if !response.status().is_success() {
+            return Err(Error::Network);
+        }
+        if response
+            .content_length()
+            .is_some_and(|size| size > MAX_RESPONSE as u64)
+        {
+            return Err(Error::InvalidResponse);
+        }
+        let mut payload = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(|_| Error::Network)? {
+            if payload.len() + chunk.len() > MAX_RESPONSE {
+                return Err(Error::InvalidResponse);
+            }
+            payload.extend_from_slice(&chunk);
+        }
+        serde_json::from_slice(&payload).map_err(|_| Error::InvalidResponse)
     }
 
     pub async fn search(
@@ -279,6 +332,17 @@ impl Client {
             .and_then(safe_icon_url))
     }
 
+    /// The declared project type and title for recognition previews. The
+    /// project document is the authority for which content type a project
+    /// publishes; version documents do not carry it.
+    pub async fn project_type_and_title(
+        &self,
+        project_id: &str,
+    ) -> Result<(String, String), Error> {
+        let project = self.project(project_id).await?;
+        Ok((project.project_type, project.title))
+    }
+
     pub async fn resolve(
         &self,
         context: &Context,
@@ -426,6 +490,157 @@ impl Client {
             loaders: version.loaders.clone(),
         }))
     }
+
+    /// Single-hash version-file lookup. `algorithm=sha512` is Aurora's
+    /// preferred recognition digest; the returned version must actually
+    /// publish the queried hash or the response is rejected.
+    async fn version_file_by_hash(&self, sha512: &str) -> Result<VersionDto, Error> {
+        let hash = validate_sha512(sha512)?;
+        let mut url = self.endpoint(&["version_file", &hash])?;
+        url.query_pairs_mut().append_pair("algorithm", "sha512");
+        self.get(url).await
+    }
+
+    /// Batched version-file lookup, at most [`MAX_HASH_BATCH`] hashes per
+    /// request. The response is verified hash-by-hash: every returned version
+    /// must publish one of the queried digests among its files.
+    async fn version_files_by_hashes(&self, hashes: &[String]) -> Result<Vec<VersionDto>, Error> {
+        let mut url = self.endpoint(&["version_files"])?;
+        let body = serde_json::json!({
+            "algorithm": "sha512",
+            "hashes": hashes,
+        });
+        url.query_pairs_mut().append_pair("algorithm", "sha512");
+        // The current API answers an object keyed by the queried hash whose
+        // values are versions; an unrecognized key never appears. Each key
+        // must be one of the queried digests or the response is rejected.
+        let mapped: HashMap<String, VersionDto> = self.post_json(url, &body).await?;
+        let mut versions = Vec::with_capacity(mapped.len());
+        for (hash, version) in mapped {
+            if !hashes
+                .iter()
+                .any(|queried| queried.eq_ignore_ascii_case(&hash))
+            {
+                return Err(Error::InvalidResponse);
+            }
+            versions.push(version);
+        }
+        Ok(versions)
+    }
+
+    /// Recognize local content by SHA-512 against the version-file lookup
+    /// APIs. A hash the provider does not know is simply absent from the
+    /// result; a response claiming identity without publishing the queried
+    /// bytes is rejected. The result is normalized adapter data, never raw
+    /// provider JSON.
+    pub async fn lookup_files(&self, hashes: &[String]) -> Result<Vec<RecognizedFile>, Error> {
+        let mut unique: Vec<String> = Vec::new();
+        for hash in hashes {
+            let canonical = validate_sha512(hash)?;
+            if !unique.contains(&canonical) {
+                unique.push(canonical);
+            }
+        }
+        let mut recognized = Vec::new();
+        for chunk in unique.chunks(MAX_HASH_BATCH) {
+            let versions = if chunk.len() == 1 {
+                match self.version_file_by_hash(&chunk[0]).await {
+                    Ok(version) => vec![version],
+                    Err(Error::NotFound) => Vec::new(),
+                    Err(error) => return Err(error),
+                }
+            } else {
+                self.version_files_by_hashes(chunk).await?
+            };
+            for version in versions {
+                recognized.push(verified_recognition(chunk, version)?);
+            }
+        }
+        Ok(recognized)
+    }
+}
+
+/// A provider response that establishes file identity. Every field comes from
+/// the verified response for the exact queried hash.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecognizedFile {
+    pub queried_sha512: String,
+    pub project_id: String,
+    pub version_id: String,
+    pub version_number: String,
+    pub version_name: String,
+    pub version_type: String,
+    pub date_published: String,
+    pub game_versions: Vec<String>,
+    pub loaders: Vec<String>,
+    pub environment: String,
+    pub dependencies: Vec<ProviderDependency>,
+    pub file_name: String,
+    pub file_size: u64,
+}
+
+fn validate_sha512(hash: &str) -> Result<String, Error> {
+    if hash.len() == 128 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        Ok(hash.to_ascii_lowercase())
+    } else {
+        Err(Error::InvalidRequest)
+    }
+}
+
+/// Response verification: identify the returned provider file whose published
+/// SHA-512 equals the queried digest. Algorithm semantics are explicit — the
+/// queried value is compared only against `sha512` fields, never a hash of
+/// another algorithm.
+fn verified_recognition(queried: &[String], version: VersionDto) -> Result<RecognizedFile, Error> {
+    let file = version
+        .files
+        .iter()
+        .find(|file| {
+            queried
+                .iter()
+                .any(|hash| file.hashes.sha512.eq_ignore_ascii_case(hash))
+        })
+        .ok_or(Error::InvalidResponse)?;
+    let queried_sha512 = file.hashes.sha512.to_ascii_lowercase();
+    let mut dependencies = Vec::new();
+    for dependency in &version.dependencies {
+        if dependency.dependency_type == "embedded" {
+            continue;
+        }
+        let Some(project_id) = &dependency.project_id else {
+            continue;
+        };
+        if project_id.is_empty() {
+            continue;
+        }
+        dependencies.push(ProviderDependency {
+            kind: match dependency.dependency_type.as_str() {
+                "required" => DependencyKind::Required,
+                "optional" => DependencyKind::Optional,
+                "incompatible" => DependencyKind::Incompatible,
+                _ => return Err(Error::InvalidResponse),
+            },
+            provider: "modrinth".into(),
+            project_id: project_id.clone(),
+            version_id: dependency.version_id.clone(),
+        });
+    }
+    Ok(RecognizedFile {
+        queried_sha512,
+        project_id: version.project_id,
+        version_id: version.id,
+        version_number: version.version_number,
+        version_name: version.name,
+        version_type: version.version_type,
+        date_published: version.date_published,
+        game_versions: version.game_versions,
+        loaders: version.loaders,
+        environment: version.environment,
+        dependencies,
+        file_name: file.filename.clone(),
+        file_size: file.size,
+    })
 }
 
 fn safe_icon_url(raw: &str) -> Option<String> {
@@ -956,6 +1171,7 @@ impl fmt::Display for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::instance_content::ProviderOrigin;
     use crate::test_support::{TestRequest, TestResponse, TestServer};
     use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
@@ -1239,6 +1455,8 @@ mod tests {
             dependencies: vec![],
             explicitly_retained: true,
             requires: vec![],
+            origin: ProviderOrigin::Direct,
+            installed_at_unix_seconds: None,
         };
         assert_eq!(
             client
@@ -1293,6 +1511,8 @@ mod tests {
             dependencies: vec![],
             explicitly_retained: true,
             requires: vec![],
+            origin: ProviderOrigin::Direct,
+            installed_at_unix_seconds: None,
         };
         let mut routes = HashMap::new();
         routes.insert(
@@ -1686,6 +1906,219 @@ mod tests {
                 )
                 .await,
             Err(Error::DependencyUnresolved)
+        ));
+    }
+
+    // ---- Phase G: recognition hash lookups --------------------------------
+
+    fn lookup_version(id: &str, project_id: &str, sha512: &str) -> Value {
+        json!({
+            "id": id, "project_id": project_id, "name": "Recognized release",
+            "version_number": "1.4.2", "version_type": "release",
+            "date_published": "2026-06-01T00:00:00Z",
+            "game_versions": ["1.21.11"], "loaders": ["fabric"],
+            "environment": "client_and_server",
+            "files": [{
+                "hashes": {"sha512": sha512, "sha1": "f".repeat(40)},
+                "url": "https://cdn.modrinth.com/data/test/file.jar",
+                "filename": format!("{id}.jar"), "primary": true,
+                "size": 4096, "file_type": null
+            }],
+            "dependencies": [
+                {"project_id": "BBBBCCCC", "version_id": null, "dependency_type": "required"},
+                {"project_id": "CCCCDDDD", "version_id": null, "dependency_type": "optional"},
+                {"project_id": "DDDD0000", "version_id": "eeee1111", "dependency_type": "embedded"}
+            ]
+        })
+    }
+
+    fn hash_of(seed: u8) -> String {
+        // A distinct 128-hex-character digest per seed, by construction.
+        use sha2::Digest as _;
+        let digest = sha2::Sha512::digest([seed]);
+        digest.iter().map(|byte| format!("{byte:02x}")).collect()
+    }
+
+    #[tokio::test]
+    async fn single_hash_lookup_verifies_the_published_digest() {
+        let hash = hash_of(1);
+        let expected = hash.clone();
+        let server = TestServer::spawn(Arc::new(move |request: &TestRequest| {
+            assert_eq!(request.method, "GET");
+            let url = Url::parse(&format!("http://localhost{}", request.path)).unwrap();
+            assert!(url.path().ends_with(&expected));
+            assert_eq!(
+                url.query_pairs()
+                    .find(|(key, _)| key == "algorithm")
+                    .unwrap()
+                    .1,
+                "sha512"
+            );
+            TestResponse::ok(
+                &serde_json::to_vec(&lookup_version("11112222", "AAAABBBB", &expected)).unwrap(),
+            )
+        }));
+        let client = Client::for_testing(&server.base_url());
+        let found = client.lookup_files(&[hash.clone()]).await.unwrap();
+        assert_eq!(found.len(), 1);
+        let file = &found[0];
+        assert_eq!(file.queried_sha512, hash_of(1));
+        assert_eq!(file.project_id, "AAAABBBB");
+        assert_eq!(file.version_id, "11112222");
+        assert_eq!(file.version_number, "1.4.2");
+        assert_eq!(file.version_type, "release");
+        assert_eq!(file.version_name, "Recognized release");
+        assert_eq!(file.file_name, "11112222.jar");
+        assert_eq!(file.file_size, 4096);
+        // Normalized dependency declarations: required and optional survive,
+        // embedded dependencies add no download.
+        assert_eq!(file.dependencies.len(), 2);
+        assert_eq!(file.dependencies[0].project_id, "BBBBCCCC");
+        assert_eq!(file.dependencies[0].kind, DependencyKind::Required);
+        assert_eq!(file.dependencies[1].kind, DependencyKind::Optional);
+    }
+
+    #[tokio::test]
+    async fn single_hash_lookup_not_found_is_unrecognized() {
+        let server = TestServer::spawn(Arc::new(|_: &TestRequest| TestResponse::status(404)));
+        let client = Client::for_testing(&server.base_url());
+        let found = client.lookup_files(&[hash_of(2)]).await.unwrap();
+        assert!(found.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_response_without_the_queried_digest_is_rejected() {
+        // The provider answered a different file's identity: the published
+        // SHA-512 (never SHA-1 or another algorithm) must equal the queried
+        // digest, or the response establishes nothing.
+        let server = TestServer::spawn(Arc::new(|_: &TestRequest| {
+            TestResponse::ok(
+                &serde_json::to_vec(&lookup_version("11112222", "AAAABBBB", &hash_of(99))).unwrap(),
+            )
+        }));
+        let client = Client::for_testing(&server.base_url());
+        assert!(matches!(
+            client.lookup_files(&[hash_of(3)]).await,
+            Err(Error::InvalidResponse)
+        ));
+    }
+
+    #[tokio::test]
+    async fn invalid_hash_shapes_are_refused_before_any_request() {
+        let requests = Arc::new(Mutex::new(0usize));
+        let seen = requests.clone();
+        let server = TestServer::spawn(Arc::new(move |_: &TestRequest| {
+            *seen.lock().unwrap() += 1;
+            TestResponse::ok(b"[]")
+        }));
+        let client = Client::for_testing(&server.base_url());
+        assert!(matches!(
+            client.lookup_files(&["z".repeat(128)]).await,
+            Err(Error::InvalidRequest)
+        ));
+        assert_eq!(*requests.lock().unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn batch_lookup_maps_hashes_to_verified_versions_and_splits_at_bound() {
+        let hashes: Vec<String> = (0..65u8).map(hash_of).collect();
+        let bodies = Arc::new(Mutex::new(Vec::<Vec<String>>::new()));
+        let captured = bodies.clone();
+        let server = TestServer::spawn(Arc::new(move |request: &TestRequest| {
+            let url = Url::parse(&format!("http://localhost{}", request.path)).unwrap();
+            let batch: Vec<String> = if request.method == "POST" {
+                assert!(url.path() == "/v2/version_files");
+                let body: Value = serde_json::from_slice(&request.body).unwrap();
+                assert_eq!(body["algorithm"], "sha512");
+                body["hashes"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|value| value.as_str().unwrap().to_owned())
+                    .collect()
+            } else {
+                assert_eq!(request.method, "GET");
+                assert!(url.path().starts_with("/v2/version_file/"));
+                assert_eq!(
+                    url.query_pairs()
+                        .find(|(key, _)| key == "algorithm")
+                        .unwrap()
+                        .1,
+                    "sha512"
+                );
+                vec![url.path().rsplit('/').next().unwrap().to_owned()]
+            };
+            captured.lock().unwrap().push(batch.clone());
+            if request.method == "GET" {
+                // The single-hash endpoint answers one version object.
+                return TestResponse::ok(
+                    &serde_json::to_vec(&lookup_version("00000000", "AAAABBBB", &batch[0]))
+                        .unwrap(),
+                );
+            }
+            let mapped: serde_json::Map<String, Value> = batch
+                .iter()
+                .enumerate()
+                .map(|(index, hash)| {
+                    (
+                        hash.clone(),
+                        lookup_version(&format!("{index:08x}"), "AAAABBBB", hash),
+                    )
+                })
+                .collect();
+            TestResponse::ok(&serde_json::to_vec(&mapped).unwrap())
+        }));
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        let found = client.lookup_files(&hashes).await.unwrap();
+        assert_eq!(found.len(), 65);
+        let batches = bodies.lock().unwrap();
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches[0].len(), MAX_HASH_BATCH);
+        assert_eq!(batches[1].len(), 1);
+        assert!(found.iter().all(|file| file.queried_sha512.len() == 128));
+    }
+
+    #[tokio::test]
+    async fn batch_lookup_rejects_an_unmatched_version() {
+        let hashes = vec![hash_of(10), hash_of(11)];
+        let server = TestServer::spawn(Arc::new(move |request: &TestRequest| {
+            let _body: Value = serde_json::from_slice(&request.body).unwrap();
+            // A response keyed by a digest Aurora never queried is invalid.
+            let mapped = serde_json::json!({
+                hash_of(200): lookup_version("99998888", "EEEEFFFF", &hash_of(200)),
+            });
+            TestResponse::ok(&serde_json::to_vec(&mapped).unwrap())
+        }));
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        // One returned version publishes none of the queried digests; a
+        // response claiming identity without matching bytes is invalid.
+        assert!(matches!(
+            client.lookup_files(&hashes).await,
+            Err(Error::InvalidResponse)
+        ));
+    }
+
+    #[tokio::test]
+    async fn batch_lookup_surfaces_rate_limit_with_reset_delay() {
+        let server = TestServer::spawn(Arc::new(|_: &TestRequest| {
+            TestResponse::status(429).with_header("x-ratelimit-reset", "42")
+        }));
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        assert!(matches!(
+            client.lookup_files(&[hash_of(20), hash_of(21)]).await,
+            Err(Error::RateLimited(Some(42)))
+        ));
+    }
+
+    #[tokio::test]
+    async fn batch_lookup_rejects_malformed_response_bodies() {
+        let server = TestServer::spawn(Arc::new(|_: &TestRequest| {
+            TestResponse::ok(b"not json at all")
+        }));
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        assert!(matches!(
+            client.lookup_files(&[hash_of(30), hash_of(31)]).await,
+            Err(Error::InvalidResponse)
         ));
     }
 }

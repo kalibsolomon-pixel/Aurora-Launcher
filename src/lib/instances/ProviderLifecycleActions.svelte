@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     applyModrinthUpdate, applyProviderRemoval, checkModrinthUpdate,
-    previewModrinthUpdate, previewProviderRemoval,
+    previewModrinthUpdate, previewProviderRemoval, providerOriginLabel,
     type ContentType, type ModrinthVersionChoice, type ProviderLifecycleEntry,
     type ProviderRemovalPreview, type ProviderUpdatePreview,
   } from "$lib/backend";
@@ -88,7 +88,7 @@
   </div>
   <details class="relationships">
     <summary>Dependency details</summary>
-    <p>{record.explicitlyRetained ? "Explicitly retained" : "Installed as a required dependency"} via Modrinth.</p>
+    <p>{record.explicitlyRetained ? "Explicitly retained" : "Installed as a required dependency"} via Modrinth. {providerOriginLabel(record.origin)}.</p>
     <p>Requires: {lifecycle.requires.length ? lifecycle.requires.map((item) => item.fileName).join(", ") : "No provider-managed dependencies"}</p>
     <p>Required by: {requiredBy.length ? requiredBy.map((parent) => parent.fileName).join(", ") : "No installed provider content"}</p>
   </details>

@@ -4,6 +4,7 @@ pub mod aurora;
 pub mod auth;
 pub mod cache;
 pub mod config;
+pub mod content_recognition;
 pub mod cosmetics;
 pub mod discord;
 pub mod distribution;
@@ -101,6 +102,8 @@ pub fn run() {
             application::get_instance_content,
             application::remove_instance_content,
             application::open_instance_content_folder,
+            application::scan_instance_content,
+            application::register_recovered_content,
             application::search_modrinth,
             application::get_modrinth_project,
             application::get_modrinth_project_artwork,

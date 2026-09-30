@@ -19,7 +19,7 @@ use crate::instances::InstanceId;
 use crate::integrity::{ArtifactDigest, verify_file};
 use crate::paths::ManagedPaths;
 
-const SCHEMA_VERSION: u32 = 2;
+const SCHEMA_VERSION: u32 = 3;
 const MAX_ARCHIVE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES: usize = 4_096;
 const MAX_METADATA_BYTES: u64 = 256 * 1024;
@@ -59,6 +59,17 @@ pub enum DependencyKind {
     Incompatible,
 }
 
+/// How a provider record entered management. Historical schema-1/2 records
+/// migrate to the strongest recorded evidence only; provenance is never
+/// invented for content Aurora did not observe being installed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProviderOrigin {
+    Direct,
+    Dependency,
+    Recovered,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProviderDependency {
@@ -95,6 +106,12 @@ pub struct ProviderRecord {
     /// Required edges that were actually satisfied at installation time.
     /// Remote dependency metadata above is descriptive, not ownership.
     pub requires: Vec<ProviderIdentity>,
+    /// How this record entered provider management. Schema-2 migration maps
+    /// `explicitlyRetained` to direct/dependency; schema-1 records are direct.
+    pub origin: ProviderOrigin,
+    /// Receipt timestamp recorded when Aurora registered the record. Absent
+    /// for migrated historical records; never fabricated.
+    pub installed_at_unix_seconds: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -116,7 +133,7 @@ impl ProviderRecord {
 }
 
 impl ProviderRecord {
-    fn validate(&self) -> Result<(), ContentError> {
+    pub(crate) fn validate(&self) -> Result<(), ContentError> {
         validate_file_name(&self.file_name)?;
         if !self
             .file_name
@@ -194,7 +211,7 @@ impl ContentState {
             .and_then(serde_json::Value::as_u64)
             .ok_or_else(|| ContentError::StateMalformed("schemaVersion is required".into()))?;
         let mut value = value;
-        if version == 1 {
+        if version == 1 || version == 2 {
             let entries = value
                 .get_mut("entries")
                 .and_then(serde_json::Value::as_array_mut)
@@ -203,13 +220,39 @@ impl ContentState {
                 let fields = entry.as_object_mut().ok_or_else(|| {
                     ContentError::StateMalformed("provider record is invalid".into())
                 })?;
-                if fields.contains_key("explicitlyRetained") || fields.contains_key("requires") {
+                if version == 1
+                    && (fields.contains_key("explicitlyRetained")
+                        || fields.contains_key("requires"))
+                {
                     return Err(ContentError::StateMalformed(
                         "v1 record contains v2 fields".into(),
                     ));
                 }
-                fields.insert("explicitlyRetained".into(), serde_json::Value::Bool(true));
-                fields.insert("requires".into(), serde_json::json!([]));
+                if fields.contains_key("origin") || fields.contains_key("installedAtUnixSeconds") {
+                    return Err(ContentError::StateMalformed(
+                        "legacy record contains v3 fields".into(),
+                    ));
+                }
+                if version == 1 {
+                    fields.insert("explicitlyRetained".into(), serde_json::Value::Bool(true));
+                    fields.insert("requires".into(), serde_json::json!([]));
+                }
+                // Schema 2 recorded only retention, so migration derives origin
+                // from the strongest evidence Aurora actually observed.
+                let retained = fields
+                    .get("explicitlyRetained")
+                    .and_then(serde_json::Value::as_bool)
+                    .ok_or_else(|| ContentError::StateMalformed("retention is required".into()))?;
+                fields.insert(
+                    "origin".into(),
+                    serde_json::json!(match retained {
+                        true => ProviderOrigin::Direct,
+                        false => ProviderOrigin::Dependency,
+                    }),
+                );
+                // Historical installation times were never recorded; the
+                // timestamp is a receipt, not inferred history.
+                fields.insert("installedAtUnixSeconds".into(), serde_json::Value::Null);
             }
             value["schemaVersion"] = serde_json::json!(SCHEMA_VERSION);
         } else if version != u64::from(SCHEMA_VERSION) {
@@ -320,7 +363,7 @@ impl ContentState {
             .map_err(|error| ContentError::StateMalformed(error.to_string()))?
             .get("schemaVersion")
             .and_then(serde_json::Value::as_u64)
-            == Some(1);
+            .is_some_and(|version| version == 1 || version == 2);
         let state = Self::from_json(&text)?;
         if legacy {
             state.save(managed, instance)?;
@@ -415,6 +458,9 @@ pub fn retain_provider(
         validate_provider_file(managed, instance, record)?;
         if !record.explicitly_retained {
             record.explicitly_retained = true;
+            // The user now chooses this artifact directly; the original
+            // registration receipt stays untouched.
+            record.origin = ProviderOrigin::Direct;
             let updated = record.clone();
             state.save(managed, instance)?;
             Ok(updated)
@@ -428,8 +474,16 @@ fn required_edges(
     record: &ProviderRecord,
     identities: &[ProviderIdentity],
 ) -> Vec<ProviderIdentity> {
-    record
-        .dependencies
+    required_edges_for(&record.dependencies, identities)
+}
+
+/// Required dependency declarations that are actually satisfied by installed
+/// provider identities. Descriptive only; never an ownership statement.
+pub(crate) fn required_edges_for(
+    dependencies: &[ProviderDependency],
+    identities: &[ProviderIdentity],
+) -> Vec<ProviderIdentity> {
+    dependencies
         .iter()
         .filter(|dependency| dependency.kind == DependencyKind::Required)
         .filter_map(|dependency| {
@@ -509,6 +563,12 @@ pub fn updated_state(
     for replacement in &mut replacements {
         replacement.explicitly_retained = replacement.identity() == *root;
         replacement.requires = required_edges(replacement, &identities);
+        replacement.origin = if replacement.identity() == *root {
+            ProviderOrigin::Direct
+        } else {
+            ProviderOrigin::Dependency
+        };
+        replacement.installed_at_unix_seconds = Some(now_unix_seconds());
     }
     let new_identities: HashSet<_> = replacements.iter().map(ProviderRecord::identity).collect();
     next.entries.extend(replacements);
@@ -535,7 +595,7 @@ pub fn update_preview_state(
         root,
         plans
             .iter()
-            .map(|plan| plan.record("0".repeat(64)))
+            .map(|plan| plan.record("0".repeat(64), ProviderOrigin::Direct))
             .collect(),
     )
 }
@@ -1114,7 +1174,7 @@ pub enum ProviderArtifactSource {
 }
 
 impl ProviderInstallPlan {
-    fn record(&self, sha256: String) -> ProviderRecord {
+    fn record(&self, sha256: String, origin: ProviderOrigin) -> ProviderRecord {
         ProviderRecord {
             content_type: self.content_type,
             provider: self.provider.clone(),
@@ -1128,8 +1188,17 @@ impl ProviderInstallPlan {
             dependencies: self.dependencies.clone(),
             explicitly_retained: true,
             requires: Vec::new(),
+            origin,
+            installed_at_unix_seconds: Some(now_unix_seconds()),
         }
     }
+}
+
+pub(crate) fn now_unix_seconds() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or_default()
 }
 
 pub async fn install_provider_artifact(
@@ -1143,7 +1212,7 @@ pub async fn install_provider_artifact(
         ProviderArtifactSource::Sha512(source) => cache.acquire_sha512(source).await,
     }
     .map_err(|error| ContentError::Acquisition(error.to_string()))?;
-    let record = plan.record(artifact.sha256.as_hex());
+    let record = plan.record(artifact.sha256.as_hex(), ProviderOrigin::Direct);
     record.validate()?;
     activate_verified(
         managed,
@@ -1442,7 +1511,7 @@ pub async fn preview_provider_conflicts(
             ProviderArtifactSource::Sha512(source) => cache.acquire_sha512(source).await,
         }
         .map_err(|error| ContentError::Acquisition(error.to_string()))?;
-        let record = plan.record(artifact.sha256.as_hex());
+        let record = plan.record(artifact.sha256.as_hex(), ProviderOrigin::Direct);
         record.validate()?;
         match validate_provider_mod_artifact(
             managed,
@@ -1487,7 +1556,7 @@ async fn acquire_provider_plans(
     }
     for plan in &plans {
         validate_file_name(&plan.file_name)?;
-        let provisional = plan.record("0".repeat(64));
+        let provisional = plan.record("0".repeat(64), ProviderOrigin::Direct);
         provisional.validate()?;
     }
     let cache = Arc::new(ArtifactCache::new(managed.clone()));
@@ -1499,7 +1568,7 @@ async fn acquire_provider_plans(
                 ProviderArtifactSource::Sha512(source) => cache.acquire_sha512(source).await,
             }
             .map_err(|error| ContentError::Acquisition(error.to_string()))?;
-            let record = plan.record(artifact.sha256.as_hex());
+            let record = plan.record(artifact.sha256.as_hex(), ProviderOrigin::Direct);
             record.validate()?;
             Ok::<_, ContentError>((record, artifact.path, artifact.bytes))
         }
@@ -1546,6 +1615,12 @@ fn activate_provider_transaction_with_revision(
             .collect();
         for (record, _, _) in &mut acquired {
             record.explicitly_retained = record.identity() == direct;
+            record.origin = if record.identity() == direct {
+                ProviderOrigin::Direct
+            } else {
+                ProviderOrigin::Dependency
+            };
+            record.installed_at_unix_seconds = Some(now_unix_seconds());
             record.requires = record
                 .dependencies
                 .iter()
@@ -1726,7 +1801,7 @@ pub async fn preview_provider_requirements(
         }
         .map_err(|e| ContentError::Acquisition(e.to_string()))?;
         artifacts.push((
-            plan.record(artifact.sha256.as_hex()),
+            plan.record(artifact.sha256.as_hex(), ProviderOrigin::Direct),
             artifact.path,
             artifact.bytes,
         ));
@@ -1890,6 +1965,11 @@ fn apply_lifecycle_state_reviewed(
                 let mut normalized_acquired = acquired_record.clone();
                 normalized_acquired.explicitly_retained = record.explicitly_retained;
                 normalized_acquired.requires = record.requires.clone();
+                // Origin and the receipt timestamp are lifecycle bookkeeping
+                // assigned by the state planner; the acquired record carries
+                // placeholders until the transaction finalizes them.
+                normalized_acquired.origin = record.origin;
+                normalized_acquired.installed_at_unix_seconds = record.installed_at_unix_seconds;
                 if normalized_acquired != **record {
                     return Err(ContentError::StateMalformed(
                         "acquired artifact changed".into(),
@@ -2142,7 +2222,7 @@ fn validate_provider_mod_artifact(
     Ok(())
 }
 
-fn conflicting_mod_identity<'a>(
+pub(crate) fn conflicting_mod_identity<'a>(
     incoming: &'a crate::instance_mods::FabricModMetadata,
     existing: &crate::instance_mods::FabricModMetadata,
 ) -> Option<&'a str> {
@@ -2274,6 +2354,7 @@ pub enum ContentError {
     Acquisition(String),
     InvalidProviderArtifact,
     RequiredByInstalledContent,
+    InvalidApproval,
 }
 impl ContentError {
     pub fn code(&self) -> &'static str {
@@ -2290,6 +2371,7 @@ impl ContentError {
             Self::Acquisition(_) => "content_acquisition_failed",
             Self::InvalidProviderArtifact => "content_invalid_artifact",
             Self::RequiredByInstalledContent => "content_required_by_installed",
+            Self::InvalidApproval => "content_invalid_approval",
         }
     }
 }
@@ -2328,6 +2410,10 @@ impl fmt::Display for ContentError {
             Self::RequiredByInstalledContent => {
                 formatter.write_str("this content is still required by another installed item")
             }
+            Self::InvalidApproval => write!(
+                formatter,
+                "the recognition approval is invalid; scan again and re-approve"
+            ),
         }
     }
 }
@@ -2601,6 +2687,8 @@ mod tests {
                 }],
                 explicitly_retained: true,
                 requires: vec![],
+                origin: ProviderOrigin::Direct,
+                installed_at_unix_seconds: None,
             }
         }
     }
@@ -2628,6 +2716,8 @@ mod tests {
             dependencies: vec![],
             explicitly_retained: true,
             requires: vec![],
+            origin: ProviderOrigin::Direct,
+            installed_at_unix_seconds: None,
         }
     }
 
@@ -3287,12 +3377,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(std::fs::read(protected_path).unwrap(), required);
-        assert_eq!(
-            ContentState::load(&fixture.managed, &fixture.instance)
-                .unwrap()
-                .entries,
-            [record]
-        );
+        let saved = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        assert_eq!(saved.entries.len(), 1);
+        assert_eq!(saved.entries[0].identity(), record.identity());
+        assert_eq!(saved.entries[0].file_name, record.file_name);
+        assert_eq!(saved.entries[0].sha256, record.sha256);
+        assert_eq!(saved.entries[0].origin, ProviderOrigin::Direct);
+        // Transactions stamp a receipt; the fixture record predates it.
+        assert!(saved.entries[0].installed_at_unix_seconds.is_some());
         let inventory = crate::instance_mods::scan(&fixture.managed, &fixture.instance).unwrap();
         assert_eq!(
             inventory
@@ -4206,6 +4298,11 @@ mod tests {
         for entry in legacy["entries"].as_array_mut().unwrap() {
             entry.as_object_mut().unwrap().remove("explicitlyRetained");
             entry.as_object_mut().unwrap().remove("requires");
+            entry.as_object_mut().unwrap().remove("origin");
+            entry
+                .as_object_mut()
+                .unwrap()
+                .remove("installedAtUnixSeconds");
         }
         let path = state_path(&fixture.managed, &fixture.instance).unwrap();
         std::fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
@@ -4217,9 +4314,19 @@ mod tests {
                 .iter()
                 .all(|record| record.explicitly_retained && record.requires.is_empty())
         );
+        // Schema-1 records had no recorded provenance beyond "launcher
+        // installed this"; migration claims direct origin only and never
+        // fabricates an installation receipt.
+        assert!(
+            migrated
+                .entries
+                .iter()
+                .all(|record| record.origin == ProviderOrigin::Direct
+                    && record.installed_at_unix_seconds.is_none())
+        );
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&std::fs::read(&path).unwrap()).unwrap()["schemaVersion"],
-            2
+            3
         );
         legacy["entries"][0]["provider"] = serde_json::json!(null);
         assert!(matches!(
@@ -4240,6 +4347,126 @@ mod tests {
             ContentState::from_json(r#"{"schemaVersion":99,"entries":[]}"#),
             Err(ContentError::StateVersion(99))
         ));
+    }
+
+    #[test]
+    fn v2_migration_maps_retention_to_origin_without_fabricating_receipts() {
+        let fixture = Fixture::new();
+        let mut state = ContentState::empty();
+        let mut direct = transaction_record(ContentType::Mod, "direct.jar", b"direct");
+        direct.project_id = "direct".into();
+        let mut dependency = transaction_record(ContentType::Mod, "dependency.jar", b"dep");
+        dependency.project_id = "dependency".into();
+        dependency.explicitly_retained = false;
+        state.entries.push(direct);
+        state.entries.push(dependency);
+        let mut legacy = serde_json::to_value(&state).unwrap();
+        legacy["schemaVersion"] = serde_json::json!(2);
+        for entry in legacy["entries"].as_array_mut().unwrap() {
+            entry.as_object_mut().unwrap().remove("origin");
+            entry
+                .as_object_mut()
+                .unwrap()
+                .remove("installedAtUnixSeconds");
+        }
+        let path = state_path(&fixture.managed, &fixture.instance).unwrap();
+        std::fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+        let migrated = ContentState::load_and_migrate(&fixture.managed, &fixture.instance).unwrap();
+        let direct = migrated
+            .entries
+            .iter()
+            .find(|record| record.project_id == "direct")
+            .unwrap();
+        let dependency = migrated
+            .entries
+            .iter()
+            .find(|record| record.project_id == "dependency")
+            .unwrap();
+        assert_eq!(direct.origin, ProviderOrigin::Direct);
+        assert_eq!(dependency.origin, ProviderOrigin::Dependency);
+        // Historical installation times were never recorded.
+        assert!(
+            migrated
+                .entries
+                .iter()
+                .all(|record| record.installed_at_unix_seconds.is_none())
+        );
+        // Provider identities, hashes, and dependency relationships survive.
+        assert_eq!(migrated.entries[0].sha256, state.entries[0].sha256);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&std::fs::read(&path).unwrap()).unwrap()["schemaVersion"],
+            3
+        );
+        // A v2 document that already carries v3 fields is malformed, not a
+        // migration candidate.
+        let mut smuggled = legacy.clone();
+        smuggled["entries"][0]["origin"] = serde_json::json!("recovered");
+        assert!(matches!(
+            ContentState::from_json(&smuggled.to_string()),
+            Err(ContentError::StateMalformed(_))
+        ));
+    }
+
+    #[test]
+    fn v3_round_trip_and_strict_validation() {
+        let mut state = ContentState::empty();
+        let mut record = transaction_record(ContentType::Mod, "recovered.jar", b"recovered");
+        record.origin = ProviderOrigin::Recovered;
+        record.installed_at_unix_seconds = Some(1_700_000_000);
+        state.entries.push(record);
+        let text = serde_json::to_string(&state).unwrap();
+        let parsed = ContentState::from_json(&text).unwrap();
+        assert_eq!(parsed, state);
+        assert_eq!(parsed.entries[0].origin, ProviderOrigin::Recovered);
+        assert_eq!(
+            parsed.entries[0].installed_at_unix_seconds,
+            Some(1_700_000_000)
+        );
+        // deny_unknown_fields keeps unknown future fields from being silently
+        // dropped on load.
+        let mut smuggled = serde_json::to_value(&state).unwrap();
+        smuggled["entries"][0]["pinState"] = serde_json::json!(true);
+        assert!(matches!(
+            ContentState::from_json(&smuggled.to_string()),
+            Err(ContentError::StateMalformed(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn transactions_assign_origin_and_receipt_timestamps() {
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        let root_plan = mod_plan(&server, "AAAABBBB", "root", false);
+        let dependency_plan = mod_plan(&server, "BBBBCCCC", "nested", true);
+        let records = install_provider_plans(
+            &fixture.managed,
+            &fixture.instance,
+            vec![dependency_plan, root_plan],
+        )
+        .await
+        .unwrap();
+        let root = records
+            .iter()
+            .find(|record| record.project_id == "AAAABBBB")
+            .unwrap();
+        let dependency = records
+            .iter()
+            .find(|record| record.project_id == "BBBBCCCC")
+            .unwrap();
+        assert_eq!(root.origin, ProviderOrigin::Direct);
+        assert_eq!(dependency.origin, ProviderOrigin::Dependency);
+        assert!(root.installed_at_unix_seconds.is_some());
+        assert!(dependency.installed_at_unix_seconds.is_some());
+
+        // Promoting an exact dependency to direct retention updates the
+        // origin to the user's direct choice and keeps the first receipt.
+        let promoted =
+            retain_provider(&fixture.managed, &fixture.instance, &dependency.identity()).unwrap();
+        assert_eq!(promoted.origin, ProviderOrigin::Direct);
+        assert_eq!(
+            promoted.installed_at_unix_seconds,
+            dependency.installed_at_unix_seconds
+        );
     }
 
     #[test]

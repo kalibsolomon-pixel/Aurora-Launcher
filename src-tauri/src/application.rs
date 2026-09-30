@@ -2516,6 +2516,56 @@ pub fn open_instance_content_folder(
     })
 }
 
+#[tauri::command]
+pub async fn scan_instance_content(
+    app: AppHandle,
+    request: InstanceContentRequest,
+) -> Result<crate::content_recognition::RecognitionScan, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, _context) = provider_context(&managed, &request.instance_id)?;
+    // The read-only local half (classification, bounded hashing, inventory
+    // revision) runs on a blocking worker; hashing never touches the UI.
+    let local = tauri::async_runtime::spawn_blocking({
+        let managed = managed.clone();
+        let instance = instance.clone();
+        move || crate::content_recognition::scan_local(&managed, &instance, request.content_type)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "content_unavailable",
+            "The recognition scan worker stopped.",
+        )
+    })?
+    .map_err(CommandError::from)?;
+    crate::content_recognition::recognize(
+        &instance,
+        request.content_type,
+        local,
+        &crate::modrinth::Client::official(),
+    )
+    .await
+    .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn register_recovered_content(
+    app: AppHandle,
+    request: crate::content_recognition::RecoveredContentApproval,
+) -> Result<Vec<crate::instance_content::ProviderRecord>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, _context) = provider_context(&managed, &request.instance_id)?;
+    crate::content_recognition::register_recovered_content(
+        &managed,
+        &instance,
+        request.content_type,
+        &request,
+        &crate::modrinth::Client::official(),
+    )
+    .await
+    .map_err(CommandError::from)
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModrinthSearchRequest {

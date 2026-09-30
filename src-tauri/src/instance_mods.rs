@@ -2744,6 +2744,8 @@ mod tests {
             dependencies: vec![],
             explicitly_retained: true,
             requires: vec![],
+            origin: crate::instance_content::ProviderOrigin::Direct,
+            installed_at_unix_seconds: None,
         };
         let mut state = ContentState::empty();
         state.entries.push(record.clone());

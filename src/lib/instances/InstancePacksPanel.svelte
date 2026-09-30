@@ -1,10 +1,11 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { getInstanceContentContext, getProviderLifecycle, type InstanceContentContext, type ContentEntry, type InstanceSummary, type ProviderLifecycleEntry } from "$lib/backend";
+  import { getInstanceContentContext, getProviderLifecycle, providerOriginLabel, type InstanceContentContext, type ContentEntry, type InstanceSummary, type ProviderLifecycleEntry } from "$lib/backend";
   import { launcher } from "$lib/launcher/store.svelte";
   import { formatModSize } from "./mods";
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
+  import ContentRecognition from "./ContentRecognition.svelte";
 
   let { instance, kind }: { instance: InstanceSummary; kind: "resourcePack" | "shaderPack" } = $props();
   let query = $state("");
@@ -103,6 +104,9 @@
   </div>
 
   {#if running}<p class="packs-note">Changes made while Minecraft is running apply on the next launch.</p>{/if}
+  {#if context?.modrinthAvailable}
+    <ContentRecognition {instance} {kind} onChanged={async () => { await refreshInstalled(instance.id, kind); }} />
+  {/if}
   {#if launcher.contentError}<p class="inline-message inline-message-error" role="alert">{launcher.contentError.message} <code>{launcher.contentError.code}</code></p>{/if}
   {#if lifecycleError}<p class="inline-message inline-message-error" role="alert">{lifecycleError}</p>{/if}
   {#if inventory?.missingManaged.length}
@@ -140,7 +144,7 @@
                 <div><dt>File</dt><dd>{entry.fileName}</dd></div>
                 <div><dt>Ownership</dt><dd>{owner(entry)}</dd></div>
                 {#if entry.packFormat !== null}<div><dt>Pack format</dt><dd>{entry.packFormat}</dd></div>{/if}
-                {#if entry.provenance}<div><dt>Provider project</dt><dd>{entry.provenance.projectId}</dd></div><div><dt>Version</dt><dd>{entry.provenance.displayVersion ?? entry.provenance.versionId}</dd></div>{/if}
+                {#if entry.provenance}<div><dt>Provider project</dt><dd>{entry.provenance.projectId}</dd></div><div><dt>Version</dt><dd>{entry.provenance.displayVersion ?? entry.provenance.versionId}</dd></div><div><dt>Origin</dt><dd>{providerOriginLabel(entry.provenance.origin)}</dd></div>{/if}
                 {#if entry.warnings.length}<div><dt>Warnings</dt><dd><ul>{#each entry.warnings as warning}<li>{warning.message}</li>{/each}</ul></dd></div>{/if}
               </dl>
             </details>

@@ -1546,7 +1546,7 @@ mod tests {
     #[tokio::test]
     async fn explicit_restore_keeps_a_verified_compatible_provider_api_replacement() {
         use crate::instance_content::{
-            ContentCompatibility, ContentState, ContentType, ProviderRecord,
+            ContentCompatibility, ContentState, ContentType, ProviderOrigin, ProviderRecord,
         };
         use sha2::Digest as _;
         let world = SyntheticWorld::with_api("restore-provider-api", true);
@@ -1583,6 +1583,8 @@ mod tests {
             dependencies: vec![],
             explicitly_retained: true,
             requires: vec![],
+            origin: ProviderOrigin::Direct,
+            installed_at_unix_seconds: None,
         });
         state.save(&world.managed, record.id()).unwrap();
         let provenance_path = paths.root().join("content-managed.json");
@@ -3865,7 +3867,7 @@ mod tests {
         use super::super::transition::{apply, preview};
         use crate::instance_content::{
             ContentCompatibility, ContentState, ContentType, DependencyKind, ProviderDependency,
-            ProviderRecord,
+            ProviderOrigin, ProviderRecord,
         };
         use sha2::Digest as _;
         use std::io::Write;
@@ -3908,6 +3910,8 @@ mod tests {
             }],
             explicitly_retained: true,
             requires: vec![],
+            origin: ProviderOrigin::Direct,
+            installed_at_unix_seconds: None,
         });
         state.save(&world.managed, record.id()).unwrap();
         for enabled in [false, true] {
