@@ -46,8 +46,8 @@ def light_field(columns, rows, blur):
     return (values - values.mean()) / max(float(values.std()), 1)
 
 # Integer temporal frequencies make values and derivatives meet at the seam.
-terms = [(light_field(9, 6, 65), light_field(9, 6, 65), .42, 1),
-         (light_field(16, 10, 45), light_field(16, 10, 45), .22, 2)]
+terms = [(light_field(9, 6, 65), light_field(9, 6, 65), .72, 1),
+         (light_field(16, 10, 45), light_field(16, 10, 45), .38, 2)]
 
 def frame(t):
     phase = 2 * math.pi * (t % seconds) / seconds
@@ -55,11 +55,10 @@ def frame(t):
     for sine, cosine, amplitude, frequency in terms:
         q = phase * frequency
         gain += amplitude * (sine * (math.cos(q) - 1) + cosine * math.sin(q))
-    # A soft asymmetric response keeps the dimmest curtains luminous (at least
-    # 68% of their original emission) while allowing clear local brightening.
-    # Smooth saturation avoids hard dark troughs and clipped contour edges.
+    # Keep dim curtains at least 68% luminous; favor a stronger brightening
+    # response so the changing light remains visible behind launcher glass.
     response = np.tanh(gain)
-    intensity = 1 + .46 * response + .14 * response * response
+    intensity = 1 + .32 * response + .42 * np.maximum(response, 0) ** 2
     return np.clip(np.rint(fixed + emission * intensity[:, :, None]), 0, 255).astype(np.uint8)
 
 args.output.parent.mkdir(parents=True, exist_ok=True)

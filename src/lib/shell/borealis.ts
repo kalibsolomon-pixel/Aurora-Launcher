@@ -11,7 +11,7 @@ export interface BorealisReview { time?: number; reducedMotion?: boolean; source
 /** Local, muted loop. Hiding/unmounting releases work; accessibility overrides speed. */
 export function mountBorealis(video: HTMLVideoElement, review: BorealisReview = {}): () => void {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  let disposed = false, failed = false, loaded = false;
+  let disposed = false, failed = false, loaded = false, playRejected = false, reportedPlayFailure = false;
   function still() { return reduced.matches || review.reducedMotion === true; }
   function allowed() { return motionAllowed(document.hidden, document.hasFocus(), still()) && review.time === undefined; }
   function sync() {
@@ -27,14 +27,23 @@ export function mountBorealis(video: HTMLVideoElement, review: BorealisReview = 
       video.dataset.motion = 'starting';
       void video.play().then(() => {
         if (disposed || !allowed()) video.pause();
-      }).catch(() => { if (!disposed) video.dataset.motion = 'paused'; });
+      }).catch((error: unknown) => {
+        if (disposed || !allowed()) return;
+        playRejected = true;
+        video.style.opacity = '0';
+        video.dataset.motion = 'fallback';
+        if (!reportedPlayFailure) {
+          reportedPlayFailure = true;
+          console.warn('Borealis playback could not start:', error instanceof DOMException ? error.name : 'unknown');
+        }
+      });
     } else { video.pause(); video.dataset.motion = 'paused'; }
   }
   function metadata() {
     if (review.time !== undefined && !still()) video.currentTime = Math.max(0, Math.min(review.time, Math.max(0, video.duration - .05)));
   }
-  function frame() { if (!still() && !failed) video.style.opacity = '1'; }
-  function playing() { if (allowed()) { video.dataset.motion = 'running'; frame(); } else video.pause(); }
+  function frame() { if (!still() && !failed && !playRejected) video.style.opacity = '1'; }
+  function playing() { if (allowed()) { playRejected = false; video.dataset.motion = 'running'; frame(); } else video.pause(); }
   function pause() { if (!still()) video.dataset.motion = 'paused'; }
   function fail() { failed = true; video.pause(); video.style.opacity = '0'; video.dataset.motion = 'fallback'; }
   video.addEventListener('loadedmetadata', metadata);

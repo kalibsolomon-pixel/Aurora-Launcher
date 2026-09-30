@@ -24,6 +24,7 @@ it('video pauses on hidden/blur/reduced motion, preserves rate and releases deco
     assert.equal(plays,0); assert.equal(loads,0); assert.equal(video.dataset.motion,'reduced');
     media.matches=false; media.dispatchEvent(new Event('change')); await Promise.resolve();
     assert.equal(plays,1); assert.equal(loads,1);
+    assert.equal(video.src,'/backgrounds/borealis-loop.mp4');
     video.dispatchEvent(new Event('playing')); assert.equal(video.dataset.motion,'running');
     doc.hidden=true; doc.dispatchEvent(new Event('visibilitychange')); assert.equal(video.dataset.motion,'paused');
     const paused=pauses; doc.hidden=false; doc.dispatchEvent(new Event('visibilitychange'));
@@ -37,6 +38,35 @@ it('video pauses on hidden/blur/reduced motion, preserves rate and releases deco
     dispose(); assert.equal(video.src,''); assert.equal(loads,2);
     win.dispatchEvent(new Event('focus')); assert.equal(plays,final);
   } finally {
+    for(const name of names){ const descriptor=originals.get(name); if(descriptor) Object.defineProperty(globalThis,name,descriptor); else delete (globalThis as any)[name]; }
+  }
+});
+
+it('rejected autoplay shows the still, reports a redacted reason once, and can retry', async () => {
+  const names = ['document','window','matchMedia'] as const;
+  const originals = new Map(names.map(name=>[name,Object.getOwnPropertyDescriptor(globalThis,name)]));
+  const originalWarn = console.warn;
+  const warnings: unknown[][] = [];
+  let attempts = 0;
+  const doc = Object.assign(new EventTarget(),{hidden:false,hasFocus:()=>true});
+  const win = new EventTarget(), media = Object.assign(new EventTarget(),{matches:false});
+  const video = Object.assign(new EventTarget(),{dataset:{} as Record<string,string>,style:{opacity:''},src:'',
+    play:()=>++attempts === 1 ? Promise.reject(new DOMException('private response detail','NotAllowedError')) : Promise.resolve(),
+    pause:()=>{},load:()=>{},removeAttribute:()=>{video.src='';}});
+  try {
+    Object.assign(globalThis,{document:doc,window:win,matchMedia:()=>media});
+    console.warn = (...args: unknown[]) => { warnings.push(args); };
+    const dispose = mountBorealis(video as unknown as HTMLVideoElement);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(video.dataset.motion,'fallback'); assert.equal(video.style.opacity,'0');
+    video.dispatchEvent(new Event('loadeddata')); assert.equal(video.style.opacity,'0');
+    assert.equal(warnings.length,1); assert.deepEqual(warnings[0],['Borealis playback could not start:','NotAllowedError']);
+    win.dispatchEvent(new Event('focus')); video.dispatchEvent(new Event('playing'));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(attempts,2); assert.equal(video.dataset.motion,'running'); assert.equal(video.style.opacity,'1');
+    dispose();
+  } finally {
+    console.warn = originalWarn;
     for(const name of names){ const descriptor=originals.get(name); if(descriptor) Object.defineProperty(globalThis,name,descriptor); else delete (globalThis as any)[name]; }
   }
 });
