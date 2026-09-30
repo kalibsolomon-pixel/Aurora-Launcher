@@ -25,8 +25,9 @@
 </dialog>
 
 <style>
-  dialog { box-sizing: border-box; width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-background); color: var(--color-text); overflow: auto; }
-  dialog::backdrop { background: rgb(0 0 0 / 65%); }
+  dialog { box-sizing: border-box; width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: var(--space-5); border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-dialog-panel); color: var(--color-text); box-shadow: var(--f-shadow); backdrop-filter: var(--f-blur); overflow: auto; }
+  dialog::backdrop { background: var(--f-dialog-dim); }
+  dialog :global(.group) { background: var(--f-dialog-group); border-color: var(--f-edge); box-shadow: none; }
   .dialog-close { display: block; margin-left: auto; margin-bottom: var(--space-3); }
   @media (max-width: 760px) { dialog { padding: var(--space-3); } }
 </style>
