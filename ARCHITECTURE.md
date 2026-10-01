@@ -1,6 +1,24 @@
 # Aurora Launcher architecture
 
-## Phase H final owner-review correction (current)
+## Phase H content controls correction (current)
+
+Resource Packs and Shader Packs now expose real management through a backend-owned capability statement, and the Home player arrows rotate the displayed player in the direction they communicate. See [PHASE_H_CONTENT_CONTROLS.md](PHASE_H_CONTENT_CONTROLS.md) for the acceptance record and native evidence.
+
+**Capability model.** Each pack inventory entry carries `management` (`ContentManagement`): `canRemove` with a `removalPath` (`localFile` for unmanaged ZIPs, `providerGraph` for verified managed ZIPs, `blocked` with a real reason for folders/links/hash-mismatched records), plus `canToggle`, `active`, `activationManagedInGame` and `toggleBlockedReason`. Svelte renders this object; it never infers legality from content types or provider strings. Previously `canRemove` was `zip && UserManaged`, which made every managed or adopted pack render a bare "Unavailable".
+
+**Resource pack activation.** The new `pack_activation` module narrowly owns the `resourcePacks:` line of the instance game directory's `options.txt`. Minecraft 1.21.11 writes it as a bracketed list of quoted entries; Aurora parses both the modern quoted and legacy unquoted forms into values, matches by value, and writes the modern quoted form with `\"`/`\\` escaping. Only that one line is spliced — byte-exactly, preserving every other line and line ending — and written atomically under the instance content lock. Enabling inserts `file/<name>` at the top (in-game behavior) preserving unrelated order; disabling removes all references; a write collapses duplicate values to each value's first position, the same normalization Minecraft performs. Malformed documents fail safely (`options_malformed`): scans report unknown activation, mutations are refused and the document is never rewritten. There are no watchers or timers; reads happen on demand inside user-triggered scans and mutations.
+
+**Coherent removal and updates.** Removing an enabled local pack retires its enabled reference in the same locked operation, restoring the file if the options write fails. Provider transactions (remove, update, bulk update) reconcile options.txt inside the existing staged/verified/rollback lifecycle: a removed managed pack loses its reference, a rename-migrating update moves it, and any failure restores files, managed state and the original options.txt bytes together.
+
+**Shader packs.** Remove uses the same paths as resource packs (provider graph for managed/adopted, entry-level for local ZIPs; unrelated files preserved). Active-state control is deliberately not faked: shader loaders are user-installed and own their activation configuration, so rows report the truthful `Activation managed in-game` with `active: null`, `set_instance_pack_enabled` refuses shaders with that reason, and no loader is installed automatically.
+
+**Adopted content.** Recovered (Phase G) packs receive the same capabilities as direct managed content — provider identity, artwork, update participation through the ordinary multi-root transaction, toggling and removal — while keeping `origin: recovered`; provenance is never rewritten to unlock controls.
+
+**Installed-content UI.** Pack rows follow the Mods visual language (artwork, name, concise source/version state, activation status, toggle, trash, Details chevron), with verbose information in expanded details. "Unavailable" is gone from these surfaces: blocked operations are disabled controls carrying their real reason.
+
+**Player arrow direction.** The renderer's front face projects to screen x as `−sin(yaw)·z`, so positive yaw turns the displayed player toward screen left; the Home arrow handlers were inverted and now bind through `arrowYawDelta` (left increases yaw, right decreases). The canonical −0.42 angle and 0.35 increment are unchanged, the surface stays passive (no drag/pointer handlers), and tests assert the *visual* direction by measuring the rendered front-face centroid.
+
+## Phase H final owner-review correction
 
 Three owner-reported defects and one interaction correction were fixed after the corrective pass. The transactional core, browsing, updates and appearance behavior above are unchanged.
 
