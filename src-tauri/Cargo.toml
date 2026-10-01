@@ -80,11 +80,15 @@ png = "0.17"
 # IPersistFile), COM initialization, known-folder resolution, and the
 # WIN32_FIND_DATAW the shell link reader requires. Already resolved in the
 # dependency tree via Tauri's WebView2 bindings, so no new code is added.
+# Server-enrichment SRV resolution (Phase H.1) adds the system DNS resolver
+# query API to the same pinned bindings family: one DnsQuery_W call family,
+# no new dependency.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security_Credentials",
     "Win32_Networking_WinSock",
+    "Win32_NetworkManagement_Dns",
 ] }
 windows = { version = "0.61", default-features = false, features = [
     "Win32_Foundation",

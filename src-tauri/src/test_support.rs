@@ -284,3 +284,62 @@ fn write_response(
     }
     stream.flush()
 }
+
+type RawHandler = dyn Fn(std::net::TcpStream) + Send + Sync + 'static;
+
+/// A loopback raw-TCP server on an ephemeral port, for deterministic tests of
+/// non-HTTP wire protocols (the Minecraft server-status ping). Each accepted
+/// connection is handed to the scripted handler on its own thread. The
+/// listener lives in the accept thread; [`RawTcpServer::stop`] wakes and joins
+/// that thread so the port genuinely refuses further connections (a plain
+/// drop cannot, because the accept thread owns a live handle).
+pub struct RawTcpServer {
+    port: u16,
+    stopped: Arc<std::sync::atomic::AtomicBool>,
+    join: std::sync::Mutex<Option<thread::JoinHandle<()>>>,
+}
+
+impl RawTcpServer {
+    pub fn spawn(handler: Arc<RawHandler>) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("loopback bind must succeed");
+        let port = listener.local_addr().unwrap().port();
+        let stopped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = Arc::clone(&stopped);
+        let join = thread::spawn(move || {
+            for stream in listener.incoming() {
+                if flag.load(std::sync::atomic::Ordering::SeqCst) {
+                    break;
+                }
+                let Ok(stream) = stream else {
+                    break;
+                };
+                let handler = Arc::clone(&handler);
+                thread::spawn(move || handler(stream));
+            }
+        });
+        Self {
+            port,
+            stopped,
+            join: std::sync::Mutex::new(Some(join)),
+        }
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    /// Closes the listener and waits for the accept thread to exit, so later
+    /// connections to this port are refused deterministically.
+    pub fn stop(&self) {
+        self.stopped
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        // Wake the blocking accept loop; it observes the flag, exits and
+        // drops the listener.
+        let _ = std::net::TcpStream::connect(("127.0.0.1", self.port));
+        if let Ok(mut guard) = self.join.lock() {
+            if let Some(handle) = guard.take() {
+                let _ = handle.join();
+            }
+        }
+    }
+}

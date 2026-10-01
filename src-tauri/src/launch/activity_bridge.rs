@@ -381,11 +381,26 @@ fn validate_text(text: Option<String>, limit: usize) -> Result<Option<String>, (
 }
 /// C0/C1, Unicode FORMAT and line separators, matching client sanitization.
 pub fn sanitize(text: &str) -> String {
-    text.chars().filter(|c| !c.is_control() && !matches!(*c as u32,
-        0x00ad | 0x0600..=0x0605 | 0x061c | 0x06dd | 0x070f | 0x0890..=0x0891 | 0x08e2 | 0x180e |
-        0x200b..=0x200f | 0x2028..=0x202e | 0x2060..=0x2064 | 0x2066..=0x206f | 0xfeff | 0xfff9..=0xfffb |
-        0x110bd | 0x110cd | 0x13430..=0x1343f | 0x1bca0..=0x1bca3 | 0x1d173..=0x1d17a | 0xe0001 | 0xe0020..=0xe007f
-    )).take(255).collect::<String>().trim().to_owned()
+    text.chars()
+        .filter(|c| is_presentable_char(*c))
+        .take(255)
+        .collect::<String>()
+        .trim()
+        .to_owned()
+}
+/// The per-character predicate behind [`sanitize`]: control characters,
+/// bidi/format characters and line separators are not presentable text.
+/// Shared with server-enrichment MOTD conversion so both untrusted-text
+/// paths apply one vocabulary.
+pub fn is_presentable_char(c: char) -> bool {
+    !c.is_control()
+        && !matches!(
+            c as u32,
+            0x00ad | 0x0600..=0x0605 | 0x061c | 0x06dd | 0x070f | 0x0890..=0x0891 | 0x08e2 |
+            0x180e | 0x200b..=0x200f | 0x2028..=0x202e | 0x2060..=0x2064 | 0x2066..=0x206f |
+            0xfeff | 0xfff9..=0xfffb | 0x110bd | 0x110cd | 0x13430..=0x1343f | 0x1bca0..=0x1bca3 |
+            0x1d173..=0x1d17a | 0xe0001 | 0xe0020..=0xe007f
+        )
 }
 async fn frame(stream: &mut TcpStream, limit: usize, idle_allowed: bool) -> Result<Vec<u8>, ()> {
     let mut first = [0];
