@@ -6,7 +6,7 @@
 
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { appendBrowsePage, TransientNotice } from "./modrinthBrowse";
+  import { appendBrowsePage, formatCategoryLabel, TransientNotice } from "./modrinthBrowse";
   import {
     BROWSE_KINDS, BROWSE_SORTS, browseKindLabel, browseKindNoun, browseModrinth, browseModrinthTags,
     browseSortLabel, getModrinthProjectBrowse, installModrinth, previewModrinthInstall, quickInstallModrinth,
@@ -49,6 +49,7 @@
   let failedIcons = $state<Record<string, true>>({});
   let blockedProjects = $state<Record<string, { message: string; conflict: ProviderConflict | null }>>({});
   let categoryPickerOpen = $state(false);
+  let categoryTrigger: HTMLButtonElement | undefined = $state();
   let allCategories = $state<ProviderCategory[]>([]);
   let categoriesError = $state("");
   let requestSerial = 0;
@@ -127,7 +128,18 @@
 
   function toggleCategory(name: string): void {
     categories = categories.includes(name) ? categories.filter((item) => item !== name) : [...categories, name];
-    void search(0, "");
+    // Applying or clearing a facet keeps the typed search term and the chosen
+    // sort; only the category set changes.
+    void search();
+  }
+
+  function closeCategoryPicker(): void {
+    categoryPickerOpen = false;
+    categoryTrigger?.focus();
+  }
+
+  function onWindowKeydown(event: KeyboardEvent): void {
+    if (categoryPickerOpen && event.key === "Escape") closeCategoryPicker();
   }
 
   function clearFilters(): void {
@@ -259,6 +271,8 @@
   const installCount = $derived(previewItems.filter((item) => !item.alreadyInstalled).length);
 </script>
 
+<svelte:window onkeydown={onWindowKeydown} />
+
 <section class="browse" aria-label="Browse Modrinth">
   <div class="browse-heading">
     <div>
@@ -283,8 +297,15 @@
   </form>
 
   <div class="browse-filters">
-    <div class="category-filter" aria-haspopup="true">
-      <button type="button" class="btn btn-quiet" aria-expanded={categoryPickerOpen} onclick={() => { categoryPickerOpen = !categoryPickerOpen; if (categoryPickerOpen) void loadCategories(); }}>
+    <div class="category-filter">
+      <button
+        type="button"
+        class="btn btn-quiet"
+        bind:this={categoryTrigger}
+        aria-haspopup="true"
+        aria-expanded={categoryPickerOpen}
+        onclick={() => { categoryPickerOpen = !categoryPickerOpen; if (categoryPickerOpen) void loadCategories(); }}
+      >
         Categories{categories.length ? ` (${categories.length})` : ""} ▾
       </button>
       {#if categoryPickerOpen}
@@ -295,8 +316,12 @@
             <div class="category-list">
               {#each availableCategories as category (category)}
                 <label class="category-option">
-                  <input type="checkbox" checked={categories.includes(category)} onchange={() => toggleCategory(category)} />
-                  <span>{category}</span>
+                  <input
+                    type="checkbox"
+                    checked={categories.includes(category)}
+                    onchange={() => toggleCategory(category)}
+                  />
+                  <span>{formatCategoryLabel(category)}</span>
                 </label>
               {/each}
             </div>
@@ -323,7 +348,7 @@
   {#if categories.length}
     <div class="selected-categories" role="group" aria-label="Selected categories">
       {#each categories as category (category)}
-        <button type="button" class="category-chip" aria-label={`Remove ${category} filter`} onclick={() => toggleCategory(category)}>{category} ×</button>
+        <button type="button" class="category-chip" aria-label={`Remove ${formatCategoryLabel(category)} filter`} onclick={() => toggleCategory(category)}>{formatCategoryLabel(category)} ×</button>
       {/each}
     </div>
   {/if}
@@ -377,7 +402,7 @@
               <h4>{hit.title}</h4>
               <p>{hit.summary}</p>
               <span class="browse-meta">By {hit.author} · {hit.downloads.toLocaleString()} downloads</span>
-              {#if hit.categories.length}<span class="browse-meta"> · {hit.categories.slice(0, 3).join(" · ")}</span>{/if}
+              {#if hit.categories.length}<span class="browse-meta"> · {hit.categories.slice(0, 3).map((category) => formatCategoryLabel(category)).join(" · ")}</span>{/if}
             </div>
             <div class="browse-actions">
               {#if installable}
@@ -438,14 +463,25 @@
   .browse-kind-tabs [aria-pressed="true"] { color: var(--color-text); background: var(--color-surface-raised); }
   .browse-search { align-items: end; margin-bottom: var(--space-3); }
   .browse-search label, .version-choice { display: grid; gap: var(--space-1); flex: 1; }
-  .browse input, .browse select { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; }
+  /* Text-field styling is scoped to the search input specifically: a bare
+     `.browse input` selector also matched the category checkboxes and blew
+     each one up into a full-width padded box, tearing the picker apart. */
+  .browse input[type="search"], .browse select { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; }
   .browse-filters { flex-wrap: wrap; margin-bottom: var(--space-2); }
   .sort-control { display: grid; gap: var(--space-1); width: 168px; }
   .filter-context { margin-left: auto; white-space: nowrap; }
   .category-filter { position: relative; }
-  .category-popover { position: absolute; z-index: 3; top: calc(100% + var(--space-1)); left: 0; width: min(340px, calc(100vw - 48px)); max-height: 280px; overflow: auto; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); box-shadow: var(--shadow-group); }
-  .category-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1) var(--space-3); }
-  .category-option { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-metadata); color: var(--color-text-secondary); cursor: pointer; }
+  /* Vertical scrolling only: rows wrap internally, so no horizontal
+     scrollbar can appear in normal use. */
+  .category-popover { position: absolute; z-index: 3; top: calc(100% + var(--space-2)); left: 0; width: 300px; max-width: calc(100vw - 48px); max-height: 320px; overflow-y: auto; overflow-x: hidden; padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-surface-raised); box-shadow: var(--shadow-group); }
+  .category-list { display: flex; flex-direction: column; gap: 2px; }
+  /* One coherent row per category: the checkbox owns a fixed footprint and
+     the label takes the remaining width, so a pair can never be split. */
+  .category-option { display: flex; align-items: center; gap: var(--space-3); min-height: 34px; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); font-size: var(--text-body); color: var(--color-text-secondary); cursor: pointer; }
+  .category-option:hover { background: var(--color-surface-hover); color: var(--color-text); }
+  .category-option:has(input:checked) { background: var(--color-accent-soft); color: var(--color-accent); }
+  .category-option input[type="checkbox"] { width: 18px; height: 18px; flex: none; margin: 0; }
+  .category-option span { flex: 1; min-width: 0; line-height: 1.3; overflow-wrap: anywhere; }
   .selected-categories { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); }
   .category-chip { padding: 2px var(--space-2); border: none; border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent); font-size: var(--text-metadata); cursor: pointer; }
   .browse-status { display: flex; align-items: center; gap: var(--space-2); }

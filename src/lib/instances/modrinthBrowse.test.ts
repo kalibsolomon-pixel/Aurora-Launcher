@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ModrinthSearchPage } from "../backend";
-import { appendBrowsePage, DefaultBrowseCache, TransientNotice } from "./modrinthBrowse.ts";
+import { appendBrowsePage, DefaultBrowseCache, formatCategoryLabel, TransientNotice } from "./modrinthBrowse.ts";
 
 function page(offset: number, id: string): ModrinthSearchPage {
   return {
@@ -36,6 +36,18 @@ describe("Modrinth browse state", () => {
     const first = page(0, "old");
     assert.deepEqual(appendBrowsePage(first, page(0, "new"), 0).hits.map((hit) => hit.projectId), ["new"]);
     assert.deepEqual(appendBrowsePage(first, page(20, "next"), 20).hits.map((hit) => hit.projectId), ["old", "next"]);
+  });
+
+  it("formats provider category slugs into readable labels without changing values", () => {
+    assert.equal(formatCategoryLabel("adventure"), "Adventure");
+    assert.equal(formatCategoryLabel("game-mechanics"), "Game Mechanics");
+    assert.equal(formatCategoryLabel("colored-lighting"), "Colored Lighting");
+    assert.equal(formatCategoryLabel("path-tracing"), "Path Tracing");
+    assert.equal(formatCategoryLabel("vanilla-like"), "Vanilla-like");
+    assert.equal(formatCategoryLabel("semi-realistic"), "Semi-Realistic");
+    assert.equal(formatCategoryLabel("colored-lighting_master"), "Colored Lighting Master");
+    assert.equal(formatCategoryLabel("Already Words"), "Already Words");
+    assert.equal(formatCategoryLabel("  "), "  ");
   });
 
   it("fades at 2.7 seconds, removes at 3 seconds, and cancels stale timers", () => {

@@ -33,11 +33,24 @@
   if (phaseH) lifecycleFixtures[3].requiredBy = [lifecycleFixtures[0].record];
   const account = { accountId, minecraftName: 'AuroraPlayer', status: 'signedIn' };
   const instance = { id, displayName: 'Aurora Client', state: 'ready', minecraftVersion: '1.21.11', platform: { kind: 'fabric', version: '0.19.5' }, aurora: { version: '2.1.5', channel: 'stable' }, auroraContentState: 'active', configuration: { minecraftVersion: '1.21.11', loader: { kind: 'fabric', policy: { type: 'pinned', version: '0.19.5' } }, auroraEnabled: true, memoryMib: 2048, additionalJvmArguments: '', window: null } };
+  // Hierarchy-review fixtures: ?instances=N seeds 0..4 instances so the
+  // Instances page can be reviewed empty, single and multi-instance.
+  const instanceRoster = [
+    instance,
+    { ...instance, id: 'b'.repeat(32), displayName: 'Vanilla', platform: { kind: 'vanilla' }, aurora: null, configuration: { ...instance.configuration, loader: { kind: 'vanilla' }, auroraEnabled: false } },
+    { ...instance, id: 'e'.repeat(32), displayName: 'Creative Sandbox', configuration: { ...instance.configuration, loader: { kind: 'fabric', policy: { type: 'automatic' } } } },
+    { ...instance, id: 'f'.repeat(32), displayName: 'Snapshot Trials', platform: { kind: 'vanilla' }, aurora: null, configuration: { ...instance.configuration, minecraftVersion: '1.21.11', loader: { kind: 'vanilla' }, auroraEnabled: false } },
+  ];
+  const instanceCount = Math.max(0, Math.min(instanceRoster.length, Number(review.get('instances') ?? 2) || 0));
+  const seededInstances = instanceRoster.slice(0, instanceCount);
   const fixtureLayout = { widgets: [{id:'recent-worlds',enabled:true,size:'small'}, {id:'playtime',enabled:true,size:'small'}, {id:'content-summary',enabled:false,size:'small'}, {id:'instance-details',enabled:false,size:'small'}] };
   setContext('borealis-review', { ...(review.has('time') ? {time: Math.max(0, Number(review.get('time')) || 0)} : {}), reducedMotion: review.has('reduced') });
   const restored = sessionStorage.getItem('phase-f-review');
   const saved = restored ? JSON.parse(restored) : null;
-  launcher.launcherState = { config: { schemaVersion: 6, selectedInstanceId: id }, instances: [instance, {...instance, id:'b'.repeat(32), displayName:'Vanilla', platform:{kind:'vanilla'}, aurora:null, configuration:{...instance.configuration, loader:{kind:'vanilla'}, auroraEnabled:false}}], platformCapabilities: [] } as any;
+  launcher.launcherState = { config: { schemaVersion: 6, selectedInstanceId: instanceCount > 0 ? id : null }, instances: seededInstances, platformCapabilities: [
+    { kind: 'vanilla', canCreate: true, canInstall: true, canValidate: true, canLaunch: true, auroraSupported: false },
+    { kind: 'fabric', canCreate: true, canInstall: true, canValidate: true, canLaunch: true, auroraSupported: true },
+  ] } as any;
   launcher.accountsState = { selectedAccountId: accountId, accounts: [account, {...account, accountId:'d'.repeat(32), minecraftName:'SecondPlayer'}] } as any;
   launcher.status = { launcherVersion: '1.2.0' } as any;
   launcher.playReadiness = { instanceId: id, accountId, ready: true, blockers: [], processStatus:'stopped' } as any;
@@ -49,7 +62,7 @@
   const managedResourceRecord = provenance('RESR0001', 'resr0002', 'Faithful 32x 1.21', 'direct');
   managedResourceRecord.contentType = 'resourcePack'; managedResourceRecord.fileName = 'Faithful 32x.zip';
   launcher.contentInventories = Object.fromEntries(['resourcePack','shaderPack'].map(kind=>[`${id}:${kind}`,{instanceId:id,contentType:kind,missingManaged:[],entries:(kind==='resourcePack'?[['Faithful 32x', managedResourceRecord],['Fresh Animations', null]]:[['Complementary Reimagined', managedPackRecord]]).map(([name, prov],i)=>({entryId:kind+i,contentType:kind,displayName:name,fileName:(prov ? prov.fileName : name+'.zip'),fileType:'zip',sizeBytes:4200000,modifiedUnixMillis:null,ownership:prov?'providerManaged':'userManaged',sha256:null,provenance:prov,description:'Visual review fixture',packFormat:46,warnings:[],canRemove:true}))}])) as any;
-  if (review.has('skin')) launcher.accountAvatars[id] = { rgba: Array(256).fill(200), model: 'classic', skinHeight: 64, skinRgba: Array(64*64*4).fill(180) } as any;
+  if (review.has('skin')) launcher.accountAvatars[accountId] = { rgba: Array(256).fill(200), model: 'classic', skinHeight: 64, skinRgba: Array(64*64*4).fill(180) } as any;
   launcher.minecraftVersions = [{id:'1.21.11',versionType:'release'}];
   launcher.createMinecraftVersion = '1.21.11';
 
@@ -112,11 +125,19 @@
       return { projectId: args.request.projectId, title: 'Fabulously Optimized', summary: 'A curated modpack fixture.', license: 'MIT', gameVersions: ['1.21.11'], loaders: ['fabric'], environments: ['client'], versions: versionLists[kind] ?? versionLists.mod, defaultVersionId: (versionLists[kind] ?? versionLists.mod)[0]?.id ?? null, projectType: kind };
     }
     if (command === 'browse_modrinth_tags') {
+      // Provider-shaped fixture data: real Modrinth tags arrive as lowercase
+      // slug names attributed to a project type, including multi-word and
+      // hyphen-compound entries that exercise the picker's presentation.
+      const tagSet = (names: string[], projectType: string) => names.map((name) => ({ name, projectType }));
       return [
-        { name:'performance', projectType:'mod' }, { name:'utility', projectType:'mod' }, { name:'adventure', projectType:'modpack' },
-        { name:'technology', projectType:'mod' }, { name:'optimization', projectType:'modpack' }, { name:'32x', projectType:'resourcepack' },
-        { name:'fantasy', projectType:'shader' }, { name:'cartoon', projectType:'shader' },
+        ...tagSet(['adventure','cursed','decoration','economy','equipment','food','game-mechanics','library','magic','management','minigame','mobs','optimization','social','storage','technology','transportation','utility','worldgen'], 'mod'),
+        ...tagSet(['adventure','challenging','combat','exploration','hardcore','kitchen-sink','magic','multiplayer','progression','questing','technology','vanilla-like'], 'modpack'),
+        ...tagSet(['8x','16x','32x','64x','128x','256x','512x','animated','core-shaders','decoration','font','game-mechanics','gui','hardcore','medieval','modern','movie','realistic','semi-realistic','vanilla-like'], 'resourcepack'),
+        ...tagSet(['atmosphere','cartoon','colored-lighting','foliage','path-tracing','pixelated','potato','realistic','reflection','semi-realistic','vanilla-like'], 'shader'),
       ];
+    }
+    if (command === 'get_aurora_compatibility') {
+      return { available: true, reason: 'Aurora 2.1.5 supports Minecraft 1.21.11 with Fabric Loader 0.19.5.', version: '2.1.5', loaderVersion: '0.19.5' };
     }
     if (command === 'check_instance_updates') {
       if (!phaseH) throw {code:'visual_review_only',message:'Add ?updates=1 for update fixtures.'};

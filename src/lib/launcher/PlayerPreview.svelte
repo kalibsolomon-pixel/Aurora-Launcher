@@ -41,21 +41,34 @@
       <canvas bind:this={canvas} width={PLAYER_RENDER_WIDTH} height={PLAYER_RENDER_HEIGHT} aria-hidden="true" class:revealed></canvas>
     {/if}
   </div>
-  <div class="player-controls" role="group" aria-label="Player view">
-    <button class="f-icon-button" aria-label="Rotate player left" title="Rotate left" disabled={!hasSkin} onclick={() => yaw -= .35}><Icon name="left" size={14} /></button>
-    <button class="reset-view" disabled={!hasSkin} onclick={() => yaw = -.42} title="Reset player view">Reset view</button>
-    <button class="f-icon-button" aria-label="Rotate player right" title="Rotate right" disabled={!hasSkin} onclick={() => yaw += .35}><Icon name="right" size={14} /></button>
-  </div>
+  {#if hasSkin}
+    <!-- In normal flow beneath the model with its own reserved space, so the
+         only manual view controls never depend on leftover room or overlays. -->
+    <div class="player-controls" role="group" aria-label="Player view">
+      <button class="f-icon-button" aria-label="Rotate player left" title="Rotate left" onclick={() => yaw -= .35}><Icon name="left" size={18} /></button>
+      <button class="reset-view" aria-label="Reset player view" title="Reset player view" onclick={() => yaw = -.42}>Reset view</button>
+      <button class="f-icon-button" aria-label="Rotate player right" title="Rotate right" onclick={() => yaw += .35}><Icon name="right" size={18} /></button>
+    </div>
+  {/if}
 </div>
 <style>
-  .player-preview { display: grid; justify-items: center; min-width: 0; position: relative; }
-  .player-model { width: 100%; aspect-ratio: 560 / 800; max-height: min(66vh, 640px); display: grid; place-items: center; }
-  canvas { display: block; width: min(100%, 480px); max-height: 100%; height: auto; opacity: 0; filter: drop-shadow(0 18px 24px rgb(0 0 0 / 28%)); transition: opacity 420ms ease-out; }
+  .player-preview { --player-max-h: min(66vh, 640px, max(280px, calc(100dvh - 300px))); display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 0; position: relative; }
+  /* The model is bounded so the model plus the control row fits the visible
+     window: the approved large scale applies while space allows and yields
+     only when the viewport is constrained. The canvas width is derived from
+     the same bound, so the raster can never overflow its container into the
+     control row. The floor keeps extreme cases scrollable instead of
+     collapsing the preview. */
+  .player-model { width: 100%; aspect-ratio: 560 / 800; max-height: var(--player-max-h); display: grid; place-items: center; }
+  canvas { display: block; width: min(100%, 480px, calc(var(--player-max-h) * 0.7)); height: auto; opacity: 0; filter: drop-shadow(0 18px 24px rgb(0 0 0 / 28%)); transition: opacity 420ms ease-out; }
   canvas.revealed { opacity: 1; }
-  .player-controls { display: flex; align-items: center; gap: 12px; opacity: 0; transition: opacity var(--f-duration); }
-  .player-preview:hover .player-controls, .player-preview:focus-within .player-controls { opacity: 1; }
-  .player-controls .f-icon-button { width: 28px; height: 28px; }
-  .reset-view { background: none; border: 0; font: inherit; font-size: 11px; color: var(--color-text-secondary); cursor: pointer; }
+  /* Always visible while a player is shown: these are the only view controls,
+     so they must never hide behind a hover reveal or shrink with the model. */
+  .player-controls { display: flex; align-items: center; gap: 4px; flex: none; padding: 6px 8px; border: 1px solid var(--f-edge); border-radius: 999px; background: var(--f-panel); backdrop-filter: var(--f-blur); box-shadow: var(--shadow-group); }
+  .player-controls .f-icon-button { width: 40px; height: 40px; border-color: transparent; border-radius: 999px; background: transparent; }
+  .player-controls .f-icon-button:hover { background: rgb(255 255 255 / 10%); color: var(--color-text); }
+  .player-controls .reset-view { border: 0; background: transparent; font: inherit; font-size: 12.5px; font-weight: 550; color: var(--color-text-secondary); padding: 10px 12px; border-radius: 999px; cursor: pointer; transition: background var(--f-fast), color var(--f-fast); }
+  .player-controls .reset-view:hover { background: rgb(255 255 255 / 10%); color: var(--color-text); }
   @media (max-width: 900px) { .player-preview { display: none; } }
-  @media (prefers-reduced-motion: reduce) { .player-controls, canvas { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { canvas { transition: none; } }
 </style>

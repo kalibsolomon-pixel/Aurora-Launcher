@@ -26,6 +26,11 @@
   $effect(() => { launcher.createAuroraEnabled = compatibility?.available === true && launcher.createAuroraPreference !== false; });
   const instances = $derived(launcher.launcherState?.instances ?? []);
   const selectedId = $derived(launcher.launcherState?.config.selectedInstanceId ?? null);
+  // Existing instances are the primary content of this page once any exist.
+  // While state is loading (or failed to load) the count is unknown, so the
+  // existing-first arrangement stays in place and never flashes to the
+  // empty-state layout and back.
+  const existingFirst = $derived(instances.length > 0 || launcher.launcherState === null);
 
   // The create form defaults its Minecraft version to the newest release
   // the Aurora release source supports, so a fresh instance is compatible
@@ -86,7 +91,7 @@
     </div>
   </header>
 
-  <div class="instances-composition">
+  {#snippet createSection()}
   <section class="group" aria-labelledby="create-title">
     <div class="group-heading">
       <div>
@@ -257,15 +262,15 @@
       </p>
     {/if}
   </section>
+  {/snippet}
 
+  {#snippet instancesSection()}
   <section class="group" aria-labelledby="list-title" aria-live="polite">
     <div class="group-heading">
       <div>
         <h3 class="group-title" id="list-title">Your instances</h3>
         <p class="group-subtitle">
-          {instances.length === 0
-            ? "Nothing here yet."
-            : `${instances.length} ${instances.length === 1 ? "instance" : "instances"} — open one to manage it; the selected one launches from Home.`}
+          {instances.length} {instances.length === 1 ? "instance" : "instances"} — open one to manage it; the selected one launches from Home.
         </p>
       </div>
     </div>
@@ -279,8 +284,6 @@
         <span class="spinner" aria-hidden="true"></span>
         <span class="group-row-detail">Loading instances…</span>
       </div>
-    {:else if instances.length === 0}
-      <p class="group-footer">No instances yet — create the first one above.</p>
     {:else}
       {#each instances as instance (instance.id)}
         {@const selected = selectedId === instance.id}
@@ -356,15 +359,45 @@
       configuration, content and Java runtime. Delete an instance from its Settings after reviewing the data warning.
     </p>
   </section>
-  </div>
+  {/snippet}
+
+  <!-- DOM order, reading order and keyboard order all follow the rendered
+       branch: the instance list precedes creation whenever instances exist,
+       and creation leads only in the intentional zero-instance empty state. -->
+  {#if existingFirst}
+    <div class="instances-composition existing-first">
+      {@render instancesSection()}
+      {@render createSection()}
+    </div>
+  {:else}
+    <div class="instances-composition creation-first">
+      {@render createSection()}
+      <section class="group" aria-labelledby="list-title">
+        <div class="group-heading">
+          <div>
+            <h3 class="group-title" id="list-title">Your instances</h3>
+            <p class="group-subtitle">Nothing here yet.</p>
+          </div>
+        </div>
+        <p class="group-footer">No instances yet — create the first one above; every instance you create appears here.</p>
+      </section>
+    </div>
+  {/if}
 </div>
 
 <style>
   .instances-page { max-width: 1500px; width: 100%; margin-inline: auto; }
-  .instances-composition { display: grid; grid-template-columns: minmax(340px, .8fr) minmax(460px, 1.2fr); gap: var(--space-5); align-items: start; }
+  .instances-composition { display: grid; gap: var(--space-5); align-items: start; }
+  /* The existing-instance collection is the primary region: left column and
+     at least as wide as the creation form. Stacking keeps DOM order, so the
+     list stays above creation at narrow widths without CSS reordering. */
+  .instances-composition.existing-first { grid-template-columns: minmax(480px, 1.15fr) minmax(360px, 0.85fr); }
+  /* Zero instances: creation is the primary task, centered as the page's
+     single form, with only a compact instances note below it. */
+  .instances-composition.creation-first { grid-template-columns: minmax(0, min(100%, 880px)); justify-content: center; }
   .instances-composition > .group { min-width: 0; margin: 0; }
   .instances-composition :global(.field-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  @media (max-width: 1250px) { .instances-composition { grid-template-columns: 1fr; } }
+  @media (max-width: 1250px) { .instances-composition.existing-first { grid-template-columns: minmax(0, 1fr); } }
   .instance-name-line {
     display: flex;
     align-items: baseline;
