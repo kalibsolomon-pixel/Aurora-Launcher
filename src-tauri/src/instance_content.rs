@@ -867,6 +867,35 @@ fn warning(code: &str, message: impl Into<String>) -> ContentWarning {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RemovalPath {
+    /// The entry-level file removal owns this artifact (unmanaged local ZIP).
+    LocalFile,
+    /// The provider graph lifecycle owns this artifact (verified managed ZIP);
+    /// dependency enforcement happens in its removal preview/transaction.
+    ProviderGraph,
+    /// No removal path exists for this entry; the reason is carried alongside.
+    Blocked,
+}
+
+/// The backend-owned statement of which management operations Aurora safely
+/// supports for one installed pack entry. Svelte renders this object; it never
+/// infers legality from content types, ownership strings or provider names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContentManagement {
+    pub can_remove: bool,
+    pub removal_path: RemovalPath,
+    pub removal_blocked_reason: Option<String>,
+    pub can_toggle: bool,
+    pub active: Option<bool>,
+    /// Truthful representation for content whose activation Aurora does not
+    /// own (shader packs: loader-specific, in-game configuration).
+    pub activation_managed_in_game: bool,
+    pub toggle_blocked_reason: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentEntry {
@@ -883,7 +912,7 @@ pub struct ContentEntry {
     pub description: Option<String>,
     pub pack_format: Option<u64>,
     pub warnings: Vec<ContentWarning>,
-    pub can_remove: bool,
+    pub management: ContentManagement,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -895,6 +924,119 @@ pub struct ContentInventory {
     pub missing_managed: Vec<ProviderRecord>,
 }
 
+/// One on-demand read of the instance's activation knowledge for a scan.
+/// Nothing watches the underlying file; every scan re-reads it.
+struct ActivationKnowledge {
+    /// Enabled references from options.txt. `None` when the document could
+    /// not be read safely (malformed); the read error explains why.
+    enabled: Option<Vec<String>>,
+    read_error: Option<&'static str>,
+}
+
+fn activation_knowledge(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    kind: ContentType,
+) -> ActivationKnowledge {
+    if kind != ContentType::ResourcePack {
+        return ActivationKnowledge {
+            enabled: None,
+            read_error: None,
+        };
+    }
+    let paths = managed.instance_paths(instance);
+    let root = paths.root().to_path_buf();
+    match crate::pack_activation::enabled_references(&root) {
+        Ok(enabled) => ActivationKnowledge {
+            enabled,
+            read_error: None,
+        },
+        Err(_) => ActivationKnowledge {
+            enabled: None,
+            read_error: Some(
+                "Minecraft's options.txt could not be read safely; pack activation is unavailable.",
+            ),
+        },
+    }
+}
+
+/// The backend-owned capability statement for one inspected entry.
+fn management_capabilities(
+    kind: ContentType,
+    file_type: &str,
+    ownership: ContentOwnership,
+    file_name: &str,
+    activation: &ActivationKnowledge,
+) -> ContentManagement {
+    let (can_remove, removal_path, removal_blocked_reason) = match (file_type, ownership) {
+        ("zip", ContentOwnership::UserManaged) => (true, RemovalPath::LocalFile, None),
+        ("zip", ContentOwnership::ProviderManaged) => (true, RemovalPath::ProviderGraph, None),
+        ("zip", ContentOwnership::Unknown) => (
+            false,
+            RemovalPath::Blocked,
+            Some(
+                "This file no longer matches its provider record; removal stays blocked until it is inspected."
+                    .into(),
+            ),
+        ),
+        ("directory", _) => (
+            false,
+            RemovalPath::Blocked,
+            Some("Folder packs are left untouched; remove them from the content folder directly.".into()),
+        ),
+        ("link", _) => (
+            false,
+            RemovalPath::Blocked,
+            Some("Links are shown but never followed or removed.".into()),
+        ),
+        ("unreadable", _) => (
+            false,
+            RemovalPath::Blocked,
+            Some("This entry could not be inspected.".into()),
+        ),
+        _ => (
+            false,
+            RemovalPath::Blocked,
+            Some("This entry is not a removable pack file.".into()),
+        ),
+    };
+    let (can_toggle, active, activation_managed_in_game, toggle_blocked_reason) =
+        if kind == ContentType::ShaderPack {
+            // Shader loaders (Iris, OptiFine-like) each own activation state in
+            // loader-specific configuration Aurora does not own. Installation is
+            // reported truthfully; activation is never guessed or faked.
+            (false, None, true, None)
+        } else if let Some(reason) = activation.read_error {
+            (false, None, false, Some(reason.to_owned()))
+        } else if !crate::pack_activation::options_representable(file_name) {
+            (
+            false,
+            None,
+            false,
+            Some(
+                "This pack's file name cannot be represented safely in Minecraft's options.txt."
+                    .into(),
+            ),
+        )
+        } else {
+            let reference = format!("file/{file_name}");
+            let on = activation
+                .enabled
+                .as_ref()
+                .is_some_and(|names| names.iter().any(|entry| entry == &reference));
+            (true, Some(on), false, None)
+        };
+    ContentManagement {
+        can_remove,
+        removal_path,
+        removal_blocked_reason,
+        can_toggle,
+        active,
+        activation_managed_in_game,
+        toggle_blocked_reason,
+    }
+}
+
 pub fn scan(
     managed: &ManagedPaths,
     instance: &InstanceId,
@@ -902,6 +1044,7 @@ pub fn scan(
 ) -> Result<ContentInventory, ContentError> {
     let directory = validate_directory(managed, instance, kind)?;
     let state = ContentState::load(managed, instance)?;
+    let activation = activation_knowledge(managed, instance, kind);
     let mut entries = Vec::new();
     if directory.exists() {
         for item in std::fs::read_dir(directory).map_err(ContentError::Io)? {
@@ -910,7 +1053,7 @@ pub fn scan(
             let record = state.entries.iter().find(|record| {
                 record.content_type == kind && record.file_name.eq_ignore_ascii_case(&name)
             });
-            entries.push(inspect(&item.path(), kind, record));
+            entries.push(inspect(&item.path(), kind, record, &activation));
         }
     }
     let present: HashSet<_> = entries
@@ -939,7 +1082,12 @@ pub fn scan(
     })
 }
 
-fn inspect(path: &Path, kind: ContentType, record: Option<&ProviderRecord>) -> ContentEntry {
+fn inspect(
+    path: &Path,
+    kind: ContentType,
+    record: Option<&ProviderRecord>,
+    activation: &ActivationKnowledge,
+) -> ContentEntry {
     let name = path
         .file_name()
         .unwrap_or_default()
@@ -1079,6 +1227,7 @@ fn inspect(path: &Path, kind: ContentType, record: Option<&ProviderRecord>) -> C
         .map(|byte| format!("{byte:02x}"))
         .collect();
     let display_name = name.strip_suffix(".zip").unwrap_or(&name).to_owned();
+    let management = management_capabilities(kind, file_type, ownership, &name, activation);
     ContentEntry {
         entry_id,
         content_type: kind,
@@ -1093,7 +1242,7 @@ fn inspect(path: &Path, kind: ContentType, record: Option<&ProviderRecord>) -> C
         description,
         pack_format,
         warnings,
-        can_remove: file_type == "zip" && ownership == ContentOwnership::UserManaged,
+        management,
     }
 }
 
@@ -1280,8 +1429,20 @@ pub fn remove(
             .iter()
             .find(|entry| entry.entry_id == entry_id)
             .ok_or(ContentError::ChangedSinceScan)?;
-        if !entry.can_remove {
-            return Err(ContentError::UnsupportedAction);
+        if !entry.management.can_remove || entry.management.removal_path != RemovalPath::LocalFile {
+            return Err(
+                match (
+                    entry.management.removal_blocked_reason.clone(),
+                    entry.management.removal_path,
+                ) {
+                    (Some(reason), _) => ContentError::UnsupportedActionWith(reason),
+                    (None, RemovalPath::ProviderGraph) => ContentError::UnsupportedActionWith(
+                        "Provider-managed content is removed through its provider lifecycle."
+                            .into(),
+                    ),
+                    _ => ContentError::UnsupportedAction,
+                },
+            );
         }
         let directory = validate_directory(managed, instance, kind)?;
         validate_file_name(&entry.file_name)?;
@@ -1303,18 +1464,94 @@ pub fn remove(
         }
         let temporary = directory.join(format!(".content-removing-{}", uuid::Uuid::new_v4()));
         std::fs::rename(&target, &temporary).map_err(ContentError::Io)?;
-        if entry.ownership == ContentOwnership::ProviderManaged {
-            let mut state = ContentState::load(managed, instance)?;
-            state.entries.retain(|record| {
-                !(record.content_type == kind
-                    && record.file_name.eq_ignore_ascii_case(&entry.file_name))
-            });
-            if let Err(error) = state.save(managed, instance) {
+        // Removing an enabled resource pack must also retire its enabled
+        // reference in one coherent operation: if the options.txt update
+        // fails, the file returns to its original name untouched.
+        let activation_change =
+            kind == ContentType::ResourcePack && entry.management.active == Some(true);
+        if activation_change {
+            let root = managed.instance_paths(instance).root().to_path_buf();
+            if let Err(error) = crate::pack_activation::apply(
+                &root,
+                &[crate::pack_activation::ReferenceChange::Disable {
+                    name: entry.file_name.clone(),
+                }],
+            ) {
                 std::fs::rename(&temporary, &target).map_err(ContentError::Io)?;
                 return Err(error);
             }
         }
-        std::fs::remove_file(temporary).map_err(ContentError::Io)?;
+        if let Err(error) = std::fs::remove_file(&temporary) {
+            let mut restored = std::fs::rename(&temporary, &target).is_ok();
+            if activation_change {
+                let root = managed.instance_paths(instance).root().to_path_buf();
+                restored &= crate::pack_activation::apply(
+                    &root,
+                    &[crate::pack_activation::ReferenceChange::Enable {
+                        name: entry.file_name.clone(),
+                    }],
+                )
+                .is_ok();
+            }
+            if !restored {
+                return Err(ContentError::StateMalformed(
+                    "removal failed and the original file could not be restored".into(),
+                ));
+            }
+            return Err(ContentError::Io(error));
+        }
+        scan(managed, instance, kind)
+    })
+}
+
+/// Toggles one resource pack's enabled reference in Minecraft's options.txt.
+/// Shader packs and mods are refused: shader activation belongs to the
+/// in-game shader loader, and mod enablement is the mods inventory's own
+/// `.jar.disabled` lifecycle.
+pub fn set_pack_enabled(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    kind: ContentType,
+    entry_id: &str,
+    enabled: bool,
+) -> Result<ContentInventory, ContentError> {
+    if kind != ContentType::ResourcePack {
+        return Err(ContentError::UnsupportedActionWith(match kind {
+            ContentType::ShaderPack => {
+                "Shader packs are activated in-game with a compatible shader loader.".into()
+            }
+            _ => "Pack activation applies to resource packs only.".into(),
+        }));
+    }
+    with_instance_lock(instance, || {
+        let inventory = scan(managed, instance, kind)?;
+        let entry = inventory
+            .entries
+            .iter()
+            .find(|entry| entry.entry_id == entry_id)
+            .ok_or(ContentError::ChangedSinceScan)?;
+        if !entry.management.can_toggle {
+            return Err(entry
+                .management
+                .toggle_blocked_reason
+                .clone()
+                .map(ContentError::UnsupportedActionWith)
+                .unwrap_or(ContentError::UnsupportedAction));
+        }
+        let paths = managed.instance_paths(instance);
+        let root = paths.root().to_path_buf();
+        crate::pack_activation::apply(
+            &root,
+            &[if enabled {
+                crate::pack_activation::ReferenceChange::Enable {
+                    name: entry.file_name.clone(),
+                }
+            } else {
+                crate::pack_activation::ReferenceChange::Disable {
+                    name: entry.file_name.clone(),
+                }
+            }],
+        )?;
         scan(managed, instance, kind)
     })
 }
@@ -2111,6 +2348,28 @@ fn apply_lifecycle_state_reviewed(
             .collect();
         crate::instance_mods::validate_provider_removals(managed, instance, &removed_mods)
             .map_err(|error| ContentError::DependencyBlocked(error.to_string()))?;
+        // Retired resource packs must not leave enabled references behind,
+        // and a managed update that renames the pack file migrates the
+        // reference. The change is applied inside the transaction, after the
+        // state commits and before cleanup, and rolls back with everything
+        // else on failure.
+        let reference_changes: Vec<crate::pack_activation::ReferenceChange> = retired
+            .iter()
+            .filter(|record| record.content_type == ContentType::ResourcePack)
+            .filter_map(|record| match next.find(&record.identity()) {
+                None => Some(crate::pack_activation::ReferenceChange::Disable {
+                    name: record.file_name.clone(),
+                }),
+                Some(updated) if !same_file(record, updated) => {
+                    Some(crate::pack_activation::ReferenceChange::Rename {
+                        from: record.file_name.clone(),
+                        to: updated.file_name.clone(),
+                    })
+                }
+                _ => None,
+            })
+            .collect();
+        let options_path = managed.instance_paths(instance).root().join("options.txt");
         if incoming.len() != acquired.len() {
             return Err(ContentError::StateMalformed(
                 "acquired graph does not match lifecycle state".into(),
@@ -2125,6 +2384,7 @@ fn apply_lifecycle_state_reviewed(
         let mut activated = Vec::<PathBuf>::new();
         let mut moved = 0usize;
         let mut state_committed = false;
+        let mut options_original: Option<Vec<u8>> = None;
         let result = (|| {
             let mut targets = HashSet::new();
             for record in &incoming {
@@ -2231,6 +2491,12 @@ fn apply_lifecycle_state_reviewed(
             }
             commit(next)?;
             state_committed = true;
+            if !reference_changes.is_empty() {
+                options_original = std::fs::read(&options_path).ok();
+                if let Some(root) = options_path.parent() {
+                    crate::pack_activation::apply(root, &reference_changes)?;
+                }
+            }
             before_cleanup()?;
             for file in &rollback {
                 std::fs::remove_file(&file.backup).map_err(ContentError::Io)?;
@@ -2256,6 +2522,11 @@ fn apply_lifecycle_state_reviewed(
             }
             if state_committed && current.save(managed, instance).is_err() {
                 rollback_failed = true;
+            }
+            if let Some(original) = &options_original {
+                if std::fs::write(&options_path, original).is_err() {
+                    rollback_failed = true;
+                }
             }
             for (_, stage) in &staged {
                 let _ = std::fs::remove_file(stage);
@@ -2639,6 +2910,8 @@ pub enum ContentError {
     InvalidProviderArtifact,
     RequiredByInstalledContent,
     InvalidApproval,
+    OptionsMalformed(String),
+    UnsupportedActionWith(String),
 }
 impl ContentError {
     pub fn code(&self) -> &'static str {
@@ -2648,7 +2921,10 @@ impl ContentError {
             Self::UnsafePath => "content_unsafe_path",
             Self::StateMalformed(_) | Self::StateVersion(_) => "content_state_malformed",
             Self::ChangedSinceScan => "content_changed_since_scan",
-            Self::UnsupportedAction => "unsupported_content_action",
+            Self::UnsupportedAction | Self::UnsupportedActionWith(_) => {
+                "unsupported_content_action"
+            }
+            Self::OptionsMalformed(_) => "options_malformed",
             Self::Collision | Self::ModCollision(_) => "content_collision",
             Self::HashMismatch => "content_hash_mismatch",
             Self::OperationInProgress => "content_operation_in_progress",
@@ -2698,6 +2974,10 @@ impl fmt::Display for ContentError {
                 formatter,
                 "the recognition approval is invalid; scan again and re-approve"
             ),
+            Self::OptionsMalformed(reason) => {
+                write!(formatter, "Minecraft's options.txt is malformed: {reason}")
+            }
+            Self::UnsupportedActionWith(reason) => formatter.write_str(reason),
         }
     }
 }
@@ -4256,6 +4536,7 @@ mod tests {
                 .iter()
                 .find(|entry| entry.file_type == "directory")
                 .unwrap()
+                .management
                 .can_remove
         );
         let shader = scan(&fixture.managed, &fixture.instance, ContentType::ShaderPack).unwrap();
@@ -4308,7 +4589,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(tampered.entries[0].ownership, ContentOwnership::Unknown);
-        assert!(!tampered.entries[0].can_remove);
+        assert!(!tampered.entries[0].management.can_remove);
         assert!(
             tampered.entries[0]
                 .warnings
@@ -4469,7 +4750,7 @@ mod tests {
                 ContentType::ResourcePack,
                 &entry.entry_id,
             ),
-            Err(ContentError::UnsupportedAction)
+            Err(ContentError::UnsupportedAction) | Err(ContentError::UnsupportedActionWith(_))
         ));
         let current = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
         remove_provider_graph(
@@ -4485,6 +4766,651 @@ mod tests {
                 .entries
                 .is_empty()
         );
+    }
+
+    // ── Pack management capabilities, activation and coherent removal ──
+
+    fn options_file(fixture: &Fixture) -> PathBuf {
+        fixture
+            .managed
+            .instance_paths(&fixture.instance)
+            .root()
+            .join("options.txt")
+    }
+    fn write_options(fixture: &Fixture, text: &str) {
+        std::fs::write(options_file(fixture), text).unwrap();
+    }
+    fn read_options(fixture: &Fixture) -> String {
+        std::fs::read_to_string(options_file(fixture)).unwrap()
+    }
+    fn save_record(fixture: &Fixture, record: ProviderRecord) {
+        let mut state = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        state.entries.push(record);
+        state.save(&fixture.managed, &fixture.instance).unwrap();
+    }
+    fn pack_entry(
+        fixture: &Fixture,
+        kind: ContentType,
+        file_name: &str,
+    ) -> crate::instance_content::ContentEntry {
+        scan(&fixture.managed, &fixture.instance, kind)
+            .unwrap()
+            .entries
+            .into_iter()
+            .find(|entry| entry.file_name == file_name)
+            .unwrap()
+    }
+
+    #[test]
+    fn pack_capabilities_report_activation_and_removal_paths() {
+        let fixture = Fixture::new();
+        fixture.zip(ContentType::ResourcePack, "local.zip", None);
+        let managed_path = fixture.zip(ContentType::ResourcePack, "managed.zip", None);
+        let record = fixture.record(ContentType::ResourcePack, &managed_path);
+        save_record(&fixture, record);
+        std::fs::create_dir(fixture.dir(ContentType::ResourcePack).join("Folder Pack")).unwrap();
+        write_options(
+            &fixture,
+            "resourcePacks:[\"file/managed.zip\",\"file/Folder Pack\",\"vanilla\"]\n",
+        );
+        let inventory = scan(
+            &fixture.managed,
+            &fixture.instance,
+            ContentType::ResourcePack,
+        )
+        .unwrap()
+        .entries;
+        let local = inventory
+            .iter()
+            .find(|entry| entry.file_name == "local.zip")
+            .unwrap();
+        assert!(local.management.can_remove);
+        assert_eq!(local.management.removal_path, RemovalPath::LocalFile);
+        assert!(local.management.can_toggle);
+        assert_eq!(local.management.active, Some(false));
+        assert!(!local.management.activation_managed_in_game);
+        let managed = inventory
+            .iter()
+            .find(|entry| entry.file_name == "managed.zip")
+            .unwrap();
+        assert!(managed.management.can_remove);
+        assert_eq!(managed.management.removal_path, RemovalPath::ProviderGraph);
+        assert!(managed.management.can_toggle);
+        assert_eq!(managed.management.active, Some(true));
+        let folder = inventory
+            .iter()
+            .find(|entry| entry.file_name == "Folder Pack")
+            .unwrap();
+        assert!(!folder.management.can_remove);
+        assert_eq!(folder.management.removal_path, RemovalPath::Blocked);
+        assert!(folder.management.removal_blocked_reason.is_some());
+        assert!(folder.management.can_toggle);
+        assert_eq!(folder.management.active, Some(true));
+    }
+
+    #[test]
+    fn shader_capabilities_stay_truthful_about_in_game_activation() {
+        let fixture = Fixture::new();
+        let managed_path = fixture.zip(ContentType::ShaderPack, "shader.zip", None);
+        save_record(
+            &fixture,
+            fixture.record(ContentType::ShaderPack, &managed_path),
+        );
+        fixture.zip(ContentType::ShaderPack, "unmanaged.zip", None);
+        let inventory = scan(&fixture.managed, &fixture.instance, ContentType::ShaderPack)
+            .unwrap()
+            .entries;
+        for entry in &inventory {
+            assert!(!entry.management.can_toggle);
+            assert!(entry.management.activation_managed_in_game);
+            assert_eq!(entry.management.active, None);
+            assert!(entry.management.toggle_blocked_reason.is_none());
+            assert!(entry.management.can_remove);
+            assert_eq!(
+                if entry.file_name == "shader.zip" {
+                    RemovalPath::ProviderGraph
+                } else {
+                    RemovalPath::LocalFile
+                },
+                entry.management.removal_path
+            );
+        }
+    }
+
+    #[test]
+    fn set_pack_enabled_round_trips_and_survives_reload() {
+        let fixture = Fixture::new();
+        fixture.zip(ContentType::ResourcePack, "faithful.zip", None);
+        let entry = pack_entry(&fixture, ContentType::ResourcePack, "faithful.zip");
+        assert_eq!(entry.management.active, Some(false));
+        let inventory = set_pack_enabled(
+            &fixture.managed,
+            &fixture.instance,
+            ContentType::ResourcePack,
+            &entry.entry_id,
+            true,
+        )
+        .unwrap();
+        assert_eq!(inventory.entries[0].management.active, Some(true));
+        assert_eq!(
+            read_options(&fixture),
+            "resourcePacks:[\"file/faithful.zip\",\"vanilla\"]\n"
+        );
+        // A fresh scan re-reads options.txt: disabled/enabled state persists
+        // across inventory reloads (restarts) without launcher-side caching.
+        let entry = pack_entry(&fixture, ContentType::ResourcePack, "faithful.zip");
+        assert_eq!(entry.management.active, Some(true));
+        set_pack_enabled(
+            &fixture.managed,
+            &fixture.instance,
+            ContentType::ResourcePack,
+            &entry.entry_id,
+            false,
+        )
+        .unwrap();
+        assert_eq!(read_options(&fixture), "resourcePacks:[\"vanilla\"]\n");
+        assert_eq!(
+            pack_entry(&fixture, ContentType::ResourcePack, "faithful.zip")
+                .management
+                .active,
+            Some(false)
+        );
+        set_pack_enabled(
+            &fixture.managed,
+            &fixture.instance,
+            ContentType::ResourcePack,
+            &entry.entry_id,
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            pack_entry(&fixture, ContentType::ResourcePack, "faithful.zip")
+                .management
+                .active,
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn set_pack_enabled_preserves_order_and_unrelated_options() {
+        let fixture = Fixture::new();
+        fixture.zip(ContentType::ResourcePack, "ours.zip", None);
+        write_options(
+            &fixture,
+            "volume:0.7\nresourcePacks:[\"file/other.zip\",\"vanilla\"]\nfov:70.0\n",
+        );
+        let entry = pack_entry(&fixture, ContentType::ResourcePack, "ours.zip");
+        set_pack_enabled(
+            &fixture.managed,
+            &fixture.instance,
+            ContentType::ResourcePack,
+            &entry.entry_id,
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            read_options(&fixture),
+            "volume:0.7\nresourcePacks:[\"file/ours.zip\",\"file/other.zip\",\"vanilla\"]\nfov:70.0\n"
+        );
+        set_pack_enabled(
+            &fixture.managed,
+            &fixture.instance,
+            ContentType::ResourcePack,
+            &entry.entry_id,
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            read_options(&fixture),
+            "volume:0.7\nresourcePacks:[\"file/other.zip\",\"vanilla\"]\nfov:70.0\n"
+        );
+    }
+
+    #[test]
+    fn malformed_options_disable_activation_safely() {
+        let fixture = Fixture::new();
+        fixture.zip(ContentType::ResourcePack, "pack.zip", None);
+        write_options(&fixture, "resourcePacks:[broken\n");
+        let entry = pack_entry(&fixture, ContentType::ResourcePack, "pack.zip");
+        assert!(!entry.management.can_toggle);
+        assert_eq!(entry.management.active, None);
+        assert!(entry.management.toggle_blocked_reason.is_some());
+        assert!(matches!(
+            set_pack_enabled(
+                &fixture.managed,
+                &fixture.instance,
+                ContentType::ResourcePack,
+                &entry.entry_id,
+                true,
+            ),
+            Err(ContentError::UnsupportedActionWith(_))
+        ));
+        assert_eq!(read_options(&fixture), "resourcePacks:[broken\n");
+    }
+
+    #[test]
+    fn removing_an_active_local_pack_updates_activation_coherently() {
+        let fixture = Fixture::new();
+        fixture.zip(ContentType::ResourcePack, "active.zip", None);
+        fixture.zip(ContentType::ResourcePack, "kept.zip", None);
+        write_options(
+            &fixture,
+            "volume:0.7\nresourcePacks:[\"file/kept.zip\",\"file/active.zip\",\"vanilla\"]\n",
+        );
+        let entry = pack_entry(&fixture, ContentType::ResourcePack, "active.zip");
+        assert_eq!(entry.management.active, Some(true));
+        let inventory = remove(
+            &fixture.managed,
+            &fixture.instance,
+            ContentType::ResourcePack,
+            &entry.entry_id,
+        )
+        .unwrap();
+        assert!(
+            inventory
+                .entries
+                .iter()
+                .all(|entry| entry.file_name != "active.zip")
+        );
+        assert!(
+            !fixture
+                .dir(ContentType::ResourcePack)
+                .join("active.zip")
+                .exists()
+        );
+        assert_eq!(
+            read_options(&fixture),
+            "volume:0.7\nresourcePacks:[\"file/kept.zip\",\"vanilla\"]\n"
+        );
+    }
+
+    #[test]
+    fn removing_an_inactive_local_pack_leaves_options_untouched() {
+        let fixture = Fixture::new();
+        fixture.zip(ContentType::ResourcePack, "inactive.zip", None);
+        write_options(&fixture, "resourcePacks:[\"file/other.zip\",\"vanilla\"]\n");
+        let entry = pack_entry(&fixture, ContentType::ResourcePack, "inactive.zip");
+        remove(
+            &fixture.managed,
+            &fixture.instance,
+            ContentType::ResourcePack,
+            &entry.entry_id,
+        )
+        .unwrap();
+        assert_eq!(
+            read_options(&fixture),
+            "resourcePacks:[\"file/other.zip\",\"vanilla\"]\n"
+        );
+    }
+
+    #[test]
+    fn removal_never_touches_an_unreadable_options_document() {
+        let fixture = Fixture::new();
+        fixture.zip(ContentType::ResourcePack, "active.zip", None);
+        write_options(
+            &fixture,
+            "resourcePacks:[\"file/active.zip\",\"vanilla\"]\n",
+        );
+        let entry = pack_entry(&fixture, ContentType::ResourcePack, "active.zip");
+        assert_eq!(entry.management.active, Some(true));
+        // Corrupt the document after the scan: Aurora cannot prove the pack
+        // is still referenced, so the file removal proceeds without
+        // activation reconciliation and the malformed document is preserved
+        // byte-for-byte (Minecraft drops references to missing files).
+        write_options(&fixture, "resourcePacks:[broken\n");
+        remove(
+            &fixture.managed,
+            &fixture.instance,
+            ContentType::ResourcePack,
+            &entry.entry_id,
+        )
+        .unwrap();
+        assert!(
+            !fixture
+                .dir(ContentType::ResourcePack)
+                .join("active.zip")
+                .exists()
+        );
+        assert_eq!(read_options(&fixture), "resourcePacks:[broken\n");
+    }
+
+    #[test]
+    fn provider_removal_of_an_enabled_pack_clears_its_reference() {
+        let fixture = Fixture::new();
+        let path = fixture.zip(ContentType::ResourcePack, "managed.zip", None);
+        let record = fixture.record(ContentType::ResourcePack, &path);
+        save_record(&fixture, record);
+        write_options(
+            &fixture,
+            "volume:0.7\nresourcePacks:[\"file/managed.zip\",\"file/user.zip\",\"vanilla\"]\n",
+        );
+        let current = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        remove_provider_graph(
+            &fixture.managed,
+            &fixture.instance,
+            &current,
+            &current.entries[0].identity(),
+        )
+        .unwrap();
+        assert!(
+            !fixture
+                .dir(ContentType::ResourcePack)
+                .join("managed.zip")
+                .exists()
+        );
+        assert_eq!(
+            read_options(&fixture),
+            "volume:0.7\nresourcePacks:[\"file/user.zip\",\"vanilla\"]\n"
+        );
+    }
+
+    #[test]
+    fn shader_provider_removal_preserves_unrelated_files() {
+        let fixture = Fixture::new();
+        let path = fixture.zip(ContentType::ShaderPack, "managed.zip", None);
+        save_record(&fixture, fixture.record(ContentType::ShaderPack, &path));
+        fixture.zip(ContentType::ShaderPack, "user.zip", None);
+        let current = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        remove_provider_graph(
+            &fixture.managed,
+            &fixture.instance,
+            &current,
+            &current.entries[0].identity(),
+        )
+        .unwrap();
+        let directory = fixture.dir(ContentType::ShaderPack);
+        assert!(!directory.join("managed.zip").exists());
+        assert!(directory.join("user.zip").exists());
+    }
+
+    #[test]
+    fn recovered_packs_receive_normal_capabilities_and_keep_provenance() {
+        let fixture = Fixture::new();
+        let path = fixture.zip(ContentType::ResourcePack, "recovered.zip", None);
+        let mut record = fixture.record(ContentType::ResourcePack, &path);
+        record.origin = ProviderOrigin::Recovered;
+        save_record(&fixture, record);
+        let entry = pack_entry(&fixture, ContentType::ResourcePack, "recovered.zip");
+        assert_eq!(entry.management.removal_path, RemovalPath::ProviderGraph);
+        assert!(entry.management.can_toggle);
+        assert_eq!(entry.management.active, Some(false));
+        assert_eq!(
+            entry.provenance.as_ref().unwrap().origin,
+            ProviderOrigin::Recovered
+        );
+        set_pack_enabled(
+            &fixture.managed,
+            &fixture.instance,
+            ContentType::ResourcePack,
+            &entry.entry_id,
+            true,
+        )
+        .unwrap();
+        let entry = pack_entry(&fixture, ContentType::ResourcePack, "recovered.zip");
+        assert_eq!(entry.management.active, Some(true));
+        assert_eq!(
+            entry.provenance.as_ref().unwrap().origin,
+            ProviderOrigin::Recovered
+        );
+        let shader_path = fixture.zip(ContentType::ShaderPack, "recovered-shader.zip", None);
+        let mut shader = fixture.record(ContentType::ShaderPack, &shader_path);
+        shader.origin = ProviderOrigin::Recovered;
+        save_record(&fixture, shader);
+        let shader_entry = pack_entry(&fixture, ContentType::ShaderPack, "recovered-shader.zip");
+        assert_eq!(
+            shader_entry.management.removal_path,
+            RemovalPath::ProviderGraph
+        );
+        assert!(shader_entry.management.activation_managed_in_game);
+        assert_eq!(
+            shader_entry.provenance.as_ref().unwrap().origin,
+            ProviderOrigin::Recovered
+        );
+    }
+
+    #[test]
+    fn unmanaged_local_packs_never_gain_provider_capabilities() {
+        let fixture = Fixture::new();
+        fixture.zip(ContentType::ResourcePack, "local.zip", None);
+        let entry = pack_entry(&fixture, ContentType::ResourcePack, "local.zip");
+        assert_eq!(entry.management.removal_path, RemovalPath::LocalFile);
+        assert!(entry.provenance.is_none());
+        assert!(
+            !fixture
+                .managed
+                .instance_paths(&fixture.instance)
+                .root()
+                .join("content-managed.json")
+                .exists()
+        );
+        // Provider-only operations key on project identity, which a local
+        // file does not have: there is no record to resolve.
+        assert!(
+            ContentState::load(&fixture.managed, &fixture.instance)
+                .unwrap()
+                .entries
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn stale_and_wrong_identity_mutations_are_refused() {
+        let fixture = Fixture::new();
+        fixture.zip(ContentType::ResourcePack, "pack.zip", None);
+        let other = Fixture::new();
+        other.zip(ContentType::ResourcePack, "other.zip", None);
+        let other_entry = pack_entry(&other, ContentType::ResourcePack, "other.zip");
+        assert!(matches!(
+            set_pack_enabled(
+                &fixture.managed,
+                &fixture.instance,
+                ContentType::ResourcePack,
+                &other_entry.entry_id,
+                true,
+            ),
+            Err(ContentError::ChangedSinceScan)
+        ));
+        assert!(matches!(
+            remove(
+                &fixture.managed,
+                &fixture.instance,
+                ContentType::ResourcePack,
+                &other_entry.entry_id,
+            ),
+            Err(ContentError::ChangedSinceScan)
+        ));
+        let entry = pack_entry(&fixture, ContentType::ResourcePack, "pack.zip");
+        std::fs::remove_file(fixture.dir(ContentType::ResourcePack).join("pack.zip")).unwrap();
+        assert!(matches!(
+            set_pack_enabled(
+                &fixture.managed,
+                &fixture.instance,
+                ContentType::ResourcePack,
+                &entry.entry_id,
+                true,
+            ),
+            Err(ContentError::ChangedSinceScan)
+        ));
+    }
+
+    #[test]
+    fn shader_activation_is_refused_as_in_game_managed() {
+        let fixture = Fixture::new();
+        fixture.zip(ContentType::ShaderPack, "shader.zip", None);
+        let entry = pack_entry(&fixture, ContentType::ShaderPack, "shader.zip");
+        assert!(matches!(
+            set_pack_enabled(
+                &fixture.managed,
+                &fixture.instance,
+                ContentType::ShaderPack,
+                &entry.entry_id,
+                true,
+            ),
+            Err(ContentError::UnsupportedActionWith(_))
+        ));
+        assert!(matches!(
+            set_pack_enabled(
+                &fixture.managed,
+                &fixture.instance,
+                ContentType::Mod,
+                &entry.entry_id,
+                true,
+            ),
+            Err(ContentError::UnsupportedActionWith(_))
+        ));
+    }
+
+    #[test]
+    fn dependency_blockers_still_guard_managed_pack_removal() {
+        let fixture = Fixture::new();
+        let parent_path = fixture.zip(ContentType::ResourcePack, "parent.zip", None);
+        let child_path = fixture.zip(ContentType::ResourcePack, "child.zip", None);
+        let mut parent = fixture.record(ContentType::ResourcePack, &parent_path);
+        let mut child = fixture.record(ContentType::ResourcePack, &child_path);
+        child.explicitly_retained = false;
+        child.project_id = "child-project".into();
+        parent.requires = vec![child.identity()];
+        let child_identity = child.identity();
+        let mut state = ContentState::empty();
+        state.entries.push(parent);
+        state.entries.push(child);
+        state.save(&fixture.managed, &fixture.instance).unwrap();
+        // The saved document is the deterministic expected state (saving
+        // orders entries); never a hand-arranged in-memory order.
+        let state = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        assert!(matches!(
+            remove_provider_graph(&fixture.managed, &fixture.instance, &state, &child_identity,),
+            Err(ContentError::RequiredByInstalledContent)
+        ));
+        assert!(
+            fixture
+                .dir(ContentType::ResourcePack)
+                .join("child.zip")
+                .exists()
+        );
+        // The explicitly retained parent still removes cleanly, taking its
+        // dependency along through the ordinary graph rules.
+        let parent_identity = state
+            .entries
+            .iter()
+            .find(|record| record.file_name == "parent.zip")
+            .unwrap()
+            .identity();
+        remove_provider_graph(
+            &fixture.managed,
+            &fixture.instance,
+            &state,
+            &parent_identity,
+        )
+        .unwrap();
+        assert!(
+            !fixture
+                .dir(ContentType::ResourcePack)
+                .join("parent.zip")
+                .exists()
+        );
+    }
+
+    fn pack_plan(
+        server: &TestServer,
+        path: &str,
+        project: &str,
+        kind: ContentType,
+        file_name: &str,
+    ) -> ProviderInstallPlan {
+        let entry = if kind == ContentType::ShaderPack {
+            "shaders/basic.fsh"
+        } else {
+            "pack.mcmeta"
+        };
+        let cursor = std::io::Cursor::new(Vec::new());
+        let mut writer = zip::ZipWriter::new(cursor);
+        writer
+            .start_file(entry, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(b"void main(){}").unwrap();
+        let bytes = writer.finish().unwrap().into_inner();
+        let hash = format!("{:x}", Sha512::digest(&bytes));
+        ProviderInstallPlan {
+            content_type: kind,
+            provider: "modrinth".into(),
+            project_id: project.into(),
+            version_id: "11112222".into(),
+            file_id: hash.clone(),
+            file_name: file_name.into(),
+            display_version: Some("1.0.0".into()),
+            compatibility: ContentCompatibility {
+                minecraft_versions: vec!["1.21.11".into()],
+                loader: None,
+                environment: Some("client".into()),
+            },
+            dependencies: vec![],
+            source: ProviderArtifactSource::Sha512(
+                Sha512ArtifactSource::loopback_http_for_testing(
+                    &format!("{}/{path}", server.base_url()),
+                    &hash,
+                    Some(bytes.len() as u64),
+                )
+                .unwrap(),
+            ),
+        }
+    }
+
+    #[tokio::test]
+    async fn provider_update_renames_migrate_the_enabled_reference() {
+        let fixture = Fixture::new();
+        let server = TestServer::spawn(Arc::new(|_request: &TestRequest| {
+            let cursor = std::io::Cursor::new(Vec::new());
+            let mut writer = zip::ZipWriter::new(cursor);
+            writer
+                .start_file("pack.mcmeta", zip::write::SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(b"void main(){}").unwrap();
+            TestResponse::ok(&writer.finish().unwrap().into_inner())
+        }));
+        install_provider_plans(
+            &fixture.managed,
+            &fixture.instance,
+            vec![pack_plan(
+                &server,
+                "old",
+                "AAAABBBB",
+                ContentType::ResourcePack,
+                "Pack 1.0.zip",
+            )],
+        )
+        .await
+        .unwrap();
+        write_options(
+            &fixture,
+            "volume:0.7\nresourcePacks:[\"file/Pack 1.0.zip\",\"file/user.zip\",\"vanilla\"]\n",
+        );
+        let state = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        update_provider_graph(
+            &fixture.managed,
+            &fixture.instance,
+            &state,
+            &state.entries[0].identity(),
+            vec![pack_plan(
+                &server,
+                "new",
+                "AAAABBBB",
+                ContentType::ResourcePack,
+                "Pack 2.0.zip",
+            )],
+        )
+        .await
+        .unwrap();
+        let directory = fixture.dir(ContentType::ResourcePack);
+        assert!(!directory.join("Pack 1.0.zip").exists());
+        assert!(directory.join("Pack 2.0.zip").exists());
+        assert_eq!(
+            read_options(&fixture),
+            "volume:0.7\nresourcePacks:[\"file/Pack 2.0.zip\",\"file/user.zip\",\"vanilla\"]\n"
+        );
+        let entry = pack_entry(&fixture, ContentType::ResourcePack, "Pack 2.0.zip");
+        assert_eq!(entry.management.active, Some(true));
+        assert!(entry.management.can_toggle);
     }
 
     #[test]
@@ -4554,7 +5480,7 @@ mod tests {
             } // Windows installations without symlink privilege.
             let inventory = scan(&fixture.managed, &fixture.instance, kind).unwrap();
             assert_eq!(inventory.entries[0].file_type, "link");
-            assert!(!inventory.entries[0].can_remove);
+            assert!(!inventory.entries[0].management.can_remove);
             assert!(
                 remove(
                     &fixture.managed,

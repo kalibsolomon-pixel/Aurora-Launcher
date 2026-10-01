@@ -23,6 +23,7 @@ pub mod launch;
 pub mod minecraft;
 pub mod mod_compatibility;
 pub mod modrinth;
+pub mod pack_activation;
 pub mod paths;
 pub mod runtime;
 pub mod shortcuts;
@@ -103,6 +104,7 @@ pub fn run() {
             application::get_instance_content_context,
             application::get_instance_content,
             application::remove_instance_content,
+            application::set_instance_pack_enabled,
             application::open_instance_content_folder,
             application::scan_instance_content,
             application::register_recovered_content,

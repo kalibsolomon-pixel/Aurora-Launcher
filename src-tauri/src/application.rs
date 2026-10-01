@@ -2415,6 +2415,15 @@ pub struct RemoveInstanceContentRequest {
     entry_id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetInstancePackEnabledRequest {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+    entry_id: String,
+    enabled: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceContentContext {
@@ -2506,6 +2515,32 @@ pub async fn remove_instance_content(
             &instance,
             request.content_type,
             &request.entry_id,
+        )
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "content_unavailable",
+            "The content mutation worker stopped.",
+        )
+    })?
+    .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn set_instance_pack_enabled(
+    app: AppHandle,
+    request: SetInstancePackEnabledRequest,
+) -> Result<crate::instance_content::ContentInventory, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::instance_content::set_pack_enabled(
+            &managed,
+            &instance,
+            request.content_type,
+            &request.entry_id,
+            request.enabled,
         )
     })
     .await
