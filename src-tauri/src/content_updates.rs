@@ -156,7 +156,7 @@ pub async fn check_updates(
                     pinned: record.pinned,
                     channel: record.update_channel,
                     detail: Some(format!(
-                        "Required by {} {}. Pack component updates require a future reconciliation workflow.",
+                        "Required by {} {}. Modpack components are updated through Update Modpack on the instance's Overview page, not individual updates.",
                         pack.as_ref().unwrap().identity.name,
                         pack.as_ref().unwrap().identity.pack_version
                     )),

@@ -1316,6 +1316,128 @@ export function installModrinthPack(projectId: string, versionId: string, select
   return contentInvoke("install_modrinth_pack", { projectId, versionId, selectedOptional, fingerprint });
 }
 
+// ---------------------------------------------------------------------------
+// Modpack update & reconciliation (Phase J)
+// ---------------------------------------------------------------------------
+
+export type PackUpdateStatus = "upToDate" | "updateAvailable" | "blocked" | "currentVersionUnknown" | "providerUnavailable";
+
+export interface PackUpdateCandidate {
+  versionId: string;
+  name: string;
+  versionNumber: string;
+  versionType: string;
+  datePublished: string;
+  gameVersions: string[];
+  loaders: string[];
+  changelog: string | null;
+}
+
+export interface PackUpdateCheck {
+  instanceId: string;
+  status: PackUpdateStatus;
+  currentVersionId: string;
+  currentPackVersion: string;
+  candidate: PackUpdateCandidate | null;
+  blockedReason: string | null;
+  divergences: number;
+}
+
+export type PackRowKind = "component" | "external" | "override";
+export type PackLocalState = "matchesOld" | "modified" | "missing" | "absent" | "equivalent";
+export type PackRowAction = "preserve" | "restore" | "acquire" | "adopt" | "replace" | "retire" | "preserveShared";
+export type PackConflictKind = "changedModified" | "removedModified" | "addedCollision";
+
+export interface PackUpdateRow {
+  path: string;
+  kind: PackRowKind;
+  title: string | null;
+  projectId: string | null;
+  oldPresent: boolean;
+  newPresent: boolean;
+  localState: PackLocalState;
+  action: PackRowAction;
+  conflict: PackConflictKind | null;
+  resolutions: string[];
+  note: string | null;
+}
+
+export interface PackUpdateCounts {
+  added: number;
+  updated: number;
+  removed: number;
+  preserved: number;
+  conflicts: number;
+}
+
+export interface PackUpdatePlan {
+  instanceId: string;
+  name: string;
+  projectId: string;
+  currentVersionId: string;
+  currentPackVersion: string;
+  candidateVersionId: string;
+  candidatePackVersion: string;
+  candidateVersionType: string;
+  candidateDatePublished: string;
+  changelog: string | null;
+  minecraftCurrent: string;
+  minecraftCandidate: string;
+  loaderCurrent: string;
+  loaderCandidate: string;
+  gameTransition: boolean;
+  rows: PackUpdateRow[];
+  counts: PackUpdateCounts;
+  newOptionalUnselected: string[];
+  priorDivergences: number;
+  fingerprint: string;
+}
+
+export interface PackConflictResolution {
+  path: string;
+  resolution: "keepLocal" | "useNewPack";
+}
+
+export interface ModpackDivergence {
+  path: string;
+  component: boolean;
+  expectedSha256: string | null;
+  expectedSha512: string | null;
+  localSha256: string;
+  resolution: string;
+  recordedAtUnixSeconds: number;
+}
+
+export interface ModpackDetails {
+  instanceId: string;
+  provider: string;
+  projectId: string;
+  versionId: string;
+  name: string;
+  packVersion: string;
+  minecraftVersion: string;
+  fabricLoaderVersion: string;
+  componentCount: number;
+  overrideCount: number;
+  divergences: ModpackDivergence[];
+}
+
+export function checkModpackUpdate(instanceId: string): Promise<PackUpdateCheck> {
+  return contentInvoke("check_modpack_update", { instanceId });
+}
+
+export function previewModpackUpdate(instanceId: string): Promise<PackUpdatePlan> {
+  return contentInvoke("preview_modpack_update", { instanceId });
+}
+
+export function applyModpackUpdate(instanceId: string, fingerprint: string, resolutions: PackConflictResolution[]): Promise<InstanceSummary> {
+  return contentInvoke("apply_modpack_update", { instanceId, fingerprint, resolutions });
+}
+
+export function getModpackDetails(instanceId: string): Promise<ModpackDetails> {
+  return contentInvoke("get_modpack_details", { instanceId });
+}
+
 export function quickInstallModrinth(instanceId: string, contentType: ContentType, projectId: string): Promise<ProviderRecord[]> {
   return contentInvoke("quick_install_modrinth", { instanceId, contentType, projectId });
 }

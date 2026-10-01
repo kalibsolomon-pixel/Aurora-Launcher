@@ -3144,6 +3144,153 @@ pub async fn install_modrinth_pack(
     Ok(InstanceSummary::from_record(&record))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackInstanceRequest {
+    instance_id: String,
+}
+
+/// Pack-level update discovery for one managed modpack instance. The
+/// frontend supplies only the instance identifier: the installed pack state
+/// is the sole authority for which project's timeline is consulted.
+#[tauri::command]
+pub async fn check_modpack_update(
+    app: AppHandle,
+    request: ModpackInstanceRequest,
+) -> Result<crate::pack_update::PackUpdateCheck, CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::pack_update::check_pack_update(
+        &managed,
+        &crate::modrinth::Client::official(),
+        &request.instance_id,
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
+}
+
+/// The full three-way reconciliation plan for the discovered candidate.
+/// Read-only: no instance bytes change while previewing.
+#[tauri::command]
+pub async fn preview_modpack_update(
+    app: AppHandle,
+    request: ModpackInstanceRequest,
+) -> Result<crate::pack_update::PackUpdatePlan, CommandError> {
+    let managed = managed_paths(&app)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("pack_configuration_invalid", error.to_string()))?;
+    crate::pack_update::build_plan(
+        &managed,
+        &endpoints,
+        &crate::modrinth::Client::official(),
+        &request.instance_id,
+        &[],
+        false,
+    )
+    .await
+    .map(|reconciliation| reconciliation.plan)
+    .map_err(|error| CommandError::new(error.code, error.message))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackUpdateApproval {
+    instance_id: String,
+    fingerprint: String,
+    #[serde(default)]
+    resolutions: Vec<crate::pack_update::ConflictResolution>,
+}
+
+/// Apply one reviewed pack reconciliation. The plan is re-derived natively
+/// and must still match the reviewed fingerprint; conflict resolutions are
+/// validated against the fresh classification.
+#[tauri::command]
+pub async fn apply_modpack_update(
+    app: AppHandle,
+    request: ModpackUpdateApproval,
+) -> Result<InstanceSummary, CommandError> {
+    let managed = managed_paths(&app)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("pack_configuration_invalid", error.to_string()))?;
+    let record = crate::pack_update::apply_pack_update(
+        &managed,
+        &endpoints,
+        &crate::modrinth::Client::official(),
+        &request.instance_id,
+        &request.fingerprint,
+        &request.resolutions,
+        &mut |phase| {
+            let _ = app.emit(
+                "modpack-update-progress",
+                serde_json::json!({ "phase": phase }),
+            );
+        },
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))?;
+    Ok(InstanceSummary::from_record(&record))
+}
+
+/// The installed modpack's own presentation state: exact identity plus the
+/// recorded divergences that make an instance "pack version — modified".
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackDetails {
+    instance_id: String,
+    provider: String,
+    project_id: String,
+    version_id: String,
+    name: String,
+    pack_version: String,
+    minecraft_version: String,
+    fabric_loader_version: String,
+    component_count: usize,
+    override_count: usize,
+    divergences: Vec<crate::pack_state::PackDivergence>,
+}
+
+#[tauri::command]
+pub fn get_modpack_details(
+    app: AppHandle,
+    request: ModpackInstanceRequest,
+) -> Result<ModpackDetails, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+    let record = registry.find(&instance).ok_or_else(|| {
+        CommandError::new(
+            "instance_not_found",
+            "Instance was removed during the request.",
+        )
+    })?;
+    if record.pack().is_none() {
+        return Err(CommandError::new(
+            "pack_not_installed",
+            "This instance was not created from a Modrinth modpack.",
+        ));
+    }
+    let pack = crate::pack_state::InstalledPack::load(&managed, &instance)
+        .map_err(|error| CommandError::new(error.code(), error.to_string()))?
+        .ok_or_else(|| {
+            CommandError::new(
+                "pack_state_malformed",
+                "The installed modpack state is missing.",
+            )
+        })?;
+    Ok(ModpackDetails {
+        instance_id: instance.to_string(),
+        provider: pack.identity.provider.clone(),
+        project_id: pack.identity.project_id.clone(),
+        version_id: pack.identity.version_id.clone(),
+        name: pack.identity.name.clone(),
+        pack_version: pack.identity.pack_version.clone(),
+        minecraft_version: pack.identity.minecraft_version.clone(),
+        fabric_loader_version: pack.identity.fabric_loader_version.clone(),
+        component_count: pack.components.len(),
+        override_count: pack.overrides.len(),
+        divergences: pack.divergences.clone(),
+    })
+}
+
 #[tauri::command]
 pub async fn preview_modrinth_install(
     app: AppHandle,
@@ -3699,7 +3846,7 @@ pub(crate) async fn resolve_updates_preview(
         {
             return Err(CommandError::new(
                 "pack_component_owned",
-                "This component belongs to the installed modpack; updating it requires a future pack reconciliation workflow.",
+                "This component belongs to the installed modpack; update the modpack itself from the instance's Overview page.",
             ));
         }
         if !record.explicitly_retained {
