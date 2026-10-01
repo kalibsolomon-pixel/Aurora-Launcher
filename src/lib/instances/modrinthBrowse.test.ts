@@ -24,6 +24,14 @@ describe("Modrinth browse state", () => {
     assert.equal(cache.get("one", "mod", "1.21.11", 45_100), null);
   });
 
+  it("keeps browsable modpack defaults separate from installable kinds", () => {
+    const cache = new DefaultBrowseCache(45_000);
+    cache.put("one", "modpack", "1.21.11", page(0, "pack"), 100);
+    assert.equal(cache.get("one", "modpack", "1.21.11", 200)?.hits[0]?.projectId, "pack");
+    assert.equal(cache.get("one", "mod", "1.21.11", 200), null);
+    assert.equal(cache.get("one", "shaderPack", "1.21.11", 200), null);
+  });
+
   it("resets on a new first page and appends only subsequent pages", () => {
     const first = page(0, "old");
     assert.deepEqual(appendBrowsePage(first, page(0, "new"), 0).hits.map((hit) => hit.projectId), ["new"]);

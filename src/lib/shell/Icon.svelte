@@ -17,6 +17,7 @@
     right: 'm10 5 7 7-7 7',
     grip: 'M8 5h.01 M16 5h.01 M8 12h.01 M16 12h.01 M8 19h.01 M16 19h.01',
     check: 'm5 12 4 4L19 6',
+    chevron: 'm6 9 6 6 6-6',
   };
 </script>
 <svg style="flex-shrink: 0; aspect-ratio: 1;" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={paths[name] ?? paths.about} /></svg>

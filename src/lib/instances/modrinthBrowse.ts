@@ -1,4 +1,4 @@
-import type { ContentType, ModrinthSearchPage } from "../backend";
+import type { BrowseKind, ModrinthSearchPage } from "../backend";
 
 export class DefaultBrowseCache {
   private readonly pages = new Map<string, { page: ModrinthSearchPage; at: number }>();
@@ -6,7 +6,7 @@ export class DefaultBrowseCache {
 
   constructor(ttlMs = 45_000) { this.ttlMs = ttlMs; }
 
-  get(instanceId: string, kind: ContentType, minecraftVersion: string, now = Date.now()): ModrinthSearchPage | null {
+  get(instanceId: string, kind: BrowseKind, minecraftVersion: string, now = Date.now()): ModrinthSearchPage | null {
     const key = `${instanceId}:${kind}:${minecraftVersion}`;
     const cached = this.pages.get(key);
     if (!cached) return null;
@@ -17,7 +17,7 @@ export class DefaultBrowseCache {
     return cached.page;
   }
 
-  put(instanceId: string, kind: ContentType, minecraftVersion: string, page: ModrinthSearchPage, now = Date.now()): void {
+  put(instanceId: string, kind: BrowseKind, minecraftVersion: string, page: ModrinthSearchPage, now = Date.now()): void {
     this.pages.set(`${instanceId}:${kind}:${minecraftVersion}`, { page, at: now });
   }
 }

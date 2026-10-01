@@ -1103,7 +1103,63 @@ export interface ModrinthProjectSummary {
   author: string;
   downloads: number;
   iconUrl: string | null;
-  projectType: ContentType;
+  projectType: BrowseKind;
+  categories: string[];
+}
+
+/** Provider content types available for browsing (a superset of installable content types). */
+export type BrowseKind = "mod" | "modpack" | "resourcePack" | "shaderPack";
+
+export const BROWSE_KINDS: BrowseKind[] = ["mod", "modpack", "resourcePack", "shaderPack"];
+
+export function browseKindLabel(kind: BrowseKind): string {
+  if (kind === "modpack") return "Modpacks";
+  if (kind === "resourcePack") return "Resource Packs";
+  if (kind === "shaderPack") return "Shaders";
+  return "Mods";
+}
+
+export function browseKindNoun(kind: BrowseKind): string {
+  if (kind === "modpack") return "modpacks";
+  if (kind === "resourcePack") return "resource packs";
+  if (kind === "shaderPack") return "shaders";
+  return "mods";
+}
+
+/** Provider-supported sort orders only. */
+export type BrowseSort = "relevance" | "downloads" | "newest" | "updated";
+
+export const BROWSE_SORTS: BrowseSort[] = ["relevance", "downloads", "newest", "updated"];
+
+export function browseSortLabel(sort: BrowseSort): string {
+  if (sort === "downloads") return "Most downloaded";
+  if (sort === "newest") return "Newest";
+  if (sort === "updated") return "Recently updated";
+  return "Relevance";
+}
+
+/** Provider-neutral browse query; the frontend never supplies provider URLs. */
+export interface ProviderBrowseQuery {
+  instanceId: string;
+  provider: "modrinth";
+  contentType: BrowseKind;
+  search: string;
+  categories: string[];
+  sort: BrowseSort;
+  offset: number;
+}
+
+export interface ProviderCategory {
+  name: string;
+  projectType: string;
+}
+
+export function browseModrinth(query: ProviderBrowseQuery): Promise<ModrinthSearchPage> {
+  return contentInvoke("browse_modrinth", { ...query });
+}
+
+export function browseModrinthTags(): Promise<ProviderCategory[]> {
+  return contentInvoke("browse_modrinth_tags", { provider: "modrinth" });
 }
 
 export interface ModrinthVersionChoice {
@@ -1126,7 +1182,7 @@ export interface ModrinthProjectDetails {
   environments: string[];
   versions: ModrinthVersionChoice[];
   defaultVersionId: string | null;
-  projectType: ContentType;
+  projectType: BrowseKind;
 }
 
 export interface ModrinthPreviewItem {
@@ -1166,6 +1222,11 @@ export function searchModrinth(instanceId: string, contentType: ContentType, que
 }
 
 export function getModrinthProject(instanceId: string, contentType: ContentType, projectId: string): Promise<ModrinthProjectDetails> {
+  return contentInvoke("get_modrinth_project", { instanceId, contentType, projectId });
+}
+
+/** Details for any browsable kind, including modpacks (read-only identity). */
+export function getModrinthProjectBrowse(instanceId: string, contentType: BrowseKind, projectId: string): Promise<ModrinthProjectDetails> {
   return contentInvoke("get_modrinth_project", { instanceId, contentType, projectId });
 }
 

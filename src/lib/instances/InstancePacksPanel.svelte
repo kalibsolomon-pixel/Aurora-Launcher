@@ -7,6 +7,7 @@
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
   import ContentRecognition from "./ContentRecognition.svelte";
   import ContentUpdates from "./ContentUpdates.svelte";
+  import Icon from "$lib/shell/Icon.svelte";
 
   let { instance, kind }: { instance: InstanceSummary; kind: "resourcePack" | "shaderPack" } = $props();
   let query = $state("");
@@ -105,7 +106,7 @@
     {#if context?.modrinthAvailable}<button type="button" class="btn btn-quiet" aria-pressed={view === "browse"} onclick={() => view = "browse"}>Browse Modrinth</button>{/if}
   </div>
   {#if view === "browse"}
-    <ModrinthBrowse instanceId={instance.id} instanceName={instance.displayName} minecraftVersion={instance.minecraftVersion} {kind} installedProjectIds={entries.filter((entry) => entry.provenance?.provider === "modrinth").map((entry) => entry.provenance!.projectId)} dependencyOnlyProjectIds={lifecycleEntries.filter((entry) => entry.record.contentType === kind && !entry.record.explicitlyRetained).map((entry) => entry.record.projectId)} onInstalled={async (targetId, targetKind) => { if (targetKind !== "mod") await refreshInstalled(targetId, targetKind); }} />
+    <ModrinthBrowse instanceId={instance.id} instanceName={instance.displayName} minecraftVersion={instance.minecraftVersion} {kind} installedProjectIds={entries.filter((entry) => entry.provenance?.provider === "modrinth").map((entry) => entry.provenance!.projectId)} dependencyOnlyProjectIds={lifecycleEntries.filter((entry) => entry.record.contentType === kind && !entry.record.explicitlyRetained).map((entry) => entry.record.projectId)} onInstalled={async (targetId, targetKind) => { if (targetKind === "mod") { await launcher.runLoadMods(targetId); } else { await refreshInstalled(targetId, targetKind); } await launcher.refreshState(); }} />
   {:else}
   <div class="packs-heading">
     <div>
@@ -147,7 +148,7 @@
               <div class="pack-glyph" aria-hidden="true">{kind === "resourcePack" ? "R" : "S"}</div>
               <div class="pack-identity">
                 <h4>{entry.displayName}</h4>
-                <p class="pack-meta">{owner(entry)} · {entry.fileType === "directory" ? "Folder" : entry.fileType === "zip" ? "ZIP" : "Unclassified"}{formatModSize(entry.sizeBytes) ? ` · ${formatModSize(entry.sizeBytes)}` : ""}</p>
+                <p class="pack-meta">{entry.provenance ? "Managed" : "Local"} · {entry.provenance?.displayVersion ?? (entry.fileType === "directory" ? "Folder" : "ZIP")}{formatModSize(entry.sizeBytes) ? ` · ${formatModSize(entry.sizeBytes)}` : ""}</p>
                 {#if entry.description}<p class="pack-description">{entry.description}</p>{/if}
                 {#if entry.warnings.length}<p class="pack-warning">⚠ {entry.warnings[0]?.message}{entry.warnings.length > 1 ? ` (+${entry.warnings.length - 1} more)` : ""}</p>{/if}
               </div>
@@ -165,18 +166,27 @@
               {/if}
               {#if entry.canRemove}<button type="button" class="btn btn-quiet" disabled={launcher.contentMutationBusy !== null} onclick={() => askRemove(entry)}>Remove…</button>{:else}<span title="Folder packs and unsafe entries are left untouched">Unavailable</span>{/if}
             </div>
-            <details class="pack-details"><summary>Details</summary>
-              <dl>
-                <div><dt>File</dt><dd>{entry.fileName}</dd></div>
-                <div><dt>Ownership</dt><dd>{owner(entry)}</dd></div>
-                {#if entry.packFormat !== null}<div><dt>Pack format</dt><dd>{entry.packFormat}</dd></div>{/if}
-                {#if entry.provenance}<div><dt>Provider project</dt><dd>{entry.provenance.projectId}</dd></div><div><dt>Version</dt><dd>{entry.provenance.displayVersion ?? entry.provenance.versionId}</dd></div><div><dt>Origin</dt><dd>{providerOriginLabel(entry.provenance.origin)}</dd></div>{/if}
-                {#if entry.warnings.length}<div><dt>Warnings</dt><dd><ul>{#each entry.warnings as warning}<li>{warning.message}</li>{/each}</ul></dd></div>{/if}
-              </dl>
-            </details>
             {#if entry.provenance?.provider === "modrinth"}
               {@const lifecycle = lifecycleEntries.find((item) => item.record.contentType === kind && item.record.projectId === entry.provenance?.projectId)}
-              {#if lifecycle}<div class="pack-details"><ProviderLifecycleActions instanceId={instance.id} {kind} title={entry.displayName} {lifecycle} onChanged={async () => { await refreshInstalled(instance.id, kind); }} /></div>{/if}
+              <details class="pack-details">
+                <summary aria-label={`Details for ${entry.displayName}`}>Details <Icon name="chevron-down" size={12} /></summary>
+                <dl>
+                  <div><dt>File</dt><dd>{entry.fileName}</dd></div>
+                  {#if entry.packFormat !== null}<div><dt>Pack format</dt><dd>{entry.packFormat}</dd></div>{/if}
+                  {#if entry.provenance}<div><dt>Provider</dt><dd>Modrinth · {entry.provenance.displayVersion ?? entry.provenance.versionId}</dd></div><div><dt>Origin</dt><dd>{providerOriginLabel(entry.provenance.origin)}</dd></div>{/if}
+                  {#if entry.warnings.length}<div><dt>Warnings</dt><dd><ul>{#each entry.warnings as warning}<li>{warning.message}</li>{/each}</ul></dd></div>{/if}
+                </dl>
+                {#if lifecycle}<ProviderLifecycleActions instanceId={instance.id} {kind} title={entry.displayName} {lifecycle} showRemoval={false} onChanged={async () => { await refreshInstalled(instance.id, kind); }} />{/if}
+              </details>
+            {:else}
+              <details class="pack-details">
+                <summary aria-label={`Details for ${entry.displayName}`}>Details <Icon name="chevron-down" size={12} /></summary>
+                <dl>
+                  <div><dt>File</dt><dd>{entry.fileName}</dd></div>
+                  {#if entry.packFormat !== null}<div><dt>Pack format</dt><dd>{entry.packFormat}</dd></div>{/if}
+                  {#if entry.warnings.length}<div><dt>Warnings</dt><dd><ul>{#each entry.warnings as warning}<li>{warning.message}</li>{/each}</ul></dd></div>{/if}
+                </dl>
+              </details>
             {/if}
             {#if removal?.entryId === entry.entryId}
               <div class="pack-confirm" role="group" aria-label={`Remove ${entry.displayName}?`}>
@@ -224,7 +234,9 @@
   .pack-warning { color: var(--color-warning); }
   .pack-actions span { color: var(--color-text-muted); font-size: var(--text-metadata); }
   .pack-details, .pack-confirm { grid-column: 1 / -1; font-size: var(--text-metadata); }
-  .pack-details summary { cursor: pointer; color: var(--color-text-secondary); }
+  .pack-details summary { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: var(--color-text-secondary); }
+  .pack-details[open] summary { color: var(--color-text); }
+  .pack-details dl { margin: var(--space-2) 0; }
   .pack-details dl { margin: var(--space-2) 0; }
   .pack-details dl div { display: flex; gap: var(--space-3); padding: 2px 0; }
   .pack-details dt { min-width: 100px; color: var(--color-text-muted); }

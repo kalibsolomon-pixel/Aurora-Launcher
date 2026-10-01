@@ -16,6 +16,7 @@
   import InstalledArtwork from "./InstalledArtwork.svelte";
   import ContentRecognition from "./ContentRecognition.svelte";
   import ContentUpdates from "./ContentUpdates.svelte";
+  import Icon from "$lib/shell/Icon.svelte";
 
   let { instance }: { instance: InstanceSummary } = $props();
   let query = $state("");
@@ -160,7 +161,7 @@
     {#if context?.modrinthAvailable}<button type="button" class="btn btn-quiet" aria-pressed={view === "browse"} onclick={() => view = "browse"}>Browse Modrinth</button>{/if}
   </div>
   {#if view === "browse"}
-    <ModrinthBrowse instanceId={instance.id} instanceName={instance.displayName} minecraftVersion={instance.minecraftVersion} kind="mod" installedProjectIds={entries.filter((entry) => entry.provenance?.provider === "modrinth").map((entry) => entry.provenance!.projectId)} dependencyOnlyProjectIds={lifecycleEntries.filter((entry) => entry.record.contentType === "mod" && !entry.record.explicitlyRetained).map((entry) => entry.record.projectId)} onInstalled={async (targetId) => { await refreshInstalled(targetId); }} />
+    <ModrinthBrowse instanceId={instance.id} instanceName={instance.displayName} minecraftVersion={instance.minecraftVersion} kind="mod" installedProjectIds={entries.filter((entry) => entry.provenance?.provider === "modrinth").map((entry) => entry.provenance!.projectId)} dependencyOnlyProjectIds={lifecycleEntries.filter((entry) => entry.record.contentType === "mod" && !entry.record.explicitlyRetained).map((entry) => entry.record.projectId)} onInstalled={async (targetId, targetKind) => { await refreshInstalled(targetId); if (targetKind !== "mod") await launcher.runLoadContent(targetId, targetKind); await launcher.refreshState(); }} />
   {:else}
   {#if inventory?.missingManaged.length}
     <p class="mods-notice" role="status">{inventory.missingManaged.length} managed mod file{inventory.missingManaged.length === 1 ? " is" : "s are"} missing. Refresh or inspect the instance folder; Aurora will not recreate files automatically.</p>
@@ -319,35 +320,41 @@
                   onclick={() => askRemove(entry)}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" /></svg>
                 </button>
-                {#if entry.removalBlockedReason}<span class="removal-blocker">{entry.removalBlockedReason}</span>{/if}
               {/if}
-              <details class="mod-actions-menu">
-                <summary id="actions-{entry.entryId}" aria-label={`Actions for ${entry.displayName}`}>•••</summary>
-                <div class="mod-actions-popover">
-                  <button type="button" class="menu-action" onclick={(event) => { expanded = expanded === entry.entryId ? null : entry.entryId; const menu = event.currentTarget.closest("details"); if (menu) menu.open = false; }}>Details</button>
-            {#if entry.provenance?.provider === "modrinth"}
-              {@const lifecycle = lifecycleEntries.find((item) => item.record.contentType === "mod" && item.record.projectId === entry.provenance?.projectId)}
-              {#if lifecycle}<div><ProviderLifecycleActions instanceId={instance.id} kind="mod" title={entry.displayName} {lifecycle} showRemoval={false} onChanged={async () => { await refreshInstalled(instance.id); }} /></div>{/if}
-            {/if}
-
-                </div>
-              </details>
+              <button
+                type="button"
+                class="mod-details-toggle"
+                aria-expanded={expanded === entry.entryId}
+                aria-controls="mod-details-{entry.entryId}"
+                aria-label={`Details for ${entry.displayName}`}
+                title="Details"
+                onclick={() => { expanded = expanded === entry.entryId ? null : entry.entryId; }}
+              >
+                <span class="mod-details-chevron" class:open={expanded === entry.entryId}><Icon name="chevron" size={14} /></span>
+              </button>
             </div>
 
-            {#if expanded === entry.entryId}<div class="mod-details">
+            {#if expanded === entry.entryId}<div class="mod-details" id="mod-details-{entry.entryId}">
               <dl>
                 <div><dt>File</dt><dd>{entry.fileName}</dd></div>
-                <div><dt>Ownership</dt><dd>{entry.ownership === "launcherManagedRequired" ? "Managed by Aurora · required" : entry.ownership === "providerManaged" ? `Managed · ${entry.provenance?.provider}` : entry.ownership === "launcherBootstrap" ? "Installed initially by Aurora; user controlled" : entry.ownership === "userManaged" ? "Local mod" : "Unclassified"}</dd></div>
-                {#if entry.provenance}<div><dt>Provider</dt><dd>{entry.provenance.provider} · {entry.provenance.projectId} · {entry.provenance.displayVersion ?? entry.provenance.versionId}</dd></div><div><dt>Origin</dt><dd>{providerOriginLabel(entry.provenance.origin)}</dd></div>{/if}
+                <div><dt>Source</dt><dd>{entry.ownership === "launcherManagedRequired" ? "Aurora · required" : entry.ownership === "providerManaged" ? `Modrinth${entry.provenance ? ` · ${entry.provenance.displayVersion ?? entry.provenance.versionId}` : ""}` : entry.ownership === "launcherBootstrap" ? "Installed initially by Aurora; user controlled" : entry.ownership === "userManaged" ? "Local mod" : "Unclassified"}</dd></div>
+                {#if entry.provenance}<div><dt>Origin</dt><dd>{providerOriginLabel(entry.provenance.origin)}</dd></div>{/if}
                 {#if entry.metadata}
                   <div><dt>Mod ID</dt><dd>{entry.metadata.id}</dd></div>
                   {#if entry.metadata.environment}<div><dt>Environment</dt><dd>{entry.metadata.environment}</dd></div>{/if}
                   {#if entry.metadata.depends.length}<div><dt>Requires</dt><dd>{entry.metadata.depends.map((item) => `${item.modId} ${item.requirement}`).join(", ")}</dd></div>{/if}
                 {/if}
+                {#if entry.removalBlockedReason}
+                  <div><dt>Removal</dt><dd>{entry.removalBlockedReason}</dd></div>
+                {/if}
                 {#if entry.warnings.length}
                   <div class="details-warnings"><dt>Metadata warnings</dt><dd><ul>{#each entry.warnings as warning}<li>{warning.message}</li>{/each}</ul></dd></div>
                 {/if}
               </dl>
+              {#if entry.provenance?.provider === "modrinth"}
+                {@const lifecycle = lifecycleEntries.find((item) => item.record.contentType === "mod" && item.record.projectId === entry.provenance?.projectId)}
+                {#if lifecycle}<ProviderLifecycleActions instanceId={instance.id} kind="mod" title={entry.displayName} {lifecycle} showRemoval={false} onChanged={async () => { await refreshInstalled(instance.id); }} />{/if}
+              {/if}
             </div>{/if}
 
             {#if providerRemovalEntry?.entryId === entry.entryId && providerRemoval}
@@ -401,7 +408,10 @@
 <style>
   .mod-identity .mod-meta { margin-bottom: 0; }
   .mod-row-main { min-height: 52px; }
-  .mod-actions-popover { min-width: 300px; max-width: min(450px, 65vw); }
+  .mod-details-toggle { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+  .mod-details-toggle:hover { background: var(--color-surface-raised); color: var(--color-text); }
+  .mod-details-chevron { display: grid; place-items: center; transition: transform var(--motion-fast) var(--motion-ease); }
+  .mod-details-chevron.open { transform: rotate(180deg); }
   .content-view-tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
   .content-view-tabs [aria-pressed="true"] { color: var(--color-text); background: var(--color-surface-raised); }
   .mods-panel { min-width: 0; }
@@ -445,17 +455,10 @@
   .mod-switch[aria-checked="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); }
   .mod-switch[aria-checked="true"] span { transform: translateX(16px); background: var(--color-accent); }
   .mod-switch:disabled { opacity: 0.5; cursor: progress; }
-  .mod-actions-menu { position: relative; }
-  .mod-actions-menu summary { display: grid; place-items: center; width: 32px; height: 28px; border-radius: var(--radius-sm); color: var(--color-text-secondary); cursor: pointer; list-style: none; }
-  .mod-actions-menu summary::-webkit-details-marker { display: none; }
-  .mod-actions-menu summary:hover { background: var(--color-surface-raised); color: var(--color-text); }
-  .mod-actions-popover { position: absolute; z-index: 2; top: calc(100% + var(--space-1)); right: 0; min-width: 180px; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); box-shadow: var(--shadow-group); }
-  .menu-action { width: 100%; padding: var(--space-2); border: none; border-radius: var(--radius-sm); background: transparent; color: var(--color-text); font: inherit; text-align: left; cursor: pointer; }
   .mod-trash { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
   .mod-trash:hover { background: var(--color-error-soft); color: var(--color-error); }
   .mod-trash:disabled { opacity: .45; cursor: default; }
-  .removal-blocker { max-width: 200px; font-size: var(--text-metadata); color: var(--color-text-muted); }
-  .menu-action:hover { background: var(--color-surface-hover); }
+
   .mod-details { grid-column: 1 / -1; margin-left: 46px; color: var(--color-text-secondary); font-size: var(--text-metadata); }
   .mod-details dl { display: grid; gap: var(--space-1); margin: var(--space-2) 0 0; }
   .mod-details dl > div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: var(--space-2); }
@@ -482,5 +485,6 @@
 
   @media (prefers-reduced-motion: reduce) {
     .mod-switch span { transition: none; }
+    .mod-details-chevron { transition: none; }
   }
 </style>

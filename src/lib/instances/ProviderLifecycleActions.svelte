@@ -88,7 +88,6 @@
       const updated = await setProviderUpdatePolicy(instanceId, kind, record.projectId, change);
       lifecycle.record.pinned = updated.pinned;
       lifecycle.record.updateChannel = updated.updateChannel;
-      // Availability was computed under the previous policy; it is stale now.
       candidate = null; checked = false; updatePreview = null;
       success = change.channel !== undefined
         ? `Release policy set to ${updateChannelLabel(updated.updateChannel)}. Check for updates again to apply it.`
@@ -102,17 +101,15 @@
   }
 </script>
 
-<div class="provider-lifecycle" aria-label={`Modrinth lifecycle for ${title}`}>
-  <div class="lifecycle-summary">
-    <span>{record.explicitlyRetained ? "Managed" : "Dependency"}</span>
-    <span>· {record.displayVersion ?? record.versionId}</span>
-    {#if record.pinned}<span class="pin-marker">· Pinned</span>{/if}
-    <span>· {updateChannelLabel(record.updateChannel)} releases</span>
-    {#if requiredBy.length}<span>· Required by {requiredBy.map((parent) => parent.fileName).join(", ")}</span>{/if}
-  </div>
+<div class="provider-lifecycle" aria-label={`Modrinth details for ${title}`}>
+  <p class="lifecycle-summary">
+    Managed via Modrinth · {record.displayVersion ?? record.versionId}
+    {#if record.pinned}<span class="pin-marker">Pinned</span>{/if}
+    {#if record.updateChannel !== "stable"}<span class="channel-marker">{updateChannelLabel(record.updateChannel)} releases</span>{/if}
+  </p>
   <details class="relationships">
-    <summary>Dependency details</summary>
-    <p>{record.explicitlyRetained ? "Explicitly retained" : "Installed as a required dependency"} via Modrinth. {providerOriginLabel(record.origin)}.</p>
+    <summary>Provider details</summary>
+    <p>{providerOriginLabel(record.origin)}. {record.explicitlyRetained ? "Explicitly retained" : "Installed as a required dependency"}.</p>
     <p>Requires: {lifecycle.requires.length ? lifecycle.requires.map((item) => item.fileName).join(", ") : "No provider-managed dependencies"}</p>
     <p>Required by: {requiredBy.length ? requiredBy.map((parent) => parent.fileName).join(", ") : "No installed provider content"}</p>
     {#if record.explicitlyRetained}
@@ -135,27 +132,26 @@
         </label>
       </div>
       <p class="policy-note">{record.pinned ? "Pinned content never advances through update actions; unpin first to update it here." : "Pinning keeps this exact version until you unpin it."}</p>
-    {/if}
-  </details>
-  <div class="lifecycle-actions">
-    {#if record.explicitlyRetained}
-      <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={check}>{busy === "check" ? "Checking…" : "Check for updates"}</button>
-      {#if checked}
-        <span role="status">
-          {#if candidate}
-            {record.pinned ? `Pinned — update available: ${candidate.versionNumber} (${candidate.versionType})` : `Update available: ${candidate.versionNumber} (${candidate.versionType})`}
-          {:else}
-            "No newer compatible version under the {updateChannelLabel(record.updateChannel)} release policy."
-          {/if}
-        </span>
-      {/if}
-      {#if candidate && !record.pinned}<button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={previewUpdate}>Update…</button>{/if}
-      {#if candidate && record.pinned}<span class="policy-note">Unpin to update.</span>{/if}
+      <div class="lifecycle-actions">
+        <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={check}>{busy === "check" ? "Checking…" : "Check for updates"}</button>
+        {#if checked}
+          <span role="status">
+            {#if candidate}
+              {record.pinned ? `Pinned — update available: ${candidate.versionNumber} (${candidate.versionType})` : `Update available: ${candidate.versionNumber} (${candidate.versionType})`}
+            {:else}
+              No newer compatible version under the {updateChannelLabel(record.updateChannel)} policy.
+            {/if}
+          </span>
+        {/if}
+        {#if candidate && !record.pinned}<button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={previewUpdate}>Update…</button>{/if}
+      </div>
     {/if}
     {#if showRemoval && (record.explicitlyRetained || !requiredBy.length)}
-      <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={previewRemove}>Remove…</button>
+      <div class="lifecycle-actions">
+        <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={previewRemove}>Remove…</button>
+      </div>
     {/if}
-  </div>
+  </details>
   {#if error}<p class="lifecycle-error" role="alert">{error}</p>{/if}
   {#if success}<p role="status">{success}</p>{/if}
 
@@ -196,10 +192,12 @@
 
 <style>
   .provider-lifecycle { display: grid; gap: var(--space-2); margin-top: var(--space-2); font-size: var(--text-metadata); color: var(--color-text-secondary); }
-  .lifecycle-summary, .lifecycle-actions, .preview-actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
-  .pin-marker { color: var(--color-accent); font-weight: 600; }
+  .lifecycle-summary { margin: 0; }
+  .pin-marker { display: inline-block; margin-left: var(--space-2); padding: 1px var(--space-2); border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent); font-weight: 600; }
+  .channel-marker { display: inline-block; margin-left: var(--space-2); padding: 1px var(--space-2); border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text-secondary); }
+  .lifecycle-actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }
   .relationships summary { cursor: pointer; color: var(--color-text-secondary); }
-  .relationships p, .lifecycle-preview p { margin: var(--space-1) 0; }
+  .relationships p { margin: var(--space-1) 0; }
   .policy-row { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-2); }
   .policy-channel { display: grid; gap: 2px; }
   .policy-channel span { color: var(--color-text-muted); }
@@ -208,6 +206,7 @@
   .changelog-toggle { padding: 0; border: none; background: transparent; color: var(--color-accent); font: inherit; font-size: var(--text-metadata); cursor: pointer; text-decoration: underline; }
   .changelog { max-height: 220px; overflow: auto; margin: var(--space-1) 0 0; padding: var(--space-2); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text-secondary); font-size: var(--text-metadata); white-space: pre-wrap; overflow-wrap: anywhere; }
   .lifecycle-preview { padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-raised); }
-  .preview-actions { margin-top: var(--space-2); }
+  .lifecycle-preview p { margin: var(--space-1) 0; }
+  .preview-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
   .lifecycle-error { color: var(--color-error); }
 </style>

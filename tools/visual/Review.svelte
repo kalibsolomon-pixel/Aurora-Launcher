@@ -17,6 +17,7 @@
   // Phase H update-review fixtures: real provider records and a typed
   // availability report for the Content workspace Updates card.
   const phaseH = review.has('updates');
+  const zeroUpdates = review.has('zero');
   const provenance = (project: string, version: string, display: string, origin: string, pinned = false, channel: 'stable'|'beta'|'alpha' = 'stable') => ({
     contentType: 'mod', provider: 'modrinth', projectId: project, versionId: version, fileId: 'f'.repeat(128),
     fileName: `${display}.jar`, sha256: 'a'.repeat(64), displayVersion: display,
@@ -27,7 +28,9 @@
     { record: provenance('AAAA0001', 'aaaa0002', 'Sodium 1.4.2', 'direct'), requiredBy: [], requires: [] },
     { record: provenance('BBBB0002', 'bbbb0002', 'Mod Menu 7.0.0', 'recovered', true), requiredBy: [], requires: [] },
     { record: provenance('CCCC0003', 'cccc0002', 'FerriteCore 8.0.0', 'direct'), requiredBy: [], requires: [] },
+    { record: { ...provenance('DEPD0009', 'depd0010', 'Cloth Config 21.11.153', 'dependency', false), explicitlyRetained: false }, requiredBy: [], requires: [] },
   ] : [];
+  if (phaseH) lifecycleFixtures[3].requiredBy = [lifecycleFixtures[0].record];
   const account = { accountId, minecraftName: 'AuroraPlayer', status: 'signedIn' };
   const instance = { id, displayName: 'Aurora Client', state: 'ready', minecraftVersion: '1.21.11', platform: { kind: 'fabric', version: '0.19.5' }, aurora: { version: '2.1.5', channel: 'stable' }, auroraContentState: 'active', configuration: { minecraftVersion: '1.21.11', loader: { kind: 'fabric', policy: { type: 'pinned', version: '0.19.5' } }, auroraEnabled: true, memoryMib: 2048, additionalJvmArguments: '', window: null } };
   const fixtureLayout = { widgets: [{id:'recent-worlds',enabled:true,size:'small'}, {id:'playtime',enabled:true,size:'small'}, {id:'content-summary',enabled:false,size:'small'}, {id:'instance-details',enabled:false,size:'small'}] };
@@ -40,8 +43,13 @@
   launcher.playReadiness = { instanceId: id, accountId, ready: true, blockers: [], processStatus:'stopped' } as any;
   const modEntry = (name: string, i: number, prov: any = null) => ({ entryId: String(i), displayName: name, fileName: prov ? prov.fileName : name.toLowerCase().replaceAll(' ', '-') + '.jar', enabled: i !== 3, fileType: i === 3 ? 'disabledJar' : 'enabledJar', sizeBytes: 1245000, modifiedUnixMillis: null, ownership: prov ? 'providerManaged' : (i === 0 ? 'auroraManaged' : 'userManaged'), sha256: null, provenance: prov, metadata: { id: name.toLowerCase(), version: prov ? prov.displayVersion : '1.0.0', authors: ['Visual review'] }, warnings: [], canToggle: i !== 0, canRemove: i !== 0, actionBlockedReason: null });
   const modNames = ['Aurora Client','Sodium','Fabric API','Lithium','Iris','Mod Menu','FerriteCore'];
-  launcher.modInventories = { [id]: { instanceId:id, entries: modNames.map((name,i)=>modEntry(name, i, phaseH && i === 1 ? lifecycleFixtures[0].record : phaseH && i === 5 ? lifecycleFixtures[1].record : phaseH && i === 6 ? lifecycleFixtures[2].record : null)), missingManaged: [] } } as any;
-  launcher.contentInventories = Object.fromEntries(['resourcePack','shaderPack'].map(kind=>[`${id}:${kind}`,{instanceId:id,contentType:kind,missingManaged:[],entries:(kind==='resourcePack'?['Faithful','Fresh Animations']:['Complementary']).map((name,i)=>({entryId:kind+i,contentType:kind,displayName:name,fileName:name+'.zip',fileType:'zip',sizeBytes:4200000,modifiedUnixMillis:null,ownership:'userManaged',sha256:null,provenance:null,description:'Visual review fixture',packFormat:46,warnings:[],canRemove:true}))}])) as any;
+  launcher.modInventories = { [id]: { instanceId:id, entries: modNames.map((name,i)=>modEntry(name, i, phaseH && i === 1 ? lifecycleFixtures[0].record : phaseH && i === 2 ? lifecycleFixtures[3].record : phaseH && i === 5 ? lifecycleFixtures[1].record : phaseH && i === 6 ? lifecycleFixtures[2].record : null)), missingManaged: [] } } as any;
+  const managedPackRecord = provenance('SHDR0001', 'shdr0002', 'Complementary r5.9.3', 'direct');
+  managedPackRecord.contentType = 'shaderPack'; managedPackRecord.fileId = 'f'.repeat(128); managedPackRecord.fileName = 'ComplementaryReimagined_r5.9.3.zip'; managedPackRecord.sha256 = 'a'.repeat(64);
+  const managedResourceRecord = provenance('RESR0001', 'resr0002', 'Faithful 32x 1.21', 'direct');
+  managedResourceRecord.contentType = 'resourcePack'; managedResourceRecord.fileName = 'Faithful 32x.zip';
+  launcher.contentInventories = Object.fromEntries(['resourcePack','shaderPack'].map(kind=>[`${id}:${kind}`,{instanceId:id,contentType:kind,missingManaged:[],entries:(kind==='resourcePack'?[['Faithful 32x', managedResourceRecord],['Fresh Animations', null]]:[['Complementary Reimagined', managedPackRecord]]).map(([name, prov],i)=>({entryId:kind+i,contentType:kind,displayName:name,fileName:(prov ? prov.fileName : name+'.zip'),fileType:'zip',sizeBytes:4200000,modifiedUnixMillis:null,ownership:prov?'providerManaged':'userManaged',sha256:null,provenance:prov,description:'Visual review fixture',packFormat:46,warnings:[],canRemove:true}))}])) as any;
+  if (review.has('skin')) launcher.accountAvatars[id] = { rgba: Array(256).fill(200), model: 'classic', skinHeight: 64, skinRgba: Array(64*64*4).fill(180) } as any;
   launcher.minecraftVersions = [{id:'1.21.11',versionType:'release'}];
   launcher.createMinecraftVersion = '1.21.11';
 
@@ -82,8 +90,40 @@
     if (command === 'get_account_avatar') return null;
     if (command === 'get_instance_runtime_status') return {instanceId:args.request.instanceId,status:'ready'};
     if (command === 'get_play_readiness') return {...launcher.playReadiness, instanceId:launcher.selectedInstance!.id,accountId:launcher.selectedAccount!.accountId};
+    if (command === 'browse_modrinth') {
+      const browseKeyType: string = args.request.contentType;
+      const hitsFor: Record<string, any[]> = {
+        mod: [1,2,3,4].map((n)=>({ projectId:'AAAA000'+n, title:['Sodium','Lithium','Iris','Mod Menu'][n-1], summary:'A visual review fixture project with a short description.', author:'Visual review', downloads: 1200000*n, iconUrl:null, projectType:'mod', categories:['performance','rendering'] })),
+        modpack: [1,2].map((n)=>({ projectId:'PACK000'+n, title:['Fabulously Optimized','Simply Optimized'][n-1], summary:'A curated modpack fixture for browsing only.', author:'Visual review', downloads: 900000*n, iconUrl:null, projectType:'modpack', categories:['optimization'] })),
+        resourcePack: [1,2].map((n)=>({ projectId:'RESR000'+n, title:['Faithful 32x','Fresh Animations'][n-1], summary:'A resource pack fixture.', author:'Visual review', downloads: 400000*n, iconUrl:null, projectType:'resourcePack', categories:['32x'] })),
+        shaderPack: [1,2].map((n)=>({ projectId:'SHDR000'+n, title:['Complementary Reimagined','BSL Shaders'][n-1], summary:'A shader pack fixture.', author:'Visual review', downloads: 700000*n, iconUrl:null, projectType:'shaderPack', categories:['fantasy','cartoon'] })),
+      };
+      return { offset: args.request.offset, totalHits: hitsFor[browseKeyType]?.length ?? 0, hits: hitsFor[browseKeyType] ?? [] };
+    }
+    if (command === 'get_modrinth_project') {
+      const kind = args.request.contentType;
+      const versionLists: Record<string, any[]> = {
+        modpack: [
+          { id:'pack0002', name:'v9.2.1', versionNumber:'9.2.1', versionType:'release', datePublished:'2026-09-01', environment:'client', loaders:['fabric'] },
+          { id:'pack0003', name:'v9.3.0-beta', versionNumber:'9.3.0-beta', versionType:'beta', datePublished:'2026-09-20', environment:'client', loaders:['fabric'] },
+        ],
+        mod: [ { id:'aaaa0009', name:'Sodium 1.5.0', versionNumber:'1.5.0', versionType:'release', datePublished:'2026-09-01', environment:'client', loaders:['fabric'] } ],
+      };
+      return { projectId: args.request.projectId, title: 'Fabulously Optimized', summary: 'A curated modpack fixture.', license: 'MIT', gameVersions: ['1.21.11'], loaders: ['fabric'], environments: ['client'], versions: versionLists[kind] ?? versionLists.mod, defaultVersionId: (versionLists[kind] ?? versionLists.mod)[0]?.id ?? null, projectType: kind };
+    }
+    if (command === 'browse_modrinth_tags') {
+      return [
+        { name:'performance', projectType:'mod' }, { name:'utility', projectType:'mod' }, { name:'adventure', projectType:'modpack' },
+        { name:'technology', projectType:'mod' }, { name:'optimization', projectType:'modpack' }, { name:'32x', projectType:'resourcepack' },
+        { name:'fantasy', projectType:'shader' }, { name:'cartoon', projectType:'shader' },
+      ];
+    }
     if (command === 'check_instance_updates') {
       if (!phaseH) throw {code:'visual_review_only',message:'Add ?updates=1 for update fixtures.'};
+      if (zeroUpdates) return { instanceId: id, dependencyManaged: 1, entries: [
+        { contentType:'mod', projectId:'AAAA0001', currentVersion:'1.4.2', status:'upToDate', block:null, candidate:null, pinned:false, channel:'stable', detail:null },
+        { contentType:'mod', projectId:'BBBB0002', currentVersion:'7.0.0', status:'noNewerUnderPolicy', block:null, candidate:null, pinned:false, channel:'stable', detail:'Newer versions exist but none is allowed by the Stable release-channel policy for this content.' },
+      ] };
       return { instanceId: id, dependencyManaged: 1, entries: [
         { contentType:'mod', projectId:'AAAA0001', currentVersion:'1.4.2', status:'updateAvailable', block:null, candidate:{id:'aaaa0009',name:'Sodium 1.5.0',versionNumber:'1.5.0',versionType:'release',datePublished:'2026-09-01',environment:'client_and_server',loaders:['fabric']}, pinned:false, channel:'stable', detail:null },
         { contentType:'mod', projectId:'BBBB0002', currentVersion:'7.0.0', status:'pinnedUpdateAvailable', block:null, candidate:{id:'bbbb0009',name:'Mod Menu 7.1.0-beta',versionNumber:'7.1.0-beta',versionType:'beta',datePublished:'2026-09-02',environment:'client_and_server',loaders:['fabric']}, pinned:true, channel:'stable', detail:null },

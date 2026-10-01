@@ -5,13 +5,14 @@
 </script>
 
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { appendBrowsePage, TransientNotice } from "./modrinthBrowse";
   import {
-    getModrinthProject, installModrinth, previewModrinthInstall, quickInstallModrinth, searchModrinth,
+    BROWSE_KINDS, BROWSE_SORTS, browseKindLabel, browseKindNoun, browseModrinth, browseModrinthTags,
+    browseSortLabel, getModrinthProjectBrowse, installModrinth, previewModrinthInstall, quickInstallModrinth,
     LauncherBackendError,
-    type ContentType, type ModrinthPreviewResponse,
-    type ModrinthProjectDetails, type ModrinthSearchPage,
+    type BrowseKind, type BrowseSort, type ContentType, type ModrinthPreviewResponse,
+    type ModrinthProjectDetails, type ModrinthSearchPage, type ProviderCategory,
     type ProviderConflict,
   } from "$lib/backend";
   import InstallConflicts from "./InstallConflicts.svelte";
@@ -28,12 +29,18 @@
     onInstalled: (targetInstanceId: string, targetKind: ContentType) => Promise<void>;
   } = $props();
 
+  // The effect below re-syncs browseKind whenever the host tab's kind
+  // changes; this initializer only seeds the very first render.
+  // svelte-ignore state_referenced_locally
+  let browseKind = $state<BrowseKind>(kind);
   let query = $state("");
+  let categories = $state<string[]>([]);
+  let sort = $state<BrowseSort>("relevance");
   let page = $state<ModrinthSearchPage | null>(null);
   let project = $state<ModrinthProjectDetails | null>(null);
   let versionId = $state("");
   let preview = $state<ModrinthPreviewResponse | null>(null);
-  let busy = $state<"search" | "details" | "preview" | "install" | null>(null);
+  let busy = $state<"search" | "details" | "preview" | "install" | "tags" | null>(null);
   let error = $state<{ code: string; message: string } | null>(null);
   let nextOffset = $state(0);
   let quickBusyProjectId = $state<string | null>(null);
@@ -41,6 +48,9 @@
   let noticeExiting = $state(false);
   let failedIcons = $state<Record<string, true>>({});
   let blockedProjects = $state<Record<string, { message: string; conflict: ProviderConflict | null }>>({});
+  let categoryPickerOpen = $state(false);
+  let allCategories = $state<ProviderCategory[]>([]);
+  let categoriesError = $state("");
   let requestSerial = 0;
 
   // A brief in-memory reuse avoids fetching the same default page on a quick
@@ -48,10 +58,27 @@
   const defaultPages = browseDefaultPages;
   const notifications = new TransientNotice((message, exiting) => { notice = message; noticeExiting = exiting; });
 
-  onDestroy(() => {
-    requestSerial++;
-    notifications.dispose();
+  const installable = $derived(browseKind !== "modpack");
+  const availableCategories = $derived.by(() => {
+    const scope = browseKind === "mod" ? ["mod", "modpack"] : [browseKindProjectType(browseKind)];
+    const seen = new Set<string>();
+    return allCategories
+      .filter((category) => scope.includes(category.projectType) && !seen.has(category.name) && seen.add(category.name))
+      .map((category) => category.name)
+      .sort();
   });
+
+  function browseKindProjectType(kind: BrowseKind): string {
+    if (kind === "mod") return "mod";
+    if (kind === "modpack") return "modpack";
+    if (kind === "resourcePack") return "resourcepack";
+    return "shader";
+  }
+
+  /** Installable kinds only; modpacks never reach the install commands. */
+  function installContentType(): ContentType {
+    return browseKind === "mod" ? "mod" : browseKind === "resourcePack" ? "resourcePack" : "shaderPack";
+  }
 
   function showError(reason: unknown): void {
     error = reason instanceof LauncherBackendError
@@ -59,17 +86,27 @@
       : { code: "provider_network_error", message: "Modrinth is unavailable. Try again later." };
   }
 
+  onDestroy(() => {
+    requestSerial++;
+    notifications.dispose();
+  });
+
   async function search(offset = 0, term = query): Promise<void> {
     const serial = ++requestSerial;
     busy = "search";
     error = null;
     if (offset === 0) { page = null; nextOffset = 0; project = null; preview = null; }
     try {
-      const result = await searchModrinth(instanceId, kind, term, offset);
+      const result = await browseModrinth({
+        instanceId, provider: "modrinth", contentType: browseKind,
+        search: term, categories, sort, offset,
+      });
       if (serial !== requestSerial) return;
       page = appendBrowsePage(page, result, offset);
       nextOffset = result.offset + 20;
-      if (offset === 0 && !term.trim()) defaultPages.put(instanceId, kind, minecraftVersion, result);
+      if (offset === 0 && !term.trim() && !categories.length && sort === "relevance") {
+        defaultPages.put(instanceId, browseKind, minecraftVersion, result);
+      }
     } catch (reason) {
       if (serial === requestSerial) showError(reason);
     } finally {
@@ -77,19 +114,52 @@
     }
   }
 
-  $effect(() => {
-    ++requestSerial;
+  async function loadCategories(): Promise<void> {
+    if (allCategories.length || busy === "tags") return;
+    busy = "tags";
+    categoriesError = "";
+    try {
+      allCategories = await browseModrinthTags();
+    } catch (reason) {
+      categoriesError = reason instanceof Error ? reason.message : "Categories are unavailable right now.";
+    } finally { busy = null; }
+  }
+
+  function toggleCategory(name: string): void {
+    categories = categories.includes(name) ? categories.filter((item) => item !== name) : [...categories, name];
+    void search(0, "");
+  }
+
+  function clearFilters(): void {
+    categories = [];
+    sort = "relevance";
     query = "";
+    void search(0, "");
+  }
+
+  function switchKind(next: BrowseKind): void {
+    if (browseKind === next) return;
+    browseKind = next;
+    query = "";
+    categories = [];
+    sort = "relevance";
     page = null;
     project = null;
     preview = null;
     error = null;
-    const cached = defaultPages.get(instanceId, kind, minecraftVersion);
     blockedProjects = {};
+    const cached = defaultPages.get(instanceId, browseKind, minecraftVersion);
+    if (cached) { page = cached; nextOffset = 20; }
+    else void search(0, "");
+  }
+
+  onMount(() => {
+    // The host tab mounts browse with a fixed kind; tab changes remount.
+    // Initial load only — switches go through switchKind below.
+    const cached = defaultPages.get(instanceId, browseKind, minecraftVersion);
     if (cached) {
       page = cached;
       nextOffset = 20;
-      busy = null;
     } else {
       void search(0, "");
     }
@@ -105,29 +175,28 @@
       case "provider_dependency_unresolved": return "A required dependency has no compatible version.";
       case "provider_dependency_cycle": return "This project's required dependencies contain a cycle.";
       case "provider_integrity_failure": return "The download failed verification. Nothing was installed.";
+      case "content_acquisition_failed": return "The download could not be completed. Try again shortly.";
       default: return reason.message;
     }
   }
 
   async function quickInstall(projectId: string, title: string): Promise<void> {
-    if (quickBusyProjectId || (installedProjectIds.includes(projectId) && !dependencyOnlyProjectIds.includes(projectId))) return;
+    if (!installable || quickBusyProjectId || (installedProjectIds.includes(projectId) && !dependencyOnlyProjectIds.includes(projectId))) return;
     const targetInstanceId = instanceId;
-    const targetKind = kind;
+    const targetKind = installContentType();
     quickBusyProjectId = projectId;
     try {
       const installed = await quickInstallModrinth(targetInstanceId, targetKind, projectId);
       if (installed.length) {
         await onInstalled(targetInstanceId, targetKind);
-        if (instanceId === targetInstanceId && kind === targetKind) notifications.show(`${title} installed. View it under Installed.`);
+        notifications.show(`${title} installed. View it under Installed.`);
       } else {
-        if (instanceId === targetInstanceId && kind === targetKind) notifications.show(`${title} is already installed.`);
+        notifications.show(`${title} is already installed.`);
       }
     } catch (reason) {
-      if (instanceId === targetInstanceId && kind === targetKind) {
-        notifications.show(quickMessage(reason));
-        if(reason instanceof LauncherBackendError && reason.code === "provider_content_collision") {
-          blockedProjects = { ...blockedProjects, [projectId]: { message: reason.message, conflict: reason.conflict } };
-        }
+      notifications.show(quickMessage(reason));
+      if(reason instanceof LauncherBackendError && reason.code === "provider_content_collision") {
+        blockedProjects = { ...blockedProjects, [projectId]: { message: reason.message, conflict: reason.conflict } };
       }
     } finally {
       quickBusyProjectId = null;
@@ -140,7 +209,7 @@
     error = null;
     preview = null;
     try {
-      const result = await getModrinthProject(instanceId, kind, id);
+      const result = await getModrinthProjectBrowse(instanceId, browseKind, id);
       if (serial !== requestSerial) return;
       project = result;
       versionId = result.defaultVersionId ?? "";
@@ -157,7 +226,7 @@
     error = null;
     preview = null;
     try {
-      preview = await previewModrinthInstall(instanceId, kind, project.projectId, versionId);
+      preview = await previewModrinthInstall(instanceId, installContentType(), project.projectId, versionId);
     } catch (reason) {
       showError(reason);
     } finally {
@@ -168,7 +237,7 @@
   async function confirmInstall(): Promise<void> {
     if (!project || !preview) return;
     const targetInstanceId = instanceId;
-    const targetKind = kind;
+    const targetKind = installContentType();
     busy = "install";
     error = null;
     try {
@@ -194,23 +263,75 @@
   <div class="browse-heading">
     <div>
       <h3 class="group-title">Browse Modrinth</h3>
-      <p class="group-subtitle">Results are filtered for this instance's Minecraft version{kind === "mod" ? " and Fabric" : ""}. Version compatibility is checked before installation.</p>
+      <p class="group-subtitle">Results are filtered for this instance's Minecraft {minecraftVersion}{browseKind === "mod" ? " and Fabric" : ""}. Compatibility is checked before installation.</p>
     </div>
     <span class="source">Source: Modrinth</span>
   </div>
 
+  <div class="browse-kind-tabs" role="group" aria-label="Browse content type">
+    {#each BROWSE_KINDS as option (option)}
+      <button type="button" class="btn btn-quiet" aria-pressed={browseKind === option} onclick={() => switchKind(option)}>{browseKindLabel(option)}</button>
+    {/each}
+  </div>
+
   <form class="browse-search" onsubmit={(event) => { event.preventDefault(); void search(); }}>
     <label>
-      <span class="field-label">Find {kind === "mod" ? "mods" : kind === "resourcePack" ? "resource packs" : "shaders"}</span>
+      <span class="field-label">Find {browseKindNoun(browseKind)}</span>
       <input type="search" bind:value={query} oninput={(event) => { if (!event.currentTarget.value.trim()) void search(0, ""); }} maxlength="160" placeholder="Search Modrinth" />
     </label>
     <button type="submit" class="btn" disabled={busy !== null}>{busy === "search" ? "Searching…" : "Search"}</button>
   </form>
 
+  <div class="browse-filters">
+    <div class="category-filter" aria-haspopup="true">
+      <button type="button" class="btn btn-quiet" aria-expanded={categoryPickerOpen} onclick={() => { categoryPickerOpen = !categoryPickerOpen; if (categoryPickerOpen) void loadCategories(); }}>
+        Categories{categories.length ? ` (${categories.length})` : ""} ▾
+      </button>
+      {#if categoryPickerOpen}
+        <div class="category-popover" role="dialog" aria-label="Category filter">
+          {#if busy === "tags"}<p class="browse-note">Loading categories…</p>{/if}
+          {#if categoriesError}<p class="browse-note">{categoriesError}</p>{/if}
+          {#if availableCategories.length}
+            <div class="category-list">
+              {#each availableCategories as category (category)}
+                <label class="category-option">
+                  <input type="checkbox" checked={categories.includes(category)} onchange={() => toggleCategory(category)} />
+                  <span>{category}</span>
+                </label>
+              {/each}
+            </div>
+          {:else if !busy && !categoriesError}
+            <p class="browse-note">No categories are listed for this content type.</p>
+          {/if}
+        </div>
+      {/if}
+    </div>
+    <label class="sort-control">
+      <span class="field-label">Sort</span>
+      <select bind:value={sort} onchange={() => void search(0, "")} aria-label="Sort results">
+        {#each BROWSE_SORTS as option (option)}
+          <option value={option}>{browseSortLabel(option)}</option>
+        {/each}
+      </select>
+    </label>
+    {#if categories.length || sort !== "relevance" || query.trim()}
+      <button type="button" class="btn btn-quiet" onclick={clearFilters}>Clear filters</button>
+    {/if}
+    <span class="filter-context">Minecraft {minecraftVersion}{browseKind === "mod" ? " · Fabric" : ""}</span>
+  </div>
+
+  {#if categories.length}
+    <div class="selected-categories" role="group" aria-label="Selected categories">
+      {#each categories as category (category)}
+        <button type="button" class="category-chip" aria-label={`Remove ${category} filter`} onclick={() => toggleCategory(category)}>{category} ×</button>
+      {/each}
+    </div>
+  {/if}
+
   {#if error}
     <p class="inline-message inline-message-error" role="alert">{error.message} <code>{error.code}</code></p>
   {/if}
-  {#if busy && busy !== "install"}<p class="browse-status" class:browse-loading={busy === "search" && !page} role="status"><span class="spinner" aria-hidden="true"></span> {busy === "search" ? "Loading Modrinth projects…" : busy === "details" ? "Loading Minecraft / loader versions…" : "Resolving dependencies…"}</p>{/if}
+  {#if busy && busy !== "install"}<p class="browse-status" class:browse-loading={busy === "search" && !page} role="status"><span class="spinner" aria-hidden="true"></span> {busy === "search" ? "Loading Modrinth projects…" : busy === "details" ? "Loading versions…" : "Resolving dependencies…"}</p>{/if}
   {#if busy === "install"}<p class="browse-status" role="status"><span class="spinner" aria-hidden="true"></span> Downloading and verifying content…</p>{/if}
 
   {#if project}
@@ -222,18 +343,20 @@
         {#if blocker.conflict}<InstallConflicts conflicts={[blocker.conflict]} />{:else}<p class="inline-message inline-message-error">{blocker.message}</p>{/if}
       {/if}
       <p>{project.summary}</p>
-      <p class="browse-meta">License {project.license} · Modrinth project {project.projectId}</p>
-      <p class="browse-meta">Minecraft {minecraftVersion} · {project.loaders.join(", ") || "No loader listed"}</p>
-      {#if kind === "shaderPack"}<p class="browse-note">The file can be installed. This instance may need a compatible shader loader before Minecraft can use it.</p>{/if}
+      <p class="browse-meta">License {project.license} · Modrinth project {project.projectId} · {project.loaders.join(", ") || "No loader listed"}</p>
+      {#if browseKind === "shaderPack"}<p class="browse-note">The file can be installed. This instance may need a compatible shader loader before Minecraft can use it.</p>{/if}
+      {#if browseKind === "modpack"}<p class="browse-note">Modpack installation arrives in a future Aurora update. Details and versions below are read-only.</p>{/if}
       {#if project.versions.length}
-        <label class="version-choice"><span class="field-label">Minecraft / loader version</span>
+        <label class="version-choice"><span class="field-label">Version</span>
           <select bind:value={versionId} onchange={() => preview = null}>
-            {#each project.versions as version}
+            {#each project.versions as version (version.id)}
               <option value={version.id}>{version.versionNumber} · {version.versionType} · {version.name}</option>
             {/each}
           </select>
         </label>
-        <button type="button" class="btn" disabled={busy !== null || !versionId} onclick={inspectInstall}>Review installation</button>
+        {#if installable}
+          <button type="button" class="btn" disabled={busy !== null || !versionId} onclick={inspectInstall}>Review installation</button>
+        {/if}
       {:else}
         <p class="browse-note">No compatible version is available for this instance.</p>
       {/if}
@@ -247,25 +370,30 @@
               {#if hit.iconUrl && !failedIconUrls.has(hit.iconUrl) && !failedIcons[hit.projectId]}
                 <img src={hit.iconUrl} alt="" loading="lazy" onerror={() => { if (hit.iconUrl) failedIconUrls.add(hit.iconUrl); failedIcons = { ...failedIcons, [hit.projectId]: true }; }} />
               {:else}
-                {kind === "mod" ? "M" : kind === "resourcePack" ? "R" : "S"}
+                {browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"}
               {/if}
             </div>
             <div class="browse-copy">
               <h4>{hit.title}</h4>
               <p>{hit.summary}</p>
               <span class="browse-meta">By {hit.author} · {hit.downloads.toLocaleString()} downloads</span>
+              {#if hit.categories.length}<span class="browse-meta"> · {hit.categories.slice(0, 3).join(" · ")}</span>{/if}
             </div>
             <div class="browse-actions">
-              <button type="button" class="btn btn-quiet install-action" title={blockedProjects[hit.projectId]?.message ?? (installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : `Install newest eligible version of ${hit.title}`)} aria-label={blockedProjects[hit.projectId] ? `${hit.title} installation blocked; review Details` : dependencyOnlyProjectIds.includes(hit.projectId) ? `Keep ${hit.title} installed directly` : installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : quickBusyProjectId === hit.projectId ? `Installing ${hit.title}` : `Install newest eligible version of ${hit.title}`} disabled={quickBusyProjectId !== null || !!blockedProjects[hit.projectId] || (installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId))} onclick={() => quickInstall(hit.projectId, hit.title)}>
-                {#if quickBusyProjectId === hit.projectId}<span class="spinner" aria-hidden="true"></span><span class="action-state">Installing…</span>{:else if installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Installed</span>{:else if blockedProjects[hit.projectId]}<span class="action-state">Blocked</span>{:else if dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Keep</span>{:else}<span aria-hidden="true">↓</span>{/if}
-              </button>
+              {#if installable}
+                <button type="button" class="btn btn-quiet install-action" title={blockedProjects[hit.projectId]?.message ?? (installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : `Install newest eligible version of ${hit.title}`)} aria-label={blockedProjects[hit.projectId] ? `${hit.title} installation blocked; review Details` : dependencyOnlyProjectIds.includes(hit.projectId) ? `Keep ${hit.title} installed directly` : installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : quickBusyProjectId === hit.projectId ? `Installing ${hit.title}` : `Install newest eligible version of ${hit.title}`} disabled={quickBusyProjectId !== null || !!blockedProjects[hit.projectId] || (installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId))} onclick={() => quickInstall(hit.projectId, hit.title)}>
+                  {#if quickBusyProjectId === hit.projectId}<span class="spinner" aria-hidden="true"></span><span class="action-state">Installing…</span>{:else if installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Installed</span>{:else if blockedProjects[hit.projectId]}<span class="action-state">Blocked</span>{:else if dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Keep</span>{:else}<span aria-hidden="true">↓</span>{/if}
+                </button>
+              {:else}
+                <span class="browse-only-badge" title="Modpack installation arrives in a future update">Browse only</span>
+              {/if}
               <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => openProject(hit.projectId)}>Details</button>
             </div>
           </article>
         {/each}
       </div>
     {:else}
-      <p class="browse-note">{page.totalHits > 0 ? "No matching Minecraft / loader projects on this page." : "No matching projects for this instance."}</p>
+      <p class="browse-note">{page.totalHits > 0 ? "No matching projects on this page." : "No matching projects for this instance."}</p>
     {/if}
     {#if nextOffset < page.totalHits}
       <button type="button" class="btn btn-quiet more" disabled={busy !== null} onclick={() => search(nextOffset)}>Load more</button>
@@ -301,14 +429,25 @@
 
 <style>
   .browse { min-width: 0; }
-  .browse-heading, .browse-search, .browse-row, .preview-actions { display: flex; gap: var(--space-3); align-items: center; }
-  .browse-heading { justify-content: space-between; margin-bottom: var(--space-4); }
+  .browse-heading, .browse-search, .browse-row, .preview-actions, .browse-filters { display: flex; gap: var(--space-3); align-items: center; }
+  .browse-heading { justify-content: space-between; margin-bottom: var(--space-3); }
   .browse-heading .group-subtitle { max-width: 50ch; }
-  .source, .browse-meta { font-size: var(--text-metadata); color: var(--color-text-muted); }
+  .source, .browse-meta, .filter-context { font-size: var(--text-metadata); color: var(--color-text-muted); }
   .source { white-space: nowrap; }
-  .browse-search { align-items: end; margin-bottom: var(--space-4); }
+  .browse-kind-tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; }
+  .browse-kind-tabs [aria-pressed="true"] { color: var(--color-text); background: var(--color-surface-raised); }
+  .browse-search { align-items: end; margin-bottom: var(--space-3); }
   .browse-search label, .version-choice { display: grid; gap: var(--space-1); flex: 1; }
   .browse input, .browse select { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; }
+  .browse-filters { flex-wrap: wrap; margin-bottom: var(--space-2); }
+  .sort-control { display: grid; gap: var(--space-1); width: 168px; }
+  .filter-context { margin-left: auto; white-space: nowrap; }
+  .category-filter { position: relative; }
+  .category-popover { position: absolute; z-index: 3; top: calc(100% + var(--space-1)); left: 0; width: min(340px, calc(100vw - 48px)); max-height: 280px; overflow: auto; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); box-shadow: var(--shadow-group); }
+  .category-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1) var(--space-3); }
+  .category-option { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-metadata); color: var(--color-text-secondary); cursor: pointer; }
+  .selected-categories { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); }
+  .category-chip { padding: 2px var(--space-2); border: none; border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent); font-size: var(--text-metadata); cursor: pointer; }
   .browse-status { display: flex; align-items: center; gap: var(--space-2); }
   .browse-loading { min-height: 96px; }
   .browse-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
@@ -318,6 +457,7 @@
   .browse-actions { display: flex; align-items: center; gap: var(--space-2); flex: none; }
   .install-action { display: flex; align-items: center; justify-content: center; gap: var(--space-1); min-width: 34px; min-height: 32px; font-size: 19px; line-height: 1; }
   .action-state { font-size: var(--text-metadata); }
+  .browse-only-badge { padding: 4px var(--space-2); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text-muted); font-size: var(--text-metadata); white-space: nowrap; }
   .browse-notice { position: fixed; z-index: 20; right: var(--space-4); bottom: var(--space-4); max-width: min(360px, calc(100vw - 32px)); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-surface-edge); border-radius: var(--radius-md); background: var(--color-surface-raised); box-shadow: var(--shadow-group); color: var(--color-text); font-size: var(--text-secondary); opacity: 1; transition: opacity 300ms ease-out; }
   .browse-notice.exiting { opacity: 0; }
   .browse-copy { min-width: 0; flex: 1; }
@@ -330,7 +470,7 @@
   .preview ul { margin: 0; padding-left: var(--space-4); }
   .preview li { margin: var(--space-1) 0; }
   .more { margin-top: var(--space-3); }
-  @media (max-width: 760px) { .browse-heading, .browse-row { align-items: flex-start; } .browse-heading { flex-wrap: wrap; } }
+  @media (max-width: 760px) { .browse-heading, .browse-row { align-items: flex-start; } .browse-heading { flex-wrap: wrap; } .filter-context { margin-left: 0; } }
   @media (max-width: 1150px) { .browse-list { grid-template-columns: minmax(0, 1fr); } }
   @media (prefers-reduced-motion: reduce) { .browse-notice { transition: none; } }
 </style>

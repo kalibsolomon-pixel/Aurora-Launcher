@@ -3,6 +3,11 @@ import { describe, it } from "node:test";
 
 import type { UpdateAvailability } from "../backend.ts";
 import {
+  BROWSE_KINDS,
+  BROWSE_SORTS,
+  browseKindLabel,
+  browseKindNoun,
+  browseSortLabel,
   summarizeUpdates,
   updateChannelDescription,
   updateChannelLabel,
@@ -63,6 +68,26 @@ describe("update availability summaries", () => {
       updateStatusText(availability("noNewerUnderPolicy", { detail: "Newer versions exist but none is allowed by the Stable release-channel policy for this content." })),
       "Newer versions exist but none is allowed by the Stable release-channel policy for this content.",
     );
+  });
+});
+
+describe("provider browse vocabulary", () => {
+  it("labels every browsable content type and keeps modpacks distinct from installable kinds", () => {
+    assert.equal(BROWSE_KINDS.length, 4);
+    assert.ok(BROWSE_KINDS.includes("modpack"));
+    assert.equal(browseKindLabel("mod"), "Mods");
+    assert.equal(browseKindLabel("modpack"), "Modpacks");
+    assert.equal(browseKindLabel("resourcePack"), "Resource Packs");
+    assert.equal(browseKindLabel("shaderPack"), "Shaders");
+    assert.equal(browseKindNoun("shaderPack"), "shaders");
+  });
+
+  it("exposes only provider-supported sort orders with readable labels", () => {
+    assert.deepEqual([...BROWSE_SORTS], ["relevance", "downloads", "newest", "updated"]);
+    assert.equal(browseSortLabel("relevance"), "Relevance");
+    assert.equal(browseSortLabel("downloads"), "Most downloaded");
+    assert.equal(browseSortLabel("newest"), "Newest");
+    assert.equal(browseSortLabel("updated"), "Recently updated");
   });
 });
 
