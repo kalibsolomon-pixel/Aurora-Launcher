@@ -63,8 +63,25 @@ function defaultSkin(): number[] {
 export const PLAYER_RENDER_WIDTH = 560;
 export const PLAYER_RENDER_HEIGHT = 800;
 
+/** The canonical default player view angle (radians). */
+export const PLAYER_DEFAULT_YAW = -0.42;
+
+/** Fixed rotation increment per arrow activation (radians). */
+export const PLAYER_ROTATE_STEP = 0.35;
+
+/**
+ * Yaw delta for one arrow activation, tied to the renderer's actual visual
+ * direction: the model's front (its −z face) projects to screen x as
+ * −sin(yaw), so INCREASING yaw turns the displayed player toward screen
+ * LEFT. The left arrow therefore increases yaw and the right arrow
+ * decreases it — the rendered result, not the numeric sign, is the contract.
+ */
+export function arrowYawDelta(arrow: "left" | "right"): number {
+  return arrow === "left" ? PLAYER_ROTATE_STEP : -PLAYER_ROTATE_STEP;
+}
+
 /** Painter's-order rasterization of visible faces; nearest texels preserve skin detail. */
-export function renderPlayer(context: CanvasRenderingContext2D, model: PlayerModel, yaw = -.42): void {
+export function renderPlayer(context: CanvasRenderingContext2D, model: PlayerModel, yaw = PLAYER_DEFAULT_YAW): void {
   const width = PLAYER_RENDER_WIDTH, height = PLAYER_RENDER_HEIGHT;
   const image = context.createImageData(width,height);
   const tilt = .10;

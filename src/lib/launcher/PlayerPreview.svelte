@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { launcher } from './store.svelte';
-  import { playerModel, renderPlayer, PLAYER_RENDER_WIDTH, PLAYER_RENDER_HEIGHT } from './playerModel';
+  import { playerModel, renderPlayer, arrowYawDelta, PLAYER_DEFAULT_YAW, PLAYER_RENDER_WIDTH, PLAYER_RENDER_HEIGHT } from './playerModel';
   import Icon from '$lib/shell/Icon.svelte';
   let canvas: HTMLCanvasElement | undefined = $state();
   let visible = $state(false);
   let revealed = $state(false);
-  let yaw = $state(-.42);
+  let yaw = $state(PLAYER_DEFAULT_YAW);
   const avatar = $derived(launcher.selectedAccount ? launcher.accountAvatars[launcher.selectedAccount.accountId] : null);
   const model = $derived(playerModel(avatar));
   // A fallback model means no validated skin for THIS account is available
@@ -21,7 +21,7 @@
     revealed = false;
   });
   $effect(() => {
-    // One redraw for a changed skin/angle; no idle requestAnimationFrame loop.
+    // One redraw for a changed skin/angle; no idle animation loop.
     const currentModel = model, angle = yaw;
     if (!visible || !canvas || !hasSkin) return;
     const context = canvas.getContext('2d');
@@ -45,9 +45,11 @@
     <!-- In normal flow beneath the model with its own reserved space, so the
          only manual view controls never depend on leftover room or overlays. -->
     <div class="player-controls" role="group" aria-label="Player view">
-      <button class="f-icon-button" aria-label="Rotate player left" title="Rotate left" onclick={() => yaw -= .35}><Icon name="left" size={18} /></button>
-      <button class="reset-view" aria-label="Reset player view" title="Reset player view" onclick={() => yaw = -.42}>Reset view</button>
-      <button class="f-icon-button" aria-label="Rotate player right" title="Rotate right" onclick={() => yaw += .35}><Icon name="right" size={18} /></button>
+      <!-- Positive yaw turns the rendered player toward screen left (see
+           arrowYawDelta); each activation is one bounded state update. -->
+      <button class="f-icon-button" aria-label="Rotate player left" title="Rotate left" onclick={() => yaw += arrowYawDelta("left")}><Icon name="left" size={18} /></button>
+      <button class="reset-view" aria-label="Reset player view" title="Reset player view" onclick={() => yaw = PLAYER_DEFAULT_YAW}>Reset view</button>
+      <button class="f-icon-button" aria-label="Rotate player right" title="Rotate right" onclick={() => yaw += arrowYawDelta("right")}><Icon name="right" size={18} /></button>
     </div>
   {/if}
 </div>
