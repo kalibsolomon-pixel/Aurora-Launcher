@@ -1,14 +1,17 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { getRecentWorlds, getRecentServers, type RecentGameplayTarget, type WidgetSize } from "$lib/backend";
+  import { getRecentWorlds, getRecentServers, refreshRecentServerStatus, type RecentGameplayTarget, type RecentServerMotdSegment, type RecentServerPresentation, type WidgetSize } from "$lib/backend";
   import { launcher } from "../store.svelte";
   import { recentLabel } from "../homeHistory";
-  let { mode, size, testFixture }: { mode: "world" | "server"; size: WidgetSize; testFixture?: RecentGameplayTarget[] } = $props();
+  import { fallbackLetter, motdPlainText, presentationsById, rowDetail, rowName, segmentStyle, statusLabel } from "../serverPresentation";
+  let { mode, size, testFixture, testPresentations }: { mode: "world" | "server"; size: WidgetSize; testFixture?: RecentGameplayTarget[]; testPresentations?: RecentServerPresentation[] } = $props();
   const initialFixture = untrack(() => testFixture);
   let entries = $state<RecentGameplayTarget[]>(initialFixture ?? []);
+  let presentations = $state(presentationsById(untrack(() => testPresentations ?? [])));
   let loading = $state(!initialFixture);
   let error = $state("");
   let pending = $state<string | null>(null);
+  let enriching = $state(false);
   const shown = $derived(entries.slice(0, size === "small" ? 3 : 5));
   const instances = $derived(launcher.launcherState?.instances ?? []);
   function instanceLabel(id: string): string {
@@ -16,6 +19,22 @@
     if (!found) return "Missing instance";
     const repeated = instances.filter(item => item.displayName === found.displayName).length > 1;
     return repeated ? `${found.displayName} · ${id.slice(0, 8)}` : found.displayName;
+  }
+  function presentation(entry: RecentGameplayTarget): RecentServerPresentation | undefined {
+    return mode === "server" ? presentations.get(entry.id) : undefined;
+  }
+  /** History renders first; enrichment overlays presentation facts when the
+   * bounded native refresh answers. Failure is silent: rows stay usable. */
+  async function enrich(): Promise<void> {
+    if (mode !== "server" || initialFixture || enriching || !entries.length) return;
+    enriching = true;
+    try {
+      presentations = presentationsById(await refreshRecentServerStatus(entries.map(entry => entry.id)));
+    } catch {
+      /* Unavailable enrichment never degrades history rows. */
+    } finally {
+      enriching = false;
+    }
   }
   async function launch(entry: RecentGameplayTarget): Promise<void> {
     if (!entry.available || pending || launcher.playBusy || (launcher.playProcess?.instanceId === entry.instanceId && ["starting", "running"].includes(launcher.playProcess.status))) return;
@@ -27,8 +46,9 @@
   }
   async function load(): Promise<void> {
     try { entries = await (mode === "world" ? getRecentWorlds(null, 5) : getRecentServers(null, 5)); error = ""; }
-    catch (cause) { error = cause instanceof Error ? cause.message : "Recent history is unavailable."; }
+    catch (cause) { error = cause instanceof Error ? cause.message : "Recent history is unavailable."; return; }
     finally { loading = false; }
+    await enrich();
   }
   let lastCompleted = launcher.playProcess;
   $effect(() => {
@@ -46,12 +66,27 @@
 {:else}
   <ul>
     {#each shown as entry (entry.id)}
-      <li>
+      {@const detail = presentation(entry)}
+      {@const name = rowName(entry, detail)}
+      {@const firstMotdLine = detail ? detail.motd.find(line => line.some(segment => segment.text.trim())) : undefined}
+      <li class:enriched={mode === "server"}>
+        {#if mode === "server"}
+          {#if detail?.favicon}
+            <img class="favicon" src={detail.favicon} alt="" />
+          {:else}
+            <span class="favicon fallback" aria-hidden="true">{fallbackLetter(name)}</span>
+          {/if}
+        {/if}
         <div class="identity">
-          <strong title={entry.displayName}>{entry.displayName}</strong>
-          <span class="meta" title={instanceLabel(entry.instanceId)}>{instanceLabel(entry.instanceId)} · {recentLabel(entry.lastPlayedAt, Date.now())}{entry.available ? "" : " · Unavailable"}</span>
+          <strong title={mode === "server" && rowDetail(detail) ? `${name} — ${rowDetail(detail)}` : name}>{name}{#if mode === "server" && detail}<span class="dot" class:online={detail.status === "online"} class:offline={detail.status === "offline"} title={statusLabel(detail)}></span>{/if}</strong>
+          {#if mode === "server" && firstMotdLine}
+            <span class="motd" title={motdPlainText(detail?.motd ?? [])}>
+              {#each firstMotdLine as segment, index (index)}<span style={segmentStyle(segment)}>{segment.text}</span>{/each}
+            </span>
+          {/if}
+          <span class="meta" title={instanceLabel(entry.instanceId)}>{instanceLabel(entry.instanceId)} · {recentLabel(entry.lastPlayedAt, Date.now())}{mode === "server" && statusLabel(detail) ? ` · ${statusLabel(detail)}` : ""}{entry.available ? "" : " · Unavailable"}</span>
         </div>
-        <button type="button" class="launch" aria-label={`Quick Launch ${mode === "world" ? "world" : "server"} ${entry.displayName} in ${instanceLabel(entry.instanceId)}`} disabled={!entry.available || !launcher.accountsState?.selectedAccountId || launcher.playBusy || pending !== null || (launcher.playProcess?.instanceId === entry.instanceId && ["starting", "running"].includes(launcher.playProcess.status))} onclick={() => launch(entry)} title={entry.available ? "Quick Launch" : "Target unavailable"}>
+        <button type="button" class="launch" aria-label={`Quick Launch ${mode === "world" ? "world" : "server"} ${name} in ${instanceLabel(entry.instanceId)}`} disabled={!entry.available || !launcher.accountsState?.selectedAccountId || launcher.playBusy || pending !== null || (launcher.playProcess?.instanceId === entry.instanceId && ["starting", "running"].includes(launcher.playProcess.status))} onclick={() => launch(entry)} title={entry.available ? "Quick Launch" : "Target unavailable"}>
           {pending === entry.id ? "…" : "▶"}
         </button>
       </li>
@@ -66,11 +101,18 @@
   ul { list-style: none; margin: 0; padding: 0; }
   li { display: flex; align-items: center; gap: var(--space-2); min-width: 0; padding: var(--space-2) 0; border-top: 1px solid var(--color-border); }
   li:first-child { border-top: 0; }
+  li.enriched { align-items: flex-start; }
   .identity { min-width: 0; flex: 1; display: grid; gap: 2px; }
   strong, .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  strong { font-size: var(--text-secondary); font-weight: 600; }
+  strong { font-size: var(--text-secondary); font-weight: 600; display: flex; align-items: center; gap: 6px; }
   .meta, .note { font-size: var(--text-metadata); color: var(--color-text-secondary); }
   .note { margin: var(--space-2) 0; }
+  .favicon { flex: none; width: 36px; height: 36px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); object-fit: cover; background: var(--color-surface-sunken); image-rendering: auto; margin-top: 1px; }
+  .favicon.fallback { display: inline-grid; place-items: center; font-size: 15px; font-weight: 600; color: var(--color-text-secondary); background: var(--color-surface-sunken); }
+  .motd { font-size: var(--text-metadata); color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--color-text-muted); }
+  .dot.online { background: var(--color-success); }
+  .dot.offline { background: var(--color-text-muted); }
   .launch { flex: none; width: 32px; height: 32px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); cursor: pointer; }
   .launch:hover:not(:disabled) { background: var(--color-accent-soft); color: var(--color-accent); }
   .launch:active:not(:disabled) { transform: scale(.96); }
