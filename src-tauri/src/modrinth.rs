@@ -248,6 +248,13 @@ impl Client {
         self.get(self.endpoint(&["version", id])?).await
     }
 
+    /// Crate-level access to one exact version document for acceptance
+    /// evidence; never part of the public command surface.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) async fn version_document(&self, id: &str) -> Result<VersionDto, Error> {
+        self.version(id).await
+    }
+
     async fn versions(
         &self,
         context: &Context,
@@ -363,23 +370,44 @@ impl Client {
         version_id: &str,
         installed: &ContentState,
     ) -> Result<Resolved, Error> {
-        let replacing = ProviderIdentity {
-            content_type: kind,
-            provider: "modrinth".into(),
-            project_id: project_id.into(),
-        };
-        if installed.find(&replacing).is_none() {
-            return Err(Error::InvalidRequest);
-        }
-        self.resolve_inner(
+        self.resolve_updates(
             context,
-            kind,
-            project_id,
-            version_id,
+            &[(kind, project_id.to_owned(), version_id.to_owned())],
             installed,
-            Some(replacing),
         )
         .await
+    }
+
+    /// Resolve one coherent multi-root update graph. Every target must be an
+    /// installed managed record; within this graph a required dependency may
+    /// advance to the version the updated roots require, which the state
+    /// planner later validates against retention and outside dependents.
+    /// Conflicting requirements for one project still fail resolution.
+    pub async fn resolve_updates(
+        &self,
+        context: &Context,
+        targets: &[(ContentType, String, String)],
+        installed: &ContentState,
+    ) -> Result<Resolved, Error> {
+        if targets.is_empty() || targets.len() > MAX_GRAPH {
+            return Err(Error::InvalidRequest);
+        }
+        let mut replacing = HashSet::new();
+        for (kind, project_id, _) in targets {
+            let identity = ProviderIdentity {
+                content_type: *kind,
+                provider: "modrinth".into(),
+                project_id: project_id.clone(),
+            };
+            if installed.find(&identity).is_none() {
+                return Err(Error::InvalidRequest);
+            }
+            if !replacing.insert(identity) {
+                return Err(Error::InvalidRequest);
+            }
+        }
+        self.resolve_multi_inner(context, targets, installed, replacing)
+            .await
     }
 
     async fn resolve_inner(
@@ -390,6 +418,22 @@ impl Client {
         version_id: &str,
         installed: &ContentState,
         replacing: Option<ProviderIdentity>,
+    ) -> Result<Resolved, Error> {
+        self.resolve_multi_inner(
+            context,
+            &[(kind, project_id.to_owned(), version_id.to_owned())],
+            installed,
+            replacing.into_iter().collect(),
+        )
+        .await
+    }
+
+    async fn resolve_multi_inner(
+        &self,
+        context: &Context,
+        targets: &[(ContentType, String, String)],
+        installed: &ContentState,
+        replacing: HashSet<ProviderIdentity>,
     ) -> Result<Resolved, Error> {
         let mut graph = Graph {
             context,
@@ -403,22 +447,25 @@ impl Client {
             warnings: Vec::new(),
             replacing,
         };
-        graph
-            .visit(
-                project_id.to_owned(),
-                Some(version_id.to_owned()),
-                Some(kind),
-                true,
-            )
-            .await?;
+        for (kind, project_id, version_id) in targets {
+            graph
+                .visit(
+                    project_id.clone(),
+                    Some(version_id.clone()),
+                    Some(*kind),
+                    true,
+                )
+                .await?;
+        }
         if graph.plans.is_empty() && graph.items.is_empty() {
             return Err(Error::NoCompatibleVersion);
         }
+        let (kind, project_id, version_id) = &targets[0];
         let preview = InstallPreview {
             inventory_revision: None,
-            project_id: project_id.to_owned(),
-            version_id: version_id.to_owned(),
-            content_type: kind,
+            project_id: project_id.clone(),
+            version_id: version_id.clone(),
+            content_type: *kind,
             items: graph.items,
             warnings: graph.warnings,
         };
@@ -445,50 +492,76 @@ impl Client {
             .await
     }
 
-    /// Publication time orders versions; release policy follows the installed
-    /// channel. A stable install never silently moves to beta or alpha.
-    pub async fn update_candidate(
+    /// Publication time orders versions; the persisted release-channel policy
+    /// selects which version types are eligible. Version strings are never
+    /// compared. Returns the discovery evidence for one managed record.
+    pub async fn update_discovery(
         &self,
         context: &Context,
         installed: &ProviderRecord,
-    ) -> Result<Option<VersionChoice>, Error> {
+    ) -> Result<UpdateDiscovery, Error> {
         if installed.provider != "modrinth" {
             return Err(Error::InvalidRequest);
         }
-        let current = self.version(&installed.version_id).await?;
+        let versions = self
+            .versions(context, installed.content_type, &installed.project_id)
+            .await?;
+        // The installed exact version identity anchors ordering. It is
+        // normally part of the compatibility-filtered list; the single-version
+        // fallback covers a record whose version is not compatible with the
+        // current instance context.
+        let current = match versions
+            .iter()
+            .find(|version| version.id == installed.version_id)
+        {
+            Some(current) => current.clone(),
+            None => self.version(&installed.version_id).await?,
+        };
         if current.project_id != installed.project_id
             || choose_file(&current, installed.content_type)?.hashes.sha512 != installed.file_id
         {
             return Err(Error::InvalidResponse);
         }
-        let allowed: &[&str] = match current.version_type.as_str() {
-            "release" => &["release"],
-            "beta" => &["release", "beta"],
-            "alpha" => &["release", "beta", "alpha"],
-            _ => return Err(Error::InvalidResponse),
-        };
-        let mut versions = self
-            .versions(context, installed.content_type, &installed.project_id)
-            .await?;
-        versions.retain(|candidate| {
-            candidate.project_id == installed.project_id
-                && candidate.date_published > current.date_published
-                && allowed.contains(&candidate.version_type.as_str())
-        });
-        versions.sort_by(|a, b| {
+        let channel = installed.update_channel;
+        let mut newer: Vec<&VersionDto> = versions
+            .iter()
+            .filter(|candidate| {
+                candidate.project_id == installed.project_id
+                    && candidate.date_published > current.date_published
+            })
+            .collect();
+        newer.sort_by(|a, b| {
             b.date_published
                 .cmp(&a.date_published)
                 .then_with(|| b.id.cmp(&a.id))
         });
-        Ok(versions.first().map(|version| VersionChoice {
-            id: version.id.clone(),
-            name: version.name.clone(),
-            version_number: version.version_number.clone(),
-            version_type: version.version_type.clone(),
-            date_published: version.date_published.clone(),
-            environment: version.environment.clone(),
-            loaders: version.loaders.clone(),
-        }))
+        let newer_compatible_exists = !newer.is_empty();
+        let candidate = newer
+            .into_iter()
+            .find(|version| channel.allows(&version.version_type))
+            .map(|version| VersionChoice {
+                id: version.id.clone(),
+                name: version.name.clone(),
+                version_number: version.version_number.clone(),
+                version_type: version.version_type.clone(),
+                date_published: version.date_published.clone(),
+                environment: version.environment.clone(),
+                loaders: version.loaders.clone(),
+            });
+        Ok(UpdateDiscovery {
+            current_version_type: current.version_type,
+            candidate,
+            newer_compatible_exists,
+        })
+    }
+
+    /// The newest policy-allowed compatible update candidate, if any.
+    pub async fn update_candidate(
+        &self,
+        context: &Context,
+        installed: &ProviderRecord,
+    ) -> Result<Option<VersionChoice>, Error> {
+        Ok(self.update_discovery(context, installed).await?.candidate)
     }
 
     /// Single-hash version-file lookup. `algorithm=sha512` is Aurora's
@@ -752,7 +825,11 @@ struct Graph<'a> {
     titles: HashMap<String, String>,
     seen: HashMap<String, String>,
     warnings: Vec<String>,
-    replacing: Option<ProviderIdentity>,
+    /// Update roots whose installed records this graph may supersede. In an
+    /// update graph a required dependency may also advance to the version the
+    /// targets require; the state planner owns the retention/dependent
+    /// safety checks. An empty set is a plain install graph.
+    replacing: HashSet<ProviderIdentity>,
 }
 
 impl Graph<'_> {
@@ -842,12 +919,16 @@ impl Graph<'_> {
             let source =
                 Sha512ArtifactSource::https(&file.url, &file.hashes.sha512, Some(file.size))
                     .map_err(|_| Error::InvalidResponse)?;
+            // Install graphs refuse to swap an installed dependency version.
+            // Update graphs plan the swap instead; the state planner then
+            // enforces retention and outside-dependent safety before any
+            // transaction is proposed.
             if let Some(record) = self.installed.entries.iter().find(|record| {
                 record.provider == "modrinth"
                     && record.project_id == project.id
                     && record.version_id != version.id
                     && record.content_type == kind
-                    && self.replacing.as_ref() != Some(&record.identity())
+                    && self.replacing.is_empty()
             }) {
                 return Err(Error::DependencyVersionConflict(format!(
                     "{} requires {} provider version {}. Installed: {} (version ID {}) in {}. Review an explicit provider update; no dependency is replaced or downgraded automatically.",
@@ -869,7 +950,7 @@ impl Graph<'_> {
                     && record.project_id == project.id
                     && record.version_id == version.id
                     && record.content_type == kind
-                    && self.replacing.as_ref() != Some(&record.identity())
+                    && !self.replacing.contains(&record.identity())
             });
             self.visiting.insert(project.id.clone());
             let mut dependencies = Vec::new();
@@ -930,6 +1011,10 @@ impl Graph<'_> {
                 file_name: file.filename.clone(),
                 already_installed: already,
                 satisfied_by: None,
+                changelog: version
+                    .changelog
+                    .clone()
+                    .filter(|changelog| !changelog.trim().is_empty()),
             });
             if !already {
                 self.plans.push(ProviderInstallPlan {
@@ -957,6 +1042,20 @@ impl Graph<'_> {
 pub struct Resolved {
     pub preview: InstallPreview,
     pub plans: Vec<ProviderInstallPlan>,
+}
+
+/// Candidate-discovery evidence for one managed record. Ordering is provider
+/// publication chronology (`date_published`, ties broken by version id);
+/// equal publication times are never treated as newer.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDiscovery {
+    pub current_version_type: String,
+    pub candidate: Option<VersionChoice>,
+    /// Newer compatible versions exist but none is allowed by the persisted
+    /// release-channel policy. Distinguishes "up to date" from "no newer
+    /// version under current policy".
+    pub newer_compatible_exists: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -994,7 +1093,7 @@ pub struct ProjectDetails {
     pub project_type: ContentType,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VersionChoice {
     pub id: String,
@@ -1027,6 +1126,9 @@ pub struct PreviewItem {
     pub file_name: String,
     pub already_installed: bool,
     pub satisfied_by: Option<crate::instance_content::DependencySatisfaction>,
+    /// Provider-authored release notes for this version, when the provider
+    /// supplied them. Untrusted display text.
+    pub changelog: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1066,34 +1168,38 @@ struct LicenseDto {
     id: String,
 }
 #[derive(Debug, Clone, Deserialize)]
-struct VersionDto {
-    id: String,
-    project_id: String,
+pub(crate) struct VersionDto {
+    pub(crate) id: String,
+    pub(crate) project_id: String,
     name: String,
-    version_number: String,
-    version_type: String,
-    date_published: String,
-    game_versions: Vec<String>,
-    loaders: Vec<String>,
-    environment: String,
-    files: Vec<FileDto>,
-    dependencies: Vec<DependencyDto>,
+    pub(crate) version_number: String,
+    pub(crate) version_type: String,
+    pub(crate) date_published: String,
+    pub(crate) game_versions: Vec<String>,
+    pub(crate) loaders: Vec<String>,
+    pub(crate) environment: String,
+    pub(crate) files: Vec<FileDto>,
+    pub(crate) dependencies: Vec<DependencyDto>,
+    /// Provider-authored release notes. Absent on list responses that exclude
+    /// changelogs; display-only untrusted text.
+    #[serde(default)]
+    changelog: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
-struct FileDto {
-    hashes: HashesDto,
-    url: String,
-    filename: String,
-    primary: bool,
-    size: u64,
+pub(crate) struct FileDto {
+    pub(crate) hashes: HashesDto,
+    pub(crate) url: String,
+    pub(crate) filename: String,
+    pub(crate) primary: bool,
+    pub(crate) size: u64,
     file_type: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
-struct HashesDto {
-    sha512: String,
+pub(crate) struct HashesDto {
+    pub(crate) sha512: String,
 }
 #[derive(Debug, Clone, Deserialize)]
-struct DependencyDto {
+pub(crate) struct DependencyDto {
     project_id: Option<String>,
     version_id: Option<String>,
     dependency_type: String,
@@ -1457,6 +1563,8 @@ mod tests {
             requires: vec![],
             origin: ProviderOrigin::Direct,
             installed_at_unix_seconds: None,
+            pinned: false,
+            update_channel: crate::instance_content::UpdateChannel::Stable,
         };
         assert_eq!(
             client
@@ -1467,27 +1575,69 @@ mod tests {
                 .id,
             "22223333"
         );
-        // A beta install may move to a newer compatible beta. The current
-        // version metadata, not a human-readable version string, sets policy.
-        let mut beta_current = current;
-        beta_current["version_type"] = json!("beta");
+        // The persisted release-channel policy, not the installed version's
+        // type or any human-readable version string, decides eligibility.
+        // Under Stable the newer beta stays hidden and the discovery reports
+        // that newer versions exist outside the policy.
         let mut beta_routes = HashMap::new();
-        beta_routes.insert("/v2/version/11112222".into(), beta_current);
+        beta_routes.insert("/v2/version/11112222".into(), current.clone());
         beta_routes.insert("/v2/project/AAAABBBB/version".into(), json!([beta, stable]));
         let beta_server = server(beta_routes);
         let beta_client = Client::for_testing(&format!("{}/v2/", beta_server.base_url()));
+        let stable_only = beta_client
+            .update_discovery(&context(), &record)
+            .await
+            .unwrap();
+        assert_eq!(stable_only.candidate.as_ref().unwrap().id, "22223333");
+        assert!(stable_only.newer_compatible_exists);
+        let mut beta_policy = record.clone();
+        beta_policy.update_channel = crate::instance_content::UpdateChannel::Beta;
         assert_eq!(
             beta_client
-                .update_candidate(&context(), &record)
+                .update_discovery(&context(), &beta_policy)
                 .await
                 .unwrap()
+                .candidate
                 .unwrap()
                 .id,
             "33334444"
         );
+        let mut alpha_only = beta.clone();
+        alpha_only["id"] = json!("66667777");
+        alpha_only["version_type"] = json!("alpha");
+        alpha_only["date_published"] = json!("2026-06-01T00:00:00Z");
+        let mut alpha_routes = HashMap::new();
+        alpha_routes.insert("/v2/version/11112222".into(), current);
+        alpha_routes.insert(
+            "/v2/project/AAAABBBB/version".into(),
+            json!([alpha_only, beta, stable]),
+        );
+        let alpha_server = server(alpha_routes);
+        let alpha_client = Client::for_testing(&format!("{}/v2/", alpha_server.base_url()));
+        let beta_view = alpha_client
+            .update_discovery(&context(), &beta_policy)
+            .await
+            .unwrap();
+        // Alpha remains excluded under Beta, and the installed version type
+        // is reported as provider evidence.
+        assert_eq!(beta_view.candidate.as_ref().unwrap().id, "33334444");
+        assert_eq!(beta_view.current_version_type, "release");
+        beta_policy.update_channel = crate::instance_content::UpdateChannel::Alpha;
+        assert_eq!(
+            alpha_client
+                .update_discovery(&context(), &beta_policy)
+                .await
+                .unwrap()
+                .candidate
+                .unwrap()
+                .id,
+            "66667777"
+        );
+        // The installed exact provider identity anchors the check: a version
+        // document that no longer publishes the recorded file is rejected.
         record.file_id = "c".repeat(128);
         assert!(matches!(
-            beta_client.update_candidate(&context(), &record).await,
+            beta_client.update_discovery(&context(), &record).await,
             Err(Error::InvalidResponse)
         ));
     }
@@ -1513,6 +1663,8 @@ mod tests {
             requires: vec![],
             origin: ProviderOrigin::Direct,
             installed_at_unix_seconds: None,
+            pinned: false,
+            update_channel: crate::instance_content::UpdateChannel::Stable,
         };
         let mut routes = HashMap::new();
         routes.insert(
@@ -2119,6 +2271,318 @@ mod tests {
         assert!(matches!(
             client.lookup_files(&[hash_of(30), hash_of(31)]).await,
             Err(Error::InvalidResponse)
+        ));
+    }
+
+    fn sha(seed: &str, width: usize) -> String {
+        const HEX: &[u8] = b"0123456789abcdef";
+        let bytes = seed.as_bytes();
+        (0..width)
+            .map(|index| HEX[(usize::from(bytes[index % bytes.len()]) + index) % HEX.len()] as char)
+            .collect()
+    }
+
+    fn versioned(id: &str, project_id: &str, kind: &str, published: &str, deps: Value) -> Value {
+        let mut document = version(id, project_id, deps);
+        document["version_type"] = json!(kind);
+        document["date_published"] = json!(published);
+        document["files"][0]["hashes"]["sha512"] = json!(sha(&format!("f{id}"), 128));
+        document
+    }
+
+    fn state_record(project: &str, version_id: &str, file_seed: &str) -> ProviderRecord {
+        ProviderRecord {
+            content_type: ContentType::Mod,
+            provider: "modrinth".into(),
+            project_id: project.into(),
+            version_id: version_id.into(),
+            file_id: sha(file_seed, 128),
+            file_name: format!("{version_id}.jar").into(),
+            sha256: "b".repeat(64),
+            display_version: Some("1.0.0".into()),
+            compatibility: ContentCompatibility {
+                minecraft_versions: vec!["1.21.11".into()],
+                loader: Some("fabric".into()),
+                environment: Some("client_and_server".into()),
+            },
+            dependencies: vec![],
+            explicitly_retained: true,
+            requires: vec![],
+            origin: ProviderOrigin::Direct,
+            installed_at_unix_seconds: None,
+            pinned: false,
+            update_channel: crate::instance_content::UpdateChannel::Stable,
+        }
+    }
+
+    fn installed_state(entries: Vec<ProviderRecord>) -> ContentState {
+        let mut state = ContentState::empty();
+        state.entries = entries;
+        state
+    }
+
+    #[tokio::test]
+    async fn update_discovery_falls_back_to_the_installed_version_document() {
+        // The compatibility-filtered list does not contain the installed
+        // version (it was built for another game version), but the exact
+        // version document anchors the ordering and identity check.
+        let current = versioned(
+            "11112222",
+            "AAAABBBB",
+            "release",
+            "2026-01-01T00:00:00Z",
+            json!([]),
+        );
+        let mut newer = versioned(
+            "22223333",
+            "AAAABBBB",
+            "release",
+            "2026-02-01T00:00:00Z",
+            json!([]),
+        );
+        newer["game_versions"] = json!(["1.21.11"]);
+        let mut routes = HashMap::new();
+        routes.insert(
+            "/v2/project/AAAABBBB/version".into(),
+            json!([newer.clone()]),
+        );
+        routes.insert("/v2/version/11112222".into(), current.clone());
+        let anchored = server(routes);
+        let client = Client::for_testing(&format!("{}/v2/", anchored.base_url()));
+        let record = state_record("AAAABBBB", "11112222", "f11112222");
+        let discovery = client.update_discovery(&context(), &record).await.unwrap();
+        assert_eq!(discovery.candidate.as_ref().unwrap().id, "22223333");
+        assert_eq!(discovery.current_version_type, "release");
+
+        // Both the project list and the exact version document missing means
+        // the provider no longer knows this identity.
+        let mut gone = HashMap::new();
+        gone.insert("/v2/project/AAAABBBB/version".into(), json!([]));
+        let missing = server(gone);
+        let client = Client::for_testing(&format!("{}/v2/", missing.base_url()));
+        assert!(matches!(
+            client.update_discovery(&context(), &record).await,
+            Err(Error::NotFound)
+        ));
+    }
+
+    #[tokio::test]
+    async fn resolve_updates_plans_multi_root_graphs_with_shared_dependency_replacement() {
+        // Two update roots both advance a shared installed dependency.
+        let root_a_old = state_record("AAAA0001", "AOLD0001", "fAOLD0001");
+        let root_b_old = state_record("CCCC0003", "BOLD0002", "fBOLD0002");
+        let mut dep_old = state_record("BBBB0002", "DOLD0003", "fDOLD0003");
+        dep_old.explicitly_retained = false;
+        let mut state = installed_state(vec![
+            root_a_old.clone(),
+            root_b_old.clone(),
+            dep_old.clone(),
+        ]);
+        state.entries[0].requires = vec![dep_old.identity()];
+        state.entries[1].requires = vec![dep_old.identity()];
+
+        let dep_new = versioned(
+            "DNEW0006",
+            "BBBB0002",
+            "release",
+            "2026-03-01T00:00:00Z",
+            json!([]),
+        );
+        let mut root_a_new = versioned(
+            "ANEW0004",
+            "AAAA0001",
+            "release",
+            "2026-03-02T00:00:00Z",
+            json!([{"project_id": "BBBB0002", "version_id": "DNEW0006", "dependency_type": "required"}]),
+        );
+        root_a_new["changelog"] = json!("Adds widgets and fixes rendering.");
+        let root_b_new = versioned(
+            "BNEW0005",
+            "CCCC0003",
+            "release",
+            "2026-03-03T00:00:00Z",
+            json!([{"project_id": "BBBB0002", "version_id": "DNEW0006", "dependency_type": "required"}]),
+        );
+        let mut routes = HashMap::new();
+        for (project_id, document) in [
+            ("AAAA0001", root_a_new.clone()),
+            ("BBBB0002", dep_new.clone()),
+            ("CCCC0003", root_b_new.clone()),
+        ] {
+            routes.insert(
+                format!("/v2/project/{project_id}"),
+                project(project_id, "mod"),
+            );
+            routes.insert(
+                format!("/v2/project/{project_id}/version"),
+                json!([document]),
+            );
+            routes.insert(
+                format!("/v2/version/{}", document["id"].as_str().unwrap()),
+                document,
+            );
+        }
+        let server = server(routes);
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+
+        let resolved = client
+            .resolve_updates(
+                &context(),
+                &[
+                    (ContentType::Mod, "AAAA0001".into(), "ANEW0004".into()),
+                    (ContentType::Mod, "CCCC0003".into(), "BNEW0005".into()),
+                ],
+                &state,
+            )
+            .await
+            .unwrap();
+        let mut planned: Vec<(String, String)> = resolved
+            .plans
+            .iter()
+            .map(|plan| (plan.project_id.clone(), plan.version_id.clone()))
+            .collect();
+        planned.sort();
+        assert_eq!(
+            planned,
+            vec![
+                ("AAAA0001".to_owned(), "ANEW0004".to_owned()),
+                ("BBBB0002".to_owned(), "DNEW0006".to_owned()),
+                ("CCCC0003".to_owned(), "BNEW0005".to_owned()),
+            ]
+        );
+        // Provider changelogs ride along as untrusted display text.
+        let changelog_item = resolved
+            .preview
+            .items
+            .iter()
+            .find(|item| item.project_id == "AAAA0001")
+            .unwrap();
+        assert_eq!(
+            changelog_item.changelog.as_deref(),
+            Some("Adds widgets and fixes rendering.")
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_updates_conflicting_dependency_versions_fail_closed() {
+        let root_a_old = state_record("AAAA0001", "AOLD0001", "fAOLD0001");
+        let root_b_old = state_record("CCCC0003", "BOLD0002", "fBOLD0002");
+        let state = installed_state(vec![root_a_old.clone(), root_b_old.clone()]);
+        let dep_v2 = versioned(
+            "DNEW0006",
+            "BBBB0002",
+            "release",
+            "2026-03-01T00:00:00Z",
+            json!([]),
+        );
+        let dep_v3 = versioned(
+            "DNEW0007",
+            "BBBB0002",
+            "release",
+            "2026-03-02T00:00:00Z",
+            json!([]),
+        );
+        let root_a_new = versioned(
+            "ANEW0004",
+            "AAAA0001",
+            "release",
+            "2026-03-03T00:00:00Z",
+            json!([{"project_id": "BBBB0002", "version_id": "DNEW0006", "dependency_type": "required"}]),
+        );
+        let root_b_new = versioned(
+            "BNEW0005",
+            "CCCC0003",
+            "release",
+            "2026-03-04T00:00:00Z",
+            json!([{"project_id": "BBBB0002", "version_id": "DNEW0007", "dependency_type": "required"}]),
+        );
+        let mut routes = HashMap::new();
+        for (project_id, document) in [
+            ("AAAA0001", root_a_new.clone()),
+            ("CCCC0003", root_b_new.clone()),
+        ] {
+            routes.insert(
+                format!("/v2/project/{project_id}"),
+                project(project_id, "mod"),
+            );
+            routes.insert(
+                format!("/v2/project/{project_id}/version"),
+                json!([document]),
+            );
+            routes.insert(
+                format!("/v2/version/{}", document["id"].as_str().unwrap()),
+                document,
+            );
+        }
+        routes.insert("/v2/project/BBBB0002".into(), project("BBBB0002", "mod"));
+        routes.insert(
+            "/v2/project/BBBB0002/version".into(),
+            json!([dep_v2.clone(), dep_v3.clone()]),
+        );
+        routes.insert("/v2/version/DNEW0006".into(), dep_v2.clone());
+        routes.insert("/v2/version/DNEW0007".into(), dep_v3.clone());
+        let server = server(routes);
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+
+        assert!(matches!(
+            client
+                .resolve_updates(
+                    &context(),
+                    &[
+                        (ContentType::Mod, "AAAA0001".into(), "ANEW0004".into()),
+                        (ContentType::Mod, "CCCC0003".into(), "BNEW0005".into()),
+                    ],
+                    &state,
+                )
+                .await,
+            Err(Error::DependencyUnresolved)
+        ));
+        // A target that is not an installed managed record is refused.
+        assert!(matches!(
+            client
+                .resolve_updates(
+                    &context(),
+                    &[(ContentType::Mod, "DDDD0004".into(), "ANEW0004".into())],
+                    &state,
+                )
+                .await,
+            Err(Error::InvalidRequest)
+        ));
+    }
+
+    #[tokio::test]
+    async fn install_resolution_still_refuses_replacing_installed_dependency_versions() {
+        // Outside an update graph, a dependency pinned to a version the
+        // project does not have installed stays a hard conflict.
+        let mut dep_old = state_record("BBBB0002", "DOLD0003", "fDOLD0003");
+        dep_old.explicitly_retained = false;
+        let state = installed_state(vec![dep_old.clone()]);
+        let dep_new = versioned(
+            "DNEW0006",
+            "BBBB0002",
+            "release",
+            "2026-03-01T00:00:00Z",
+            json!([]),
+        );
+        let root = versioned(
+            "ANEW0004",
+            "AAAA0001",
+            "release",
+            "2026-03-02T00:00:00Z",
+            json!([{"project_id": "BBBB0002", "version_id": "DNEW0006", "dependency_type": "required"}]),
+        );
+        let mut routes = HashMap::new();
+        routes.insert("/v2/project/AAAA0001".into(), project("AAAA0001", "mod"));
+        routes.insert("/v2/version/ANEW0004".into(), root.clone());
+        routes.insert("/v2/project/BBBB0002".into(), project("BBBB0002", "mod"));
+        routes.insert("/v2/version/DNEW0006".into(), dep_new.clone());
+        let server = server(routes);
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        assert!(matches!(
+            client
+                .resolve(&context(), ContentType::Mod, "AAAA0001", "ANEW0004", &state,)
+                .await,
+            Err(Error::DependencyVersionConflict(_))
         ));
     }
 }

@@ -1585,6 +1585,8 @@ mod tests {
             requires: vec![],
             origin: ProviderOrigin::Direct,
             installed_at_unix_seconds: None,
+            pinned: false,
+            update_channel: crate::instance_content::UpdateChannel::Stable,
         });
         state.save(&world.managed, record.id()).unwrap();
         let provenance_path = paths.root().join("content-managed.json");
@@ -3912,6 +3914,8 @@ mod tests {
             requires: vec![],
             origin: ProviderOrigin::Direct,
             installed_at_unix_seconds: None,
+            pinned: false,
+            update_channel: crate::instance_content::UpdateChannel::Stable,
         });
         state.save(&world.managed, record.id()).unwrap();
         for enabled in [false, true] {

@@ -646,6 +646,8 @@ pub(crate) async fn register_recovered_content(
                 requires,
                 origin: ProviderOrigin::Recovered,
                 installed_at_unix_seconds: Some(now),
+                pinned: false,
+                update_channel: instance_content::UpdateChannel::Stable,
             };
             record.validate()?;
             records.push(record);
@@ -1007,6 +1009,8 @@ mod tests {
             requires: vec![],
             origin: ProviderOrigin::Direct,
             installed_at_unix_seconds: Some(1),
+            pinned: false,
+            update_channel: instance_content::UpdateChannel::Stable,
         }
     }
 

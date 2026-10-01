@@ -19,7 +19,7 @@ use crate::instances::InstanceId;
 use crate::integrity::{ArtifactDigest, verify_file};
 use crate::paths::ManagedPaths;
 
-const SCHEMA_VERSION: u32 = 3;
+const SCHEMA_VERSION: u32 = 4;
 const MAX_ARCHIVE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES: usize = 4_096;
 const MAX_METADATA_BYTES: u64 = 256 * 1024;
@@ -70,6 +70,33 @@ pub enum ProviderOrigin {
     Recovered,
 }
 
+/// Per-record release-channel policy for update candidate selection. This is
+/// a policy about which provider version types may be selected, never a pin
+/// of one exact version. Schema-3 and older records migrate to Stable: the
+/// previous updater derived its channel rule from a live provider lookup of
+/// the installed version, and a file migration must not perform network I/O
+/// or fabricate the historical policy it would have produced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UpdateChannel {
+    #[default]
+    Stable,
+    Beta,
+    Alpha,
+}
+
+impl UpdateChannel {
+    /// Whether a Modrinth `version_type` may be selected under this policy.
+    /// Unknown provider version types are never selectable.
+    pub fn allows(self, version_type: &str) -> bool {
+        match self {
+            Self::Stable => version_type == "release",
+            Self::Beta => matches!(version_type, "release" | "beta"),
+            Self::Alpha => matches!(version_type, "release" | "beta" | "alpha"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProviderDependency {
@@ -112,6 +139,14 @@ pub struct ProviderRecord {
     /// Receipt timestamp recorded when Aurora registered the record. Absent
     /// for migrated historical records; never fabricated.
     pub installed_at_unix_seconds: Option<u64>,
+    /// A user pin against provider-version advancement. Pinned roots may
+    /// still report an available candidate, but normal update actions
+    /// (single, selected, all) never advance them. Not a version pin: the
+    /// record keeps identifying the installed version.
+    pub pinned: bool,
+    /// Release-channel policy for candidate selection. Independent of
+    /// pinning; migrating records default to Stable.
+    pub update_channel: UpdateChannel,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -211,7 +246,7 @@ impl ContentState {
             .and_then(serde_json::Value::as_u64)
             .ok_or_else(|| ContentError::StateMalformed("schemaVersion is required".into()))?;
         let mut value = value;
-        if version == 1 || version == 2 {
+        if version == 1 || version == 2 || version == 3 {
             let entries = value
                 .get_mut("entries")
                 .and_then(serde_json::Value::as_array_mut)
@@ -228,31 +263,54 @@ impl ContentState {
                         "v1 record contains v2 fields".into(),
                     ));
                 }
-                if fields.contains_key("origin") || fields.contains_key("installedAtUnixSeconds") {
+                if version <= 2
+                    && (fields.contains_key("origin")
+                        || fields.contains_key("installedAtUnixSeconds"))
+                {
                     return Err(ContentError::StateMalformed(
                         "legacy record contains v3 fields".into(),
+                    ));
+                }
+                if version <= 3
+                    && (fields.contains_key("pinned") || fields.contains_key("updateChannel"))
+                {
+                    return Err(ContentError::StateMalformed(
+                        "legacy record contains v4 fields".into(),
                     ));
                 }
                 if version == 1 {
                     fields.insert("explicitlyRetained".into(), serde_json::Value::Bool(true));
                     fields.insert("requires".into(), serde_json::json!([]));
                 }
-                // Schema 2 recorded only retention, so migration derives origin
-                // from the strongest evidence Aurora actually observed.
-                let retained = fields
-                    .get("explicitlyRetained")
-                    .and_then(serde_json::Value::as_bool)
-                    .ok_or_else(|| ContentError::StateMalformed("retention is required".into()))?;
+                if version <= 2 {
+                    // Schema 2 recorded only retention, so migration derives
+                    // origin from the strongest evidence Aurora actually
+                    // observed.
+                    let retained = fields
+                        .get("explicitlyRetained")
+                        .and_then(serde_json::Value::as_bool)
+                        .ok_or_else(|| {
+                            ContentError::StateMalformed("retention is required".into())
+                        })?;
+                    fields.insert(
+                        "origin".into(),
+                        serde_json::json!(match retained {
+                            true => ProviderOrigin::Direct,
+                            false => ProviderOrigin::Dependency,
+                        }),
+                    );
+                    // Historical installation times were never recorded; the
+                    // timestamp is a receipt, not inferred history.
+                    fields.insert("installedAtUnixSeconds".into(), serde_json::Value::Null);
+                }
+                // Schema 3 predates update policy: unpinned, stable. The old
+                // updater's channel rule came from a live provider lookup, so
+                // no historical policy is fabricated here.
+                fields.insert("pinned".into(), serde_json::Value::Bool(false));
                 fields.insert(
-                    "origin".into(),
-                    serde_json::json!(match retained {
-                        true => ProviderOrigin::Direct,
-                        false => ProviderOrigin::Dependency,
-                    }),
+                    "updateChannel".into(),
+                    serde_json::json!(UpdateChannel::Stable),
                 );
-                // Historical installation times were never recorded; the
-                // timestamp is a receipt, not inferred history.
-                fields.insert("installedAtUnixSeconds".into(), serde_json::Value::Null);
             }
             value["schemaVersion"] = serde_json::json!(SCHEMA_VERSION);
         } else if version != u64::from(SCHEMA_VERSION) {
@@ -363,7 +421,7 @@ impl ContentState {
             .map_err(|error| ContentError::StateMalformed(error.to_string()))?
             .get("schemaVersion")
             .and_then(serde_json::Value::as_u64)
-            .is_some_and(|version| version == 1 || version == 2);
+            .is_some_and(|version| version == 1 || version == 2 || version == 3);
         let state = Self::from_json(&text)?;
         if legacy {
             state.save(managed, instance)?;
@@ -536,22 +594,96 @@ pub fn removal_state(
     Ok(next)
 }
 
-pub fn updated_state(
+/// Plan one coherent multi-root update transaction. Roots must be explicitly
+/// retained Modrinth-style records; each root's replacement keeps its
+/// installation origin (updating recovered content does not rewrite how
+/// management began). A replacement may also supersede an installed
+/// dependency of the updating graph, but only when that dependency is not
+/// itself explicitly retained and every installed record requiring it is
+/// inside the same transaction — an outside dependent never has its
+/// dependency swapped underneath a plan it did not join.
+pub fn updated_state_multi(
     current: &ContentState,
-    root: &ProviderIdentity,
+    roots: &[ProviderIdentity],
     mut replacements: Vec<ProviderRecord>,
 ) -> Result<ContentState, ContentError> {
-    let old = current.find(root).ok_or(ContentError::ChangedSinceScan)?;
-    if !old.explicitly_retained || !current.required_by(root).is_empty() {
-        return Err(ContentError::RequiredByInstalledContent);
-    }
-    if replacements.last().map(ProviderRecord::identity).as_ref() != Some(root) {
+    if roots.is_empty() || roots.len() > 64 {
         return Err(ContentError::StateMalformed(
-            "update graph has no root".into(),
+            "update graph has no roots".into(),
         ));
     }
+    let mut root_set = HashSet::new();
+    for root in roots {
+        if !root_set.insert(root.clone()) {
+            return Err(ContentError::StateMalformed(
+                "update graph repeats a root".into(),
+            ));
+        }
+        let old = current.find(root).ok_or(ContentError::ChangedSinceScan)?;
+        if !old.explicitly_retained {
+            return Err(ContentError::RequiredByInstalledContent);
+        }
+    }
+    for root in &root_set {
+        // Existing lifecycle rule: an installed dependent outside this
+        // transaction blocks advancing its requirement. Dependents updating
+        // in the same graph do not.
+        if current
+            .required_by(root)
+            .iter()
+            .any(|dependent| !root_set.contains(dependent))
+        {
+            return Err(ContentError::RequiredByInstalledContent);
+        }
+    }
+    let replacement_identities: HashSet<_> =
+        replacements.iter().map(ProviderRecord::identity).collect();
+    if !roots
+        .iter()
+        .all(|root| replacement_identities.contains(root))
+    {
+        return Err(ContentError::StateMalformed(
+            "update graph is missing a root replacement".into(),
+        ));
+    }
+    // A replaced dependency keeps the same identity as the record it
+    // supersedes; the root identities themselves are removed as roots.
+    let superseded: HashSet<_> = replacement_identities
+        .iter()
+        .filter(|identity| current.find(identity).is_some())
+        .cloned()
+        .collect();
+    for identity in &superseded {
+        if root_set.contains(identity) {
+            continue;
+        }
+        let old = current
+            .find(identity)
+            .expect("superseded identities exist in current");
+        if old.explicitly_retained {
+            return Err(ContentError::RequiredByInstalledContent);
+        }
+        let outsiders: Vec<_> = current
+            .required_by(identity)
+            .into_iter()
+            .filter(|dependent| !superseded.contains(dependent))
+            .collect();
+        if !outsiders.is_empty() {
+            return Err(ContentError::DependencyBlocked(format!(
+                "Updating would replace a dependency still required outside this update: {}. Update its parent in the same operation or review it separately.",
+                outsiders
+                    .iter()
+                    .filter_map(|identity| current
+                        .find(identity)
+                        .map(|record| record.file_name.clone()))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )));
+        }
+    }
     let mut next = current.clone();
-    next.entries.retain(|record| record.identity() != *root);
+    next.entries
+        .retain(|record| !superseded.contains(&record.identity()));
     let mut identities: Vec<_> = next.entries.iter().map(ProviderRecord::identity).collect();
     for replacement in &replacements {
         let identity = replacement.identity();
@@ -561,13 +693,22 @@ pub fn updated_state(
         identities.push(identity);
     }
     for replacement in &mut replacements {
-        replacement.explicitly_retained = replacement.identity() == *root;
+        let identity = replacement.identity();
+        let is_root = root_set.contains(&identity);
+        replacement.explicitly_retained = is_root;
         replacement.requires = required_edges(replacement, &identities);
-        replacement.origin = if replacement.identity() == *root {
-            ProviderOrigin::Direct
+        if is_root {
+            // Origin records how management began; an update does not change
+            // that story, so the root keeps the origin of the record it
+            // replaces. The receipt is refreshed: it documents when these
+            // exact bytes were registered.
+            let old = current.find(&identity).expect("root exists");
+            replacement.origin = old.origin;
+            replacement.pinned = old.pinned;
+            replacement.update_channel = old.update_channel;
         } else {
-            ProviderOrigin::Dependency
-        };
+            replacement.origin = ProviderOrigin::Dependency;
+        }
         replacement.installed_at_unix_seconds = Some(now_unix_seconds());
     }
     let new_identities: HashSet<_> = replacements.iter().map(ProviderRecord::identity).collect();
@@ -585,6 +726,14 @@ pub fn updated_state(
     Ok(next)
 }
 
+pub fn updated_state(
+    current: &ContentState,
+    root: &ProviderIdentity,
+    replacements: Vec<ProviderRecord>,
+) -> Result<ContentState, ContentError> {
+    updated_state_multi(current, std::slice::from_ref(root), replacements)
+}
+
 pub fn update_preview_state(
     current: &ContentState,
     root: &ProviderIdentity,
@@ -593,6 +742,23 @@ pub fn update_preview_state(
     updated_state(
         current,
         root,
+        plans
+            .iter()
+            .map(|plan| plan.record("0".repeat(64), ProviderOrigin::Direct))
+            .collect(),
+    )
+}
+
+/// Preview-time state planning for a multi-root update. Placeholder digests
+/// stand in for artifacts that are only acquired at execution time.
+pub fn update_preview_state_multi(
+    current: &ContentState,
+    roots: &[ProviderIdentity],
+    plans: &[ProviderInstallPlan],
+) -> Result<ContentState, ContentError> {
+    updated_state_multi(
+        current,
+        roots,
         plans
             .iter()
             .map(|plan| plan.record("0".repeat(64), ProviderOrigin::Direct))
@@ -1190,6 +1356,8 @@ impl ProviderInstallPlan {
             requires: Vec::new(),
             origin,
             installed_at_unix_seconds: Some(now_unix_seconds()),
+            pinned: false,
+            update_channel: UpdateChannel::Stable,
         }
     }
 }
@@ -1965,11 +2133,14 @@ fn apply_lifecycle_state_reviewed(
                 let mut normalized_acquired = acquired_record.clone();
                 normalized_acquired.explicitly_retained = record.explicitly_retained;
                 normalized_acquired.requires = record.requires.clone();
-                // Origin and the receipt timestamp are lifecycle bookkeeping
-                // assigned by the state planner; the acquired record carries
-                // placeholders until the transaction finalizes them.
+                // Origin, the receipt timestamp and the update policy are
+                // lifecycle bookkeeping assigned by the state planner; the
+                // acquired record carries placeholders until the transaction
+                // finalizes them.
                 normalized_acquired.origin = record.origin;
                 normalized_acquired.installed_at_unix_seconds = record.installed_at_unix_seconds;
+                normalized_acquired.pinned = record.pinned;
+                normalized_acquired.update_channel = record.update_channel;
                 if normalized_acquired != **record {
                     return Err(ContentError::StateMalformed(
                         "acquired artifact changed".into(),
@@ -2131,10 +2302,44 @@ pub(crate) async fn update_provider_graph_reviewed(
     plans: Vec<ProviderInstallPlan>,
     revision: Option<&str>,
 ) -> Result<ContentState, ContentError> {
-    let acquired = acquire_provider_plans(managed, plans).await?;
-    let next = updated_state(
+    update_provider_graph_multi_reviewed(
+        managed,
+        instance,
         expected,
-        root,
+        std::slice::from_ref(root),
+        plans,
+        revision,
+    )
+    .await
+}
+
+/// Execute one coherent multi-root update transaction: acquire every planned
+/// artifact, plan the combined next state, and commit it through the same
+/// staged/verified/rollback lifecycle as every provider transition.
+pub async fn update_provider_graph_multi(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    expected: &ContentState,
+    roots: &[ProviderIdentity],
+    plans: Vec<ProviderInstallPlan>,
+) -> Result<ContentState, ContentError> {
+    let revision = local_inventory_revision(managed, instance)?;
+    update_provider_graph_multi_reviewed(managed, instance, expected, roots, plans, Some(&revision))
+        .await
+}
+
+pub(crate) async fn update_provider_graph_multi_reviewed(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    expected: &ContentState,
+    roots: &[ProviderIdentity],
+    plans: Vec<ProviderInstallPlan>,
+    revision: Option<&str>,
+) -> Result<ContentState, ContentError> {
+    let acquired = acquire_provider_plans(managed, plans).await?;
+    let next = updated_state_multi(
+        expected,
+        roots,
         acquired
             .iter()
             .map(|(record, _, _)| record.clone())
@@ -2142,6 +2347,76 @@ pub(crate) async fn update_provider_graph_reviewed(
     )?;
     apply_lifecycle_state_with_revision(managed, instance, expected, &next, &acquired, revision)?;
     Ok(next)
+}
+
+/// Test-only multi-root update with injectable commit/cleanup hooks so
+/// deterministic failures can be simulated at every transaction stage.
+#[cfg(test)]
+async fn update_provider_graph_multi_with_hooks(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    expected: &ContentState,
+    roots: &[ProviderIdentity],
+    plans: Vec<ProviderInstallPlan>,
+    commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
+) -> Result<ContentState, ContentError> {
+    let acquired = acquire_provider_plans(managed, plans).await?;
+    let next = updated_state_multi(
+        expected,
+        roots,
+        acquired
+            .iter()
+            .map(|(record, _, _)| record.clone())
+            .collect(),
+    )?;
+    apply_lifecycle_state_reviewed(
+        managed,
+        instance,
+        expected,
+        &next,
+        &acquired,
+        None,
+        commit,
+        || Ok(()),
+    )?;
+    Ok(next)
+}
+
+/// Change only the persisted update policy of one managed record. Files,
+/// bytes, versions and provenance are untouched; the next lifecycle
+/// fingerprint changes because the managed state changed.
+pub fn set_update_policy(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    identity: &ProviderIdentity,
+    pinned: Option<bool>,
+    channel: Option<UpdateChannel>,
+) -> Result<ProviderRecord, ContentError> {
+    with_instance_lock(instance, || {
+        let mut state = ContentState::load(managed, instance)?;
+        let record = state
+            .entries
+            .iter_mut()
+            .find(|record| record.identity() == *identity)
+            .ok_or(ContentError::ChangedSinceScan)?;
+        if record.provider != "modrinth" {
+            return Err(ContentError::UnsupportedAction);
+        }
+        if pinned.is_none() && channel.is_none() {
+            return Err(ContentError::StateMalformed(
+                "policy change is empty".into(),
+            ));
+        }
+        if let Some(pinned) = pinned {
+            record.pinned = pinned;
+        }
+        if let Some(channel) = channel {
+            record.update_channel = channel;
+        }
+        let updated = record.clone();
+        state.save(managed, instance)?;
+        Ok(updated)
+    })
 }
 
 fn activate_verified(
@@ -2689,6 +2964,8 @@ mod tests {
                 requires: vec![],
                 origin: ProviderOrigin::Direct,
                 installed_at_unix_seconds: None,
+                pinned: false,
+                update_channel: UpdateChannel::Stable,
             }
         }
     }
@@ -2718,6 +2995,8 @@ mod tests {
             requires: vec![],
             origin: ProviderOrigin::Direct,
             installed_at_unix_seconds: None,
+            pinned: false,
+            update_channel: UpdateChannel::Stable,
         }
     }
 
@@ -2937,6 +3216,7 @@ mod tests {
                     file_name: "dependency.jar".into(),
                     already_installed: false,
                     satisfied_by: None,
+                    changelog: None,
                 }],
                 warnings: vec![],
             },
@@ -4303,6 +4583,8 @@ mod tests {
                 .as_object_mut()
                 .unwrap()
                 .remove("installedAtUnixSeconds");
+            entry.as_object_mut().unwrap().remove("pinned");
+            entry.as_object_mut().unwrap().remove("updateChannel");
         }
         let path = state_path(&fixture.managed, &fixture.instance).unwrap();
         std::fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
@@ -4326,7 +4608,15 @@ mod tests {
         );
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&std::fs::read(&path).unwrap()).unwrap()["schemaVersion"],
-            3
+            4
+        );
+        // Phase H policy migration: legacy records are unpinned and stable;
+        // no historical channel preference is fabricated.
+        assert!(
+            migrated
+                .entries
+                .iter()
+                .all(|record| !record.pinned && record.update_channel == UpdateChannel::Stable)
         );
         legacy["entries"][0]["provider"] = serde_json::json!(null);
         assert!(matches!(
@@ -4368,6 +4658,8 @@ mod tests {
                 .as_object_mut()
                 .unwrap()
                 .remove("installedAtUnixSeconds");
+            entry.as_object_mut().unwrap().remove("pinned");
+            entry.as_object_mut().unwrap().remove("updateChannel");
         }
         let path = state_path(&fixture.managed, &fixture.instance).unwrap();
         std::fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
@@ -4395,7 +4687,7 @@ mod tests {
         assert_eq!(migrated.entries[0].sha256, state.entries[0].sha256);
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&std::fs::read(&path).unwrap()).unwrap()["schemaVersion"],
-            3
+            4
         );
         // A v2 document that already carries v3 fields is malformed, not a
         // migration candidate.
@@ -4621,5 +4913,655 @@ mod tests {
                 current
             );
         }
+    }
+
+    // ---- Phase H: policy schema, multi-root planning, provenance, failure ----
+
+    fn policy_record(
+        project: &str,
+        name: &str,
+        bytes: &[u8],
+        retained: bool,
+        origin: ProviderOrigin,
+    ) -> ProviderRecord {
+        let mut record = transaction_record(ContentType::Mod, name, bytes);
+        record.project_id = project.into();
+        record.explicitly_retained = retained;
+        record.origin = origin;
+        record
+    }
+
+    #[test]
+    fn v3_migration_moves_to_schema_four_with_conservative_policy() {
+        let fixture = Fixture::new();
+        let record = transaction_record(ContentType::Mod, "legacy.jar", b"legacy");
+        let mut legacy = serde_json::to_value(ContentState {
+            schema_version: 3,
+            entries: vec![record.clone()],
+        })
+        .unwrap();
+        legacy["schemaVersion"] = serde_json::json!(3);
+        for entry in legacy["entries"].as_array_mut().unwrap() {
+            entry.as_object_mut().unwrap().remove("pinned");
+            entry.as_object_mut().unwrap().remove("updateChannel");
+        }
+        let path = state_path(&fixture.managed, &fixture.instance).unwrap();
+        std::fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+        let migrated = ContentState::load_and_migrate(&fixture.managed, &fixture.instance).unwrap();
+        assert!(!migrated.entries[0].pinned);
+        assert_eq!(migrated.entries[0].update_channel, UpdateChannel::Stable);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&std::fs::read(&path).unwrap()).unwrap()["schemaVersion"],
+            4
+        );
+        // A v3 document already carrying v4 fields is malformed, never a
+        // migration candidate, and is never overwritten.
+        legacy["entries"][0]["pinned"] = serde_json::json!(true);
+        std::fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+        assert!(matches!(
+            ContentState::load(&fixture.managed, &fixture.instance),
+            Err(ContentError::StateMalformed(_))
+        ));
+    }
+
+    #[test]
+    fn update_policy_persists_and_validates() {
+        let fixture = no_aurora_fixture();
+        let path = fixture.dir(ContentType::Mod).join("managed.jar");
+        std::fs::write(&path, fabric_jar_with_id("managed")).unwrap();
+        let record = {
+            let mut record = fixture.record(ContentType::Mod, &path);
+            record.provider = "modrinth".into();
+            record.project_id = "AAAABBBB".into();
+            record
+        };
+        let mut state = ContentState::empty();
+        state.entries.push(record.clone());
+        state.save(&fixture.managed, &fixture.instance).unwrap();
+        let identity = record.identity();
+
+        let pinned = set_update_policy(
+            &fixture.managed,
+            &fixture.instance,
+            &identity,
+            Some(true),
+            None,
+        )
+        .unwrap();
+        assert!(pinned.pinned);
+        assert_eq!(pinned.update_channel, UpdateChannel::Stable);
+        let widened = set_update_policy(
+            &fixture.managed,
+            &fixture.instance,
+            &identity,
+            None,
+            Some(UpdateChannel::Beta),
+        )
+        .unwrap();
+        assert!(widened.pinned);
+        assert_eq!(widened.update_channel, UpdateChannel::Beta);
+        let reloaded = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        assert!(reloaded.entries[0].pinned);
+        assert_eq!(reloaded.entries[0].update_channel, UpdateChannel::Beta);
+        // An empty policy change is refused; unknown records are stale.
+        assert!(matches!(
+            set_update_policy(&fixture.managed, &fixture.instance, &identity, None, None),
+            Err(ContentError::StateMalformed(_))
+        ));
+        let unknown = ProviderIdentity {
+            content_type: ContentType::Mod,
+            provider: "modrinth".into(),
+            project_id: "CCCCDDDD".into(),
+        };
+        assert!(matches!(
+            set_update_policy(
+                &fixture.managed,
+                &fixture.instance,
+                &unknown,
+                Some(true),
+                None
+            ),
+            Err(ContentError::ChangedSinceScan)
+        ));
+        // An invalid channel value never parses.
+        let mut smuggled = serde_json::to_value(&reloaded).unwrap();
+        smuggled["entries"][0]["updateChannel"] = serde_json::json!("nightly");
+        assert!(matches!(
+            ContentState::from_json(&smuggled.to_string()),
+            Err(ContentError::StateMalformed(_))
+        ));
+    }
+
+    #[test]
+    fn updated_state_multi_preserves_root_provenance_and_policy() {
+        let root_old = policy_record(
+            "AAAA0001",
+            "root.jar",
+            b"root-old",
+            true,
+            ProviderOrigin::Recovered,
+        );
+        let mut dep_old = policy_record(
+            "BBBB0002",
+            "dep.jar",
+            b"dep-old",
+            false,
+            ProviderOrigin::Dependency,
+        );
+        dep_old.version_id = "dep-v1".into();
+        let mut current = ContentState::empty();
+        current.entries = vec![root_old.clone(), dep_old.clone()];
+        current.entries[0].requires = vec![dep_old.identity()];
+        current.entries[0].pinned = false;
+        current.entries[0].update_channel = UpdateChannel::Beta;
+        current.entries[0].installed_at_unix_seconds = None;
+        current.validate().unwrap();
+
+        let mut root_new = policy_record(
+            "AAAA0001",
+            "root-v2.jar",
+            b"root-new",
+            true,
+            ProviderOrigin::Direct,
+        );
+        root_new.version_id = "root-v2".into();
+        root_new.dependencies = vec![ProviderDependency {
+            kind: DependencyKind::Required,
+            provider: "modrinth".into(),
+            project_id: "BBBB0002".into(),
+            version_id: None,
+        }];
+        let mut dep_new = policy_record(
+            "BBBB0002",
+            "dep-v2.jar",
+            b"dep-new",
+            false,
+            ProviderOrigin::Direct,
+        );
+        dep_new.version_id = "dep-v2".into();
+        let next = updated_state_multi(
+            &current,
+            &[root_old.identity()],
+            vec![dep_new.clone(), root_new.clone()],
+        )
+        .unwrap();
+        let updated_root = next.find(&root_old.identity()).unwrap();
+        // Origin records how management began; updating recovered content
+        // keeps it recovered. The policy fields survive; the receipt is fresh.
+        assert_eq!(updated_root.origin, ProviderOrigin::Recovered);
+        assert!(!updated_root.pinned);
+        assert_eq!(updated_root.update_channel, UpdateChannel::Beta);
+        assert!(updated_root.installed_at_unix_seconds.is_some());
+        assert_eq!(updated_root.file_name, "root-v2.jar");
+        assert!(updated_root.requires.contains(&dep_old.identity()));
+        let updated_dep = next.find(&dep_old.identity()).unwrap();
+        assert!(!updated_dep.explicitly_retained);
+        assert_eq!(updated_dep.origin, ProviderOrigin::Dependency);
+        assert_eq!(updated_dep.version_id, "dep-v2");
+        assert!(next.validate().is_ok());
+    }
+
+    #[test]
+    fn updated_state_multi_replaces_only_owned_dependencies() {
+        // A replaced dependency that an outside record still requires blocks
+        // the whole transaction; the parent must join the same update.
+        let root_a = policy_record("AAAA0001", "a.jar", b"a-old", true, ProviderOrigin::Direct);
+        let shared = policy_record(
+            "BBBB0002",
+            "shared.jar",
+            b"shared-v1",
+            false,
+            ProviderOrigin::Dependency,
+        );
+        let outsider = policy_record(
+            "CCCC0003",
+            "outsider.jar",
+            b"outsider",
+            true,
+            ProviderOrigin::Direct,
+        );
+        let mut current = ContentState::empty();
+        current.entries = vec![root_a.clone(), shared.clone(), outsider.clone()];
+        current.entries[0].requires = vec![shared.identity()];
+        current.entries[2].requires = vec![shared.identity()];
+        current.validate().unwrap();
+
+        let mut a_new = policy_record(
+            "AAAA0001",
+            "a-v2.jar",
+            b"a-new",
+            true,
+            ProviderOrigin::Direct,
+        );
+        a_new.version_id = "a-v2".into();
+        let mut shared_new = policy_record(
+            "BBBB0002",
+            "shared-v2.jar",
+            b"shared-v2",
+            false,
+            ProviderOrigin::Dependency,
+        );
+        shared_new.version_id = "shared-v2".into();
+        assert!(matches!(
+            updated_state_multi(
+                &current,
+                &[root_a.identity()],
+                vec![shared_new.clone(), a_new.clone()]
+            ),
+            Err(ContentError::DependencyBlocked(_))
+        ));
+
+        // An explicitly retained dependency is never silently replaced.
+        let mut retained_dep = shared.clone();
+        retained_dep.explicitly_retained = true;
+        let mut retained_state = current.clone();
+        retained_state.entries[1] = retained_dep.clone();
+        retained_state.entries[2].requires = Vec::new();
+        retained_state.validate().unwrap();
+        assert!(matches!(
+            updated_state_multi(
+                &retained_state,
+                &[root_a.identity()],
+                vec![shared_new.clone(), a_new.clone()]
+            ),
+            Err(ContentError::RequiredByInstalledContent)
+        ));
+
+        // Dependency records are not roots: an unretained identity cannot be
+        // updated on its own.
+        assert!(matches!(
+            updated_state_multi(&current, &[shared.identity()], vec![shared_new]),
+            Err(ContentError::RequiredByInstalledContent)
+        ));
+    }
+
+    #[test]
+    fn updated_state_multi_updates_two_roots_and_a_shared_dependency() {
+        let root_a = policy_record("AAAA0001", "a.jar", b"a-old", true, ProviderOrigin::Direct);
+        let root_b = policy_record("CCCC0003", "b.jar", b"b-old", true, ProviderOrigin::Direct);
+        let shared = policy_record(
+            "BBBB0002",
+            "shared.jar",
+            b"shared-v1",
+            false,
+            ProviderOrigin::Dependency,
+        );
+        let mut current = ContentState::empty();
+        current.entries = vec![root_a.clone(), root_b.clone(), shared.clone()];
+        current.entries[0].requires = vec![shared.identity()];
+        current.entries[1].requires = vec![shared.identity()];
+        current.validate().unwrap();
+
+        let mut a_new = policy_record(
+            "AAAA0001",
+            "a-v2.jar",
+            b"a-new",
+            true,
+            ProviderOrigin::Direct,
+        );
+        a_new.version_id = "a-v2".into();
+        a_new.dependencies = vec![ProviderDependency {
+            kind: DependencyKind::Required,
+            provider: "modrinth".into(),
+            project_id: "BBBB0002".into(),
+            version_id: None,
+        }];
+        let mut b_new = policy_record(
+            "CCCC0003",
+            "b-v2.jar",
+            b"b-new",
+            true,
+            ProviderOrigin::Direct,
+        );
+        b_new.version_id = "b-v2".into();
+        b_new.dependencies = a_new.dependencies.clone();
+        let mut shared_new = policy_record(
+            "BBBB0002",
+            "shared-v2.jar",
+            b"shared-v2",
+            false,
+            ProviderOrigin::Dependency,
+        );
+        shared_new.version_id = "shared-v2".into();
+        let next = updated_state_multi(
+            &current,
+            &[root_a.identity(), root_b.identity()],
+            vec![shared_new.clone(), a_new.clone(), b_new.clone()],
+        )
+        .unwrap();
+        assert_eq!(next.entries.len(), 3);
+        let shared_updated = next.find(&shared.identity()).unwrap();
+        assert_eq!(shared_updated.version_id, "shared-v2");
+        assert!(!shared_updated.explicitly_retained);
+        // Both updating roots keep their requirement edges on the identity.
+        assert_eq!(
+            next.find(&root_a.identity()).unwrap().requires,
+            vec![shared.identity()]
+        );
+        assert_eq!(
+            next.find(&root_b.identity()).unwrap().requires,
+            vec![shared.identity()]
+        );
+        assert!(next.validate().is_ok());
+
+        // Repeating a root in one transaction is refused.
+        assert!(matches!(
+            updated_state_multi(
+                &current,
+                &[root_a.identity(), root_a.identity()],
+                vec![shared_new, a_new, b_new]
+            ),
+            Err(ContentError::StateMalformed(_))
+        ));
+    }
+
+    fn versioned_plan(
+        server: &TestServer,
+        project: &str,
+        mod_id: &str,
+        version_id: &str,
+        dependency: Option<&str>,
+    ) -> ProviderInstallPlan {
+        let bytes = fabric_jar_with_id(mod_id);
+        let hash = format!("{:x}", Sha512::digest(&bytes));
+        ProviderInstallPlan {
+            content_type: ContentType::Mod,
+            provider: "modrinth".into(),
+            project_id: project.into(),
+            version_id: version_id.into(),
+            file_id: hash.clone(),
+            file_name: format!("{mod_id}.jar"),
+            display_version: Some(mod_id.into()),
+            compatibility: ContentCompatibility {
+                minecraft_versions: vec!["1.21.11".into()],
+                loader: Some("fabric".into()),
+                environment: Some("client_and_server".into()),
+            },
+            dependencies: match dependency {
+                Some(project) => vec![ProviderDependency {
+                    kind: DependencyKind::Required,
+                    provider: "modrinth".into(),
+                    project_id: project.into(),
+                    version_id: None,
+                }],
+                None => Vec::new(),
+            },
+            source: ProviderArtifactSource::Sha512(
+                Sha512ArtifactSource::loopback_http_for_testing(
+                    &format!("{}/{mod_id}", server.base_url()),
+                    &hash,
+                    Some(bytes.len() as u64),
+                )
+                .unwrap(),
+            ),
+        }
+    }
+
+    #[tokio::test]
+    async fn multi_root_update_executes_atomically_and_preserves_provenance() {
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        // Each install transaction has exactly one root; two roots require
+        // two explicit installs sharing one dependency graph.
+        install_provider_plans(
+            &fixture.managed,
+            &fixture.instance,
+            vec![
+                versioned_plan(&server, "BBBB0002", "shared-v1", "sv1", None),
+                versioned_plan(&server, "AAAA0001", "root-a-v1", "av1", Some("BBBB0002")),
+            ],
+        )
+        .await
+        .unwrap();
+        install_provider_plans(
+            &fixture.managed,
+            &fixture.instance,
+            vec![versioned_plan(
+                &server,
+                "CCCC0003",
+                "root-b-v1",
+                "bv1",
+                Some("BBBB0002"),
+            )],
+        )
+        .await
+        .unwrap();
+        // Install assigns dependency origin to the shared mod; give the roots
+        // a recovered origin to prove updates never rewrite provenance.
+        let mut state = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        let roots: Vec<_> = state
+            .entries
+            .iter()
+            .filter(|record| record.explicitly_retained)
+            .map(|record| record.identity())
+            .collect();
+        assert_eq!(roots.len(), 2);
+        for record in &mut state.entries {
+            if record.explicitly_retained {
+                record.origin = ProviderOrigin::Recovered;
+            }
+        }
+        state.save(&fixture.managed, &fixture.instance).unwrap();
+
+        let next = update_provider_graph_multi(
+            &fixture.managed,
+            &fixture.instance,
+            &state,
+            &roots,
+            vec![
+                versioned_plan(&server, "BBBB0002", "shared-v2", "sv2", None),
+                versioned_plan(&server, "AAAA0001", "root-a-v2", "av2", Some("BBBB0002")),
+                versioned_plan(&server, "CCCC0003", "root-b-v2", "bv2", Some("BBBB0002")),
+            ],
+        )
+        .await
+        .unwrap();
+        let persisted = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        // save() sorts entries for the on-disk document; compare by identity.
+        assert_eq!(persisted.entries.len(), next.entries.len());
+        for record in &next.entries {
+            assert_eq!(persisted.find(&record.identity()), Some(record));
+        }
+        let directory = fixture.dir(ContentType::Mod);
+        for name in ["root-a-v2.jar", "root-b-v2.jar", "shared-v2.jar"] {
+            assert!(directory.join(name).is_file(), "{name} missing");
+        }
+        for name in ["root-a-v1.jar", "root-b-v1.jar", "shared-v1.jar"] {
+            assert!(!directory.join(name).exists(), "{name} still present");
+        }
+        for record in &persisted.entries {
+            if record.explicitly_retained {
+                assert_eq!(record.origin, ProviderOrigin::Recovered);
+            } else {
+                assert_eq!(record.origin, ProviderOrigin::Dependency);
+                assert_eq!(record.version_id, "sv2");
+            }
+        }
+        // The inventory stays valid after the swap.
+        let inventory = crate::instance_mods::scan(&fixture.managed, &fixture.instance).unwrap();
+        assert_eq!(inventory.entries.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn multi_root_failures_leave_both_old_versions_intact() {
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        install_provider_plans(
+            &fixture.managed,
+            &fixture.instance,
+            vec![versioned_plan(
+                &server,
+                "AAAA0001",
+                "root-a-v1",
+                "av1",
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        install_provider_plans(
+            &fixture.managed,
+            &fixture.instance,
+            vec![versioned_plan(
+                &server,
+                "CCCC0003",
+                "root-b-v1",
+                "bv1",
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        let state = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        let roots: Vec<_> = state
+            .entries
+            .iter()
+            .filter(|record| record.explicitly_retained)
+            .map(|record| record.identity())
+            .collect();
+        assert_eq!(roots.len(), 2);
+        let directory = fixture.dir(ContentType::Mod);
+        let originals: Vec<_> = roots
+            .iter()
+            .filter_map(|identity| state.find(identity))
+            .map(|record| {
+                (
+                    record.file_name.clone(),
+                    std::fs::read(directory.join(&record.file_name)).unwrap(),
+                )
+            })
+            .collect();
+
+        // Download failure for the second root aborts before any mutation.
+        let failing = TestServer::spawn(Arc::new(|request: &TestRequest| {
+            if request.path.starts_with("/root-a-v2") {
+                TestResponse::ok(&fabric_jar_with_id("root-a-v2"))
+            } else {
+                TestResponse::status(500)
+            }
+        }));
+        assert!(matches!(
+            update_provider_graph_multi(
+                &fixture.managed,
+                &fixture.instance,
+                &state,
+                &roots,
+                vec![
+                    versioned_plan(&failing, "AAAA0001", "root-a-v2", "av2", None),
+                    versioned_plan(&failing, "CCCC0003", "root-b-v2", "bv2", None),
+                ],
+            )
+            .await,
+            Err(ContentError::Acquisition(_))
+        ));
+        for (name, bytes) in &originals {
+            assert_eq!(std::fs::read(directory.join(name)).unwrap(), *bytes);
+        }
+        assert_eq!(
+            ContentState::load(&fixture.managed, &fixture.instance).unwrap(),
+            state
+        );
+
+        // State-commit failure after activation rolls both roots back.
+        let plans = vec![
+            versioned_plan(&server, "AAAA0001", "root-a-v2", "av2", None),
+            versioned_plan(&server, "CCCC0003", "root-b-v2", "bv2", None),
+        ];
+        assert!(matches!(
+            update_provider_graph_multi_with_hooks(
+                &fixture.managed,
+                &fixture.instance,
+                &state,
+                &roots,
+                plans,
+                |_| Err(ContentError::StateMalformed(
+                    "injected commit failure".into()
+                )),
+            )
+            .await,
+            Err(ContentError::StateMalformed(_))
+        ));
+        for (name, bytes) in &originals {
+            assert!(directory.join(name).is_file(), "{name} not restored");
+            assert_eq!(std::fs::read(directory.join(name)).unwrap(), *bytes);
+        }
+        assert!(!directory.join("root-a-v2.jar").exists());
+        assert!(!directory.join("root-b-v2.jar").exists());
+        assert_eq!(
+            ContentState::load(&fixture.managed, &fixture.instance).unwrap(),
+            state
+        );
+
+        // A stale inventory revision is refused before mutation.
+        std::fs::write(
+            directory.join("external.jar"),
+            fabric_jar_with_id("external"),
+        )
+        .unwrap();
+        let stale_revision = String::new();
+        assert!(matches!(
+            update_provider_graph_multi_reviewed(
+                &fixture.managed,
+                &fixture.instance,
+                &state,
+                &roots,
+                vec![
+                    versioned_plan(&server, "AAAA0001", "root-a-v2", "av2", None),
+                    versioned_plan(&server, "CCCC0003", "root-b-v2", "bv2", None),
+                ],
+                Some(&stale_revision),
+            )
+            .await,
+            Err(ContentError::ChangedSinceScan)
+        ));
+    }
+
+    #[tokio::test]
+    async fn updating_a_disabled_root_is_refused_with_state_untouched() {
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        let installed = install_provider_plans(
+            &fixture.managed,
+            &fixture.instance,
+            vec![versioned_plan(
+                &server,
+                "AAAA0001",
+                "root-a-v1",
+                "av1",
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        let state = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        let directory = fixture.dir(ContentType::Mod);
+        let active = directory.join("root-a-v1.jar");
+        let disabled = directory.join("root-a-v1.jar.disabled");
+        std::fs::rename(&active, &disabled).unwrap();
+
+        assert!(matches!(
+            update_provider_graph(
+                &fixture.managed,
+                &fixture.instance,
+                &state,
+                &installed[0].identity(),
+                vec![versioned_plan(
+                    &server,
+                    "AAAA0001",
+                    "root-a-v2",
+                    "av2",
+                    None
+                )],
+            )
+            .await,
+            Err(ContentError::DependencyBlocked(_))
+        ));
+        assert!(disabled.is_file());
+        assert!(!active.exists());
+        assert!(!directory.join("root-a-v2.jar").exists());
+        assert_eq!(
+            ContentState::load(&fixture.managed, &fixture.instance).unwrap(),
+            state
+        );
     }
 }

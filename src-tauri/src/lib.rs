@@ -5,6 +5,7 @@ pub mod auth;
 pub mod cache;
 pub mod config;
 pub mod content_recognition;
+pub mod content_updates;
 pub mod cosmetics;
 pub mod discord;
 pub mod distribution;
@@ -114,6 +115,10 @@ pub fn run() {
             application::check_modrinth_update,
             application::preview_modrinth_update,
             application::apply_modrinth_update,
+            application::check_instance_updates,
+            application::set_provider_update_policy,
+            application::preview_modrinth_bulk_update,
+            application::apply_modrinth_bulk_update,
             application::preview_provider_removal,
             application::apply_provider_removal,
             application::validate_instance,

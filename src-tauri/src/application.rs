@@ -226,6 +226,13 @@ impl From<crate::instances::InvalidInstanceRecord> for CommandError {
 }
 
 impl CommandError {
+    /// The stable error code for this failure. Crate-visible for acceptance
+    /// evidence; the frontend receives it through serialization.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn error_code(&self) -> &str {
+        &self.code
+    }
+
     fn managed_path(message: impl Into<String>) -> Self {
         Self::new("managed_path_unavailable", message)
     }
@@ -2722,8 +2729,11 @@ async fn check_provider_requirements(
     context: &crate::modrinth::Context,
     resolved: &crate::modrinth::Resolved,
 ) -> Result<(), CommandError> {
-    if resolved.preview.content_type != crate::instance_content::ContentType::Mod
-        || resolved.plans.is_empty()
+    if resolved.plans.is_empty()
+        || resolved
+            .plans
+            .iter()
+            .all(|plan| plan.content_type != crate::instance_content::ContentType::Mod)
     {
         return Ok(());
     }
@@ -3182,13 +3192,24 @@ fn lifecycle_fingerprint(
     provider_plan: Option<&str>,
 ) -> String {
     use sha2::Digest as _;
+    // Receipt timestamps are lifecycle bookkeeping finalized at commit; both
+    // the preview and the re-resolved approval plan stamp "now" while
+    // planning, so masking them keeps the fingerprint about identity, policy
+    // and file facts rather than the wall clock.
+    fn mask_receipts(state: &crate::instance_content::ContentState) -> impl serde::Serialize + '_ {
+        let mut masked = state.clone();
+        for record in &mut masked.entries {
+            record.installed_at_unix_seconds = None;
+        }
+        masked
+    }
     let bytes = serde_json::to_vec(&(
         instance.to_string(),
         &context.minecraft_version,
         &context.loader,
         context.fabric_api_protected,
-        current,
-        next,
+        mask_receipts(current),
+        mask_receipts(next),
         provider_plan,
     ))
     .expect("lifecycle state serializes");
@@ -3260,51 +3281,227 @@ pub async fn check_modrinth_update(
         .map_err(provider_error)
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderLifecycleTarget {
+    pub(crate) content_type: crate::instance_content::ContentType,
+    pub(crate) project_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderBulkUpdateRequest {
+    instance_id: String,
+    targets: Vec<ProviderLifecycleTarget>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderBulkUpdateApproval {
+    instance_id: String,
+    targets: Vec<ProviderLifecycleTarget>,
+    preview_fingerprint: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckInstanceUpdatesRequest {
+    instance_id: String,
+    content_type: Option<crate::instance_content::ContentType>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderPolicyRequest {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+    project_id: String,
+    pinned: Option<bool>,
+    channel: Option<crate::instance_content::UpdateChannel>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderUpdatePreview {
     current: LifecycleItem,
     candidate: crate::modrinth::VersionChoice,
+    changelog: Option<String>,
+    channel: crate::instance_content::UpdateChannel,
     delta: LifecycleDelta,
     warnings: Vec<String>,
     preview_fingerprint: String,
 }
 
-async fn resolve_update_preview(
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkUpdateTargetPreview {
+    pub(crate) current: LifecycleItem,
+    pub(crate) candidate: crate::modrinth::VersionChoice,
+    changelog: Option<String>,
+    channel: crate::instance_content::UpdateChannel,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkUpdatePreview {
+    pub(crate) targets: Vec<BulkUpdateTargetPreview>,
+    delta: LifecycleDelta,
+    warnings: Vec<String>,
+    pub(crate) preview_fingerprint: String,
+}
+
+/// Explicit, user-triggered availability check across the managed Modrinth
+/// records of one instance. Read-only; no background polling exists.
+#[tauri::command]
+pub async fn check_instance_updates(
+    app: AppHandle,
+    request: CheckInstanceUpdatesRequest,
+) -> Result<crate::content_updates::UpdatesReport, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, context) = provider_context(&managed, &request.instance_id)?;
+    crate::content_updates::check_updates(
+        &managed,
+        &instance,
+        &context,
+        &crate::modrinth::Client::official(),
+        request.content_type,
+    )
+    .await
+    .map_err(CommandError::from)
+}
+
+/// Change only the persisted pin/release-channel policy of one managed
+/// Modrinth record. Files, bytes, versions and provenance are untouched.
+#[tauri::command]
+pub fn set_provider_update_policy(
+    app: AppHandle,
+    request: ProviderPolicyRequest,
+) -> Result<crate::instance_content::ProviderRecord, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, _) = provider_context(&managed, &request.instance_id)?;
+    let identity = crate::instance_content::ProviderIdentity {
+        content_type: request.content_type,
+        provider: "modrinth".into(),
+        project_id: request.project_id,
+    };
+    crate::instance_content::set_update_policy(
+        &managed,
+        &instance,
+        &identity,
+        request.pinned,
+        request.channel,
+    )
+    .map_err(CommandError::from)
+}
+
+fn bulk_targets(request: &ProviderLifecycleRequest) -> Vec<ProviderLifecycleTarget> {
+    vec![ProviderLifecycleTarget {
+        content_type: request.content_type,
+        project_id: request.project_id.clone(),
+    }]
+}
+
+/// Resolve one coherent update preview for one or more managed roots.
+/// Discovery, dependency resolution against the target versions, local
+/// reconciliation and compatibility validation all happen before any
+/// mutation; nothing is downloaded into the instance here.
+pub(crate) async fn resolve_updates_preview(
     managed: &ManagedPaths,
-    request: &ProviderLifecycleRequest,
+    instance_id: &str,
+    targets: &[ProviderLifecycleTarget],
 ) -> Result<
     (
         crate::instances::InstanceId,
         crate::instance_content::ContentState,
+        Vec<crate::instance_content::ProviderIdentity>,
         crate::modrinth::Resolved,
-        ProviderUpdatePreview,
+        BulkUpdatePreview,
     ),
     CommandError,
 > {
-    let (instance, context) = provider_context(managed, &request.instance_id)?;
+    if targets.is_empty() || targets.len() > 64 {
+        return Err(CommandError::new(
+            "provider_invalid_request",
+            "Select at least one and at most 64 managed items to update.",
+        ));
+    }
+    let (instance, context) = provider_context(managed, instance_id)?;
     let state = provider_state(managed, &instance)?;
-    let current = lifecycle_record(&state, request)?;
-    let candidate = crate::modrinth::Client::official()
-        .update_candidate(&context, current)
-        .await
-        .map_err(provider_error)?
-        .ok_or_else(|| CommandError::new("provider_no_update", "This project is up to date."))?;
-    let mut resolved = crate::modrinth::Client::official()
-        .resolve_update(
-            &context,
-            request.content_type,
-            &request.project_id,
-            &candidate.id,
-            &state,
-        )
+    let client = crate::modrinth::Client::official();
+    let mut resolved_targets = Vec::<(crate::instance_content::ContentType, String, String)>::new();
+    let mut target_previews = Vec::new();
+    let mut roots = Vec::new();
+    for target in targets {
+        let lookup = ProviderLifecycleRequest {
+            instance_id: instance_id.to_owned(),
+            content_type: target.content_type,
+            project_id: target.project_id.clone(),
+        };
+        let record = lifecycle_record(&state, &lookup)?;
+        if !record.explicitly_retained {
+            return Err(CommandError::new(
+                "content_required_by_installed",
+                "This item is installed as a dependency. Check its parent for updates.",
+            ));
+        }
+        if record.pinned {
+            return Err(CommandError::new(
+                "provider_update_pinned",
+                "This content is pinned to its current version. Unpin it before updating.",
+            ));
+        }
+        match crate::instance_content::validate_provider_file(managed, &instance, record) {
+            Ok(path) => {
+                let disabled = record.content_type == crate::instance_content::ContentType::Mod
+                    && path
+                        .extension()
+                        .is_some_and(|extension| extension.eq_ignore_ascii_case("disabled"));
+                if disabled {
+                    return Err(CommandError::new(
+                        "mod_dependency_blocked",
+                        "This mod is disabled. Re-enable it before updating it.",
+                    ));
+                }
+            }
+            Err(_) => {
+                return Err(CommandError::new(
+                    "provider_content_collision",
+                    "An installed provider file is missing, changed, or unsafe. Inspect local content before updating.",
+                ));
+            }
+        }
+        let discovery = client
+            .update_discovery(&context, record)
+            .await
+            .map_err(provider_error)?;
+        let candidate = discovery.candidate.ok_or_else(|| {
+            CommandError::new(
+                "provider_no_update",
+                "No newer compatible version under the current release-channel policy.",
+            )
+        })?;
+        target_previews.push(BulkUpdateTargetPreview {
+            current: LifecycleItem::from(record),
+            changelog: None,
+            channel: record.update_channel,
+            candidate: candidate.clone(),
+        });
+        roots.push(crate::instance_content::ProviderIdentity {
+            content_type: target.content_type,
+            provider: "modrinth".into(),
+            project_id: target.project_id.clone(),
+        });
+        resolved_targets.push((target.content_type, target.project_id.clone(), candidate.id));
+    }
+    let mut resolved = client
+        .resolve_updates(&context, &resolved_targets, &state)
         .await
         .map_err(provider_error)?;
     crate::instance_content::reconcile_provider_resolution(managed, &instance, &mut resolved)
         .await?;
     check_provider_requirements(managed, &instance, &context, &resolved).await?;
-    let root = current.identity();
-    let next = crate::instance_content::update_preview_state(&state, &root, &resolved.plans)?;
+    let next =
+        crate::instance_content::update_preview_state_multi(&state, &roots, &resolved.plans)?;
     let fingerprint = lifecycle_fingerprint(
         &instance,
         &context,
@@ -3312,14 +3509,39 @@ async fn resolve_update_preview(
         &next,
         Some(&provider_fingerprint(&instance, &resolved)),
     );
-    let preview = ProviderUpdatePreview {
-        current: LifecycleItem::from(current),
-        candidate,
-        delta: lifecycle_delta(&state, &next, &root),
+    for preview in &mut target_previews {
+        preview.changelog = resolved
+            .preview
+            .items
+            .iter()
+            .find(|item| {
+                item.project_id == preview.current.project_id
+                    && item.version_id == preview.candidate.id
+            })
+            .and_then(|item| item.changelog.clone());
+    }
+    let bulk = BulkUpdatePreview {
+        targets: target_previews,
+        delta: lifecycle_delta_multi(&state, &next, &roots),
         warnings: resolved.preview.warnings.clone(),
         preview_fingerprint: fingerprint,
     };
-    Ok((instance, state, resolved, preview))
+    Ok((instance, state, roots, resolved, bulk))
+}
+
+fn lifecycle_delta_multi(
+    current: &crate::instance_content::ContentState,
+    next: &crate::instance_content::ContentState,
+    roots: &[crate::instance_content::ProviderIdentity],
+) -> LifecycleDelta {
+    let mut delta = lifecycle_delta(current, next, &roots[0]);
+    for root in &roots[1..] {
+        let more = lifecycle_delta(current, next, root);
+        delta.will_retain.extend(more.will_retain);
+        delta.new_requirements.extend(more.new_requirements);
+        delta.removed_requirements.extend(more.removed_requirements);
+    }
+    delta
 }
 
 #[tauri::command]
@@ -3328,7 +3550,60 @@ pub async fn preview_modrinth_update(
     request: ProviderLifecycleRequest,
 ) -> Result<ProviderUpdatePreview, CommandError> {
     let managed = managed_paths(&app)?;
-    Ok(resolve_update_preview(&managed, &request).await?.3)
+    let (_, _, _, _, bulk) =
+        resolve_updates_preview(&managed, &request.instance_id, &bulk_targets(&request)).await?;
+    let target = bulk.targets.into_iter().next().ok_or_else(|| {
+        CommandError::new("provider_invalid_response", "The update preview is empty.")
+    })?;
+    Ok(ProviderUpdatePreview {
+        current: target.current,
+        changelog: target.changelog,
+        channel: target.channel,
+        candidate: target.candidate,
+        delta: bulk.delta,
+        warnings: bulk.warnings,
+        preview_fingerprint: bulk.preview_fingerprint,
+    })
+}
+
+#[tauri::command]
+pub async fn preview_modrinth_bulk_update(
+    app: AppHandle,
+    request: ProviderBulkUpdateRequest,
+) -> Result<BulkUpdatePreview, CommandError> {
+    let managed = managed_paths(&app)?;
+    Ok(
+        resolve_updates_preview(&managed, &request.instance_id, &request.targets)
+            .await?
+            .4,
+    )
+}
+
+pub(crate) async fn apply_resolved_updates(
+    managed: &ManagedPaths,
+    instance_id: &str,
+    targets: Vec<ProviderLifecycleTarget>,
+    preview_fingerprint: &str,
+) -> Result<(), CommandError> {
+    let (instance, state, roots, resolved, preview) =
+        resolve_updates_preview(managed, instance_id, &targets).await?;
+    if preview.preview_fingerprint != preview_fingerprint {
+        return Err(CommandError::new(
+            "provider_preview_changed",
+            "The update preview changed. Review it again before updating.",
+        ));
+    }
+    crate::instance_content::update_provider_graph_multi_reviewed(
+        managed,
+        &instance,
+        &state,
+        &roots,
+        resolved.plans,
+        resolved.preview.inventory_revision.as_deref(),
+    )
+    .await
+    .map_err(CommandError::from)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -3337,34 +3612,32 @@ pub async fn apply_modrinth_update(
     request: ProviderLifecycleApproval,
 ) -> Result<(), CommandError> {
     let managed = managed_paths(&app)?;
-    let lookup = ProviderLifecycleRequest {
-        instance_id: request.instance_id.clone(),
+    let targets = vec![ProviderLifecycleTarget {
         content_type: request.content_type,
         project_id: request.project_id.clone(),
-    };
-    let (instance, state, resolved, preview) = resolve_update_preview(&managed, &lookup).await?;
-    if preview.preview_fingerprint != request.preview_fingerprint {
-        return Err(CommandError::new(
-            "provider_preview_changed",
-            "The update preview changed. Review it again before updating.",
-        ));
-    }
-    let root = crate::instance_content::ProviderIdentity {
-        content_type: request.content_type,
-        provider: "modrinth".into(),
-        project_id: request.project_id,
-    };
-    crate::instance_content::update_provider_graph_reviewed(
+    }];
+    apply_resolved_updates(
         &managed,
-        &instance,
-        &state,
-        &root,
-        resolved.plans,
-        resolved.preview.inventory_revision.as_deref(),
+        &request.instance_id,
+        targets,
+        &request.preview_fingerprint,
     )
     .await
-    .map_err(CommandError::from)?;
-    Ok(())
+}
+
+#[tauri::command]
+pub async fn apply_modrinth_bulk_update(
+    app: AppHandle,
+    request: ProviderBulkUpdateApproval,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    apply_resolved_updates(
+        &managed,
+        &request.instance_id,
+        request.targets,
+        &request.preview_fingerprint,
+    )
+    .await
 }
 
 #[derive(Serialize)]
@@ -4994,6 +5267,7 @@ mod tests {
                     version_number: "1.0".into(),
                     file_name: "example.jar".into(),
                     already_installed: false,
+                    changelog: None,
                 }],
                 warnings: Vec::new(),
             },
