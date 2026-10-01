@@ -429,7 +429,7 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
                 .unwrap_or(&entry.file_name);
             if pack.owns_path(&format!("mods/{base}")) {
                 let reason = format!(
-                    "Required by {} {}. Pack component changes require a future reconciliation workflow.",
+                    "Required by {} {}. Modpack components are updated through Update Modpack on the instance's Overview page.",
                     pack.identity.name, pack.identity.pack_version
                 );
                 entry.can_remove = false;

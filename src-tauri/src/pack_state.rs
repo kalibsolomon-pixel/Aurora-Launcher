@@ -13,7 +13,7 @@ use crate::instances::InstanceId;
 use crate::integrity::{ArtifactDigest, verify_file};
 use crate::paths::ManagedPaths;
 
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -49,6 +49,25 @@ pub struct OwnedOverride {
     pub sha256: String,
 }
 
+/// One pack-owned path whose installed bytes deliberately differ from the
+/// authored snapshot (Phase J reconciliation). `expected_*` records what the
+/// exact pack version authors for the path (`None` when the pack removed it);
+/// `local_sha256` records the bytes the user chose to keep, so later drift
+/// from the chosen state is still detected. Only the paths in `components`
+/// and `overrides` are pack-owned with authored bytes present; a divergence
+/// path is owned expectation without authored bytes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackDivergence {
+    pub path: String,
+    pub component: bool,
+    pub expected_sha256: Option<String>,
+    pub expected_sha512: Option<String>,
+    pub local_sha256: String,
+    pub resolution: String,
+    pub recorded_at_unix_seconds: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstalledPack {
@@ -58,6 +77,8 @@ pub struct InstalledPack {
     pub components: Vec<OwnedComponent>,
     pub overrides: Vec<OwnedOverride>,
     pub excluded_paths: Vec<String>,
+    #[serde(default)]
+    pub divergences: Vec<PackDivergence>,
 }
 
 #[derive(Debug)]
@@ -107,6 +128,7 @@ impl InstalledPack {
             components,
             overrides,
             excluded_paths,
+            divergences: Vec::new(),
         };
         value.validate_document()?;
         Ok(value)
@@ -138,6 +160,7 @@ impl InstalledPack {
             .map(|v| v.path.as_str())
             .chain(self.overrides.iter().map(|v| v.path.as_str()))
             .chain(self.excluded_paths.iter().map(String::as_str))
+            .chain(self.divergences.iter().map(|v| v.path.as_str()))
         {
             crate::mrpack::destination_path(path).map_err(|_| PackStateError::UnsafePath)?;
             if !seen.insert(path.to_lowercase()) {
@@ -166,7 +189,40 @@ impl InstalledPack {
         if self.overrides.iter().any(|v| !hex(&v.sha256, 64)) {
             return Err(PackStateError::Malformed);
         }
+        for item in &self.divergences {
+            if item.resolution != "keepLocal"
+                || !hex(&item.local_sha256, 64)
+                || item.expected_sha256.as_ref().is_some_and(|v| !hex(v, 64))
+                || item.expected_sha512.as_ref().is_some_and(|v| !hex(v, 128))
+            {
+                return Err(PackStateError::Malformed);
+            }
+        }
         Ok(())
+    }
+
+    /// Construct a pack state that explicitly carries recorded divergences
+    /// (Phase J reconciliation result). The document still fails closed on
+    /// unknown schemas, unsafe paths, or invalid digests.
+    pub fn with_divergences(
+        instance_id: InstanceId,
+        identity: PackIdentity,
+        components: Vec<OwnedComponent>,
+        overrides: Vec<OwnedOverride>,
+        excluded_paths: Vec<String>,
+        divergences: Vec<PackDivergence>,
+    ) -> Result<Self, PackStateError> {
+        let value = Self {
+            schema_version: SCHEMA_VERSION,
+            instance_id,
+            identity,
+            components,
+            overrides,
+            excluded_paths,
+            divergences,
+        };
+        value.validate_document()?;
+        Ok(value)
     }
 
     pub fn from_json(text: &str) -> Result<Self, PackStateError> {
@@ -176,10 +232,19 @@ impl InstalledPack {
             .get("schemaVersion")
             .and_then(serde_json::Value::as_u64)
             .ok_or(PackStateError::Malformed)?;
-        if version != u64::from(SCHEMA_VERSION) {
+        if version != 1 && version != u64::from(SCHEMA_VERSION) {
             return Err(PackStateError::UnsupportedSchema(version));
         }
-        let parsed: Self = serde_json::from_value(value).map_err(|_| PackStateError::Malformed)?;
+        if version == 1 && value.get("divergences").is_some() {
+            // A schema-1 document never carried divergences; one that claims
+            // them is not a migration candidate.
+            return Err(PackStateError::Malformed);
+        }
+        let mut parsed: Self =
+            serde_json::from_value(value).map_err(|_| PackStateError::Malformed)?;
+        // In-memory migration only: schema-1 state gains an empty divergence
+        // list. The next explicit pack operation persists the schema-2 form.
+        parsed.schema_version = SCHEMA_VERSION;
         parsed.validate_document()?;
         Ok(parsed)
     }
@@ -207,15 +272,22 @@ impl InstalledPack {
         if Self::load(managed, &self.instance_id)?.is_some() {
             return Err(PackStateError::Malformed);
         }
-        let temp = path.with_extension(format!("json.{}.tmp", uuid::Uuid::new_v4()));
-        let mut json = serde_json::to_string_pretty(self).map_err(|_| PackStateError::Malformed)?;
-        json.push('\n');
-        std::fs::write(&temp, json).map_err(PackStateError::Io)?;
-        if let Err(error) = std::fs::rename(&temp, &path) {
-            let _ = std::fs::remove_file(&temp);
-            return Err(PackStateError::Io(error));
+        write_atomic(self, &path)
+    }
+
+    /// Atomically replace a valid existing document (pack update commit). The
+    /// stored document must still equal the exact expected old state: a
+    /// damaged, foreign, or concurrently changed document is never overwritten.
+    pub fn replace(&self, managed: &ManagedPaths, expected: &Self) -> Result<(), PackStateError> {
+        self.validate_document()?;
+        if self.instance_id != expected.instance_id {
+            return Err(PackStateError::InstanceMismatch);
         }
-        Ok(())
+        let stored = Self::load(managed, &self.instance_id)?;
+        if stored.as_ref() != Some(expected) {
+            return Err(PackStateError::Integrity);
+        }
+        write_atomic(self, &state_path(managed, &self.instance_id)?)
     }
 
     pub fn owns_provider(&self, identity: &ProviderIdentity) -> bool {
@@ -232,6 +304,17 @@ impl InstalledPack {
                 .overrides
                 .iter()
                 .any(|override_file| override_file.path.eq_ignore_ascii_case(path))
+            || self
+                .divergences
+                .iter()
+                .any(|divergence| divergence.path.eq_ignore_ascii_case(path))
+    }
+
+    /// The pack's authored expectation for a divergence path, if recorded.
+    pub fn divergence(&self, path: &str) -> Option<&PackDivergence> {
+        self.divergences
+            .iter()
+            .find(|divergence| divergence.path.eq_ignore_ascii_case(path))
     }
 
     /// Read-only, network-free validation against the exact installed pack
@@ -295,8 +378,29 @@ impl InstalledPack {
                 ArtifactDigest::parse(&item.sha256).map_err(|_| PackStateError::Malformed)?;
             verify_file(&path, &digest, None).map_err(|_| PackStateError::Integrity)?;
         }
+        // A recorded divergence is the chosen local state, not damage: the
+        // bytes must still match what the user kept, or drift from the chosen
+        // state is reported exactly like any other integrity failure.
+        for item in &self.divergences {
+            let path = safe_file(&root, &item.path)?;
+            let digest =
+                ArtifactDigest::parse(&item.local_sha256).map_err(|_| PackStateError::Malformed)?;
+            verify_file(&path, &digest, None).map_err(|_| PackStateError::Integrity)?;
+        }
         Ok(())
     }
+}
+
+fn write_atomic(value: &InstalledPack, path: &Path) -> Result<(), PackStateError> {
+    let temp = path.with_extension(format!("json.{}.tmp", uuid::Uuid::new_v4()));
+    let mut json = serde_json::to_string_pretty(value).map_err(|_| PackStateError::Malformed)?;
+    json.push('\n');
+    std::fs::write(&temp, json).map_err(PackStateError::Io)?;
+    if let Err(error) = std::fs::rename(&temp, &path) {
+        let _ = std::fs::remove_file(&temp);
+        return Err(PackStateError::Io(error));
+    }
+    Ok(())
 }
 
 fn hex(value: &str, len: usize) -> bool {
@@ -384,10 +488,28 @@ mod tests {
             InstalledPack::from_json(&text).unwrap().identity.version_id,
             "VERS0001"
         );
+        let rewritten = |version: u64, keep_divergences: bool| {
+            let mut value = serde_json::from_str::<serde_json::Value>(&text).unwrap();
+            let object = value.as_object_mut().unwrap();
+            object.insert("schemaVersion".into(), serde_json::json!(version));
+            if !keep_divergences {
+                object.remove("divergences");
+            }
+            serde_json::to_string(&value).unwrap()
+        };
         assert!(matches!(
-            InstalledPack::from_json(&text.replace("\"schemaVersion\":1", "\"schemaVersion\":2")),
-            Err(PackStateError::UnsupportedSchema(2))
+            InstalledPack::from_json(&rewritten(3, true)),
+            Err(PackStateError::UnsupportedSchema(3))
         ));
+        // A schema-1 document claiming divergences is malformed, not a
+        // migration candidate.
+        assert!(matches!(
+            InstalledPack::from_json(&rewritten(1, true)),
+            Err(PackStateError::Malformed)
+        ));
+        // Schema-1 documents without divergences migrate in memory.
+        let migrated = InstalledPack::from_json(&rewritten(1, false)).unwrap();
+        assert!(migrated.divergences.is_empty());
         assert!(matches!(
             InstalledPack::from_json("{}"),
             Err(PackStateError::Malformed)

@@ -27,6 +27,7 @@ pub mod modrinth;
 pub mod mrpack;
 pub mod pack_activation;
 pub mod pack_state;
+pub mod pack_update;
 pub mod paths;
 pub mod runtime;
 pub mod server_enrichment;
@@ -120,6 +121,10 @@ pub fn run() {
             application::get_modrinth_project_artwork,
             application::preview_modrinth_pack,
             application::install_modrinth_pack,
+            application::check_modpack_update,
+            application::preview_modpack_update,
+            application::apply_modpack_update,
+            application::get_modpack_details,
             application::preview_modrinth_install,
             application::install_modrinth,
             application::quick_install_modrinth,

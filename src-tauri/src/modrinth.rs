@@ -418,19 +418,9 @@ impl Client {
         if version.project_id != project.id {
             return Err(Error::InvalidRequest);
         }
-        let file = version
-            .files
-            .iter()
-            .find(|file| file.primary)
-            .or_else(|| {
-                version
-                    .files
-                    .iter()
-                    .find(|file| file.filename.ends_with(".mrpack"))
-            })
-            .filter(|file| file.filename.to_ascii_lowercase().ends_with(".mrpack") && file.size > 0)
-            .ok_or(Error::InvalidResponse)?;
+        let file = pack_archive_file(&version).ok_or(Error::InvalidResponse)?;
         let source = self.official_file_source(&file.url, &file.hashes.sha512, file.size)?;
+        let sha512 = file.hashes.sha512.to_ascii_lowercase();
         Ok(PackArtifact {
             project_id: project.id,
             version_id: version.id,
@@ -438,8 +428,81 @@ impl Client {
             version_number: version.version_number,
             game_versions: version.game_versions,
             loaders: version.loaders,
-            sha512: file.hashes.sha512.to_ascii_lowercase(),
+            sha512,
             source,
+        })
+    }
+
+    /// Every published version of one modpack project, newest first by
+    /// publication chronology (ties broken by version id, equal times never
+    /// "newer"). Modpack discovery is not context-filtered: pack updates must
+    /// see the project's own timeline, including versions for other Minecraft
+    /// releases, so an unsupported candidate can be reported honestly instead
+    /// of hidden by a compatibility filter.
+    pub async fn pack_versions(&self, project_id: &str) -> Result<Vec<PackVersionOption>, Error> {
+        let project = self.project(project_id).await?;
+        if project.project_type != "modpack" {
+            return Err(Error::InvalidRequest);
+        }
+        let mut url = self.endpoint(&["project", project_id, "version"])?;
+        url.query_pairs_mut()
+            .append_pair("include_changelog", "false");
+        let mut versions: Vec<VersionDto> = self.get(url).await?;
+        versions.sort_by(|a, b| {
+            b.date_published
+                .cmp(&a.date_published)
+                .then_with(|| b.id.cmp(&a.id))
+        });
+        Ok(versions
+            .into_iter()
+            .map(|version| {
+                let archive_sha512 =
+                    pack_archive_file(&version).map(|file| file.hashes.sha512.to_ascii_lowercase());
+                PackVersionOption {
+                    version_id: version.id,
+                    project_id: version.project_id,
+                    name: version.name,
+                    version_number: version.version_number,
+                    version_type: version.version_type,
+                    date_published: version.date_published,
+                    game_versions: version.game_versions,
+                    loaders: version.loaders,
+                    archive_sha512,
+                }
+            })
+            .collect())
+    }
+
+    /// Exact provider details for one modpack version, including authored
+    /// changelog text (display-only untrusted content).
+    pub async fn pack_version_details(
+        &self,
+        project_id: &str,
+        version_id: &str,
+    ) -> Result<PackVersionDetails, Error> {
+        let project = self.project(project_id).await?;
+        if project.project_type != "modpack" {
+            return Err(Error::InvalidRequest);
+        }
+        let version = self.version(version_id).await?;
+        if version.project_id != project.id {
+            return Err(Error::InvalidRequest);
+        }
+        let archive_sha512 =
+            pack_archive_file(&version).map(|file| file.hashes.sha512.to_ascii_lowercase());
+        Ok(PackVersionDetails {
+            version_id: version.id,
+            project_id: project.id,
+            name: version.name,
+            version_number: version.version_number,
+            version_type: version.version_type,
+            date_published: version.date_published,
+            game_versions: version.game_versions,
+            loaders: version.loaders,
+            changelog: version
+                .changelog
+                .filter(|changelog| !changelog.trim().is_empty()),
+            archive_sha512,
         })
     }
 
@@ -1361,6 +1424,55 @@ pub struct PackArtifact {
     pub loaders: Vec<String>,
     pub sha512: String,
     pub source: Sha512ArtifactSource,
+}
+
+/// One published modpack version as discovery evidence. Version ordering is
+/// provider chronology, never version-string comparison.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackVersionOption {
+    pub version_id: String,
+    pub project_id: String,
+    pub name: String,
+    pub version_number: String,
+    pub version_type: String,
+    pub date_published: String,
+    pub game_versions: Vec<String>,
+    pub loaders: Vec<String>,
+    /// Published SHA-512 of the primary `.mrpack`, when the version publishes
+    /// one. A version without a pack archive cannot anchor pack identity.
+    pub archive_sha512: Option<String>,
+}
+
+/// Exact provider evidence for one modpack version.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackVersionDetails {
+    pub version_id: String,
+    pub project_id: String,
+    pub name: String,
+    pub version_number: String,
+    pub version_type: String,
+    pub date_published: String,
+    pub game_versions: Vec<String>,
+    pub loaders: Vec<String>,
+    pub changelog: Option<String>,
+    pub archive_sha512: Option<String>,
+}
+
+/// The primary `.mrpack` file of a modpack version, if it publishes one.
+fn pack_archive_file(version: &VersionDto) -> Option<&FileDto> {
+    version
+        .files
+        .iter()
+        .find(|file| file.primary)
+        .or_else(|| {
+            version
+                .files
+                .iter()
+                .find(|file| file.filename.ends_with(".mrpack"))
+        })
+        .filter(|file| file.filename.to_ascii_lowercase().ends_with(".mrpack") && file.size > 0)
 }
 
 /// Candidate-discovery evidence for one managed record. Ordering is provider

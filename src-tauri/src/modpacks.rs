@@ -69,15 +69,15 @@ pub struct RecognizedPreview {
     pub title: String,
 }
 
-struct Resolved {
-    archive: VerifiedArtifact,
-    archive_sha512: String,
-    provider_project_id: String,
-    provider_version_id: String,
-    pack: PackPlan,
-    provider_plans: Vec<ProviderInstallPlan>,
-    unresolved: Vec<PackFile>,
-    preview: PackPreview,
+pub(crate) struct Resolved {
+    pub(crate) archive: VerifiedArtifact,
+    pub(crate) archive_sha512: String,
+    pub(crate) provider_project_id: String,
+    pub(crate) provider_version_id: String,
+    pub(crate) pack: PackPlan,
+    pub(crate) provider_plans: Vec<ProviderInstallPlan>,
+    pub(crate) unresolved: Vec<PackFile>,
+    pub(crate) preview: PackPreview,
 }
 
 pub async fn preview(
@@ -94,7 +94,11 @@ pub async fn preview(
     )
 }
 
-async fn resolve(
+/// Resolve one exact pack version into its verified archive, parsed plan,
+/// provider component plans, and unresolved external files. Shared by the
+/// Phase I install path and the Phase J update planner; re-resolving is the
+/// staleness check, so callers never trust a previously rendered snapshot.
+pub(crate) async fn resolve(
     managed: &ManagedPaths,
     provider: &crate::modrinth::Client,
     project_id: &str,
@@ -533,7 +537,10 @@ pub async fn install(
     Ok(record)
 }
 
-fn verify_external(file: &PackFile, artifact: &VerifiedArtifact) -> Result<(), PackInstallError> {
+pub(crate) fn verify_external(
+    file: &PackFile,
+    artifact: &VerifiedArtifact,
+) -> Result<(), PackInstallError> {
     if artifact.bytes != file.file_size {
         return Err(fail(
             "pack_digest_mismatch",
@@ -551,7 +558,7 @@ fn verify_external(file: &PackFile, artifact: &VerifiedArtifact) -> Result<(), P
     Ok(())
 }
 
-fn materialize(
+pub(crate) fn materialize(
     root: &Path,
     relative: &str,
     source: &Path,
@@ -569,7 +576,7 @@ fn materialize(
     activate_temporary(temporary, target, digest)
 }
 
-fn materialize_bytes(
+pub(crate) fn materialize_bytes(
     root: &Path,
     relative: &str,
     bytes: &[u8],
@@ -587,7 +594,7 @@ fn materialize_bytes(
     activate_temporary(temporary, target, digest)
 }
 
-fn target_for(root: &Path, relative: &str) -> Result<PathBuf, PackInstallError> {
+pub(crate) fn target_for(root: &Path, relative: &str) -> Result<PathBuf, PackInstallError> {
     crate::mrpack::destination_path(relative)
         .map_err(|_| fail("pack_invalid_path", "A pack file destination is unsafe."))?;
     let mut target = root.to_path_buf();
@@ -626,7 +633,7 @@ fn target_for(root: &Path, relative: &str) -> Result<PathBuf, PackInstallError> 
     Ok(target)
 }
 
-fn activate_temporary(
+pub(crate) fn activate_temporary(
     temporary: PathBuf,
     target: PathBuf,
     digest: &str,

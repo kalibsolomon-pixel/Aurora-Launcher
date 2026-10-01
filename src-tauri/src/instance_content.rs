@@ -331,7 +331,7 @@ impl ContentState {
         Ok(state)
     }
 
-    fn validate(&self) -> Result<(), ContentError> {
+    pub(crate) fn validate(&self) -> Result<(), ContentError> {
         if self.schema_version != SCHEMA_VERSION {
             return Err(ContentError::StateVersion(u64::from(self.schema_version)));
         }
@@ -1609,6 +1609,7 @@ pub fn set_pack_enabled(
 
 /// Backend-only normalized plan. Source URL authority belongs to its adapter.
 /// The installed SHA-256 is filled only after expected-digest acquisition.
+#[derive(Clone)]
 pub struct ProviderInstallPlan {
     pub content_type: ContentType,
     pub provider: String,
@@ -1622,6 +1623,7 @@ pub struct ProviderInstallPlan {
     pub source: ProviderArtifactSource,
 }
 
+#[derive(Clone)]
 pub enum ProviderArtifactSource {
     Sha256(ArtifactSource),
     Sha512(Sha512ArtifactSource),
@@ -1647,6 +1649,13 @@ impl ProviderInstallPlan {
             pinned: false,
             update_channel: UpdateChannel::Stable,
         }
+    }
+
+    /// Build the lifecycle record for an acquired artifact. Pack-owned
+    /// components register through the same shape as any provider content;
+    /// the pack transaction finalizes `requires`, origin, and receipts.
+    pub(crate) fn provider_record(&self, sha256: String, origin: ProviderOrigin) -> ProviderRecord {
+        self.record(sha256, origin)
     }
 }
 
@@ -2034,7 +2043,7 @@ pub async fn preview_provider_conflicts(
     Ok(conflicts)
 }
 
-async fn acquire_provider_plans(
+pub(crate) async fn acquire_provider_plans(
     managed: &ManagedPaths,
     plans: Vec<ProviderInstallPlan>,
 ) -> Result<Vec<(ProviderRecord, PathBuf, u64)>, ContentError> {
@@ -2262,10 +2271,61 @@ fn validate_projected_artifacts(
     artifacts: &[(ProviderRecord, PathBuf, u64)],
     java_major: Option<u32>,
 ) -> Result<(), ContentError> {
+    validate_projected_artifacts_scoped(managed, instance, &[], &[], artifacts, java_major, None)
+}
+
+/// Projected-inventory validation for a pack reconciliation: the artifacts a
+/// pack update activates, the managed records it retires, the file names
+/// whose current bytes are acknowledged divergences the update preserves
+/// (kept-local user files leave the projected check to their own drift
+/// detection), and the Minecraft / loader identity the instance will have
+/// after the update (which may be a game transition the registry record
+/// does not reflect yet).
+pub(crate) fn validate_projected_pack_artifacts(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    removed: &[ProviderRecord],
+    tolerated: &[String],
+    artifacts: &[(ProviderRecord, PathBuf, u64)],
+    target_minecraft: &str,
+    target_loader_version: &str,
+) -> Result<(), ContentError> {
+    validate_projected_artifacts_scoped(
+        managed,
+        instance,
+        removed,
+        tolerated,
+        artifacts,
+        None,
+        Some((target_minecraft, target_loader_version)),
+    )
+}
+
+fn validate_projected_artifacts_scoped(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    removed: &[ProviderRecord],
+    tolerated: &[String],
+    artifacts: &[(ProviderRecord, PathBuf, u64)],
+    java_major: Option<u32>,
+    target: Option<(&str, &str)>,
+) -> Result<(), ContentError> {
     let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
         .map_err(|e| ContentError::StateMalformed(e.to_string()))?;
     let Some(record) = registry.find(instance) else {
         return Ok(());
+    };
+    let (minecraft_version, loader_version) = match target {
+        Some((minecraft, loader)) => (minecraft.to_string(), loader.to_string()),
+        None => (
+            record.installed().minecraft_version.clone(),
+            record
+                .installed()
+                .platform
+                .version()
+                .unwrap_or_default()
+                .to_string(),
+        ),
     };
     if record.installed().platform.kind() != "fabric" {
         return Ok(());
@@ -2281,6 +2341,25 @@ fn validate_projected_artifacts(
         _ => crate::instance_mods::scan(managed, instance)
             .map_err(|e| ContentError::StateMalformed(e.to_string()))?,
     };
+    // Retired managed files leave the projected inventory exactly as their
+    // on-disk files leave the instance; the transaction proves the actual
+    // bytes at retirement, so the file name identifies the leaving entry.
+    // Tolerated names are acknowledged divergences the update preserves as
+    // user content — their drift is watched by the pack state, not by this
+    // transaction projection.
+    for retired in removed
+        .iter()
+        .filter(|record| record.content_type == ContentType::Mod)
+    {
+        inventory
+            .entries
+            .retain(|entry| !entry.file_name.eq_ignore_ascii_case(&retired.file_name));
+    }
+    for name in tolerated {
+        inventory
+            .entries
+            .retain(|entry| !entry.file_name.eq_ignore_ascii_case(name));
+    }
     for (incoming, path, bytes) in artifacts
         .iter()
         .filter(|(r, _, _)| r.content_type == ContentType::Mod)
@@ -2302,8 +2381,8 @@ fn validate_projected_artifacts(
     }
     if let Some(problem) = crate::mod_compatibility::validate(
         &inventory,
-        &record.installed().minecraft_version,
-        record.installed().platform.version().unwrap_or(""),
+        &minecraft_version,
+        &loader_version,
         java_major,
     )
     .first()
@@ -2426,7 +2505,7 @@ fn apply_lifecycle_state_reviewed(
             for old in &current.entries {
                 if pack.owns_provider(&old.identity()) && next.find(&old.identity()) != Some(old) {
                     return Err(ContentError::UnsupportedActionWith(
-                        "This component belongs to the installed modpack; updating or removing it requires a future pack reconciliation workflow.".into(),
+                        "This component belongs to the installed modpack; updating or removing it is part of a modpack update on the instance's Overview page.".into(),
                     ));
                 }
             }

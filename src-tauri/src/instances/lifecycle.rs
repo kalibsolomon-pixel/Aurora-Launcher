@@ -127,6 +127,50 @@ impl InstanceEndpoints {
     pub(crate) fn download_options(&self) -> &crate::downloads::DownloadOptions {
         self.install.download_options()
     }
+    pub(crate) fn install_context(&self) -> &InstallContext {
+        &self.install
+    }
+}
+
+/// Resolve the composed game plan for an Aurora-free installed configuration.
+/// Pack updates use this to stage a Minecraft/loader transition for an
+/// existing instance through the ordinary verified installation pipeline.
+pub(crate) async fn resolve_packed_game_plan(
+    endpoints: &InstanceEndpoints,
+    installed: &super::platform::InstalledConfiguration,
+) -> Result<crate::fabric::plan::GameInstallPlan, InstanceError> {
+    let game_version =
+        crate::minecraft::metadata::MinecraftVersionId::new(&installed.minecraft_version)
+            .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+    if installed.platform == (super::platform::PlatformPin::Vanilla {}) {
+        let minecraft = crate::minecraft::resolve_install_plan(
+            &endpoints.minecraft,
+            &game_version,
+            PlatformProfile::current().map_err(InstanceError::Platform)?,
+            endpoints.install.download_options(),
+        )
+        .await
+        .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+        return Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft));
+    }
+    let loader_version = crate::fabric::metadata::LoaderVersionId::new(
+        installed
+            .platform
+            .require_fabric()
+            .map_err(InstanceError::ReleaseInvalid)?,
+    )
+    .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+    let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
+    crate::fabric::resolve_game_plan(
+        &endpoints.minecraft,
+        &endpoints.fabric,
+        &game_version,
+        &loader_version,
+        platform,
+        endpoints.install.download_options(),
+    )
+    .await
+    .map_err(InstanceError::from)
 }
 
 /// A typed instance-creation request.
@@ -505,6 +549,24 @@ fn require_executable_configuration(
         ));
     }
     Ok(())
+}
+
+/// Resolve the exact installed configuration for an independent (Aurora-free)
+/// pinned Fabric game. Pack updates use this to prove a candidate Minecraft /
+/// Fabric Loader combination is installable before offering it, and to build
+/// the instance's next installed state when a transition commits.
+pub(crate) async fn resolve_packed_fabric_configuration(
+    endpoints: &InstanceEndpoints,
+    configuration: &InstanceConfiguration,
+) -> Result<super::platform::InstalledConfiguration, InstanceError> {
+    if configuration.aurora_enabled()
+        || configuration.loader().kind() != super::settings::LoaderKind::Fabric
+    {
+        return Err(InstanceError::ReleaseInvalid(
+            "a pack instance requires an independent pinned Fabric configuration".into(),
+        ));
+    }
+    resolve_installed_configuration(endpoints, configuration).await
 }
 
 async fn resolve_installed_configuration(
