@@ -26,6 +26,7 @@ pub mod modrinth;
 pub mod pack_activation;
 pub mod paths;
 pub mod runtime;
+pub mod server_enrichment;
 pub mod shortcuts;
 pub mod window_activity;
 
@@ -68,6 +69,7 @@ pub fn run() {
             application::get_daily_playtime,
             application::get_recent_worlds,
             application::get_recent_servers,
+            application::refresh_recent_server_status,
             application::quick_play_history,
             application::set_home_widgets,
             application::reset_home_widgets,

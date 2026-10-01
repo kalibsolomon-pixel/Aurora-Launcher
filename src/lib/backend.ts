@@ -126,6 +126,38 @@ export async function getRecentServers(instanceId: string | null = null, limit =
   return invokeHistory<RecentGameplayTarget[]>("get_recent_servers", { instanceId, limit });
 }
 
+/**
+ * Server-provided presentation for one recent-server target. Display facts
+ * only: no endpoint address field, no instance, no launch authority — rejoin
+ * continues to resolve the opaque history target ID natively.
+ */
+export interface RecentServerMotdSegment {
+  text: string;
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+}
+export interface RecentServerPresentation {
+  targetId: string;
+  status: "online" | "offline";
+  name: string | null;
+  motd: RecentServerMotdSegment[][];
+  playersOnline: number | null;
+  playersMax: number | null;
+  versionText: string | null;
+  latencyMs: number | null;
+  favicon: string | null;
+}
+export async function refreshRecentServerStatus(targetIds: string[]): Promise<RecentServerPresentation[]> {
+  try {
+    return await invoke<RecentServerPresentation[]>("refresh_recent_server_status", { request: { targetIds } });
+  } catch (error: unknown) {
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    throw new LauncherBackendError("backend_unavailable", "Recent server presentation could not be refreshed.");
+  }
+}
+
 /** One selectable built-in launcher theme. */
 export interface ThemeOption {
   id: string;

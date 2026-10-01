@@ -737,6 +737,50 @@ pub fn get_recent_servers(
     }
     Ok(entries)
 }
+
+/// One requested Recent Servers enrichment entry: an opaque recent-target id
+/// exactly as `get_recent_servers` returned it. The frontend never supplies
+/// an address; endpoints are resolved natively from history.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServerEnrichmentRequest {
+    pub target_ids: Vec<String>,
+}
+
+/// Cache-first, on-demand presentation enrichment for Recent Servers.
+///
+/// History remains the sole source of truth for visits and rejoin authority:
+/// this command performs bounded status queries for endpoints already in
+/// persisted history, caches sanitized presentation under the managed cache,
+/// and returns display-only DTOs. One server's failure degrades only its own
+/// entry; no history document is written.
+#[tauri::command]
+pub async fn refresh_recent_server_status(
+    app: AppHandle,
+    request: ServerEnrichmentRequest,
+) -> Result<Vec<crate::server_enrichment::RecentServerPresentation>, CommandError> {
+    if request.target_ids.len() > 20 {
+        return Err(CommandError::new(
+            "server_enrichment_invalid",
+            "Too many enrichment targets were requested.",
+        ));
+    }
+    let managed = managed_paths(&app)?;
+    let store =
+        crate::gameplay_history::Store::open(managed.gameplay_history_file()).map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Local gameplay history is unavailable or damaged.",
+            )
+        })?;
+    Ok(crate::server_enrichment::refresh(
+        &managed,
+        &store,
+        &request.target_ids,
+        crate::server_enrichment::RefreshOptions::default(),
+    )
+    .await)
+}
 #[tauri::command]
 pub fn set_home_widgets(
     app: AppHandle,
