@@ -3,7 +3,7 @@
   import type { SkinModel, WidgetSize } from "$lib/backend";
   import { launcher } from "../store.svelte";
   import { cosmetics } from "../cosmetics.svelte";
-  import { playerModel, renderPlayer } from "../playerModel";
+  import { playerModel, renderPlayer, PLAYER_RENDER_WIDTH, PLAYER_RENDER_HEIGHT } from "../playerModel";
   let { size }: { size: WidgetSize } = $props();
   let previewCanvas: HTMLCanvasElement | undefined = $state();
   let importModel = $state<SkinModel>("classic");
@@ -23,7 +23,7 @@
 </script>
 
 <div class="cosmetic-widget">
-  <div class="current-row"><canvas bind:this={previewCanvas} class="skin-mini" width="420" height="600" aria-hidden="true"></canvas><p class="cosmetic-current">{#if !accountId}Choose a Minecraft account to see its current skin.{:else if cosmetics.loading}Loading current skin…{:else if cosmetics.remote?.hasCurrentSkin}Current account skin · {cosmetics.remote.currentSkinModel === "slim" ? "Slim" : cosmetics.remote.currentSkinModel === "classic" ? "Classic" : "Model unavailable"}{:else if cosmetics.offline}Current skin unavailable offline. Saved presets remain available.{:else}No current skin reported.{/if}</p></div>
+  <div class="current-row"><canvas bind:this={previewCanvas} class="skin-mini" width={PLAYER_RENDER_WIDTH} height={PLAYER_RENDER_HEIGHT} aria-hidden="true"></canvas><p class="cosmetic-current">{#if !accountId}Choose a Minecraft account to see its current skin.{:else if cosmetics.loading}Loading current skin…{:else if cosmetics.remote?.hasCurrentSkin}Current account skin · {cosmetics.remote.currentSkinModel === "slim" ? "Slim" : cosmetics.remote.currentSkinModel === "classic" ? "Classic" : "Model unavailable"}{:else if cosmetics.offline}Current skin unavailable offline. Saved presets remain available.{:else}No current skin reported.{/if}</p></div>
   <div class="cosmetic-toolbar">
     <label>Import model <select aria-label="Import skin model" bind:value={importModel}><option value="classic">Classic</option><option value="slim">Slim</option></select></label>
     <button type="button" class="btn btn-quiet" disabled={cosmetics.busy} onclick={() => fileInput.click()}>Import PNG</button>

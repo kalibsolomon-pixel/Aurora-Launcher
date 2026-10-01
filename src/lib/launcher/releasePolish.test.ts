@@ -40,7 +40,7 @@ const html = (component: any, props = {}) => render(component, { props }).body;
 it("default widgets sit below the unchanged primary card and 3D player", () => {
   reset(); const view = html(Home);
   assert.match(view, /Instance Details/); assert.match(view, /Content Summary/); assert.doesNotMatch(view, /Current launcher session only/);
-  assert(view.indexOf("home-widgets") > view.indexOf("instance-card")); assert.match(view, /Default Minecraft player/);
+  assert(view.indexOf("home-widgets") > view.indexOf("instance-card")); assert.match(view, /Player skin loading/);
 });
 it("available session is real, hidden widgets disappear, and all-off retains the edit entry point", () => {
   reset(); homeWidgets.layout.widgets[2].enabled = true; assert.match(html(Home), /Current launcher session only/);

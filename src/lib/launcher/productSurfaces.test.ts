@@ -171,10 +171,10 @@ it("account switching uses Rust selection without assigning accounts to instance
   assert.equal(launcher.selectedAccount.minecraftName, "SecondPlayer"); assert.equal(JSON.stringify(launcher.launcherState), before);
   assert(calls.includes("select_account")); assert(!calls.some(command => /instance|configuration/.test(command)));
 });
-it("cosmetic avatar failure renders a fallback without disabling native Ready", async () => {
+it("cosmetic avatar failure leaves the model region empty without disabling native Ready", async () => {
   reset(); (globalThis as any).window = { __TAURI_INTERNALS__: { invoke: async () => { throw new Error("offline"); } } };
   await launcher.refreshAvatar(account.accountId, true);
-  assert.match(html(Home), /Default Minecraft player/); assert.match(html(Home), /class="btn btn-primary[^>]*>Play/);
+  assert.match(html(Home), /Player skin loading/); assert.doesNotMatch(html(Home), /Default Minecraft player/); assert.match(html(Home), /class="btn btn-primary[^>]*>Play/);
   assert.equal(launcher.playReadiness.ready, true); assert.equal(launcher.playError, null);
 });
 it("invalid avatar pixels use a fallback and valid pixels produce the head canvas", () => {
@@ -246,12 +246,14 @@ it("Home integrates its picker within the selected-instance card and has no acco
   reset(); const view=html(Home);
   assert.match(view, /aria-label="Selected instance"[\s\S]*Select Play instance/);
   assert.doesNotMatch(view, /Play instance<|Manage accounts|Minecraft account|PlayerName/);
-  assert.match(view, /Default Minecraft player/);
+  assert.match(view, /Player skin loading/);
   const card=view.slice(view.indexOf('aria-label="Selected instance"'),view.indexOf('</section>',view.indexOf('aria-label="Selected instance"')));
   assert.doesNotMatch(card,/player-preview|<canvas/);
-  assert.match(view,/width="420" height="600"/);
+  assert.doesNotMatch(view,/width="560" height="800"/);
   launcher.accountAvatars[account.accountId]={rgba:Array(256).fill(255),model:"classic",skinHeight:64,skinRgba:Array(16384).fill(255)};
-  assert.match(html(Home), /Current Minecraft player skin/);
+  const skinned = html(Home);
+  assert.match(skinned, /Current Minecraft player skin/);
+  assert.match(skinned, /width="560" height="800"/);
 });
 
 it("Add account and cancellation use the existing native commands and preserve identity", async () => {

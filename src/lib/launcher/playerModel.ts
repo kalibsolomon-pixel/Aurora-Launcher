@@ -59,15 +59,19 @@ function defaultSkin(): number[] {
   return pixels;
 }
 
+/** Rendered model bounds shared by the Home preview layout. */
+export const PLAYER_RENDER_WIDTH = 560;
+export const PLAYER_RENDER_HEIGHT = 800;
+
 /** Painter's-order rasterization of visible faces; nearest texels preserve skin detail. */
 export function renderPlayer(context: CanvasRenderingContext2D, model: PlayerModel, yaw = -.42): void {
-  const width = 420, height = 600;
+  const width = PLAYER_RENDER_WIDTH, height = PLAYER_RENDER_HEIGHT;
   const image = context.createImageData(width,height);
   const tilt = .10;
   function project([x,y,z]: Point) {
     const px=x*Math.cos(yaw)+z*Math.sin(yaw), pz=-x*Math.sin(yaw)+z*Math.cos(yaw);
     const py=y*Math.cos(tilt)-pz*Math.sin(tilt), depth=y*Math.sin(tilt)+pz*Math.cos(tilt);
-    const scale=15/(1+depth/120);
+    const scale=20/(1+depth/120);
     return { x:width/2+px*scale,y:height/2+py*scale,z:depth };
   }
   const visible = model.faces.map(face=>({face,p:face.points.map(project)})).filter(({p})=>

@@ -63,18 +63,14 @@
                   <span class="accent-swatch" style:background={accent.hex}>{#if selected}<span class="swatch-check">✓</span>{/if}</span><span>{accent.label}</span>
                 </label>
               {/each}
-              <label class="accent-option" class:chosen={appearance.accent.type === 'custom'}>
-                <input type="radio" name="accent" checked={appearance.accent.type === 'custom'} disabled={appearance.busy} onchange={() => appearance.setAccent({ type: 'custom', hex: customHex })} />
-                <span class="accent-swatch custom-swatch" style:background={customHex}>+</span><span>Custom</span>
+              <!-- The Custom circle opens the system color picker directly;
+                   choosing a color applies it immediately. No second row. -->
+              <label class="accent-option" class:chosen={appearance.accent.type === 'custom'} title="Choose a custom accent color">
+                <input class="custom-picker-input" type="color" aria-label="Custom accent color" value={customHex} disabled={appearance.busy}
+                  oninput={(event) => { customHex = event.currentTarget.value; appearance.setAccent({ type: 'custom', hex: customHex }); }} />
+                <span class="accent-swatch custom-swatch" style:background={customHex}>{appearance.accent.type === 'custom' ? '' : '+'}</span><span>Custom</span>
               </label>
             </div>
-            {#if appearance.accent.type === 'custom'}
-              <div class="custom-color">
-                <label>Custom color<input type="color" aria-label="Custom accent color" bind:value={customHex} disabled={appearance.busy} onchange={() => appearance.setAccent({ type: 'custom', hex: customHex })} /></label>
-                <input class="custom-hex" aria-label="Custom accent hex" type="text" bind:value={customHex} maxlength="7" spellcheck="false" disabled={appearance.busy} />
-                <button class="btn" disabled={appearance.busy} onclick={() => appearance.setAccent({type:'custom',hex:customHex})}>Apply color</button>
-              </div>
-            {/if}
             <p class="choice-note">Selection and primary actions follow your accent. Status colors keep their meaning.</p>
           </fieldset>
           {#if appearance.error}<p class="inline-message inline-message-error" role="alert">{appearance.error.message}</p>{/if}
@@ -136,12 +132,10 @@
   .accent-swatch { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; }
   .chosen .accent-swatch { outline: 2px solid var(--color-accent); outline-offset: 4px; }
   .swatch-check { background: #101116; color: white; border-radius: 50%; width: 15px; height: 15px; text-align: center; font-size: 11px; }
-  .custom-swatch { color: #08090c; font-size: 20px; }
+  .custom-swatch { color: #08090c; font-size: 20px; display: grid; place-items: center; }
+  .custom-picker-input { position: absolute; width: 0; height: 0; opacity: 0; padding: 0; border: 0; pointer-events: none; }
+  .accent-option:has(.custom-picker-input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   .accent-section .choice-note { margin-top: 20px; }
-  .custom-color { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 13px; }
-  .custom-color label { display: flex; align-items: center; gap: 12px; }
-  .custom-color .custom-hex { width: 96px; padding: 9px; background: var(--color-surface-sunken); color: var(--color-text); border: 1px solid var(--f-edge); border-radius: 8px; font: inherit; }
-  .custom-color input[type="color"] { width: 42px; height: 30px; background: none; border: 0; }
   @media (max-width: 1050px) { .settings-layout { grid-template-columns: 1fr; gap: 26px; } .settings-nav { display: flex; flex-wrap: wrap; position: static; } }
   @media (max-width: 760px) { .theme-preview { height: 65px; } .theme-grid { gap: 8px; } .choice-label { font-size: 11px; } }
 </style>
