@@ -29,8 +29,9 @@
     onInstalled: (targetInstanceId: string, targetKind: ContentType) => Promise<void>;
   } = $props();
 
-  // The effect below re-syncs browseKind whenever the host tab's kind
-  // changes; this initializer only seeds the very first render.
+  // browseKind is seeded once from the host's kind; hosts swap panels
+  // through {#if} so a mounted browser never changes kind. A future host
+  // passing a dynamic kind must key its remount explicitly.
   // svelte-ignore state_referenced_locally
   let browseKind = $state<BrowseKind>(kind);
   let query = $state("");
