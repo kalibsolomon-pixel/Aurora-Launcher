@@ -106,6 +106,8 @@ pub fn run() {
             application::scan_instance_content,
             application::register_recovered_content,
             application::search_modrinth,
+            application::browse_modrinth,
+            application::browse_modrinth_tags,
             application::get_modrinth_project,
             application::get_modrinth_project_artwork,
             application::preview_modrinth_install,

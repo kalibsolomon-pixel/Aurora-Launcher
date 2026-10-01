@@ -1527,4 +1527,170 @@ mod live_acceptance {
             // No mutation: this is the preview cost only.
         }
     }
+
+    /// Real Modrinth shader-pack installation acceptance through the actual
+    /// quick-install command path (provider state validation, bounded
+    /// environment candidate loop, verified acquisition, activation),
+    /// followed by remove/reinstall lifecycle. Enabled only through
+    /// AURORA_SHADER_ACCEPT_ROOT pointing at a disposable temporary
+    /// directory whose name starts with aurora-shader-acceptance-.
+    #[tokio::test]
+    #[ignore = "requires live Modrinth and an explicit disposable root"]
+    async fn live_shader_installation_acceptance() {
+        let root =
+            PathBuf::from(std::env::var_os("AURORA_SHADER_ACCEPT_ROOT").expect("disposable root"));
+        assert!(root.starts_with(std::env::temp_dir()));
+        assert!(
+            root.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("aurora-shader-acceptance-")
+        );
+        std::fs::create_dir_all(root.join("instances")).unwrap();
+        let instance = InstanceId::new(format!("safe-{}", uuid::Uuid::new_v4().simple())).unwrap();
+        std::fs::create_dir_all(root.join("instances").join(instance.as_str())).unwrap();
+        let managed = ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        {
+            use crate::instances::{
+                InstanceRecord, InstanceRegistry, InstanceState, platform::InstalledConfiguration,
+                settings::InstanceConfiguration,
+            };
+            let mut config = InstanceConfiguration::for_minecraft_version("1.21.11");
+            config.set_aurora_enabled(false);
+            let mut registry = InstanceRegistry::empty();
+            registry.instances_mut().push(
+                InstanceRecord::from_installed(
+                    instance.clone(),
+                    "Shader acceptance",
+                    InstanceState::Ready,
+                    InstalledConfiguration {
+                        minecraft_version: "1.21.11".into(),
+                        platform: crate::instances::platform::PlatformPin::Fabric {
+                            version: "0.19.5".into(),
+                        },
+                        aurora: None,
+                    },
+                    config,
+                )
+                .unwrap(),
+            );
+            std::fs::create_dir_all(managed.launcher_dir()).unwrap();
+            registry.save(&managed.instance_registry_file()).unwrap();
+        }
+        let context = Context {
+            minecraft_version: "1.21.11".into(),
+            loader: "fabric".into(),
+            fabric_api_protected: false,
+        };
+        let client = Client::official();
+        let packs = [
+            ("HVnmMxH1", "Complementary Reimagined"),
+            ("Q1vvjJYV", "BSL Shaders"),
+        ];
+        let mut installed = Vec::new();
+        for (project, title) in packs {
+            // The exact quick_install_modrinth body without AppHandle.
+            let state =
+                crate::instance_content::ContentState::load_and_migrate(&managed, &instance)
+                    .unwrap();
+            let details = client
+                .details(&context, ContentType::ShaderPack, project)
+                .await
+                .unwrap();
+            let mut choices = details.versions;
+            choices.sort_by_key(|version| version.version_type != "release");
+            let choice = &choices[0];
+            let mut resolved = client
+                .resolve(
+                    &context,
+                    ContentType::ShaderPack,
+                    project,
+                    &choice.id,
+                    &state,
+                )
+                .await
+                .unwrap();
+            crate::instance_content::reconcile_provider_resolution(
+                &managed,
+                &instance,
+                &mut resolved,
+            )
+            .await
+            .unwrap();
+            let conflicts = crate::instance_content::preview_provider_conflicts(
+                &managed,
+                &instance,
+                &resolved.plans,
+            )
+            .await
+            .unwrap();
+            assert!(conflicts.is_empty(), "{title}: unexpected conflicts");
+            let records = crate::instance_content::install_provider_plans(
+                &managed,
+                &instance,
+                resolved.plans,
+            )
+            .await
+            .unwrap_or_else(|error| panic!("{title}: install failed: {error}"));
+            let record = &records[0];
+            let path = managed
+                .instance_paths(&instance)
+                .shaderpacks()
+                .join(&record.file_name);
+            let bytes = std::fs::read(&path).unwrap();
+            use sha2::Digest as _;
+            println!(
+                "{title}: project={project} version={} file={} size={} sha256={:x} published512_match={}",
+                record.version_id,
+                record.file_name,
+                bytes.len(),
+                sha2::Sha256::digest(&bytes),
+                record
+                    .file_id
+                    .eq_ignore_ascii_case(&format!("{:x}", sha2::Sha512::digest(&bytes)))
+            );
+            assert!(path.is_file());
+            assert!(path.starts_with(managed.instance_paths(&instance).shaderpacks()));
+            installed.push((record.identity(), record.file_name.clone(), title));
+        }
+        let state = crate::instance_content::ContentState::load(&managed, &instance).unwrap();
+        assert_eq!(state.entries.len(), 2);
+        println!("managed state: 2 shader records persisted");
+
+        // Remove/reinstall lifecycle for the first pack.
+        let (identity, file_name, title) = installed[0].clone();
+        crate::instance_content::remove_provider_graph(&managed, &instance, &state, &identity)
+            .unwrap();
+        let shaderpacks = managed
+            .instance_paths(&instance)
+            .shaderpacks()
+            .to_path_buf();
+        assert!(!shaderpacks.join(&file_name).exists(), "removed file gone");
+        let state = crate::instance_content::ContentState::load(&managed, &instance).unwrap();
+        assert_eq!(state.entries.len(), 1, "second pack retained");
+        println!("{title}: removed; the other pack is untouched");
+
+        // Reinstall through the same path.
+        let details = client
+            .details(&context, ContentType::ShaderPack, &identity.project_id)
+            .await
+            .unwrap();
+        let mut choices = details.versions;
+        choices.sort_by_key(|version| version.version_type != "release");
+        let resolved = client
+            .resolve(
+                &context,
+                ContentType::ShaderPack,
+                &identity.project_id,
+                &choices[0].id,
+                &state,
+            )
+            .await
+            .unwrap();
+        crate::instance_content::install_provider_plans(&managed, &instance, resolved.plans)
+            .await
+            .unwrap();
+        assert!(shaderpacks.join(&file_name).is_file(), "reinstalled");
+        println!("{title}: reinstalled through the same verified pipeline");
+    }
 }

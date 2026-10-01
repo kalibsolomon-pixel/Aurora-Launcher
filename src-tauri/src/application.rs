@@ -374,6 +374,18 @@ impl From<crate::instance_content::ContentError> for CommandError {
                     "Another content change is in progress for this instance."
                 }
                 "unsupported_content_action" => "This content entry cannot be changed here.",
+                "content_unavailable" => {
+                    "A content folder could not be read. Refresh and try again."
+                }
+                "content_acquisition_failed" => {
+                    "The download could not be completed. Check the connection and try again."
+                }
+                "content_invalid_artifact" => {
+                    "The downloaded content is not a valid mod file. Nothing was installed."
+                }
+                "content_required_by_installed" => {
+                    "This content is still required by other installed content."
+                }
                 _ => "The content operation could not be completed. Refresh and try again.",
             },
         )
@@ -2582,11 +2594,33 @@ pub struct ModrinthSearchRequest {
     offset: u32,
 }
 
+/// Provider-neutral browse query. The provider is validated; the frontend
+/// never supplies URLs or raw provider API shapes. Modpacks browse with
+/// strong identity but never install.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderBrowseRequest {
+    instance_id: String,
+    provider: String,
+    content_type: crate::modrinth::BrowseKind,
+    search: String,
+    #[serde(default)]
+    categories: Vec<String>,
+    sort: crate::modrinth::BrowseSort,
+    offset: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderBrowseTagsRequest {
+    provider: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModrinthProjectRequest {
     instance_id: String,
-    content_type: crate::instance_content::ContentType,
+    content_type: crate::modrinth::BrowseKind,
     project_id: String,
 }
 
@@ -2847,6 +2881,50 @@ pub async fn search_modrinth(
 }
 
 #[tauri::command]
+pub async fn browse_modrinth(
+    app: AppHandle,
+    request: ProviderBrowseRequest,
+) -> Result<crate::modrinth::SearchPage, CommandError> {
+    if request.provider != "modrinth" {
+        return Err(CommandError::new(
+            "provider_unsupported",
+            "This provider is not available in Aurora yet.",
+        ));
+    }
+    let managed = managed_paths(&app)?;
+    let (_, context) = provider_context(&managed, &request.instance_id)?;
+    crate::modrinth::Client::official()
+        .search_browse(
+            &context,
+            request.content_type,
+            &request.search,
+            &request.categories,
+            request.sort,
+            request.offset,
+        )
+        .await
+        .map_err(provider_error)
+}
+
+/// Live provider category tags for the browse filter. One bounded request
+/// per process; no polling.
+#[tauri::command]
+pub async fn browse_modrinth_tags(
+    request: ProviderBrowseTagsRequest,
+) -> Result<Vec<crate::modrinth::ProviderCategory>, CommandError> {
+    if request.provider != "modrinth" {
+        return Err(CommandError::new(
+            "provider_unsupported",
+            "This provider is not available in Aurora yet.",
+        ));
+    }
+    crate::modrinth::Client::official()
+        .categories()
+        .await
+        .map_err(provider_error)
+}
+
+#[tauri::command]
 pub async fn get_modrinth_project(
     app: AppHandle,
     request: ModrinthProjectRequest,
@@ -2854,23 +2932,27 @@ pub async fn get_modrinth_project(
     let managed = managed_paths(&app)?;
     let (instance, context) = provider_context(&managed, &request.instance_id)?;
     let mut details = crate::modrinth::Client::official()
-        .details(&context, request.content_type, &request.project_id)
+        .details_browse(&context, request.content_type, &request.project_id)
         .await
         .map_err(provider_error)?;
-    let state = provider_state(&managed, &instance)?;
-    // Keep Details available even if all candidates are blocked: its explicit
-    // preview supplies the concrete first candidate error.
-    if let Ok(resolved) = resolve_environment_candidate(
-        &managed,
-        &instance,
-        &context,
-        request.content_type,
-        &request.project_id,
-        &state,
-    )
-    .await
-    {
-        details.default_version_id = Some(resolved.preview.version_id);
+    // Modpacks browse with provider identity only: no environment resolution,
+    // no install planning. Phase I attaches the .mrpack pipeline.
+    if let Some(kind) = request.content_type.content_type() {
+        let state = provider_state(&managed, &instance)?;
+        // Keep Details available even if all candidates are blocked: its
+        // explicit preview supplies the concrete first candidate error.
+        if let Ok(resolved) = resolve_environment_candidate(
+            &managed,
+            &instance,
+            &context,
+            kind,
+            &request.project_id,
+            &state,
+        )
+        .await
+        {
+            details.default_version_id = Some(resolved.preview.version_id);
+        }
     }
     Ok(details)
 }

@@ -31,6 +31,76 @@ pub struct Context {
     pub fabric_api_protected: bool,
 }
 
+/// Provider content types a user can browse. A superset of the installable
+/// `ContentType`: modpacks browse with strong provider identity but do not
+/// install (Phase I will attach that pipeline).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BrowseKind {
+    Mod,
+    Modpack,
+    ResourcePack,
+    ShaderPack,
+}
+
+impl BrowseKind {
+    pub fn project_type(self) -> &'static str {
+        match self {
+            Self::Mod => "mod",
+            Self::Modpack => "modpack",
+            Self::ResourcePack => "resourcepack",
+            Self::ShaderPack => "shader",
+        }
+    }
+
+    pub fn content_type(self) -> Option<ContentType> {
+        match self {
+            Self::Mod => Some(ContentType::Mod),
+            Self::Modpack => None,
+            Self::ResourcePack => Some(ContentType::ResourcePack),
+            Self::ShaderPack => Some(ContentType::ShaderPack),
+        }
+    }
+
+    pub fn from_content_type(kind: ContentType) -> Self {
+        match kind {
+            ContentType::Mod => Self::Mod,
+            ContentType::ResourcePack => Self::ResourcePack,
+            ContentType::ShaderPack => Self::ShaderPack,
+        }
+    }
+}
+
+/// Provider-supported browse sort orders. Relevance is the provider default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BrowseSort {
+    Relevance,
+    Downloads,
+    Newest,
+    Updated,
+}
+
+impl BrowseSort {
+    fn query_value(self) -> Option<&'static str> {
+        match self {
+            Self::Relevance => None,
+            Self::Downloads => Some("downloads"),
+            Self::Newest => Some("newest"),
+            Self::Updated => Some("updated"),
+        }
+    }
+}
+
+/// One live provider category tag, scoped by the provider's own project-type
+/// attribution. Never a hardcoded taxonomy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderCategory {
+    pub name: String,
+    pub project_type: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct Client {
     base: Url,
@@ -171,26 +241,42 @@ impl Client {
         serde_json::from_slice(&payload).map_err(|_| Error::InvalidResponse)
     }
 
-    pub async fn search(
+    /// Provider-neutral browse search over the official facets API. The
+    /// instance's Minecraft version stays the binding compatibility facet;
+    /// categories, sort and search text are user filters. The response is
+    /// re-validated against the requested project type and version.
+    pub async fn search_browse(
         &self,
         context: &Context,
-        kind: ContentType,
+        kind: BrowseKind,
         query: &str,
+        categories: &[String],
+        sort: BrowseSort,
         offset: u32,
     ) -> Result<SearchPage, Error> {
         if context.loader != "fabric" {
             return Err(Error::NoCompatibleVersion);
         }
-        if query.len() > 160 || offset > 10_000 {
+        if query.len() > 160 || offset > 10_000 || categories.len() > 8 {
             return Err(Error::InvalidRequest);
         }
+        for category in categories {
+            if category.is_empty()
+                || category.len() > 48
+                || !category
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+            {
+                return Err(Error::InvalidRequest);
+            }
+        }
         let mut url = self.endpoint(&["search"])?;
-        let project_type = project_type(kind);
+        let project_type = kind.project_type();
         let mut facets = vec![
             vec![format!("project_type:{project_type}")],
             vec![format!("versions:{}", context.minecraft_version)],
         ];
-        if kind == ContentType::Mod {
+        if kind == BrowseKind::Mod {
             facets.push(vec![format!("categories:{}", context.loader)]);
             facets.push(
                 CLIENT_ENVIRONMENTS
@@ -199,6 +285,14 @@ impl Client {
                     .collect(),
             );
         }
+        if kind == BrowseKind::ResourcePack {
+            facets.push(vec!["loaders:minecraft".to_owned()]);
+        }
+        // Thematic categories are separate facet groups (AND between groups);
+        // loader remains its own facet, never mixed into a category group.
+        for category in categories {
+            facets.push(vec![format!("categories:{category}")]);
+        }
         {
             let mut pairs = url.query_pairs_mut();
             pairs.append_pair("query", query.trim());
@@ -206,6 +300,9 @@ impl Client {
                 "facets",
                 &serde_json::to_string(&facets).expect("facets serialize"),
             );
+            if let Some(sort_value) = sort.query_value() {
+                pairs.append_pair("sort", sort_value);
+            }
             pairs.append_pair("limit", "20");
             pairs.append_pair("offset", &offset.to_string());
         }
@@ -222,7 +319,7 @@ impl Client {
                             .versions
                             .iter()
                             .any(|version| version == &context.minecraft_version)
-                        && (kind != ContentType::Mod
+                        && (kind != BrowseKind::Mod
                             || hit.environment.iter().any(|env| client_environment(env)))
                 })
                 .map(|hit| ProjectSummary {
@@ -233,9 +330,58 @@ impl Client {
                     downloads: hit.downloads,
                     icon_url: hit.icon_url.as_deref().and_then(safe_icon_url),
                     project_type: kind,
+                    categories: hit.display_categories,
                 })
                 .collect(),
         })
+    }
+
+    /// Compatibility wrapper for the existing mod/pack search callers.
+    pub async fn search(
+        &self,
+        context: &Context,
+        kind: ContentType,
+        query: &str,
+        offset: u32,
+    ) -> Result<SearchPage, Error> {
+        self.search_browse(
+            context,
+            BrowseKind::from_content_type(kind),
+            query,
+            &[],
+            BrowseSort::Relevance,
+            offset,
+        )
+        .await
+    }
+
+    /// Live provider category tags, fetched once per provider host per
+    /// process and reused. No polling; the provider's own project-type
+    /// attribution scopes relevance.
+    pub async fn categories(&self) -> Result<Vec<ProviderCategory>, Error> {
+        static CATEGORIES: OnceLock<std::sync::Mutex<HashMap<String, Vec<ProviderCategory>>>> =
+            OnceLock::new();
+        let cache = CATEGORIES.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+        let host = format!(
+            "{}:{}",
+            self.base.host_str().unwrap_or_default(),
+            self.base.port().unwrap_or(0)
+        );
+        if let Some(cached) = cache.lock().unwrap().get(&host) {
+            return Ok(cached.clone());
+        }
+        let url = self.endpoint(&["tag", "category"])?;
+        let tags: Vec<CategoryTagDto> = self.get(url).await?;
+        let categories: Vec<ProviderCategory> = tags
+            .into_iter()
+            .filter(|tag| !tag.name.is_empty() && tag.name.len() <= 48)
+            .map(|tag| ProviderCategory {
+                name: tag.name,
+                project_type: tag.project_type.unwrap_or_else(|| "mod".to_owned()),
+            })
+            .collect();
+        cache.lock().unwrap().insert(host, categories.clone());
+        Ok(categories)
     }
 
     async fn project(&self, id: &str) -> Result<ProjectDto, Error> {
@@ -261,6 +407,16 @@ impl Client {
         kind: ContentType,
         project_id: &str,
     ) -> Result<Vec<VersionDto>, Error> {
+        self.versions_browse(context, BrowseKind::from_content_type(kind), project_id)
+            .await
+    }
+
+    async fn versions_browse(
+        &self,
+        context: &Context,
+        kind: BrowseKind,
+        project_id: &str,
+    ) -> Result<Vec<VersionDto>, Error> {
         validate_id(project_id)?;
         let mut url = self.endpoint(&["project", project_id, "version"])?;
         {
@@ -269,12 +425,12 @@ impl Client {
                 "game_versions",
                 &serde_json::to_string(&[&context.minecraft_version]).unwrap(),
             );
-            if kind == ContentType::Mod {
+            if kind == BrowseKind::Mod {
                 pairs.append_pair(
                     "loaders",
                     &serde_json::to_string(&[&context.loader]).unwrap(),
                 );
-            } else if kind == ContentType::ResourcePack {
+            } else if kind == BrowseKind::ResourcePack {
                 pairs.append_pair("loaders", "[\"minecraft\"]");
             }
             pairs.append_pair("include_changelog", "false");
@@ -282,7 +438,7 @@ impl Client {
         let versions: Vec<VersionDto> = self.get(url).await?;
         Ok(versions
             .into_iter()
-            .filter(|version| compatible(context, kind, version))
+            .filter(|version| compatible_browse(context, kind, version))
             .collect())
     }
 
@@ -292,11 +448,23 @@ impl Client {
         kind: ContentType,
         project_id: &str,
     ) -> Result<ProjectDetails, Error> {
+        self.details_browse(context, BrowseKind::from_content_type(kind), project_id)
+            .await
+    }
+
+    /// Details for any browsable kind, including modpacks. Modpack versions
+    /// carry strong provider identity only; nothing here plans an install.
+    pub async fn details_browse(
+        &self,
+        context: &Context,
+        kind: BrowseKind,
+        project_id: &str,
+    ) -> Result<ProjectDetails, Error> {
         let project = self.project(project_id).await?;
-        if project.project_type != project_type(kind) {
+        if project.project_type != kind.project_type() {
             return Err(Error::NoCompatibleVersion);
         }
-        let mut versions = self.versions(context, kind, &project.id).await?;
+        let mut versions = self.versions_browse(context, kind, &project.id).await?;
         versions.sort_by(|a, b| b.date_published.cmp(&a.date_published));
         let choices: Vec<_> = versions
             .iter()
@@ -744,14 +912,6 @@ fn client_environment(value: &str) -> bool {
     CLIENT_ENVIRONMENTS.contains(&value) || value == "unknown"
 }
 
-fn project_type(kind: ContentType) -> &'static str {
-    match kind {
-        ContentType::Mod => "mod",
-        ContentType::ResourcePack => "resourcepack",
-        ContentType::ShaderPack => "shader",
-    }
-}
-
 fn content_type(project_type: &str) -> Result<ContentType, Error> {
     match project_type {
         "mod" => Ok(ContentType::Mod),
@@ -762,6 +922,10 @@ fn content_type(project_type: &str) -> Result<ContentType, Error> {
 }
 
 fn compatible(context: &Context, kind: ContentType, version: &VersionDto) -> bool {
+    compatible_browse(context, BrowseKind::from_content_type(kind), version)
+}
+
+fn compatible_browse(context: &Context, kind: BrowseKind, version: &VersionDto) -> bool {
     if context.loader != "fabric" {
         return false;
     }
@@ -770,12 +934,12 @@ fn compatible(context: &Context, kind: ContentType, version: &VersionDto) -> boo
         .iter()
         .any(|value| value == &context.minecraft_version)
         && match kind {
-            ContentType::Mod => {
+            BrowseKind::Mod => {
                 version.loaders.iter().any(|value| value == &context.loader)
                     && client_environment(&version.environment)
             }
-            ContentType::ResourcePack => version.loaders.iter().any(|value| value == "minecraft"),
-            ContentType::ShaderPack => true,
+            BrowseKind::ResourcePack => version.loaders.iter().any(|value| value == "minecraft"),
+            BrowseKind::ShaderPack | BrowseKind::Modpack => true,
         }
 }
 
@@ -1075,7 +1239,9 @@ pub struct ProjectSummary {
     pub author: String,
     pub downloads: u64,
     pub icon_url: Option<String>,
-    pub project_type: ContentType,
+    pub project_type: BrowseKind,
+    /// Concise provider-curated categories for display chips.
+    pub categories: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1090,7 +1256,7 @@ pub struct ProjectDetails {
     pub environments: Vec<String>,
     pub versions: Vec<VersionChoice>,
     pub default_version_id: Option<String>,
-    pub project_type: ContentType,
+    pub project_type: BrowseKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1149,6 +1315,14 @@ struct SearchHitDto {
     icon_url: Option<String>,
     versions: Vec<String>,
     environment: Vec<String>,
+    #[serde(default)]
+    display_categories: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CategoryTagDto {
+    name: String,
+    project_type: Option<String>,
 }
 #[derive(Debug, Deserialize)]
 struct ProjectDto {
@@ -2583,6 +2757,244 @@ mod tests {
                 .resolve(&context(), ContentType::Mod, "AAAA0001", "ANEW0004", &state,)
                 .await,
             Err(Error::DependencyVersionConflict(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn browse_search_maps_kinds_categories_and_sort_into_provider_facets() {
+        let paths = Arc::new(Mutex::new(Vec::new()));
+        let captured = paths.clone();
+        let server = TestServer::spawn(Arc::new(move |request: &TestRequest| {
+            captured.lock().unwrap().push(request.path.clone());
+            TestResponse::ok(br#"{"hits":[],"offset":0,"total_hits":0}"#)
+        }));
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+
+        let cases: Vec<(BrowseKind, Vec<&str>, BrowseSort)> = vec![
+            (BrowseKind::Mod, vec![], BrowseSort::Relevance),
+            (
+                BrowseKind::Modpack,
+                vec!["adventure", "technology"],
+                BrowseSort::Downloads,
+            ),
+            (BrowseKind::ResourcePack, vec![], BrowseSort::Newest),
+            (BrowseKind::ShaderPack, vec!["cartoon"], BrowseSort::Updated),
+        ];
+        for (kind, categories, sort) in cases {
+            client
+                .search_browse(
+                    &context(),
+                    kind,
+                    "",
+                    &categories
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>(),
+                    sort,
+                    0,
+                )
+                .await
+                .unwrap();
+        }
+        let requests = paths.lock().unwrap();
+        let parsed: Vec<(String, Vec<Vec<String>>, Option<String>)> = requests
+            .iter()
+            .map(|path| {
+                let url = Url::parse(&format!("http://localhost{path}")).unwrap();
+                let facets: Vec<Vec<String>> = serde_json::from_str(
+                    &url.query_pairs()
+                        .find(|(key, _)| key == "facets")
+                        .unwrap()
+                        .1,
+                )
+                .unwrap();
+                let sort = url
+                    .query_pairs()
+                    .find(|(key, _)| key == "sort")
+                    .map(|(_, value)| value.to_string());
+                (url.path().to_owned(), facets, sort)
+            })
+            .collect();
+        assert!(parsed.iter().all(|(path, _, _)| path == "/v2/search"));
+        let (mod_facets, mod_sort) = (&parsed[0].1, &parsed[0].2);
+        assert!(
+            mod_facets
+                .iter()
+                .flatten()
+                .any(|value| value == "project_type:mod")
+        );
+        assert!(
+            mod_facets
+                .iter()
+                .flatten()
+                .any(|value| value == "categories:fabric")
+        );
+        assert!(
+            mod_facets
+                .iter()
+                .flatten()
+                .any(|value| value == "environment:client_and_server")
+        );
+        assert_eq!(mod_sort.as_deref(), None);
+        let (pack_facets, pack_sort) = (&parsed[1].1, &parsed[1].2);
+        assert!(
+            pack_facets
+                .iter()
+                .flatten()
+                .any(|value| value == "project_type:modpack")
+        );
+        assert!(
+            !pack_facets
+                .iter()
+                .flatten()
+                .any(|value| value == "categories:fabric")
+        );
+        // Each selected category is its own facet group (AND semantics).
+        assert_eq!(
+            pack_facets
+                .iter()
+                .filter(|group| group.len() == 1 && group[0] == "categories:adventure")
+                .count(),
+            1
+        );
+        assert_eq!(
+            pack_facets
+                .iter()
+                .filter(|group| group.len() == 1 && group[0] == "categories:technology")
+                .count(),
+            1
+        );
+        assert_eq!(pack_sort.as_deref(), Some("downloads"));
+        let (rp_facets, _) = (&parsed[2].1, &parsed[2].2);
+        assert!(
+            rp_facets
+                .iter()
+                .flatten()
+                .any(|value| value == "loaders:minecraft")
+        );
+        assert!(
+            rp_facets
+                .iter()
+                .flatten()
+                .any(|value| value == "project_type:resourcepack")
+        );
+        assert_eq!(parsed[3].2.as_deref(), Some("updated"));
+        assert!(
+            parsed[3]
+                .1
+                .iter()
+                .flatten()
+                .any(|value| value == "project_type:shader")
+        );
+        assert!(
+            !parsed[3]
+                .1
+                .iter()
+                .flatten()
+                .any(|value| value.starts_with("loaders:"))
+        );
+    }
+
+    #[tokio::test]
+    async fn browse_search_rejects_invalid_categories_and_bounds_without_requests() {
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let captured = requests.clone();
+        let server = TestServer::spawn(Arc::new(move |request: &TestRequest| {
+            captured.lock().unwrap().push(request.path.clone());
+            TestResponse::ok(br#"{"hits":[],"offset":0,"total_hits":0}"#)
+        }));
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        for categories in [
+            vec!["has space".to_owned()],
+            vec!["bad/slash".to_owned()],
+            vec!["x".repeat(49)],
+            (0..9).map(|index| format!("c{index}")).collect::<Vec<_>>(),
+        ] {
+            assert!(matches!(
+                client
+                    .search_browse(
+                        &context(),
+                        BrowseKind::Mod,
+                        "",
+                        &categories,
+                        BrowseSort::Relevance,
+                        0
+                    )
+                    .await,
+                Err(Error::InvalidRequest)
+            ));
+        }
+        assert!(requests.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn browse_categories_use_live_provider_tags_with_project_types() {
+        let routes = Arc::new(Mutex::new(HashMap::new()));
+        routes.lock().unwrap().insert(
+            "/v2/tag/category".to_owned(),
+            json!([
+                {"name": "adventure", "project_type": "modpack"},
+                {"name": "technology", "project_type": "mod"},
+                {"name": "decorative", "project_type": "resourcepack"},
+                {"name": "", "project_type": "mod"}
+            ]),
+        );
+        let shared = routes.clone();
+        let server = TestServer::spawn(Arc::new(move |request: &TestRequest| {
+            let path = request.path.split('?').next().unwrap_or_default();
+            shared
+                .lock()
+                .unwrap()
+                .get(path)
+                .map(|value| TestResponse::ok(&serde_json::to_vec(value).unwrap()))
+                .unwrap_or_else(|| TestResponse::status(404))
+        }));
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        let categories = client.categories().await.unwrap();
+        assert_eq!(categories.len(), 3);
+        assert!(
+            categories
+                .iter()
+                .any(|category| category.name == "adventure" && category.project_type == "modpack")
+        );
+
+        let rate = TestServer::spawn(Arc::new(|_| TestResponse::status(429)));
+        let client = Client::for_testing(&format!("{}/v2/", rate.base_url()));
+        assert!(matches!(
+            client.categories().await,
+            Err(Error::RateLimited(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn modpack_details_browse_with_strong_identity_and_no_install_planning() {
+        let mut routes: HashMap<String, Value> = HashMap::new();
+        routes.insert(
+            "/v2/project/PACK0001".into(),
+            project("PACK0001", "modpack"),
+        );
+        routes.insert(
+            "/v2/project/PACK0001/version".into(),
+            json!([version("pack0002", "PACK0001", json!([]))]),
+        );
+        let server = server(routes);
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        let details = client
+            .details_browse(&context(), BrowseKind::Modpack, "PACK0001")
+            .await
+            .unwrap();
+        assert_eq!(details.project_id, "PACK0001");
+        assert_eq!(details.project_type, BrowseKind::Modpack);
+        assert_eq!(details.default_version_id.as_deref(), Some("pack0002"));
+        // A modpack is not an installable ContentType: no plan can exist.
+        assert_eq!(BrowseKind::Modpack.content_type(), None);
+        // Browsing another kind against a modpack project is refused by the
+        // provider's own project type.
+        assert!(matches!(
+            client
+                .details_browse(&context(), BrowseKind::Mod, "PACK0001")
+                .await,
+            Err(Error::NoCompatibleVersion)
         ));
     }
 }

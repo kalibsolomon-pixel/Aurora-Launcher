@@ -1695,19 +1695,28 @@ pub async fn preview_provider_conflicts(
             other => other?,
         }
         let directory = validate_directory(managed, instance, record.content_type)?;
-        if let Some(name) = std::fs::read_dir(directory)
-            .map_err(ContentError::Io)?
-            .filter_map(Result::ok)
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .find(|name| name.eq_ignore_ascii_case(&record.file_name))
-        {
-            conflicts.push(ProviderConflict {
-                mod_id: None,
-                file_name: name,
-                ownership: crate::instance_mods::ModOwnership::Unknown,
-                reason: "A destination file already exists; it will not be overwritten or adopted."
-                    .into(),
-            });
+        // A content directory that does not exist yet simply has no files to
+        // collide with; activation creates it. Reading it as an error broke
+        // every first install into a fresh destination (shader packs).
+        match std::fs::read_dir(&directory) {
+            Ok(entries) => {
+                if let Some(name) = entries
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                    .find(|name| name.eq_ignore_ascii_case(&record.file_name))
+                {
+                    conflicts.push(ProviderConflict {
+                        mod_id: None,
+                        file_name: name,
+                        ownership: crate::instance_mods::ModOwnership::Unknown,
+                        reason:
+                            "A destination file already exists; it will not be overwritten or adopted."
+                                .into(),
+                    });
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(ContentError::Io(error)),
         }
     }
     Ok(conflicts)
@@ -5563,5 +5572,82 @@ mod tests {
             ContentState::load(&fixture.managed, &fixture.instance).unwrap(),
             state
         );
+    }
+
+    #[tokio::test]
+    async fn shader_preview_and_install_work_when_the_destination_does_not_exist_yet() {
+        // Regression: a first shader install into an instance whose
+        // shaderpacks directory has never been created must not fail the
+        // preview with a raw I/O error (the original generic-toast defect).
+        let fixture = no_aurora_fixture();
+        let shader_bytes: Vec<u8> = {
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+            writer
+                .start_file(
+                    "shaders/basic.fsh",
+                    zip::write::SimpleFileOptions::default(),
+                )
+                .unwrap();
+            writer.write_all(b"void main(){}").unwrap();
+            writer.finish().unwrap().into_inner()
+        };
+        let hash = format!("{:x}", Sha512::digest(&shader_bytes));
+        let served = shader_bytes.clone();
+        let server = TestServer::spawn(Arc::new(move |request: &TestRequest| {
+            if request.path == "/shader-pack" {
+                TestResponse::ok(&served)
+            } else {
+                TestResponse::status(404)
+            }
+        }));
+        let make_plan = || {
+            let source = Sha512ArtifactSource::loopback_http_for_testing(
+                &format!("{}/shader-pack", server.base_url()),
+                &hash,
+                Some(shader_bytes.len() as u64),
+            )
+            .unwrap();
+            ProviderInstallPlan {
+                content_type: ContentType::ShaderPack,
+                provider: "modrinth".into(),
+                project_id: "SHDR0001".into(),
+                version_id: "shdr0002".into(),
+                file_id: hash.clone(),
+                file_name: "shader-pack.zip".into(),
+                display_version: Some("1.0.0".into()),
+                compatibility: ContentCompatibility {
+                    minecraft_versions: vec!["1.21.11".into()],
+                    loader: None,
+                    environment: Some("client_and_server".into()),
+                },
+                dependencies: vec![],
+                source: ProviderArtifactSource::Sha512(source),
+            }
+        };
+        let shaderpacks = fixture
+            .managed
+            .instance_paths(&fixture.instance)
+            .shaderpacks()
+            .to_path_buf();
+        assert!(
+            !shaderpacks.exists(),
+            "fixture must start without the directory"
+        );
+
+        let preview_plan = make_plan();
+        let conflicts =
+            preview_provider_conflicts(&fixture.managed, &fixture.instance, &[preview_plan])
+                .await
+                .unwrap();
+        assert!(conflicts.is_empty());
+
+        let records =
+            install_provider_plans(&fixture.managed, &fixture.instance, vec![make_plan()])
+                .await
+                .unwrap();
+        assert_eq!(records[0].content_type, ContentType::ShaderPack);
+        assert!(shaderpacks.join("shader-pack.zip").is_file());
+        let state = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        assert_eq!(state.entries.len(), 1);
     }
 }
