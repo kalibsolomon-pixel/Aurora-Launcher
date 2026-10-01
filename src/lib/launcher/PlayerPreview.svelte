@@ -7,9 +7,6 @@
   let visible = $state(false);
   let revealed = $state(false);
   let yaw = $state(-.42);
-  let startX: number | null = null;
-  let startYaw = 0;
-  let pending: number | null = null;
   const avatar = $derived(launcher.selectedAccount ? launcher.accountAvatars[launcher.selectedAccount.accountId] : null);
   const model = $derived(playerModel(avatar));
   // A fallback model means no validated skin for THIS account is available
@@ -34,18 +31,12 @@
     const width = matchMedia('(min-width: 901px)');
     const update = () => { visible = !document.hidden && width.matches; };
     update(); document.addEventListener('visibilitychange', update); width.addEventListener('change', update);
-    return () => { document.removeEventListener('visibilitychange', update); width.removeEventListener('change', update); if (pending !== null) cancelAnimationFrame(pending); };
+    return () => { document.removeEventListener('visibilitychange', update); width.removeEventListener('change', update); };
   });
-  function move(event: PointerEvent) {
-    if (startX === null || pending !== null || !visible || !hasSkin) return;
-    const next = startYaw + (event.clientX - startX) * .01;
-    pending = requestAnimationFrame(() => { pending = null; yaw = next; });
-  }
 </script>
 <div class="player-preview">
-  <div class="player-model" role="img" aria-label={hasSkin ? 'Current Minecraft player skin' : 'Player skin loading'}
-    onpointerdown={event => { if (event.button !== 0 || !hasSkin) return; startX = event.clientX; startYaw = yaw; event.currentTarget.setPointerCapture(event.pointerId); }}
-    onpointermove={move} onpointerup={() => startX = null} onlostpointercapture={() => startX = null}>
+  <!-- Passive visual surface: the arrows below are the only manual rotation. -->
+  <div class="player-model" role="img" aria-label={hasSkin ? 'Current Minecraft player skin' : 'Player skin loading'}>
     {#if hasSkin}
       <canvas bind:this={canvas} width={PLAYER_RENDER_WIDTH} height={PLAYER_RENDER_HEIGHT} aria-hidden="true" class:revealed></canvas>
     {/if}
@@ -58,8 +49,7 @@
 </div>
 <style>
   .player-preview { display: grid; justify-items: center; min-width: 0; position: relative; }
-  .player-model { width: 100%; aspect-ratio: 560 / 800; max-height: min(66vh, 640px); display: grid; place-items: center; cursor: grab; touch-action: pan-y; }
-  .player-model:active { cursor: grabbing; }
+  .player-model { width: 100%; aspect-ratio: 560 / 800; max-height: min(66vh, 640px); display: grid; place-items: center; }
   canvas { display: block; width: min(100%, 480px); max-height: 100%; height: auto; opacity: 0; filter: drop-shadow(0 18px 24px rgb(0 0 0 / 28%)); transition: opacity 420ms ease-out; }
   canvas.revealed { opacity: 1; }
   .player-controls { display: flex; align-items: center; gap: 12px; opacity: 0; transition: opacity var(--f-duration); }
