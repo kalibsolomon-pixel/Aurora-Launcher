@@ -8,6 +8,7 @@ import {
   getApplicationStatus,
   getAccounts,
   getAccountAvatar,
+  getCachedAccountAvatars,
   getInstanceRuntimeStatus,
   getLauncherState,
   getInstanceMods,
@@ -249,11 +250,26 @@ class LauncherStore {
 
     try {
       this.accountsState = await getAccounts();
+      this.hydrateCachedAvatars();
       if (this.selectedAccount?.status === "signedIn") void this.refreshAvatar(this.selectedAccount.accountId);
       void this.refreshPlayReadiness();
     } catch (cause: unknown) {
       this.accountsError = backendError(cause, "The account list could not be loaded.");
     }
+  }
+
+  /** Known-good persisted avatars render immediately; only ids still unknown stay pending. */
+  private hydrateCachedAvatars(): void {
+    void getCachedAccountAvatars().then((cached) => {
+      for (const { accountId, avatar } of cached) {
+        if (this.accountsState?.accounts.some((account) => account.accountId === accountId) &&
+            this.accountAvatars[accountId] === undefined) {
+          this.accountAvatars[accountId] = avatar;
+        }
+      }
+    }).catch(() => {
+      // Cache hydration is best-effort; the active account still refreshes online.
+    });
   }
 
   private async subscribeToEvents(): Promise<void> {
@@ -725,6 +741,7 @@ class LauncherStore {
   async refreshAccounts(): Promise<void> {
     try {
       this.accountsState = await getAccounts();
+      this.hydrateCachedAvatars();
       if (this.selectedAccount?.status === "signedIn" && this.accountAvatars[this.selectedAccount.accountId] === undefined) {
         void this.refreshAvatar(this.selectedAccount.accountId);
       }

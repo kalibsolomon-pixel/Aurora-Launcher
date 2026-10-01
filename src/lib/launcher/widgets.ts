@@ -9,7 +9,7 @@ export const widgetCatalog: readonly WidgetDefinition[] = [
   { id: "playtime", title: "Playtime", description: "Local UTC playtime totals and daily history.", sizes: ["small", "wide", "large"] },
   { id: "recent-worlds", title: "Recent Worlds", description: "Recently played local worlds and validated Quick Launch.", sizes: ["small", "wide", "large"] },
   { id: "recent-servers", title: "Recent Servers", description: "Recently played servers and validated Quick Launch.", sizes: ["small", "wide", "large"] },
-  { id: "skin-manager", title: "Skin Manager", description: "Current account skin and launcher-local saved skin presets.", sizes: ["small", "wide", "large"] },
+  { id: "skin-manager", title: "Skin Library", description: "Current account skin and your saved, reusable imported skins.", sizes: ["small", "wide", "large"] },
   { id: "cape-selector", title: "Cape Selector", description: "Select or disable capes owned by the current Minecraft account.", sizes: ["small", "wide", "large"] },
 ];
 export function registeredWidgets(layout: HomeLayout): WidgetPlacement[] {

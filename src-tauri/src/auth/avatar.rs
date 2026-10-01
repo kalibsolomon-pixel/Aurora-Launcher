@@ -1,16 +1,27 @@
 //! Cosmetic official profile textures. No credential, filesystem or launch authority.
 //! Only validated native profile URLs reach transport; the UI receives bounded decoded pixels.
-use std::collections::VecDeque;
-use std::io::Cursor;
-use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::{
+    collections::VecDeque,
+    io::{Cursor, Write},
+    path::{Path, PathBuf},
+    sync::{Mutex, OnceLock},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use url::Url;
+
+use crate::paths::ManagedPaths;
 
 const MAX_BYTES: usize = 128 * 1024;
 const CACHE_LIMIT: usize = 16;
 const CACHE_TTL: Duration = Duration::from_secs(15 * 60);
+
+/// Persisted avatar documents are small bounded JSON files; anything larger is
+/// treated as absent rather than trusted.
+const MAX_PERSISTED: usize = 512 * 1024;
+const MAX_PERSISTED_ACCOUNTS: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkinTexture {
@@ -34,6 +45,11 @@ impl SkinTexture {
             url,
             model: model.into(),
         })
+    }
+
+    /// The validated, HTTPS-upgraded official texture locator.
+    pub fn url(&self) -> &Url {
+        &self.url
     }
 }
 
@@ -59,13 +75,16 @@ pub(crate) fn validated_url(value: &str) -> Option<Url> {
     Some(url)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HeadAvatar {
     pub rgba: Vec<u8>,
     pub model: String,
     pub skin_rgba: Vec<u8>,
     pub skin_height: u32,
+    /// SHA-256 of the exact skin PNG bytes. Presentation identity for content
+    /// association (for example the Skin Library); never a secret.
+    pub sha256: String,
 }
 
 impl HeadAvatar {
@@ -74,6 +93,8 @@ impl HeadAvatar {
             && matches!(self.skin_height, 32 | 64)
             && self.skin_rgba.len() == 64 * self.skin_height as usize * 4
             && matches!(self.model.as_str(), "classic" | "slim")
+            && self.sha256.len() == 64
+            && self.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
     }
 }
 
@@ -116,6 +137,121 @@ impl AvatarCache {
 fn cache() -> &'static Mutex<AvatarCache> {
     static CACHE: OnceLock<Mutex<AvatarCache>> = OnceLock::new();
     CACHE.get_or_init(Mutex::default)
+}
+
+// ---------------------------------------------------------------------------
+// Persisted per-account avatar cache (presentation only)
+//
+// Keyed by the validated Minecraft account UUID — never a display name — so
+// one account can never render another account's avatar. Entries are
+// non-authoritative cache objects: malformed, oversized or future-schema
+// documents are treated as absent, and only a freshly verified network fetch
+// replaces a stored one. Removing an account removes exactly its own file.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PersistedAvatar {
+    schema_version: u32,
+    account_id: String,
+    saved_at: u64,
+    avatar: HeadAvatar,
+}
+
+fn persisted_dir(paths: &ManagedPaths) -> PathBuf {
+    paths.cache_dir().join("avatars")
+}
+
+fn persisted_path(paths: &ManagedPaths, account_id: &str) -> Option<PathBuf> {
+    super::accounts::AccountId::validate(account_id)
+        .ok()
+        .map(|()| persisted_dir(paths).join(format!("{account_id}.json")))
+}
+
+fn write_persisted_atomic(path: &Path, bytes: &[u8]) -> Option<()> {
+    let parent = path.parent()?;
+    std::fs::create_dir_all(parent).ok()?;
+    let temporary = parent.join(format!(".{}.tmp", uuid::Uuid::new_v4()));
+    let result = (|| {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .ok()?;
+        file.write_all(bytes).ok()?;
+        file.sync_all().ok()?;
+        std::fs::rename(&temporary, path).ok()
+    })();
+    if result.is_none() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
+}
+
+/// The known-good avatar for one account, without touching the network.
+pub fn load_cached(paths: &ManagedPaths, account_id: &str) -> Option<HeadAvatar> {
+    let path = persisted_path(paths, account_id)?;
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.len() > MAX_PERSISTED {
+        return None;
+    }
+    let document: PersistedAvatar = serde_json::from_slice(&bytes).ok()?;
+    if document.schema_version != 1 || document.account_id != account_id {
+        return None;
+    }
+    document.avatar.valid().then_some(document.avatar)
+}
+
+/// Retains a verified avatar across restarts. Best-effort: a full or unwritable
+/// cache only means the next visible fetch happens online again.
+pub fn store_cached(paths: &ManagedPaths, account_id: &str, avatar: &HeadAvatar) {
+    let Some(path) = persisted_path(paths, account_id) else {
+        return;
+    };
+    if !avatar.valid() {
+        return;
+    }
+    let document = PersistedAvatar {
+        schema_version: 1,
+        account_id: account_id.to_owned(),
+        saved_at: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+        avatar: avatar.clone(),
+    };
+    if let Ok(bytes) = serde_json::to_vec(&document) {
+        if bytes.len() <= MAX_PERSISTED {
+            let _ = write_persisted_atomic(&path, &bytes);
+        }
+    }
+}
+
+/// Removes exactly one account's cache object, after proven account removal.
+pub fn remove_cached(paths: &ManagedPaths, account_id: &str) {
+    if let Some(path) = persisted_path(paths, account_id) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// Every cached avatar for hydration after restart; bounded and deterministic.
+pub fn list_cached(paths: &ManagedPaths) -> Vec<(String, HeadAvatar)> {
+    let Ok(entries) = std::fs::read_dir(persisted_dir(paths)) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| name.ends_with(".json"))
+        .filter_map(|name| name.strip_suffix(".json").map(str::to_owned))
+        .filter(|id| super::accounts::AccountId::validate(id).is_ok())
+        .collect();
+    names.sort();
+    names.truncate(MAX_PERSISTED_ACCOUNTS);
+    names
+        .into_iter()
+        .filter_map(|id| load_cached(paths, &id).map(|avatar| (id, avatar)))
+        .collect()
 }
 
 pub async fn head(skin: &SkinTexture, refresh: bool) -> Option<HeadAvatar> {
@@ -196,17 +332,39 @@ fn decode(bytes: &[u8], model: &str) -> Option<HeadAvatar> {
         skin_rgba.push(if channels == 4 { pixel[3] } else { 255 });
     }
     // Legacy opaque hat backgrounds mean no hat, as in the game renderer.
+    let mut legacy_hat_cleared = false;
     if info.height == 32
         && (0..32).all(|y| (32..64).all(|x| skin_rgba[(y * 64 + x) * 4 + 3] == 255))
     {
         // Only hat UVs are cleared; the lower half contains the base right arm.
+        legacy_hat_cleared = true;
         for y in 0..16 {
             for x in 32..64 {
                 skin_rgba[(y * 64 + x) * 4 + 3] = 0;
             }
         }
     }
-    let mut rgba = Vec::with_capacity(256);
+    let rgba = composite_head(&pixels[..info.buffer_size()], channels, legacy_hat_cleared).to_vec();
+    Some(HeadAvatar {
+        rgba,
+        model: if info.height == 32 {
+            "classic".into()
+        } else {
+            model.into()
+        },
+        skin_rgba,
+        skin_height: info.height,
+        sha256: format!("{:x}", Sha256::digest(bytes)),
+    })
+}
+
+/// The 8×8 face with the hat layer alpha-composited over it, straight from an
+/// expanded (RGB/RGBA) 64-wide skin buffer. Shared by account avatars and
+/// saved-skin thumbnails so one proven compositor defines "head".
+/// `clear_hat` reproduces the legacy opaque-background rule: no hat at all.
+pub(crate) fn composite_head(pixels: &[u8], channels: usize, clear_hat: bool) -> [u8; 256] {
+    let mut rgba = [0u8; 256];
+    let mut offset = 0;
     for y in 8..16 {
         for x in 8..16 {
             let base = (y * 64 + x) * channels;
@@ -216,7 +374,13 @@ fn decode(bytes: &[u8], model: &str) -> Option<HeadAvatar> {
             } else {
                 255
             };
-            let hat_alpha = skin_rgba[(y * 64 + x + 32) * 4 + 3] as u32;
+            let hat_alpha = if clear_hat {
+                0
+            } else if channels == 4 {
+                pixels[hat + 3] as u32
+            } else {
+                255
+            };
             let alpha = hat_alpha * 255 + base_alpha * (255 - hat_alpha);
             for channel in 0..3 {
                 let value = if alpha == 0 {
@@ -227,21 +391,13 @@ fn decode(bytes: &[u8], model: &str) -> Option<HeadAvatar> {
                         + alpha / 2)
                         / alpha
                 };
-                rgba.push(value as u8);
+                rgba[offset + channel] = value as u8;
             }
-            rgba.push(((alpha + 127) / 255) as u8);
+            rgba[offset + 3] = ((alpha + 127) / 255) as u8;
+            offset += 4;
         }
     }
-    Some(HeadAvatar {
-        rgba,
-        model: if info.height == 32 {
-            "classic".into()
-        } else {
-            model.into()
-        },
-        skin_rgba,
-        skin_height: info.height,
-    })
+    rgba
 }
 
 #[cfg(test)]
@@ -373,6 +529,63 @@ mod tests {
         assert_eq!(cache.entries.len(), CACHE_LIMIT);
         texture.model = "classic".into();
         assert!(cache.get(&texture).is_none());
+    }
+
+    const ACCOUNT_A: &str = "986dec87b7ec47ff89ff033fdb95c4b5";
+    const ACCOUNT_B: &str = "0123456789abcdef0123456789abcdef";
+
+    fn managed() -> ManagedPaths {
+        ManagedPaths::from_app_local_data_dir(
+            std::env::temp_dir().join(format!("aurora-avatar-test-{}", uuid::Uuid::new_v4())),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn persisted_cache_is_account_keyed_and_round_trips() {
+        let paths = managed();
+        let avatar = decode(&fixture(64), "slim").unwrap();
+        assert!(!avatar.sha256.is_empty());
+        store_cached(&paths, ACCOUNT_A, &avatar);
+        assert_eq!(load_cached(&paths, ACCOUNT_A), Some(avatar.clone()));
+        // Identity is the account UUID: names and other accounts never alias.
+        assert_eq!(load_cached(&paths, ACCOUNT_B), None);
+        assert!(load_cached(&paths, "../escape").is_none());
+        assert!(load_cached(&paths, "steve").is_none());
+        let listed = list_cached(&paths);
+        assert_eq!(listed, vec![(ACCOUNT_A.to_owned(), avatar.clone())]);
+        store_cached(&paths, ACCOUNT_B, &avatar);
+        assert_eq!(list_cached(&paths).len(), 2);
+        // Removal deletes exactly the one proven-own file.
+        remove_cached(&paths, ACCOUNT_A);
+        assert_eq!(load_cached(&paths, ACCOUNT_A), None);
+        assert_eq!(load_cached(&paths, ACCOUNT_B), Some(avatar));
+        remove_cached(&paths, ACCOUNT_A);
+        std::fs::remove_dir_all(paths.data_root()).unwrap();
+    }
+
+    #[test]
+    fn damaged_or_future_persisted_documents_are_treated_as_absent() {
+        let paths = managed();
+        std::fs::create_dir_all(persisted_dir(&paths)).unwrap();
+        let path = persisted_dir(&paths).join(format!("{ACCOUNT_A}.json"));
+        std::fs::write(&path, b"{broken").unwrap();
+        assert_eq!(load_cached(&paths, ACCOUNT_A), None);
+        let future = br#"{"schemaVersion":2,"accountId":"0123456789abcdef0123456789abcdef","savedAt":0,"avatar":null}"#;
+        std::fs::write(&path, future).unwrap();
+        assert_eq!(load_cached(&paths, ACCOUNT_A), None);
+        std::fs::write(&path, vec![0u8; MAX_PERSISTED + 1]).unwrap();
+        assert_eq!(load_cached(&paths, ACCOUNT_A), None);
+        // A freshly verified avatar may replace the damaged cache object.
+        let avatar = decode(&fixture(64), "classic").unwrap();
+        store_cached(&paths, ACCOUNT_A, &avatar);
+        assert_eq!(load_cached(&paths, ACCOUNT_A), Some(avatar));
+        // Invalid avatars are never persisted.
+        let mut broken = decode(&fixture(64), "classic").unwrap();
+        broken.rgba.clear();
+        store_cached(&paths, ACCOUNT_B, &broken);
+        assert_eq!(load_cached(&paths, ACCOUNT_B), None);
+        std::fs::remove_dir_all(paths.data_root()).unwrap();
     }
     #[tokio::test]
     async fn bounded_transport_failures_and_success_use_only_loopback() {

@@ -1,11 +1,13 @@
 import {
   applySkinPreset, disableOwnedCape, getCosmetics, importSkinPreset,
-  listSkinPresets, removeSkinPreset, selectOwnedCape,
+  listSkinPresets, removeSkinPreset, selectOwnedCape, updateSkinPreset,
+  saveCurrentSkin,
   type CosmeticsState, type SkinModel, type SkinPreset,
 } from "$lib/backend";
 import { launcher } from "./store.svelte";
 
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : "Minecraft cosmetics are unavailable."; }
+export interface LibraryEntryOutcome { id: string; duplicate: boolean }
 class CosmeticsStore {
   presets = $state<SkinPreset[]>([]);
   remote = $state<CosmeticsState | null>(null);
@@ -40,16 +42,31 @@ class CosmeticsStore {
       if (serial === this.serial) { this.error = message(cause); this.offline = true; }
     } finally { if (serial === this.serial) this.loading = false; }
   }
-  async importFile(file: File, model: SkinModel): Promise<void> {
-    if (this.busy) return;
+  async importFile(file: File, model: SkinModel): Promise<LibraryEntryOutcome | null> {
+    if (this.busy) return null;
     this.busy = true; this.error = "";
     try {
       if (file.size > 128 * 1024) throw new Error("The PNG exceeds the 128 KiB skin limit.");
       const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
       const name = file.name.replace(/\.png$/i, "").slice(0, 80).trim() || "Imported skin";
-      await importSkinPreset(name, model, bytes);
+      const outcome = await importSkinPreset(name, model, bytes);
       this.presets = await listSkinPresets();
-    } catch (cause) { this.error = message(cause); }
+      return { id: outcome.preset.id, duplicate: outcome.duplicate };
+    } catch (cause) { this.error = message(cause); return null; }
+    finally { this.busy = false; }
+  }
+  async rename(id: string, name: string): Promise<boolean> {
+    if (this.busy) return false;
+    this.busy = true; this.error = "";
+    try { this.presets = await updateSkinPreset(id, { name }); return true; }
+    catch (cause) { this.error = message(cause); return false; }
+    finally { this.busy = false; }
+  }
+  async setModel(id: string, model: SkinModel): Promise<void> {
+    if (this.busy) return;
+    this.busy = true; this.error = "";
+    try { this.presets = await updateSkinPreset(id, { model }); }
+    catch (cause) { this.error = message(cause); }
     finally { this.busy = false; }
   }
   async remove(id: string): Promise<void> {
@@ -59,12 +76,24 @@ class CosmeticsStore {
     catch (cause) { this.error = message(cause); }
     finally { this.busy = false; }
   }
-  async apply(id: string, model: SkinModel): Promise<void> {
-    const accountId = this.accountId;
-    if (!accountId || this.busy || this.offline) return;
+  /** Saves the active account's current skin into the library via the authenticated path. */
+  async saveCurrent(accountId: string): Promise<LibraryEntryOutcome | null> {
+    if (this.busy || this.offline) return null;
     this.busy = true; this.error = "";
     try {
-      const state = await applySkinPreset(accountId, id, model);
+      const outcome = await saveCurrentSkin(accountId);
+      this.presets = await listSkinPresets();
+      return { id: outcome.preset.id, duplicate: outcome.duplicate };
+    } catch (cause) { this.error = message(cause); return null; }
+    finally { this.busy = false; }
+  }
+  async apply(id: string): Promise<void> {
+    const accountId = this.accountId;
+    const preset = this.presets.find(entry => entry.id === id);
+    if (!accountId || !preset || this.busy || this.offline) return;
+    this.busy = true; this.error = "";
+    try {
+      const state = await applySkinPreset(accountId, id, preset.model);
       if (this.accountId === accountId) {
         this.remote = state;
         await launcher.refreshAvatar(accountId, true);

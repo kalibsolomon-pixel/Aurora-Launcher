@@ -62,8 +62,8 @@ it("installation blockers render native identity, filename, ownership and reason
   assert.equal(html(Conflicts,{conflicts:[]}).includes("Installation blocked"),false);
 });
 it("installed artwork failure and Local/Unknown rows preserve a nonfatal glyph", () => {
-  for(const ownership of ["providerManaged","userManaged","unknown"]) {
-    assert.match(html(Artwork,{entry:{ownership,provenance:null,metadata:{id:"fixture"}}}).replace(/<!--.*?-->/g,""),/installed-artwork[^>]*>M/);
+  for(const projectId of ["ABCDEFGH", null]) {
+    assert.match(html(Artwork,{projectId,fallback:"M"}).replace(/<!--.*?-->/g,""),/installed-artwork[^>]*>M/);
   }
 });
 it("Home permits selection when instances exist without a selected target", () => {

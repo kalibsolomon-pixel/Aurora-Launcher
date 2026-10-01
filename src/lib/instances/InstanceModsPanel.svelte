@@ -14,6 +14,7 @@
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
   import InstalledArtwork from "./InstalledArtwork.svelte";
+  import { artworkProject } from "./projectArtwork";
   import ContentRecognition from "./ContentRecognition.svelte";
   import ContentUpdates from "./ContentUpdates.svelte";
   import Icon from "$lib/shell/Icon.svelte";
@@ -256,7 +257,7 @@
         {#each shown as entry (entry.entryId)}
           <article class="mod-row" class:mod-row-disabled={!entry.enabled}>
             <div class="mod-row-main">
-              <InstalledArtwork {entry} />
+              <InstalledArtwork projectId={artworkProject(entry)} fallback={entry.metadata ? "M" : "J"} />
               <div class="mod-identity">
                 <div class="mod-title-line">
                   <h4>{entry.displayName}</h4>

@@ -1,5 +1,6 @@
 pub mod appearance;
 mod application;
+pub mod artwork;
 pub mod aurora;
 pub mod auth;
 pub mod cache;
@@ -129,9 +130,13 @@ pub fn run() {
             application::ensure_instance_runtime,
             application::get_accounts,
             application::get_account_avatar,
+            application::get_cached_account_avatars,
             application::get_cosmetics,
             application::list_skin_presets,
             application::import_skin_preset,
+            application::update_skin_preset,
+            application::skin_preset_thumbnail,
+            application::save_current_skin,
             application::remove_skin_preset,
             application::apply_skin_preset,
             application::select_cape,

@@ -50,6 +50,15 @@ pub struct SkinPreset {
     pub sha256: String,
 }
 
+/// Import result: an exact (bytes, model) duplicate reports the existing
+/// library entry instead of creating another record or managed file.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportOutcome {
+    pub preset: SkinPreset,
+    pub duplicate: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PresetDocument {
@@ -309,7 +318,7 @@ pub fn import_preset(
     name: &str,
     model: SkinModel,
     bytes: &[u8],
-) -> Result<SkinPreset> {
+) -> Result<ImportOutcome> {
     validate_png(bytes)?;
     let name = name.trim();
     if name.is_empty() || name.len() > 80 || name.chars().any(char::is_control) {
@@ -326,6 +335,20 @@ pub fn import_preset(
             "The 64 saved skin limit has been reached.",
         ));
     }
+    let content_digest = digest(bytes);
+    // Content-hash deduplication: identical bytes under the same model keep
+    // the existing entry. The same bytes under the other model stay an
+    // independent library entry with its own model metadata.
+    if let Some(existing) = document
+        .presets
+        .iter()
+        .find(|preset| preset.sha256 == content_digest && preset.model == model)
+    {
+        return Ok(ImportOutcome {
+            preset: existing.clone(),
+            duplicate: true,
+        });
+    }
     let preset = SkinPreset {
         id: Uuid::new_v4().to_string(),
         name: name.to_owned(),
@@ -334,7 +357,7 @@ pub fn import_preset(
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(),
-        sha256: digest(bytes),
+        sha256: content_digest,
     };
     let path = png_path(paths, &preset.id)?;
     if path.exists() {
@@ -346,7 +369,10 @@ pub fn import_preset(
         let _ = std::fs::remove_file(&path);
         return Err(e);
     }
-    Ok(preset)
+    Ok(ImportOutcome {
+        preset,
+        duplicate: false,
+    })
 }
 pub fn remove_preset(paths: &ManagedPaths, id: &str) -> Result<()> {
     let _guard = lock().lock().map_err(|_| storage_error())?;
@@ -396,6 +422,125 @@ pub fn preset_for_upload(paths: &ManagedPaths, id: &str) -> Result<(SkinPreset, 
         ));
     }
     Ok((preset, bytes))
+}
+
+/// Metadata-only update: rename and/or the Classic/Slim model. The managed
+/// image bytes and content hash never change here.
+pub fn update_preset(
+    paths: &ManagedPaths,
+    id: &str,
+    name: Option<&str>,
+    model: Option<SkinModel>,
+) -> Result<Vec<SkinPreset>> {
+    let _guard = lock().lock().map_err(|_| storage_error())?;
+    let mut document = read_document(paths)?;
+    let preset = document
+        .presets
+        .iter_mut()
+        .find(|preset| preset.id == id)
+        .ok_or(error(
+            "skin_preset_missing",
+            "That saved skin preset is unavailable.",
+        ))?;
+    if let Some(name) = name {
+        let name = name.trim();
+        if name.is_empty() || name.len() > 80 || name.chars().any(char::is_control) {
+            return Err(error(
+                "skin_preset_name_invalid",
+                "Give the saved skin a short name.",
+            ));
+        }
+        preset.name = name.to_owned();
+    }
+    if let Some(model) = model {
+        preset.model = model;
+    }
+    save_document(paths, &document)?;
+    Ok(document.presets)
+}
+
+/// The saved skin's 8×8 head with hat composited — a cheap, static thumbnail
+/// derived from verified managed bytes. Read-only; no network, no animation.
+pub fn preset_thumbnail(paths: &ManagedPaths, id: &str) -> Result<Option<[u8; 256]>> {
+    let (_, bytes) = preset_for_upload(paths, id)?;
+    Ok(decode_head_thumbnail(&bytes))
+}
+
+fn decode_head_thumbnail(bytes: &[u8]) -> Option<[u8; 256]> {
+    let mut decoder = png::Decoder::new(Cursor::new(bytes));
+    decoder.set_limits(png::Limits { bytes: 1024 * 1024 });
+    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
+    let mut reader = decoder.read_info().ok()?;
+    if reader.info().width != 64
+        || !matches!(reader.info().height, 32 | 64)
+        || reader.info().animation_control.is_some()
+    {
+        return None;
+    }
+    let mut pixels = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut pixels).ok()?;
+    let channels = match info.color_type {
+        png::ColorType::Rgb => 3,
+        png::ColorType::Rgba => 4,
+        _ => return None,
+    };
+    let buffer = &pixels[..info.buffer_size()];
+    let alpha = |x: usize, y: usize| {
+        if channels == 4 {
+            buffer[(y * 64 + x) * channels + 3] as u32
+        } else {
+            255
+        }
+    };
+    // Same legacy rule as account avatars: an opaque legacy hat background
+    // means no hat at all.
+    let clear_hat = info.height == 32 && (0..32).all(|y| (32..64).all(|x| alpha(x, y) == 255));
+    Some(crate::auth::avatar::composite_head(
+        buffer, channels, clear_hat,
+    ))
+}
+
+/// Bounded download of the account's active skin PNG from the validated
+/// official texture locator. Feeds the same import validation as a file.
+pub async fn download_current_skin(url: &url::Url) -> Result<Vec<u8>> {
+    let mut response = client().get(url.clone()).send().await.map_err(|_| {
+        error(
+            "cosmetics_service_unavailable",
+            "Minecraft skin textures could not be reached.",
+        )
+    })?;
+    if response.status() != reqwest::StatusCode::OK
+        || response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value.split(';').next().unwrap_or("").trim() != "image/png")
+            .unwrap_or(true)
+        || response
+            .content_length()
+            .is_some_and(|length| length > MAX_PNG as u64)
+    {
+        return Err(error(
+            "cosmetics_response_invalid",
+            "The Minecraft skin texture could not be read.",
+        ));
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|_| {
+        error(
+            "cosmetics_service_unavailable",
+            "Minecraft skin textures could not be reached.",
+        )
+    })? {
+        if body.len() + chunk.len() > MAX_PNG {
+            return Err(error(
+                "cosmetics_response_invalid",
+                "The Minecraft skin texture is oversized.",
+            ));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
 }
 
 #[derive(Deserialize)]
@@ -848,18 +993,119 @@ mod tests {
         let bytes = fixture(64, 64);
         let first = import_preset(&paths, "Same name", SkinModel::Classic, &bytes).unwrap();
         let second = import_preset(&paths, "Same name", SkinModel::Slim, &bytes).unwrap();
-        assert_ne!(first.id, second.id);
+        assert_ne!(first.preset.id, second.preset.id);
+        assert!(!first.duplicate && !second.duplicate);
         assert_eq!(list_presets(&paths).unwrap().len(), 2);
-        assert_eq!(preset_for_upload(&paths, &first.id).unwrap().1, bytes);
+        assert_eq!(
+            preset_for_upload(&paths, &first.preset.id).unwrap().1,
+            bytes
+        );
         assert_eq!(
             preset_for_upload(&paths, "../escape").unwrap_err().code,
             "skin_preset_missing"
         );
-        remove_preset(&paths, &first.id).unwrap();
+        remove_preset(&paths, &first.preset.id).unwrap();
         assert_eq!(list_presets(&paths).unwrap().len(), 1);
-        assert_eq!(list_presets(&paths).unwrap()[0].id, second.id);
-        assert!(!png_path(&paths, &first.id).unwrap().exists());
+        assert_eq!(list_presets(&paths).unwrap()[0].id, second.preset.id);
+        assert!(!png_path(&paths, &first.preset.id).unwrap().exists());
         std::fs::remove_dir_all(paths.data_root()).unwrap();
+    }
+
+    #[test]
+    fn identical_bytes_and_model_are_deduplicated_but_models_stay_independent() {
+        let paths = paths();
+        let bytes = fixture(64, 64);
+        let first = import_preset(&paths, "Original", SkinModel::Classic, &bytes).unwrap();
+        let again = import_preset(&paths, "Different name", SkinModel::Classic, &bytes).unwrap();
+        assert!(again.duplicate);
+        assert_eq!(again.preset.id, first.preset.id);
+        // The duplicate import keeps the existing entry exactly as it was.
+        assert_eq!(again.preset.name, "Original");
+        assert_eq!(list_presets(&paths).unwrap().len(), 1);
+        // Same bytes under the other model remain a distinct library entry
+        // with independent model metadata.
+        let slim = import_preset(&paths, "Original", SkinModel::Slim, &bytes).unwrap();
+        assert!(!slim.duplicate);
+        assert_ne!(slim.preset.id, first.preset.id);
+        assert_eq!(list_presets(&paths).unwrap().len(), 2);
+        std::fs::remove_dir_all(paths.data_root()).unwrap();
+    }
+
+    #[test]
+    fn rename_and_model_updates_are_metadata_only() {
+        let paths = paths();
+        let bytes = fixture(64, 64);
+        let imported = import_preset(&paths, "Before", SkinModel::Classic, &bytes).unwrap();
+        let id = imported.preset.id.clone();
+        let updated = update_preset(&paths, &id, Some("After"), Some(SkinModel::Slim)).unwrap();
+        assert_eq!(updated[0].name, "After");
+        assert_eq!(updated[0].model, SkinModel::Slim);
+        // Content identity and managed bytes are untouched by the rename.
+        assert_eq!(updated[0].sha256, imported.preset.sha256);
+        assert_eq!(preset_for_upload(&paths, &id).unwrap().1, bytes);
+        assert_eq!(
+            update_preset(&paths, &id, Some("   "), None)
+                .unwrap_err()
+                .code,
+            "skin_preset_name_invalid"
+        );
+        assert_eq!(
+            update_preset(&paths, &id, Some(&"x".repeat(81)), None)
+                .unwrap_err()
+                .code,
+            "skin_preset_name_invalid"
+        );
+        assert_eq!(
+            update_preset(&paths, "unknown-id", Some("Nope"), None)
+                .unwrap_err()
+                .code,
+            "skin_preset_missing"
+        );
+        std::fs::remove_dir_all(paths.data_root()).unwrap();
+    }
+
+    #[test]
+    fn thumbnails_are_bounded_head_crops_of_verified_bytes() {
+        let paths = paths();
+        let bytes = fixture(64, 64);
+        let imported = import_preset(&paths, "Thumb", SkinModel::Classic, &bytes).unwrap();
+        let thumbnail = preset_thumbnail(&paths, &imported.preset.id)
+            .unwrap()
+            .expect("a saved 64x64 skin yields a head thumbnail");
+        assert_eq!(thumbnail.len(), 256);
+        assert_eq!(
+            preset_thumbnail(&paths, "missing-id").unwrap_err().code,
+            "skin_preset_missing"
+        );
+        // The legacy 32-high form produces the same shape.
+        let legacy = import_preset(&paths, "Legacy", SkinModel::Classic, &fixture(64, 32)).unwrap();
+        assert!(
+            preset_thumbnail(&paths, &legacy.preset.id)
+                .unwrap()
+                .is_some()
+        );
+        std::fs::remove_dir_all(paths.data_root()).unwrap();
+    }
+
+    #[tokio::test]
+    async fn current_skin_download_is_bounded_and_png_typed() {
+        let png = fixture(64, 64);
+        let server = TestServer::spawn(Arc::new(move |request| match request.path.as_str() {
+            "/skin.png" => TestResponse::ok(&png).with_header("Content-Type", "image/png"),
+            "/html" => TestResponse::ok(b"<html>").with_header("Content-Type", "text/html"),
+            "/oversized" => TestResponse::ok(&vec![0u8; MAX_PNG + 1])
+                .with_header("Content-Type", "image/png")
+                .with_close_framing(),
+            _ => TestResponse::status(404),
+        }));
+        let url = |path| url::Url::parse(&format!("{}{path}", server.base_url())).unwrap();
+        assert_eq!(
+            download_current_skin(&url("/skin.png")).await.unwrap(),
+            fixture(64, 64)
+        );
+        for path in ["/html", "/oversized", "/missing"] {
+            assert!(download_current_skin(&url(path)).await.is_err(), "{path}");
+        }
     }
     #[test]
     fn damaged_or_future_metadata_is_never_overwritten() {

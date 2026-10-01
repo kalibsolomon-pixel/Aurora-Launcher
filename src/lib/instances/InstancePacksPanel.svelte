@@ -5,6 +5,7 @@
   import { formatModSize } from "./mods";
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
+  import InstalledArtwork from "./InstalledArtwork.svelte";
   import ContentRecognition from "./ContentRecognition.svelte";
   import ContentUpdates from "./ContentUpdates.svelte";
   import Icon from "$lib/shell/Icon.svelte";
@@ -145,7 +146,7 @@
         {#each shown as entry (entry.entryId)}
           <article class="pack-row">
             <div class="pack-main">
-              <div class="pack-glyph" aria-hidden="true">{kind === "resourcePack" ? "R" : "S"}</div>
+              <InstalledArtwork compact projectId={entry.provenance?.provider === "modrinth" ? entry.provenance.projectId : null} fallback={kind === "resourcePack" ? "R" : "S"} />
               <div class="pack-identity">
                 <h4>{entry.displayName}</h4>
                 <p class="pack-meta">{entry.provenance ? "Managed" : "Local"} · {entry.provenance?.displayVersion ?? (entry.fileType === "directory" ? "Folder" : "ZIP")}{formatModSize(entry.sizeBytes) ? ` · ${formatModSize(entry.sizeBytes)}` : ""}</p>
@@ -225,7 +226,6 @@
   .pack-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); }
   .pack-row:last-child { border-bottom: none; }
   .pack-main { min-width: 0; align-items: flex-start; }
-  .pack-glyph { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text-secondary); font-weight: 700; }
   .pack-identity { min-width: 0; }
   .pack-identity h4 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-body); }
   .pack-meta, .pack-description, .pack-warning { margin: 2px 0 0; font-size: var(--text-metadata); }

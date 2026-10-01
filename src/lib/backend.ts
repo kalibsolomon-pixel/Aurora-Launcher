@@ -1549,14 +1549,21 @@ export interface AccountSummary {
 }
 
 /** Native head and bounded decoded skin pixels. No URL, token or authentication authority. */
-export interface HeadAvatar { rgba: number[]; model: "classic" | "slim"; skinRgba: number[]; skinHeight: 32 | 64 }
+export interface HeadAvatar { rgba: number[]; model: "classic" | "slim"; skinRgba: number[]; skinHeight: 32 | 64; sha256: string }
 
 export async function getAccountAvatar(accountId: string, refresh = false): Promise<HeadAvatar | null> {
   return await invoke<HeadAvatar | null>("get_account_avatar", { request: { accountId, refresh } });
 }
 
+export interface CachedAccountAvatar { accountId: string; avatar: HeadAvatar }
+export async function getCachedAccountAvatars(): Promise<CachedAccountAvatar[]> {
+  return await invoke<CachedAccountAvatar[]>("get_cached_account_avatars");
+}
+
 export type SkinModel = "classic" | "slim";
 export interface SkinPreset { id: string; name: string; model: SkinModel; importedAt: number; sha256: string }
+export interface SkinPresetImport { preset: SkinPreset; duplicate: boolean }
+export interface SkinPresetThumbnail { rgba: number[] }
 export interface CapePreview { width: number; height: number; rgba: number[] }
 export interface OwnedCape { id: string; name: string; selected: boolean; preview?: CapePreview }
 export interface CosmeticsState { accountId: string; currentSkinModel: SkinModel | null; hasCurrentSkin: boolean; capes: OwnedCape[] }
@@ -1568,7 +1575,10 @@ function cosmeticsCommand<T>(name: string, request?: object): Promise<T> {
 }
 export const getCosmetics = (accountId: string): Promise<CosmeticsState> => cosmeticsCommand("get_cosmetics", { accountId });
 export const listSkinPresets = (): Promise<SkinPreset[]> => cosmeticsCommand("list_skin_presets");
-export const importSkinPreset = (name: string, model: SkinModel, bytes: number[]): Promise<SkinPreset> => cosmeticsCommand("import_skin_preset", { name, model, bytes });
+export const importSkinPreset = (name: string, model: SkinModel, bytes: number[]): Promise<SkinPresetImport> => cosmeticsCommand("import_skin_preset", { name, model, bytes });
+export const updateSkinPreset = (presetId: string, changes: { name?: string; model?: SkinModel }): Promise<SkinPreset[]> => cosmeticsCommand("update_skin_preset", { presetId, changes });
+export const skinPresetThumbnail = (presetId: string): Promise<SkinPresetThumbnail | null> => cosmeticsCommand("skin_preset_thumbnail", { presetId });
+export const saveCurrentSkin = (accountId: string): Promise<SkinPresetImport> => cosmeticsCommand("save_current_skin", { accountId });
 export const removeSkinPreset = (presetId: string): Promise<void> => cosmeticsCommand("remove_skin_preset", { presetId });
 export const applySkinPreset = (accountId: string, presetId: string, model: SkinModel): Promise<CosmeticsState> => cosmeticsCommand("apply_skin_preset", { accountId, presetId, model });
 export const selectOwnedCape = (accountId: string, capeId: string): Promise<CosmeticsState> => cosmeticsCommand("select_cape", { accountId, capeId });

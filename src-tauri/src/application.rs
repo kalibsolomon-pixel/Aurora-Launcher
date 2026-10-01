@@ -2964,13 +2964,15 @@ pub struct ModrinthArtworkRequest {
 }
 
 #[tauri::command]
-pub async fn get_modrinth_project_artwork(request: ModrinthArtworkRequest) -> Option<String> {
+pub async fn get_modrinth_project_artwork(
+    app: AppHandle,
+    request: ModrinthArtworkRequest,
+) -> Option<String> {
     // Failure is cosmetic. No frontend URL or filesystem locator is accepted.
-    crate::modrinth::Client::official()
-        .artwork(&request.project_id)
-        .await
-        .ok()
-        .flatten()
+    // Cache-first: installed rows render Aurora-cached bytes, and the network
+    // is touched only for a project whose artwork is not yet stored.
+    let managed = managed_paths(&app).ok()?;
+    crate::artwork::cached_artwork(&managed, &request.project_id).await
 }
 
 #[tauri::command]
@@ -4279,6 +4281,9 @@ pub async fn remove_account(app: AppHandle, request: AccountIdRequest) -> Result
 
     let _restoration = crate::auth::flow::session_restoration_guard().await;
     crate::auth::flow::sign_out(&context, &account_id)?;
+    // The account is proven removed: retire exactly its own avatar cache
+    // object. Shared and unrelated cache material is never touched.
+    crate::auth::avatar::remove_cached(&managed, &account_id);
 
     Ok(())
 }
@@ -4339,17 +4344,45 @@ pub async fn get_account_avatar(
     app: AppHandle,
     request: AccountAvatarRequest,
 ) -> Result<Option<crate::auth::avatar::HeadAvatar>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let account_id = request.account_id.trim().to_owned();
+    crate::auth::accounts::AccountId::validate(&account_id)?;
+    // Cache-first: a previously verified avatar serves without touching the
+    // session or the network, including saved secondary accounts.
+    if !request.refresh
+        && let Some(avatar) = crate::auth::avatar::load_cached(&managed, &account_id)
+    {
+        return Ok(Some(avatar));
+    }
+    let fetched = fetch_account_avatar(&app, &account_id, request.refresh).await;
+    match fetched {
+        Some(avatar) => {
+            crate::auth::avatar::store_cached(&managed, &account_id, &avatar);
+            Ok(Some(avatar))
+        }
+        // A failed refresh retains the known-good cached real avatar instead
+        // of degrading to a placeholder.
+        None => Ok(crate::auth::avatar::load_cached(&managed, &account_id)),
+    }
+}
+
+async fn fetch_account_avatar(
+    app: &AppHandle,
+    account_id: &str,
+    refresh: bool,
+) -> Option<crate::auth::avatar::HeadAvatar> {
     refresh_account_session(
-        app,
+        app.clone(),
         AccountIdRequest {
-            account_id: request.account_id.clone(),
+            account_id: account_id.to_owned(),
         },
     )
-    .await?;
-    let Some(session) = crate::auth::session::SessionCache::usable(&request.account_id) else {
-        return Ok(None);
+    .await
+    .ok()?;
+    let Some(session) = crate::auth::session::SessionCache::usable(account_id) else {
+        return None;
     };
-    let refreshed_profile = if request.refresh {
+    let refreshed_profile = if refresh {
         // Refresh cosmetic metadata with the existing token, independently of
         // credential/session lifetime. A mismatching identity is never adopted.
         crate::auth::metadata::fetch_profile(
@@ -4363,17 +4396,34 @@ pub async fn get_account_avatar(
     } else {
         None
     };
-    let skin = if request.refresh {
+    let skin = if refresh {
         refreshed_profile
             .as_ref()
             .and_then(|profile| profile.skin.as_ref())
     } else {
         session.profile().skin()
     };
-    let Some(skin) = skin else {
-        return Ok(None);
-    };
-    Ok(crate::auth::avatar::head(skin, request.refresh).await)
+    let skin = skin?;
+    crate::auth::avatar::head(skin, refresh).await
+}
+
+/// Cached avatars for every saved account, so the account list renders real
+/// avatars after restart without any network work or session restoration.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedAccountAvatarDto {
+    pub account_id: String,
+    pub avatar: crate::auth::avatar::HeadAvatar,
+}
+
+#[tauri::command]
+pub fn get_cached_account_avatars(
+    app: AppHandle,
+) -> Result<Vec<CachedAccountAvatarDto>, CommandError> {
+    Ok(crate::auth::avatar::list_cached(&managed_paths(&app)?)
+        .into_iter()
+        .map(|(account_id, avatar)| CachedAccountAvatarDto { account_id, avatar })
+        .collect())
 }
 
 #[derive(Debug, Deserialize)]
@@ -4440,18 +4490,131 @@ pub fn list_skin_presets(
 ) -> Result<Vec<crate::cosmetics::SkinPreset>, CommandError> {
     crate::cosmetics::list_presets(&managed_paths(&app)?).map_err(cosmetic_error)
 }
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkinPresetImportDto {
+    preset: crate::cosmetics::SkinPreset,
+    duplicate: bool,
+}
+
 #[tauri::command]
 pub fn import_skin_preset(
     app: AppHandle,
     request: ImportSkinPresetRequest,
-) -> Result<crate::cosmetics::SkinPreset, CommandError> {
-    crate::cosmetics::import_preset(
+) -> Result<SkinPresetImportDto, CommandError> {
+    let outcome = crate::cosmetics::import_preset(
         &managed_paths(&app)?,
         &request.name,
         request.model,
         &request.bytes,
     )
+    .map_err(cosmetic_error)?;
+    Ok(SkinPresetImportDto {
+        preset: outcome.preset,
+        duplicate: outcome.duplicate,
+    })
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateSkinPresetRequest {
+    preset_id: String,
+    changes: SkinPresetChanges,
+}
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields, default)]
+pub struct SkinPresetChanges {
+    name: Option<String>,
+    model: Option<crate::cosmetics::SkinModel>,
+}
+#[tauri::command]
+pub fn update_skin_preset(
+    app: AppHandle,
+    request: UpdateSkinPresetRequest,
+) -> Result<Vec<crate::cosmetics::SkinPreset>, CommandError> {
+    crate::cosmetics::update_preset(
+        &managed_paths(&app)?,
+        &request.preset_id,
+        request.changes.name.as_deref(),
+        request.changes.model,
+    )
     .map_err(cosmetic_error)
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetThumbnailDto {
+    rgba: Vec<u8>,
+}
+#[tauri::command]
+pub fn skin_preset_thumbnail(
+    app: AppHandle,
+    request: PresetIdRequest,
+) -> Result<Option<PresetThumbnailDto>, CommandError> {
+    Ok(
+        crate::cosmetics::preset_thumbnail(&managed_paths(&app)?, &request.preset_id)
+            .map_err(cosmetic_error)?
+            .map(|rgba| PresetThumbnailDto {
+                rgba: rgba.to_vec(),
+            }),
+    )
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveCurrentSkinRequest {
+    account_id: String,
+}
+/// Saves the active account's current skin into the Skin Library through the
+/// existing validated import path. Uses the same authenticated profile the
+/// avatar pipeline trusts; nothing is invented locally.
+#[tauri::command]
+pub async fn save_current_skin(
+    app: AppHandle,
+    request: SaveCurrentSkinRequest,
+) -> Result<SkinPresetImportDto, CommandError> {
+    let managed = managed_paths(&app)?;
+    let session = cosmetic_session(&app, &request.account_id).await?;
+    let profile = crate::auth::metadata::fetch_profile(
+        &crate::auth::AuthEndpoints::official(),
+        session.minecraft_access_token(),
+    )
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "cosmetics_service_unavailable",
+            "Minecraft Services could not be reached.",
+        )
+    })?
+    .ok_or_else(|| {
+        CommandError::new(
+            "cosmetics_profile_unavailable",
+            "The Minecraft profile is unavailable.",
+        )
+    })?;
+    if profile.id != session.account_id() {
+        return Err(CommandError::new(
+            "cosmetics_wrong_account",
+            "Minecraft returned a different account profile.",
+        ));
+    }
+    let skin = profile.skin.ok_or_else(|| {
+        CommandError::new(
+            "current_skin_unavailable",
+            "This account has no current skin to save.",
+        )
+    })?;
+    let model = match skin.model.as_str() {
+        "slim" => crate::cosmetics::SkinModel::Slim,
+        _ => crate::cosmetics::SkinModel::Classic,
+    };
+    let name = format!("{}'s skin", session.profile().name());
+    let bytes = crate::cosmetics::download_current_skin(skin.url())
+        .await
+        .map_err(cosmetic_error)?;
+    let outcome =
+        crate::cosmetics::import_preset(&managed, &name, model, &bytes).map_err(cosmetic_error)?;
+    Ok(SkinPresetImportDto {
+        preset: outcome.preset,
+        duplicate: outcome.duplicate,
+    })
 }
 #[tauri::command]
 pub fn remove_skin_preset(app: AppHandle, request: PresetIdRequest) -> Result<(), CommandError> {
