@@ -4,6 +4,7 @@
   import { configurationRequiresInstall } from "$lib/launcher/instanceStatus";
   import ReadinessRows from "$lib/instances/ReadinessRows.svelte";
   import InstalledArtwork from "$lib/instances/InstalledArtwork.svelte";
+  import PackUpdatePanel from "$lib/instances/PackUpdatePanel.svelte";
   import type { InstanceSummary } from "$lib/backend";
 
   let { instance }: { instance: InstanceSummary } = $props();
@@ -180,6 +181,10 @@
     Production releases are bundled with the launcher; debug builds also offer development fixtures.
   </p>
 </section>
+
+{#if instance.pack && instance.state === "ready"}
+  <PackUpdatePanel instanceId={instance.id} onChanged={() => launcher.refreshState()} />
+{/if}
 
 <style>
   .warning-value {
