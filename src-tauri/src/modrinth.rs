@@ -483,7 +483,7 @@ impl Client {
             provider: "modrinth".into(),
             project_id: recognized.project_id.clone(),
             version_id: recognized.version_id.clone(),
-            file_id: recognized.file_name.clone(),
+            file_id: recognized.queried_sha512.clone(),
             file_name: file_name.into(),
             display_version: Some(recognized.version_number.clone()),
             compatibility: ContentCompatibility {

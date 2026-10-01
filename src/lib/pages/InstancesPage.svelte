@@ -63,7 +63,9 @@
     if (instance.state === "installing") {
       return launcher.createBusy && launcher.createProgress
         ? launcher.createProgress.phase
-        : "This instance did not finish installing — retry below.";
+        : instance.pack
+          ? "This modpack did not finish installing and is unavailable. Review its files before recovery."
+          : "This instance did not finish installing — retry below.";
     }
     if (validation?.status === "damaged") {
       return validation.problems[0]
@@ -337,7 +339,7 @@
                 Select
               </button>
             {/if}
-            {#if instance.state === "installing"}
+            {#if instance.state === "installing" && !instance.pack}
               <button
                 type="button"
                 class="btn"

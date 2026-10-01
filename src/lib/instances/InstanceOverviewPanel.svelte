@@ -37,7 +37,7 @@
       <h3 class="group-title" id="readiness-title">Readiness</h3>
     </div>
     <div class="group-row-actions">
-      {#if instance.state === "installing"}
+      {#if instance.state === "installing" && !instance.pack}
         <button
           type="button"
           class="btn"

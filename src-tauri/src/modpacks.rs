@@ -191,12 +191,7 @@ async fn resolve(
                         fail("pack_identity_conflict", format!("{}: {e}", file.path))
                     }
                 })?;
-            if !project_set.insert(planned.project_id.clone()) {
-                return Err(fail(
-                    "pack_identity_conflict",
-                    "The pack requires multiple files from one Modrinth project; Aurora cannot represent that without losing file identity.",
-                ));
-            }
+            project_set.insert(planned.project_id.clone());
             provider_preview.push(RecognizedPreview {
                 path: file.path.clone(),
                 project_id: planned.project_id.clone(),
@@ -212,14 +207,12 @@ async fn resolve(
         for dependency in &planned.dependencies {
             match dependency.kind {
                 crate::instance_content::DependencyKind::Required => {
-                    let matching = provider_plans
-                        .iter()
-                        .find(|candidate| candidate.project_id == dependency.project_id);
-                    if matching.is_none_or(|candidate| {
-                        dependency
-                            .version_id
-                            .as_ref()
-                            .is_some_and(|exact| exact != &candidate.version_id)
+                    if !provider_plans.iter().any(|candidate| {
+                        candidate.project_id == dependency.project_id
+                            && dependency
+                                .version_id
+                                .as_ref()
+                                .is_none_or(|exact| exact == &candidate.version_id)
                     }) {
                         return Err(fail(
                             "pack_dependency_conflict",
@@ -461,7 +454,7 @@ pub async fn install(
         }
     };
     progress("installingComponents");
-    let provider_records = match crate::instance_content::install_provider_plans(
+    let provider_records = match crate::instance_content::install_pack_provider_plans(
         managed,
         record.id(),
         resolved.provider_plans,
@@ -779,6 +772,7 @@ mod tests {
     use sha2::Sha512;
     use std::io::{Cursor, Write};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     fn archive(index: &str) -> Vec<u8> {
         let mut buffer = Cursor::new(Vec::new());
@@ -808,12 +802,20 @@ mod tests {
             "dependencies": {"minecraft": "1.21.1", "fabric-loader": "0.16.0"}
         });
         let bytes = archive(&index.to_string());
-        let archive_hash = format!("{:x}", Sha512::digest(&bytes));
-        let archive_size = bytes.len();
+        let mut changed_index = index;
+        changed_index["name"] = serde_json::json!("Revised Fixture Pack");
+        let changed_bytes = archive(&changed_index.to_string());
+        let changed = Arc::new(AtomicBool::new(false));
+        let serving_changed = Arc::clone(&changed);
         let server = TestServer::spawn(Arc::new(move |request: &TestRequest| {
             let path = request.path.split('?').next().unwrap_or_default();
+            let archive_bytes = if serving_changed.load(Ordering::SeqCst) {
+                &changed_bytes
+            } else {
+                &bytes
+            };
             match path {
-                "/pack.mrpack" => TestResponse::ok(&bytes),
+                "/pack.mrpack" => TestResponse::ok(archive_bytes),
                 "/v2/project/PACK0001" => TestResponse::ok(serde_json::json!({
                     "id": "PACK0001", "project_type": "modpack", "title": "Fixture Pack", "description": "Fixture",
                     "license": {"id":"mit"}, "game_versions": ["1.21.1"], "loaders": ["fabric"], "environment": ["client_only"]
@@ -822,8 +824,8 @@ mod tests {
                     "id": "VERS0001", "project_id": "PACK0001", "name": "One", "version_number": "1",
                     "version_type": "release", "date_published": "2026-01-01T00:00:00Z", "game_versions": ["1.21.1"],
                     "loaders": ["fabric"], "environment": "client_only", "dependencies": [],
-                    "files": [{"hashes": {"sha512": archive_hash}, "url": format!("{}/pack.mrpack", request.base_url),
-                        "filename": "pack.mrpack", "primary": true, "size": archive_size}]
+                    "files": [{"hashes": {"sha512": format!("{:x}", Sha512::digest(archive_bytes))}, "url": format!("{}/pack.mrpack", request.base_url),
+                        "filename": "pack.mrpack", "primary": true, "size": archive_bytes.len()}]
                 }).to_string().as_bytes()),
                 _ => TestResponse::status(404),
             }
@@ -841,6 +843,140 @@ mod tests {
         assert_eq!(result.unresolved, ["mods/external.jar"]);
         assert!(result.recognized.is_empty());
         assert!(!result.fingerprint.is_empty());
+        changed.store(true, Ordering::SeqCst);
+        let endpoints = InstanceEndpoints::development().unwrap();
+        let stale = install(
+            &managed,
+            &endpoints,
+            &client,
+            "PACK0001",
+            "VERS0001",
+            &[],
+            &result.fingerprint,
+            &mut |_| {},
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(stale.code, "pack_preview_stale");
+        assert!(!managed.instance_registry_file().exists());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn unresolved_fallback_keeps_external_identity_and_rejects_bad_bytes() {
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        writer
+            .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer
+            .write_all(br#"{"schemaVersion":1,"id":"external_fixture","version":"1.0"}"#)
+            .unwrap();
+        let payload = writer.finish().unwrap().into_inner();
+        let sha1 = format!("{:x}", Sha1::digest(&payload));
+        let sha512 = format!("{:x}", Sha512::digest(&payload));
+        let served = payload.clone();
+        let server = TestServer::spawn(Arc::new(move |_: &TestRequest| TestResponse::ok(&served)));
+        let root =
+            std::env::temp_dir().join(format!("aurora-pack-fallback-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let managed = ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let instance =
+            crate::instances::InstanceId::new(uuid::Uuid::new_v4().simple().to_string()).unwrap();
+        let instance_root = managed.instance_paths(&instance).root().to_path_buf();
+        std::fs::create_dir_all(&instance_root).unwrap();
+        let unrelated = root.join("unrelated.txt");
+        std::fs::write(&unrelated, b"owner bytes").unwrap();
+        let file = PackFile {
+            path: "mods/external.jar".into(),
+            sha1,
+            sha512: sha512.clone(),
+            downloads: vec![format!("{}/external.jar", server.base_url())],
+            file_size: payload.len() as u64,
+            client: crate::mrpack::EnvironmentSide::Required,
+        };
+        let source = Sha512ArtifactSource::mrpack_fallback(
+            &file.downloads[0],
+            &file.sha512,
+            Some(file.file_size),
+        )
+        .unwrap();
+        let cache = ArtifactCache::new(managed.clone());
+        let artifact = cache.acquire_sha512(&source).await.unwrap();
+        verify_external(&file, &artifact).unwrap();
+        let target = materialize(
+            &instance_root,
+            &file.path,
+            &artifact.path,
+            &artifact.sha256.as_hex(),
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), payload);
+        let state = InstalledPack::new(
+            instance.clone(),
+            PackIdentity {
+                provider: "modrinth".into(),
+                project_id: "PACK0001".into(),
+                version_id: "VERS0001".into(),
+                name: "External fixture".into(),
+                pack_version: "1".into(),
+                artifact_sha512: "a".repeat(128),
+                artifact_sha256: "b".repeat(64),
+                minecraft_version: "1.21.11".into(),
+                fabric_loader_version: "0.19.3".into(),
+                installed_at_unix_seconds: 1,
+            },
+            vec![OwnedComponent {
+                path: file.path.clone(),
+                sha256: artifact.sha256.as_hex(),
+                sha512: file.sha512.clone(),
+                provider: None,
+                provider_version_id: None,
+            }],
+            vec![],
+            vec![],
+        )
+        .unwrap();
+        state.save(&managed).unwrap();
+        let restored = InstalledPack::load(&managed, &instance).unwrap().unwrap();
+        assert_eq!(restored.components, state.components);
+        assert!(restored.components[0].provider.is_none());
+
+        let bad_sha1 = PackFile {
+            sha1: "0".repeat(40),
+            path: "mods/bad-sha1.jar".into(),
+            ..file.clone()
+        };
+        assert_eq!(
+            verify_external(&bad_sha1, &artifact).unwrap_err().code,
+            "pack_digest_mismatch"
+        );
+        assert!(!instance_root.join("mods/bad-sha1.jar").exists());
+        let wrong_sha512 = format!("{:x}", Sha512::digest(b"different bytes"));
+        let bad_source = Sha512ArtifactSource::mrpack_fallback(
+            &file.downloads[0],
+            &wrong_sha512,
+            Some(file.file_size),
+        )
+        .unwrap();
+        assert!(cache.acquire_sha512(&bad_source).await.is_err());
+        assert!(artifact.path.is_file());
+        assert_eq!(std::fs::read(&target).unwrap(), payload);
+        assert_eq!(std::fs::read(&unrelated).unwrap(), b"owner bytes");
+        assert!(
+            Sha512ArtifactSource::mrpack_fallback(
+                "https://unapproved.example/external.jar",
+                &sha512,
+                Some(file.file_size),
+            )
+            .is_err()
+        );
+        assert_eq!(
+            materialize_bytes(&instance_root, "../outside.txt", b"escape", &"0".repeat(64))
+                .unwrap_err()
+                .code,
+            "pack_invalid_path"
+        );
+        assert!(!root.join("outside.txt").exists());
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

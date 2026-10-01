@@ -13,12 +13,14 @@
 //! record in the `installing` state **before** the long installation runs.
 //! A failure at any later point therefore leaves an explicit, non-ready
 //! record with its pinned release â€” never an ordinary-looking healthy
-//! instance, and never a silent gap. Retry re-runs the installation for
-//! that same record, reusing Phase 5's staged-install recovery and the
-//! verified caches (already-valid artifacts are not re-downloaded). The
+//! instance, and never a silent gap. Ordinary instance retry re-runs the
+//! installation for that same record, reusing Phase 5's staged-install
+//! recovery and the verified caches. Modpack records require their exact
+//! pack transaction and are refused by ordinary retry. The
 //! record becomes `ready` only after complete validation passes; nothing
-//! else ever moves it there. Rollback never deletes anything â€” user data
-//! and launcher-managed trees alike are preserved for retry and diagnosis.
+//! else ever moves it there. Ordinary lifecycle rollback preserves data for
+//! retry; the modpack transaction removes only proven files and a validated
+//! game tree, retaining uncertain state for inspection.
 //!
 //! ## Selection policy (explicit)
 //!
@@ -459,6 +461,12 @@ pub async fn retry_instance_install(
                     "only instances that are still installing can be retried; this instance is {}",
                     record.state()
                 ),
+            });
+        }
+        if record.pack().is_some() {
+            return Err(InstanceError::NotReady {
+                instance_id: instance_id.to_string(),
+                reason: "An interrupted modpack snapshot cannot be retried by the ordinary instance installer. It remains unavailable; review its files before recovery.".into(),
             });
         }
         record
@@ -1865,12 +1873,14 @@ mod tests {
     }
     use crate::install::assets::AssetObjectEndpoints;
     use crate::minecraft::metadata::AssetIndexObjectsDocument;
-    use crate::test_support::{TestResponse, TestServer};
+    use crate::test_support::{TestRequest, TestResponse, TestServer};
     use std::collections::BTreeMap;
     use std::collections::HashSet;
     use std::io::Write as _;
     use std::path::PathBuf;
+    use std::sync::Arc;
     use std::sync::Mutex as StdMutex;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
     #[test]
@@ -2395,6 +2405,430 @@ mod tests {
                 .map(|id| id.as_str()),
             Some(retried.id().as_str())
         );
+    }
+
+    #[tokio::test]
+    async fn failed_pack_game_install_stays_unavailable_and_ordinary_retry_refuses_it() {
+        let world = SyntheticWorld::new("pack-game-failure");
+        world.break_path("/mojang/client.jar");
+        std::fs::create_dir_all(world.managed.launcher_dir()).unwrap();
+        let unrelated = world.managed.launcher_dir().join("unrelated.txt");
+        std::fs::write(&unrelated, b"owner state").unwrap();
+        let mut configuration = InstanceConfiguration::for_minecraft_version("26.2");
+        configuration.set_aurora_enabled(false);
+        configuration.set_loader(crate::instances::settings::LoaderConfiguration::fabric(
+            LoaderPolicy::Pinned {
+                version: "0.19.5".into(),
+            },
+        ));
+        let error = begin_pack_instance(
+            &world.managed,
+            &world.registry_path(),
+            &world.endpoints(),
+            CreateInstanceRequest::new("Broken pack", configuration),
+            crate::instances::PackRegistryIdentity {
+                provider: "modrinth".into(),
+                project_id: "PACK0001".into(),
+                version_id: "VERS0001".into(),
+                name: "Fixture pack".into(),
+                pack_version: "1.0".into(),
+            },
+            &mut |_| {},
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(error, InstanceError::GameInstall(_)), "{error}");
+        let registry = world.load_registry();
+        assert_eq!(registry.instances().len(), 1);
+        let record = &registry.instances()[0];
+        assert_eq!(record.state(), InstanceState::Installing);
+        assert_eq!(
+            world.validate(record.id()).status,
+            InstanceStatus::Installing
+        );
+        assert!(record.pack().is_some());
+        assert!(world.load_config().selected_instance_id().is_none());
+        let retry = retry_instance_install(
+            &world.managed,
+            &world.registry_path(),
+            &world.config_path(),
+            &world.endpoints(),
+            record.id(),
+            &mut |_| {},
+            InstanceFaults::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(retry, InstanceError::NotReady { .. }));
+        assert_eq!(
+            world.load_registry().instances()[0].state(),
+            InstanceState::Installing
+        );
+        assert_eq!(std::fs::read(unrelated).unwrap(), b"owner state");
+    }
+
+    struct FixtureJar {
+        bytes: Vec<u8>,
+        sha1: String,
+        sha512: String,
+    }
+
+    /// A Modrinth authority fixture for the pack transaction tests: one pack
+    /// archive with two recognized mods and one override, plus the batched
+    /// version-file lookups that recognize them. `poisoned` serves the second
+    /// component as same-length bytes whose fabric metadata is invalid JSON,
+    /// so every digest and size check passes while provider activation rejects
+    /// the artifact after the game is already installed. `offline` fails the
+    /// component downloads before any instance exists.
+    struct PackAuthorityFixture {
+        server: TestServer,
+        poisoned: Arc<AtomicBool>,
+        offline: Arc<AtomicBool>,
+    }
+
+    impl PackAuthorityFixture {
+        fn new(poisoned: bool, offline: bool) -> Self {
+            use sha2::Digest as _;
+            let jar = |metadata: &str| {
+                let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+                writer
+                    .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                writer.write_all(metadata.as_bytes()).unwrap();
+                let bytes = writer.finish().unwrap().into_inner();
+                let sha512 = format!("{:x}", sha2::Sha512::digest(&bytes));
+                FixtureJar {
+                    sha1: crate::integrity::Sha1Digest::compute(&bytes).as_hex(),
+                    sha512,
+                    bytes,
+                }
+            };
+            // The two metadata strings are the same length, so either serving
+            // satisfies every declared digest and size check.
+            let first = jar(r#"{"schemaVersion":1,"id":"rollback-first","version":"1"}"#);
+            let second_valid = jar(r#"{"schemaVersion":1,"id":"rollback-second","version":"1"}"#);
+            let second_poisoned =
+                jar(r#"{"schemaVersion":1,"id":"rollback-second" "version":"1"}"#);
+            let archive = |second: &FixtureJar| {
+                let index = serde_json::json!({
+                    "formatVersion": 1, "game": "minecraft", "versionId": "rollback-1",
+                    "name": "Rollback Fixture Pack",
+                    "files": [
+                        {"path": "mods/first.jar",
+                         "hashes": {"sha1": first.sha1, "sha512": first.sha512},
+                         "downloads": ["https://github.com/example/pack/releases/download/1/first.jar"],
+                         "fileSize": first.bytes.len(),
+                         "env": {"client": "required", "server": "unsupported"}},
+                        {"path": "mods/second.jar",
+                         "hashes": {"sha1": second.sha1, "sha512": second.sha512},
+                         "downloads": ["https://github.com/example/pack/releases/download/1/second.jar"],
+                         "fileSize": second.bytes.len(),
+                         "env": {"client": "required", "server": "unsupported"}}
+                    ],
+                    "dependencies": {"minecraft": "26.2", "fabric-loader": "0.19.5"}
+                });
+                let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+                writer
+                    .start_file(
+                        "modrinth.index.json",
+                        zip::write::SimpleFileOptions::default(),
+                    )
+                    .unwrap();
+                writer.write_all(index.to_string().as_bytes()).unwrap();
+                writer
+                    .start_file(
+                        "overrides/config/rollback-fixture.toml",
+                        zip::write::SimpleFileOptions::default(),
+                    )
+                    .unwrap();
+                writer.write_all(b"rollback fixture override").unwrap();
+                let bytes = writer.finish().unwrap().into_inner();
+                let sha512 = format!("{:x}", sha2::Sha512::digest(&bytes));
+                (bytes, sha512)
+            };
+            let (archive_valid, archive_valid_sha512) = archive(&second_valid);
+            let (archive_poisoned, archive_poisoned_sha512) = archive(&second_poisoned);
+            let poisoned_flag = Arc::new(AtomicBool::new(poisoned));
+            let offline_flag = Arc::new(AtomicBool::new(offline));
+            let serving_poisoned = Arc::clone(&poisoned_flag);
+            let serving_offline = Arc::clone(&offline_flag);
+            let server = TestServer::spawn(Arc::new(move |request: &TestRequest| {
+                let path = request.path.split('?').next().unwrap_or_default();
+                let (archive_bytes, archive_sha512, second, second_url) =
+                    if serving_poisoned.load(Ordering::SeqCst) {
+                        (
+                            &archive_poisoned,
+                            &archive_poisoned_sha512,
+                            &second_poisoned,
+                            "/cdn/second-poisoned.jar",
+                        )
+                    } else {
+                        (
+                            &archive_valid,
+                            &archive_valid_sha512,
+                            &second_valid,
+                            "/cdn/second-valid.jar",
+                        )
+                    };
+                let component = |jar: &FixtureJar,
+                                 project: &str,
+                                 version: &str,
+                                 name: &str,
+                                 url: &str| {
+                    serde_json::json!({
+                        "id": version, "project_id": project, "name": name, "version_number": "1",
+                        "version_type": "release", "date_published": "2026-01-01T00:00:00Z",
+                        "game_versions": ["26.2"], "loaders": ["fabric"], "environment": "client_only",
+                        "dependencies": [],
+                        "files": [{"hashes": {"sha512": jar.sha512},
+                            "url": format!("{request_base}{url}", request_base = request.base_url),
+                            "filename": "component.jar", "primary": true, "size": jar.bytes.len()}]
+                    })
+                };
+                match path {
+                    "/pack.mrpack" => TestResponse::ok(archive_bytes),
+                    "/v2/project/PACKROLL" => TestResponse::ok(serde_json::json!({
+                        "id": "PACKROLL", "project_type": "modpack", "title": "Rollback Fixture Pack",
+                        "description": "Fixture", "license": {"id": "mit"},
+                        "game_versions": ["26.2"], "loaders": ["fabric"], "environment": ["client_only"]
+                    })
+                    .to_string()
+                    .as_bytes()),
+                    "/v2/project/MODA0001" | "/v2/project/MODB0002" => TestResponse::ok(serde_json::json!({
+                        "id": path.rsplit('/').next().unwrap_or_default(), "project_type": "mod",
+                        "title": "Component", "description": "Fixture", "license": {"id": "mit"},
+                        "game_versions": ["26.2"], "loaders": ["fabric"], "environment": ["client_only"]
+                    })
+                    .to_string()
+                    .as_bytes()),
+                    "/v2/version/VERSROLL" => TestResponse::ok(serde_json::json!({
+                        "id": "VERSROLL", "project_id": "PACKROLL", "name": "Rollback",
+                        "version_number": "rollback-1", "version_type": "release",
+                        "date_published": "2026-01-01T00:00:00Z", "game_versions": ["26.2"],
+                        "loaders": ["fabric"], "environment": "client_only", "dependencies": [],
+                        "files": [{"hashes": {"sha512": archive_sha512},
+                            "url": format!("{}/pack.mrpack", request.base_url),
+                            "filename": "pack.mrpack", "primary": true, "size": archive_bytes.len()}]
+                    })
+                    .to_string()
+                    .as_bytes()),
+                    "/v2/version_files" => {
+                        let mut map = serde_json::Map::new();
+                        map.insert(
+                            first.sha512.clone(),
+                            component(&first, "MODA0001", "MODV0001", "First", "/cdn/first.jar"),
+                        );
+                        map.insert(
+                            second.sha512.clone(),
+                            component(second, "MODB0002", "MODV0002", "Second", second_url),
+                        );
+                        TestResponse::ok(serde_json::Value::Object(map).to_string().as_bytes())
+                    }
+                    "/cdn/first.jar" => {
+                        if serving_offline.load(Ordering::SeqCst) {
+                            TestResponse::status(404)
+                        } else {
+                            TestResponse::ok(&first.bytes)
+                        }
+                    }
+                    "/cdn/second-valid.jar" | "/cdn/second-poisoned.jar" => {
+                        if serving_offline.load(Ordering::SeqCst) {
+                            TestResponse::status(404)
+                        } else {
+                            TestResponse::ok(&second.bytes)
+                        }
+                    }
+                    _ => TestResponse::status(404),
+                }
+            }));
+            Self {
+                server,
+                poisoned: poisoned_flag,
+                offline: offline_flag,
+            }
+        }
+
+        fn client(&self) -> crate::modrinth::Client {
+            crate::modrinth::Client::for_testing(&format!("{}/v2/", self.server.base_url()))
+        }
+
+        fn set_valid(&self) {
+            self.poisoned.store(false, Ordering::SeqCst);
+        }
+
+        fn set_online(&self) {
+            self.offline.store(false, Ordering::SeqCst);
+        }
+    }
+
+    fn cache_files(root: &std::path::Path) -> Vec<String> {
+        fn walk(dir: &std::path::Path, prefix: &str, out: &mut Vec<String>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let entry = entry.unwrap();
+                let name = format!("{prefix}/{}", entry.file_name().to_string_lossy());
+                if entry.file_type().unwrap().is_dir() {
+                    walk(&entry.path(), &name, out);
+                } else {
+                    out.push(name);
+                }
+            }
+        }
+        let mut files = Vec::new();
+        walk(root, "", &mut files);
+        files.sort();
+        files
+    }
+
+    #[tokio::test]
+    async fn pack_component_failure_after_game_install_rolls_back_and_keeps_the_cache() {
+        let world = SyntheticWorld::new("pack-component-rollback");
+        std::fs::create_dir_all(world.managed.launcher_dir()).unwrap();
+        let unrelated = world.managed.launcher_dir().join("unrelated.txt");
+        std::fs::write(&unrelated, b"owner state").unwrap();
+        let fixture = PackAuthorityFixture::new(true, false);
+        let client = fixture.client();
+        let shown = crate::modpacks::preview(&world.managed, &client, "PACKROLL", "VERSROLL", &[])
+            .await
+            .unwrap();
+        let error = crate::modpacks::install(
+            &world.managed,
+            &world.endpoints(),
+            &client,
+            "PACKROLL",
+            "VERSROLL",
+            &[],
+            &shown.fingerprint,
+            &mut |_| {},
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code, "pack_component_install_failed");
+        // The transaction is retired wholesale: no registry record, no
+        // instance tree, nothing half-ready, no selection, and unrelated
+        // owner state untouched.
+        assert_eq!(world.load_registry().instances().len(), 0);
+        let leftovers = std::fs::read_dir(world.managed.instances_dir())
+            .map(|list| list.count())
+            .unwrap_or(0);
+        assert_eq!(leftovers, 0);
+        assert!(world.load_config().selected_instance_id().is_none());
+        assert_eq!(std::fs::read(&unrelated).unwrap(), b"owner state");
+        let after_rollback = cache_files(&world.managed.cache_dir());
+        assert!(!after_rollback.is_empty());
+
+        // The shared verified cache survives the rollback unchanged and the
+        // same objects serve the corrected retry without any new acquisition.
+        fixture.set_valid();
+        let shown = crate::modpacks::preview(&world.managed, &client, "PACKROLL", "VERSROLL", &[])
+            .await
+            .unwrap();
+        let record = crate::modpacks::install(
+            &world.managed,
+            &world.endpoints(),
+            &client,
+            "PACKROLL",
+            "VERSROLL",
+            &[],
+            &shown.fingerprint,
+            &mut |_| {},
+        )
+        .await
+        .unwrap();
+        assert_eq!(record.state(), InstanceState::Ready);
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        assert_eq!(
+            world
+                .load_config()
+                .selected_instance_id()
+                .map(|id| id.as_str()),
+            Some(record.id().as_str())
+        );
+        let pack = crate::pack_state::InstalledPack::load(&world.managed, record.id())
+            .unwrap()
+            .unwrap();
+        assert_eq!(pack.components.len(), 2);
+        assert_eq!(pack.overrides.len(), 1);
+        assert!(pack.components.iter().all(|item| item.provider.is_some()));
+        let content =
+            crate::instance_content::ContentState::load(&world.managed, record.id()).unwrap();
+        assert_eq!(content.entries.len(), 2);
+        assert!(content.entries.iter().all(|entry| entry.origin
+            == crate::instance_content::ProviderOrigin::Pack
+            && entry.explicitly_retained));
+        for entry in &content.entries {
+            assert!(
+                pack.components
+                    .iter()
+                    .any(|item| entry.file_id.eq_ignore_ascii_case(&item.sha512)
+                        && entry.sha256 == item.sha256)
+            );
+        }
+        let after_retry = cache_files(&world.managed.cache_dir());
+        // The retry legitimately acquires the corrected archive and second
+        // component, but every surviving object is still present and the game
+        // artifacts were served from the shared cache, not re-downloaded.
+        assert!(after_rollback.iter().all(|path| after_retry.contains(path)));
+        let game_objects = |files: &[String]| {
+            files
+                .iter()
+                .filter(|path| path.starts_with("/artifacts/sha1/"))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(game_objects(&after_retry), game_objects(&after_rollback));
+        assert_eq!(std::fs::read(&unrelated).unwrap(), b"owner state");
+    }
+
+    #[tokio::test]
+    async fn pack_acquisition_failure_leaves_no_instance_and_the_cache_serves_a_retry() {
+        let world = SyntheticWorld::new("pack-acquisition-failure");
+        std::fs::create_dir_all(world.managed.launcher_dir()).unwrap();
+        let unrelated = world.managed.launcher_dir().join("unrelated.txt");
+        std::fs::write(&unrelated, b"owner state").unwrap();
+        let fixture = PackAuthorityFixture::new(false, true);
+        let client = fixture.client();
+        let shown = crate::modpacks::preview(&world.managed, &client, "PACKROLL", "VERSROLL", &[])
+            .await
+            .unwrap();
+        let error = crate::modpacks::install(
+            &world.managed,
+            &world.endpoints(),
+            &client,
+            "PACKROLL",
+            "VERSROLL",
+            &[],
+            &shown.fingerprint,
+            &mut |_| {},
+        )
+        .await
+        .unwrap_err();
+        // Component downloads fail in the shared cache before the instance
+        // exists: nothing is registered, created, or selected.
+        assert_eq!(error.code, "pack_download_failed");
+        assert!(!world.managed.instance_registry_file().exists());
+        let leftovers = std::fs::read_dir(world.managed.instances_dir())
+            .map(|list| list.count())
+            .unwrap_or(0);
+        assert_eq!(leftovers, 0);
+        assert_eq!(std::fs::read(&unrelated).unwrap(), b"owner state");
+
+        fixture.set_online();
+        let shown = crate::modpacks::preview(&world.managed, &client, "PACKROLL", "VERSROLL", &[])
+            .await
+            .unwrap();
+        let record = crate::modpacks::install(
+            &world.managed,
+            &world.endpoints(),
+            &client,
+            "PACKROLL",
+            "VERSROLL",
+            &[],
+            &shown.fingerprint,
+            &mut |_| {},
+        )
+        .await
+        .unwrap();
+        assert_eq!(record.state(), InstanceState::Ready);
     }
 
     #[tokio::test]

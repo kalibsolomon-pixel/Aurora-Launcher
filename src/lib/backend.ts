@@ -931,7 +931,7 @@ export interface ProviderRecord {
   updateChannel: UpdateChannel;
 }
 
-export type ProviderOrigin = "direct" | "dependency" | "recovered";
+export type ProviderOrigin = "direct" | "dependency" | "recovered" | "pack";
 
 export type UpdateChannel = "stable" | "beta" | "alpha";
 
@@ -950,6 +950,7 @@ export function updateChannelDescription(channel: UpdateChannel): string {
 }
 
 export function providerOriginLabel(origin: ProviderOrigin): string {
+  if (origin === "pack") return "Installed by modpack";
   if (origin === "direct") return "Installed directly";
   if (origin === "dependency") return "Installed as dependency";
   return "Recovered from local file";

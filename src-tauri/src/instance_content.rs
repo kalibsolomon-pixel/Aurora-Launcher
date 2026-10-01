@@ -68,6 +68,7 @@ pub enum ProviderOrigin {
     Direct,
     Dependency,
     Recovered,
+    Pack,
 }
 
 /// Per-record release-channel policy for update candidate selection. This is
@@ -196,6 +197,14 @@ impl ProviderRecord {
         }
         ArtifactDigest::parse(&self.sha256)
             .map_err(|_| ContentError::StateMalformed("provider digest is invalid".into()))?;
+        if self.origin == ProviderOrigin::Pack
+            && (self.file_id.len() != 128
+                || !self.file_id.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        {
+            return Err(ContentError::StateMalformed(
+                "pack provider file identity is not SHA-512".into(),
+            ));
+        }
         if self
             .compatibility
             .minecraft_versions
@@ -328,6 +337,8 @@ impl ContentState {
         }
         let mut names = HashSet::new();
         let mut identities = HashSet::new();
+        let mut project_records: HashMap<ProviderIdentity, &ProviderRecord> = HashMap::new();
+        let mut pack_files = HashMap::new();
         for entry in &self.entries {
             entry.validate()?;
             if !names.insert((entry.content_type, entry.file_name.to_lowercase())) {
@@ -335,11 +346,30 @@ impl ContentState {
                     "duplicate provider filename".into(),
                 ));
             }
-            if !identities.insert(entry.identity()) {
-                return Err(ContentError::StateMalformed(
-                    "duplicate provider project".into(),
-                ));
+            let identity = entry.identity();
+            if let Some(previous) = project_records.insert(identity.clone(), entry) {
+                if previous.origin != ProviderOrigin::Pack || entry.origin != ProviderOrigin::Pack {
+                    return Err(ContentError::StateMalformed(
+                        "duplicate provider project outside a pack".into(),
+                    ));
+                }
             }
+            if entry.origin == ProviderOrigin::Pack {
+                let key = (
+                    identity.clone(),
+                    entry.version_id.clone(),
+                    entry.file_id.to_lowercase(),
+                );
+                if pack_files
+                    .insert(key, &entry.sha256)
+                    .is_some_and(|digest| digest != &entry.sha256)
+                {
+                    return Err(ContentError::StateMalformed(
+                        "one provider file identity has conflicting bytes".into(),
+                    ));
+                }
+            }
+            identities.insert(identity);
         }
         for entry in &self.entries {
             let mut edges = HashSet::new();
@@ -351,14 +381,18 @@ impl ContentState {
                 }
             }
         }
-        let graph: HashMap<_, _> = self
-            .entries
-            .iter()
-            .map(|entry| (entry.identity(), entry.requires.as_slice()))
-            .collect();
+        let mut graph: HashMap<ProviderIdentity, Vec<ProviderIdentity>> = HashMap::new();
+        for entry in &self.entries {
+            let edges = graph.entry(entry.identity()).or_default();
+            for edge in &entry.requires {
+                if !edges.contains(edge) {
+                    edges.push(edge.clone());
+                }
+            }
+        }
         fn cycle(
             node: &ProviderIdentity,
-            graph: &HashMap<ProviderIdentity, &[ProviderIdentity]>,
+            graph: &HashMap<ProviderIdentity, Vec<ProviderIdentity>>,
             active: &mut HashSet<ProviderIdentity>,
             done: &mut HashSet<ProviderIdentity>,
         ) -> bool {
@@ -1657,6 +1691,25 @@ pub async fn install_provider_plans(
     install_provider_plans_reviewed(managed, instance, plans, Some(&revision)).await
 }
 
+/// Install every file authored by one exact pack snapshot. Pack provenance is
+/// per file; project identity remains useful for dependency and ownership guards.
+pub(crate) async fn install_pack_provider_plans(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    plans: Vec<ProviderInstallPlan>,
+) -> Result<Vec<ProviderRecord>, ContentError> {
+    let revision = local_inventory_revision(managed, instance)?;
+    let acquired = acquire_provider_plans(managed, plans).await?;
+    activate_provider_transaction_with_revision(
+        managed,
+        instance,
+        acquired,
+        Some(&revision),
+        true,
+        |state| state.save(managed, instance),
+    )
+}
+
 pub(crate) async fn install_provider_plans_reviewed(
     managed: &ManagedPaths,
     instance: &InstanceId,
@@ -1664,9 +1717,14 @@ pub(crate) async fn install_provider_plans_reviewed(
     revision: Option<&str>,
 ) -> Result<Vec<ProviderRecord>, ContentError> {
     let acquired = acquire_provider_plans(managed, plans).await?;
-    activate_provider_transaction_with_revision(managed, instance, acquired, revision, |state| {
-        state.save(managed, instance)
-    })
+    activate_provider_transaction_with_revision(
+        managed,
+        instance,
+        acquired,
+        revision,
+        false,
+        |state| state.save(managed, instance),
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1990,24 +2048,64 @@ async fn acquire_provider_plans(
         let provisional = plan.record("0".repeat(64), ProviderOrigin::Direct);
         provisional.validate()?;
     }
+    // Distinct destinations may name the same exact provider file. Acquire
+    // each expected digest once even when concurrent cache misses occur.
+    let mut unique = Vec::new();
+    let mut indices = Vec::with_capacity(plans.len());
+    let mut by_digest = HashMap::new();
+    for (position, plan) in plans.iter().enumerate() {
+        let key = match &plan.source {
+            ProviderArtifactSource::Sha256(source) => {
+                format!("sha256:{}", source.sha256().as_hex())
+            }
+            ProviderArtifactSource::Sha512(source) => {
+                format!("sha512:{}", source.sha512().as_hex())
+            }
+        };
+        let index = *by_digest.entry(key).or_insert_with(|| {
+            let index = unique.len();
+            unique.push(position);
+            index
+        });
+        indices.push(index);
+    }
     let cache = Arc::new(ArtifactCache::new(managed.clone()));
-    let acquired = stream::iter(plans.into_iter().map(|plan| {
+    let acquired = stream::iter(unique.into_iter().map(|position| {
         let cache = cache.clone();
+        let source = &plans[position].source;
         async move {
-            let artifact = match &plan.source {
+            let artifact = match source {
                 ProviderArtifactSource::Sha256(source) => cache.acquire(source).await,
                 ProviderArtifactSource::Sha512(source) => cache.acquire_sha512(source).await,
             }
             .map_err(|error| ContentError::Acquisition(error.to_string()))?;
-            let record = plan.record(artifact.sha256.as_hex(), ProviderOrigin::Direct);
-            record.validate()?;
-            Ok::<_, ContentError>((record, artifact.path, artifact.bytes))
+            Ok::<_, ContentError>((artifact.sha256.as_hex(), artifact.path, artifact.bytes))
         }
     }))
     .buffered(8)
     .collect::<Vec<_>>()
     .await;
-    acquired.into_iter().collect::<Result<Vec<_>, _>>()
+    let acquired = acquired.into_iter().collect::<Result<Vec<_>, _>>()?;
+    plans
+        .into_iter()
+        .zip(indices)
+        .map(|(plan, index)| {
+            let (sha256, path, bytes) = &acquired[index];
+            let expected_size = match &plan.source {
+                ProviderArtifactSource::Sha256(source) => source.size_bytes(),
+                ProviderArtifactSource::Sha512(source) => source.size_bytes(),
+            };
+            if expected_size.is_some_and(|size| size != *bytes) {
+                return Err(ContentError::Acquisition(
+                    "provider artifact size conflicts with another reference to the same digest"
+                        .into(),
+                ));
+            }
+            let record = plan.record(sha256.clone(), ProviderOrigin::Direct);
+            record.validate()?;
+            Ok((record, path.clone(), *bytes))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -2017,7 +2115,7 @@ fn activate_provider_transaction(
     acquired: Vec<(ProviderRecord, PathBuf, u64)>,
     commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
 ) -> Result<Vec<ProviderRecord>, ContentError> {
-    activate_provider_transaction_with_revision(managed, instance, acquired, None, commit)
+    activate_provider_transaction_with_revision(managed, instance, acquired, None, false, commit)
 }
 
 fn activate_provider_transaction_with_revision(
@@ -2025,6 +2123,7 @@ fn activate_provider_transaction_with_revision(
     instance: &InstanceId,
     mut acquired: Vec<(ProviderRecord, PathBuf, u64)>,
     revision: Option<&str>,
+    pack_install: bool,
     commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
 ) -> Result<Vec<ProviderRecord>, ContentError> {
     with_instance_lock(instance, || {
@@ -2045,8 +2144,10 @@ fn activate_provider_transaction_with_revision(
             .chain(acquired.iter().map(|(record, _, _)| record.identity()))
             .collect();
         for (record, _, _) in &mut acquired {
-            record.explicitly_retained = record.identity() == direct;
-            record.origin = if record.identity() == direct {
+            record.explicitly_retained = pack_install || record.identity() == direct;
+            record.origin = if pack_install {
+                ProviderOrigin::Pack
+            } else if record.identity() == direct {
                 ProviderOrigin::Direct
             } else {
                 ProviderOrigin::Dependency
@@ -3214,6 +3315,97 @@ mod tests {
     use std::io::Write as _;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    #[test]
+    fn pack_records_keep_distinct_files_from_one_project() {
+        let fixture = Fixture::new();
+        let first_path = fixture.dir(ContentType::Mod).join("first.jar");
+        let second_path = fixture.dir(ContentType::Mod).join("second.jar");
+        std::fs::write(&first_path, b"first file").unwrap();
+        std::fs::write(&second_path, b"second file").unwrap();
+        let mut first = fixture.record(ContentType::Mod, &first_path);
+        first.origin = ProviderOrigin::Pack;
+        first.file_id = format!("{:x}", Sha512::digest(b"first file"));
+        let mut second = fixture.record(ContentType::Mod, &second_path);
+        second.origin = ProviderOrigin::Pack;
+        second.file_id = format!("{:x}", Sha512::digest(b"second file"));
+        let state = ContentState {
+            schema_version: SCHEMA_VERSION,
+            entries: vec![first.clone(), second.clone()],
+        };
+        state.validate().unwrap();
+        assert_eq!(state.entries.len(), 2);
+        assert_eq!(state.entries[0].identity(), state.entries[1].identity());
+        assert_ne!(state.entries[0].file_id, state.entries[1].file_id);
+        let restored = ContentState::from_json(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert_eq!(restored.entries, state.entries);
+
+        let mut ordinary = state.clone();
+        ordinary.entries[1].origin = ProviderOrigin::Direct;
+        assert!(ordinary.validate().is_err());
+        let mut conflicting = state;
+        conflicting.entries[1].file_id = first.file_id;
+        assert!(conflicting.validate().is_err());
+        std::fs::remove_dir_all(&fixture.root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn pack_installs_distinct_files_from_one_project() {
+        let fixture = no_aurora_fixture();
+        let server = served_mods();
+        let records = install_pack_provider_plans(
+            &fixture.managed,
+            &fixture.instance,
+            vec![
+                mod_plan(&server, "SameProj", "pack-first", false),
+                mod_plan(&server, "SameProj", "pack-second", false),
+            ],
+        )
+        .await
+        .unwrap();
+        assert_eq!(records.len(), 2);
+        assert!(
+            records
+                .iter()
+                .all(|record| record.origin == ProviderOrigin::Pack)
+        );
+        assert!(records.iter().all(|record| record.explicitly_retained));
+        assert_ne!(records[0].file_id, records[1].file_id);
+        let restored = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+        assert_eq!(restored.entries, records);
+        for record in &records {
+            assert!(
+                fixture
+                    .dir(ContentType::Mod)
+                    .join(&record.file_name)
+                    .is_file()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn redundant_exact_pack_file_acquisition_reuses_verified_object() {
+        let fixture = Fixture::new();
+        let hits = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&hits);
+        let bytes = fabric_jar_with_id("same-file");
+        let server = TestServer::spawn(Arc::new(move |_: &TestRequest| {
+            observed.fetch_add(1, Ordering::SeqCst);
+            TestResponse::ok(&bytes)
+        }));
+        let acquired = acquire_provider_plans(
+            &fixture.managed,
+            vec![
+                mod_plan(&server, "SameProj", "same-file", false),
+                mod_plan(&server, "SameProj", "same-file", false),
+            ],
+        )
+        .await
+        .unwrap();
+        assert_eq!(acquired.len(), 2);
+        assert_eq!(acquired[0].1, acquired[1].1);
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+
     struct Fixture {
         root: PathBuf,
         managed: ManagedPaths,
@@ -3315,10 +3507,6 @@ mod tests {
             pinned: false,
             update_channel: UpdateChannel::Stable,
         }
-    }
-
-    fn fixture_fabric_jar() -> Vec<u8> {
-        fabric_jar_with_id("fixture")
     }
 
     fn fabric_jar_with_id(id: &str) -> Vec<u8> {
@@ -4349,23 +4537,27 @@ mod tests {
     #[tokio::test]
     async fn sha512_plans_acquire_concurrently_and_persist_provider_ownership() {
         let fixture = Fixture::new();
-        let bytes = fixture_fabric_jar();
-        let served_bytes = bytes.clone();
+        let served_bytes = Arc::new([
+            fabric_jar_with_id("fixture-mod"),
+            fabric_jar_with_id("fixture-resource"),
+            fabric_jar_with_id("fixture-shader"),
+        ]);
         let active = Arc::new(AtomicUsize::new(0));
         let peak = Arc::new(AtomicUsize::new(0));
         let requests = Arc::new(AtomicUsize::new(0));
         let handler_active = active.clone();
         let handler_peak = peak.clone();
         let handler_requests = requests.clone();
+        let handler_bytes = Arc::clone(&served_bytes);
         let server = TestServer::spawn(Arc::new(move |_request: &TestRequest| {
             handler_requests.fetch_add(1, Ordering::SeqCst);
             let now = handler_active.fetch_add(1, Ordering::SeqCst) + 1;
             handler_peak.fetch_max(now, Ordering::SeqCst);
             std::thread::sleep(std::time::Duration::from_millis(35));
             handler_active.fetch_sub(1, Ordering::SeqCst);
-            TestResponse::ok(&served_bytes)
+            let index: usize = _request.path.trim_start_matches("/file/").parse().unwrap();
+            TestResponse::ok(&handler_bytes[index])
         }));
-        let sha512 = format!("{:x}", Sha512::digest(&bytes));
         let cases = [
             (ContentType::Mod, "fixture.jar"),
             (ContentType::ResourcePack, "fixture.zip"),
@@ -4375,6 +4567,8 @@ mod tests {
             .iter()
             .enumerate()
             .map(|(index, (kind, name))| {
+                let bytes = &served_bytes[index];
+                let sha512 = format!("{:x}", Sha512::digest(bytes));
                 let mut record = transaction_record(*kind, name, &bytes);
                 record.project_id = format!("project-{index}");
                 ProviderInstallPlan {
@@ -4403,6 +4597,7 @@ mod tests {
             .unwrap();
         assert_eq!(records.len(), 3);
         assert!(peak.load(Ordering::SeqCst) > 1);
+        assert_eq!(requests.load(Ordering::SeqCst), 3);
         assert_eq!(
             ContentState::load(&fixture.managed, &fixture.instance)
                 .unwrap()
@@ -4429,6 +4624,8 @@ mod tests {
             }
         }
         let count = requests.load(Ordering::SeqCst);
+        let bytes = &served_bytes[0];
+        let sha512 = format!("{:x}", Sha512::digest(bytes));
         let source = Sha512ArtifactSource::loopback_http_for_testing(
             &format!("{}/file/0", server.base_url()),
             &sha512,

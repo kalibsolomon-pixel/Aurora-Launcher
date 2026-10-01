@@ -269,22 +269,22 @@ impl InstalledPack {
                 ArtifactDigest::parse(&component.sha256).map_err(|_| PackStateError::Malformed)?;
             verify_file(&path, &digest, None).map_err(|_| PackStateError::Integrity)?;
             if let Some(identity) = &component.provider {
-                let record = provider
-                    .find(identity)
-                    .ok_or(PackStateError::ProviderMismatch)?;
-                if record.version_id
-                    != *component
-                        .provider_version_id
-                        .as_ref()
-                        .ok_or(PackStateError::Malformed)?
-                    || record.sha256 != component.sha256
-                    || component.path
-                        != format!(
-                            "{}/{}",
-                            record.content_type.directory_name(),
-                            record.file_name
-                        )
-                {
+                let version_id = component
+                    .provider_version_id
+                    .as_ref()
+                    .ok_or(PackStateError::Malformed)?;
+                if !provider.entries.iter().any(|record| {
+                    record.identity() == *identity
+                        && record.version_id == *version_id
+                        && record.file_id.eq_ignore_ascii_case(&component.sha512)
+                        && record.sha256 == component.sha256
+                        && component.path
+                            == format!(
+                                "{}/{}",
+                                record.content_type.directory_name(),
+                                record.file_name
+                            )
+                }) {
                     return Err(PackStateError::ProviderMismatch);
                 }
             }
