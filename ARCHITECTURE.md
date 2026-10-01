@@ -1,5 +1,9 @@
 # Aurora Launcher architecture
 
+## Phase J modpack update & reconciliation (current)
+
+An installed Modrinth modpack can move from one exact pack version to a newer exact version through a reviewed three-way reconciliation between the old snapshot, the candidate snapshot, and the current local filesystem; see [PHASE_J_MODPACK_UPDATES.md](PHASE_J_MODPACK_UPDATES.md). Discovery is same-project only, anchored on the installed exact version's still-published archive SHA-512, ordered by publication chronology (never version strings), with unsupported-loader candidates reported as blocked. Classification uses provider/file identity (project + version + SHA-512), never filenames; every outcome — preserve, acquire, adopt, replace, retire, preserve-shared, conflict — is planned before mutation, with keep-local divergence recorded in `pack-installed.json` schema 2 so a "Pack v2 — modified" instance validates against its chosen bytes instead of lying. Apply re-derives the whole plan natively and compares a resolution-independent fingerprint over the observed world; the transaction (receipt-marked `installing`, verified acquisition, staged activation with backups, game/loader transitions through the ordinary pipeline, registry commit last) rolls back fully on failure and recovers receipt-marked interruptions by proving old or new state. Pack-owned components remain blocked from ordinary Phase H updates; Update Modpack is a separate reconciliation path, not a call into Update All.
+
 ## Phase H.1 recent server enrichment (current)
 
 The Home Recent Servers widget now shows real Minecraft server presentation — favicon, name, MOTD, player counts, online/offline state — for servers already recorded in local gameplay history. See [PHASE_H1_SERVER_ENRICHMENT.md](PHASE_H1_SERVER_ENRICHMENT.md) for the acceptance record and native evidence.
