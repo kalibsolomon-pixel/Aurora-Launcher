@@ -16,6 +16,13 @@ pub struct ManagedPaths {
 
 impl ManagedPaths {
     pub fn from_app_local_data_dir(data_root: PathBuf) -> Result<Self, ManagedPathError> {
+        // Development acceptance can run the real app against a disposable
+        // managed root without ever opening the owner's normal instance data.
+        // Release builds have no override.
+        #[cfg(debug_assertions)]
+        let data_root = std::env::var_os("AURORA_DIAGNOSTIC_DATA_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or(data_root);
         if !data_root.is_absolute() {
             return Err(ManagedPathError::RelativeDataRoot(data_root));
         }

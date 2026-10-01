@@ -6,19 +6,22 @@
 
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
+  import { listen } from "@tauri-apps/api/event";
+  import { launcher } from "$lib/launcher/store.svelte";
   import { appendBrowsePage, formatCategoryLabel, TransientNotice } from "./modrinthBrowse";
   import {
     BROWSE_KINDS, BROWSE_SORTS, browseKindLabel, browseKindNoun, browseModrinth, browseModrinthTags,
     browseSortLabel, getModrinthProjectBrowse, installModrinth, previewModrinthInstall, quickInstallModrinth,
+    installModrinthPack, previewModrinthPack,
     LauncherBackendError,
     type BrowseKind, type BrowseSort, type ContentType, type ModrinthPreviewResponse,
     type ModrinthProjectDetails, type ModrinthSearchPage, type ProviderCategory,
-    type ProviderConflict,
+    type ProviderConflict, type ModrinthPackPreview,
   } from "$lib/backend";
   import InstallConflicts from "./InstallConflicts.svelte";
 
   let {
-    instanceId, instanceName, minecraftVersion, kind, installedProjectIds, dependencyOnlyProjectIds, onInstalled,
+    instanceId, instanceName, minecraftVersion, kind, installedProjectIds, dependencyOnlyProjectIds, onInstalled, standalonePackBrowse = false,
   }: {
     instanceId: string;
     instanceName: string;
@@ -27,13 +30,14 @@
     installedProjectIds: string[];
     dependencyOnlyProjectIds: string[];
     onInstalled: (targetInstanceId: string, targetKind: ContentType) => Promise<void>;
+    standalonePackBrowse?: boolean;
   } = $props();
 
   // browseKind is seeded once from the host's kind; hosts swap panels
   // through {#if} so a mounted browser never changes kind. A future host
   // passing a dynamic kind must key its remount explicitly.
   // svelte-ignore state_referenced_locally
-  let browseKind = $state<BrowseKind>(kind);
+  let browseKind = $state<BrowseKind>(standalonePackBrowse ? "modpack" : kind);
   let query = $state("");
   let categories = $state<string[]>([]);
   let sort = $state<BrowseSort>("relevance");
@@ -41,6 +45,11 @@
   let project = $state<ModrinthProjectDetails | null>(null);
   let versionId = $state("");
   let preview = $state<ModrinthPreviewResponse | null>(null);
+  let packPreview = $state<ModrinthPackPreview | null>(null);
+  let selectedOptional = $state<string[]>([]);
+  let previewOptional = $state<string[]>([]);
+  let packPhase = $state("");
+  let stopPackProgress: (() => void) | null = null;
   let busy = $state<"search" | "details" | "preview" | "install" | "tags" | null>(null);
   let error = $state<{ code: string; message: string } | null>(null);
   let nextOffset = $state(0);
@@ -61,6 +70,16 @@
   const notifications = new TransientNotice((message, exiting) => { notice = message; noticeExiting = exiting; });
 
   const installable = $derived(browseKind !== "modpack");
+  const optionalChanged = $derived(selectedOptional.join("\u0000") !== previewOptional.join("\u0000"));
+  const packFileCounts = $derived.by(() => {
+    const paths = [...(packPreview?.recognized.map((item) => item.path) ?? []), ...(packPreview?.unresolved ?? [])];
+    return {
+      mods: paths.filter((path) => path.startsWith("mods/")).length,
+      resourcePacks: paths.filter((path) => path.startsWith("resourcepacks/")).length,
+      shaders: paths.filter((path) => path.startsWith("shaderpacks/")).length,
+      other: paths.filter((path) => !/^(mods|resourcepacks|shaderpacks)\//.test(path)).length,
+    };
+  });
   const availableCategories = $derived.by(() => {
     const scope = browseKind === "mod" ? ["mod", "modpack"] : [browseKindProjectType(browseKind)];
     const seen = new Set<string>();
@@ -91,13 +110,14 @@
   onDestroy(() => {
     requestSerial++;
     notifications.dispose();
+    stopPackProgress?.();
   });
 
   async function search(offset = 0, term = query): Promise<void> {
     const serial = ++requestSerial;
     busy = "search";
     error = null;
-    if (offset === 0) { page = null; nextOffset = 0; project = null; preview = null; }
+    if (offset === 0) { page = null; nextOffset = 0; project = null; preview = null; packPreview = null; }
     try {
       const result = await browseModrinth({
         instanceId, provider: "modrinth", contentType: browseKind,
@@ -151,6 +171,7 @@
   }
 
   function switchKind(next: BrowseKind): void {
+    if (standalonePackBrowse && next !== "modpack") return;
     if (browseKind === next) return;
     browseKind = next;
     query = "";
@@ -159,6 +180,7 @@
     page = null;
     project = null;
     preview = null;
+    packPreview = null;
     error = null;
     blockedProjects = {};
     const cached = defaultPages.get(instanceId, browseKind, minecraftVersion);
@@ -167,6 +189,10 @@
   }
 
   onMount(() => {
+    let destroyed = false;
+    void listen<{ phase: string }>("modpack-progress", (event) => {
+      if (busy === "install" && browseKind === "modpack") packPhase = event.payload.phase;
+    }).then((stop) => { if (destroyed) stop(); else stopPackProgress = stop; });
     // The host tab mounts browse with a fixed kind; tab changes remount.
     // Initial load only — switches go through switchKind below.
     const cached = defaultPages.get(instanceId, browseKind, minecraftVersion);
@@ -176,6 +202,7 @@
     } else {
       void search(0, "");
     }
+    return () => { destroyed = true; };
   });
 
   function quickMessage(reason: unknown): string {
@@ -221,6 +248,8 @@
     busy = "details";
     error = null;
     preview = null;
+    packPreview = null;
+    selectedOptional = [];
     try {
       const result = await getModrinthProjectBrowse(instanceId, browseKind, id);
       if (serial !== requestSerial) return;
@@ -246,6 +275,50 @@
       busy = null;
     }
   }
+
+  async function inspectPack(): Promise<void> {
+    if (!project || !versionId) return;
+    busy = "preview";
+    error = null;
+    packPreview = null;
+    try {
+      packPreview = await previewModrinthPack(project.projectId, versionId, selectedOptional);
+      previewOptional = [...selectedOptional];
+    } catch (reason) { showError(reason); }
+    finally { busy = null; }
+  }
+
+  async function confirmPack(): Promise<void> {
+    if (!packPreview || optionalChanged) return;
+    const selected = packPreview;
+    busy = "install";
+    error = null;
+    packPhase = "preparingInstance";
+    try {
+      const created = await installModrinthPack(selected.projectId, selected.versionId, selectedOptional, selected.fingerprint);
+      await launcher.refreshState();
+      await launcher.runSelect(created.id);
+      packPreview = null;
+      project = null;
+      notifications.show(`${selected.name} ${selected.packVersion} installed as a new instance.`);
+    } catch (reason) { showError(reason); }
+    finally { busy = null; packPhase = ""; }
+  }
+
+  function togglePackOptional(path: string): void {
+    selectedOptional = selectedOptional.includes(path) ? selectedOptional.filter((value) => value !== path) : [...selectedOptional, path];
+  }
+
+  const packPhaseLabel = $derived(({
+    resolvingPack: "Resolving the exact pack version…",
+    downloading: "Downloading and verifying pack files…",
+    preparingInstance: "Preparing a new Fabric instance…",
+    installingGame: "Installing Minecraft and Fabric…",
+    installingOverrides: "Installing pack files and overrides…",
+    installingComponents: "Registering managed content…",
+    validating: "Validating the completed instance…",
+    complete: "Installation complete.",
+  } as Record<string, string>)[packPhase] ?? "Installing modpack…");
 
   async function confirmInstall(): Promise<void> {
     if (!project || !preview) return;
@@ -278,16 +351,18 @@
   <div class="browse-heading">
     <div>
       <h3 class="group-title">Browse Modrinth</h3>
-      <p class="group-subtitle">Results are filtered for this instance's Minecraft {minecraftVersion}{browseKind === "mod" ? " and Fabric" : ""}. Compatibility is checked before installation.</p>
+      <p class="group-subtitle">{browseKind === "modpack" ? "Choose an exact Fabric pack version. Its declared Minecraft and loader versions determine the new instance." : `Results are filtered for this instance's Minecraft ${minecraftVersion}${browseKind === "mod" ? " and Fabric" : ""}. Compatibility is checked before installation.`}</p>
     </div>
     <span class="source">Source: Modrinth</span>
   </div>
 
-  <div class="browse-kind-tabs" role="group" aria-label="Browse content type">
-    {#each BROWSE_KINDS as option (option)}
-      <button type="button" class="btn btn-quiet" aria-pressed={browseKind === option} onclick={() => switchKind(option)}>{browseKindLabel(option)}</button>
-    {/each}
-  </div>
+  {#if !standalonePackBrowse}
+    <div class="browse-kind-tabs" role="group" aria-label="Browse content type">
+      {#each BROWSE_KINDS as option (option)}
+        <button type="button" class="btn btn-quiet" aria-pressed={browseKind === option} onclick={() => switchKind(option)}>{browseKindLabel(option)}</button>
+      {/each}
+    </div>
+  {/if}
 
   <form class="browse-search" onsubmit={(event) => { event.preventDefault(); void search(); }}>
     <label>
@@ -343,7 +418,7 @@
     {#if categories.length || sort !== "relevance" || query.trim()}
       <button type="button" class="btn btn-quiet" onclick={clearFilters}>Clear filters</button>
     {/if}
-    <span class="filter-context">Minecraft {minecraftVersion}{browseKind === "mod" ? " · Fabric" : ""}</span>
+    <span class="filter-context">{browseKind === "modpack" ? "Fabric modpacks · new instance" : `Minecraft ${minecraftVersion}${browseKind === "mod" ? " · Fabric" : ""}`}</span>
   </div>
 
   {#if categories.length}
@@ -358,11 +433,11 @@
     <p class="inline-message inline-message-error" role="alert">{error.message} <code>{error.code}</code></p>
   {/if}
   {#if busy && busy !== "install"}<p class="browse-status" class:browse-loading={busy === "search" && !page} role="status"><span class="spinner" aria-hidden="true"></span> {busy === "search" ? "Loading Modrinth projects…" : busy === "details" ? "Loading versions…" : "Resolving dependencies…"}</p>{/if}
-  {#if busy === "install"}<p class="browse-status" role="status"><span class="spinner" aria-hidden="true"></span> Downloading and verifying content…</p>{/if}
+  {#if busy === "install"}<p class="browse-status" role="status"><span class="spinner" aria-hidden="true"></span> {browseKind === "modpack" ? packPhaseLabel : "Downloading and verifying content…"}</p>{/if}
 
   {#if project}
     <div class="project">
-      <button type="button" class="btn btn-quiet" onclick={() => { project = null; preview = null; }}>← Results</button>
+      <button type="button" class="btn btn-quiet" onclick={() => { project = null; preview = null; packPreview = null; }}>← Results</button>
       <h4>{project.title}</h4>
       {#if blockedProjects[project.projectId]}
         {@const blocker = blockedProjects[project.projectId]}
@@ -371,10 +446,10 @@
       <p>{project.summary}</p>
       <p class="browse-meta">License {project.license} · Modrinth project {project.projectId} · {project.loaders.join(", ") || "No loader listed"}</p>
       {#if browseKind === "shaderPack"}<p class="browse-note">The file can be installed. This instance may need a compatible shader loader before Minecraft can use it.</p>{/if}
-      {#if browseKind === "modpack"}<p class="browse-note">Modpack installation arrives in a future Aurora update. Details and versions below are read-only.</p>{/if}
+      {#if browseKind === "modpack"}<p class="browse-note">This pack will create its own Fabric instance with the Minecraft and loader versions declared by the selected pack. Aurora Client is not added.</p>{/if}
       {#if project.versions.length}
         <label class="version-choice"><span class="field-label">Version</span>
-          <select bind:value={versionId} onchange={() => preview = null}>
+          <select bind:value={versionId} onchange={() => { preview = null; packPreview = null; selectedOptional = []; }}>
             {#each project.versions as version (version.id)}
               <option value={version.id}>{version.versionNumber} · {version.versionType} · {version.name}</option>
             {/each}
@@ -382,9 +457,11 @@
         </label>
         {#if installable}
           <button type="button" class="btn" disabled={busy !== null || !versionId} onclick={inspectInstall}>Review installation</button>
+        {:else}
+          <button type="button" class="btn" disabled={busy !== null || !versionId} onclick={inspectPack}>Review pack installation</button>
         {/if}
       {:else}
-        <p class="browse-note">No compatible version is available for this instance.</p>
+        <p class="browse-note">No Fabric pack version is available.</p>
       {/if}
     </div>
   {:else if page}
@@ -411,7 +488,7 @@
                   {#if quickBusyProjectId === hit.projectId}<span class="spinner" aria-hidden="true"></span><span class="action-state">Installing…</span>{:else if installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Installed</span>{:else if blockedProjects[hit.projectId]}<span class="action-state">Blocked</span>{:else if dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Keep</span>{:else}<span aria-hidden="true">↓</span>{/if}
                 </button>
               {:else}
-                <span class="browse-only-badge" title="Modpack installation arrives in a future update">Browse only</span>
+                <span class="browse-only-badge">New instance</span>
               {/if}
               <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => openProject(hit.projectId)}>Details</button>
             </div>
@@ -448,6 +525,30 @@
       <div class="preview-actions">
         <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => preview = null}>Cancel</button>
         <button type="button" class="btn" disabled={busy !== null || installCount === 0 || !!preview.conflicts?.length} onclick={confirmInstall}>Install {installCount} file{installCount === 1 ? "" : "s"}</button>
+      </div>
+    </div>
+  {/if}
+  {#if packPreview}
+    <div class="preview" role="group" aria-label="Modpack installation preview">
+      <h4>{packPreview.name} · {packPreview.packVersion}</h4>
+      <p>Minecraft {packPreview.minecraftVersion} · Fabric Loader {packPreview.fabricLoaderVersion} · New independent instance</p>
+      <p>{packFileCounts.mods} mods · {packFileCounts.resourcePacks} resource packs · {packFileCounts.shaders} shader packs · {packFileCounts.other} other files · {packPreview.overrides.length} overrides.</p>
+      <p>{packPreview.recognized.length} Modrinth-managed components · {packPreview.unresolved.length} external verified files.</p>
+      {#if packPreview.recognized.length}
+        <details><summary>Modrinth component identities ({packPreview.recognized.length})</summary><ul>{#each packPreview.recognized as item}<li>{item.path} · Modrinth {item.projectId} / {item.versionId}</li>{/each}</ul></details>
+      {/if}
+      {#if packPreview.unresolved.length}<p class="browse-note">{packPreview.unresolved.length} external files have no Modrinth project identity. Their pack-declared hashes are verified.</p><details><summary>External file paths</summary><ul>{#each packPreview.unresolved as path}<li>{path}</li>{/each}</ul></details>{/if}
+      {#if packPreview.optional.length}
+        <fieldset class="pack-optional"><legend>Optional client files</legend>
+          {#each packPreview.optional as path}<label><input type="checkbox" checked={selectedOptional.includes(path)} onchange={() => togglePackOptional(path)} /> {path}</label>{/each}
+        </fieldset>
+        {#if optionalChanged}<p class="browse-note">Optional selection changed. Review the updated plan before installing.</p><button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={inspectPack}>Review selection</button>{/if}
+      {/if}
+      {#if packPreview.excluded.length}<details><summary>Excluded for this client ({packPreview.excluded.length})</summary><ul>{#each packPreview.excluded as path}<li>{path}</li>{/each}</ul></details>{/if}
+      {#if packPreview.overrides.length}<details><summary>Pack defaults ({packPreview.overrides.length})</summary><ul>{#each packPreview.overrides as path}<li>{path}</li>{/each}</ul></details>{/if}
+      <div class="preview-actions">
+        <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => packPreview = null}>Cancel</button>
+        <button type="button" class="btn" disabled={busy !== null || optionalChanged} onclick={confirmPack}>Install exact version</button>
       </div>
     </div>
   {/if}
@@ -505,6 +606,8 @@
   .project > .btn, .preview-actions .btn { justify-self: start; }
   .preview { margin-top: var(--space-4); }
   .preview ul { margin: 0; padding-left: var(--space-4); }
+  .pack-optional { display: grid; gap: var(--space-2); border: 1px solid var(--color-surface-edge); border-radius: var(--radius-md); }
+  .pack-optional label { display: block; }
   .preview li { margin: var(--space-1) 0; }
   .more { margin-top: var(--space-3); }
   @media (max-width: 760px) { .browse-heading, .browse-row { align-items: flex-start; } .browse-heading { flex-wrap: wrap; } .filter-context { margin-left: 0; } }

@@ -568,6 +568,7 @@ export interface InstanceSummary {
   state: "installing" | "ready";
   aurora: { channel: AuroraChannel; version: string } | null;
   platform: InstancePlatform;
+  pack?: { provider: "modrinth"; projectId: string; versionId: string; name: string; packVersion: string } | null;
   minecraftVersion: string;
   configuration: InstanceConfiguration;
 }
@@ -1276,7 +1277,7 @@ export function getModrinthProject(instanceId: string, contentType: ContentType,
   return contentInvoke("get_modrinth_project", { instanceId, contentType, projectId });
 }
 
-/** Details for any browsable kind, including modpacks (read-only identity). */
+/** Details for any browsable kind, including exact Modrinth pack versions. */
 export function getModrinthProjectBrowse(instanceId: string, contentType: BrowseKind, projectId: string): Promise<ModrinthProjectDetails> {
   return contentInvoke("get_modrinth_project", { instanceId, contentType, projectId });
 }
@@ -1287,6 +1288,31 @@ export function previewModrinthInstall(instanceId: string, contentType: ContentT
 
 export function installModrinth(instanceId: string, contentType: ContentType, projectId: string, versionId: string, previewFingerprint: string): Promise<ProviderRecord[]> {
   return contentInvoke("install_modrinth", { instanceId, contentType, projectId, versionId, previewFingerprint });
+}
+
+export interface ModrinthPackPreview {
+  provider: "modrinth";
+  projectId: string;
+  versionId: string;
+  name: string;
+  packVersion: string;
+  minecraftVersion: string;
+  fabricLoaderVersion: string;
+  archiveSha512: string;
+  recognized: { path: string; projectId: string; versionId: string; title: string }[];
+  unresolved: string[];
+  optional: string[];
+  excluded: string[];
+  overrides: string[];
+  fingerprint: string;
+}
+
+export function previewModrinthPack(projectId: string, versionId: string, selectedOptional: string[]): Promise<ModrinthPackPreview> {
+  return contentInvoke("preview_modrinth_pack", { projectId, versionId, selectedOptional });
+}
+
+export function installModrinthPack(projectId: string, versionId: string, selectedOptional: string[], fingerprint: string): Promise<InstanceSummary> {
+  return contentInvoke("install_modrinth_pack", { projectId, versionId, selectedOptional, fingerprint });
 }
 
 export function quickInstallModrinth(instanceId: string, contentType: ContentType, projectId: string): Promise<ProviderRecord[]> {

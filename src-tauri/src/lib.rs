@@ -22,8 +22,11 @@ pub mod integrity;
 pub mod launch;
 pub mod minecraft;
 pub mod mod_compatibility;
+pub mod modpacks;
 pub mod modrinth;
+pub mod mrpack;
 pub mod pack_activation;
+pub mod pack_state;
 pub mod paths;
 pub mod runtime;
 pub mod server_enrichment;
@@ -115,6 +118,8 @@ pub fn run() {
             application::browse_modrinth_tags,
             application::get_modrinth_project,
             application::get_modrinth_project_artwork,
+            application::preview_modrinth_pack,
+            application::install_modrinth_pack,
             application::preview_modrinth_install,
             application::install_modrinth,
             application::quick_install_modrinth,

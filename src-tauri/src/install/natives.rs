@@ -283,7 +283,8 @@ mod tests {
         let directory = std::env::temp_dir()
             .join("aurora-natives-test")
             .join(std::process::id().to_string())
-            .join(name);
+            .join(name)
+            .join(uuid::Uuid::new_v4().to_string());
         std::fs::create_dir_all(&directory).unwrap();
         directory
     }

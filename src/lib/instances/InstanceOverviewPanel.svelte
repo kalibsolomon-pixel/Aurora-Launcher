@@ -3,6 +3,7 @@
   import { navigation } from "$lib/launcher/navigation.svelte";
   import { configurationRequiresInstall } from "$lib/launcher/instanceStatus";
   import ReadinessRows from "$lib/instances/ReadinessRows.svelte";
+  import InstalledArtwork from "$lib/instances/InstalledArtwork.svelte";
   import type { InstanceSummary } from "$lib/backend";
 
   let { instance }: { instance: InstanceSummary } = $props();
@@ -149,7 +150,7 @@
     <div>
       <h3 class="group-title" id="release-title">Installed content</h3>
       <p class="group-subtitle">
-        The concrete Minecraft, platform, and optional Aurora configuration.
+        The concrete Minecraft, platform, and distribution identity.
       </p>
     </div>
   </div>
@@ -158,6 +159,13 @@
     <span class="group-row-title">Aurora</span>
     <span class="group-row-value">{instance.aurora ? `${instance.aurora.version} (${instance.aurora.channel}) · ${instance.auroraContentState ?? "not detected"}` : "Not configured"}</span>
   </div>
+  {#if instance.pack}
+    <div class="group-row">
+      <InstalledArtwork projectId={instance.pack.projectId} fallback="P" compact />
+      <span class="group-row-title">Modrinth pack</span>
+      <span class="group-row-value">{instance.pack.name} · {instance.pack.packVersion} · {instance.pack.projectId} / {instance.pack.versionId}</span>
+    </div>
+  {/if}
   <div class="group-row">
     <span class="group-row-title">Minecraft</span>
     <span class="group-row-value">{instance.minecraftVersion}</span>

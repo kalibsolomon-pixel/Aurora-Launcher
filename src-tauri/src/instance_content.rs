@@ -660,7 +660,10 @@ pub fn updated_state_multi(
         let old = current
             .find(identity)
             .expect("superseded identities exist in current");
-        if old.explicitly_retained {
+        // A pin follows the record even if a later removal leaves it as a
+        // non-retained dependency. Advancing a parent must not supersede that
+        // exact pinned dependency as an incidental graph replacement.
+        if old.explicitly_retained || old.pinned {
             return Err(ContentError::RequiredByInstalledContent);
         }
         let outsiders: Vec<_> = current
@@ -777,7 +780,7 @@ fn state_path(managed: &ManagedPaths, instance: &InstanceId) -> Result<PathBuf, 
     Ok(path)
 }
 
-fn validated_instance_root(
+pub(crate) fn validated_instance_root(
     managed: &ManagedPaths,
     instance: &InstanceId,
 ) -> Result<PathBuf, ContentError> {
@@ -1044,6 +1047,8 @@ pub fn scan(
 ) -> Result<ContentInventory, ContentError> {
     let directory = validate_directory(managed, instance, kind)?;
     let state = ContentState::load(managed, instance)?;
+    let pack = crate::pack_state::InstalledPack::load(managed, instance)
+        .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
     let activation = activation_knowledge(managed, instance, kind);
     let mut entries = Vec::new();
     if directory.exists() {
@@ -1053,7 +1058,19 @@ pub fn scan(
             let record = state.entries.iter().find(|record| {
                 record.content_type == kind && record.file_name.eq_ignore_ascii_case(&name)
             });
-            entries.push(inspect(&item.path(), kind, record, &activation));
+            let mut entry = inspect(&item.path(), kind, record, &activation);
+            if let Some(pack) = pack
+                .as_ref()
+                .filter(|pack| pack.owns_path(&format!("{}/{}", kind.directory_name(), name)))
+            {
+                entry.management.can_remove = false;
+                entry.management.removal_path = RemovalPath::Blocked;
+                entry.management.removal_blocked_reason = Some(format!(
+                    "Required by {} {}. Pack component removal is deferred until pack reconciliation is available.",
+                    pack.identity.name, pack.identity.pack_version
+                ));
+            }
+            entries.push(entry);
         }
     }
     let present: HashSet<_> = entries
@@ -2302,6 +2319,17 @@ fn apply_lifecycle_state_reviewed(
             return Err(ContentError::ChangedSinceScan);
         }
         let current = ContentState::load(managed, instance)?;
+        if let Some(pack) = crate::pack_state::InstalledPack::load(managed, instance)
+            .map_err(|error| ContentError::StateMalformed(error.to_string()))?
+        {
+            for old in &current.entries {
+                if pack.owns_provider(&old.identity()) && next.find(&old.identity()) != Some(old) {
+                    return Err(ContentError::UnsupportedActionWith(
+                        "This component belongs to the installed modpack; updating or removing it requires a future pack reconciliation workflow.".into(),
+                    ));
+                }
+            }
+        }
         if !acquired.is_empty() {
             validate_projected_artifacts(managed, instance, acquired, None)?;
         }
@@ -6108,6 +6136,57 @@ mod tests {
             updated_state_multi(&current, &[shared.identity()], vec![shared_new]),
             Err(ContentError::RequiredByInstalledContent)
         ));
+    }
+
+    #[test]
+    fn pinned_non_retained_dependency_is_not_superseded_by_parent_update() {
+        let root = policy_record(
+            "AAAA0001",
+            "root.jar",
+            b"old-root",
+            true,
+            ProviderOrigin::Direct,
+        );
+        let mut dependency = policy_record(
+            "BBBB0002",
+            "dep.jar",
+            b"old-dep",
+            false,
+            ProviderOrigin::Dependency,
+        );
+        dependency.pinned = true;
+        let mut current = ContentState::empty();
+        current.entries = vec![root.clone(), dependency.clone()];
+        current.entries[0].requires = vec![dependency.identity()];
+        current.validate().unwrap();
+
+        let mut new_root = policy_record(
+            "AAAA0001",
+            "root-new.jar",
+            b"new-root",
+            true,
+            ProviderOrigin::Direct,
+        );
+        new_root.version_id = "new-root".into();
+        new_root.dependencies = vec![ProviderDependency {
+            kind: DependencyKind::Required,
+            provider: "modrinth".into(),
+            project_id: dependency.project_id.clone(),
+            version_id: None,
+        }];
+        let mut new_dependency = policy_record(
+            "BBBB0002",
+            "dep-new.jar",
+            b"new-dep",
+            false,
+            ProviderOrigin::Dependency,
+        );
+        new_dependency.version_id = "new-dep".into();
+        assert!(matches!(
+            updated_state_multi(&current, &[root.identity()], vec![new_dependency, new_root]),
+            Err(ContentError::RequiredByInstalledContent)
+        ));
+        assert_eq!(current.entries[1], dependency);
     }
 
     #[test]

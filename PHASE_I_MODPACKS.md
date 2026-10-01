@@ -1,0 +1,23 @@
+# Phase I: Modrinth modpack installation
+
+Aurora accepts an exact Modrinth pack project and version ID from the UI. Rust resolves the version and its primary `.mrpack` through the official Modrinth API, verifies the published SHA-512 in the shared content-addressed cache, and parses only those verified bytes. A pack creates an independent Fabric instance; Aurora Client is never added.
+
+## Supported `.mrpack` subset
+
+The parser accepts Modrinth format version 1 for `game: minecraft` with exactly one `minecraft` and one `fabric-loader` dependency. It reads the root `modrinth.index.json` fields `versionId`, `name`, `summary`, `files`, `dependencies`, and file paths, SHA-1, SHA-512, downloads, file size, and client/server environment. Client `required` files are installed, `optional` files require explicit selection, and `unsupported` files are excluded. Common `overrides/` are overlaid by `client-overrides/`; `server-overrides/` are ignored for client instances. Other loader requirements and unknown manifest fields fail deliberately.
+
+The accepted destination roots are the game-content roots enumerated in `mrpack::destination_path`. Single-root files are limited to `options.txt`, `servers.dat`, and `optionsshaders.txt`. This strict subset protects registry, account, content, transaction, and installed-state files. Packs requiring other roots fail with a path error.
+
+## Identity and state
+
+The pack planner batches SHA-512 lookups against Modrinth's version-file API. A recognized file must agree on its exact hash, size, and content type. Recognized mods must publish Fabric and client-capable environment metadata. The pack's Minecraft version is authoritative for this exact authored composition: individual component version lists are retained as published, including when they do not list that game version. Its provider-resolved CDN URL supplies the bytes through the normal verified cache and `ProviderRecord`/`ContentState` path. The pack's own URL cannot replace that authority. An unresolved file remains an explicitly external component, acquired only from an approved `.mrpack` host with the pack's SHA-512 and SHA-1 verified. The fallback's redirects obey the same host policy. No provider identity is invented.
+
+Registry schema 5 adds an optional pack identity to the instance record. Schema 4 migrates explicitly with no pack; older supported schemas continue their existing migration path. `pack-installed.json` schema 1 stores exact pack/version/artifact identity, component ownership references and hashes, override hashes, and exclusions. Unknown schema or malformed state is never overwritten. Pack ownership is orthogonal to provider origin and retention. Recognized pack files remain normal provider records; externally sourced files do not become provider records. Installed-state validation is read-only and network-free.
+
+The pack instance remains `installing` until its game, components, overrides, content state, and pack marker validate. Ready is committed last. Pack-owned provider records are blocked from ordinary removal and managed-update mutation. Phase J will own pack update discovery, version reconciliation, user divergence, override conflict handling, and version rollback. The pinned non-retained dependency supersede check now also honors its pin, with a regression test.
+
+## Threat model
+
+The `.mrpack`, provider metadata, fallback URLs, ZIP entry names, and override bytes are untrusted. ZIP names and destinations are checked for Unix and Windows traversal, absolute/drive paths, mixed separators, special device names, case collisions, duplicate paths, and archive link entries. The index, archive, entry count, override size, and total expanded size are bounded. Overrides are read individually from the verified archive and their planned SHA-256 is checked again before activation. Targets are derived only from a validated instance ID and checked for symlink/reparse parents and collisions. The frontend supplies only project/version IDs and optional file selections, never paths, URLs, hashes, or an install plan. Install re-resolves provider authority and compares the preview fingerprint before creating an instance.
+
+The parser uses a narrow destination allowlist, so some otherwise valid packs may be rejected. A pack with contradictory published provider dependencies is rejected instead of silently changing its exact snapshot. Failed activation attempts remove only transaction-owned files whose hashes still match; if safe cleanup cannot be proven, the incomplete instance remains unavailable and reports `pack_rollback_failed` for inspection.

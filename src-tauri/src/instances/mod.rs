@@ -13,6 +13,8 @@
 //! explicitly to equivalent Fabric + Aurora records; unsupported or malformed
 //! state is never overwritten. Startup persists migration atomically, while
 //! ordinary load and complete validation remain read-only.
+//! Schema 5 adds optional exact Modrinth pack identity; schema 4 migrates
+//! additively with every historical record remaining pack-free.
 //!
 //! Instance lifecycle orchestration (create/retry/rename/select/validate and
 //! configuration updates) lives in [`lifecycle`]; Aurora's own installed state
@@ -33,8 +35,8 @@ use serde::{Deserialize, Serialize};
 use crate::distribution::ReleaseChannel;
 use crate::instances::settings::InstanceConfiguration;
 
-/// Current schema. Only the explicitly understood schemas 2 and 3 migrate.
-pub const INSTANCE_REGISTRY_SCHEMA_VERSION: u32 = 4;
+/// Schema 5 adds an optional exact Modrinth pack identity to instance records.
+pub const INSTANCE_REGISTRY_SCHEMA_VERSION: u32 = 5;
 
 /// Oldest explicitly migratable schema. Schema 3 is also supported.
 const LEGACY_REGISTRY_SCHEMA_VERSION: u32 = 2;
@@ -107,6 +109,44 @@ pub struct InstanceRecord {
     state: InstanceState,
     installed: platform::InstalledConfiguration,
     configuration: InstanceConfiguration,
+    #[serde(default)]
+    pack: Option<PackRegistryIdentity>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackRegistryIdentity {
+    pub provider: String,
+    pub project_id: String,
+    pub version_id: String,
+    pub name: String,
+    pub pack_version: String,
+}
+
+impl PackRegistryIdentity {
+    fn validate(&self) -> Result<(), InvalidInstanceRecord> {
+        if self.provider != "modrinth"
+            || self.project_id.len() != 8
+            || !self
+                .project_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric())
+            || self.version_id.len() != 8
+            || !self
+                .version_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric())
+            || self.name.trim().is_empty()
+            || self.name.len() > 256
+            || self.pack_version.trim().is_empty()
+            || self.pack_version.len() > 256
+        {
+            return Err(InvalidInstanceRecord::Configuration(
+                "invalid exact modpack identity".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// The lifecycle state of a persisted instance.
@@ -208,6 +248,7 @@ impl InstanceRecord {
             state,
             installed: platform::InstalledConfiguration::from_release(&release),
             configuration,
+            pack: None,
         };
         record.validate_content()?;
         Ok(record)
@@ -248,6 +289,7 @@ impl InstanceRecord {
             state,
             installed,
             configuration,
+            pack: None,
         };
         record.validate_content()?;
         Ok(record)
@@ -259,6 +301,21 @@ impl InstanceRecord {
 
     pub fn configuration(&self) -> &InstanceConfiguration {
         &self.configuration
+    }
+
+    pub fn pack(&self) -> Option<&PackRegistryIdentity> {
+        self.pack.as_ref()
+    }
+
+    pub fn set_pack(&mut self, pack: PackRegistryIdentity) -> Result<(), InvalidInstanceRecord> {
+        pack.validate()?;
+        if self.installed.aurora.is_some() {
+            return Err(InvalidInstanceRecord::Configuration(
+                "a modpack instance cannot contain Aurora Client".into(),
+            ));
+        }
+        self.pack = Some(pack);
+        self.validate_content()
     }
 
     /// Sets the lifecycle state (used only by lifecycle orchestration when
@@ -295,7 +352,16 @@ impl InstanceRecord {
         validate_display_name(&self.display_name)?;
         self.installed
             .validate()
-            .map_err(InvalidInstanceRecord::Configuration)
+            .map_err(InvalidInstanceRecord::Configuration)?;
+        if let Some(pack) = &self.pack {
+            pack.validate()?;
+            if self.installed.aurora.is_some() || self.installed.platform.kind() != "fabric" {
+                return Err(InvalidInstanceRecord::Configuration(
+                    "modpacks require independent Fabric instances".into(),
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -369,7 +435,8 @@ impl InstanceRegistry {
 
     /// Parses and validates registry data from JSON text.
     ///
-    /// Schema 4 parses directly. Schemas 2 and 3 — the Aurora-only shapes —
+    /// Schema 5 parses directly. Schema 4 adds no pack identity; schemas 2
+    /// and 3 — the Aurora-only shapes —
     /// migrates deterministically: identifiers, display names, lifecycle
     /// states, and release pins survive. Schema 2 derives desired settings
     /// from the pin with safe defaults; schema 3 preserves its desired
@@ -378,6 +445,24 @@ impl InstanceRegistry {
         let registry = match Self::parse_schema_version(text)? {
             Self::SCHEMA_VERSION => serde_json::from_str(text)
                 .map_err(|error| InstanceRegistryError::Malformed(error.to_string()))?,
+            4 => {
+                let mut value: serde_json::Value = serde_json::from_str(text)
+                    .map_err(|error| InstanceRegistryError::Malformed(error.to_string()))?;
+                if value
+                    .get("instances")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|instances| {
+                        instances.iter().any(|record| record.get("pack").is_some())
+                    })
+                {
+                    return Err(InstanceRegistryError::Malformed(
+                        "schema 4 cannot contain a pack identity".into(),
+                    ));
+                }
+                value["schemaVersion"] = serde_json::json!(Self::SCHEMA_VERSION);
+                serde_json::from_value(value)
+                    .map_err(|error| InstanceRegistryError::Malformed(error.to_string()))?
+            }
             LEGACY_REGISTRY_SCHEMA_VERSION | 3 => Self::migrate_legacy(text)?,
             found => {
                 return Err(InstanceRegistryError::UnsupportedSchema {
@@ -1132,14 +1217,14 @@ mod tests {
                 .matches_release_pin("1.21.11", "0.19.4")
         );
 
-        // Saving the migrated registry persists schema 3 and round-trips.
+        // Saving the migrated registry persists the current schema and round-trips.
         let directory = std::env::temp_dir().join("aurora-instances-test-migrate-save");
         let _ = std::fs::remove_dir_all(&directory);
         let saved = directory.join("instances.json");
         registry.save(&saved).unwrap();
         assert_eq!(InstanceRegistry::load(&saved).unwrap(), registry);
         let persisted = std::fs::read_to_string(&saved).unwrap();
-        assert!(persisted.contains("\"schemaVersion\": 4"));
+        assert!(persisted.contains("\"schemaVersion\": 5"));
         assert!(persisted.contains("\"configuration\""));
     }
 
@@ -1203,8 +1288,8 @@ mod tests {
             ("{ not json".to_owned(), "malformed"),
             ("{}".to_owned(), "schema version"),
             (
-                r#"{ "schemaVersion": 5, "instances": [] }"#.to_owned(),
-                "schema version 5",
+                r#"{ "schemaVersion": 6, "instances": [] }"#.to_owned(),
+                "schema version 6",
             ),
             (
                 r#"{ "schemaVersion": 1, "instances": [] }"#.to_owned(),
@@ -1306,7 +1391,7 @@ mod tests {
         assert_eq!(InstanceRegistry::load(&path).unwrap(), registry);
         let persisted: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        assert_eq!(persisted["schemaVersion"], 4);
+        assert_eq!(persisted["schemaVersion"], 5);
         assert!(persisted["instances"][0].get("release").is_none());
         assert_eq!(
             persisted["instances"][0]["installed"]["platform"],
@@ -1314,6 +1399,35 @@ mod tests {
         );
         std::fs::remove_file(&path).unwrap();
         std::fs::remove_dir(&root).unwrap();
+    }
+
+    #[test]
+    fn schema_four_migrates_without_inventing_pack_ownership() {
+        let mut registry = InstanceRegistry::empty();
+        registry.instances_mut().push(
+            InstanceRecord::new(
+                InstanceId::new("legacy-pack-free").unwrap(),
+                "Legacy",
+                InstanceState::Ready,
+                sample_pin(),
+                sample_configuration(),
+            )
+            .unwrap(),
+        );
+        let mut value = serde_json::to_value(&registry).unwrap();
+        value["schemaVersion"] = serde_json::json!(4);
+        value["instances"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("pack");
+        let migrated = InstanceRegistry::from_json(&value.to_string()).unwrap();
+        assert_eq!(migrated, registry);
+        assert!(migrated.instances()[0].pack().is_none());
+        value["instances"][0]["pack"] = serde_json::Value::Null;
+        assert!(matches!(
+            InstanceRegistry::from_json(&value.to_string()),
+            Err(InstanceRegistryError::Malformed(_))
+        ));
     }
     #[test]
     fn malformed_legacy_and_future_documents_remain_untouched() {

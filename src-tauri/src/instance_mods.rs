@@ -419,6 +419,26 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
     for (entry, reason) in inventory.entries.iter_mut().zip(blockers) {
         entry.removal_blocked_reason = reason;
     }
+    if let Some(pack) = crate::pack_state::InstalledPack::load(managed, instance)
+        .map_err(|error| ModError::State(error.to_string()))?
+    {
+        for entry in &mut inventory.entries {
+            let base = entry
+                .file_name
+                .strip_suffix(".disabled")
+                .unwrap_or(&entry.file_name);
+            if pack.owns_path(&format!("mods/{base}")) {
+                let reason = format!(
+                    "Required by {} {}. Pack component changes require a future reconciliation workflow.",
+                    pack.identity.name, pack.identity.pack_version
+                );
+                entry.can_remove = false;
+                entry.can_toggle = false;
+                entry.removal_blocked_reason = Some(reason.clone());
+                entry.action_blocked_reason = Some(reason);
+            }
+        }
+    }
     Ok(inventory)
 }
 

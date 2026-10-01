@@ -230,6 +230,7 @@ pub struct Sha512ArtifactSource {
     url: Url,
     sha512: Sha512Digest,
     size_bytes: Option<u64>,
+    mrpack_hosts: bool,
 }
 
 impl Sha512ArtifactSource {
@@ -249,6 +250,21 @@ impl Sha512ArtifactSource {
         Self::build(url, sha512, size_bytes, HostPolicy::LoopbackHttpAllowed)
     }
 
+    /// Pack-declared fallback source. Every redirect must remain on one of
+    /// the format's explicitly permitted artifact hosts.
+    pub fn mrpack_fallback(
+        url: &str,
+        sha512: &str,
+        size_bytes: Option<u64>,
+    ) -> Result<Self, InvalidArtifactSource> {
+        let mut source = Self::build(url, sha512, size_bytes, HostPolicy::LoopbackHttpAllowed)?;
+        if !mrpack_allowed_url(&source.url) {
+            return Err(InvalidArtifactSource::InsecureUrl(url.to_owned()));
+        }
+        source.mrpack_hosts = true;
+        Ok(source)
+    }
+
     fn build(
         url: &str,
         sha512: &str,
@@ -262,6 +278,7 @@ impl Sha512ArtifactSource {
             url: validate_transport_url(url, policy)?,
             sha512: Sha512Digest::parse(sha512).map_err(InvalidArtifactSource::InvalidSha512)?,
             size_bytes,
+            mrpack_hosts: false,
         })
     }
 
@@ -281,7 +298,11 @@ pub async fn download_sha512(
     destination: &Path,
     options: &DownloadOptions,
 ) -> Result<DownloadedFile, DownloadError> {
-    let response = send_request(source.url(), options).await?;
+    let response = if source.mrpack_hosts {
+        send_mrpack_request(source.url(), options).await?
+    } else {
+        send_request(source.url(), options).await?
+    };
     check_declared_length(&response, source.size_bytes())?;
     let mut sha512 = Sha512::new();
     let mut sha256 = Sha256::new();
@@ -610,6 +631,65 @@ async fn send_request(
     }
 
     Ok(response)
+}
+
+/// Pack fallback downloads stay on the hosts permitted by the mrpack format,
+/// including every redirect destination.
+async fn send_mrpack_request(
+    url: &Url,
+    options: &DownloadOptions,
+) -> Result<reqwest::Response, DownloadError> {
+    ensure_rustls_crypto_provider();
+    let max_redirects = options.max_redirects;
+    let client = reqwest::Client::builder()
+        .user_agent(USER_AGENT)
+        .connect_timeout(options.connect_timeout)
+        .read_timeout(options.idle_read_timeout)
+        .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+            if !mrpack_allowed_url(attempt.url()) {
+                return attempt.stop();
+            }
+            let original = attempt
+                .previous()
+                .first()
+                .expect("redirect attempts always include the original URL");
+            let hops_taken = attempt.previous().len().saturating_sub(1);
+            match decide_redirect(original, attempt.url(), hops_taken, max_redirects) {
+                RedirectDecision::Follow => attempt.follow(),
+                RedirectDecision::Refuse(reason) => {
+                    attempt.error(RedirectPolicyViolation { reason })
+                }
+            }
+        }))
+        .build()
+        .expect("pack download client configuration is valid");
+    let response = client
+        .get(url.clone())
+        .send()
+        .await
+        .map_err(DownloadError::from_transport)?;
+    if !response.status().is_success() {
+        return Err(DownloadError::HttpStatus {
+            status: response.status().as_u16(),
+        });
+    }
+    Ok(response)
+}
+
+pub(crate) fn mrpack_allowed_url(url: &Url) -> bool {
+    if !url.username().is_empty() || url.password().is_some() {
+        return false;
+    }
+    #[cfg(test)]
+    if url.scheme() == "http" && is_loopback_host(url) {
+        return true;
+    }
+    url.scheme() == "https"
+        && url.port().is_none()
+        && matches!(
+            url.host_str(),
+            Some("cdn.modrinth.com" | "github.com" | "raw.githubusercontent.com" | "gitlab.com")
+        )
 }
 
 /// A server-declared length that already disagrees with the expected value is
@@ -1376,6 +1456,39 @@ mod tests {
                 "{url} must not count as a loopback test source"
             );
         }
+    }
+
+    #[test]
+    fn mrpack_fallback_hosts_are_exact_and_redirects_cannot_escape() {
+        let digest = "a".repeat(128);
+        for url in [
+            "https://cdn.modrinth.com/data/a/file.jar",
+            "https://github.com/owner/repo/releases/file.jar",
+            "https://raw.githubusercontent.com/owner/repo/main/file.jar",
+            "https://gitlab.com/owner/repo/-/raw/main/file.jar",
+        ] {
+            assert!(Sha512ArtifactSource::mrpack_fallback(url, &digest, Some(1)).is_ok());
+        }
+        for url in [
+            "https://cdn.modrinth.com.evil.invalid/file.jar",
+            "https://cdn.modrinth.com:444/file.jar",
+            "https://user:password@github.com/file.jar",
+            "http://github.com/file.jar",
+        ] {
+            assert!(Sha512ArtifactSource::mrpack_fallback(url, &digest, Some(1)).is_err());
+        }
+        let original = Url::parse("https://github.com/file.jar").unwrap();
+        let escaped = Url::parse("https://evil.invalid/file.jar").unwrap();
+        assert!(!mrpack_allowed_url(&escaped));
+        assert!(matches!(
+            decide_redirect(
+                &original,
+                &Url::parse("http://github.com/file.jar").unwrap(),
+                0,
+                MAX_REDIRECTS
+            ),
+            RedirectDecision::Refuse(_)
+        ));
     }
 
     #[test]

@@ -137,6 +137,7 @@ pub struct InstanceSummary {
     aurora_content_state: Option<String>,
     minecraft_version: String,
     platform: crate::instances::platform::PlatformPin,
+    pack: Option<crate::instances::PackRegistryIdentity>,
     /// The desired configuration, verbatim. The UI edits a draft and sends
     /// the whole proposed configuration to `update_instance_configuration`.
     configuration: InstanceConfigurationDto,
@@ -152,6 +153,7 @@ impl InstanceSummary {
             aurora_content_state: None,
             minecraft_version: record.installed().minecraft_version.clone(),
             platform: record.installed().platform.clone(),
+            pack: record.pack().cloned(),
             configuration: InstanceConfigurationDto::from_configuration(record.configuration()),
         }
     }
@@ -2970,8 +2972,18 @@ pub async fn browse_modrinth(
             "This provider is not available in Aurora yet.",
         ));
     }
-    let managed = managed_paths(&app)?;
-    let (_, context) = provider_context(&managed, &request.instance_id)?;
+    let context = if request.content_type == crate::modrinth::BrowseKind::Modpack
+        && request.instance_id.is_empty()
+    {
+        crate::modrinth::Context {
+            minecraft_version: String::new(),
+            loader: "fabric".into(),
+            fabric_api_protected: false,
+        }
+    } else {
+        let managed = managed_paths(&app)?;
+        provider_context(&managed, &request.instance_id)?.1
+    };
     crate::modrinth::Client::official()
         .search_browse(
             &context,
@@ -3009,7 +3021,21 @@ pub async fn get_modrinth_project(
     request: ModrinthProjectRequest,
 ) -> Result<crate::modrinth::ProjectDetails, CommandError> {
     let managed = managed_paths(&app)?;
-    let (instance, context) = provider_context(&managed, &request.instance_id)?;
+    let (instance, context) = if request.content_type == crate::modrinth::BrowseKind::Modpack
+        && request.instance_id.is_empty()
+    {
+        (
+            None,
+            crate::modrinth::Context {
+                minecraft_version: String::new(),
+                loader: "fabric".into(),
+                fabric_api_protected: false,
+            },
+        )
+    } else {
+        let (instance, context) = provider_context(&managed, &request.instance_id)?;
+        (Some(instance), context)
+    };
     let mut details = crate::modrinth::Client::official()
         .details_browse(&context, request.content_type, &request.project_id)
         .await
@@ -3017,6 +3043,12 @@ pub async fn get_modrinth_project(
     // Modpacks browse with provider identity only: no environment resolution,
     // no install planning. Phase I attaches the .mrpack pipeline.
     if let Some(kind) = request.content_type.content_type() {
+        let instance = instance.ok_or_else(|| {
+            CommandError::new(
+                "instance_not_found",
+                "An instance is required for content browsing.",
+            )
+        })?;
         let state = provider_state(&managed, &instance)?;
         // Keep Details available even if all candidates are blocked: its
         // explicit preview supplies the concrete first candidate error.
@@ -3052,6 +3084,64 @@ pub async fn get_modrinth_project_artwork(
     // is touched only for a project whose artwork is not yet stored.
     let managed = managed_paths(&app).ok()?;
     crate::artwork::cached_artwork(&managed, &request.project_id).await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthPackRequest {
+    project_id: String,
+    version_id: String,
+    #[serde(default)]
+    selected_optional: Vec<String>,
+    fingerprint: Option<String>,
+}
+
+#[tauri::command]
+pub async fn preview_modrinth_pack(
+    app: AppHandle,
+    request: ModrinthPackRequest,
+) -> Result<crate::modpacks::PackPreview, CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::modpacks::preview(
+        &managed,
+        &crate::modrinth::Client::official(),
+        &request.project_id,
+        &request.version_id,
+        &request.selected_optional,
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
+}
+
+#[tauri::command]
+pub async fn install_modrinth_pack(
+    app: AppHandle,
+    request: ModrinthPackRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let fingerprint = request.fingerprint.ok_or_else(|| {
+        CommandError::new(
+            "pack_preview_required",
+            "Review the exact pack version before installing it.",
+        )
+    })?;
+    let managed = managed_paths(&app)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("pack_configuration_invalid", error.to_string()))?;
+    let record = crate::modpacks::install(
+        &managed,
+        &endpoints,
+        &crate::modrinth::Client::official(),
+        &request.project_id,
+        &request.version_id,
+        &request.selected_optional,
+        &fingerprint,
+        &mut |phase| {
+            let _ = app.emit("modpack-progress", serde_json::json!({ "phase": phase }));
+        },
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))?;
+    Ok(InstanceSummary::from_record(&record))
 }
 
 #[tauri::command]

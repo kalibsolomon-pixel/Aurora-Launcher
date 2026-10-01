@@ -278,8 +278,16 @@ pub async fn create_instance(
         registry.save(registry_path)?;
     }
 
-    install_instance_components(managed, registry_path, endpoints, &record, progress, faults)
-        .await?;
+    install_instance_components(
+        managed,
+        registry_path,
+        endpoints,
+        &record,
+        progress,
+        faults,
+        true,
+    )
+    .await?;
 
     // The registry now holds the ready record; mirror it on the returned
     // value.
@@ -291,6 +299,132 @@ pub async fn create_instance(
     select_instance_if_unselected(config_path, record.id())?;
 
     Ok(record)
+}
+
+/// Creates the game foundation for a Modrinth pack while retaining the
+/// `installing` registry state. Pack files, owned overrides, and pack state
+/// must be installed and validated before `complete_pack_instance` is called.
+pub async fn begin_pack_instance(
+    managed: &ManagedPaths,
+    registry_path: &Path,
+    endpoints: &InstanceEndpoints,
+    request: CreateInstanceRequest,
+    pack_identity: super::PackRegistryIdentity,
+    progress: &mut (dyn FnMut(InstanceProgress) + Send),
+) -> Result<InstanceRecord, InstanceError> {
+    request.configuration().validate()?;
+    if request.configuration().aurora_enabled()
+        || request.configuration().loader().kind() != super::settings::LoaderKind::Fabric
+    {
+        return Err(InstanceError::ReleaseInvalid(
+            "a Modrinth pack requires an independent Fabric instance without Aurora".into(),
+        ));
+    }
+    progress(report(InstancePhase::ResolvingRelease, None));
+    let installed = resolve_installed_configuration(endpoints, request.configuration()).await?;
+    let instance_id = allocate_instance_id(managed, registry_path)?;
+    let mut record = InstanceRecord::from_installed(
+        instance_id,
+        request.display_name,
+        InstanceState::Installing,
+        installed,
+        request.configuration,
+    )?;
+    record.set_pack(pack_identity)?;
+    {
+        let _guard = registry_lock();
+        let mut registry = InstanceRegistry::load(registry_path)?;
+        registry.instances_mut().push(record.clone());
+        registry.save(registry_path)?;
+    }
+    install_instance_components(
+        managed,
+        registry_path,
+        endpoints,
+        &record,
+        progress,
+        InstanceFaults::default(),
+        false,
+    )
+    .await?;
+    Ok(record)
+}
+
+/// The pack marker and all owned bytes must already be present. This is the
+/// only path that promotes a pack instance from Installing to Ready.
+pub fn complete_pack_instance(
+    managed: &ManagedPaths,
+    registry_path: &Path,
+    config_path: &Path,
+    instance: &InstanceId,
+) -> Result<InstanceRecord, InstanceError> {
+    let pack = crate::pack_state::InstalledPack::load(managed, instance)
+        .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?
+        .ok_or_else(|| InstanceError::ReleaseInvalid("pack installed state is missing".into()))?;
+    pack.validate_installed(managed)
+        .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
+    let mut record = {
+        let _guard = registry_lock();
+        let mut registry = InstanceRegistry::load(registry_path)?;
+        let stored = registry
+            .find(instance)
+            .ok_or_else(|| InstanceError::NotFound {
+                instance_id: instance.to_string(),
+            })?;
+        if stored.state() != InstanceState::Installing {
+            return Err(InstanceError::NotReady {
+                instance_id: instance.to_string(),
+                reason: "pack creation is no longer in the installing state".into(),
+            });
+        }
+        let validation = validate_instance(managed, &registry, instance)?;
+        if !validation.problems.is_empty() {
+            return Err(InstanceError::ValidationFailed {
+                instance_id: instance.to_string(),
+                problems: validation
+                    .problems
+                    .iter()
+                    .map(|problem| format!("{}: {}", problem.component, problem.reason))
+                    .collect(),
+            });
+        }
+        let stored = registry.find_mut(instance).expect("checked above");
+        stored.set_state(InstanceState::Ready);
+        let result = stored.clone();
+        registry.save(registry_path)?;
+        result
+    };
+    // The ready registry write is the commit. A failed convenience selection
+    // must not turn a committed installation into a reported rollback case.
+    let _ = select_instance_if_unselected(config_path, instance);
+    record.set_state(InstanceState::Ready);
+    Ok(record)
+}
+
+/// Remove only the Installing registration of a newly created pack after its
+/// exact transaction-owned files have been cleaned up. Never removes files.
+pub(crate) fn abandon_pack_instance(
+    registry_path: &Path,
+    instance: &InstanceId,
+) -> Result<(), InstanceError> {
+    let _guard = registry_lock();
+    let mut registry = InstanceRegistry::load(registry_path)?;
+    let record = registry
+        .find(instance)
+        .ok_or_else(|| InstanceError::NotFound {
+            instance_id: instance.to_string(),
+        })?;
+    if record.state() != InstanceState::Installing || record.pack().is_none() {
+        return Err(InstanceError::NotReady {
+            instance_id: instance.to_string(),
+            reason: "only a pending pack registration can be abandoned".into(),
+        });
+    }
+    registry
+        .instances_mut()
+        .retain(|record| record.id() != instance);
+    registry.save(registry_path)?;
+    Ok(())
 }
 
 /// Retries the installation of an instance whose creation did not finish.
@@ -330,8 +464,16 @@ pub async fn retry_instance_install(
         record
     };
 
-    install_instance_components(managed, registry_path, endpoints, &record, progress, faults)
-        .await?;
+    install_instance_components(
+        managed,
+        registry_path,
+        endpoints,
+        &record,
+        progress,
+        faults,
+        true,
+    )
+    .await?;
 
     // The registry now holds the ready record; mirror it on the returned
     // value.
@@ -644,8 +786,16 @@ pub async fn install_instance_configuration(
         updated
     };
 
-    install_instance_components(managed, registry_path, endpoints, &record, progress, faults)
-        .await?;
+    install_instance_components(
+        managed,
+        registry_path,
+        endpoints,
+        &record,
+        progress,
+        faults,
+        true,
+    )
+    .await?;
 
     record.set_state(InstanceState::Ready);
     select_instance_if_unselected(config_path, record.id())?;
@@ -661,6 +811,7 @@ async fn install_instance_components(
     record: &InstanceRecord,
     progress: &mut (dyn FnMut(InstanceProgress) + Send),
     faults: InstanceFaults,
+    finish: bool,
 ) -> Result<(), InstanceError> {
     let started = std::time::Instant::now();
     let release = resolve_optional_aurora(endpoints, record)?;
@@ -706,6 +857,13 @@ async fn install_instance_components(
         .await?;
     }
     let aurora_finished = std::time::Instant::now();
+
+    // A pack instance adds its exact provider content and overrides before
+    // validation and the ready commit. The ordinary instance path continues
+    // through unchanged.
+    if !finish {
+        return Ok(());
+    }
 
     progress(report(InstancePhase::Validating, None));
     let registry = InstanceRegistry::load(registry_path)?;
@@ -1308,6 +1466,35 @@ pub fn validate_instance(
                 });
             }
         }
+    }
+    match crate::pack_state::InstalledPack::load(managed, record.id())
+        .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?
+    {
+        Some(pack) => {
+            if record.pack().is_none_or(|expected| {
+                expected.provider != pack.identity.provider
+                    || expected.project_id != pack.identity.project_id
+                    || expected.version_id != pack.identity.version_id
+                    || expected.name != pack.identity.name
+                    || expected.pack_version != pack.identity.pack_version
+            }) {
+                problems.push(InstanceProblem {
+                    component: "modpack",
+                    reason: "the installed pack identity differs from the instance registry".into(),
+                });
+            }
+            if let Err(error) = pack.validate_installed(managed) {
+                problems.push(InstanceProblem {
+                    component: "modpack",
+                    reason: error.to_string(),
+                });
+            }
+        }
+        None if record.pack().is_some() => problems.push(InstanceProblem {
+            component: "modpack",
+            reason: "the installed pack marker is missing".into(),
+        }),
+        None => {}
     }
     let status = if record.state() == InstanceState::Installing {
         InstanceStatus::Installing

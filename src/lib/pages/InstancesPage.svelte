@@ -7,6 +7,9 @@
   } from "$lib/launcher/instanceStatus";
   import { getAuroraCompatibility, type AuroraCompatibility, type InstanceLoader, type InstanceSummary } from "$lib/backend";
   import { creationPlatforms, creationBlocked } from "$lib/instances/configurationChoices";
+  import ModrinthBrowse from "$lib/instances/ModrinthBrowse.svelte";
+
+  let browsingPacks = $state(false);
 
   const platforms = $derived(creationPlatforms(launcher.launcherState?.platformCapabilities ?? []));
   const selectedCapability = $derived(platforms.find(capability => capability.kind === launcher.createPlatform));
@@ -90,6 +93,16 @@
       <p class="page-subtitle">Isolated Minecraft installations Aurora launches from.</p>
     </div>
   </header>
+
+  <section class="group" aria-label="Modrinth modpacks">
+    <div class="group-heading">
+      <div><h3 class="group-title">Modrinth modpacks</h3><p class="group-subtitle">Choose a published pack version to create its own Fabric instance.</p></div>
+      <button type="button" class="btn" aria-expanded={browsingPacks} onclick={() => browsingPacks = !browsingPacks}>{browsingPacks ? "Close Modpacks" : "Browse Modpacks"}</button>
+    </div>
+    {#if browsingPacks}
+      <ModrinthBrowse instanceId="" instanceName="" minecraftVersion="" kind="mod" installedProjectIds={[]} dependencyOnlyProjectIds={[]} onInstalled={async () => {}} standalonePackBrowse />
+    {/if}
+  </section>
 
   {#snippet createSection()}
   <section class="group" aria-labelledby="create-title">

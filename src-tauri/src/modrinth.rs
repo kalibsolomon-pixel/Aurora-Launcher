@@ -272,10 +272,10 @@ impl Client {
         }
         let mut url = self.endpoint(&["search"])?;
         let project_type = kind.project_type();
-        let mut facets = vec![
-            vec![format!("project_type:{project_type}")],
-            vec![format!("versions:{}", context.minecraft_version)],
-        ];
+        let mut facets = vec![vec![format!("project_type:{project_type}")]];
+        if kind != BrowseKind::Modpack {
+            facets.push(vec![format!("versions:{}", context.minecraft_version)]);
+        }
         if kind == BrowseKind::Mod {
             facets.push(vec![format!("categories:{}", context.loader)]);
             facets.push(
@@ -315,10 +315,11 @@ impl Client {
                 .into_iter()
                 .filter(|hit| {
                     hit.project_type == project_type
-                        && hit
-                            .versions
-                            .iter()
-                            .any(|version| version == &context.minecraft_version)
+                        && (kind == BrowseKind::Modpack
+                            || hit
+                                .versions
+                                .iter()
+                                .any(|version| version == &context.minecraft_version))
                         && (kind != BrowseKind::Mod
                             || hit.environment.iter().any(|env| client_environment(env)))
                 })
@@ -401,6 +402,129 @@ impl Client {
         self.version(id).await
     }
 
+    /// Resolve an exact Modrinth modpack version from provider authority.
+    /// The frontend supplies identity only; neither a URL nor a digest can
+    /// cross into this source. The selected version is never substituted.
+    pub async fn pack_artifact(
+        &self,
+        project_id: &str,
+        version_id: &str,
+    ) -> Result<PackArtifact, Error> {
+        let project = self.project(project_id).await?;
+        if project.project_type != "modpack" {
+            return Err(Error::InvalidRequest);
+        }
+        let version = self.version(version_id).await?;
+        if version.project_id != project.id {
+            return Err(Error::InvalidRequest);
+        }
+        let file = version
+            .files
+            .iter()
+            .find(|file| file.primary)
+            .or_else(|| {
+                version
+                    .files
+                    .iter()
+                    .find(|file| file.filename.ends_with(".mrpack"))
+            })
+            .filter(|file| file.filename.to_ascii_lowercase().ends_with(".mrpack") && file.size > 0)
+            .ok_or(Error::InvalidResponse)?;
+        let source = self.official_file_source(&file.url, &file.hashes.sha512, file.size)?;
+        Ok(PackArtifact {
+            project_id: project.id,
+            version_id: version.id,
+            title: project.title,
+            version_number: version.version_number,
+            game_versions: version.game_versions,
+            loaders: version.loaders,
+            sha512: file.hashes.sha512.to_ascii_lowercase(),
+            source,
+        })
+    }
+
+    /// Turn a hash-recognized pack entry into a normal provider plan, using
+    /// Modrinth's file URL rather than the URL embedded in the pack.
+    pub async fn pack_component_plan(
+        &self,
+        recognized: &RecognizedFile,
+        destination: &str,
+        expected_size: u64,
+        _minecraft_version: &str,
+    ) -> Result<ProviderInstallPlan, Error> {
+        let (directory, file_name) = destination.split_once('/').ok_or(Error::InvalidRequest)?;
+        let kind = match directory {
+            "mods" => ContentType::Mod,
+            "resourcepacks" => ContentType::ResourcePack,
+            "shaderpacks" => ContentType::ShaderPack,
+            _ => return Err(Error::InvalidRequest),
+        };
+        if file_name.contains('/')
+            || crate::instance_content::validate_file_name(file_name).is_err()
+        {
+            return Err(Error::InvalidRequest);
+        }
+        let project = self.project(&recognized.project_id).await?;
+        if content_type(&project.project_type)? != kind
+            || recognized.file_size != expected_size
+            || (kind == ContentType::Mod
+                && (!recognized.loaders.iter().any(|loader| loader == "fabric")
+                    || !pack_client_environment(&recognized.environment)))
+        {
+            return Err(Error::DependencyConflict);
+        }
+        let source = self.official_file_source(
+            &recognized.official_url,
+            &recognized.queried_sha512,
+            recognized.file_size,
+        )?;
+        Ok(ProviderInstallPlan {
+            content_type: kind,
+            provider: "modrinth".into(),
+            project_id: recognized.project_id.clone(),
+            version_id: recognized.version_id.clone(),
+            file_id: recognized.file_name.clone(),
+            file_name: file_name.into(),
+            display_version: Some(recognized.version_number.clone()),
+            compatibility: ContentCompatibility {
+                minecraft_versions: recognized.game_versions.clone(),
+                loader: (kind == ContentType::Mod).then(|| "fabric".into()),
+                environment: Some(recognized.environment.clone()),
+            },
+            dependencies: recognized.dependencies.clone(),
+            source: ProviderArtifactSource::Sha512(source),
+        })
+    }
+
+    fn official_file_source(
+        &self,
+        raw: &str,
+        sha512: &str,
+        size: u64,
+    ) -> Result<Sha512ArtifactSource, Error> {
+        let url = Url::parse(raw).map_err(|_| Error::InvalidResponse)?;
+        if !url.username().is_empty() || url.password().is_some() {
+            return Err(Error::InvalidResponse);
+        }
+        if url.scheme() == "https"
+            && url.host_str() == Some("cdn.modrinth.com")
+            && url.port().is_none()
+        {
+            return Sha512ArtifactSource::https(raw, sha512, Some(size))
+                .map_err(|_| Error::InvalidResponse);
+        }
+        #[cfg(test)]
+        if self.base.scheme() == "http"
+            && crate::downloads::is_loopback_host(&self.base)
+            && url.scheme() == "http"
+            && crate::downloads::is_loopback_host(&url)
+        {
+            return Sha512ArtifactSource::loopback_http_for_testing(raw, sha512, Some(size))
+                .map_err(|_| Error::InvalidResponse);
+        }
+        Err(Error::InvalidResponse)
+    }
+
     async fn versions(
         &self,
         context: &Context,
@@ -421,10 +545,12 @@ impl Client {
         let mut url = self.endpoint(&["project", project_id, "version"])?;
         {
             let mut pairs = url.query_pairs_mut();
-            pairs.append_pair(
-                "game_versions",
-                &serde_json::to_string(&[&context.minecraft_version]).unwrap(),
-            );
+            if kind != BrowseKind::Modpack {
+                pairs.append_pair(
+                    "game_versions",
+                    &serde_json::to_string(&[&context.minecraft_version]).unwrap(),
+                );
+            }
             if kind == BrowseKind::Mod {
                 pairs.append_pair(
                     "loaders",
@@ -745,7 +871,10 @@ impl Client {
     /// Batched version-file lookup, at most [`MAX_HASH_BATCH`] hashes per
     /// request. The response is verified hash-by-hash: every returned version
     /// must publish one of the queried digests among its files.
-    async fn version_files_by_hashes(&self, hashes: &[String]) -> Result<Vec<VersionDto>, Error> {
+    async fn version_files_by_hashes(
+        &self,
+        hashes: &[String],
+    ) -> Result<Vec<(String, VersionDto)>, Error> {
         let mut url = self.endpoint(&["version_files"])?;
         let body = serde_json::json!({
             "algorithm": "sha512",
@@ -764,7 +893,7 @@ impl Client {
             {
                 return Err(Error::InvalidResponse);
             }
-            versions.push(version);
+            versions.push((hash, version));
         }
         Ok(versions)
     }
@@ -786,15 +915,15 @@ impl Client {
         for chunk in unique.chunks(MAX_HASH_BATCH) {
             let versions = if chunk.len() == 1 {
                 match self.version_file_by_hash(&chunk[0]).await {
-                    Ok(version) => vec![version],
+                    Ok(version) => vec![(chunk[0].clone(), version)],
                     Err(Error::NotFound) => Vec::new(),
                     Err(error) => return Err(error),
                 }
             } else {
                 self.version_files_by_hashes(chunk).await?
             };
-            for version in versions {
-                recognized.push(verified_recognition(chunk, version)?);
+            for (hash, version) in versions {
+                recognized.push(verified_recognition(&[hash], version)?);
             }
         }
         Ok(recognized)
@@ -819,6 +948,8 @@ pub struct RecognizedFile {
     pub dependencies: Vec<ProviderDependency>,
     pub file_name: String,
     pub file_size: u64,
+    #[serde(skip_serializing)]
+    pub(crate) official_url: String,
 }
 
 fn validate_sha512(hash: &str) -> Result<String, Error> {
@@ -881,6 +1012,7 @@ fn verified_recognition(queried: &[String], version: VersionDto) -> Result<Recog
         dependencies,
         file_name: file.filename.clone(),
         file_size: file.size,
+        official_url: file.url.clone(),
     })
 }
 
@@ -912,6 +1044,13 @@ fn client_environment(value: &str) -> bool {
     CLIENT_ENVIRONMENTS.contains(&value) || value == "unknown"
 }
 
+/// A pack's explicit client file requirement can include a provider version
+/// whose client installation is optional (or useful for singleplayer). Only
+/// dedicated-server-only files are incompatible with a physical client.
+fn pack_client_environment(value: &str) -> bool {
+    client_environment(value) || matches!(value, "server_only" | "server_only_client_optional")
+}
+
 fn content_type(project_type: &str) -> Result<ContentType, Error> {
     match project_type {
         "mod" => Ok(ContentType::Mod),
@@ -926,6 +1065,9 @@ fn compatible(context: &Context, kind: ContentType, version: &VersionDto) -> boo
 }
 
 fn compatible_browse(context: &Context, kind: BrowseKind, version: &VersionDto) -> bool {
+    if kind == BrowseKind::Modpack {
+        return version.loaders.iter().any(|loader| loader == "fabric");
+    }
     if context.loader != "fabric" {
         return false;
     }
@@ -1206,6 +1348,19 @@ impl Graph<'_> {
 pub struct Resolved {
     pub preview: InstallPreview,
     pub plans: Vec<ProviderInstallPlan>,
+}
+
+/// Verified-acquisition input for exactly one provider-owned pack version.
+/// The source is Rust-only; UI previews expose only its identity and digest.
+pub struct PackArtifact {
+    pub project_id: String,
+    pub version_id: String,
+    pub title: String,
+    pub version_number: String,
+    pub game_versions: Vec<String>,
+    pub loaders: Vec<String>,
+    pub sha512: String,
+    pub source: Sha512ArtifactSource,
 }
 
 /// Candidate-discovery evidence for one managed record. Ordering is provider
@@ -2405,6 +2560,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn batch_lookup_preserves_each_file_hash_within_one_version() {
+        let first = hash_of(71);
+        let second = hash_of(72);
+        let version = lookup_version("00000071", "AAAABBBB", &first);
+        let mut version = version;
+        let mut other = version["files"][0].clone();
+        other["hashes"]["sha512"] = serde_json::json!(second);
+        other["filename"] = serde_json::json!("second.jar");
+        version["files"].as_array_mut().unwrap().push(other);
+        let server = TestServer::spawn(Arc::new(move |_: &TestRequest| {
+            let mapped = serde_json::Map::from_iter([
+                (first.clone(), version.clone()),
+                (second.clone(), version.clone()),
+            ]);
+            TestResponse::ok(&serde_json::to_vec(&mapped).unwrap())
+        }));
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        let found = client
+            .lookup_files(&[hash_of(71), hash_of(72)])
+            .await
+            .unwrap();
+        assert_eq!(found.len(), 2);
+        assert!(
+            found
+                .iter()
+                .any(|item| item.queried_sha512 == hash_of(71) && item.file_name != "second.jar")
+        );
+        assert!(
+            found
+                .iter()
+                .any(|item| item.queried_sha512 == hash_of(72) && item.file_name == "second.jar")
+        );
+    }
+
+    #[test]
+    fn pack_environment_accepts_singleplayer_and_rejects_dedicated_server_only() {
+        for value in [
+            "client_only",
+            "client_and_server",
+            "client_only_server_optional",
+            "server_only_client_optional",
+            "server_only",
+            "singleplayer_only",
+            "client_or_server",
+            "client_or_server_prefers_both",
+            "unknown",
+        ] {
+            assert!(pack_client_environment(value), "{value}");
+        }
+        for value in ["dedicated_server_only", "future_value"] {
+            assert!(!pack_client_environment(value), "{value}");
+        }
+    }
+
+    #[tokio::test]
     async fn batch_lookup_rejects_an_unmatched_version() {
         let hashes = vec![hash_of(10), hash_of(11)];
         let server = TestServer::spawn(Arc::new(move |request: &TestRequest| {
@@ -2995,6 +3205,33 @@ mod tests {
                 .details_browse(&context(), BrowseKind::Mod, "PACK0001")
                 .await,
             Err(Error::NoCompatibleVersion)
+        ));
+    }
+
+    #[tokio::test]
+    async fn exact_pack_artifact_uses_provider_identity_and_published_sha512() {
+        let mut routes = HashMap::new();
+        routes.insert(
+            "/v2/project/PACK0001".into(),
+            project("PACK0001", "modpack"),
+        );
+        routes.insert("/v2/version/VERS0001".into(), json!({
+            "id": "VERS0001", "project_id": "PACK0001", "name": "Pack 1", "version_number": "1.0",
+            "version_type": "release", "date_published": "2026-01-01T00:00:00Z",
+            "game_versions": ["1.21.1"], "loaders": ["fabric"], "environment": "client_only",
+            "files": [{ "hashes": {"sha512": "a".repeat(128)}, "url": "https://cdn.modrinth.com/data/PACK0001/versions/VERS0001/pack.mrpack", "filename": "pack.mrpack", "primary": true, "size": 12, "file_type": null }],
+            "dependencies": []
+        }));
+        let source = server(routes);
+        let client = Client::for_testing(&format!("{}/v2/", source.base_url()));
+        // The provider version id is exact; another project or version is
+        // rejected rather than silently falling back to the newest release.
+        let pack = client.pack_artifact("PACK0001", "VERS0001").await.unwrap();
+        assert_eq!(pack.version_id, "VERS0001");
+        assert_eq!(pack.sha512, "a".repeat(128));
+        assert!(matches!(
+            client.pack_artifact("PACK0001", "VERS0002").await,
+            Err(Error::NotFound)
         ));
     }
 }

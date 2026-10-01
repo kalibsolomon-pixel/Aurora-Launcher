@@ -443,7 +443,8 @@ mod tests {
     fn test_directory(name: &str) -> PathBuf {
         let directory = std::env::temp_dir()
             .join(name)
-            .join(std::process::id().to_string());
+            .join(std::process::id().to_string())
+            .join(uuid::Uuid::new_v4().to_string());
         std::fs::create_dir_all(&directory).unwrap();
         directory
     }

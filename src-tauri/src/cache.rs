@@ -802,7 +802,8 @@ mod tests {
         let root = std::env::temp_dir()
             .join("aurora-cache-test")
             .join(std::process::id().to_string())
-            .join(name);
+            .join(name)
+            .join(uuid::Uuid::new_v4().to_string());
         let managed =
             ManagedPaths::from_app_local_data_dir(root.join("managed")).expect("absolute root");
         (root, ArtifactCache::new(managed))
