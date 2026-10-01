@@ -1055,6 +1055,25 @@ export interface ProviderRemovalPreview {
   previewFingerprint: string;
 }
 
+/** Which native path owns removal of one installed pack. */
+export type ContentRemovalPath = "localFile" | "providerGraph" | "blocked";
+
+/**
+ * The backend-owned statement of the management operations Aurora safely
+ * supports for one installed pack. The UI renders this object; it never
+ * infers legality from content types or provider strings.
+ */
+export interface ContentManagement {
+  canRemove: boolean;
+  removalPath: ContentRemovalPath;
+  removalBlockedReason: string | null;
+  canToggle: boolean;
+  active: boolean | null;
+  /** Truthful for shader packs: activation belongs to the in-game loader. */
+  activationManagedInGame: boolean;
+  toggleBlockedReason: string | null;
+}
+
 export interface ContentEntry {
   entryId: string;
   contentType: ContentType;
@@ -1069,7 +1088,7 @@ export interface ContentEntry {
   description: string | null;
   packFormat: number | null;
   warnings: ModWarning[];
-  canRemove: boolean;
+  management: ContentManagement;
 }
 
 export interface ContentInventory {
@@ -1371,6 +1390,10 @@ export function getInstanceContent(instanceId: string, contentType: ContentType)
 
 export function removeInstanceContent(instanceId: string, contentType: ContentType, entryId: string): Promise<ContentInventory> {
   return contentInvoke("remove_instance_content", { instanceId, contentType, entryId });
+}
+
+export function setInstancePackEnabled(instanceId: string, contentType: ContentType, entryId: string, enabled: boolean): Promise<ContentInventory> {
+  return contentInvoke("set_instance_pack_enabled", { instanceId, contentType, entryId, enabled });
 }
 
 export function openInstanceContentFolder(instanceId: string, contentType: ContentType): Promise<void> {

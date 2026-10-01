@@ -35,6 +35,7 @@ import {
   selectAccount,
   selectInstance,
   setInstanceModEnabled,
+  setInstancePackEnabled,
   updateInstanceConfiguration,
   validateInstance,
   validateInstalledGame,
@@ -621,6 +622,19 @@ class LauncherStore {
       this.contentInventories[this.contentKey(id, kind)] = await removeInstanceContent(id, kind, entryId);
     } catch (cause: unknown) {
       const error = backendError(cause, "The content could not be removed.");
+      await this.runLoadContent(id, kind);
+      this.contentError = error;
+    } finally { this.contentMutationBusy = null; }
+  }
+
+  async runSetPackEnabled(id: string, kind: ContentType, entryId: string, enabled: boolean): Promise<void> {
+    if (this.contentMutationBusy !== null) return;
+    this.contentMutationBusy = entryId;
+    this.contentError = null;
+    try {
+      this.contentInventories[this.contentKey(id, kind)] = await setInstancePackEnabled(id, kind, entryId, enabled);
+    } catch (cause: unknown) {
+      const error = backendError(cause, "The pack's activation state could not be changed.");
       await this.runLoadContent(id, kind);
       this.contentError = error;
     } finally { this.contentMutationBusy = null; }
