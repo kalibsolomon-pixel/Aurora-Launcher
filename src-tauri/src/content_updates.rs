@@ -3,6 +3,8 @@
 //! background provider polling. The mutating half of updates stays inside the
 //! existing provider lifecycle transaction in `instance_content`.
 
+use std::collections::HashSet;
+
 use serde::Serialize;
 
 use crate::instance_content::{
@@ -44,6 +46,9 @@ pub enum UpdateStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum UpdateBlock {
+    /// The exact installed modpack owns this file; changing it would alter
+    /// the authored snapshot without pack reconciliation.
+    PackOwned,
     /// The managed file is currently disabled; re-enable it before updating.
     Disabled,
     /// Local bytes no longer match the managed record's digest. Aurora will
@@ -116,9 +121,12 @@ pub async fn check_updates(
     kind: Option<ContentType>,
 ) -> Result<UpdatesReport, ContentError> {
     let state = ContentState::load_and_migrate(managed, instance)?;
+    let pack = crate::pack_state::InstalledPack::load(managed, instance)
+        .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
     let mut entries = Vec::new();
     let mut dependency_managed = 0usize;
     let mut rate_limited = false;
+    let mut reported_pack_projects = HashSet::new();
     for record in &state.entries {
         if record.provider != "modrinth" || kind.is_some_and(|kind| record.content_type != kind) {
             continue;
@@ -131,6 +139,31 @@ pub async fn check_updates(
             .display_version
             .clone()
             .unwrap_or_else(|| record.version_id.clone());
+        if pack
+            .as_ref()
+            .is_some_and(|pack| pack.owns_provider(&record.identity()))
+        {
+            // Distinct pack files can share a project. Update discovery is
+            // project-scoped, so show one explanatory row for that project.
+            if reported_pack_projects.insert((record.content_type, record.project_id.clone())) {
+                entries.push(UpdateAvailability {
+                    content_type: record.content_type,
+                    project_id: record.project_id.clone(),
+                    current_version,
+                    status: UpdateStatus::Blocked,
+                    block: Some(UpdateBlock::PackOwned),
+                    candidate: None,
+                    pinned: record.pinned,
+                    channel: record.update_channel,
+                    detail: Some(format!(
+                        "Required by {} {}. Pack component updates require a future reconciliation workflow.",
+                        pack.as_ref().unwrap().identity.name,
+                        pack.as_ref().unwrap().identity.pack_version
+                    )),
+                });
+            }
+            continue;
+        }
         if let Some(block) = local_block(managed, instance, record) {
             entries.push(UpdateAvailability {
                 content_type: record.content_type,
@@ -142,6 +175,7 @@ pub async fn check_updates(
                 pinned: record.pinned,
                 channel: record.update_channel,
                 detail: Some(match block {
+                    UpdateBlock::PackOwned => unreachable!("pack ownership is classified first"),
                     UpdateBlock::Disabled => {
                         "This mod is disabled. Re-enable it before updating; updates never change the enabled state."
                     }
@@ -497,6 +531,79 @@ mod tests {
             .iter()
             .find(|entry| entry.project_id == project)
             .unwrap()
+    }
+
+    #[tokio::test]
+    async fn pack_owned_files_share_one_blocked_project_row_without_network() {
+        let fixture = Fixture::new();
+        let mut first =
+            fixture.managed_mod("Pack0001", "pack-a", "pack-a", false, UpdateChannel::Stable);
+        let mut second =
+            fixture.managed_mod("Pack0001", "pack-b", "pack-b", false, UpdateChannel::Stable);
+        first.origin = crate::instance_content::ProviderOrigin::Pack;
+        second.origin = crate::instance_content::ProviderOrigin::Pack;
+        let mut state = ContentState::empty();
+        state.entries.extend([first.clone(), second.clone()]);
+        state.save(&fixture.managed, &fixture.instance).unwrap();
+        let identity = crate::pack_state::PackIdentity {
+            provider: "modrinth".into(),
+            project_id: "PackRoot".into(),
+            version_id: "exact".into(),
+            name: "Fixture pack".into(),
+            pack_version: "1.0".into(),
+            artifact_sha512: hex_seed("archive"),
+            artifact_sha256: "a".repeat(64),
+            minecraft_version: "1.21.11".into(),
+            fabric_loader_version: "0.19.3".into(),
+            installed_at_unix_seconds: 1,
+        };
+        let components = [&first, &second]
+            .into_iter()
+            .map(|record| crate::pack_state::OwnedComponent {
+                path: format!("mods/{}", record.file_name),
+                sha256: record.sha256.clone(),
+                sha512: record.file_id.clone(),
+                provider: Some(record.identity()),
+                provider_version_id: Some(record.version_id.clone()),
+            })
+            .collect();
+        crate::pack_state::InstalledPack::new(
+            fixture.instance.clone(),
+            identity,
+            components,
+            vec![],
+            vec![],
+        )
+        .unwrap()
+        .save(&fixture.managed)
+        .unwrap();
+        let hits = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&hits);
+        let server = TestServer::spawn(Arc::new(move |_: &TestRequest| {
+            observed.fetch_add(1, Ordering::SeqCst);
+            TestResponse::status(404)
+        }));
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        let report = check_updates(
+            &fixture.managed,
+            &fixture.instance,
+            &context(),
+            &client,
+            Some(ContentType::Mod),
+        )
+        .await
+        .unwrap();
+        assert_eq!(report.entries.len(), 1);
+        assert_eq!(report.entries[0].status, UpdateStatus::Blocked);
+        assert_eq!(report.entries[0].block, Some(UpdateBlock::PackOwned));
+        assert!(
+            report.entries[0]
+                .detail
+                .as_ref()
+                .unwrap()
+                .contains("Fixture pack")
+        );
+        assert_eq!(hits.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]
@@ -1313,6 +1420,7 @@ mod live_acceptance {
                 ProviderOrigin::Direct => "direct",
                 ProviderOrigin::Dependency => "dependency",
                 ProviderOrigin::Recovered => "recovered",
+                ProviderOrigin::Pack => "pack",
             },
         }
     }

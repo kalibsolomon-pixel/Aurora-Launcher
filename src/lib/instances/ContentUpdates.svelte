@@ -143,11 +143,10 @@
   {#if success && !dismissed}<p class="updates-success" role="status">{success}</p>{/if}
 
   {#if report && !dismissed}
-    {#if actionable === 0}
+    {#if actionable === 0 && counts.blocked === 0}
       <p class="updates-quiet" role="status">
         Everything is up to date
-        {#if counts.noted}· {counts.noted} item{counts.noted === 1 ? "" : "s"} to review in Details{/if}
-        {#if counts.blocked}· {counts.blocked} blocked{/if}.
+        {#if counts.noted}· {counts.noted} item{counts.noted === 1 ? "" : "s"} to review in Details{/if}.
       </p>
     {:else}
       <div class="updates-panel">

@@ -3680,6 +3680,8 @@ pub(crate) async fn resolve_updates_preview(
     }
     let (instance, context) = provider_context(managed, instance_id)?;
     let state = provider_state(managed, &instance)?;
+    let pack = crate::pack_state::InstalledPack::load(managed, &instance)
+        .map_err(|error| CommandError::new(error.code(), error.to_string()))?;
     let client = crate::modrinth::Client::official();
     let mut resolved_targets = Vec::<(crate::instance_content::ContentType, String, String)>::new();
     let mut target_previews = Vec::new();
@@ -3691,6 +3693,15 @@ pub(crate) async fn resolve_updates_preview(
             project_id: target.project_id.clone(),
         };
         let record = lifecycle_record(&state, &lookup)?;
+        if pack
+            .as_ref()
+            .is_some_and(|pack| pack.owns_provider(&record.identity()))
+        {
+            return Err(CommandError::new(
+                "pack_component_owned",
+                "This component belongs to the installed modpack; updating it requires a future pack reconciliation workflow.",
+            ));
+        }
         if !record.explicitly_retained {
             return Err(CommandError::new(
                 "content_required_by_installed",
