@@ -1,11 +1,12 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { getInstanceContentContext, getProviderLifecycle, providerOriginLabel, type InstanceContentContext, type ContentEntry, type InstanceSummary, type ProviderLifecycleEntry } from "$lib/backend";
+  import { getInstanceContentContext, getProviderLifecycle, providerOriginLabel, type InstanceContentContext, type ContentEntry, type InstanceSummary, type ProviderLifecycleEntry, type UpdatesReport } from "$lib/backend";
   import { launcher } from "$lib/launcher/store.svelte";
   import { formatModSize } from "./mods";
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
   import ContentRecognition from "./ContentRecognition.svelte";
+  import ContentUpdates from "./ContentUpdates.svelte";
 
   let { instance, kind }: { instance: InstanceSummary; kind: "resourcePack" | "shaderPack" } = $props();
   let query = $state("");
@@ -17,6 +18,7 @@
   let lifecycleEntries = $state<ProviderLifecycleEntry[]>([]);
   let lifecycleError = $state("");
   let context = $state<InstanceContentContext | null>(null);
+  let updatesReport = $state<UpdatesReport | null>(null);
 
   async function refreshLifecycle(targetId: string): Promise<void> {
     try {
@@ -37,6 +39,18 @@
     await launcher.runLoadContent(targetId, targetKind);
     await refreshLifecycle(targetId);
   }
+  const providerNames = $derived.by(() => {
+    const names: Record<string, string> = {};
+    for (const entry of entries) {
+      if (entry.provenance?.provider === "modrinth") names[entry.provenance.projectId] = entry.displayName;
+    }
+    for (const item of lifecycleEntries) {
+      if (item.record.provider === "modrinth" && item.record.contentType === kind && !names[item.record.projectId]) {
+        names[item.record.projectId] = item.record.fileName;
+      }
+    }
+    return names;
+  });
   const key = $derived(`${instance.id}:${kind}`);
   const title = $derived(kind === "resourcePack" ? "Resource Packs" : "Shaders");
   const directoryName = $derived(kind === "resourcePack" ? "resourcepacks" : "shaderpacks");
@@ -54,6 +68,7 @@
     if (loadedKey !== key) {
       loadedKey = key;
       context = null;
+      updatesReport = null;
       view = "installed";
       if (!launcher.contentInventories[key]) void launcher.runLoadContent(instance.id, kind);
       void refreshLifecycle(instance.id);
@@ -106,6 +121,7 @@
   {#if running}<p class="packs-note">Changes made while Minecraft is running apply on the next launch.</p>{/if}
   {#if context?.modrinthAvailable}
     <ContentRecognition {instance} {kind} onChanged={async () => { await refreshInstalled(instance.id, kind); }} />
+    <ContentUpdates instanceId={instance.id} {kind} names={providerNames} bind:report={updatesReport} onChanged={async () => { await refreshInstalled(instance.id, kind); await launcher.refreshState(); }} />
   {/if}
   {#if launcher.contentError}<p class="inline-message inline-message-error" role="alert">{launcher.contentError.message} <code>{launcher.contentError.code}</code></p>{/if}
   {#if lifecycleError}<p class="inline-message inline-message-error" role="alert">{lifecycleError}</p>{/if}
@@ -137,6 +153,16 @@
               </div>
             </div>
             <div class="pack-actions">
+              {#if entry.provenance?.provider === "modrinth"}
+                {@const update = updatesReport?.entries.find((item) => item.contentType === kind && item.projectId === entry.provenance?.projectId)}
+                {#if update?.status === "updateAvailable"}
+                  <span class="row-update-badge">Update</span>
+                {:else if update?.status === "pinnedUpdateAvailable"}
+                  <span class="row-update-badge badge-pinned">Pinned</span>
+                {:else if update?.status === "blocked"}
+                  <span class="row-update-badge badge-blocked" title={update.detail ?? "Updating is blocked"}>Blocked</span>
+                {/if}
+              {/if}
               {#if entry.canRemove}<button type="button" class="btn btn-quiet" disabled={launcher.contentMutationBusy !== null} onclick={() => askRemove(entry)}>Remove…</button>{:else}<span title="Folder packs and unsafe entries are left untouched">Unavailable</span>{/if}
             </div>
             <details class="pack-details"><summary>Details</summary>
@@ -183,6 +209,9 @@
   .packs-toolbar select { min-width: 128px; }
   .packs-toolbar input, .packs-toolbar select { padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; }
   .packs-list { border: 1px solid var(--color-surface-edge); border-radius: var(--radius-lg); background: var(--f-panel); box-shadow: var(--f-shadow); }
+  .row-update-badge { padding: 1px var(--space-2); border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent); font-size: var(--text-metadata); font-weight: 600; white-space: nowrap; }
+  .row-update-badge.badge-pinned { background: var(--color-working-soft); color: var(--color-working); }
+  .row-update-badge.badge-blocked { background: var(--color-error-soft); color: var(--color-error); }
   .pack-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); }
   .pack-row:last-child { border-bottom: none; }
   .pack-main { min-width: 0; align-items: flex-start; }

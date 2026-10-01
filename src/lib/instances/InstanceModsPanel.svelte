@@ -10,11 +10,12 @@
     type ModSort,
     type RemovalCandidate,
   } from "$lib/instances/mods";
-  import { applyProviderRemoval, previewProviderRemoval, type ProviderRemovalPreview, getInstanceContentContext, getProviderLifecycle, providerOriginLabel, type InstanceContentContext, type InstanceSummary, type ModEntry, type ProviderLifecycleEntry } from "$lib/backend";
+  import { applyProviderRemoval, previewProviderRemoval, type ProviderRemovalPreview, getInstanceContentContext, getProviderLifecycle, providerOriginLabel, type InstanceContentContext, type InstanceSummary, type ModEntry, type ProviderLifecycleEntry, type UpdatesReport } from "$lib/backend";
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
   import InstalledArtwork from "./InstalledArtwork.svelte";
   import ContentRecognition from "./ContentRecognition.svelte";
+  import ContentUpdates from "./ContentUpdates.svelte";
 
   let { instance }: { instance: InstanceSummary } = $props();
   let query = $state("");
@@ -31,6 +32,7 @@
   let lifecycleEntries = $state<ProviderLifecycleEntry[]>([]);
   let lifecycleError = $state("");
   let context = $state<InstanceContentContext | null>(null);
+  let updatesReport = $state<UpdatesReport | null>(null);
 
   async function refreshLifecycle(targetId: string): Promise<void> {
     try {
@@ -52,6 +54,19 @@
     await refreshLifecycle(targetId);
   }
 
+  const providerNames = $derived.by(() => {
+    const names: Record<string, string> = {};
+    for (const entry of entries) {
+      if (entry.provenance?.provider === "modrinth") names[entry.provenance.projectId] = entry.displayName;
+    }
+    for (const item of lifecycleEntries) {
+      if (item.record.provider === "modrinth" && !names[item.record.projectId]) {
+        names[item.record.projectId] = item.record.fileName;
+      }
+    }
+    return names;
+  });
+
   const inventory = $derived(launcher.modInventories[instance.id] ?? null);
   const entries = $derived(inventory?.entries ?? []);
   const shown = $derived(visibleMods(entries, query, filter, sort));
@@ -64,7 +79,7 @@
     if (loadedInstance !== instance.id) {
       loadedInstance = instance.id;
       removal = null; providerRemoval = null; providerRemovalEntry = null; expanded = null;
-      context = null;
+      context = null; updatesReport = null;
       view = "installed";
       if (launcher.modInventories[instance.id] === undefined) {
         void launcher.runLoadMods(instance.id);
@@ -184,6 +199,7 @@
 
   {#if context?.modrinthAvailable && view === "installed"}
     <ContentRecognition {instance} kind="mod" onChanged={async () => { await refreshInstalled(instance.id); }} />
+    <ContentUpdates instanceId={instance.id} kind="mod" names={providerNames} bind:report={updatesReport} onChanged={async () => { await refreshInstalled(instance.id); await launcher.refreshState(); await launcher.refreshPlayReadiness(); }} />
   {/if}
 
   {#if launcher.modError}
@@ -269,6 +285,16 @@
               <span class="mod-state" class:mod-state-required={entry.ownership === "launcherManagedRequired"}>
                 {launcher.modMutationBusy === entry.entryId ? "Changing…" : stateLabel(entry)}
               </span>
+              {#if entry.provenance?.provider === "modrinth"}
+                {@const update = updatesReport?.entries.find((item) => item.contentType === "mod" && item.projectId === entry.provenance?.projectId)}
+                {#if update?.status === "updateAvailable"}
+                  <span class="row-update-badge">Update</span>
+                {:else if update?.status === "pinnedUpdateAvailable"}
+                  <span class="row-update-badge badge-pinned" title={update.detail ?? "Pinned with an update available"}>Pinned</span>
+                {:else if update?.status === "blocked"}
+                  <span class="row-update-badge badge-blocked" title={update.detail ?? "Updating is blocked"}>Blocked</span>
+                {/if}
+              {/if}
               {#if entry.canToggle}
                 <button
                   type="button"
@@ -409,6 +435,9 @@
   .mod-warning { color: var(--color-warning); font-size: var(--text-metadata); line-height: 1.4; }
   .mod-row-actions { align-self: start; justify-content: flex-end; gap: var(--space-2); }
   .mod-state, .protected-marker { color: var(--color-text-secondary); font-size: var(--text-metadata); font-weight: 500; white-space: nowrap; }
+  .row-update-badge { padding: 1px var(--space-2); border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent); font-size: var(--text-metadata); font-weight: 600; white-space: nowrap; }
+  .row-update-badge.badge-pinned { background: var(--color-working-soft); color: var(--color-working); }
+  .row-update-badge.badge-blocked { background: var(--color-error-soft); color: var(--color-error); }
   .mod-state-required { color: var(--color-working); }
   .protected-marker { color: var(--color-text-muted); }
   .mod-switch { position: relative; width: 38px; height: 22px; padding: 2px; border: 1px solid var(--color-border-strong); border-radius: 999px; background: var(--color-surface-sunken); cursor: pointer; }

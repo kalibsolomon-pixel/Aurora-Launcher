@@ -894,9 +894,27 @@ export interface ProviderRecord {
   requires: ProviderIdentity[];
   origin: ProviderOrigin;
   installedAtUnixSeconds: number | null;
+  pinned: boolean;
+  updateChannel: UpdateChannel;
 }
 
 export type ProviderOrigin = "direct" | "dependency" | "recovered";
+
+export type UpdateChannel = "stable" | "beta" | "alpha";
+
+export const UPDATE_CHANNELS: UpdateChannel[] = ["stable", "beta", "alpha"];
+
+export function updateChannelLabel(channel: UpdateChannel): string {
+  if (channel === "beta") return "Beta";
+  if (channel === "alpha") return "Alpha";
+  return "Stable";
+}
+
+export function updateChannelDescription(channel: UpdateChannel): string {
+  if (channel === "beta") return "Release and beta versions";
+  if (channel === "alpha") return "Release, beta, and alpha versions";
+  return "Release versions only";
+}
 
 export function providerOriginLabel(origin: ProviderOrigin): string {
   if (origin === "direct") return "Installed directly";
@@ -935,6 +953,97 @@ export interface LifecycleDelta {
 export interface ProviderUpdatePreview {
   current: LifecycleItem;
   candidate: ModrinthVersionChoice;
+  changelog: string | null;
+  channel: UpdateChannel;
+  delta: LifecycleDelta;
+  warnings: string[];
+  previewFingerprint: string;
+}
+
+export type UpdateStatusKind =
+  | "upToDate"
+  | "updateAvailable"
+  | "pinnedUpdateAvailable"
+  | "noNewerUnderPolicy"
+  | "currentVersionUnknown"
+  | "providerUnavailable"
+  | "blocked";
+
+export type UpdateBlockReason = "disabled" | "locallyModified" | "missing" | "conflict";
+
+export interface UpdateAvailability {
+  contentType: ContentType;
+  projectId: string;
+  currentVersion: string;
+  status: UpdateStatusKind;
+  block: UpdateBlockReason | null;
+  candidate: ModrinthVersionChoice | null;
+  pinned: boolean;
+  channel: UpdateChannel;
+  detail: string | null;
+}
+
+export interface UpdatesReport {
+  instanceId: string;
+  entries: UpdateAvailability[];
+  dependencyManaged: number;
+}
+
+export function summarizeUpdates(entries: UpdateAvailability[]): {
+  ready: number;
+  pinned: number;
+  blocked: number;
+  current: number;
+  noted: number;
+} {
+  let ready = 0;
+  let pinned = 0;
+  let blocked = 0;
+  let current = 0;
+  let noted = 0;
+  for (const entry of entries) {
+    if (entry.status === "updateAvailable") ready += 1;
+    else if (entry.status === "pinnedUpdateAvailable") pinned += 1;
+    else if (entry.status === "blocked") blocked += 1;
+    else if (entry.status === "upToDate") current += 1;
+    else noted += 1;
+  }
+  return { ready, pinned, blocked, current, noted };
+}
+
+export function updateStatusText(entry: UpdateAvailability): string {
+  switch (entry.status) {
+    case "upToDate":
+      return "Up to date";
+    case "updateAvailable":
+      return `Update available: ${entry.candidate?.versionNumber ?? "newer version"}`;
+    case "pinnedUpdateAvailable":
+      return `Pinned — update available: ${entry.candidate?.versionNumber ?? "newer version"}`;
+    case "noNewerUnderPolicy":
+      return entry.detail ?? "No newer version under the current release policy";
+    case "currentVersionUnknown":
+      return entry.detail ?? "The provider no longer recognizes the installed version";
+    case "providerUnavailable":
+      return entry.detail ?? "Update check unavailable";
+    case "blocked":
+      return entry.detail ?? "Updating is blocked";
+  }
+}
+
+export interface BulkUpdateTarget {
+  contentType: ContentType;
+  projectId: string;
+}
+
+export interface BulkUpdateTargetPreview {
+  current: LifecycleItem;
+  candidate: ModrinthVersionChoice;
+  changelog: string | null;
+  channel: UpdateChannel;
+}
+
+export interface BulkUpdatePreview {
+  targets: BulkUpdateTargetPreview[];
   delta: LifecycleDelta;
   warnings: string[];
   previewFingerprint: string;
@@ -1086,6 +1195,27 @@ export function previewModrinthUpdate(instanceId: string, contentType: ContentTy
 
 export function applyModrinthUpdate(instanceId: string, contentType: ContentType, projectId: string, previewFingerprint: string): Promise<void> {
   return contentInvoke("apply_modrinth_update", { instanceId, contentType, projectId, previewFingerprint });
+}
+
+export function checkInstanceUpdates(instanceId: string, contentType: ContentType | null): Promise<UpdatesReport> {
+  return contentInvoke("check_instance_updates", { instanceId, contentType });
+}
+
+export function setProviderUpdatePolicy(
+  instanceId: string,
+  contentType: ContentType,
+  projectId: string,
+  change: { pinned?: boolean; channel?: UpdateChannel },
+): Promise<ProviderRecord> {
+  return contentInvoke("set_provider_update_policy", { instanceId, contentType, projectId, ...change });
+}
+
+export function previewModrinthBulkUpdate(instanceId: string, targets: BulkUpdateTarget[]): Promise<BulkUpdatePreview> {
+  return contentInvoke("preview_modrinth_bulk_update", { instanceId, targets });
+}
+
+export function applyModrinthBulkUpdate(instanceId: string, targets: BulkUpdateTarget[], previewFingerprint: string): Promise<void> {
+  return contentInvoke("apply_modrinth_bulk_update", { instanceId, targets, previewFingerprint });
 }
 
 export function previewProviderRemoval(instanceId: string, contentType: ContentType, projectId: string): Promise<ProviderRemovalPreview> {

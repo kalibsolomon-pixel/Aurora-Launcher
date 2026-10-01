@@ -13,10 +13,24 @@
   import { homeWidgets } from '$lib/launcher/homeLayout.svelte';
   import { discord } from '$lib/launcher/discord.svelte';
   const id = 'a'.repeat(32), accountId = 'c'.repeat(32);
+  const review = new URLSearchParams(location.search);
+  // Phase H update-review fixtures: real provider records and a typed
+  // availability report for the Content workspace Updates card.
+  const phaseH = review.has('updates');
+  const provenance = (project: string, version: string, display: string, origin: string, pinned = false, channel: 'stable'|'beta'|'alpha' = 'stable') => ({
+    contentType: 'mod', provider: 'modrinth', projectId: project, versionId: version, fileId: 'f'.repeat(128),
+    fileName: `${display}.jar`, sha256: 'a'.repeat(64), displayVersion: display,
+    compatibility: { minecraftVersions: ['1.21.11'], loader: 'fabric', environment: 'client' },
+    dependencies: [], explicitlyRetained: true, requires: [], origin, installedAtUnixSeconds: 1760000000, pinned, updateChannel: channel,
+  });
+  const lifecycleFixtures: any[] = phaseH ? [
+    { record: provenance('AAAA0001', 'aaaa0002', 'Sodium 1.4.2', 'direct'), requiredBy: [], requires: [] },
+    { record: provenance('BBBB0002', 'bbbb0002', 'Mod Menu 7.0.0', 'recovered', true), requiredBy: [], requires: [] },
+    { record: provenance('CCCC0003', 'cccc0002', 'FerriteCore 8.0.0', 'direct'), requiredBy: [], requires: [] },
+  ] : [];
   const account = { accountId, minecraftName: 'AuroraPlayer', status: 'signedIn' };
   const instance = { id, displayName: 'Aurora Client', state: 'ready', minecraftVersion: '1.21.11', platform: { kind: 'fabric', version: '0.19.5' }, aurora: { version: '2.1.5', channel: 'stable' }, auroraContentState: 'active', configuration: { minecraftVersion: '1.21.11', loader: { kind: 'fabric', policy: { type: 'pinned', version: '0.19.5' } }, auroraEnabled: true, memoryMib: 2048, additionalJvmArguments: '', window: null } };
   const fixtureLayout = { widgets: [{id:'recent-worlds',enabled:true,size:'small'}, {id:'playtime',enabled:true,size:'small'}, {id:'content-summary',enabled:false,size:'small'}, {id:'instance-details',enabled:false,size:'small'}] };
-  const review = new URLSearchParams(location.search);
   setContext('borealis-review', { ...(review.has('time') ? {time: Math.max(0, Number(review.get('time')) || 0)} : {}), reducedMotion: review.has('reduced') });
   const restored = sessionStorage.getItem('phase-f-review');
   const saved = restored ? JSON.parse(restored) : null;
@@ -24,7 +38,9 @@
   launcher.accountsState = { selectedAccountId: accountId, accounts: [account, {...account, accountId:'d'.repeat(32), minecraftName:'SecondPlayer'}] } as any;
   launcher.status = { launcherVersion: '1.2.0' } as any;
   launcher.playReadiness = { instanceId: id, accountId, ready: true, blockers: [], processStatus:'stopped' } as any;
-  launcher.modInventories = { [id]: { instanceId:id, entries:['Aurora Client','Sodium','Fabric API','Lithium','Iris'].map((name,i)=>({entryId:String(i),displayName:name,fileName:name.toLowerCase().replaceAll(' ','-')+'.jar',enabled:i!==3,fileType:i===3?'disabledJar':'enabledJar',sizeBytes:1245000,modifiedUnixMillis:null,ownership:i===0?'auroraManaged':'userManaged',sha256:null,provenance:null,metadata:{id:name.toLowerCase(),version:'1.0.0',authors:['Visual review']},warnings:[],canToggle:i!==0,canRemove:i!==0,actionBlockedReason:null})),missingManaged:[] } } as any;
+  const modEntry = (name: string, i: number, prov: any = null) => ({ entryId: String(i), displayName: name, fileName: prov ? prov.fileName : name.toLowerCase().replaceAll(' ', '-') + '.jar', enabled: i !== 3, fileType: i === 3 ? 'disabledJar' : 'enabledJar', sizeBytes: 1245000, modifiedUnixMillis: null, ownership: prov ? 'providerManaged' : (i === 0 ? 'auroraManaged' : 'userManaged'), sha256: null, provenance: prov, metadata: { id: name.toLowerCase(), version: prov ? prov.displayVersion : '1.0.0', authors: ['Visual review'] }, warnings: [], canToggle: i !== 0, canRemove: i !== 0, actionBlockedReason: null });
+  const modNames = ['Aurora Client','Sodium','Fabric API','Lithium','Iris','Mod Menu','FerriteCore'];
+  launcher.modInventories = { [id]: { instanceId:id, entries: modNames.map((name,i)=>modEntry(name, i, phaseH && i === 1 ? lifecycleFixtures[0].record : phaseH && i === 5 ? lifecycleFixtures[1].record : phaseH && i === 6 ? lifecycleFixtures[2].record : null)), missingManaged: [] } } as any;
   launcher.contentInventories = Object.fromEntries(['resourcePack','shaderPack'].map(kind=>[`${id}:${kind}`,{instanceId:id,contentType:kind,missingManaged:[],entries:(kind==='resourcePack'?['Faithful','Fresh Animations']:['Complementary']).map((name,i)=>({entryId:kind+i,contentType:kind,displayName:name,fileName:name+'.zip',fileType:'zip',sizeBytes:4200000,modifiedUnixMillis:null,ownership:'userManaged',sha256:null,provenance:null,description:'Visual review fixture',packFormat:46,warnings:[],canRemove:true}))}])) as any;
   launcher.minecraftVersions = [{id:'1.21.11',versionType:'release'}];
   launcher.createMinecraftVersion = '1.21.11';
@@ -41,10 +57,11 @@
   if (review.has('tab')) navigation.openInstance(id, review.get('tab') as any);
   // Only this standalone review server aliases the native invoke boundary.
   setReviewInvoke(async (command:string,args:any) => {
+    try {
     if (command === 'list_minecraft_versions') return [{id:'1.21.11',versionType:'release'}];
     if (command === 'list_fabric_loader_versions') return [{version:'0.19.5',stable:true}];
     if (command === 'get_instance_content_context') return {instanceId:id,minecraftVersion:'1.21.11',loader:'fabric',loaderVersion:'0.19.5',auroraVersion:'2.1.5',environment:'client',modrinthAvailable:true,modsLoadable:true};
-    if (command === 'get_provider_lifecycle') return [];
+    if (command === 'get_provider_lifecycle') return lifecycleFixtures;
     if (command === 'list_instance_mods') return launcher.modInventories[id];
     if (command === 'list_instance_content') return launcher.contentInventories[`${id}:${args.contentType ?? args.request?.contentType}`];
     if (command === 'get_home_widgets') return homeWidgets.layout;
@@ -65,8 +82,60 @@
     if (command === 'get_account_avatar') return null;
     if (command === 'get_instance_runtime_status') return {instanceId:args.request.instanceId,status:'ready'};
     if (command === 'get_play_readiness') return {...launcher.playReadiness, instanceId:launcher.selectedInstance!.id,accountId:launcher.selectedAccount!.accountId};
+    if (command === 'check_instance_updates') {
+      if (!phaseH) throw {code:'visual_review_only',message:'Add ?updates=1 for update fixtures.'};
+      return { instanceId: id, dependencyManaged: 1, entries: [
+        { contentType:'mod', projectId:'AAAA0001', currentVersion:'1.4.2', status:'updateAvailable', block:null, candidate:{id:'aaaa0009',name:'Sodium 1.5.0',versionNumber:'1.5.0',versionType:'release',datePublished:'2026-09-01',environment:'client_and_server',loaders:['fabric']}, pinned:false, channel:'stable', detail:null },
+        { contentType:'mod', projectId:'BBBB0002', currentVersion:'7.0.0', status:'pinnedUpdateAvailable', block:null, candidate:{id:'bbbb0009',name:'Mod Menu 7.1.0-beta',versionNumber:'7.1.0-beta',versionType:'beta',datePublished:'2026-09-02',environment:'client_and_server',loaders:['fabric']}, pinned:true, channel:'stable', detail:null },
+        { contentType:'mod', projectId:'CCCC0003', currentVersion:'8.0.0', status: review.has('mixed') ? 'noNewerUnderPolicy' : 'updateAvailable', block:null, candidate: review.has('mixed') ? null : {id:'cccc0009',name:'FerriteCore 8.1.0',versionNumber:'8.1.0',versionType:'release',datePublished:'2026-09-03',environment:'client_and_server',loaders:['fabric']}, pinned:false, channel:'stable', detail: review.has('mixed') ? 'Newer versions exist but none is allowed by the Stable release-channel policy for this content.' : null },
+        { contentType:'mod', projectId:'DDDD0004', currentVersion:'2.0.0', status:'upToDate', block:null, candidate:null, pinned:false, channel:'stable', detail:null },
+        { contentType:'mod', projectId:'EEEE0005', currentVersion:'3.0.0', status:'blocked', block:'locallyModified', candidate:null, pinned:false, channel:'stable', detail:'The local file changed since Aurora recorded it. Aurora will not overwrite local modifications; use Recognize local files or restore the file first.' },
+      ] };
+    }
+    if (command === 'set_provider_update_policy') {
+      const record = lifecycleFixtures.find((entry:any)=>entry.record.projectId === args.request.projectId)?.record;
+      if (!record) throw {code:'content_changed_since_scan',message:'Visual review fixture: unknown project.'};
+      if (args.request.pinned !== undefined) record.pinned = args.request.pinned;
+      if (args.request.channel !== undefined) record.updateChannel = args.request.channel;
+      return record;
+    }
+    if (command === 'preview_modrinth_bulk_update' || command === 'preview_modrinth_update') {
+      const targets = command === 'preview_modrinth_update' ? [args.request] : args.request.targets;
+      const recordFor = (project:string)=>lifecycleFixtures.find((entry:any)=>entry.record.projectId === project)?.record ?? lifecycleFixtures[0].record;
+      const candidateVersion = (project:string)=> project === 'AAAA0001' ? '1.5.0' : '7.1.0-beta';
+      const candidateType = (project:string)=> project === 'AAAA0001' ? 'release' : 'beta';
+      return {
+        targets: targets.map((t:any)=>({ current:{contentType:'mod', provider:'modrinth', projectId:t.projectId, fileName:recordFor(t.projectId).fileName, displayVersion:recordFor(t.projectId).displayVersion}, candidate:{id:'c'+t.projectId, name:'Update', versionNumber:candidateVersion(t.projectId), versionType:candidateType(t.projectId), datePublished:'2026-09-01', environment:'client', loaders:['fabric']}, changelog: ['## Changes', '', '- Improved frame pacing on wide screens.', '- Fixed a crash when reloading shaders mid-world.', '', 'Provider-authored release notes rendered as plain text.'].join('\n'), channel: recordFor(t.projectId).updateChannel })),
+        delta: { willInstall: targets.map((t:any)=>({contentType:'mod', provider:'modrinth', projectId:t.projectId, fileName:candidateVersion(t.projectId)+'.jar', displayVersion:candidateVersion(t.projectId)})), willRemove: targets.map((t:any)=>({contentType:'mod', provider:'modrinth', projectId:t.projectId, fileName:recordFor(t.projectId).fileName, displayVersion:recordFor(t.projectId).displayVersion})), willRetain: [], newRequirements: [{contentType:'mod', provider:'modrinth', projectId:'FFFF0006', fileName:'shared-lib-2.1.0.jar', displayVersion:'2.1.0'}], removedRequirements: [] },
+        warnings: ['Optional dependency Iris is not installed automatically.'],
+        previewFingerprint: 'visual-review',
+      };
+    }
+    if (command === 'apply_modrinth_bulk_update' || command === 'apply_modrinth_update') {
+      // Simulated success: bump fixture records so the updated state renders.
+      const targets = command === 'apply_modrinth_update' ? [args.request] : args.request.targets;
+      for (const t of targets) {
+        const record = lifecycleFixtures.find((entry:any)=>entry.record.projectId === t.projectId)?.record;
+        const display = t.projectId === 'AAAA0001' ? 'Sodium 1.5.0' : t.projectId === 'CCCC0003' ? 'FerriteCore 8.1.0' : 'Mod Menu 7.1.0';
+        if (record) { record.versionId = record.versionId + 'u'; record.displayVersion = display; }
+        const row = (launcher.modInventories[id] as any)?.entries?.find((entry:any)=>entry.provenance?.projectId === t.projectId);
+        if (row) { row.metadata = { ...row.metadata, version: display }; row.fileName = display + '.jar'; }
+      }
+      return;
+    }
+    if (command === 'check_modrinth_update') {
+      const record = lifecycleFixtures.find((entry:any)=>entry.record.projectId === args.request.projectId)?.record;
+      if (!record) throw {code:'content_changed_since_scan',message:'Visual review fixture: unknown project.'};
+      if (record.pinned) return {id:'x1',name:'Update',versionNumber:'1.5.0',versionType:'release',datePublished:'2026-09-01',environment:'client',loaders:['fabric']};
+      return args.request.projectId === 'AAAA0001' ? {id:'aaaa0009',name:'Sodium 1.5.0',versionNumber:'1.5.0',versionType:'release',datePublished:'2026-09-01',environment:'client',loaders:['fabric']} : null;
+    }
+    if (command === 'preview_provider_removal' || command === 'apply_provider_removal') throw {code:'visual_review_only',message:'Visual review fixture.'};
     if (command === 'play_instance' || command === 'quick_play_history') throw {code:'visual_review_only',message:'Visual review fixture. No game was launched.'};
     throw {code:'visual_review_only',message:`Unavailable in visual review: ${command}`};
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in (error as any)) throw error;
+      throw {code:'review_handler_error',message:`Review fixture failed for ${command}: ${String(error)}`};
+    }
   });
 </script>
 <AppShell>
