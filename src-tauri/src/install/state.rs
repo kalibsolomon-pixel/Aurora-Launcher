@@ -80,18 +80,39 @@ pub enum InstalledFileRole {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativesRecord {
-    /// The path of the extracted natives directory relative to the game
-    /// directory.
+    /// The path of the extracted natives root relative to the game
+    /// directory — the value substituted for `${natives_directory}` at
+    /// launch, exactly as the version document expects.
     directory: String,
+    /// The subdirectory under the root that modern documents append to
+    /// their own `java.library.path` template (extraction writes there).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    subdirectory: Option<String>,
 }
 
 impl NativesRecord {
     pub fn new(directory: String) -> Self {
-        Self { directory }
+        Self {
+            directory,
+            subdirectory: None,
+        }
+    }
+
+    pub fn with_subdirectory(directory: String, subdirectory: Option<String>) -> Self {
+        Self {
+            directory,
+            subdirectory,
+        }
     }
 
     pub fn directory(&self) -> &str {
         &self.directory
+    }
+
+    /// The directory extraction wrote into, when the version document
+    /// appends a subdirectory.
+    pub fn subdirectory(&self) -> Option<&str> {
+        self.subdirectory.as_deref()
     }
 }
 
@@ -214,6 +235,9 @@ impl InstalledGameManifest {
             (2, Some(crate::instances::platform::PlatformPin::Fabric { version }), None) => {
                 !version.trim().is_empty()
             }
+            (2, Some(crate::instances::platform::PlatformPin::NeoForge { version }), None) => {
+                !version.trim().is_empty()
+            }
             _ => false,
         };
         if manifest.minecraft_version.trim().is_empty()
@@ -266,6 +290,22 @@ impl InstalledGameManifest {
                 ),
             }
         })?;
+        if let Some(subdirectory) = &manifest.natives.subdirectory {
+            let valid = !subdirectory.is_empty()
+                && !subdirectory.contains('/')
+                && !subdirectory.contains('\\')
+                && !subdirectory.contains("..")
+                && subdirectory
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'));
+            if !valid {
+                return Err(InstalledStateError::Malformed {
+                    reason: format!(
+                        "natives subdirectory '{subdirectory}' is not a safe single segment"
+                    ),
+                });
+            }
+        }
 
         Ok(manifest)
     }
@@ -353,6 +393,11 @@ fn validate_trust_record(trust: &ArtifactTrust) -> Result<(), String> {
             ArtifactDigest::parse(observed_sha256)
                 .map(|_| ())
                 .map_err(|error| format!("the observed SHA-256 digest is invalid: {error}"))
+        }
+        ArtifactTrust::LocallyGenerated { observed_sha256 } => {
+            ArtifactDigest::parse(observed_sha256)
+                .map(|_| ())
+                .map_err(|error| format!("the generated SHA-256 digest is invalid: {error}"))
         }
     }
 }

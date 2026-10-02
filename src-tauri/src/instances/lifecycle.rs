@@ -54,6 +54,7 @@ use crate::instances::{
 };
 use crate::minecraft::metadata::MetadataEndpoints;
 use crate::minecraft::rules::PlatformProfile;
+use crate::neoforge::metadata::NeoForgeMavenEndpoints;
 use crate::paths::ManagedPaths;
 use crate::runtime::install::{
     InstallRuntimeProgress, InstalledRuntime, RuntimeInstallError, RuntimeValidation,
@@ -70,6 +71,8 @@ pub struct InstanceEndpoints {
     release_manifest: ReleaseManifest,
     minecraft: MetadataEndpoints,
     fabric: FabricMetaEndpoints,
+    neoforge: NeoForgeMavenEndpoints,
+    runtime: RuntimeMetadataEndpoints,
     install: InstallContext,
 }
 
@@ -80,6 +83,8 @@ impl InstanceEndpoints {
             release_manifest: crate::distribution::creation_manifest()?,
             minecraft: MetadataEndpoints::official(),
             fabric: FabricMetaEndpoints::official(),
+            neoforge: NeoForgeMavenEndpoints::official(),
+            runtime: RuntimeMetadataEndpoints::official(),
             install: InstallContext::official(),
         })
     }
@@ -91,6 +96,8 @@ impl InstanceEndpoints {
             release_manifest: crate::distribution::operational_manifest()?,
             minecraft: MetadataEndpoints::official(),
             fabric: FabricMetaEndpoints::official(),
+            neoforge: NeoForgeMavenEndpoints::official(),
+            runtime: RuntimeMetadataEndpoints::official(),
             install: InstallContext::official(),
         })
     }
@@ -102,6 +109,8 @@ impl InstanceEndpoints {
             release_manifest: crate::distribution::development_manifest()?,
             minecraft: MetadataEndpoints::official(),
             fabric: FabricMetaEndpoints::official(),
+            neoforge: NeoForgeMavenEndpoints::official(),
+            runtime: RuntimeMetadataEndpoints::official(),
             install: InstallContext::official(),
         })
     }
@@ -111,14 +120,26 @@ impl InstanceEndpoints {
         release_manifest: ReleaseManifest,
         minecraft: MetadataEndpoints,
         fabric: FabricMetaEndpoints,
+        neoforge: NeoForgeMavenEndpoints,
+        runtime: RuntimeMetadataEndpoints,
         install: InstallContext,
     ) -> Self {
         Self {
             release_manifest,
             minecraft,
             fabric,
+            neoforge,
+            runtime,
             install,
         }
+    }
+
+    pub fn neoforge(&self) -> &NeoForgeMavenEndpoints {
+        &self.neoforge
+    }
+
+    pub fn runtime(&self) -> &RuntimeMetadataEndpoints {
+        &self.runtime
     }
 
     pub fn release_manifest(&self) -> &ReleaseManifest {
@@ -542,7 +563,9 @@ fn require_executable_configuration(
 ) -> Result<(), InstanceError> {
     if !matches!(
         configuration.loader().kind(),
-        super::settings::LoaderKind::Fabric | super::settings::LoaderKind::Vanilla
+        super::settings::LoaderKind::Fabric
+            | super::settings::LoaderKind::Vanilla
+            | super::settings::LoaderKind::NeoForge
     ) {
         return Err(InstanceError::ReleaseInvalid(
             "this platform has no installation/launch implementation in this build".into(),
@@ -579,6 +602,47 @@ async fn resolve_installed_configuration(
         return Ok(super::platform::InstalledConfiguration {
             minecraft_version: configuration.minecraft_version().into(),
             platform: super::platform::PlatformPin::Vanilla {},
+            aurora: None,
+        });
+    }
+    if configuration.loader().kind() == super::settings::LoaderKind::NeoForge {
+        if configuration.aurora_enabled() {
+            return Err(InstanceError::ReleaseInvalid(
+                "the Aurora client requires Fabric Loader".into(),
+            ));
+        }
+        configuration.validate()?;
+        let game =
+            crate::minecraft::metadata::MinecraftVersionId::new(configuration.minecraft_version())
+                .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+        let listing = crate::neoforge::metadata::fetch_neoforge_versions(
+            endpoints.neoforge(),
+            endpoints.install.download_options(),
+        )
+        .await
+        .map_err(InstanceError::NeoForgeMetadata)?;
+        let entries = listing.for_minecraft(&game);
+        let candidates: Vec<_> = entries
+            .iter()
+            .map(|entry| LoaderCandidate {
+                version: entry.version().to_owned(),
+                stable: entry.stable(),
+            })
+            .collect();
+        let version = configuration
+            .loader()
+            .policy()
+            .resolve(&candidates)
+            .ok_or_else(|| InstanceError::LoaderResolution {
+                game: game.to_string(),
+                reason: "the requested NeoForge policy has no compatible version for this Minecraft version"
+                    .into(),
+            })?;
+        return Ok(super::platform::InstalledConfiguration {
+            minecraft_version: configuration.minecraft_version().into(),
+            platform: super::platform::PlatformPin::NeoForge {
+                version: version.into(),
+            },
             aurora: None,
         });
     }
@@ -888,15 +952,47 @@ async fn install_instance_components(
     let release_finished = std::time::Instant::now();
 
     progress(report(InstancePhase::ResolvingGame, None));
-    let plan = resolve_record_game_plan(endpoints, record, release).await?;
+    let plan = resolve_record_game_plan(managed, endpoints, record, release).await?;
     let metadata_finished = std::time::Instant::now();
+
+    // A NeoForge plan executes bounded installer processors during game
+    // installation, so the managed Java runtime is resolved and ensured
+    // first — the same runtime pipeline launch later revalidates.
+    let mut install_context = endpoints.install.clone();
+    if let Some(neoforge) = plan.neoforge_loader() {
+        if neoforge.requires_install_time_java() {
+            let runtime_platform =
+                RuntimePlatform::current().map_err(RuntimeMetadataError::Plan)?;
+            let runtime_plan = crate::runtime::metadata::resolve_runtime_plan(
+                managed,
+                endpoints.runtime(),
+                plan.java().component(),
+                plan.java().major_version(),
+                runtime_platform,
+                endpoints.install.download_options(),
+            )
+            .await
+            .map_err(InstanceError::RuntimeMetadata)?;
+            let installed_runtime = crate::runtime::install::ensure_runtime(
+                managed,
+                &runtime_plan,
+                endpoints.install.download_options(),
+                false,
+                &mut |_| {},
+            )
+            .await
+            .map_err(InstanceError::RuntimeInstall)?;
+            install_context = install_context
+                .with_processor_java(installed_runtime.diagnostic_executable().to_path_buf());
+        }
+    }
 
     progress(report(InstancePhase::InstallingGame, None));
     execute_game_install(
         managed,
         record.id(),
         &plan,
-        &endpoints.install,
+        &install_context,
         &mut |game| progress(report(InstancePhase::InstallingGame, Some(game))),
         crate::install::InstallFaults::default(),
     )
@@ -993,6 +1089,7 @@ async fn install_instance_components(
 }
 
 async fn resolve_record_game_plan(
+    managed: &ManagedPaths,
     endpoints: &InstanceEndpoints,
     record: &InstanceRecord,
     release: Option<&crate::distribution::AuroraRelease>,
@@ -1011,6 +1108,22 @@ async fn resolve_record_game_plan(
         .await
         .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
         return Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft));
+    }
+    if let super::platform::PlatformPin::NeoForge { version } = &installed.platform {
+        let loader_version = crate::neoforge::metadata::NeoForgeVersionId::new(version)
+            .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+        let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
+        return crate::neoforge::resolve_neoforge_game_plan(
+            managed,
+            &endpoints.minecraft,
+            endpoints.neoforge(),
+            &game_version,
+            &loader_version,
+            platform,
+            endpoints.install.download_options(),
+        )
+        .await
+        .map_err(InstanceError::NeoForgeResolution);
     }
     let loader_version = crate::fabric::metadata::LoaderVersionId::new(
         installed
@@ -1132,7 +1245,7 @@ pub async fn resolve_instance_game_plan(
         });
     }
     let release = resolve_optional_aurora(endpoints, &record)?;
-    resolve_record_game_plan(endpoints, &record, release).await
+    resolve_record_game_plan(managed, endpoints, &record, release).await
 }
 
 pub async fn validate_instance_runtime(
@@ -1295,7 +1408,9 @@ pub fn validate_instance(
     // settings (memory, JVM arguments, window, name) never participate.
     if !matches!(
         record.installed().platform,
-        super::platform::PlatformPin::Fabric { .. } | super::platform::PlatformPin::Vanilla {}
+        super::platform::PlatformPin::Fabric { .. }
+            | super::platform::PlatformPin::Vanilla {}
+            | super::platform::PlatformPin::NeoForge { .. }
     ) {
         problems.push(InstanceProblem {
             component: "platform",
@@ -1638,6 +1753,11 @@ pub enum InstanceError {
     /// A Fabric Meta document failed to fetch or parse while selecting a
     /// loader version.
     FabricMetadata(crate::fabric::metadata::FabricMetadataError),
+    /// A NeoForge metadata document failed to fetch or parse while
+    /// selecting a loader version.
+    NeoForgeMetadata(crate::neoforge::metadata::NeoForgeMetadataError),
+    /// A Minecraft + NeoForge plan failed to resolve.
+    NeoForgeResolution(crate::neoforge::NeoForgeGameResolutionError),
     GameInstall(InstallError),
     /// Reading a game installed-state manifest failed structurally.
     GameInstallState(crate::install::state::InstalledStateError),
@@ -1701,6 +1821,9 @@ impl fmt::Display for InstanceError {
             Self::Platform(error) => write!(formatter, "{error}"),
             Self::GameResolution(error) => write!(formatter, "{error}"),
             Self::FabricMetadata(error) => write!(formatter, "{error}"),
+            Self::NeoForgeMetadata(error) => write!(formatter, "{error}"),
+            Self::NeoForgeResolution(error) => write!(formatter, "{error}"),
+
             Self::GameInstall(error) => write!(formatter, "{error}"),
             Self::GameInstallState(error) => write!(formatter, "{error}"),
             Self::Aurora(error) => write!(formatter, "{error}"),
@@ -2251,6 +2374,12 @@ mod tests {
                     "{}/v2/",
                     self.server.base_url()
                 )),
+                crate::neoforge::metadata::NeoForgeMavenEndpoints::loopback_for_testing(
+                    self.server.base_url(),
+                ),
+                crate::runtime::metadata::RuntimeMetadataEndpoints::loopback_for_testing(
+                    self.server.base_url(),
+                ),
                 InstallContext::loopback_for_testing(
                     crate::downloads::DownloadOptions {
                         connect_timeout: Duration::from_secs(5),
@@ -4033,7 +4162,9 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            plan.loader().expect("Fabric resolution").loader_version(),
+            plan.fabric_loader()
+                .expect("Fabric resolution")
+                .loader_version(),
             "0.19.5"
         );
         assert_eq!(

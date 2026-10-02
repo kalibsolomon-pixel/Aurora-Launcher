@@ -254,7 +254,7 @@ impl Client {
         sort: BrowseSort,
         offset: u32,
     ) -> Result<SearchPage, Error> {
-        if context.loader != "fabric" {
+        if !matches!(context.loader.as_str(), "fabric" | "neoforge") {
             return Err(Error::NoCompatibleVersion);
         }
         if query.len() > 160 || offset > 10_000 || categories.len() > 8 {
@@ -1129,9 +1129,12 @@ fn compatible(context: &Context, kind: ContentType, version: &VersionDto) -> boo
 
 fn compatible_browse(context: &Context, kind: BrowseKind, version: &VersionDto) -> bool {
     if kind == BrowseKind::Modpack {
+        // Modrinth packs remain a Fabric-only surface in this build; a
+        // NeoForge pack is excluded here and rejected explicitly at the
+        // pack boundary.
         return version.loaders.iter().any(|loader| loader == "fabric");
     }
-    if context.loader != "fabric" {
+    if !matches!(context.loader.as_str(), "fabric" | "neoforge") {
         return false;
     }
     version

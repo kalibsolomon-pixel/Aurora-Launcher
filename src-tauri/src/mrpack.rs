@@ -150,7 +150,7 @@ impl fmt::Display for PackError {
             Self::InvalidIndex => "The pack index is missing, malformed, or too large.",
             Self::UnsupportedFormat => "Aurora supports Minecraft .mrpack format version 1 only.",
             Self::UnsupportedLoader => {
-                "This pack requires a loader that Aurora cannot install as a Fabric pack."
+                "This pack requires a mod loader Aurora does not install as a pack (NeoForge .mrpack support is not part of this build)."
             }
             Self::InvalidPath => {
                 "A pack file names a path outside Aurora's supported game-content roots."

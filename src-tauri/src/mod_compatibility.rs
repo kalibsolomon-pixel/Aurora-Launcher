@@ -1,13 +1,29 @@
 //! Local deterministic compatibility facts. Ownership is independent of
 //! capabilities; this module never downloads, executes, adopts or mutates.
-use crate::fabric::versions::satisfies;
-use crate::instance_mods::{FabricModMetadata, ModEntry, ModInventory, ModOwnership, ModRelation};
+use crate::fabric::versions::satisfies as fabric_satisfies;
+use crate::neoforge::versions::satisfies as neoforge_satisfies;
+
+/// Evaluates one relation requirement in the semantics of the instance's
+/// loader family: Fabric predicates for Fabric instances, Maven ranges for
+/// NeoForge instances. Malformed requirements are errors, never matches.
+pub(crate) fn satisfies_for_family(
+    version: &str,
+    requirement: &str,
+    loader_family: &str,
+) -> Result<bool, &'static str> {
+    if loader_family == "neoForge" {
+        neoforge_satisfies(version, requirement)
+    } else {
+        fabric_satisfies(version, requirement)
+    }
+}
+use crate::instance_mods::{ModEntry, ModInventory, ModMetadata, ModOwnership, ModRelation};
 use serde::Serialize;
 
 pub(crate) fn add_artifact(
     inventory: &mut ModInventory,
     file_name: String,
-    metadata: FabricModMetadata,
+    metadata: ModMetadata,
     sha256: String,
     warnings: Vec<crate::instance_mods::ModWarning>,
 ) {
@@ -43,7 +59,7 @@ pub struct CompatibilityIssue {
     pub message: String,
 }
 
-pub(crate) fn version_for<'a>(metadata: &'a FabricModMetadata, id: &str) -> Option<&'a str> {
+pub(crate) fn version_for<'a>(metadata: &'a ModMetadata, id: &str) -> Option<&'a str> {
     if metadata.id == id {
         metadata.version.as_deref()
     } else {
@@ -67,6 +83,7 @@ pub(crate) fn usable(entry: &ModEntry) -> bool {
         && !entry.warnings.iter().any(|w| {
             w.code.starts_with("nested_")
                 || w.code.starts_with("fabric_metadata_")
+                || w.code.starts_with("neoforge_metadata_")
                 || w.code == "mixin_metadata_invalid"
         })
 }
@@ -74,6 +91,7 @@ pub(crate) fn usable(entry: &ModEntry) -> bool {
 pub(crate) fn relation_satisfied(
     inventory: &ModInventory,
     relation: &ModRelation,
+    loader_family: &str,
 ) -> Result<bool, &'static str> {
     let active: Vec<_> = inventory
         .entries
@@ -95,21 +113,21 @@ pub(crate) fn relation_satisfied(
     };
     let mut found = false;
     for version in versions {
-        let mut matches = satisfies(version, &relation.requirement)?;
+        let mut matches = satisfies_for_family(version, &relation.requirement, loader_family)?;
         for metadata in &active {
             for constraint in metadata
                 .depends
                 .iter()
                 .filter(|r| r.mod_id == relation.mod_id)
             {
-                matches &= satisfies(version, &constraint.requirement)?;
+                matches &= satisfies_for_family(version, &constraint.requirement, loader_family)?;
             }
             for constraint in metadata
                 .breaks
                 .iter()
                 .filter(|r| r.mod_id == relation.mod_id)
             {
-                matches &= !satisfies(version, &constraint.requirement)?;
+                matches &= !satisfies_for_family(version, &constraint.requirement, loader_family)?;
             }
         }
         found |= matches;
@@ -145,6 +163,7 @@ pub fn validate(
     minecraft: &str,
     loader: &str,
     java_major: Option<u32>,
+    loader_family: &str,
 ) -> Vec<CompatibilityIssue> {
     let mut issues = Vec::new();
     for entry in inventory.entries.iter().filter(|e| e.enabled) {
@@ -159,7 +178,8 @@ pub fn validate(
         for relation in &metadata.depends {
             let builtin = match relation.mod_id.as_str() {
                 "minecraft" => Some(minecraft.to_owned()),
-                "fabricloader" => Some(loader.to_owned()),
+                "fabricloader" if loader_family != "neoForge" => Some(loader.to_owned()),
+                "neoforge" | "forge" if loader_family == "neoForge" => Some(loader.to_owned()),
                 "java" => {
                     if java_major.is_none() {
                         continue;
@@ -169,9 +189,9 @@ pub fn validate(
                 _ => None,
             };
             let result = if let Some(version) = &builtin {
-                satisfies(version, &relation.requirement)
+                satisfies_for_family(version, &relation.requirement, loader_family)
             } else {
-                relation_satisfied(inventory, relation)
+                relation_satisfied(inventory, relation, loader_family)
             };
             if result != Ok(true) {
                 let providers: Vec<_> = inventory
@@ -221,7 +241,8 @@ pub fn validate(
         for relation in &metadata.breaks {
             let builtin = match relation.mod_id.as_str() {
                 "minecraft" => Some(minecraft.to_owned()),
-                "fabricloader" => Some(loader.to_owned()),
+                "fabricloader" if loader_family != "neoForge" => Some(loader.to_owned()),
+                "neoforge" | "forge" if loader_family == "neoForge" => Some(loader.to_owned()),
                 "java" => {
                     if java_major.is_none() {
                         continue;
@@ -231,7 +252,8 @@ pub fn validate(
                 _ => None,
             };
             if let Some(version) = builtin {
-                if satisfies(&version, &relation.requirement) != Ok(false) {
+                if satisfies_for_family(&version, &relation.requirement, loader_family) != Ok(false)
+                {
                     issues.push(issue(
                         entry,
                         "mod_declared_break",
@@ -257,7 +279,7 @@ pub fn validate(
                     .as_ref()
                     .and_then(|m| version_for(m, &relation.mod_id))
                 {
-                    match satisfies(version, &relation.requirement) {
+                    match satisfies_for_family(version, &relation.requirement, loader_family) {
                         Ok(false) => {}
                         result => issues.push(issue(
                             entry,
@@ -366,7 +388,9 @@ mod tests {
                 dependency(ModOwnership::UserManaged, false, "2"),
             ],
         ] {
-            assert!(!validate(&inventory(entries), "1.21.11", "0.19.5", Some(21)).is_empty());
+            assert!(
+                !validate(&inventory(entries), "1.21.11", "0.19.5", Some(21), "fabric").is_empty()
+            );
         }
     }
     #[test]
@@ -380,7 +404,9 @@ mod tests {
                 parent("depends", ">=2 <3"),
                 dependency(ownership, true, "2.4+build"),
             ];
-            assert!(validate(&inventory(entries), "1.21.11", "0.19.5", Some(21)).is_empty());
+            assert!(
+                validate(&inventory(entries), "1.21.11", "0.19.5", Some(21), "fabric").is_empty()
+            );
         }
     }
     #[test]
@@ -398,6 +424,7 @@ mod tests {
                 "1.21.11",
                 "0.19.5",
                 Some(21),
+                "fabric",
             );
             assert!(issues.iter().any(|i| i.code == "mod_dependency_unsatisfied"
                 && i.message.contains(">=2")
@@ -412,7 +439,8 @@ mod tests {
                     &inventory(vec![parent(key, "*")]),
                     "1.21.11",
                     "0.19.5",
-                    Some(21)
+                    Some(21),
+                    "fabric"
                 )
                 .is_empty()
             );
@@ -424,7 +452,8 @@ mod tests {
                     ]),
                     "1.21.11",
                     "0.19.5",
-                    Some(21)
+                    Some(21),
+                    "fabric"
                 )
                 .is_empty()
             );
@@ -437,7 +466,8 @@ mod tests {
                 ]),
                 "1.21.11",
                 "0.19.5",
-                Some(21)
+                Some(21),
+                "fabric"
             )[0]
             .code,
             "mod_declared_break"
@@ -450,7 +480,8 @@ mod tests {
                 ]),
                 "1.21.11",
                 "0.19.5",
-                Some(21)
+                Some(21),
+                "fabric"
             )
             .is_empty()
         );
@@ -484,7 +515,8 @@ mod tests {
                 ]),
                 "1.21.11",
                 "0.19.5",
-                Some(21)
+                Some(21),
+                "fabric"
             )
             .is_empty()
         );
@@ -502,7 +534,8 @@ mod tests {
                 &inventory(vec![parent("depends", ">=2"), bundle]),
                 "1.21.11",
                 "0.19.5",
-                Some(21)
+                Some(21),
+                "fabric"
             )
             .is_empty()
         );
@@ -520,7 +553,14 @@ mod tests {
                 true,
             );
             assert_eq!(
-                validate(&inventory(vec![value]), "1.21.11", "0.19.5", Some(21))[0].code,
+                validate(
+                    &inventory(vec![value]),
+                    "1.21.11",
+                    "0.19.5",
+                    Some(21),
+                    "fabric"
+                )[0]
+                .code,
                 "mod_declared_break"
             );
         }
@@ -529,7 +569,16 @@ mod tests {
             ModOwnership::UserManaged,
             true,
         );
-        assert!(validate(&inventory(vec![value]), "1.21.11", "0.19.5", Some(21)).is_empty());
+        assert!(
+            validate(
+                &inventory(vec![value]),
+                "1.21.11",
+                "0.19.5",
+                Some(21),
+                "fabric"
+            )
+            .is_empty()
+        );
     }
     #[test]
     fn duplicate_roots_and_java_are_deterministic() {
@@ -544,7 +593,8 @@ mod tests {
                 ]),
                 "1.21.11",
                 "0.19.5",
-                Some(21)
+                Some(21),
+                "fabric"
             )
             .iter()
             .any(|i| i.code == "mod_duplicate_root")
@@ -559,11 +609,21 @@ mod tests {
                 &inventory(vec![java.clone()]),
                 "1.21.11",
                 "0.19.5",
-                Some(21)
+                Some(21),
+                "fabric"
             )
             .iter()
             .any(|i| i.code == "mod_dependency_unsatisfied")
         );
-        assert!(validate(&inventory(vec![java]), "1.21.11", "0.19.5", Some(25)).is_empty());
+        assert!(
+            validate(
+                &inventory(vec![java]),
+                "1.21.11",
+                "0.19.5",
+                Some(25),
+                "fabric"
+            )
+            .is_empty()
+        );
     }
 }

@@ -17,7 +17,7 @@
   const loaderPolicy = $derived(
     "policy" in instance.configuration.loader && instance.configuration.loader.policy.type === "pinned"
       ? `Fabric ${instance.configuration.loader.policy.version}`
-      : instance.configuration.loader.kind === "fabric" ? `Fabric (${instance.configuration.auroraEnabled ? "release version" : "automatic"})` : instance.configuration.loader.kind === "vanilla" ? "Vanilla" : instance.configuration.loader.kind,
+      : instance.configuration.loader.kind === "fabric" ? `Fabric (${instance.configuration.auroraEnabled ? "release version" : "automatic"})` : instance.configuration.loader.kind === "vanilla" ? "Vanilla" : instance.configuration.loader.kind === "neoForge" ? (instance.configuration.loader.policy.type === "pinned" ? `NeoForge ${instance.configuration.loader.policy.version}` : "NeoForge (automatic)") : instance.configuration.loader.kind,
   );
 
   function windowLabel(): string {

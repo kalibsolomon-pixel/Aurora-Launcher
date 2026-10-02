@@ -46,7 +46,7 @@
         tabindex={open && current === index ? 0 : -1} class="picker-option" disabled={busy}
         onfocus={() => current = index} onclick={() => void choose(instance.id)}>
         <span class="option-identity"><strong>{instance.displayName}</strong>
-          <small>{instance.pack ? `${instance.pack.name} ${instance.pack.packVersion} · ` : ""}Minecraft {instance.minecraftVersion} · {instance.platform.kind === "vanilla" ? "Vanilla" : "Fabric"}{instance.aurora ? " · Aurora configured" : ""}</small>
+          <small>{instance.pack ? `${instance.pack.name} ${instance.pack.packVersion} · ` : ""}Minecraft {instance.minecraftVersion} · {instance.platform.kind === "vanilla" ? "Vanilla" : instance.platform.kind === "neoForge" ? "NeoForge" : "Fabric"}{instance.aurora ? " · Aurora configured" : ""}</small>
         </span><span class="selected-marker">{instance.id === selectedId ? "✓ Selected" : ""}</span>
       </button>
     {/each}

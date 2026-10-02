@@ -290,8 +290,10 @@ impl LaunchPlan {
                 .filter(|library| library.is_classpath_entry())
                 .map(|library| library.repository_path())
                 .collect(),
-            game_arguments: minecraft.launch().game_arguments().to_vec(),
-            jvm_arguments: minecraft.launch().jvm_arguments().to_vec(),
+            // The composed plan's effective arguments: Mojang's groups,
+            // then the loader's unconditional contributions appended.
+            game_arguments: plan.effective_game_arguments(),
+            jvm_arguments: plan.effective_jvm_arguments(),
             asset_index: minecraft.asset_index().id().to_owned(),
             logging: minecraft.logging().map(|logging| LaunchLogging {
                 file_name: logging.file_name().to_owned(),

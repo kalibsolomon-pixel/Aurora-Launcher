@@ -32,7 +32,7 @@
   const needsInstall = $derived(configurationRequiresInstall(instance));
 
   function onDraftChange(): void {
-    if (draft && draft.loader.kind === "fabric" && draft.minecraftVersion.trim() !== "") {
+    if (draft && draft.loader.kind !== "vanilla" && draft.minecraftVersion.trim() !== "") {
       void launcher.loadLoaderVersions(draft.minecraftVersion);
     }
   }
@@ -184,11 +184,11 @@
           <span class="field-label">Mod loader</span>
           <select value={draft.loader.kind} disabled>
             {#each launcher.launcherState?.platformCapabilities ?? [] as capability (capability.kind)}
-              {#if capability.canInstall}<option value={capability.kind}>{capability.kind === "fabric" ? "Fabric" : capability.kind}</option>{/if}
+              {#if capability.canInstall}<option value={capability.kind}>{capability.kind === "fabric" ? "Fabric" : capability.kind === "neoForge" ? "NeoForge" : capability.kind}</option>{/if}
             {/each}
           </select>
         </label>
-        {#if draft.loader.kind === "fabric"}
+        {#if draft.loader.kind !== "vanilla"}
         <label class="field">
           <span class="field-label">Fabric Loader version</span>
           {#if "policy" in draft.loader && draft.loader.policy.type === "automatic"}

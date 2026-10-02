@@ -18,6 +18,7 @@ import {
   installInstanceConfiguration,
   listAuroraReleases,
   listFabricLoaderVersions,
+  listNeoforgeVersions,
   listMinecraftVersions,
   openInstanceFolder,
   openInstanceModsFolder,
@@ -94,7 +95,7 @@ class LauncherStore {
   // Instance management. All state comes from Rust.
   createDisplayName = $state("");
   createMinecraftVersion = $state("");
-  createPlatform = $state<"vanilla" | "fabric">("fabric");
+  createPlatform = $state<"vanilla" | "fabric" | "neoForge">("fabric");
   createAuroraEnabled = $state(false);
   createAuroraPreference = $state<boolean | null>(null);
   createLoaderPolicy = $state<{ type: "automatic" | "pinned"; version?: string }>({
@@ -408,19 +409,27 @@ class LauncherStore {
   }
 
   async loadLoaderVersions(minecraftVersion: string): Promise<void> {
-    if (minecraftVersion.trim() === "") {
+    if (minecraftVersion.trim() === "" || this.createPlatform === "vanilla") {
       this.loaderVersions = null;
       return;
     }
     this.loaderVersionsBusy = true;
     this.loaderVersionsError = null;
     try {
-      this.loaderVersions = await listFabricLoaderVersions(minecraftVersion.trim());
+      this.loaderVersions =
+        this.createPlatform === "neoForge"
+          ? (await listNeoforgeVersions(minecraftVersion.trim())).map((entry) => ({
+              version: entry.version,
+              stable: entry.stable,
+            }))
+          : await listFabricLoaderVersions(minecraftVersion.trim());
     } catch (cause: unknown) {
       this.loaderVersions = null;
       this.loaderVersionsError = backendError(
         cause,
-        "The Fabric Loader versions could not be loaded.",
+        this.createPlatform === "neoForge"
+          ? "The NeoForge versions could not be loaded."
+          : "The Fabric Loader versions could not be loaded.",
       );
     } finally {
       this.loaderVersionsBusy = false;
@@ -436,7 +445,12 @@ class LauncherStore {
       await createInstance({
         displayName: this.createDisplayName.trim(),
         minecraftVersion: this.createMinecraftVersion,
-        loader: this.createPlatform === "vanilla" ? {kind: "vanilla"} : {kind: "fabric", policy: this.createLoaderPolicy},
+        loader:
+          this.createPlatform === "vanilla"
+            ? {kind: "vanilla"}
+            : this.createPlatform === "neoForge"
+              ? {kind: "neoForge", policy: this.createLoaderPolicy}
+              : {kind: "fabric", policy: this.createLoaderPolicy},
         auroraEnabled: this.createAuroraEnabled,
       });
       this.createDisplayName = "";

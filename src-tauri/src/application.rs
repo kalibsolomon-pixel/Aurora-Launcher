@@ -1394,7 +1394,7 @@ pub async fn plan_fabric_install(
         fabric_library_count: plan.fabric_library_count(),
         final_library_count: plan.libraries().len(),
         fabric_digested_library_count: plan
-            .loader()
+            .fabric_loader()
             .expect("Fabric resolution")
             .digested_library_count(),
         java_component: plan.java().component().to_owned(),
@@ -1402,6 +1402,80 @@ pub async fn plan_fabric_install(
         java_raised_by_loader: plan.java().raised_by_loader(),
         final_main_class: plan.main_class().to_owned(),
     })
+}
+
+/// Plans a Minecraft + NeoForge installation without installing anything
+/// (the development proof surface for the composed NeoForge pipeline).
+#[tauri::command]
+pub async fn plan_neoforge_install(
+    app: AppHandle,
+    request: PlanNeoForgeInstallRequest,
+) -> Result<NeoForgePlanSummary, CommandError> {
+    let managed = managed_paths(&app)?;
+    let version = MinecraftVersionId::new(request.minecraft_version.trim())?;
+    let loader = crate::neoforge::metadata::NeoForgeVersionId::new(request.neoforge_version.trim())
+        .map_err(|error| CommandError::new("fabric_loader_not_found", error.to_string()))?;
+    let platform = crate::minecraft::rules::PlatformProfile::current()?;
+
+    let plan = crate::neoforge::resolve_neoforge_game_plan(
+        &managed,
+        &MetadataEndpoints::official(),
+        &crate::neoforge::metadata::NeoForgeMavenEndpoints::official(),
+        &version,
+        &loader,
+        platform,
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await?;
+
+    Ok(NeoForgePlanSummary {
+        minecraft_version: plan.minecraft().minecraft_version().to_owned(),
+        neoforge_version: plan
+            .neoforge_loader()
+            .expect("NeoForge resolution")
+            .neoforge_version()
+            .to_owned(),
+        vanilla_library_count: plan.vanilla_library_count(),
+        neoforge_library_count: plan.neoforge_library_count(),
+        final_library_count: plan.libraries().len(),
+        java_component: plan.java().component().to_owned(),
+        java_major_version: plan.java().major_version(),
+        final_main_class: plan.main_class().to_owned(),
+        processor_steps: plan
+            .neoforge_loader()
+            .expect("NeoForge resolution")
+            .processors()
+            .len(),
+    })
+}
+
+/// Typed request for the NeoForge planning command.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanNeoForgeInstallRequest {
+    pub minecraft_version: String,
+    pub neoforge_version: String,
+}
+
+/// Concise summary of a composed Minecraft + NeoForge game plan.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NeoForgePlanSummary {
+    pub minecraft_version: String,
+    pub neoforge_version: String,
+    pub vanilla_library_count: usize,
+    pub neoforge_library_count: usize,
+    pub final_library_count: usize,
+    pub java_component: String,
+    pub java_major_version: u32,
+    pub final_main_class: String,
+    pub processor_steps: usize,
+}
+
+impl From<crate::neoforge::NeoForgeGameResolutionError> for CommandError {
+    fn from(error: crate::neoforge::NeoForgeGameResolutionError) -> Self {
+        crate::instances::lifecycle::InstanceError::NeoForgeResolution(error).into()
+    }
 }
 
 impl From<InstallError> for CommandError {
@@ -1418,6 +1492,7 @@ impl From<InstallError> for CommandError {
                     InstallError::AssetIndexInvalid { .. } => "minecraft_asset_index_invalid",
                     InstallError::AssetInvalid { .. } => "minecraft_asset_invalid",
                     InstallError::InvalidSource(_) => "artifact_source_invalid",
+                    InstallError::Processing { .. } => "installation_processing_failed",
                     InstallError::Materialization { .. } => "artifact_materialization_failure",
                     InstallError::Native(native) => match native {
                         crate::install::natives::NativeExtractionError::ArchiveInvalid {
@@ -1552,7 +1627,8 @@ pub async fn install_game(
                     crate::integrity::DigestAlgorithm::Sha256 => verified_sha256_files += 1,
                 }
             }
-            crate::integrity::ArtifactTrust::SecureTransportObserved { .. } => {
+            crate::integrity::ArtifactTrust::SecureTransportObserved { .. }
+            | crate::integrity::ArtifactTrust::LocallyGenerated { .. } => {
                 transport_observed_files += 1;
             }
         }
@@ -1667,6 +1743,8 @@ impl From<InstanceError> for CommandError {
                     InstanceError::ConfigurationStale { .. } => "instance_not_ready",
                     InstanceError::ReleaseUnavailable { .. } => "instance_release_invalid",
                     InstanceError::LoaderResolution { .. } => "fabric_loader_not_found",
+                    InstanceError::NeoForgeMetadata(_) => "neoforge_metadata_unavailable",
+                    InstanceError::NeoForgeResolution(_) => "neoforge_resolution_failed",
                     InstanceError::Platform(_) => "minecraft_platform_unsupported",
                     InstanceError::GameInstallState(_) => "installation_state_invalid",
                     InstanceError::ValidationFailed { .. } => "instance_consistency_failure",
@@ -1676,6 +1754,8 @@ impl From<InstanceError> for CommandError {
                     | InstanceError::Aurora(_)
                     | InstanceError::GameResolution(_)
                     | InstanceError::FabricMetadata(_)
+                    | InstanceError::NeoForgeMetadata(_)
+                    | InstanceError::NeoForgeResolution(_)
                     | InstanceError::RuntimeMetadata(_)
                     | InstanceError::RuntimeInstall(_) => {
                         unreachable!("handled by value above")
@@ -4212,6 +4292,48 @@ pub async fn list_fabric_loader_versions(
         .collect())
 }
 
+/// Lists the NeoForge versions available for one exact Minecraft version,
+/// newest first, with the official stability markers. A Minecraft version
+/// no current NeoForge generation addresses surfaces as an empty list —
+/// a truthful no-compatible answer, never a fabricated one.
+#[tauri::command]
+pub async fn list_neoforge_versions(
+    minecraft_version: String,
+) -> Result<Vec<NeoForgeVersionDto>, CommandError> {
+    let version = MinecraftVersionId::new(minecraft_version.trim())?;
+    let listing = crate::neoforge::metadata::fetch_neoforge_versions(
+        &crate::neoforge::metadata::NeoForgeMavenEndpoints::official(),
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|error| -> CommandError {
+        crate::instances::lifecycle::InstanceError::NeoForgeMetadata(error).into()
+    })?;
+
+    Ok(listing
+        .for_minecraft(&version)
+        .into_iter()
+        .map(|entry| NeoForgeVersionDto {
+            version: entry.version().to_owned(),
+            stable: entry.stable(),
+        })
+        .collect())
+}
+
+/// One NeoForge version available for a Minecraft version.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NeoForgeVersionDto {
+    pub version: String,
+    pub stable: bool,
+}
+
+impl From<crate::neoforge::metadata::NeoForgeMetadataError> for CommandError {
+    fn from(error: crate::neoforge::metadata::NeoForgeMetadataError) -> Self {
+        crate::instances::lifecycle::InstanceError::NeoForgeMetadata(error).into()
+    }
+}
+
 impl From<FabricMetadataError> for CommandError {
     fn from(error: FabricMetadataError) -> Self {
         // Mirrors the FabricResolutionError mapping for the same conditions.
@@ -5329,7 +5451,8 @@ async fn calculate_play_readiness(
 
     let mut mod_issues = Vec::new();
     if let (Some(plan), Some(record)) = (&runtime_plan, registry.find(instance_id)) {
-        if record.installed().platform.kind() == "fabric"
+        let loader_family = record.installed().platform.kind();
+        if matches!(loader_family, "fabric" | "neoForge")
             && managed.instance_paths(instance_id).mods().is_dir()
         {
             let inventory = crate::instance_mods::scan(managed, instance_id)?;
@@ -5338,6 +5461,7 @@ async fn calculate_play_readiness(
                 &record.installed().minecraft_version,
                 record.installed().platform.version().unwrap_or(""),
                 Some(plan.required_major_version()),
+                loader_family,
             );
         }
     }
@@ -5484,7 +5608,8 @@ async fn play_instance_with_target(
             "Quick Launch is currently supported for Minecraft 1.21.11 only.",
         ));
     }
-    if record.installed().platform.kind() == "fabric"
+    let launch_loader_family = record.installed().platform.kind();
+    if matches!(launch_loader_family, "fabric" | "neoForge")
         && managed.instance_paths(&instance).mods().is_dir()
     {
         let inventory = crate::instance_mods::scan(&managed, &instance)?;
@@ -5493,6 +5618,7 @@ async fn play_instance_with_target(
             &record.installed().minecraft_version,
             record.installed().platform.version().unwrap_or(""),
             Some(game_plan.java().major_version()),
+            launch_loader_family,
         )
         .first()
         {
@@ -5586,7 +5712,8 @@ async fn play_instance_with_target(
         crate::minecraft::rules::PlatformProfile::current()?,
     );
     prepared.with_validated(&managed, |installed| {
-        if record.installed().platform.kind() == "fabric"
+        let validated_loader_family = record.installed().platform.kind();
+        if matches!(validated_loader_family, "fabric" | "neoForge")
             && managed.instance_paths(&instance).mods().is_dir()
         {
             let inventory = crate::instance_mods::scan(&managed, &instance)?;
@@ -5595,6 +5722,7 @@ async fn play_instance_with_target(
                 &record.installed().minecraft_version,
                 record.installed().platform.version().unwrap_or(""),
                 Some(game_plan.java().major_version()),
+                validated_loader_family,
             )
             .first()
             {
@@ -5629,6 +5757,7 @@ async fn play_instance_with_target(
         let presence_version = record.installed().minecraft_version.clone();
         let presence_platform = match &record.installed().platform {
             crate::instances::platform::PlatformPin::Vanilla {} => "Vanilla",
+            crate::instances::platform::PlatformPin::NeoForge { .. } => "NeoForge",
             _ => "Fabric",
         }
         .to_owned();

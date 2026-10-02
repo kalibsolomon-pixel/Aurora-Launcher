@@ -72,6 +72,7 @@ use crate::integrity::{
 };
 use crate::minecraft::metadata::AssetIndexObjectsDocument;
 use crate::minecraft::plan::{ArtifactRequirement, AssetIndexRequirement, LibraryKind};
+use crate::neoforge::processors::run_client_processors;
 use crate::paths::ManagedPaths;
 
 use assets::AssetObjectEndpoints;
@@ -100,6 +101,10 @@ pub struct InstallContext {
     download_options: DownloadOptions,
     asset_endpoints: AssetObjectEndpoints,
     small_artifact_concurrency: usize,
+    /// The managed Java diagnostic executable used to run installer
+    /// processors. Required by NeoForge plans; `None` for Vanilla and
+    /// Fabric, whose installations execute no build steps.
+    processor_java: Option<PathBuf>,
 }
 
 impl InstallContext {
@@ -110,6 +115,7 @@ impl InstallContext {
             download_options: DownloadOptions::default(),
             asset_endpoints: AssetObjectEndpoints::official(),
             small_artifact_concurrency: SMALL_ARTIFACT_CONCURRENCY,
+            processor_java: None,
         }
     }
 
@@ -123,7 +129,14 @@ impl InstallContext {
             download_options,
             asset_endpoints,
             small_artifact_concurrency: SMALL_ARTIFACT_CONCURRENCY,
+            processor_java: None,
         }
+    }
+
+    /// Sets the managed Java executable used for installer processors.
+    pub fn with_processor_java(mut self, executable: PathBuf) -> Self {
+        self.processor_java = Some(executable);
+        self
     }
 
     pub fn download_options(&self) -> &DownloadOptions {
@@ -148,6 +161,7 @@ pub enum InstallPhase {
     Acquiring,
     Materializing,
     ExtractingNatives,
+    Processing,
     Validating,
     Committing,
 }
@@ -158,6 +172,7 @@ impl InstallPhase {
             Self::Acquiring => "acquiring",
             Self::Materializing => "materializing",
             Self::ExtractingNatives => "extractingNatives",
+            Self::Processing => "processing",
             Self::Validating => "validating",
             Self::Committing => "committing",
         }
@@ -377,6 +392,58 @@ pub async fn install_game(
     }
     let libraries_finished = Instant::now();
 
+    // ---- NeoForge-specific artifacts: the verified installer (kept for
+    // the processor pass, never an installed file), the universal
+    // artifact, and the installer-tool libraries processors run from.
+    let mut installer_path: Option<PathBuf> = None;
+    if let Some(neoforge) = plan.neoforge_loader() {
+        let installer = acquire_neoforge_artifact(&cache, neoforge.installer(), context).await?;
+        completed += 1;
+        report(
+            InstallPhase::Acquiring,
+            completed,
+            total_items,
+            Some(format!("neoforge {}", neoforge.neoforge_version())),
+        );
+
+        let universal = acquire_neoforge_library(&cache, neoforge.universal(), context).await?;
+        completed += 1;
+        files.push(PlannedFile {
+            source: universal.path.clone(),
+            relative: format!("libraries/{}", neoforge.universal().path()),
+            trust: universal.trust(),
+            size_bytes: universal.bytes,
+            role: InstalledFileRole::Library,
+            origin: universal.origin,
+        });
+        report(
+            InstallPhase::Acquiring,
+            completed,
+            total_items,
+            Some(neoforge.universal().coordinate().as_maven_string()),
+        );
+
+        for library in neoforge.installer_libraries() {
+            let artifact = acquire_neoforge_library(&cache, library, context).await?;
+            completed += 1;
+            files.push(PlannedFile {
+                source: artifact.path.clone(),
+                relative: format!("libraries/{}", library.path()),
+                trust: artifact.trust(),
+                size_bytes: artifact.bytes,
+                role: InstalledFileRole::Library,
+                origin: artifact.origin,
+            });
+            report(
+                InstallPhase::Acquiring,
+                completed,
+                total_items,
+                Some(library.coordinate().as_maven_string()),
+            );
+        }
+        installer_path = Some(installer.path);
+    }
+
     // Asset objects, deduplicated by hash.
     for batch in objects.chunks(context.small_artifact_concurrency) {
         let acquired = join_all(batch.iter().map(|object| async {
@@ -435,9 +502,16 @@ pub async fn install_game(
     }
     let materialization_finished = Instant::now();
 
-    // ---- Native extraction from the verified native archives.
+    // ---- Native extraction from the verified native archives. Modern
+    // Minecraft documents append a subdirectory to their own
+    // java.library.path template; extraction follows the document.
     let natives_relative = format!("natives/{}", minecraft.minecraft_version());
-    let natives_root = staging_game.join(&natives_relative);
+    let natives_subdirectory = minecraft.natives_subdirectory().map(str::to_owned);
+    let extraction_relative = match &natives_subdirectory {
+        Some(subdirectory) => format!("{natives_relative}/{subdirectory}"),
+        None => natives_relative.clone(),
+    };
+    let natives_root = staging_game.join(&extraction_relative);
     let native_libraries: Vec<&GameLibrary> = plan
         .libraries()
         .iter()
@@ -477,9 +551,61 @@ pub async fn install_game(
     }
     let natives_finished = Instant::now();
 
+    // ---- Loader processing: NeoForge's bounded installer processors run
+    // here, against staged inputs, writing only into the staged tree. Any
+    // produced artifact is recorded as a locally generated observation.
+    if let Some(neoforge) = plan.neoforge_loader() {
+        if neoforge.requires_install_time_java() {
+            let java_executable = context
+                .processor_java
+                .as_deref()
+                .ok_or(InstallError::Processing {
+                reason:
+                    "the NeoForge plan requires the managed Java runtime, which was not provided"
+                        .to_owned(),
+            })?;
+            let processor_context = crate::neoforge::processors::ProcessorContext {
+                staging_game: staging_game.clone(),
+                scratch_directory: staging_directory.join("processor-inputs"),
+                installer_path: installer_path
+                    .clone()
+                    .expect("a NeoForge plan acquired its installer above"),
+                java_executable: java_executable.to_path_buf(),
+                client_jar: staging_game.join(format!(
+                    "versions/{}/client.jar",
+                    minecraft.minecraft_version()
+                )),
+                minecraft_version: minecraft.minecraft_version().to_owned(),
+            };
+            let outcome = run_client_processors(neoforge, &processor_context, &mut |item| {
+                report(InstallPhase::Processing, 0, 0, Some(item.to_owned()));
+            })
+            .await
+            .map_err(|error| InstallError::Processing {
+                reason: error.to_string(),
+            })?;
+            for artifact in outcome.generated {
+                let staged = staging_game.join(artifact.relative.split('/').collect::<PathBuf>());
+                files.push(PlannedFile {
+                    source: staged,
+                    relative: artifact.relative.clone(),
+                    trust: ArtifactTrust::LocallyGenerated {
+                        observed_sha256: artifact.observed_sha256,
+                    },
+                    size_bytes: artifact.size_bytes,
+                    role: InstalledFileRole::Library,
+                    origin: ArtifactOrigin::CacheHit,
+                });
+            }
+        }
+    }
+    let processing_finished = Instant::now();
+    let _ = processing_finished;
+
     // ---- Staged validation: every file re-verified before completion.
     report(InstallPhase::Validating, 0, total_files, None);
-    let installed_files = validate_staged_files(&staging_game, &files, &natives_relative).await?;
+    let installed_files =
+        validate_staged_files(&staging_game, &files, &extraction_relative).await?;
     let staged_validation_finished = Instant::now();
 
     // ---- Completion record, written last inside staging.
@@ -501,7 +627,7 @@ pub async fn install_game(
         installation_id,
         installed_at,
         installed_files,
-        NativesRecord::new(natives_relative),
+        NativesRecord::with_subdirectory(natives_relative, natives_subdirectory),
     );
     let manifest_path = staging_game.join(INSTALLED_GAME_FILE_NAME);
     std::fs::write(&manifest_path, manifest.to_json()).map_err(|error| InstallError::Commit {
@@ -691,7 +817,8 @@ fn verify_managed_file(game_root: &Path, file: &InstalledFile) -> Result<u64, St
                     .map_err(|error| error.to_string())
             }
         },
-        ArtifactTrust::SecureTransportObserved { observed_sha256 } => {
+        ArtifactTrust::SecureTransportObserved { observed_sha256 }
+        | ArtifactTrust::LocallyGenerated { observed_sha256 } => {
             let expected = ArtifactDigest::parse(observed_sha256).map_err(|e| e.to_string())?;
             verify_file(&path, &expected, Some(file.size_bytes()))
                 .map_err(|error| error.to_string())
@@ -710,6 +837,11 @@ fn acquisition_total(plan: &GameInstallPlan, objects: &UnknownObjects) -> u32 {
         total += 1;
     }
     total += plan.libraries().len() as u32;
+    if let Some(neoforge) = plan.neoforge_loader() {
+        // The installer jar itself plus the universal artifact and the
+        // installer-tool libraries.
+        total += 2 + neoforge.installer_libraries().len() as u32;
+    }
     if let UnknownObjects::Known(count) = objects {
         total += *count as u32;
     }
@@ -909,6 +1041,16 @@ async fn acquire_library(
                 artifact.origin,
             ))
         }
+        GameLibrary::NeoForge(entry) => {
+            let artifact = acquire_neoforge_library(cache, entry, context).await?;
+            Ok((
+                artifact.path.clone(),
+                artifact.trust(),
+                artifact.bytes,
+                InstalledFileRole::Library,
+                artifact.origin,
+            ))
+        }
         GameLibrary::Fabric(entry) => {
             let artifact = entry.artifact();
             if let Some(sha256) = artifact.sha256() {
@@ -944,6 +1086,37 @@ async fn acquire_library(
             }
         }
     }
+}
+
+/// Acquires one NeoForge-published library through the SHA-1 verified
+/// store, exactly like a Mojang library: NeoForge publishes official
+/// SHA-1 digests inline in its metadata.
+async fn acquire_neoforge_library(
+    cache: &ArtifactCache,
+    library: &crate::neoforge::plan::NeoForgeLibrary,
+    context: &InstallContext,
+) -> Result<VerifiedSha1Artifact, InstallError> {
+    acquire_neoforge_artifact(cache, library.artifact(), context).await
+}
+
+/// Acquires one SHA-1-verified NeoForge artifact (library, universal, or
+/// installer).
+async fn acquire_neoforge_artifact(
+    cache: &ArtifactCache,
+    artifact: &crate::neoforge::plan::NeoForgeArtifact,
+    context: &InstallContext,
+) -> Result<VerifiedSha1Artifact, InstallError> {
+    let source = Sha1ArtifactSource::https_or_loopback(
+        artifact.url().as_str(),
+        &artifact.sha1().as_hex(),
+        artifact.size_bytes(),
+    )
+    .map_err(|error| InstallError::InvalidSource(error.to_string()))?;
+
+    cache
+        .acquire_sha1(&source, context.download_options())
+        .await
+        .map_err(InstallError::Acquisition)
 }
 
 /// Constructs a production HTTPS SHA-256 artifact source, falling back to
@@ -1108,6 +1281,8 @@ pub enum InstallError {
     },
     /// Native extraction failed (unsafe, conflicting, or unreadable).
     Native(NativeExtractionError),
+    /// A bounded installer-processor step failed.
+    Processing { reason: String },
     /// Staged content failed validation before commit.
     Validation { path: String, reason: String },
     /// The staged installation could not be committed.
@@ -1149,6 +1324,10 @@ impl fmt::Display for InstallError {
                 "the verified artifact for '{path}' could not be materialized into the installation: {source}"
             ),
             Self::Native(error) => write!(formatter, "{error}"),
+            Self::Processing { reason } => write!(
+                formatter,
+                "a bounded NeoForge installer-processor step failed: {reason}"
+            ),
             Self::Validation { path, reason } => write!(
                 formatter,
                 "the staged installation failed validation at '{path}': {reason}"
@@ -1460,6 +1639,7 @@ mod tests {
 
     fn test_context(server_base: &str) -> InstallContext {
         InstallContext {
+            processor_java: None,
             download_options: crate::downloads::DownloadOptions {
                 connect_timeout: Duration::from_secs(5),
                 idle_read_timeout: Duration::from_secs(5),

@@ -25,6 +25,7 @@ pub mod mod_compatibility;
 pub mod modpacks;
 pub mod modrinth;
 pub mod mrpack;
+pub mod neoforge;
 pub mod pack_activation;
 pub mod pack_state;
 pub mod pack_update;
@@ -88,6 +89,7 @@ pub fn run() {
             application::acquire_artifact,
             application::plan_minecraft_install,
             application::plan_fabric_install,
+            application::plan_neoforge_install,
             application::install_game,
             application::validate_installed_game,
             application::list_aurora_releases,
@@ -101,6 +103,7 @@ pub fn run() {
             application::install_instance_configuration,
             application::list_minecraft_versions,
             application::list_fabric_loader_versions,
+            application::list_neoforge_versions,
             application::select_instance,
             application::open_instance_folder,
             application::get_instance_mods,

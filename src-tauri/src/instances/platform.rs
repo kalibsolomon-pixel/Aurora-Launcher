@@ -40,9 +40,28 @@ impl PlatformPin {
             )),
         }
     }
+    /// The exact NeoForge version of a NeoForge installation.
+    pub fn require_neoforge(&self) -> Result<&str, String> {
+        match self {
+            Self::NeoForge { version } => Ok(version),
+            _ => Err(format!(
+                "a {} installation cannot provide a NeoForge version",
+                self.kind()
+            )),
+        }
+    }
+    /// The provider loader identity content compatibility is checked
+    /// against: the Modrinth loader slug of this installation's loader
+    /// family. Vanilla has no provider identity of its own.
     pub fn provider_loader(&self) -> Result<&'static str, String> {
-        self.require_fabric()?;
-        Ok("fabric")
+        match self {
+            Self::Fabric { .. } => Ok("fabric"),
+            Self::NeoForge { .. } => Ok("neoforge"),
+            other => Err(format!(
+                "{} content has no provider compatibility identity",
+                other.kind()
+            )),
+        }
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,6 +163,14 @@ pub fn capabilities() -> Vec<PlatformCapability> {
             can_launch: true,
             aurora_supported: true,
         },
+        PlatformCapability {
+            kind: "neoForge",
+            can_create: true,
+            can_install: true,
+            can_validate: true,
+            can_launch: true,
+            aurora_supported: false,
+        },
     ]
 }
 
@@ -220,9 +247,6 @@ mod tests {
             PlatformPin::Forge {
                 version: "1".into(),
             },
-            PlatformPin::NeoForge {
-                version: "1".into(),
-            },
             PlatformPin::Quilt {
                 version: "1".into(),
             },
@@ -230,9 +254,15 @@ mod tests {
             assert!(platform.require_fabric().is_err());
             assert!(platform.provider_loader().is_err());
         }
+        let neoforge = PlatformPin::NeoForge {
+            version: "26.2.0.88".into(),
+        };
+        assert!(neoforge.require_fabric().is_err());
+        assert_eq!(neoforge.require_neoforge().unwrap(), "26.2.0.88");
+        assert_eq!(neoforge.provider_loader().unwrap(), "neoforge");
         assert_eq!(
             capabilities().iter().map(|c| c.kind).collect::<Vec<_>>(),
-            vec!["vanilla", "fabric"]
+            vec!["vanilla", "fabric", "neoForge"]
         );
         assert!(
             capabilities()

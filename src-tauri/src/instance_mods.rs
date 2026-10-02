@@ -52,7 +52,7 @@ pub struct ModEntry {
     pub ownership: ModOwnership,
     pub sha256: Option<String>,
     pub provenance: Option<ProviderRecord>,
-    pub metadata: Option<FabricModMetadata>,
+    pub metadata: Option<ModMetadata>,
     pub warnings: Vec<ModWarning>,
     pub can_toggle: bool,
     pub can_remove: bool,
@@ -126,7 +126,7 @@ pub(crate) fn bootstrap_status(
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FabricModMetadata {
+pub struct ModMetadata {
     pub id: String,
     pub name: Option<String>,
     pub version: Option<String>,
@@ -211,6 +211,12 @@ struct NestedJarDeclaration {
 pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventory, ModError> {
     let mods = validate_mods_directory(managed, instance)?;
     let managed_file = managed_artifact_file_name(managed, instance)?;
+    // The loader family owns the metadata format read from mod jars.
+    let platform_kind = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
+        .map_err(|error| ModError::InstalledState(error.to_string()))?
+        .find(instance)
+        .map(|record| record.installed().platform.kind().to_owned())
+        .unwrap_or_else(|| "fabric".to_owned());
     let content_state = ContentState::load(managed, instance)
         .map_err(|error| ModError::ContentState(error.to_string()))?;
     let mut entries = Vec::new();
@@ -229,6 +235,7 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
                     &child.path(),
                     managed_file.as_deref(),
                     provider,
+                    &platform_kind,
                 ));
             }
             Err(source) => entries.push(ModEntry {
@@ -411,7 +418,7 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
         .entries
         .iter()
         .map(|entry| {
-            dependency_blockers(&inventory, entry)
+            dependency_blockers(&inventory, entry, &platform_kind)
                 .err()
                 .map(|reason| reason.to_string())
         })
@@ -568,7 +575,7 @@ pub(crate) fn managed_artifact_file_name(
 pub(crate) fn verified_required_mods(
     managed: &ManagedPaths,
     instance: &InstanceId,
-) -> Result<Vec<FabricModMetadata>, ModError> {
+) -> Result<Vec<ModMetadata>, ModError> {
     let manifest = crate::distribution::operational_manifest()
         .map_err(|error| ModError::InstalledState(error.to_string()))?;
     verified_required_mods_with_manifest(managed, instance, &manifest)
@@ -578,7 +585,7 @@ pub(crate) fn verified_required_mods_with_manifest(
     managed: &ManagedPaths,
     instance: &InstanceId,
     manifest: &crate::distribution::ReleaseManifest,
-) -> Result<Vec<FabricModMetadata>, ModError> {
+) -> Result<Vec<ModMetadata>, ModError> {
     let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
         .map_err(|error| ModError::InstalledState(error.to_string()))?;
     crate::instance_content::validate_directory(
@@ -714,6 +721,7 @@ fn inspect_entry(
     path: &Path,
     managed_files: Option<&[String]>,
     provider: Option<&ProviderRecord>,
+    platform_kind: &str,
 ) -> ModEntry {
     let file_name = path
         .file_name()
@@ -816,7 +824,7 @@ fn inspect_entry(
         file_type,
         ModFileType::EnabledJar | ModFileType::DisabledJar
     ) {
-        inspect_fabric_metadata(path, size_bytes.unwrap_or_default())
+        inspect_mod_metadata(path, size_bytes.unwrap_or_default(), platform_kind)
     } else {
         (None, Vec::new())
     };
@@ -929,10 +937,262 @@ fn unavailable_entry(file_name: String, reason: String) -> ModEntry {
     }
 }
 
+/// The platform kind of one instance's installed pin, for loader-family
+/// aware metadata inspection.
+pub(crate) fn platform_kind_of(managed: &ManagedPaths, instance: &InstanceId) -> String {
+    crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
+        .ok()
+        .and_then(|registry| {
+            registry
+                .find(instance)
+                .map(|record| record.installed().platform.kind().to_owned())
+        })
+        .unwrap_or_else(|| "fabric".to_owned())
+}
+
+/// Reads one mod JAR's metadata in the format its instance's loader
+/// family declares. The instance platform is the authority: NeoForge
+/// instances read `META-INF/neoforge.mods.toml` (with the legacy
+/// `META-INF/mods.toml` spelling accepted), everything else reads
+/// `fabric.mod.json`.
+pub(crate) fn inspect_mod_metadata(
+    path: &Path,
+    jar_size: u64,
+    platform_kind: &str,
+) -> (Option<ModMetadata>, Vec<ModWarning>) {
+    if platform_kind == "neoForge" {
+        inspect_neoforge_metadata(path, jar_size)
+    } else {
+        inspect_fabric_metadata(path, jar_size)
+    }
+}
+
+/// Reads the NeoForge mod metadata of one JAR into the shared normalized
+/// model: `depends` carries `required` dependencies, `recommends` carries
+/// `optional`, and `conflicts` carries `incompatible` declarations.
+pub(crate) fn inspect_neoforge_metadata(
+    path: &Path,
+    jar_size: u64,
+) -> (Option<ModMetadata>, Vec<ModWarning>) {
+    if jar_size > MAX_INSPECTED_JAR_BYTES {
+        return (
+            None,
+            vec![ModWarning::new(
+                "jar_too_large",
+                "Metadata inspection was skipped because this JAR exceeds the 512 MiB safety bound.",
+            )],
+        );
+    }
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(source) => {
+            return (
+                None,
+                vec![ModWarning::new(
+                    "jar_unreadable",
+                    format!("The JAR could not be opened: {source}"),
+                )],
+            );
+        }
+    };
+    let mut archive = match zip::ZipArchive::new(file) {
+        Ok(archive) => archive,
+        Err(error) => {
+            return (
+                None,
+                vec![ModWarning::new(
+                    "jar_malformed",
+                    format!("This file is not a readable ZIP/JAR archive: {error}"),
+                )],
+            );
+        }
+    };
+    if archive.len() > MAX_ARCHIVE_ENTRIES {
+        return (
+            None,
+            vec![ModWarning::new(
+                "jar_entry_limit",
+                "Metadata inspection was skipped because the archive contains more than 4,096 entries.",
+            )],
+        );
+    }
+    let mut primary = None;
+    let mut legacy = None;
+    for index in 0..archive.len() {
+        match archive.by_index(index) {
+            Ok(entry) => match entry.name() {
+                "META-INF/neoforge.mods.toml" => primary = Some(index),
+                "META-INF/mods.toml" => legacy = Some(index),
+                _ => {}
+            },
+            Err(error) => {
+                return (
+                    None,
+                    vec![ModWarning::new(
+                        "jar_malformed",
+                        format!("The JAR directory could not be inspected: {error}"),
+                    )],
+                );
+            }
+        }
+    }
+    let metadata_index = match (primary, legacy) {
+        (Some(index), _) => index,
+        (None, Some(index)) => index,
+        (None, None) => {
+            return (
+                None,
+                vec![ModWarning::new(
+                    "neoforge_metadata_missing",
+                    "No META-INF/neoforge.mods.toml metadata was found.",
+                )],
+            );
+        }
+    };
+    let mut entry = match archive.by_index(metadata_index) {
+        Ok(entry) => entry,
+        Err(error) => {
+            return (
+                None,
+                vec![ModWarning::new("jar_malformed", error.to_string())],
+            );
+        }
+    };
+    if entry.size() > MAX_METADATA_BYTES {
+        return (
+            None,
+            vec![ModWarning::new(
+                "neoforge_metadata_too_large",
+                "neoforge.mods.toml exceeds the 256 KiB safety bound.",
+            )],
+        );
+    }
+    let mut bytes = Vec::with_capacity(entry.size().min(MAX_METADATA_BYTES as u64) as usize);
+    if let Err(error) = entry
+        .by_ref()
+        .take(MAX_METADATA_BYTES + 1)
+        .read_to_end(&mut bytes)
+    {
+        return (
+            None,
+            vec![ModWarning::new(
+                "neoforge_metadata_unreadable",
+                format!("neoforge.mods.toml could not be decompressed: {error}"),
+            )],
+        );
+    }
+    if bytes.len() as u64 > MAX_METADATA_BYTES {
+        return (
+            None,
+            vec![ModWarning::new(
+                "neoforge_metadata_too_large",
+                "neoforge.mods.toml exceeded the 256 KiB read limit.",
+            )],
+        );
+    }
+    let text = match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(_) => {
+            return (
+                None,
+                vec![ModWarning::new(
+                    "neoforge_metadata_malformed",
+                    "neoforge.mods.toml is not valid UTF-8.",
+                )],
+            );
+        }
+    };
+    let document = match crate::neoforge::mods::NeoForgeModsDocument::parse(&text) {
+        Ok(document) => document,
+        Err(reason) => {
+            return (
+                None,
+                vec![ModWarning::new(
+                    "neoforge_metadata_malformed",
+                    format!("neoforge.mods.toml is malformed: {reason}"),
+                )],
+            );
+        }
+    };
+    let Some(first) = document.mods.first() else {
+        return (
+            None,
+            vec![ModWarning::new(
+                "neoforge_metadata_malformed",
+                "neoforge.mods.toml declares no [[mods]] entry.",
+            )],
+        );
+    };
+    if document.mods.len() > 1 {
+        return (
+            None,
+            vec![ModWarning::new(
+                "neoforge_metadata_malformed",
+                "neoforge.mods.toml declares more than one [[mods]] entry.",
+            )],
+        );
+    }
+    let id = first.mod_id.clone().unwrap_or_default().trim().to_owned();
+    if id.is_empty() {
+        return (
+            None,
+            vec![ModWarning::new(
+                "neoforge_metadata_malformed",
+                "neoforge.mods.toml does not contain a usable mod id.",
+            )],
+        );
+    }
+    let mut depends = Vec::new();
+    let mut recommends = Vec::new();
+    let mut conflicts = Vec::new();
+    for list in document.dependencies.values() {
+        for dependency in list {
+            if dependency.mod_id.trim().is_empty() {
+                continue;
+            }
+            let relation = ModRelation {
+                mod_id: dependency.mod_id.trim().to_owned(),
+                requirement: if dependency.version_range.trim().is_empty() {
+                    "*".to_owned()
+                } else {
+                    dependency.version_range.trim().to_owned()
+                },
+            };
+            match dependency.kind.as_str() {
+                "optional" => recommends.push(relation),
+                "incompatible" => conflicts.push(relation),
+                // `required` is the default spelling; discouraged future
+                // types degrade conservatively to required.
+                _ => depends.push(relation),
+            }
+        }
+    }
+    (
+        Some(ModMetadata {
+            id,
+            name: first.display_name.clone().filter(|v| !v.trim().is_empty()),
+            version: first.version.clone().filter(|v| !v.trim().is_empty()),
+            description: first.description.clone().filter(|v| !v.trim().is_empty()),
+            authors: first.authors.clone(),
+            environment: None,
+            depends,
+            recommends,
+            suggests: Vec::new(),
+            conflicts,
+            breaks: Vec::new(),
+            has_declared_icon: first.icon_file.is_some(),
+            nested_mod_ids: Vec::new(),
+            nested_mod_versions: HashMap::new(),
+            mixin_java_requirements: Vec::new(),
+        }),
+        Vec::new(),
+    )
+}
+
 pub(crate) fn inspect_fabric_metadata(
     path: &Path,
     jar_size: u64,
-) -> (Option<FabricModMetadata>, Vec<ModWarning>) {
+) -> (Option<ModMetadata>, Vec<ModWarning>) {
     if jar_size > MAX_INSPECTED_JAR_BYTES {
         return (
             None,
@@ -1121,7 +1381,7 @@ pub(crate) fn inspect_fabric_metadata(
         .take(16)
         .collect();
     (
-        Some(FabricModMetadata {
+        Some(ModMetadata {
             id,
             name: clean_optional(document.name),
             version: clean_optional(document.version),
@@ -1690,7 +1950,7 @@ fn set_enabled_with_commit(
             return Ok(inventory);
         }
         if !enabled {
-            dependency_blockers(&inventory, entry)?;
+            dependency_blockers(&inventory, entry, &platform_kind_of(managed, instance))?;
         } else {
             let mut proposed = inventory.entries.clone();
             proposed
@@ -1855,7 +2115,7 @@ pub fn remove(
     with_mutation_lock(instance, || {
         let inventory = scan(managed, instance)?;
         let entry = resolve_mutable_entry(&inventory, entry_id, false)?;
-        dependency_blockers(&inventory, entry)?;
+        dependency_blockers(&inventory, entry, &platform_kind_of(managed, instance))?;
         let mods = validate_mods_directory(managed, instance)?;
         let target = validate_current_regular_file(&mods, &entry.file_name)?;
         if let Some(hash) = &entry.sha256 {
@@ -1890,7 +2150,11 @@ fn resolve_mutable_entry<'a>(
     Ok(entry)
 }
 
-fn dependency_blockers(inventory: &ModInventory, target: &ModEntry) -> Result<(), ModError> {
+fn dependency_blockers(
+    inventory: &ModInventory,
+    target: &ModEntry,
+    loader_family: &str,
+) -> Result<(), ModError> {
     if !target.enabled {
         return Ok(());
     }
@@ -1921,9 +2185,10 @@ fn dependency_blockers(inventory: &ModInventory, target: &ModEntry) -> Result<()
                         .any(|alternative| {
                             crate::mod_compatibility::version_for(alternative, &relation.mod_id)
                                 .is_some_and(|version| {
-                                    crate::fabric::versions::satisfies(
+                                    crate::mod_compatibility::satisfies_for_family(
                                         version,
                                         &relation.requirement,
+                                        loader_family,
                                     ) == Ok(true)
                                 })
                         })
@@ -1981,7 +2246,7 @@ pub(crate) fn validate_provider_removals(
             .any(|target| target.entry_id == entry.entry_id)
     });
     for target in targets {
-        dependency_blockers(&inventory, &target)?;
+        dependency_blockers(&inventory, &target, &platform_kind_of(managed, instance))?;
     }
     Ok(())
 }
@@ -2578,9 +2843,15 @@ mod tests {
             let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
             if name == "java25" {
                 assert!(
-                    crate::mod_compatibility::validate(&inventory, "1.21.11", "0.19.5", Some(21))
-                        .iter()
-                        .any(|i| i.code == "mod_java_incompatible")
+                    crate::mod_compatibility::validate(
+                        &inventory,
+                        "1.21.11",
+                        "0.19.5",
+                        Some(21),
+                        "fabric"
+                    )
+                    .iter()
+                    .any(|i| i.code == "mod_java_incompatible")
                 );
                 std::fs::rename(&path, fixture.mods().join("mixins.jar.disabled")).unwrap();
                 assert!(
@@ -2588,15 +2859,22 @@ mod tests {
                         &scan(&fixture.managed, &fixture.instance).unwrap(),
                         "1.21.11",
                         "0.19.5",
-                        Some(21)
+                        Some(21),
+                        "fabric"
                     )
                     .is_empty()
                 );
             }
             if name == "java21" {
                 assert!(
-                    crate::mod_compatibility::validate(&inventory, "1.21.11", "0.19.5", Some(21))
-                        .is_empty()
+                    crate::mod_compatibility::validate(
+                        &inventory,
+                        "1.21.11",
+                        "0.19.5",
+                        Some(21),
+                        "fabric"
+                    )
+                    .is_empty()
                 );
             }
         }

@@ -106,7 +106,7 @@ export function instanceContentStatus(
 
 /** Quiet one-line description of an instance's desired configuration. */
 export function configurationLabel(instance: InstanceSummary): string {
-  const kind = instance.configuration.loader.kind === "fabric" ? "Fabric" : instance.configuration.loader.kind === "vanilla" ? "Vanilla" : instance.configuration.loader.kind;
+  const kind = instance.configuration.loader.kind === "fabric" ? "Fabric" : instance.configuration.loader.kind === "vanilla" ? "Vanilla" : instance.configuration.loader.kind === "neoForge" ? "NeoForge" : instance.configuration.loader.kind;
   const loader = "policy" in instance.configuration.loader
     ? instance.configuration.loader.policy.type === "pinned"
       ? `${kind} ${instance.configuration.loader.policy.version}`
@@ -178,7 +178,7 @@ export function javaRuntimeStatus(
 }
 
 export function installedConfigurationLabel(instance: InstanceSummary): string {
-  const platform = instance.platform.kind === "fabric" ? "Fabric" : instance.platform.kind === "vanilla" ? "Vanilla" : instance.platform.kind;
+  const platform = instance.platform.kind === "fabric" ? "Fabric" : instance.platform.kind === "vanilla" ? "Vanilla" : instance.platform.kind === "neoForge" ? "NeoForge" : instance.platform.kind;
   const loader = "version" in instance.platform ? ` ${instance.platform.version}` : "";
   const aurora = instance.aurora ? ` · Aurora ${instance.aurora.version}${instance.auroraContentState && instance.auroraContentState !== "active" ? ` (${instance.auroraContentState})` : ""}` : " · Aurora Off";
   return `Minecraft ${instance.minecraftVersion} · ${platform}${loader}${aurora}`;

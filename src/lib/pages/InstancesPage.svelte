@@ -15,7 +15,15 @@
   const selectedCapability = $derived(platforms.find(capability => capability.kind === launcher.createPlatform));
   let compatibility = $state<AuroraCompatibility | null>(null);
   let compatibilityError = $state("");
-  const loader = $derived<InstanceLoader>(launcher.createPlatform === "vanilla" ? {kind: "vanilla"} : {kind:"fabric", policy: launcher.createLoaderPolicy});
+  const platformLabel = (kind: string): string =>
+    kind === "vanilla" ? "Vanilla" : kind === "neoForge" ? "NeoForge" : "Fabric";
+  const loader = $derived<InstanceLoader>(
+    launcher.createPlatform === "vanilla"
+      ? {kind: "vanilla"}
+      : launcher.createPlatform === "neoForge"
+        ? {kind: "neoForge", policy: launcher.createLoaderPolicy}
+        : {kind: "fabric", policy: launcher.createLoaderPolicy},
+  );
   $effect(() => {
     const version = launcher.createMinecraftVersion;
     const selection = $state.snapshot(loader);
@@ -166,13 +174,13 @@
           <span class="field-label">Minecraft platform</span>
           <select bind:value={launcher.createPlatform}>
             {#each platforms as capability (capability.kind)}
-              <option value={capability.kind}>{capability.kind === "vanilla" ? "Vanilla" : "Fabric"}</option>
+              <option value={capability.kind}>{platformLabel(capability.kind)}</option>
             {/each}
           </select>
         </label>
-        {#if launcher.createPlatform === "fabric"}
+        {#if launcher.createPlatform !== "vanilla"}
         <label class="field">
-          <span class="field-label">Fabric Loader version</span>
+          <span class="field-label">{launcher.createPlatform === "neoForge" ? "NeoForge version" : "Fabric Loader version"}</span>
           <select
             value={launcher.createLoaderPolicy.type === "automatic" ? "" : "pinned"}
             onchange={(event) => {
@@ -191,8 +199,8 @@
               }
             }}
           >
-              <option value="">{launcher.createAuroraEnabled ? "Aurora release version" : "Newest stable compatible version"}</option>
-              <option value="pinned">Fabric — choose version</option>
+              <option value="">Newest stable compatible version</option>
+              <option value="pinned">{launcher.createPlatform === "neoForge" ? "NeoForge" : "Fabric"} — choose version</option>
           </select>
           {#if launcher.createLoaderPolicy.type === "pinned"}
             <select

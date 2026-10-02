@@ -1794,8 +1794,9 @@ pub async fn reconcile_provider_resolution(
         ProviderArtifactSource::Sha512(s) => cache.acquire_sha512(s).await,
     }
     .map_err(|e| ContentError::Acquisition(e.to_string()))?;
+    let platform_kind = crate::instance_mods::platform_kind_of(managed, instance);
     let (root_metadata, warnings) =
-        crate::instance_mods::inspect_fabric_metadata(&artifact.path, artifact.bytes);
+        crate::instance_mods::inspect_mod_metadata(&artifact.path, artifact.bytes, &platform_kind);
     let root_metadata = root_metadata.ok_or(ContentError::InvalidProviderArtifact)?;
     let all_dependencies: Vec<_> = resolved
         .plans
@@ -2327,7 +2328,8 @@ fn validate_projected_artifacts_scoped(
                 .to_string(),
         ),
     };
-    if record.installed().platform.kind() != "fabric" {
+    let loader_family = record.installed().platform.kind();
+    if !matches!(loader_family, "fabric" | "neoForge") {
         return Ok(());
     }
     let mut inventory = match std::fs::symlink_metadata(managed.instance_paths(instance).mods()) {
@@ -2370,7 +2372,8 @@ fn validate_projected_artifacts_scoped(
                 .as_ref()
                 .is_none_or(|old| old.identity() != incoming.identity())
         });
-        let (metadata, warnings) = crate::instance_mods::inspect_fabric_metadata(path, *bytes);
+        let (metadata, warnings) =
+            crate::instance_mods::inspect_mod_metadata(path, *bytes, loader_family);
         crate::mod_compatibility::add_artifact(
             &mut inventory,
             incoming.file_name.clone(),
@@ -2384,6 +2387,7 @@ fn validate_projected_artifacts_scoped(
         &minecraft_version,
         &loader_version,
         java_major,
+        loader_family,
     )
     .first()
     {
@@ -2936,6 +2940,7 @@ fn validate_provider_mod_artifact(
     }
     let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
         .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
+    let platform_kind = crate::instance_mods::platform_kind_of(managed, instance);
     if let Some(instance_record) = registry.find(instance) {
         let installed = instance_record.installed();
         let loader = installed
@@ -2951,7 +2956,7 @@ fn validate_provider_mod_artifact(
             return Err(ContentError::UnsupportedAction);
         }
     }
-    let (metadata, _) = crate::instance_mods::inspect_fabric_metadata(path, bytes);
+    let (metadata, _) = crate::instance_mods::inspect_mod_metadata(path, bytes, &platform_kind);
     let Some(metadata) = metadata else {
         return Err(ContentError::InvalidProviderArtifact);
     };
@@ -2986,8 +2991,8 @@ fn validate_provider_mod_artifact(
 }
 
 pub(crate) fn conflicting_mod_identity<'a>(
-    incoming: &'a crate::instance_mods::FabricModMetadata,
-    existing: &crate::instance_mods::FabricModMetadata,
+    incoming: &'a crate::instance_mods::ModMetadata,
+    existing: &crate::instance_mods::ModMetadata,
 ) -> Option<&'a str> {
     if incoming.id.eq_ignore_ascii_case(&existing.id) {
         return Some(&incoming.id);
@@ -3235,7 +3240,8 @@ mod compatibility_acceptance {
         };
         let state = ContentState::load(&managed, &instance).unwrap();
         let inventory = crate::instance_mods::scan(&managed, &instance).unwrap();
-        let issues = crate::mod_compatibility::validate(&inventory, "1.21.11", "0.19.5", Some(21));
+        let issues =
+            crate::mod_compatibility::validate(&inventory, "1.21.11", "0.19.5", Some(21), "fabric");
         println!("Existing environment issues: {issues:?}");
         assert!(
             issues.is_empty(),
@@ -3294,7 +3300,8 @@ mod compatibility_acceptance {
             "db9446e3956ac7d7527e470bc8fae89fd48f36605ce792165401135465f18e7c".into(),
             warnings,
         );
-        let issues = crate::mod_compatibility::validate(&projected, "1.21.11", "0.19.5", Some(21));
+        let issues =
+            crate::mod_compatibility::validate(&projected, "1.21.11", "0.19.5", Some(21), "fabric");
         assert!(issues.iter().any(|i| i.code == "mod_java_incompatible"));
         println!("Exact retained Java25 artifact pre-Play issues: {issues:?}");
         for project in ["mOgUt4GM", "YL57xq9U"] {

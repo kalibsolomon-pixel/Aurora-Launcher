@@ -3504,6 +3504,8 @@ mod tests {
                 crate::fabric::metadata::FabricMetaEndpoints::loopback_for_testing(&format!(
                     "{base}/v2/"
                 )),
+                crate::neoforge::metadata::NeoForgeMavenEndpoints::loopback_for_testing(&base),
+                crate::runtime::metadata::RuntimeMetadataEndpoints::loopback_for_testing(&base),
                 crate::install::InstallContext::loopback_for_testing(
                     crate::downloads::DownloadOptions {
                         connect_timeout: std::time::Duration::from_secs(5),

@@ -5,7 +5,7 @@
 {#if instance}
   <dl>
     <div><dt>Minecraft</dt><dd>{instance.minecraftVersion}</dd></div>
-    <div><dt>Platform</dt><dd>{instance.platform.kind === "vanilla" ? "Vanilla" : `Fabric ${instance.platform.version}`}</dd></div>
+    <div><dt>Platform</dt><dd>{instance.platform.kind === "vanilla" ? "Vanilla" : instance.platform.kind === "neoForge" ? `NeoForge ${instance.platform.version}` : `Fabric ${instance.platform.version}`}</dd></div>
     <div><dt>Aurora Client</dt><dd>{instance.aurora ? `${instance.aurora.version} · ${instance.auroraContentState ?? "State unavailable"}` : "Not configured"}</dd></div>
   </dl>
 {:else}<p>Select an instance to see its installed details.</p>{/if}

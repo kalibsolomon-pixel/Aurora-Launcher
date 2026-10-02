@@ -631,12 +631,16 @@ pub(crate) async fn register_recovered_content(
                 compatibility: ContentCompatibility {
                     minecraft_versions: recognized.game_versions.clone(),
                     loader: match kind {
-                        ContentType::Mod => recognized
-                            .loaders
-                            .iter()
-                            .find(|loader| loader.as_str() == "fabric")
-                            .or_else(|| recognized.loaders.first())
-                            .cloned(),
+                        ContentType::Mod => {
+                            let platform_kind =
+                                crate::instance_mods::platform_kind_of(managed, instance);
+                            recognized
+                                .loaders
+                                .iter()
+                                .find(|loader| loader.as_str() == platform_kind)
+                                .or_else(|| recognized.loaders.first())
+                                .cloned()
+                        }
                         _ => None,
                     },
                     environment: Some(recognized.environment.clone()),
@@ -729,7 +733,11 @@ fn validate_recovered_mod(
     bytes: u64,
     canonical: &str,
 ) -> Result<(), ContentError> {
-    let (metadata, _) = crate::instance_mods::inspect_fabric_metadata(path, bytes);
+    let (metadata, _) = crate::instance_mods::inspect_mod_metadata(
+        path,
+        bytes,
+        &crate::instance_mods::platform_kind_of(managed, instance),
+    );
     let Some(metadata) = metadata else {
         return Err(ContentError::InvalidProviderArtifact);
     };

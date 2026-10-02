@@ -159,7 +159,9 @@ pub async fn resolve_game_plan(
     eprintln!(
         "[aurora-launcher] planned Minecraft {} + Fabric Loader {}: {} vanilla + {} Fabric = {} libraries, Java {}, main class {}",
         plan.minecraft().minecraft_version(),
-        plan.loader().expect("Fabric resolution").loader_version(),
+        plan.fabric_loader()
+            .expect("Fabric resolution")
+            .loader_version(),
         plan.vanilla_library_count(),
         plan.fabric_library_count(),
         plan.libraries().len(),
@@ -396,7 +398,7 @@ mod tests {
                 panic!("{game_version} + {loader_version} must resolve: {error}")
             });
 
-            let fabric = plan.loader().expect("Fabric resolution");
+            let fabric = plan.fabric_loader().expect("Fabric resolution");
             assert_eq!(fabric.minecraft_version(), game_version);
             assert_eq!(fabric.loader_version(), loader_version);
             assert_eq!(

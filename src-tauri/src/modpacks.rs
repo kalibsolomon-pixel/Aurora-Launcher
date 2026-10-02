@@ -125,6 +125,17 @@ pub(crate) async fn resolve(
         .map_err(|e| fail("pack_download_failed", e.to_string()))?;
     let pack = crate::mrpack::parse_verified_file(&archive.path)
         .map_err(|e| fail(e.code(), e.to_string()))?;
+    if artifact
+        .loaders
+        .iter()
+        .any(|v| v.eq_ignore_ascii_case("neoforge"))
+        && !artifact.loaders.iter().any(|v| v == "fabric")
+    {
+        return Err(fail(
+            "pack_unsupported_loader",
+            "This Modrinth version is a NeoForge modpack. Aurora installs NeoForge instances in this build, not NeoForge packs.",
+        ));
+    }
     if !artifact
         .game_versions
         .iter()

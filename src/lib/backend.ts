@@ -418,6 +418,7 @@ export interface InstallProgressEvent {
     | "acquiring"
     | "materializing"
     | "extractingNatives"
+    | "processing"
     | "validating"
     | "committing";
   completedItems: number;
@@ -727,6 +728,12 @@ export interface FabricLoaderVersion {
   stable: boolean;
 }
 
+/** One NeoForge version available for a Minecraft version. */
+export interface NeoForgeVersion {
+  version: string;
+  stable: boolean;
+}
+
 export async function listFabricLoaderVersions(
   minecraftVersion: string,
 ): Promise<FabricLoaderVersion[]> {
@@ -745,6 +752,16 @@ export async function listFabricLoaderVersions(
     );
   }
 }
+
+/**
+ * Lists the NeoForge versions available for one exact Minecraft version,
+ * newest first. A Minecraft version no current NeoForge generation
+ * addresses returns an empty list.
+ */
+export async function listNeoforgeVersions(minecraftVersion: string): Promise<NeoForgeVersion[]> {
+  return invoke("list_neoforge_versions", { minecraftVersion });
+}
+
 
 export async function retryInstanceInstall(instanceId: string): Promise<InstanceSummary> {
   try {

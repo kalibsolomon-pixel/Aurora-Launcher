@@ -340,6 +340,12 @@ pub enum ArtifactTrust {
     /// was computed locally on first acquisition and is recorded as an
     /// observation (a local consistency reference, not official verification).
     SecureTransportObserved { observed_sha256: String },
+    /// Produced inside Aurora by a bounded, supervised installer-processor
+    /// step from verified inputs (a generated artifact, not an
+    /// acquisition). The SHA-256 was computed locally when the output was
+    /// accepted and is recorded as an observation — a local consistency
+    /// reference, never an official verification.
+    LocallyGenerated { observed_sha256: String },
 }
 
 impl ArtifactTrust {
@@ -349,6 +355,7 @@ impl ArtifactTrust {
         match self {
             Self::ExpectedDigestVerified { .. } => "expectedDigestVerified",
             Self::SecureTransportObserved { .. } => "secureTransportObserved",
+            Self::LocallyGenerated { .. } => "locallyGenerated",
         }
     }
 
@@ -387,6 +394,10 @@ impl fmt::Display for ArtifactTrust {
                     "verified against expected {algorithm} digest {digest}"
                 )
             }
+            Self::LocallyGenerated { observed_sha256 } => write!(
+                formatter,
+                "generated locally by a supervised installer-processor step, observed SHA-256 {observed_sha256}"
+            ),
             Self::SecureTransportObserved { observed_sha256 } => write!(
                 formatter,
                 "secure transport with locally observed SHA-256 {observed_sha256} (no published digest)"

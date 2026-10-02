@@ -292,8 +292,16 @@ impl InstanceConfiguration {
             if version.trim() != version || version.is_empty() {
                 return Err(InvalidInstanceConfiguration::LoaderVersionInvalid);
             }
-            crate::fabric::metadata::LoaderVersionId::new(version)
-                .map_err(|_| InvalidInstanceConfiguration::LoaderVersionInvalid)?;
+            match self.loader.kind() {
+                LoaderKind::NeoForge => {
+                    crate::neoforge::metadata::NeoForgeVersionId::new(version)
+                        .map_err(|_| InvalidInstanceConfiguration::LoaderVersionInvalid)?;
+                }
+                _ => {
+                    crate::fabric::metadata::LoaderVersionId::new(version)
+                        .map_err(|_| InvalidInstanceConfiguration::LoaderVersionInvalid)?;
+                }
+            }
         }
         validate_memory_mib(self.memory_mib)?;
         parse_jvm_arguments(&self.additional_jvm_arguments)?;

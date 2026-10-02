@@ -280,6 +280,11 @@ pub struct MinecraftInstallPlan {
     logging: Option<LoggingRequirement>,
     libraries: Vec<PlannedLibrary>,
     launch: LaunchMetadata,
+    /// The subdirectory under the instance natives directory that Mojang's
+    /// own `java.library.path` template appends (modern documents use
+    /// `${natives_directory}/java`; historical ones use the directory
+    /// itself). Extraction writes there and validation checks there.
+    natives_subdirectory: Option<String>,
 }
 
 impl MinecraftInstallPlan {
@@ -317,6 +322,12 @@ impl MinecraftInstallPlan {
 
     pub fn launch(&self) -> &LaunchMetadata {
         &self.launch
+    }
+
+    /// The subdirectory under the instance natives directory that the
+    /// document's own `java.library.path` template appends, if any.
+    pub fn natives_subdirectory(&self) -> Option<&str> {
+        self.natives_subdirectory.as_deref()
     }
 
     /// How many planned libraries are platform-native artifacts.
@@ -437,6 +448,8 @@ pub fn plan_version_document(
         jvm_arguments: plan_arguments(&document.arguments.jvm, platform)?,
     };
 
+    let natives_subdirectory = derive_natives_subdirectory(&launch)?;
+
     Ok(MinecraftInstallPlan {
         minecraft_version: document.id.clone(),
         version_type: document.kind,
@@ -449,7 +462,63 @@ pub fn plan_version_document(
         logging,
         libraries,
         launch,
+        natives_subdirectory,
     })
+}
+
+/// Derives the natives extraction subdirectory from the document's own
+/// `java.library.path` template. The template is authoritative: modern
+/// documents append a subdirectory (`${natives_directory}/java`), historical
+/// ones use the directory itself. Anything else is refused rather than
+/// guessed, because extraction and launch substitution must agree.
+fn derive_natives_subdirectory(launch: &LaunchMetadata) -> Result<Option<String>, PlanError> {
+    const PREFIX: &str = "-Djava.library.path=${natives_directory}";
+    let mut subdirectory: Option<Option<String>> = None;
+    for group in launch.jvm_arguments() {
+        for value in &group.values {
+            let Some(rest) = value.strip_prefix(PREFIX) else {
+                continue;
+            };
+            let derived = if rest.is_empty() {
+                None
+            } else {
+                let suffix = rest
+                    .strip_prefix('/')
+                    .ok_or_else(|| PlanError::Unsupported {
+                        reason: format!(
+                            "the java.library.path template '{value}' is not a safe natives path"
+                        ),
+                    })?;
+                if suffix.is_empty()
+                    || suffix.contains('/')
+                    || suffix.contains('\\')
+                    || suffix.contains("..")
+                    || suffix.contains(':')
+                    || !suffix
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+                {
+                    return Err(PlanError::Unsupported {
+                        reason: format!(
+                            "the java.library.path template '{value}' is not a safe natives path"
+                        ),
+                    });
+                }
+                Some(suffix.to_owned())
+            };
+            if let Some(existing) = &subdirectory {
+                if *existing != derived {
+                    return Err(PlanError::Unsupported {
+                        reason:
+                            "the version document declares conflicting java.library.path templates"
+                                .to_owned(),
+                    });
+                }
+            }
+            subdirectory = Some(derived);
+        }
+    }
+    Ok(subdirectory.unwrap_or(None))
 }
 
 fn validate_logging_argument(argument: &str) -> Result<String, PlanError> {
