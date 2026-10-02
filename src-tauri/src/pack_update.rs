@@ -3767,6 +3767,95 @@ mod tests {
         assert!(check.blocked_reason.as_deref().unwrap().contains("quilt"));
     }
 
+    // BP — an installed supported (fabric) pack whose newer same-project
+    // version requires an unsupported loader transition is blocked at every
+    // entry point, before any reconciliation apply or mutation.
+    #[tokio::test]
+    async fn unsupported_loader_transition_is_blocked_before_apply() {
+        let (v1, v2) = canonical_specs();
+        // Newest same-project version on quilt. Its archive is deliberately
+        // absent from the server so any attempted acquisition would fail;
+        // the loader gate refuses long before that.
+        let quilt_newest = (
+            "VERS0003".to_owned(),
+            serde_json::json!({
+                "id": "VERS0003", "project_id": PACK_PROJECT, "name": "3.0.0", "version_number": "3.0.0",
+                "version_type": "release", "date_published": "2026-05-01T00:00:00Z",
+                "game_versions": [MC], "loaders": ["quilt"], "environment": "client_only",
+                "dependencies": [],
+                "files": [{"hashes": {"sha512": "f".repeat(128)}, "url": "__BAD_ARCHIVE__",
+                           "filename": "3.0.0.mrpack", "primary": true, "size": 10}]
+            }),
+        );
+        let world = PackWorld::with_variants("loader-block", v1, v2, vec![quilt_newest], None);
+        let record = world.install_v1(&[]).await;
+        let root = world.instance_root(&record);
+
+        // Discovery identifies the same pack/project and reports the
+        // unsupported loader transition as the reason.
+        let check = check_pack_update(&world.managed, &world.client, &record.id().to_string())
+            .await
+            .unwrap();
+        assert_eq!(check.status, PackUpdateStatus::Blocked);
+        assert!(check.candidate.is_none());
+        let reason = check.blocked_reason.as_deref().unwrap();
+        assert!(reason.contains("quilt"));
+        assert!(reason.contains("3.0.0"));
+
+        // No reconciliation is ever built: the preview refuses.
+        let error = match build_plan(
+            &world.managed,
+            &world.endpoints,
+            &world.client,
+            &record.id().to_string(),
+            &[],
+            false,
+        )
+        .await
+        {
+            Ok(_) => panic!("the unsupported loader transition must be refused"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code, "pack_update_unavailable");
+        assert!(error.message.contains("quilt"));
+
+        // The apply path is refused through the same gate, even with a
+        // forged fingerprint, before any mutation begins.
+        let error = apply_pack_update(
+            &world.managed,
+            &world.endpoints,
+            &world.client,
+            &record.id().to_string(),
+            &"0".repeat(64),
+            &[],
+            &mut |_| {},
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code, "pack_update_unavailable");
+
+        // The instance is untouched: the old exact pack identity stands and
+        // validates, the registry record stays ready, no new game/loader
+        // tree or pack state was activated, local files are unchanged, and
+        // no receipt exists.
+        let pack = crate::pack_state::InstalledPack::load(&world.managed, record.id())
+            .unwrap()
+            .unwrap();
+        assert_eq!(pack.identity.version_id, V1);
+        pack.validate_installed(&world.managed).unwrap();
+        let registry = InstanceRegistry::load(&world.managed.instance_registry_file()).unwrap();
+        assert_eq!(
+            registry.find(record.id()).unwrap().state().as_str(),
+            "ready"
+        );
+        assert!(!root.join("mods/added.jar").exists());
+        assert_eq!(
+            std::fs::read(root.join("config/same.toml")).unwrap(),
+            b"same = 1\n"
+        );
+        assert!(!receipt_path(&world.managed, record.id()).unwrap().exists());
+    }
+
     // G — provider unavailability fails safely without mutating anything.
     #[tokio::test]
     async fn provider_unavailable_is_a_safe_failure() {
@@ -4806,8 +4895,9 @@ mod tests {
         std::env::temp_dir().join(format!("aurora-pack-update-tmp-{}", uuid::Uuid::new_v4()))
     }
 
-    // AF, AG — unsafe fallback URL and bad digest are rejected (Phase I
-    // boundary, re-verified through the update path).
+    // An unchanged external component needs no fallback acquisition and is
+    // preserved with its external identity (the classification-matrix
+    // companion to the dedicated unsafe-fallback test below).
     #[tokio::test]
     async fn unsafe_external_sources_are_rejected_before_mutation() {
         let (v1, v2) = canonical_specs();
@@ -4827,6 +4917,101 @@ mod tests {
             PackRowAction::Preserve
         );
         let _ = record;
+    }
+
+    // AF — a new pack snapshot cannot authorize an external component
+    // through an unsafe fallback source. Discovery offers the candidate
+    // honestly, and the Phase I approved-host policy then refuses its
+    // archive at the parser boundary: no acquisition, no reconciliation,
+    // no instance mutation.
+    #[tokio::test]
+    async fn pack_update_rejects_unsafe_external_fallback() {
+        let (v1, v2) = canonical_specs();
+        // The candidate's index is honest in every respect except that the
+        // only download source for its external file is an unapproved HTTPS
+        // host. No component URLs are embedded, so the archive bytes do not
+        // depend on the test server's bound port.
+        let unsafe_candidate = PackSpec {
+            version_id: "VERS0009",
+            version_number: "3.0.0",
+            published: "2026-05-01T00:00:00Z",
+            minecraft: MC,
+            loader: LOADER,
+            components: vec![],
+            external: vec![ExternalSpec::new("mods/untrusted.jar", "untrusted-mod", "")],
+            overrides: vec![],
+        };
+        let archive = build_archive(
+            &unsafe_candidate,
+            "https://unused.invalid",
+            "https://unapproved.example.com",
+        );
+        let unsafe_version = serde_json::json!({
+            "id": "VERS0009", "project_id": PACK_PROJECT, "name": "3.0.0", "version_number": "3.0.0",
+            "version_type": "release", "date_published": "2026-05-01T00:00:00Z",
+            "game_versions": [MC], "loaders": ["fabric"], "environment": "client_only",
+            "dependencies": [],
+            "files": [{"hashes": {"sha512": sha512_hex(&archive)}, "url": "__BAD_ARCHIVE__",
+                       "filename": "3.0.0.mrpack", "primary": true, "size": archive.len()}]
+        });
+        let world = PackWorld::with_variants(
+            "unsafe-fallback",
+            v1,
+            v2,
+            vec![("VERS0009".to_owned(), unsafe_version)],
+            None,
+        );
+        {
+            let mut bodies = world.bodies.lock().unwrap();
+            bodies.insert("/packs/bad.mrpack".into(), archive.clone());
+        }
+        let record = world.install_v1(&[]).await;
+        let root = world.instance_root(&record);
+
+        // Discovery reports the newest same-project version as available.
+        let check = check_pack_update(&world.managed, &world.client, &record.id().to_string())
+            .await
+            .unwrap();
+        assert_eq!(check.status, PackUpdateStatus::UpdateAvailable);
+        assert_eq!(check.candidate.as_ref().unwrap().version_id, "VERS0009");
+
+        // Reconciliation refuses the candidate: the unsafe fallback source
+        // is rejected before any acquisition is attempted.
+        let error = match build_plan(
+            &world.managed,
+            &world.endpoints,
+            &world.client,
+            &record.id().to_string(),
+            &[],
+            true,
+        )
+        .await
+        {
+            Ok(_) => panic!("the unsafe fallback source must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code, "pack_invalid_download");
+
+        // No mutation occurred: the old exact pack identity stands and
+        // validates, the registry record is still ready, local and pack
+        // files are untouched, the untrusted file never landed, and no
+        // update receipt exists.
+        let pack = crate::pack_state::InstalledPack::load(&world.managed, record.id())
+            .unwrap()
+            .unwrap();
+        assert_eq!(pack.identity.version_id, V1);
+        pack.validate_installed(&world.managed).unwrap();
+        let registry = InstanceRegistry::load(&world.managed.instance_registry_file()).unwrap();
+        assert_eq!(
+            registry.find(record.id()).unwrap().state().as_str(),
+            "ready"
+        );
+        assert_eq!(
+            std::fs::read(root.join("config/same.toml")).unwrap(),
+            b"same = 1\n"
+        );
+        assert!(!root.join("mods/untrusted.jar").exists());
+        assert!(!receipt_path(&world.managed, record.id()).unwrap().exists());
     }
 
     // BY — ordinary Update All still blocks pack-owned content after update.
