@@ -203,6 +203,65 @@ policy is newest stable. Aurora is not offered for NeoForge instances
 (backend rejects the combination). Version selection appears only when
 NeoForge is selected; no Home/Settings/navigation redesign.
 
+## Acceptance
+
+Deterministic acceptance: A-CN all PASS (785 lib tests + 6 others, 0
+failures; 29 ignored are pre-existing live/benchmark gates plus the new
+live drift check). Full verification: `npm run check` 0/0, `npm test`
+178/0, `npm run build` exit 0, `cargo fmt --all -- --check` clean,
+`cargo check --all-targets` 0/0, `cargo test` all green, `npm run tauri
+build` exit 0.
+
+Live acceptance (disposable diagnostic root
+`C:\Users\kalib\AppData\Local\Temp\aurora-phase-k-root`, confirmed by
+the backend's own startup line): discovery, creation, and installation of
+Minecraft 26.2 + NeoForge 26.2.0.88 (pinned and automatic) and Minecraft
+26.3 + NeoForge 26.3.0.41-beta; managed `java-runtime-epsilon` (Java
+25.0.1) installed by the runtime pipeline at install time; AppleSkin
+(`appleskin-neoforge-mc26.2-3.0.10.jar`, Modrinth `EsAfCjCV`) installed
+from the provider with exact provenance; restart persistence with no
+re-downloads; truthful incompatibility rejection for Minecraft 1.21.11.
+
+### Minecraft launch acceptance
+
+The first implementation pass was blocked by authentication: the isolated
+diagnostic environment had no Microsoft account, and production account
+data was deliberately not accessed. The completion pass closed this item
+through Aurora's normal Microsoft flow (owner-interacted browser sign-in
+inside the diagnostic environment; no credentials copied, injected,
+printed, or captured; the refresh credential lives only in the OS-backed
+Credential Manager).
+
+- Authentication completed through the normal Aurora flow; account
+  "Spxcterr" recognized; the `authentication_required` blocker disappeared
+- Pre-launch: content Ready, `java-runtime-epsilon` Java 25.0.1 Ready,
+  instance Ready, AppleSkin present
+- Lifecycle observed from real Aurora state: Ready -> Starting (10:10:58)
+  -> Running (process 19252, started 10:11:21, executable under the
+  diagnostic managed runtime)
+- NeoForge confirmed from the game log: "Found mod file
+  neoforge-26.2.0.88-universal.jar"; mod list "NeoForge 26.2.0.88
+  (neoforge)"; AppleSkin "Found mod file
+  appleskin-neoforge-mc26.2-3.0.10.jar" and "AppleSkin 3.0.10+mc26.2
+  (appleskin)"
+- Genuine Minecraft 26.2 main menu with the NeoForge badge (screenshot
+  evidence)
+- Duplicate launch: while Running no Play control exists (replaced by the
+  Running indicator); readiness reports the supervised process; exactly
+  one Java process; the existing process stayed supervised
+- Session injection: "Setting user: Spxcterr" in the supervised log; no
+  token patterns in any log
+- Normal Quit -> exit code 0 -> Ready restored; no orphan Java process
+- Second-launch sanity: Ready -> Starting (10:19:41) -> Running (process
+  26148) -> NeoForge 26.2.0.88 + AppleSkin init confirmed -> normal exit 0
+  -> Ready; no unexpected downloads
+- Launcher restart: account still signed in, exact MC 26.2 / NeoForge
+  26.2.0.88 persist, runtime valid, AppleSkin present, deep validation
+  passed, no reinstall or redownload
+
+Verdict: **COMPLETE**. Evidence: `.zcode-diag/phase-k-neoforge/`
+(index in `evidence-index.md`).
+
 ## Limitations (genuine)
 
 - Only the 26.x NeoForge generation is offered; NeoForge for Minecraft
