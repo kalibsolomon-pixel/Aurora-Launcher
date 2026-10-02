@@ -684,6 +684,47 @@ impl std::error::Error for InvalidJvmArguments {}
 mod tests {
     use super::*;
 
+    #[test]
+    fn neoforge_configurations_validate_their_pinned_versions() {
+        let mut configuration = InstanceConfiguration::from_parts(
+            "26.2",
+            LoaderConfiguration::NeoForge {
+                policy: LoaderPolicy::Pinned {
+                    version: "26.2.0.88".to_owned(),
+                },
+            },
+            2048,
+            "",
+            None,
+        );
+        configuration.aurora_enabled = false;
+        assert!(configuration.validate().is_ok());
+        let invalid = InstanceConfiguration::from_parts(
+            "26.2",
+            LoaderConfiguration::NeoForge {
+                policy: LoaderPolicy::Pinned {
+                    version: "26.2.0.88/../evil".to_owned(),
+                },
+            },
+            2048,
+            "",
+            None,
+        );
+        assert!(invalid.validate().is_err());
+        // Aurora stays Fabric-only.
+        let mut aurora_neoforge = InstanceConfiguration::from_parts(
+            "26.2",
+            LoaderConfiguration::NeoForge {
+                policy: LoaderPolicy::Automatic {},
+            },
+            2048,
+            "",
+            None,
+        );
+        aurora_neoforge.aurora_enabled = true;
+        assert!(aurora_neoforge.validate().is_err());
+    }
+
     fn configuration() -> InstanceConfiguration {
         InstanceConfiguration::for_minecraft_version("26.2")
     }

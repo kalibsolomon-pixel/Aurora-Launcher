@@ -332,6 +332,65 @@ mod tests {
     use super::*;
     use crate::instance_mods::inspect_fabric_metadata;
     use std::io::{Cursor, Write};
+
+    #[test]
+    fn neoforge_families_use_maven_ranges_and_neoforge_builtins() {
+        let parent = entry(
+            serde_json::json!({"id":"mymod","version":"1.0","depends":{
+                "neoforge":"[26.2,)","minecraft":"[26.2]","java":"[25,)"
+            }}),
+            ModOwnership::UserManaged,
+            true,
+        );
+        assert!(
+            validate(
+                &inventory(vec![parent]),
+                "26.2",
+                "26.2.0.88",
+                Some(25),
+                "neoForge"
+            )
+            .is_empty()
+        );
+
+        let parent = entry(
+            serde_json::json!({"id":"mymod","version":"1.0","depends":{"neoforge":"[26.3,)"}}),
+            ModOwnership::UserManaged,
+            true,
+        );
+        let issues = validate(
+            &inventory(vec![parent]),
+            "26.2",
+            "26.2.0.88",
+            Some(25),
+            "neoForge",
+        );
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.code == "mod_dependency_unsatisfied")
+        );
+
+        // A fabricloader relation on a NeoForge instance is an ordinary mod
+        // relation, never the loader builtin.
+        let parent = entry(
+            serde_json::json!({"id":"mymod","version":"1.0","depends":{"fabricloader":">=1"}}),
+            ModOwnership::UserManaged,
+            true,
+        );
+        let issues = validate(
+            &inventory(vec![parent]),
+            "26.2",
+            "26.2.0.88",
+            Some(25),
+            "neoForge",
+        );
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.code == "mod_dependency_unsatisfied")
+        );
+    }
     fn entry(document: serde_json::Value, ownership: ModOwnership, enabled: bool) -> ModEntry {
         let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
         zip.start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())

@@ -215,7 +215,7 @@ pub async fn run_client_processors(
             hex
         });
         generated.push(GeneratedArtifact {
-            relative: path.clone(),
+            relative: path.replace('\\', "/"),
             observed_sha256: observed,
             size_bytes: bytes.len() as u64,
         });
@@ -263,15 +263,15 @@ fn substitute_argument(
             match value {
                 NeoForgeDataValue::Literal(literal) => literal.clone(),
                 NeoForgeDataValue::InstallerFile(name) => {
-                    let destination = context.scratch_directory.join(
-                        name.trim_start_matches('/')
-                            .replace('/', std::path::MAIN_SEPARATOR_STR),
-                    );
+                    let entry = name.trim_start_matches('/');
+                    let destination = context
+                        .scratch_directory
+                        .join(entry.replace('/', std::path::MAIN_SEPARATOR_STR));
                     require_within(&destination, &context.scratch_directory, argument)?;
                     if !destination.is_file() {
                         crate::neoforge::metadata::extract_installer_entry(
                             &context.installer_path,
-                            name,
+                            entry,
                             &destination,
                         )
                         .map_err(|error| ProcessorError::Substitution {
@@ -582,8 +582,475 @@ fn diagnostics_tail(output: &std::process::Output) -> String {
 }
 
 #[cfg(test)]
+pub(crate) mod test_tools {
+    //! Deterministic processor-execution fixtures: a real Java tool
+    //! compiled on demand (the acceptance host ships a JDK) plus the
+    //! graceful-degradation note for hosts without one.
+
+    use std::path::PathBuf;
+    use std::sync::OnceLock;
+
+    /// The synthetic processor tool. Behavior is selected by the first
+    /// argument after `--mode`:
+    /// - `write`: writes `--output <path>` with fixed bytes (a real
+    ///   processor producing its artifact);
+    /// - `noop`: exits 0 without writing anything (a processor that
+    ///   forgets its output);
+    /// - `fail`: prints a diagnostic and exits 3;
+    /// - `extra`: writes the output AND one additional unexpected file
+    ///   next to it.
+    pub const TOOL_SOURCE: &str = r#"
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public final class Tool {
+    public static void main(String[] args) throws Exception {
+        String mode = "write";
+        int outputIndex = -1;
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].equals("--mode") && i + 1 < args.length) {
+                mode = args[i + 1];
+            }
+            if (args[i].equals("--output") && i + 1 < args.length) {
+                outputIndex = i + 1;
+            }
+        }
+        if (mode.equals("fail")) {
+            System.out.println("synthetic processor refusing to work");
+            System.exit(3);
+        }
+        if (mode.equals("noop")) {
+            return;
+        }
+        if (mode.equals("destroy")) {
+            int inputIndex = -1;
+            for (int i = 0; i < args.length; i++) {
+                if (args[i].equals("--input") && i + 1 < args.length) {
+                    inputIndex = i + 1;
+                }
+            }
+            Files.delete(Path.of(args[inputIndex]));
+            Path output = Path.of(args[outputIndex]);
+            Files.createDirectories(output.getParent());
+            Files.write(output, "patched client artifact bytes".getBytes("UTF-8"));
+            return;
+        }
+        Path output = Path.of(args[outputIndex]);
+        Files.createDirectories(output.getParent());
+        Files.write(output, "patched client artifact bytes".getBytes("UTF-8"));
+        if (mode.equals("extra")) {
+            Path sibling = output.resolveSibling("unexpected.txt");
+            Files.write(sibling, "unexpected side effect".getBytes("UTF-8"));
+        }
+    }
+}
+"#;
+
+    fn compile_tool() -> Option<PathBuf> {
+        use std::io::Write as _;
+        let directory =
+            std::env::temp_dir().join(format!("aurora-neoforge-tool-{}", std::process::id()));
+        let jar = directory.join("processor-tool.jar");
+        if jar.is_file() {
+            return Some(jar);
+        }
+        let _ = std::fs::create_dir_all(&directory);
+        let source = directory.join("Tool.java");
+        std::fs::write(&source, TOOL_SOURCE).ok()?;
+        let javac = which_javac()?;
+        let status = std::process::Command::new(javac)
+            .arg(&source)
+            .current_dir(&directory)
+            .output()
+            .ok()?;
+        if !status.status.success() {
+            return None;
+        }
+        // The jar is assembled with the launcher's own archive writer;
+        // only compilation needs the JDK.
+        let class_bytes = std::fs::read(directory.join("Tool.class")).ok()?;
+        let file = std::fs::File::create(&jar).ok()?;
+        let mut writer = zip::ZipWriter::new(file);
+        writer
+            .start_file(
+                "META-INF/MANIFEST.MF",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .ok()?;
+        writer
+            .write_all(b"Manifest-Version: 1.0\r\nMain-Class: Tool\r\n")
+            .ok()?;
+        writer
+            .start_file("Tool.class", zip::write::SimpleFileOptions::default())
+            .ok()?;
+        writer.write_all(&class_bytes).ok()?;
+        writer.finish().ok()?;
+        Some(jar)
+    }
+
+    fn which_java() -> Option<PathBuf> {
+        if let Some(home) = std::env::var_os("JAVA_HOME") {
+            let executable = PathBuf::from(home).join("bin").join(if cfg!(windows) {
+                "java.exe"
+            } else {
+                "java"
+            });
+            if executable.is_file() {
+                return Some(executable);
+            }
+        }
+        which_on_path("java")
+    }
+
+    fn which_javac() -> Option<PathBuf> {
+        if let Some(home) = std::env::var_os("JAVA_HOME") {
+            let executable = PathBuf::from(home).join("bin").join(if cfg!(windows) {
+                "javac.exe"
+            } else {
+                "javac"
+            });
+            if executable.is_file() {
+                return Some(executable);
+            }
+        }
+        which_on_path("javac")
+    }
+
+    fn which_on_path(program: &str) -> Option<PathBuf> {
+        let path = std::env::var_os("PATH")?;
+        let candidate = if cfg!(windows) {
+            format!("{program}.exe")
+        } else {
+            program.to_owned()
+        };
+        for entry in std::env::split_paths(&path) {
+            let executable = entry.join(&candidate);
+            if executable.is_file() {
+                return Some(executable);
+            }
+        }
+        None
+    }
+
+    /// The compiled processor tool jar and the Java that runs it. `None`
+    /// means this host cannot execute processors (no JDK); callers skip
+    /// with an explicit note in that case.
+    pub fn tool_and_java() -> Option<(PathBuf, PathBuf)> {
+        static CACHE: OnceLock<Option<(PathBuf, PathBuf)>> = OnceLock::new();
+        CACHE
+            .get_or_init(|| {
+                let java = which_java()?;
+                let tool = compile_tool()?;
+                Some((tool, java))
+            })
+            .clone()
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use test_tools::tool_and_java;
+
+    fn scratch(name: &str) -> PathBuf {
+        let root = std::env::temp_dir()
+            .join("aurora-neoforge-processor-tests")
+            .join(std::process::id().to_string())
+            .join(name);
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("game").join("libraries")).unwrap();
+        std::fs::create_dir_all(root.join("scratch")).unwrap();
+        root
+    }
+
+    fn plan_with_processor(mode: &str) -> NeoForgePlan {
+        let profile = format!(
+            r#"{{
+              "spec": 1,
+              "profile": "NeoForge",
+              "version": "neoforge-26.2.0.88",
+              "minecraft": "26.2",
+              "json": "/version.json",
+              "data": {{
+                "PATCHED": {{"client": "[net.neoforged:minecraft-client-patched:26.2.0.88]", "server": "[net.neoforged:minecraft-server-patched:26.2.0.88]"}}
+              }},
+              "processors": [
+                {{"jar": "net.neoforged.installertools:installertools:4.0.17:fatjar", "classpath": ["net.neoforged.installertools:installertools:4.0.17:fatjar"], "args": ["--mode", "{mode}", "--input", "{{MINECRAFT_JAR}}", "--output", "{{PATCHED}}"]}}
+              ],
+              "libraries": []
+            }}"#
+        );
+        let version = r#"{
+          "id": "neoforge-26.2.0.88",
+          "inheritsFrom": "26.2",
+          "mainClass": "net.neoforged.fml.startup.Client",
+          "arguments": {"jvm": [], "game": []},
+          "libraries": []
+        }"#;
+        NeoForgePlan::from_documents(
+            &crate::neoforge::metadata::InstallProfileDocument::from_json(&profile).unwrap(),
+            &crate::neoforge::metadata::VersionProfileDocument::from_json(version).unwrap(),
+            &crate::minecraft::metadata::MinecraftVersionId::new("26.2").unwrap(),
+            &crate::neoforge::metadata::NeoForgeVersionId::new("26.2.0.88").unwrap(),
+            &crate::neoforge::metadata::NeoForgeMavenEndpoints::official(),
+            crate::integrity::Sha1Digest::parse("42d3bfead0ba3aa89c7d45ac29115defc9967219")
+                .unwrap(),
+            crate::integrity::Sha1Digest::parse("42d3bfead0ba3aa89c7d45ac29115defc9967219")
+                .unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn context_for(root: &Path, tool_jar: &Path) -> ProcessorContext {
+        let tool_relative = "libraries/net/neoforged/installertools/installertools/4.0.17/installertools-4.0.17-fatjar.jar";
+        std::fs::create_dir_all(
+            root.join("game/libraries/net/neoforged/installertools/installertools/4.0.17"),
+        )
+        .unwrap();
+        std::fs::copy(tool_jar, root.join("game").join(tool_relative)).unwrap();
+        std::fs::create_dir_all(root.join("game/versions/26.2")).unwrap();
+        std::fs::write(
+            root.join("game/versions/26.2/client.jar"),
+            b"synthetic client",
+        )
+        .unwrap();
+        ProcessorContext {
+            staging_game: root.join("game"),
+            scratch_directory: root.join("scratch"),
+            installer_path: PathBuf::from("installer-does-not-exist.jar"),
+            java_executable: PathBuf::new(),
+            client_jar: root.join("game/versions/26.2/client.jar"),
+            minecraft_version: "26.2".to_owned(),
+        }
+    }
+
+    #[tokio::test]
+    async fn required_processor_output_is_generated_and_recorded() {
+        let Some((tool, java)) = tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let root = scratch("generated");
+        let mut context = context_for(&root, &tool);
+        context.java_executable = java;
+        let plan = plan_with_processor("write");
+        let outcome = run_client_processors(&plan, &context, &mut |_| {})
+            .await
+            .unwrap();
+        assert_eq!(outcome.generated.len(), 1);
+        let artifact = &outcome.generated[0];
+        assert_eq!(
+            artifact.relative,
+            "libraries/net/neoforged/minecraft-client-patched/26.2.0.88/minecraft-client-patched-26.2.0.88.jar"
+        );
+        assert_eq!(artifact.observed_sha256.len(), 64);
+        assert!(artifact.size_bytes > 0);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn missing_processor_output_fails() {
+        let Some((tool, java)) = tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let root = scratch("missing-output");
+        let mut context = context_for(&root, &tool);
+        context.java_executable = java;
+        let plan = plan_with_processor("noop");
+        let error = run_client_processors(&plan, &context, &mut |_| {})
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(error, ProcessorError::OutputMissing { .. }),
+            "{error}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn nonzero_processor_exit_fails_with_diagnostics() {
+        let Some((tool, java)) = tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let root = scratch("failing");
+        let mut context = context_for(&root, &tool);
+        context.java_executable = java;
+        let plan = plan_with_processor("fail");
+        let error = run_client_processors(&plan, &context, &mut |_| {})
+            .await
+            .unwrap_err();
+        match &error {
+            ProcessorError::Failed {
+                exit_code,
+                diagnostics,
+                ..
+            } => {
+                assert_eq!(*exit_code, Some(3));
+                assert!(diagnostics.contains("refusing to work"), "{diagnostics}");
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn unexpected_side_effects_are_recorded_not_silent() {
+        let Some((tool, java)) = tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let root = scratch("extra");
+        let mut context = context_for(&root, &tool);
+        context.java_executable = java;
+        let plan = plan_with_processor("extra");
+        let outcome = run_client_processors(&plan, &context, &mut |_| {})
+            .await
+            .unwrap();
+        let relatives: Vec<&str> = outcome
+            .generated
+            .iter()
+            .map(|artifact| artifact.relative.as_str())
+            .collect();
+        assert!(relatives.contains(
+            &"libraries/net/neoforged/minecraft-client-patched/26.2.0.88/minecraft-client-patched-26.2.0.88.jar"
+        ));
+        assert!(relatives.contains(
+            &"libraries/net/neoforged/minecraft-client-patched/26.2.0.88/unexpected.txt"
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn retry_from_unchanged_inputs_succeeds() {
+        let Some((tool, java)) = tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let root = scratch("retry");
+        let mut context = context_for(&root, &tool);
+        context.java_executable = java;
+        let plan = plan_with_processor("write");
+        let first = run_client_processors(&plan, &context, &mut |_| {})
+            .await
+            .unwrap();
+        assert_eq!(first.generated.len(), 1);
+        let patched = context.staging_game.join(
+            first.generated[0]
+                .relative
+                .split('/')
+                .collect::<std::path::PathBuf>(),
+        );
+        let bytes_before = std::fs::read(&patched).unwrap();
+        // A retry from the same cached inputs succeeds; the tool rewrites
+        // the artifact deterministically (the snapshot diff sees no *new*
+        // file because the output path already exists).
+        let second = run_client_processors(&plan, &context, &mut |_| {})
+            .await
+            .unwrap();
+        assert!(second.generated.is_empty());
+        assert_eq!(std::fs::read(&patched).unwrap(), bytes_before);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn destroying_a_managed_file_fails_the_pass() {
+        let Some((tool, java)) = tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let root = scratch("destroy");
+        let mut context = context_for(&root, &tool);
+        context.java_executable = java;
+        // A processor that destroys an already-materialized managed file
+        // (here: the staged vanilla client jar) fails the pass.
+        let plan = plan_with_processor("destroy");
+        let error = run_client_processors(&plan, &context, &mut |_| {})
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ProcessorError::Destroyed { .. }), "{error}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn unknown_tokens_are_rejected_not_forwarded() {
+        let root = scratch("unknown-token");
+        let (tool, _java) = tool_and_java().expect("JDK available on acceptance host");
+        let context = context_for(&root, &tool);
+        let mut profile = r#"{
+          "spec": 1, "profile": "NeoForge", "version": "neoforge-26.2.0.88", "minecraft": "26.2",
+          "data": {"EVIL": {"client": "[net.neoforged:evil:1]", "server": "[net.neoforged:evil:1]"}},
+          "processors": [{"jar": "net.neoforged.installertools:installertools:4.0.17:fatjar", "classpath": [], "args": ["--mode", "write", "--output", "{NOT_A_TOKEN}"]}],
+          "libraries": []
+        }"#;
+        let document =
+            crate::neoforge::metadata::InstallProfileDocument::from_json(profile).unwrap();
+        profile = "{}";
+        let _ = profile;
+        let version = crate::neoforge::metadata::VersionProfileDocument::from_json(
+            r#"{"id":"neoforge-26.2.0.88","inheritsFrom":"26.2","mainClass":"net.neoforged.fml.startup.Client","arguments":{"jvm":[],"game":[]},"libraries":[]}"#,
+        )
+        .unwrap();
+        let plan = NeoForgePlan::from_documents(
+            &document,
+            &version,
+            &crate::minecraft::metadata::MinecraftVersionId::new("26.2").unwrap(),
+            &crate::neoforge::metadata::NeoForgeVersionId::new("26.2.0.88").unwrap(),
+            &crate::neoforge::metadata::NeoForgeMavenEndpoints::official(),
+            crate::integrity::Sha1Digest::parse("42d3bfead0ba3aa89c7d45ac29115defc9967219")
+                .unwrap(),
+            crate::integrity::Sha1Digest::parse("42d3bfead0ba3aa89c7d45ac29115defc9967219")
+                .unwrap(),
+        )
+        .unwrap();
+        let mut expected_outputs = Vec::new();
+        let error = substitute_argument(&plan, "{NOT_A_TOKEN}", &context, &mut expected_outputs)
+            .unwrap_err();
+        assert!(
+            matches!(error, ProcessorError::Substitution { .. }),
+            "{error}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolved_paths_must_stay_inside_their_roots() {
+        let root = scratch("escape");
+        let context = ProcessorContext {
+            staging_game: root.join("game"),
+            scratch_directory: root.join("scratch"),
+            installer_path: PathBuf::from("installer.jar"),
+            java_executable: PathBuf::new(),
+            client_jar: root.join("game/versions/26.2/client.jar"),
+            minecraft_version: "26.2".to_owned(),
+        };
+        assert!(
+            require_within(
+                &context.staging_game.join("libraries/x.jar"),
+                &context.staging_game,
+                "libraries/x.jar"
+            )
+            .is_ok()
+        );
+        assert!(
+            require_within(
+                &context.staging_game.join("../escape.jar"),
+                &context.staging_game,
+                "../escape.jar"
+            )
+            .is_err()
+        );
+        assert!(
+            require_within(
+                &context.staging_game.join("libraries/../../escape.jar"),
+                &context.staging_game,
+                "escape"
+            )
+            .is_err()
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn whole_argument_tokens_are_recognized() {

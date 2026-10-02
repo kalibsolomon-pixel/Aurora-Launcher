@@ -2435,6 +2435,73 @@ mod tests {
     use super::*;
 
     #[test]
+    fn neoforge_mod_metadata_normalizes_into_the_shared_model() {
+        let directory =
+            std::env::temp_dir().join(format!("aurora-neoforge-mods-test-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let jar = directory.join("neoforge-mod.jar");
+        {
+            use std::io::Write as _;
+            let file = std::fs::File::create(&jar).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            writer
+                .start_file(
+                    "META-INF/neoforge.mods.toml",
+                    zip::write::SimpleFileOptions::default(),
+                )
+                .unwrap();
+            writer
+                .write_all(
+                    br#"modLoader="javafml"
+loaderVersion="[3,]"
+
+[[mods]]
+modId="mymod"
+version="1.2.3"
+displayName="My Mod"
+
+[[dependencies.mymod]]
+modId="neoforge"
+type="required"
+versionRange="[26.2,)"
+
+[[dependencies.mymod]]
+modId="decorative"
+type="optional"
+versionRange="*"
+
+[[dependencies.mymod]]
+modId="rival"
+type="incompatible"
+versionRange="[1,2)"
+"#,
+                )
+                .unwrap();
+            writer.finish().unwrap();
+        }
+        let size = std::fs::metadata(&jar).unwrap().len();
+        let (metadata, warnings) = inspect_neoforge_metadata(&jar, size);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let metadata = metadata.expect("metadata parses");
+        assert_eq!(metadata.id, "mymod");
+        assert_eq!(metadata.version.as_deref(), Some("1.2.3"));
+        assert_eq!(metadata.name.as_deref(), Some("My Mod"));
+        assert_eq!(metadata.depends.len(), 1);
+        assert_eq!(metadata.depends[0].mod_id, "neoforge");
+        assert_eq!(metadata.depends[0].requirement, "[26.2,)");
+        assert_eq!(metadata.recommends.len(), 1);
+        assert_eq!(metadata.recommends[0].mod_id, "decorative");
+        assert_eq!(metadata.conflicts.len(), 1);
+        assert_eq!(metadata.conflicts[0].requirement, "[1,2)");
+
+        let (fabric_shaped, _) = inspect_mod_metadata(&jar, 0, "fabric");
+        assert!(fabric_shaped.is_none());
+        let (neoforge_shaped, _) = inspect_mod_metadata(&jar, size, "neoForge");
+        assert!(neoforge_shaped.is_some());
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
     fn toggle_receipt_failure_rolls_back_exact_bytes_and_filename() {
         let fixture = Fixture::new("toggle-rollback");
         jar(

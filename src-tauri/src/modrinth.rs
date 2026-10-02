@@ -1726,6 +1726,83 @@ mod tests {
     use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
 
+    #[test]
+    fn loader_compatibility_follows_the_instance_loader_family() {
+        let neoforge_context = Context {
+            minecraft_version: "26.2".into(),
+            loader: "neoforge".into(),
+            fabric_api_protected: false,
+        };
+        let fabric_context = Context {
+            minecraft_version: "26.2".into(),
+            loader: "fabric".into(),
+            fabric_api_protected: false,
+        };
+        let vanilla_context = Context {
+            minecraft_version: "26.2".into(),
+            loader: "vanilla".into(),
+            fabric_api_protected: false,
+        };
+
+        let mut neoforge_file = VersionDto {
+            id: "1".into(),
+            project_id: "p".into(),
+            name: "1.0".into(),
+            version_number: "1.0".into(),
+            version_type: "release".into(),
+            date_published: "2026-01-01T00:00:00Z".into(),
+            game_versions: vec!["26.2".into()],
+            loaders: vec!["neoforge".into()],
+            environment: "client_and_server".into(),
+            files: Vec::new(),
+            dependencies: Vec::new(),
+            changelog: None,
+        };
+        let mut fabric_file = neoforge_file.clone();
+        fabric_file.loaders = vec!["fabric".into()];
+        let mut wrong_version = neoforge_file.clone();
+        wrong_version.game_versions = vec!["1.21.11".into()];
+        let mut neoforge_pack = neoforge_file.clone();
+        neoforge_pack.loaders = vec!["neoforge".into()];
+
+        // BN: a NeoForge-compatible file is accepted on a NeoForge instance.
+        assert!(compatible(
+            &neoforge_context,
+            ContentType::Mod,
+            &neoforge_file
+        ));
+        // BO: a Fabric-only file is rejected on a NeoForge instance.
+        assert!(!compatible(
+            &neoforge_context,
+            ContentType::Mod,
+            &fabric_file
+        ));
+        // BP: a NeoForge-only file is rejected on a Fabric instance.
+        assert!(!compatible(
+            &fabric_context,
+            ContentType::Mod,
+            &neoforge_file
+        ));
+        assert!(compatible(&fabric_context, ContentType::Mod, &fabric_file));
+        // BQ: a Minecraft-version mismatch is rejected regardless of loader.
+        assert!(!compatible(
+            &neoforge_context,
+            ContentType::Mod,
+            &wrong_version
+        ));
+        // Vanilla has no provider identity at all.
+        assert!(!compatible(
+            &vanilla_context,
+            ContentType::Mod,
+            &neoforge_file
+        ));
+        // Modpacks remain a Fabric-only provider surface.
+        assert!(!compatible_browse(
+            &neoforge_context,
+            BrowseKind::Modpack,
+            &neoforge_pack
+        ));
+    }
     fn context() -> Context {
         Context {
             minecraft_version: "1.21.11".into(),

@@ -492,6 +492,14 @@ fn parse_reader<R: Read + Seek>(reader: R) -> Result<PackPlan, PackError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_neoforge_mrpack_is_rejected_with_an_explicit_phase_k_message() {
+        let index = r#"{"formatVersion":1,"game":"minecraft","versionId":"v1","name":"Neo Pack","files":[],"dependencies":{"minecraft":"26.2","neoforge":"26.2.0.88"}}"#;
+        let error = pack(index, &[]).unwrap_err();
+        assert_eq!(error.code(), "pack_unsupported_loader");
+        assert!(error.to_string().contains("NeoForge"), "{error}");
+    }
     use std::io::{Cursor, Write};
 
     fn pack(index: &str, extras: &[(&str, &[u8])]) -> Result<PackPlan, PackError> {

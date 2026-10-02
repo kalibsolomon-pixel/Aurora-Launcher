@@ -233,3 +233,249 @@ impl From<crate::fabric::plan::CompositionError> for NeoForgeGameResolutionError
         Self::Composition(error)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{TestResponse, TestServer};
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+
+    fn sha1_hex(bytes: &[u8]) -> String {
+        crate::integrity::Sha1Digest::compute(bytes).as_hex()
+    }
+
+    /// Builds one synthetic installer jar: the two embedded documents plus
+    /// the binpatch bundle the processor references.
+    fn installer_jar(profile_json: &str, version_json: &str) -> Vec<u8> {
+        use std::io::Write as _;
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        {
+            let mut writer = zip::ZipWriter::new(&mut cursor);
+            for (name, bytes) in [
+                ("install_profile.json", profile_json.as_bytes().to_vec()),
+                ("version.json", version_json.as_bytes().to_vec()),
+                ("data/client.lzma", b"synthetic binpatch bundle".to_vec()),
+            ] {
+                writer
+                    .start_file(name, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                writer.write_all(&bytes).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+        cursor.into_inner()
+    }
+
+    fn representative_documents(base: &str) -> (String, String) {
+        let profile = format!(
+            r#"{{
+              "spec": 1,
+              "profile": "NeoForge",
+              "version": "neoforge-26.2.0.88",
+              "minecraft": "26.2",
+              "json": "/version.json",
+              "data": {{
+                "BINPATCH": {{"client": "/data/client.lzma", "server": "/data/client.lzma"}},
+                "PATCHED": {{"client": "[net.neoforged:minecraft-client-patched:26.2.0.88]", "server": "[net.neoforged:minecraft-server-patched:26.2.0.88]"}}
+              }},
+              "processors": [
+                {{"sides": ["server"], "jar": "net.neoforged.installertools:installertools:4.0.17:fatjar", "classpath": ["net.neoforged.installertools:installertools:4.0.17:fatjar"], "args": ["--task", "EXTRACT_FILES"]}},
+                {{"jar": "net.neoforged.installertools:installertools:4.0.17:fatjar", "classpath": ["net.neoforged.installertools:installertools:4.0.17:fatjar"], "args": ["--task", "PROCESS_MINECRAFT_JAR", "--input", "{{MINECRAFT_JAR}}", "--output", "{{PATCHED}}", "--apply-patches", "{{BINPATCH}}"]}}
+              ],
+              "libraries": [
+                {{"name": "net.neoforged.installertools:installertools:4.0.17:fatjar", "downloads": {{"artifact": {{"path": "net/neoforged/installertools/installertools/4.0.17/installertools-4.0.17-fatjar.jar", "url": "{base}/neoforge-maven/net/neoforged/installertools/installertools/4.0.17/installertools-4.0.17-fatjar.jar", "sha1": "{}", "size": 100000}}}}}}
+              ]
+            }}"#,
+            sha1_hex(b"synthetic installertools fatjar"),
+        );
+        let version = format!(
+            r#"{{
+              "id": "neoforge-26.2.0.88",
+              "inheritsFrom": "26.2",
+              "mainClass": "net.neoforged.fml.startup.Client",
+              "arguments": {{
+                "jvm": ["-DlibraryDirectory=${{library_directory}}"],
+                "game": ["--fml.neoForgeVersion", "26.2.0.88", "--fml.mcVersion", "26.2"]
+              }},
+              "libraries": [
+                {{"name": "net.neoforged.fancymodloader:loader:11.0.16", "downloads": {{"artifact": {{"path": "net/neoforged/fancymodloader/loader/11.0.16/loader-11.0.16.jar", "url": "{base}/neoforge-maven/net/neoforged/fancymodloader/loader/11.0.16/loader-11.0.16.jar", "sha1": "{}", "size": 669160}}}}}}
+              ]
+            }}"#,
+            sha1_hex(b"synthetic fml loader jar"),
+        );
+        (profile, version)
+    }
+
+    fn listing_body() -> String {
+        r#"{"isSnapshot":false,"versions":["21.1.252","26.2.0.88","26.2.0.80-beta","26.3.0.40-beta","0.25w14craftmine.3-beta"]}"#.to_owned()
+    }
+
+    fn spawn_neoforge_server(listing_status: u16) -> (TestServer, BTreeMap<String, Vec<u8>>) {
+        // Phase one: a mutable body map so the installer jar can embed the
+        // live loopback base once the server exists.
+        let bodies = Arc::new(std::sync::Mutex::new(BTreeMap::<String, Vec<u8>>::new()));
+        bodies.lock().unwrap().insert(
+            "/api/maven/versions/releases/net/neoforged/neoforge".to_owned(),
+            listing_body().into_bytes(),
+        );
+        bodies.lock().unwrap().insert(
+            "/neoforge-maven/net/neoforged/installertools/installertools/4.0.17/installertools-4.0.17-fatjar.jar".to_owned(),
+            b"synthetic installertools fatjar".to_vec(),
+        );
+        bodies.lock().unwrap().insert(
+            "/neoforge-maven/net/neoforged/fancymodloader/loader/11.0.16/loader-11.0.16.jar"
+                .to_owned(),
+            b"synthetic fml loader jar".to_vec(),
+        );
+
+        let bodies_for_handler = Arc::clone(&bodies);
+        let server = TestServer::spawn(Arc::new(move |request| {
+            if request.path == "/api/maven/versions/releases/net/neoforged/neoforge"
+                && listing_status != 200
+            {
+                return TestResponse::status(listing_status);
+            }
+            let bodies = bodies_for_handler.lock().unwrap();
+            match bodies.get(&request.path) {
+                Some(body) => TestResponse::ok(body),
+                None => TestResponse::status(404),
+            }
+        }));
+
+        // Phase two: rebuild the installer with the live base URL, embed it
+        // in the map, and publish its sidecar digests.
+        let base = server.base_url().to_owned();
+        let (profile, version) = representative_documents(&base);
+        let installer = installer_jar(&profile, &version);
+        let universal = b"synthetic universal jar".to_vec();
+        let installer_path =
+            "/releases/net/neoforged/neoforge/26.2.0.88/neoforge-26.2.0.88-installer.jar";
+        let universal_path =
+            "/releases/net/neoforged/neoforge/26.2.0.88/neoforge-26.2.0.88-universal.jar";
+        let mut map = bodies.lock().unwrap();
+        map.insert(installer_path.to_owned(), installer.clone());
+        map.insert(
+            format!("{installer_path}.sha1"),
+            sha1_hex(&installer).into_bytes(),
+        );
+        map.insert(universal_path.to_owned(), universal.clone());
+        map.insert(
+            format!("{universal_path}.sha1"),
+            sha1_hex(&universal).into_bytes(),
+        );
+        drop(map);
+        let snapshot = bodies.lock().unwrap().clone();
+        (server, snapshot)
+    }
+
+    fn managed_root(name: &str) -> (crate::paths::ManagedPaths, std::path::PathBuf) {
+        let root = std::env::temp_dir()
+            .join("aurora-neoforge-resolution-tests")
+            .join(std::process::id().to_string())
+            .join(name);
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let managed = crate::paths::ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        (managed, root)
+    }
+
+    #[tokio::test]
+    async fn an_exact_combination_resolves_into_a_deterministic_plan() {
+        let (server, _) = spawn_neoforge_server(200);
+        let (managed, root) = managed_root("exact");
+        let endpoints = metadata::NeoForgeMavenEndpoints::loopback_for_testing(server.base_url());
+        let game = crate::minecraft::metadata::MinecraftVersionId::new("26.2").unwrap();
+        let loader = metadata::NeoForgeVersionId::new("26.2.0.88").unwrap();
+        let options = test_options();
+
+        let first = resolve_neoforge_plan(&managed, &endpoints, &game, &loader, &options)
+            .await
+            .unwrap();
+        let second = resolve_neoforge_plan(&managed, &endpoints, &game, &loader, &options)
+            .await
+            .unwrap();
+        assert_eq!(first, second);
+        assert_eq!(first.neoforge_version(), "26.2.0.88");
+        assert_eq!(first.version_id(), "neoforge-26.2.0.88");
+        assert_eq!(first.main_class(), "net.neoforged.fml.startup.Client");
+        assert_eq!(first.libraries().len(), 1);
+        assert_eq!(first.installer_libraries().len(), 1);
+        assert_eq!(first.processors().len(), 1);
+        // The plan's URLs are pinned to the resolved endpoint base; the
+        // documents the frontend never supplies cannot forge them.
+        assert!(
+            first
+                .installer()
+                .url()
+                .as_str()
+                .starts_with(server.base_url())
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn an_unknown_version_is_reported_not_substituted() {
+        let (server, _) = spawn_neoforge_server(200);
+        let (managed, root) = managed_root("unknown");
+        let endpoints = metadata::NeoForgeMavenEndpoints::loopback_for_testing(server.base_url());
+        let game = crate::minecraft::metadata::MinecraftVersionId::new("26.2").unwrap();
+        let loader = metadata::NeoForgeVersionId::new("26.9.9.9").unwrap();
+        let error = resolve_neoforge_plan(&managed, &endpoints, &game, &loader, &test_options())
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            NeoForgeResolutionError::VersionNotFound { .. }
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn a_minecraft_mapping_mismatch_is_rejected() {
+        let (server, _) = spawn_neoforge_server(200);
+        let (managed, root) = managed_root("mismatch");
+        let endpoints = metadata::NeoForgeMavenEndpoints::loopback_for_testing(server.base_url());
+        // 21.1.252 exists in the listing but addresses Minecraft 1.21.1.
+        let game = crate::minecraft::metadata::MinecraftVersionId::new("26.2").unwrap();
+        let loader = metadata::NeoForgeVersionId::new("21.1.252").unwrap();
+        let error = resolve_neoforge_plan(&managed, &endpoints, &game, &loader, &test_options())
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                error,
+                NeoForgeResolutionError::CombinationUnsupported { .. }
+            ),
+            "{error}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn metadata_unavailability_fails_safely() {
+        let (server, _) = spawn_neoforge_server(503);
+        let (managed, root) = managed_root("unavailable");
+        let endpoints = metadata::NeoForgeMavenEndpoints::loopback_for_testing(server.base_url());
+        let game = crate::minecraft::metadata::MinecraftVersionId::new("26.2").unwrap();
+        let loader = metadata::NeoForgeVersionId::new("26.2.0.88").unwrap();
+        let error = resolve_neoforge_plan(&managed, &endpoints, &game, &loader, &test_options())
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            NeoForgeResolutionError::Metadata(metadata::NeoForgeMetadataError::HttpStatus {
+                status: 503
+            })
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    fn test_options() -> crate::downloads::DownloadOptions {
+        crate::downloads::DownloadOptions {
+            connect_timeout: std::time::Duration::from_secs(5),
+            idle_read_timeout: std::time::Duration::from_secs(5),
+            max_redirects: crate::downloads::MAX_REDIRECTS,
+        }
+    }
+}

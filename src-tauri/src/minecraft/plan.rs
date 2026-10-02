@@ -801,6 +801,97 @@ fn validate_repository_path(path: &str, name: &str) -> Result<(), PlanError> {
 }
 
 #[cfg(test)]
+#[test]
+fn modern_java_library_path_templates_derive_the_natives_subdirectory() {
+    let document = VersionDocument::from_json(
+            r#"{
+                "id": "26.2",
+                "type": "release",
+                "mainClass": "net.minecraft.client.main.Main",
+                "javaVersion": { "component": "java-runtime-epsilon", "majorVersion": 25 },
+                "assetIndex": { "id": "32", "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951", "size": 10, "totalSize": 20, "url": "https://piston-meta.mojang.com/1/32.json" },
+                "downloads": { "client": { "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951", "size": 10, "url": "https://piston-data.mojang.com/1/client.jar" } },
+                "libraries": [
+                    {
+                        "downloads": { "artifact": {
+                            "path": "com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar",
+                            "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951",
+                            "size": 10,
+                            "url": "https://libraries.minecraft.net/com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar"
+                        } },
+                        "name": "com.mojang:brigadier:1.0.18"
+                    }
+                ],
+                "arguments": {
+                    "game": [],
+                    "jvm": ["-Djava.library.path=${natives_directory}/java", "-Djna.tmpdir=${natives_directory}/jna"]
+                }
+            }"#,
+        )
+        .unwrap();
+    let plan = plan_version_document(&document, PlatformProfile::current().unwrap()).unwrap();
+    assert_eq!(plan.natives_subdirectory(), Some("java"));
+
+    let document = VersionDocument::from_json(
+            r#"{
+                "id": "1.21.11",
+                "type": "release",
+                "mainClass": "net.minecraft.client.main.Main",
+                "javaVersion": { "component": "java-runtime-delta", "majorVersion": 21 },
+                "assetIndex": { "id": "32", "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951", "size": 10, "totalSize": 20, "url": "https://piston-meta.mojang.com/1/32.json" },
+                "downloads": { "client": { "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951", "size": 10, "url": "https://piston-data.mojang.com/1/client.jar" } },
+                "libraries": [
+                    {
+                        "downloads": { "artifact": {
+                            "path": "com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar",
+                            "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951",
+                            "size": 10,
+                            "url": "https://libraries.minecraft.net/com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar"
+                        } },
+                        "name": "com.mojang:brigadier:1.0.18"
+                    }
+                ],
+                "arguments": {
+                    "game": [],
+                    "jvm": ["-Djava.library.path=${natives_directory}"]
+                }
+            }"#,
+        )
+        .unwrap();
+    let plan = plan_version_document(&document, PlatformProfile::current().unwrap()).unwrap();
+    assert_eq!(plan.natives_subdirectory(), None);
+}
+
+#[test]
+fn unsafe_java_library_path_templates_are_rejected() {
+    let document = VersionDocument::from_json(
+            r#"{
+                "id": "26.2",
+                "type": "release",
+                "mainClass": "net.minecraft.client.main.Main",
+                "javaVersion": { "component": "java-runtime-epsilon", "majorVersion": 25 },
+                "assetIndex": { "id": "32", "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951", "size": 10, "totalSize": 20, "url": "https://piston-meta.mojang.com/1/32.json" },
+                "downloads": { "client": { "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951", "size": 10, "url": "https://piston-data.mojang.com/1/client.jar" } },
+                "libraries": [
+                    {
+                        "downloads": { "artifact": {
+                            "path": "com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar",
+                            "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951",
+                            "size": 10,
+                            "url": "https://libraries.minecraft.net/com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar"
+                        } },
+                        "name": "com.mojang:brigadier:1.0.18"
+                    }
+                ],
+                "arguments": {
+                    "game": [],
+                    "jvm": ["-Djava.library.path=${natives_directory}/../escape"]
+                }
+            }"#,
+        )
+        .unwrap();
+    assert!(plan_version_document(&document, PlatformProfile::current().unwrap()).is_err());
+}
 mod tests {
     use super::*;
     use crate::minecraft::metadata::VersionDocument;

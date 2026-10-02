@@ -2593,4 +2593,490 @@ mod tests {
             validation.verified_bytes
         }
     }
+    // ---- NeoForge end-to-end installation (Phase K) ----
+
+    /// The synthetic installer documents. `client_processor` selects the
+    /// client-side processor mode (`write`, `fail`, ...); `None` keeps the
+    /// profile server-only so no install-time Java is needed.
+    fn neoforge_documents(
+        base: &str,
+        client_processor: Option<&str>,
+        installertools: &[u8],
+    ) -> (String, String) {
+        let client_step = match client_processor {
+            Some(mode) => format!(
+                r#",
+                {{"jar": "net.neoforged.installertools:installertools:4.0.17:fatjar", "classpath": ["net.neoforged.installertools:installertools:4.0.17:fatjar"], "args": ["--mode", "{mode}", "--input", "{{MINECRAFT_JAR}}", "--output", "{{PATCHED}}", "--apply-patches", "{{BINPATCH}}"]}}"#
+            ),
+            None => String::new(),
+        };
+        let profile = format!(
+            r#"{{
+              "spec": 1,
+              "profile": "NeoForge",
+              "version": "neoforge-26.2.0.88",
+              "minecraft": "26.2",
+              "json": "/version.json",
+              "data": {{
+                "BINPATCH": {{"client": "/data/client.lzma", "server": "/data/client.lzma"}},
+                "PATCHED": {{"client": "[net.neoforged:minecraft-client-patched:26.2.0.88]", "server": "[net.neoforged:minecraft-server-patched:26.2.0.88]"}}
+              }},
+              "processors": [
+                {{"sides": ["server"], "jar": "net.neoforged.installertools:installertools:4.0.17:fatjar", "classpath": ["net.neoforged.installertools:installertools:4.0.17:fatjar"], "args": ["--task", "EXTRACT_FILES"]}}{client_step}
+              ],
+              "libraries": [
+                {{"name": "net.neoforged.fancymodloader:loader:11.0.16", "downloads": {{"artifact": {{"path": "net/neoforged/fancymodloader/loader/11.0.16/loader-11.0.16.jar", "url": "{base}/neoforge-maven/net/neoforged/fancymodloader/loader/11.0.16/loader-11.0.16.jar", "sha1": "{}", "size": {}}}}}}},
+                {{"name": "net.neoforged.installertools:installertools:4.0.17:fatjar", "downloads": {{"artifact": {{"path": "net/neoforged/installertools/installertools/4.0.17/installertools-4.0.17-fatjar.jar", "url": "{base}/neoforge-maven/net/neoforged/installertools/installertools/4.0.17/installertools-4.0.17-fatjar.jar", "sha1": "{}", "size": {}}}}}}}
+              ]
+            }}"#,
+            sha1_hex(b"synthetic fml loader jar"),
+            b"synthetic fml loader jar".len(),
+            sha1_hex(installertools),
+            installertools.len(),
+        );
+        let version = format!(
+            r#"{{
+              "id": "neoforge-26.2.0.88",
+              "inheritsFrom": "26.2",
+              "mainClass": "net.neoforged.fml.startup.Client",
+              "arguments": {{
+                "jvm": ["-DlibraryDirectory=${{library_directory}}"],
+                "game": ["--fml.neoForgeVersion", "26.2.0.88", "--fml.mcVersion", "26.2"]
+              }},
+              "libraries": [
+                {{"name": "net.neoforged.fancymodloader:loader:11.0.16", "downloads": {{"artifact": {{"path": "net/neoforged/fancymodloader/loader/11.0.16/loader-11.0.16.jar", "url": "{base}/neoforge-maven/net/neoforged/fancymodloader/loader/11.0.16/loader-11.0.16.jar", "sha1": "{}", "size": {}}}}}}},
+                {{"name": "cpw.mods:bootstraplauncher:2.0.2", "downloads": {{"artifact": {{"path": "cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar", "url": "{base}/neoforge-maven/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar", "sha1": "{}", "size": {}}}}}}}
+              ]
+            }}"#,
+            sha1_hex(b"synthetic fml loader jar"),
+            b"synthetic fml loader jar".len(),
+            sha1_hex(b"synthetic bootstraplauncher jar"),
+            b"synthetic bootstraplauncher jar".len(),
+        );
+        (profile, version)
+    }
+
+    fn neoforge_installer_jar(profile: &str, version: &str) -> Vec<u8> {
+        use std::io::Write as _;
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        {
+            let mut writer = zip::ZipWriter::new(&mut cursor);
+            for (name, bytes) in [
+                ("install_profile.json", profile.as_bytes().to_vec()),
+                ("version.json", version.as_bytes().to_vec()),
+                ("data/client.lzma", b"synthetic binpatch bundle".to_vec()),
+            ] {
+                writer
+                    .start_file(name, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                writer.write_all(&bytes).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+        cursor.into_inner()
+    }
+
+    /// The complete synthetic NeoForge world: Mojang pieces plus the
+    /// NeoForge repository, and the composed plan over them.
+    fn synthetic_neoforge_game(client_processor: Option<&str>) -> (Fixture, GameInstallPlan) {
+        let client = b"synthetic client jar bytes".to_vec();
+        let logging = b"<Configuration status=\"WARN\"></Configuration>".to_vec();
+        let mojang_library = b"synthetic mojang library jar".to_vec();
+        let native_archive = native_zip_bytes();
+
+        let asset_a = b"tiny png bytes a".to_vec();
+        let asset_b = b"tiny png bytes b".to_vec();
+        let asset_a_hash = sha1_hex(&asset_a);
+        let asset_b_hash = sha1_hex(&asset_b);
+        let asset_index_body = format!(
+            r#"{{"objects": {{
+                "icons/icon_16x16.png": {{"hash": "{asset_a_hash}", "size": {}}},
+                "minecraft/sounds/click.ogg": {{"hash": "{asset_b_hash}", "size": {}}}
+            }}}}"#,
+            asset_a.len(),
+            asset_b.len(),
+        )
+        .into_bytes();
+
+        let mut bodies: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        bodies.insert("/mojang/client.jar".to_owned(), client.clone());
+        bodies.insert(
+            "/mojang/logging/client-1.21.2.xml".to_owned(),
+            logging.clone(),
+        );
+        bodies.insert(
+            "/mojang/libraries/com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar".to_owned(),
+            mojang_library.clone(),
+        );
+        bodies.insert(
+            "/mojang/libraries/org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-natives-windows.jar".to_owned(),
+            native_archive.clone(),
+        );
+        bodies.insert(
+            "/mojang/asset-index/32.json".to_owned(),
+            asset_index_body.clone(),
+        );
+        bodies.insert(
+            format!("/assets/{}/{}", &asset_a_hash[..2], asset_a_hash),
+            asset_a.clone(),
+        );
+        bodies.insert(
+            format!("/assets/{}/{}", &asset_b_hash[..2], asset_b_hash),
+            asset_b.clone(),
+        );
+        bodies.insert(
+            "/neoforge-maven/net/neoforged/fancymodloader/loader/11.0.16/loader-11.0.16.jar"
+                .to_owned(),
+            b"synthetic fml loader jar".to_vec(),
+        );
+        bodies.insert(
+            "/neoforge-maven/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar"
+                .to_owned(),
+            b"synthetic bootstraplauncher jar".to_vec(),
+        );
+        // When a client processor runs, the installertools artifact is the
+        // compiled synthetic tool itself; otherwise any verified bytes do.
+        let installertools_body = if client_processor.is_some() {
+            crate::neoforge::processors::test_tools::tool_and_java()
+                .map(|(tool, _java)| std::fs::read(&tool).expect("the compiled tool jar"))
+                .expect("a JDK is required for the processing fixture")
+        } else {
+            b"synthetic installertools fatjar".to_vec()
+        };
+        bodies.insert(
+            "/neoforge-maven/net/neoforged/installertools/installertools/4.0.17/installertools-4.0.17-fatjar.jar".to_owned(),
+            installertools_body.clone(),
+        );
+
+        let broken = Arc::new(Mutex::new(HashSet::new()));
+
+        // The installer documents embed the server base, and the installer
+        // bytes embed the documents: serve from a shared mutable body map
+        // so the installer can be published once the base is known.
+        let shared_bodies = Arc::new(Mutex::new(bodies.clone()));
+        let bodies_for_handler = Arc::clone(&shared_bodies);
+        let broken_for_handler = Arc::clone(&broken);
+        let server = TestServer::spawn(Arc::new(move |request| {
+            if broken_for_handler.lock().unwrap().contains(&request.path) {
+                return TestResponse::status(404);
+            }
+            let bodies = bodies_for_handler.lock().unwrap();
+            match bodies.get(&request.path) {
+                Some(body) => TestResponse::ok(body),
+                None => TestResponse::status(404),
+            }
+        }));
+        let base = server.base_url().to_owned();
+
+        let endpoints =
+            crate::neoforge::metadata::NeoForgeMavenEndpoints::loopback_for_testing(&base);
+        let (profile, version) = neoforge_documents(&base, client_processor, &installertools_body);
+        let installer = neoforge_installer_jar(&profile, &version);
+        let universal = b"synthetic universal jar".to_vec();
+        let installer_path =
+            "/releases/net/neoforged/neoforge/26.2.0.88/neoforge-26.2.0.88-installer.jar";
+        let universal_path =
+            "/releases/net/neoforged/neoforge/26.2.0.88/neoforge-26.2.0.88-universal.jar";
+        shared_bodies
+            .lock()
+            .unwrap()
+            .insert(installer_path.to_owned(), installer.clone());
+        shared_bodies.lock().unwrap().insert(
+            format!("{installer_path}.sha1"),
+            sha1_hex(&installer).into_bytes(),
+        );
+        shared_bodies
+            .lock()
+            .unwrap()
+            .insert(universal_path.to_owned(), universal.clone());
+        shared_bodies.lock().unwrap().insert(
+            format!("{universal_path}.sha1"),
+            sha1_hex(&universal).into_bytes(),
+        );
+
+        let version_document_json = format!(
+            r#"{{
+                "id": "26.2",
+                "type": "release",
+                "mainClass": "net.minecraft.client.main.Main",
+                "javaVersion": {{ "component": "java-runtime-epsilon", "majorVersion": 25 }},
+                "assetIndex": {{
+                    "id": "32",
+                    "sha1": "{}",
+                    "size": {},
+                    "totalSize": 999999,
+                    "url": "{base}/mojang/asset-index/32.json"
+                }},
+                "downloads": {{
+                    "client": {{
+                        "sha1": "{}",
+                        "size": {},
+                        "url": "{base}/mojang/client.jar"
+                    }}
+                }},
+                "logging": {{
+                    "client": {{
+                        "argument": "-Dlog4j.configurationFile=${{path}}",
+                        "file": {{
+                            "id": "client-1.21.2.xml",
+                            "sha1": "{}",
+                            "size": {},
+                            "url": "{base}/mojang/logging/client-1.21.2.xml"
+                        }},
+                        "type": "log4j2-xml"
+                    }}
+                }},
+                "libraries": [
+                    {{
+                        "downloads": {{ "artifact": {{
+                            "path": "com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar",
+                            "sha1": "{}",
+                            "size": {},
+                            "url": "{base}/mojang/libraries/com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar"
+                        }} }},
+                        "name": "com.mojang:brigadier:1.0.18"
+                    }},
+                    {{
+                        "downloads": {{ "artifact": {{
+                            "path": "org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-natives-windows.jar",
+                            "sha1": "{}",
+                            "size": {},
+                            "url": "{base}/mojang/libraries/org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-natives-windows.jar"
+                        }} }},
+                        "name": "org.lwjgl:lwjgl:3.4.1:natives-windows"
+                    }}
+                ],
+                "arguments": {{
+                    "game": ["--username", "${{auth_player_name}}"],
+                    "jvm": ["-Djava.library.path=${{natives_directory}}"]
+                }}
+            }}"#,
+            sha1_hex(&asset_index_body),
+            asset_index_body.len(),
+            sha1_hex(&client),
+            client.len(),
+            sha1_hex(&logging),
+            logging.len(),
+            sha1_hex(&mojang_library),
+            mojang_library.len(),
+            sha1_hex(&native_archive),
+            native_archive.len(),
+        );
+        let document = VersionDocument::from_json(&version_document_json).unwrap();
+        let minecraft =
+            plan_version_document(&document, PlatformProfile::current().unwrap()).unwrap();
+
+        let neoforge = crate::neoforge::plan::NeoForgePlan::from_documents(
+            &crate::neoforge::metadata::InstallProfileDocument::from_json(&profile).unwrap(),
+            &crate::neoforge::metadata::VersionProfileDocument::from_json(&version).unwrap(),
+            &crate::minecraft::metadata::MinecraftVersionId::new("26.2").unwrap(),
+            &crate::neoforge::metadata::NeoForgeVersionId::new("26.2.0.88").unwrap(),
+            &endpoints,
+            crate::integrity::Sha1Digest::parse(&sha1_hex(&installer)).unwrap(),
+            crate::integrity::Sha1Digest::parse(&sha1_hex(b"synthetic universal jar")).unwrap(),
+        )
+        .unwrap();
+
+        let plan = crate::neoforge::plan::compose_neoforge_game_plan(minecraft, neoforge).unwrap();
+        let fixture = Fixture {
+            server,
+            bodies: shared_bodies.lock().unwrap().clone(),
+            broken,
+        };
+        (fixture, plan)
+    }
+
+    fn neoforge_managed_root(name: &str) -> (crate::paths::ManagedPaths, std::path::PathBuf) {
+        let root = std::env::temp_dir()
+            .join("aurora-neoforge-install-tests")
+            .join(std::process::id().to_string())
+            .join(name);
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let managed = crate::paths::ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        (managed, root)
+    }
+
+    #[tokio::test]
+    async fn a_synthetic_neoforge_game_installs_and_validates() {
+        let (fixture, plan) = synthetic_neoforge_game(None);
+        assert!(plan.neoforge_loader().unwrap().processors().is_empty());
+        let context = test_context(fixture.server.base_url());
+
+        let (managed, root) = neoforge_managed_root("basic");
+        let instance = InstanceId::new("11111111-1111-4111-8111-111111111111").unwrap();
+        let mut progress_events = 0usize;
+        let installed = install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_progress| progress_events += 1,
+            InstallFaults::default(),
+        )
+        .await
+        .unwrap();
+
+        let manifest = installed.manifest();
+        assert_eq!(manifest.minecraft_version(), "26.2");
+        assert_eq!(
+            manifest.platform(),
+            crate::instances::platform::PlatformPin::NeoForge {
+                version: "26.2.0.88".to_owned()
+            }
+        );
+        // The universal artifact is a managed library-tree discovery.
+        assert!(manifest.files().iter().any(|file| file.path()
+            == "libraries/net/neoforged/neoforge/26.2.0.88/neoforge-26.2.0.88-universal.jar"));
+        // Every NeoForge launch library is a recorded, digest-verified
+        // classpath entry.
+        for coordinate in [
+            "net.neoforged.fancymodloader:loader:11.0.16",
+            "cpw.mods:bootstraplauncher:2.0.2",
+        ] {
+            let library = plan
+                .libraries()
+                .iter()
+                .find(|library| library.coordinate_string() == coordinate)
+                .expect("composed plan carries the launch library");
+            assert!(library.is_classpath_entry());
+            let file = manifest
+                .files()
+                .iter()
+                .find(|file| file.path() == format!("libraries/{}", library.repository_path()))
+                .expect("the manifest records the launch library");
+            assert!(matches!(
+                file.trust(),
+                crate::integrity::ArtifactTrust::ExpectedDigestVerified { .. }
+            ));
+        }
+        assert!(progress_events > 0);
+
+        match validate_installed_game(&managed, &instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the installation must validate"),
+        }
+
+        // A corrupted artifact is detected without mutation.
+        let target = managed
+            .instance_paths(&instance)
+            .game()
+            .join("libraries/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar");
+        std::fs::write(&target, b"tampered bytes").unwrap();
+        match validate_installed_game(&managed, &instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Damaged);
+                assert!(
+                    validation
+                        .problems
+                        .iter()
+                        .any(|problem| problem.path.ends_with("bootstraplauncher-2.0.2.jar"))
+                );
+            }
+            ValidationOutcome::NotInstalled => panic!("the installation must still exist"),
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn a_processing_neoforge_install_records_generated_artifacts() {
+        let Some((_tool, java)) = crate::neoforge::processors::test_tools::tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let (fixture, plan) = synthetic_neoforge_game(Some("write"));
+        assert_eq!(plan.neoforge_loader().unwrap().processors().len(), 1);
+        let context = test_context(fixture.server.base_url()).with_processor_java(java);
+
+        let (managed, root) = neoforge_managed_root("processed");
+        let instance = InstanceId::new("33333333-3333-4333-8333-333333333333").unwrap();
+        let installed = install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_| {},
+            InstallFaults::default(),
+        )
+        .await
+        .unwrap();
+
+        let patched_relative = "libraries/net/neoforged/minecraft-client-patched/26.2.0.88/minecraft-client-patched-26.2.0.88.jar";
+        let file = installed
+            .manifest()
+            .files()
+            .iter()
+            .find(|file| file.path() == patched_relative)
+            .expect("the generated patched client is recorded");
+        assert!(matches!(
+            file.trust(),
+            crate::integrity::ArtifactTrust::LocallyGenerated { .. }
+        ));
+
+        match validate_installed_game(&managed, &instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the installation must validate"),
+        }
+
+        // Deleting the generated artifact is detected; repair is a
+        // deliberate reinstall, never silent.
+        let patched = managed
+            .instance_paths(&instance)
+            .game()
+            .join(patched_relative.split('/').collect::<std::path::PathBuf>());
+        std::fs::remove_file(&patched).unwrap();
+        match validate_installed_game(&managed, &instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Damaged);
+            }
+            ValidationOutcome::NotInstalled => panic!("the installation must still exist"),
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn a_failing_processor_never_commits_installed_state() {
+        let Some((_tool, java)) = crate::neoforge::processors::test_tools::tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let (fixture, plan) = synthetic_neoforge_game(Some("fail"));
+        let context = test_context(fixture.server.base_url()).with_processor_java(java);
+
+        let (managed, root) = neoforge_managed_root("failed-processor");
+        let instance = InstanceId::new("44444444-4444-4444-8444-444444444444").unwrap();
+        let error = install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_| {},
+            InstallFaults::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(error, InstallError::Processing { .. }), "{error}");
+        assert!(
+            !managed
+                .instance_paths(&instance)
+                .game()
+                .join(INSTALLED_GAME_FILE_NAME)
+                .exists(),
+            "no complete-looking installation may exist"
+        );
+        // The verified shared cache survived the failure and is reusable.
+        assert!(
+            crate::cache::ArtifactCache::new(managed.clone())
+                .verified_sha1_path(
+                    &crate::integrity::Sha1Digest::parse(&sha1_hex(b"synthetic fml loader jar"))
+                        .unwrap()
+                )
+                .is_file()
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
