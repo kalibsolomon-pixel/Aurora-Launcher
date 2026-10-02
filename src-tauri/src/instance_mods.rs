@@ -350,7 +350,7 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
             entry.action_blocked_reason = (!matches).then_some(file.reason);
         }
     }
-    derive_local_warnings(&mut entries);
+    derive_local_warnings(&mut entries, &platform_kind);
     let active_providers: HashSet<_> = entries
         .iter()
         .filter(|entry| entry.enabled)
@@ -1830,7 +1830,7 @@ fn relations(fields: serde_json::Map<String, serde_json::Value>) -> Vec<ModRelat
     relations
 }
 
-fn derive_local_warnings(entries: &mut [ModEntry]) {
+fn derive_local_warnings(entries: &mut [ModEntry], platform_kind: &str) {
     let module_versions: Vec<_> = entries
         .iter()
         .filter(|e| e.enabled)
@@ -1851,7 +1851,14 @@ fn derive_local_warnings(entries: &mut [ModEntry]) {
             declarations.entry(id.to_lowercase()).or_default().1 += 1;
         }
     }
-    let builtins = ["minecraft", "fabricloader", "java"];
+    // The builtin relation ids are loader-family dependent: NeoForge mods
+    // declare `neoforge` (and historically `forge`), Fabric mods declare
+    // `fabricloader`.
+    let builtins: Vec<&str> = if platform_kind == "neoForge" {
+        vec!["minecraft", "neoforge", "forge", "java"]
+    } else {
+        vec!["minecraft", "fabricloader", "java"]
+    };
     for entry in entries.iter_mut() {
         let Some(metadata) = &entry.metadata else {
             continue;
@@ -1958,7 +1965,7 @@ fn set_enabled_with_commit(
                 .find(|candidate| candidate.entry_id == entry.entry_id)
                 .expect("resolved entry")
                 .enabled = true;
-            derive_local_warnings(&mut proposed);
+            derive_local_warnings(&mut proposed, &platform_kind_of(managed, instance));
             let candidate = proposed
                 .iter()
                 .find(|candidate| candidate.entry_id == entry.entry_id)

@@ -892,6 +892,7 @@ fn unsafe_java_library_path_templates_are_rejected() {
         .unwrap();
     assert!(plan_version_document(&document, PlatformProfile::current().unwrap()).is_err());
 }
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::minecraft::metadata::VersionDocument;

@@ -471,6 +471,41 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// Live drift check against the current official repository: the real
+    /// installer documents of the newest stable lines must parse and
+    /// normalize. Ignored by default; run explicitly for acceptance.
+    #[tokio::test]
+    #[ignore = "live network drift check"]
+    async fn live_official_installer_documents_parse() {
+        let endpoints = metadata::NeoForgeMavenEndpoints::official();
+        let options = crate::downloads::DownloadOptions::default();
+        let managed = crate::paths::ManagedPaths::from_app_local_data_dir(
+            std::env::temp_dir().join("aurora-neoforge-live-drift"),
+        )
+        .unwrap();
+        for (game, loader) in [("26.2", "26.2.0.88"), ("26.1.2", "26.1.2.112")] {
+            let game = crate::minecraft::metadata::MinecraftVersionId::new(game).unwrap();
+            let loader = metadata::NeoForgeVersionId::new(loader).unwrap();
+            let plan = resolve_neoforge_plan(&managed, &endpoints, &game, &loader, &options).await;
+            match plan {
+                Ok(plan) => {
+                    assert!(!plan.main_class().is_empty());
+                    assert!(!plan.libraries().is_empty());
+                    assert!(plan.installer().sha1().as_hex().len() == 40);
+                }
+                Err(error) => panic!("{game} + {loader} must parse: {error}"),
+            }
+        }
+        // The 1.21.x installer generation stays outside the installed
+        // scope: discovery answers Minecraft 1.21.1 with an honest empty
+        // list rather than offering an unexecutable generation.
+        let legacy = crate::minecraft::metadata::MinecraftVersionId::new("1.21.1").unwrap();
+        let listing = metadata::fetch_neoforge_versions(&endpoints, &options)
+            .await
+            .unwrap();
+        assert!(listing.for_minecraft(&legacy).is_empty());
+    }
+
     fn test_options() -> crate::downloads::DownloadOptions {
         crate::downloads::DownloadOptions {
             connect_timeout: std::time::Duration::from_secs(5),

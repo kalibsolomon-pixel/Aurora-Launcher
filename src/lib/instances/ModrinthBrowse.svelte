@@ -21,11 +21,12 @@
   import InstallConflicts from "./InstallConflicts.svelte";
 
   let {
-    instanceId, instanceName, minecraftVersion, kind, installedProjectIds, dependencyOnlyProjectIds, onInstalled, standalonePackBrowse = false,
+    instanceId, instanceName, minecraftVersion, loaderLabel = "Fabric", kind, installedProjectIds, dependencyOnlyProjectIds, onInstalled, standalonePackBrowse = false,
   }: {
     instanceId: string;
     instanceName: string;
     minecraftVersion: string;
+    loaderLabel?: string;
     kind: ContentType;
     installedProjectIds: string[];
     dependencyOnlyProjectIds: string[];
@@ -351,7 +352,7 @@
   <div class="browse-heading">
     <div>
       <h3 class="group-title">Browse Modrinth</h3>
-      <p class="group-subtitle">{browseKind === "modpack" ? "Choose an exact Fabric pack version. Its declared Minecraft and loader versions determine the new instance." : `Results are filtered for this instance's Minecraft ${minecraftVersion}${browseKind === "mod" ? " and Fabric" : ""}. Compatibility is checked before installation.`}</p>
+      <p class="group-subtitle">{browseKind === "modpack" ? "Choose an exact Fabric pack version. Its declared Minecraft and loader versions determine the new instance." : `Results are filtered for this instance's Minecraft ${minecraftVersion}${browseKind === "mod" ? ` and ${loaderLabel}` : ""}. Compatibility is checked before installation.`}</p>
     </div>
     <span class="source">Source: Modrinth</span>
   </div>

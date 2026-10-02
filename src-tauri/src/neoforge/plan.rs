@@ -575,6 +575,111 @@ mod tests {
     }
 
     #[test]
+    fn composed_launch_views_carry_the_neoforge_contribution() {
+        // A minimal Mojang plan plus the representative NeoForge plan: the
+        // effective launch views must carry Mojang's groups followed by the
+        // loader's arguments, and the composed classpath must keep the
+        // vanilla client jar last.
+        let minecraft = synthetic_minecraft_plan();
+        let plan = compose_neoforge_game_plan(minecraft, plan()).unwrap();
+
+        assert_eq!(plan.main_class(), "net.neoforged.fml.startup.Client");
+        let jvm = plan.effective_jvm_arguments();
+        let jvm_values: Vec<&str> = jvm
+            .iter()
+            .flat_map(|group| group.values.iter().map(String::as_str))
+            .collect();
+        assert!(jvm_values.contains(&"-Djava.library.path=${natives_directory}/java"));
+        assert!(jvm_values.contains(&"-DlibraryDirectory=${library_directory}"));
+        // Mojang's arguments come first, the loader's group is appended last.
+        assert_eq!(
+            jvm.last().unwrap().values,
+            vec![
+                "-DlibraryDirectory=${library_directory}",
+                "--add-opens",
+                "java.base/java.lang.invoke=ALL-UNNAMED"
+            ]
+        );
+
+        let game = plan.effective_game_arguments();
+        let game_values: Vec<&str> = game
+            .iter()
+            .flat_map(|group| group.values.iter().map(String::as_str))
+            .collect();
+        assert!(game_values.contains(&"--username"));
+        assert!(game_values.contains(&"--fml.neoForgeVersion"));
+
+        // The composed classpath order: Mojang libraries, then NeoForge
+        // libraries, with the vanilla client jar positioned last by launch
+        // assembly (the shared resolve rule).
+        let classpath: Vec<String> = plan
+            .libraries()
+            .iter()
+            .filter(|library| library.is_classpath_entry())
+            .map(|library| library.repository_path())
+            .collect();
+        assert!(
+            classpath
+                .iter()
+                .any(|path| path.starts_with("com/mojang/brigadier"))
+        );
+        assert!(
+            classpath
+                .iter()
+                .any(|path| path.starts_with("net/neoforged/fancymodloader/loader"))
+        );
+        assert!(
+            classpath
+                .iter()
+                .position(|path| path.starts_with("net/neoforged"))
+                .unwrap()
+                > classpath
+                    .iter()
+                    .position(|path| path.starts_with("com/mojang/brigadier"))
+                    .unwrap()
+        );
+
+        // The vanilla boundary stays intact: the Minecraft half is the
+        // unmodified Mojang plan, and the platform pin answers exactly.
+        assert_eq!(plan.minecraft().minecraft_version(), "26.2");
+        assert_eq!(
+            plan.platform(),
+            crate::instances::platform::PlatformPin::NeoForge {
+                version: "26.2.0.88".to_owned()
+            }
+        );
+    }
+
+    /// A minimal but structurally valid Mojang plan for the launch-view
+    /// composition test (26.2-era shapes: modern natives, Java 25).
+    fn synthetic_minecraft_plan() -> crate::minecraft::plan::MinecraftInstallPlan {
+        let document = crate::minecraft::metadata::VersionDocument::from_json(
+            r#"{
+              "id": "26.2",
+              "type": "release",
+              "mainClass": "net.minecraft.client.main.Main",
+              "javaVersion": { "component": "java-runtime-epsilon", "majorVersion": 25 },
+              "assetIndex": { "id": "32", "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951", "size": 10, "totalSize": 20, "url": "https://piston-meta.mojang.com/1/32.json" },
+              "downloads": { "client": { "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951", "size": 10, "url": "https://piston-data.mojang.com/1/client.jar" } },
+              "libraries": [
+                { "downloads": { "artifact": { "path": "com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar", "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951", "size": 10, "url": "https://libraries.minecraft.net/com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar" } }, "name": "com.mojang:brigadier:1.0.18" },
+                { "downloads": { "artifact": { "path": "org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-natives-windows.jar", "sha1": "ad52af0ecf054a7e3f275a2e180ee06d9c490951", "size": 10, "url": "https://libraries.minecraft.net/org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-natives-windows.jar" } }, "name": "org.lwjgl:lwjgl:3.4.1:natives-windows" }
+              ],
+              "arguments": {
+                "game": ["--username", "${auth_player_name}"],
+                "jvm": ["-Djava.library.path=${natives_directory}/java"]
+              }
+            }"#,
+        )
+        .unwrap();
+        crate::minecraft::plan::plan_version_document(
+            &document,
+            crate::minecraft::rules::PlatformProfile::current().unwrap(),
+        )
+        .unwrap()
+    }
+
+    #[test]
     fn identity_disagreements_are_rejected() {
         let error = NeoForgePlan::from_documents(
             &profile_document(),

@@ -1,6 +1,74 @@
 # Aurora Launcher architecture
 
-## Phase J modpack update & reconciliation (current)
+## Phase K NeoForge loader support (current)
+
+NeoForge is a first-class loader of ordinary instances inside the existing
+normalized architecture; there is no parallel NeoForge launcher. Full
+details: `PHASE_K_NEOFORGE.md`.
+
+### Loader-generic composed plan
+
+`GameInstallPlan` (still in `fabric::plan`, the historical home) carries
+`loader: Option<LoaderPlan>` with `Fabric(FabricPlan)` and
+`NeoForge(NeoForgePlan)` variants. Composed views (ordered library set with
+`LibraryProvenance::NeoForge`, effective Java requirement, final main
+class) stay loader-generic; per-loader plans stay independently meaningful
+boundaries. `effective_jvm_arguments()` / `effective_game_arguments()`
+return Mojang's groups followed by the loader's unconditional groups —
+NeoForge is the first loader contributing launch arguments; Fabric/Vanilla
+behavior is unchanged. `LaunchPlan::from_game_plan` consumes the effective
+views.
+
+### NeoForge resolution and the bounded processor model
+
+`neoforge::metadata` owns the external boundary: the pinned
+`maven.neoforged.net` release listing (bare versions; Minecraft mapping
+derived from the leading components and cross-checked against each
+installer's own `install_profile.json`), SHA-1 sidecar digests, and the
+installer-embedded `install_profile.json`/`version.json` DTOs. The
+installer jar is a verified SHA-1-store acquisition read as a metadata
+document — Aurora never runs the NeoForge installer. Client-side
+processors execute as narrowly modeled build steps (`neoforge::processors`):
+argument-vector-only substitution from the normalized plan, exact managed
+Java diagnostic executable, empty environment, bounded scratch/staging
+roots, before/after tree snapshots that record generated outputs and reject
+destruction, nonzero exit/timeout/missing-output failures, and honest
+`ArtifactTrust::LocallyGenerated` observations for generated artifacts
+(never official verifications). NeoForge publishes no loader Java floor;
+Mojang's requirement stays authoritative (26.x -> `java-runtime-epsilon`,
+major 25), and the managed runtime is ensured before game installation
+because processors need it at install time.
+
+### Modern Minecraft metadata
+
+26.x version documents append a subdirectory to their own
+`java.library.path` template; Minecraft planning derives
+`natives_subdirectory` at plan time, extraction and the manifest follow it
+(`natives/26.2/java`). Historical flat documents are unchanged; unsafe or
+conflicting templates are rejected.
+
+### Loader-family content compatibility
+
+`PlatformPin::provider_loader()` supplies the Modrinth slug per family
+(`fabric`/`neoforge`); provider queries, file compatibility, updates, and
+dependency resolution flow from that backend-owned identity. Mod metadata
+normalizes into the shared loader-neutral `ModMetadata` model (JSON shape
+unchanged): NeoForge jars read `META-INF/neoforge.mods.toml`
+(required->depends, optional->recommends, incompatible->conflicts), and
+relation semantics dispatch per family (Fabric predicates vs Maven ranges).
+Local builtin relation ids are family-aware (`neoforge`/`forge` on
+NeoForge instances). NeoForge `.mrpack` remains explicitly rejected at the
+pack boundary with a Phase K deferral message; Fabric packs and their
+reconciliation are unchanged.
+
+### Discovery scope
+
+Only the four-component (26.x) installer generation is offered. Older
+generations are attributable in the listing but deliberately not offered:
+a Minecraft version of an uninstalled generation surfaces as an honest
+empty list.
+
+## Phase J modpack update & reconciliation
 
 An installed Modrinth modpack can move from one exact pack version to a newer exact version through a reviewed three-way reconciliation between the old snapshot, the candidate snapshot, and the current local filesystem; see [PHASE_J_MODPACK_UPDATES.md](PHASE_J_MODPACK_UPDATES.md). Discovery is same-project only, anchored on the installed exact version's still-published archive SHA-512, ordered by publication chronology (never version strings), with unsupported-loader candidates reported as blocked. Classification uses provider/file identity (project + version + SHA-512), never filenames; every outcome — preserve, acquire, adopt, replace, retire, preserve-shared, conflict — is planned before mutation, with keep-local divergence recorded in `pack-installed.json` schema 2 so a "Pack v2 — modified" instance validates against its chosen bytes instead of lying. Apply re-derives the whole plan natively and compares a resolution-independent fingerprint over the observed world; the transaction (receipt-marked `installing`, verified acquisition, staged activation with backups, game/loader transitions through the ordinary pipeline, registry commit last) rolls back fully on failure and recovers receipt-marked interruptions by proving old or new state. Pack-owned components remain blocked from ordinary Phase H updates; Update Modpack is a separate reconciliation path, not a call into Update All.
 

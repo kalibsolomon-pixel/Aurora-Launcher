@@ -1754,8 +1754,6 @@ impl From<InstanceError> for CommandError {
                     | InstanceError::Aurora(_)
                     | InstanceError::GameResolution(_)
                     | InstanceError::FabricMetadata(_)
-                    | InstanceError::NeoForgeMetadata(_)
-                    | InstanceError::NeoForgeResolution(_)
                     | InstanceError::RuntimeMetadata(_)
                     | InstanceError::RuntimeInstall(_) => {
                         unreachable!("handled by value above")
@@ -2592,6 +2590,7 @@ pub fn get_instance_content_context(
         mods_loadable: matches!(
             record.installed().platform,
             crate::instances::platform::PlatformPin::Fabric { .. }
+                | crate::instances::platform::PlatformPin::NeoForge { .. }
         ),
     })
 }

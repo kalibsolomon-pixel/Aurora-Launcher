@@ -1803,7 +1803,7 @@ impl fmt::Display for InstanceError {
             ),
             Self::LoaderResolution { game, reason } => write!(
                 formatter,
-                "no Fabric Loader version could be selected for Minecraft {game}: {reason}"
+                "no mod loader version could be selected for Minecraft {game}: {reason}"
             ),
             Self::Registry(error) => write!(formatter, "{error}"),
             Self::Config(error) => write!(formatter, "{error}"),

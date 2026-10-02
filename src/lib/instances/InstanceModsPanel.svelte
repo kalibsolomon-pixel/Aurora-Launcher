@@ -162,7 +162,7 @@
     {#if context?.modrinthAvailable}<button type="button" class="btn btn-quiet" aria-pressed={view === "browse"} onclick={() => view = "browse"}>Browse Modrinth</button>{/if}
   </div>
   {#if view === "browse"}
-    <ModrinthBrowse instanceId={instance.id} instanceName={instance.displayName} minecraftVersion={instance.minecraftVersion} kind="mod" installedProjectIds={entries.filter((entry) => entry.provenance?.provider === "modrinth").map((entry) => entry.provenance!.projectId)} dependencyOnlyProjectIds={lifecycleEntries.filter((entry) => entry.record.contentType === "mod" && !entry.record.explicitlyRetained).map((entry) => entry.record.projectId)} onInstalled={async (targetId, targetKind) => { await refreshInstalled(targetId); if (targetKind !== "mod") await launcher.runLoadContent(targetId, targetKind); await launcher.refreshState(); }} />
+    <ModrinthBrowse instanceId={instance.id} instanceName={instance.displayName} minecraftVersion={instance.minecraftVersion} loaderLabel={instance.platform.kind === "neoForge" ? "NeoForge" : "Fabric"} kind="mod" installedProjectIds={entries.filter((entry) => entry.provenance?.provider === "modrinth").map((entry) => entry.provenance!.projectId)} dependencyOnlyProjectIds={lifecycleEntries.filter((entry) => entry.record.contentType === "mod" && !entry.record.explicitlyRetained).map((entry) => entry.record.projectId)} onInstalled={async (targetId, targetKind) => { await refreshInstalled(targetId); if (targetKind !== "mod") await launcher.runLoadContent(targetId, targetKind); await launcher.refreshState(); }} />
   {:else}
   {#if inventory?.missingManaged.length}
     <p class="mods-notice" role="status">{inventory.missingManaged.length} managed mod file{inventory.missingManaged.length === 1 ? " is" : "s are"} missing. Refresh or inspect the instance folder; Aurora will not recreate files automatically.</p>
@@ -266,7 +266,7 @@
                   {/if}
                 </div>
                 <p class="mod-meta">
-                  {entry.metadata ? "Fabric" : "Metadata unavailable"}
+                  {entry.metadata ? (instance.platform.kind === "neoForge" ? "NeoForge" : "Fabric") : "Metadata unavailable"}
                   {#if entry.metadata?.authors.length}
                     · By {entry.metadata.authors.slice(0, 2).join(", ")}{entry.metadata.authors.length > 2 ? "…" : ""}
                   {/if}

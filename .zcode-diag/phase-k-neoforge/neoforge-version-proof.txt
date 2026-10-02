@@ -1,0 +1,3 @@
+		Minecraft 26.2 (minecraft)
+		NeoForge 26.2.0.88 (neoforge)
+[06:44:46] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 26.2.0.88, for MC 26.2

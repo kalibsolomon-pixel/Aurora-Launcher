@@ -147,6 +147,10 @@ pub struct NeoForgeVersionEntry {
     minecraft_version: String,
     build: u64,
     stable: bool,
+    /// Whether this entry belongs to the installer generation this build
+    /// installs (the four-component 26.x line). Entries of older
+    /// generations are attributable but deliberately not offered.
+    installable_generation: bool,
 }
 
 impl NeoForgeVersionEntry {
@@ -221,12 +225,21 @@ impl NeoForgeVersionEntry {
                 version: version.to_owned(),
                 reason: "the NeoForge build component must be numeric".to_owned(),
             })?;
+        // Only the four-component generation (26.x onward) has an
+        // installer this build can execute and normalize.
+        let installable_generation = parts.len() == 4;
         Ok(Self {
             version: version.to_owned(),
             minecraft_version,
             build,
             stable,
+            installable_generation,
         })
+    }
+
+    /// Whether this build can install this entry's generation.
+    pub fn installable_generation(&self) -> bool {
+        self.installable_generation
     }
 }
 
@@ -344,6 +357,7 @@ impl NeoForgeVersionList {
             .entries
             .iter()
             .filter(|entry| entry.minecraft_version() == game.as_str())
+            .filter(|entry| entry.installable_generation())
             .cloned()
             .collect();
         matching.sort_by(|a, b| b.build().cmp(&a.build()));
@@ -470,21 +484,37 @@ impl InstallProfileDocument {
                 limit_bytes: MAX_INSTALLER_DOCUMENT_BYTES,
             });
         }
+        /// Parsed for shape fidelity only: several fields exist so the
+        /// strict `deny_unknown_fields` boundary accepts the documented
+        /// document shape without consuming every value.
         #[derive(serde::Deserialize)]
         #[serde(deny_unknown_fields)]
+        #[allow(dead_code)]
         struct Document {
             spec: u32,
             #[serde(default)]
             profile: String,
             version: String,
+            #[serde(default)]
+            icon: Option<String>,
             minecraft: String,
             #[serde(default)]
             json: String,
+            #[serde(default)]
+            logo: Option<String>,
+            #[serde(default)]
+            welcome: Option<String>,
+            #[serde(default, rename = "mirrorList")]
+            mirror_list: Option<String>,
+            #[serde(default, rename = "hideExtract")]
+            hide_extract: Option<bool>,
             data: BTreeMap<String, RawDataValue>,
             #[serde(default)]
             processors: Vec<RawProcessor>,
             #[serde(default)]
             libraries: Vec<RawLibrary>,
+            #[serde(default, rename = "serverJarPath")]
+            server_jar_path: Option<String>,
         }
 
         let document: Document =
@@ -587,6 +617,7 @@ impl VersionProfileDocument {
         }
         #[derive(serde::Deserialize)]
         #[serde(deny_unknown_fields)]
+        #[allow(dead_code)]
         struct Document {
             id: String,
             #[serde(rename = "inheritsFrom")]
@@ -596,6 +627,12 @@ impl VersionProfileDocument {
             arguments: RawArguments,
             #[serde(default)]
             libraries: Vec<RawLibrary>,
+            #[serde(default, rename = "releaseTime")]
+            release_time: Option<String>,
+            #[serde(default)]
+            time: Option<String>,
+            #[serde(default, rename = "type")]
+            kind: Option<String>,
         }
 
         let document: Document =
