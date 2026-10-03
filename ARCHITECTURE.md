@@ -1,5 +1,17 @@
 # Aurora Launcher architecture
 
+## Phase L production updates (current)
+
+Aurora has a production update system with two deliberately separate domains: the **Aurora Client update** (a versioned, digested mod artifact the launcher already owns) and the **launcher self-update** (the official Tauri 2 updater). Full details: `PHASE_L_PRODUCTION_UPDATES.md`.
+
+**Release-driven, never commit-driven.** Only intentionally published release metadata becomes an update candidate: the manually gated public Aurora Client release manifest (`updates::client::PRODUCTION_MANIFEST_URL`, the same schema-1 model with an optional bounded `notes` field) and the owner-published per-channel signed launcher update manifests (`updates::launcher::UPDATES_BASE_URL`). Nothing publishes automatically, and checks are bounded — one startup check per process plus explicit manual checks, with no polling anywhere.
+
+**Client updates** are a fingerprinted transaction through the existing verified pipeline: fetch published manifest (bootstrap discovery metadata — HTTPS plus strict parsing, honestly not signature-verified), read-only compatibility-checked preview (exact Minecraft/Loader identity, channel policy by `updates::eligible_channels`, semver-only ordering, `installedNewer` never downgrades), then verified SHA-256 acquisition, staged activation with renamed (recoverable) old artifacts, whole-instance revalidation, and a registry pin that moves only after commit — all under the instance lock, the registry lock, and the same-instance launch exclusion (`lock_stopped`), with full byte-exact rollback on any failure. A remotely installed release persists its exact published entry as `instances/<id>/aurora-release.json`; resolution (`resolve_optional_aurora`), provider reconciliation, validation, and transitions consult embedded ∪ sidecar so an instance newer than the bundled manifest still validates and launches, and reconfiguration preserves an unchanged platform's pin (no silent downgrades).
+
+**Launcher self-updates** use `tauri-plugin-updater` (≥ 2.12, CVE-2026-95624) driven entirely from Rust with no frontend capability. The trust root is a compile-time minisign public key (`AURORA_UPDATER_PUBKEY`); production builds compile without one and honestly report *Launcher updates are not configured in this build* until the owner generates the production keypair — trust is never weakened to make acceptance pass. Downloads verify signatures inside the updater before any bytes are retained, stale offers are re-checked before download and install, and on Windows the verified NSIS installer runs passively and the app exits (the installer relaunches the new version); managed state survives by construction.
+
+**Checking, settings, and UI.** Launcher configuration is schema 7 (`updates.channel`, default stable; schemas 1–6 migrate explicitly). Session availability lives in a process-global update center with per-domain check de-duplication and transaction exclusivity (`update_already_in_progress`). Settings gains an Updates section (channel selector, versions, explicit check, plain-text release notes, launcher download/install with truthful phases); Home shows a restrained dismissible notice; the instance workspace Settings tab carries the Aurora Client update action. Offline update services are honest *Could not check for updates* and never degrade instances, accounts, or the launcher.
+
 ## Phase K NeoForge loader support (current)
 
 NeoForge is a first-class loader of ordinary instances inside the existing
