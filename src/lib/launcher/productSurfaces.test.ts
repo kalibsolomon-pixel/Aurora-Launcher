@@ -16,6 +16,8 @@ let Dialog: any;
 let accountManager: any;
 let Conflicts: any;
 let Artwork: any;
+let UpdateSettings: any;
+let updates: any;
 const id = "a".repeat(32);
 const secondId = "b".repeat(32);
 function instance(platform: any = { kind: "vanilla" }, aurora: any = null) {
@@ -47,9 +49,56 @@ before(async () => {
   Identity = (await server.ssrLoadModule("/src/lib/launcher/AccountIdentity.svelte")).default;
   Conflicts = (await server.ssrLoadModule("/src/lib/instances/InstallConflicts.svelte")).default;
   Artwork = (await server.ssrLoadModule("/src/lib/instances/InstalledArtwork.svelte")).default;
+  UpdateSettings = (await server.ssrLoadModule("/src/lib/launcher/UpdateSettings.svelte")).default;
+  ({ updates } = await server.ssrLoadModule("/src/lib/launcher/updates.svelte.ts"));
 });
 after(async () => { await server?.close(); });
 function html(component: any, props = {}) { return render(component, { props }).body; }
+
+function updateOverview(available = false) {
+  const offer = available ? { kind: "updateAvailable", current: "1.0.0", candidate: "1.1.0", notes: "<script>alert('remote')</script>" } : { kind: "upToDate" };
+  return { launcher: { installedVersion: "1.0.0", availability: offer, phase: null }, client: offer,
+    clientInstanceId: id, clientInstanceName: "Acceptance instance", clientInstalledVersion: "1.0.0", startupCheckDone: true };
+}
+
+it("Updates renders one primary action, concise versions, and no public channels", () => {
+  updates.snapshot = { action: { kind: "idle" }, overview: updateOverview(), context: "" };
+  const view = html(UpdateSettings);
+  assert.equal((view.match(/<button\b/g) ?? []).length, 1);
+  assert.match(view, /Check For Updates/); assert.match(view, /Version 1\.0\.0/);
+  assert.doesNotMatch(view, /Release channel|Stable|Beta|Nightly|type="radio"|Download update|Update in instance/);
+  assert.doesNotMatch(view, /What&#39;s New|What's New/);
+});
+it("both-domain offers remain one Update action and secondary plain-text notes", () => {
+  updates.snapshot = { action: { kind: "available" }, overview: updateOverview(true), context: "" };
+  const view = html(UpdateSettings);
+  assert.equal((view.match(/<button\b/g) ?? []).length, 1);
+  assert.match(view, />Update<|>Update<!--/);
+  assert.match(view, /Aurora Launcher 1\.0\.0 → 1\.1\.0/);
+  assert.match(view, /Aurora Client 1\.0\.0 → 1\.1\.0/);
+  assert.match(view, /&lt;script>/); assert.doesNotMatch(view, /<script>alert/);
+});
+it("no-update confirmation and mutation render a disabled primary action with honest progress", () => {
+  for (const action of [{ kind: "noUpdate" }, { kind: "updating", domain: "client", phase: "updating" }]) {
+    updates.snapshot = { action, overview: updateOverview(), context: "" };
+    const view = html(UpdateSettings); assert.match(view, /<button[^>]*disabled/);
+    if (action.kind === "noUpdate") { assert.match(view, /None Available/); assert.doesNotMatch(view, /<progress/); }
+    else { assert.match(view, /<progress/); assert.doesNotMatch(view, /<progress[^>]*value=/); }
+  }
+});
+it("Home update notice is small, silent when current or offline, and independent of Play", () => {
+  reset();
+  for (const kind of ["upToDate", "unavailable"]) {
+    const overview = updateOverview(); overview.client = { kind };
+    overview.launcher.availability = { kind };
+    updates.snapshot = { action: { kind: "idle" }, overview, context: "" };
+    assert.doesNotMatch(html(Home), /Aurora update available/);
+  }
+  updates.snapshot = { action: { kind: "available" }, overview: updateOverview(true), context: "" };
+  const view = html(Home); assert.match(view, /Aurora update available/); assert.match(view, />Play</);
+  assert.doesNotMatch(view, /Later|Release channel|modal.*update/i);
+  updates.snapshot = { action: { kind: "idle" }, overview: null, context: "" };
+});
 
 it("Home with no selected instance offers creation and keeps local navigation", () => {
   reset(null); assert.match(html(Home), /No instances yet/); assert.match(html(Home), /Create instance/);

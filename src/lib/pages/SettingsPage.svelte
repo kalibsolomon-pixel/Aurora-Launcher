@@ -7,7 +7,7 @@
   import { navigation } from '$lib/launcher/navigation.svelte';
   import Icon from '$lib/shell/Icon.svelte';
   const categories = ['Appearance', 'Home', 'Updates', 'Discord & privacy'] as const;
-  let category = $state<(typeof categories)[number]>('Appearance');
+  const category = $derived(navigation.settingsCategory);
   let motionSpeed = $state(50);
   $effect(() => { motionSpeed = appearance.auroraMotionSpeed; });
   let customHex = $state('#8b80ff');
@@ -19,7 +19,7 @@
   <header class="page-header"><div><h2 class="page-title">Settings</h2><p class="page-subtitle">Make yourself at home.</p></div></header>
   <div class="settings-layout">
     <nav class="settings-nav" aria-label="Settings categories">
-      {#each categories as item}<button type="button" aria-current={category === item ? 'page' : undefined} onclick={() => category = item}>{item}</button>{/each}
+      {#each categories as item}<button type="button" aria-current={category === item ? 'page' : undefined} onclick={() => navigation.settingsCategory = item}>{item}</button>{/each}
     </nav>
     <div class="settings-body">
       {#if category === 'Appearance'}

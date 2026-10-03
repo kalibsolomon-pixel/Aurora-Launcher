@@ -15,11 +15,14 @@ import {
  * model stays testable outside Svelte.
  */
 class NavigationStore {
+  settingsCategory = $state<"Appearance" | "Home" | "Updates" | "Discord & privacy">("Appearance");
   state = $state<NavigationState>({ kind: "global", page: "home" });
 
   goTo(page: GlobalPage): void {
     this.state = goToGlobal(this.state, page);
   }
+
+  openUpdates(): void { this.settingsCategory = "Updates"; this.goTo("settings"); }
 
   openInstance(instanceId: string, tab?: InstanceTab): void {
     this.state = openInstance(this.state, instanceId, tab);

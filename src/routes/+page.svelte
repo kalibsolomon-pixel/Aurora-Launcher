@@ -16,6 +16,15 @@
 
   const state = $derived(navigation.state);
 
+  $effect(() => {
+    // Selection changes invalidate only local presentation. A new network
+    // check still requires the single startup call or explicit user action.
+    if (launcher.launcherState) {
+      void launcher.launcherState.config.selectedInstanceId;
+      void updates.refresh();
+    }
+  });
+
   onMount(() => {
     launcher.initialize();
     void updates.initialize();

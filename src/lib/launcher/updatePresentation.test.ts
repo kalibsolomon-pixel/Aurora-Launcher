@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  channelDescriptions,
   clientPhaseLabel,
   formatBytes,
   isUpdateAvailable,
@@ -12,20 +11,20 @@ import {
   summarizeAvailability,
 } from "./updatePresentation.ts";
 
-test("summarizeAvailability reports an update with versions and channel", () => {
+test("summarizeAvailability reports an update with versions", () => {
   const summary = summarizeAvailability(
     {
       kind: "updateAvailable",
       current: "2.1.5",
       candidate: "2.2.0",
-      channel: "stable",
+
       notes: "Improvements.",
     },
     "client",
   );
   assert.equal(summary.tone, "accent");
   assert.equal(summary.title, "Aurora Client 2.2.0 available");
-  assert.equal(summary.detail, "Installed 2.1.5 · channel stable");
+  assert.equal(summary.detail, "Installed 2.1.5");
 });
 
 test("summarizeAvailability names the launcher domain distinctly", () => {
@@ -64,7 +63,7 @@ test("isUpdateAvailable only surfaces real offers", () => {
       kind: "updateAvailable",
       current: "1",
       candidate: "2",
-      channel: "stable",
+
       notes: null,
     }),
     true,
@@ -78,7 +77,7 @@ test("offeredVersion extracts the candidate", () => {
       kind: "updateAvailable",
       current: "1.3.1",
       candidate: "1.4.0",
-      channel: "beta",
+
       notes: null,
     }),
     "1.4.0",
@@ -101,7 +100,7 @@ test("presentationNotes normalizes and bounds untrusted note text", () => {
         kind: "updateAvailable",
         current: "1",
         candidate: "2",
-        channel: "stable",
+
         notes: "from availability",
       },
       null,
@@ -133,14 +132,8 @@ test("launcherPhaseLabel never fabricates a percentage", () => {
 });
 
 test("clientPhaseLabel names the real transaction phases", () => {
-  assert.equal(clientPhaseLabel("acquiring"), "Downloading the verified release…");
-  assert.equal(clientPhaseLabel("committing"), "Committing…");
-  assert.equal(clientPhaseLabel("validating"), "Validating…");
+  assert.equal(clientPhaseLabel("acquiring"), "Updating…");
+  assert.equal(clientPhaseLabel("committing"), "Updating…");
+  assert.equal(clientPhaseLabel("validating"), "Updating…");
   assert.equal(clientPhaseLabel(null), "");
-});
-
-test("channel descriptions widen monotonically", () => {
-  assert.equal(channelDescriptions.stable, "Stable releases only.");
-  assert.ok(channelDescriptions.beta.includes("beta"));
-  assert.ok(channelDescriptions.nightly.includes("nightly"));
 });

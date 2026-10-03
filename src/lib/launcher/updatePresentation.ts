@@ -8,7 +8,6 @@
 
 import type {
   ProductUpdateAvailability,
-  UpdateReleaseChannel,
 } from "$lib/backend";
 
 export interface AvailabilitySummary {
@@ -40,7 +39,7 @@ export function summarizeAvailability(
       return {
         tone: "accent",
         title: `${subject} ${availability.candidate} available`,
-        detail: `Installed ${availability.current} · channel ${availability.channel}`,
+        detail: `Installed ${availability.current}`,
       };
     case "notApplicable":
       return {
@@ -130,31 +129,7 @@ export function launcherPhaseLabel(
   }
 }
 
-/** The Aurora Client transaction phase label. */
+/** Client progress stays indeterminate: these phases carry no byte counts. */
 export function clientPhaseLabel(phase: string | null | undefined): string {
-  switch (phase) {
-    case "acquiring":
-      return "Downloading the verified release…";
-    case "staging":
-      return "Staging…";
-    case "activating":
-      return "Activating…";
-    case "validating":
-      return "Validating…";
-    case "committing":
-      return "Committing…";
-    default:
-      return "";
-  }
+  return phase ? "Updating…" : "";
 }
-
-/** What changing the channel means, in one honest sentence. */
-export const channelDescriptions: Record<UpdateReleaseChannel, string> = {
-  stable: "Stable releases only.",
-  beta: "Stable and beta releases.",
-  nightly: "Stable, beta and nightly releases.",
-};
-
-/** Changing the channel never changes installed software. */
-export const channelNote =
-  "Changing the channel affects future update checks only; nothing is installed automatically.";

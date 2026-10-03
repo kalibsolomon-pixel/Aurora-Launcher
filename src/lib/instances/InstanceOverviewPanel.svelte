@@ -158,7 +158,7 @@
 
   <div class="group-row">
     <span class="group-row-title">Aurora</span>
-    <span class="group-row-value">{instance.aurora ? `${instance.aurora.version} (${instance.aurora.channel}) · ${instance.auroraContentState ?? "not detected"}` : "Not configured"}</span>
+    <span class="group-row-value">{instance.aurora ? `${instance.aurora.version} · ${instance.auroraContentState ?? "not detected"}` : "Not configured"}</span>
   </div>
   {#if instance.pack}
     <div class="group-row">
@@ -177,7 +177,7 @@
   </div>
 
   <p class="group-footer">
-    Instances pin concrete releases and never move between channels on their own.
+    Instances pin concrete releases. Updates install only when you choose.
     Production releases are bundled with the launcher; debug builds also offer development fixtures.
   </p>
 </section>
