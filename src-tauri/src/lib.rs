@@ -33,6 +33,7 @@ pub mod paths;
 pub mod runtime;
 pub mod server_enrichment;
 pub mod shortcuts;
+pub mod updates;
 pub mod window_activity;
 
 #[cfg(test)]
@@ -44,6 +45,7 @@ pub fn run() {
 
     use tauri::Manager;
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 #[cfg(target_os = "windows")]
@@ -165,7 +167,16 @@ pub fn run() {
             application::refresh_account_session,
             application::get_play_readiness,
             application::get_launch_state,
-            application::play_instance
+            application::play_instance,
+            application::get_update_overview,
+            application::startup_update_check,
+            application::check_for_updates,
+            application::set_update_channel,
+            application::dismiss_update_notice,
+            application::preview_client_update,
+            application::apply_client_update,
+            application::launcher_update_download,
+            application::launcher_update_install
         ])
         .build(tauri::generate_context!())
         .expect("failed to run Aurora Launcher");
