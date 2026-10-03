@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { launcher } from "$lib/launcher/store.svelte";
+  import { updates } from "$lib/launcher/updates.svelte";
   import { navigation } from "$lib/launcher/navigation.svelte";
   import AppShell from "$lib/shell/AppShell.svelte";
   import HomePage from "$lib/pages/HomePage.svelte";
@@ -17,7 +18,11 @@
 
   onMount(() => {
     launcher.initialize();
-    return () => launcher.dispose();
+    void updates.initialize();
+    return () => {
+      launcher.dispose();
+      updates.dispose();
+    };
   });
 </script>
 

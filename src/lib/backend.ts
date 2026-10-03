@@ -2028,3 +2028,102 @@ export const resetHomeWidgets = (): Promise<HomeLayout> => preferenceCommand("re
 export const getDiscordState = (): Promise<DiscordState> => preferenceCommand("get_discord_state");
 export const connectDiscord = (): Promise<DiscordState> => preferenceCommand("connect_discord");
 export const saveDiscordPreferences = (request: DiscordPreferences): Promise<DiscordState> => preferenceCommand("set_discord_preferences", request);
+
+// ---------------------------------------------------------------------------
+// Phase L: production updates
+// ---------------------------------------------------------------------------
+
+/** Aurora release channels, shared by Client and launcher update policy. */
+export type UpdateReleaseChannel = "stable" | "beta" | "nightly";
+
+/** One update domain's availability, mirroring the Rust enum exactly. */
+export type ProductUpdateAvailability =
+  | { kind: "notChecked" }
+  | { kind: "upToDate" }
+  | {
+      kind: "updateAvailable";
+      current: string;
+      candidate: string;
+      channel: UpdateReleaseChannel;
+      notes: string | null;
+    }
+  | { kind: "notApplicable"; reason: string }
+  | { kind: "unavailable"; reason: string };
+
+export type LauncherUpdatePhase = "checking" | "downloading" | "readyToInstall" | "installing";
+
+export interface LauncherUpdateStatus {
+  installedVersion: string;
+  availability: ProductUpdateAvailability;
+  phase: LauncherUpdatePhase | null;
+}
+
+export interface UpdateOverview {
+  channel: UpdateReleaseChannel;
+  launcher: LauncherUpdateStatus;
+  client: ProductUpdateAvailability;
+  clientInstanceId: string | null;
+  clientInstanceName: string | null;
+  startupCheckDone: boolean;
+  dismissedLauncher: boolean;
+  dismissedClient: boolean;
+}
+
+export interface ClientUpdateCandidate {
+  version: string;
+  channel: UpdateReleaseChannel;
+  notes: string | null;
+  minecraftVersion: string;
+  fabricLoaderVersion: string;
+  javaMajorVersion: number;
+  sizeBytes: number | null;
+  sha256: string;
+  fabricApiVersion: string | null;
+}
+
+export interface ClientUpdatePreview {
+  instanceId: string;
+  installedVersion: string;
+  installedChannel: UpdateReleaseChannel;
+  outcome: "updateAvailable" | "upToDate" | "installedNewer";
+  candidate: ClientUpdateCandidate | null;
+  blockers: string[];
+  warnings: string[];
+  fingerprint: string;
+}
+
+async function updateCommand<T>(command: string, request?: unknown): Promise<T> {
+  try {
+    return await invoke<T>(command, request === undefined ? undefined : { request });
+  } catch (error: unknown) {
+    if (isBackendCommandError(error)) {
+      throw new LauncherBackendError(error.code, error.message);
+    }
+    throw new LauncherBackendError(
+      "backend_unavailable",
+      "Aurora's update services did not answer. Try again.",
+    );
+  }
+}
+
+export const getUpdateOverview = (): Promise<UpdateOverview> =>
+  updateCommand<UpdateOverview>("get_update_overview");
+export const startupUpdateCheck = (): Promise<UpdateOverview> =>
+  updateCommand<UpdateOverview>("startup_update_check");
+export const checkForUpdates = (): Promise<UpdateOverview> =>
+  updateCommand<UpdateOverview>("check_for_updates");
+export const setUpdateChannel = (channel: UpdateReleaseChannel): Promise<UpdateOverview> =>
+  updateCommand<UpdateOverview>("set_update_channel", { channel });
+export const dismissUpdateNotice = (domain: "launcher" | "client"): Promise<UpdateOverview> =>
+  updateCommand<UpdateOverview>("dismiss_update_notice", { domain });
+export const previewClientUpdate = (instanceId: string): Promise<ClientUpdatePreview> =>
+  updateCommand<ClientUpdatePreview>("preview_client_update", { instanceId });
+export const applyClientUpdate = (
+  instanceId: string,
+  fingerprint: string,
+): Promise<InstanceSummary> =>
+  updateCommand<InstanceSummary>("apply_client_update", { instanceId, fingerprint });
+export const launcherUpdateDownload = (version: string): Promise<LauncherUpdateStatus> =>
+  updateCommand<LauncherUpdateStatus>("launcher_update_download", { version });
+export const launcherUpdateInstall = (version: string): Promise<LauncherUpdateStatus> =>
+  updateCommand<LauncherUpdateStatus>("launcher_update_install", { version });

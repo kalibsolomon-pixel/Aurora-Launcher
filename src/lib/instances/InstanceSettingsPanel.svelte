@@ -15,6 +15,7 @@
     finally { deleting = false; }
   }
   import AuroraTransitionPanel from "./AuroraTransitionPanel.svelte";
+  import AuroraUpdatePanel from "./AuroraUpdatePanel.svelte";
 
   let { instance }: { instance: InstanceSummary } = $props();
 
@@ -91,6 +92,7 @@
 -->
 <div class="instance-settings-composition">
 <div class="settings-main"><AuroraTransitionPanel {instance} />
+<AuroraUpdatePanel {instance} />
 <section class="group" aria-labelledby="instance-settings-title">
   <div class="group-heading">
     <div>

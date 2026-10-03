@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import DiscordSettings from '$lib/launcher/DiscordSettings.svelte';
+  import UpdateSettings from '$lib/launcher/UpdateSettings.svelte';
   import { appearance } from '$lib/launcher/appearance.svelte';
   import { homeWidgets } from '$lib/launcher/homeLayout.svelte';
   import { navigation } from '$lib/launcher/navigation.svelte';
   import Icon from '$lib/shell/Icon.svelte';
-  const categories = ['Appearance', 'Home', 'Discord & privacy'] as const;
+  const categories = ['Appearance', 'Home', 'Updates', 'Discord & privacy'] as const;
   let category = $state<(typeof categories)[number]>('Appearance');
   let motionSpeed = $state(50);
   $effect(() => { motionSpeed = appearance.auroraMotionSpeed; });
@@ -82,6 +83,8 @@
           <div class="group-row"><div class="group-row-main"><span class="group-row-title">Start fresh</span><span class="group-row-detail">Restore the default widget layout.</span></div><button class="btn btn-quiet" disabled={homeWidgets.busy || !homeWidgets.layout} onclick={() => homeWidgets.reset()}>Reset layout</button></div></div>
           {#if homeWidgets.error}<p role="alert" class="inline-message inline-message-error">{homeWidgets.error}</p>{/if}
         </section>
+      {:else if category === 'Updates'}
+        <UpdateSettings />
       {:else}
         <div class="section-intro"><h3>Discord & privacy</h3><p>You decide what leaves the launcher.</p></div>
         <DiscordSettings />
