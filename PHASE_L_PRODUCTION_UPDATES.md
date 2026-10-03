@@ -1,3 +1,5 @@
+> Current authority lifecycle: see `UPDATE_AUTHORITY.md`. Immutable versioned releases, mutable discovery ref and compiled signing key are separate identities. Public 1.4.0 retains its retired endpoint and requires manual bootstrap to 1.4.1. Historical acceptance below is preserved.
+
 # Aurora Launcher — Phase L: Production Updates
 
 Phase L has one public production release stream. Aurora Client and Aurora Launcher remain separate native update engines with different artifacts, trust roots, activation, and rollback. A single Settings action checks both and explicitly updates the applicable domains. There is no public release-channel preference, selector, channel eligibility ladder, or per-channel launcher endpoint.
@@ -25,10 +27,10 @@ The manifest is HTTPS-authenticated bootstrap discovery metadata, not an indepen
 The sole production manifest is:
 
 ```text
-https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/launcher-updates/launcher-update.json
+https://raw.githubusercontent.com/kalibsolomon-pixel/Aurora-Launcher/launcher-update-authority/launcher-update.json
 ```
 
-`updates::launcher::PRODUCTION_MANIFEST_URL` serves the official Tauri v2 static-manifest shape: `version`, optional `notes`/`pub_date`, and `platforms.windows-x86_64.{url,signature}`. Windows uses a signed NSIS installer. There are no stable/beta/nightly manifest alternatives. Compile-time `AURORA_LAUNCHER_MANIFEST_URL` is the diagnostic injection; it replaces the old base-URL override. No frontend/runtime URL, key, or hash override exists. Production transport is HTTPS; explicit loopback HTTP is solely the documented diagnostic path.
+`updates::launcher::PRODUCTION_MANIFEST_URL` serves the official Tauri v2 static-manifest shape: `version`, optional `notes`/`pub_date`, and `platforms.windows-x86_64.{url,signature}`. Windows uses a signed NSIS installer. There are no stable/beta/nightly manifest alternatives. The endpoint is a fixed Rust constant; the former compile-time diagnostic endpoint override is removed. No frontend/runtime URL, key, or hash override exists. Production transport is HTTPS; explicit loopback artifact acceptance exists only in `cfg(test)` and cannot be activated in a production binary.
 
 The official `tauri-plugin-updater` stays at the existing >=2.12 security floor (lockfile 2.13.1). Rust embeds the minisign verification public key through `AURORA_UPDATER_PUBKEY`. A build lacking it reports `updater_unconfigured` and never downloads or installs. The private key never enters source, configuration, DTOs, logs, or frontend code. Official signature and signed-version checks remain mandatory. Metadata checks have a 30-second timeout, downloads 300 seconds. Download rechecks the presented version; install rechecks version, URL, and signature, rejecting same-version drift before consuming the exact retained verified bytes. Windows runs the official passive installer and exits; its installer relaunches the updated application. The running version is never fabricated before that boot.
 
@@ -72,7 +74,7 @@ The instance workspace shows concise selected-instance Client status plus View U
 
 1. Generate and securely retain the real production updater keypair; embed its public key in production builds and supply the private signing key/password only in the release environment.
 2. Enable official updater artifacts, sign the reviewed NSIS installer, and manually publish its immutable bytes and `.sig`.
-3. Manually publish **one** `launcher-update.json` pointing to those exact platform bytes/signature. No public channels.
+3. Approve the separately protected authority-ref advancement after immutable public-byte verification. Never routinely edit/upload the generated manifest manually. No public channels.
 4. Publish reviewed Client entries with their pre-known expected SHA-256 into **one** `aurora-releases.json`. Keep exact compatibility requirements and useful history.
 5. A future website presents/mirrors these two authorities. It does not invent another Client release truth, per-channel Launcher feeds, signing keys, or automatic commit publication.
 

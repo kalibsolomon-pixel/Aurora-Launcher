@@ -1,3 +1,5 @@
+> Historical record: mutable release-asset authority and compile-time diagnostic endpoint assumptions are superseded by `UPDATE_AUTHORITY.md`. Accepted public 1.4.0 bytes and original evidence are preserved.
+
 # Aurora Phase L — Simplified Updates Correction
 
 ## Verdict

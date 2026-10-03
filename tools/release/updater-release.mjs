@@ -64,6 +64,8 @@ export function createManifest(version, notes, signature) {
   } } };
 }
 export function publicationDecision(previousBytes, nextBytes) {
+  validateManifest(previousBytes);
+  validateManifest(nextBytes);
   if (previousBytes.equals(nextBytes)) return "unchanged";
   const previous = JSON.parse(previousBytes.toString("utf8"));
   const next = JSON.parse(nextBytes.toString("utf8"));
@@ -96,6 +98,15 @@ export async function verifyDirectory(directory, version, sourceSha, publicKey) 
   const nsisSignature = (await readFile(join(directory, installerName(version, "nsis") + ".sig"), "utf8")).trim();
   if (JSON.stringify(updater) !== JSON.stringify(createManifest(version, updater.notes, nsisSignature))) throw new Error("Update manifest differs from verified installers");
   return manifest;
+}
+/** Strict single-stream metadata; payload verification remains separate. */
+export function validateManifest(bytes) {
+  if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > 16384) throw new Error("Invalid manifest size");
+  const value = JSON.parse(bytes.toString("utf8"));
+  const target = value?.platforms?.["windows-x86_64"];
+  const expected = createManifest(value?.version, value?.notes, target?.signature);
+  if (JSON.stringify(value) !== JSON.stringify(expected)) throw new Error("Unexpected production manifest semantics");
+  return value;
 }
 async function main() {
   const [mode, version, sourceSha, directoryArg, rootArg] = process.argv.slice(2);

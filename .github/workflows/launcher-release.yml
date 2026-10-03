@@ -84,6 +84,7 @@ jobs:
           node tools/release/check-collision.mjs "$VERSION" "$SOURCE_SHA" "$RESUME_RELEASE_ID"
 
   build:
+    name: Build and sign (owner gate)
     needs: resolve
     runs-on: windows-latest
     environment: launcher-production
@@ -168,6 +169,7 @@ jobs:
           retention-days: 7
 
   publish:
+    name: Publish immutable installers (owner gate)
     needs: [resolve, build]
     runs-on: windows-latest
     environment: launcher-production
@@ -213,7 +215,8 @@ jobs:
           & ./tools/release/publish.ps1 -Version $env:VERSION -Format $env:FORMAT -SourceSha $env:SOURCE_SHA -AssetsDirectory (Join-Path $env:RUNNER_TEMP 'aurora-release-assets') -ResumeReleaseId $resume
           if (-not $?) { throw 'Release publication or public-byte verification failed' }
 
-  expose_update:
+  advance_update_authority:
+    name: Advance update discovery ref (separate owner gate)
     needs: [resolve, build, publish]
     runs-on: windows-latest
     environment: launcher-production
@@ -234,7 +237,7 @@ jobs:
         with:
           name: aurora-launcher-${{ inputs.version }}-${{ inputs.installer_format }}
           path: ${{ runner.temp }}/aurora-release-assets
-      - name: Verify public signed assets and expose the single manifest last
+      - name: Verify immutable public bytes and advance discovery ref LAST
         shell: pwsh
         env:
           VERSION: ${{ inputs.version }}
@@ -243,4 +246,4 @@ jobs:
           AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
         run: |
           node tools/release/publish-manifest.mjs $env:VERSION $env:SOURCE_SHA (Join-Path $env:RUNNER_TEMP 'aurora-release-assets')
-          if ($LASTEXITCODE -ne 0) { throw 'Single update manifest publication failed; retain immutable release artifacts' }
+          if ($LASTEXITCODE -ne 0) { throw 'Authority advancement incomplete; inspect PREPARED/PUBLISHED/VERIFIED; retain immutable artifacts and ref' }

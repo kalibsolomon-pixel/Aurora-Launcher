@@ -1,13 +1,17 @@
+## Current authority operator contract
+
+Follow `UPDATE_AUTHORITY.md`. Immutable installers and the separately gated Git authority ref are distinct publication operations. Release 402692668 / tag launcher-updates is retired evidence. This source correction is intended for later 1.4.1 manual bootstrap; never replace accepted public 1.4.0. Earlier preparation text remains historical where it assumes mutable release assets.
+
 # Aurora Launcher release baseline
 
-## Current 1.4.0 preparation
+## Accepted 1.4.0 and historical preparation
 
-Aurora Launcher **1.4.0** is prepared locally for owner production signing setup;
-it has not been built as a signed release or published. Aurora Client remains
-**2.1.5**. See [RELEASE_1_4_0_PREPARATION.md](RELEASE_1_4_0_PREPARATION.md) for
-signing inputs, artifact names, publication gates, recovery rules and exact-byte
-fresh-install/1.3.1-upgrade acceptance. The unpublished user-facing draft is
-[RELEASE_1_4_0_NOTES.md](RELEASE_1_4_0_NOTES.md).
+Aurora Launcher **1.4.0** is now the accepted public immutable release, built
+from `a9b1954fb389ca3ee4a560235a63ac13ab32a399`. Aurora Client remains **2.1.5**.
+[RELEASE_1_4_0_PREPARATION.md](RELEASE_1_4_0_PREPARATION.md) and
+[RELEASE_1_4_0_NOTES.md](RELEASE_1_4_0_NOTES.md) retain their original preparation
+record. Use [UPDATE_AUTHORITY.md](UPDATE_AUTHORITY.md) for current gates,
+recovery and the required manual 1.4.1 bootstrap; never replace accepted 1.4.0.
 
 ## Historical 1.1.0 candidate record
 
@@ -58,10 +62,10 @@ Neither format has configured **Windows Authenticode publisher signing**. Window
 1. Audit and normally push reviewed history to `main`; do not force-push or move a tag.
 2. Verify the synchronized release version, then accept the exact signed production NSIS installer on a disposable Windows user/profile or VM before approving publication. Keep existing developer installation and launcher data intact.
 3. Configure a GitHub Actions environment named `launcher-production` with required reviewers (preferably disallow self-review). GitHub does not make a newly named environment reviewer-gated automatically. Ensure Actions can create releases with its scoped `GITHUB_TOKEN`; no broad PAT is needed.
-4. Configure owner-only signing inputs and the dedicated authority as described in the preparation document, under separate authorization.
+4. Retain the owner-only signing inputs. Initialize and protect the distinct authority ref as described in [UPDATE_AUTHORITY.md](UPDATE_AUTHORITY.md), under separate authorization; historical release-asset initialization instructions are superseded.
 5. Dispatch only after owner authorization from `main`, with the exact 40-character current reviewed main SHA, matching version and `installer_format=nsis` (or `both` after MSI acceptance). Historical 1.0.0 remains NSIS-only.
 
-The read-only resolve job requires exact current main for a new release and rejects conflicting tags/releases; explicit recovery is bound to an existing release ID. The protected Windows build runs frontend, Rust and release-tool checks, builds official Tauri signed installers, inspects Windows product metadata and signatures, and records exact hashes/sizes. It transfers selected installers/signatures, immutable `release-assets.json` and generated `launcher-update.json` privately for seven days. Owner accepts those exact bytes before approving the separately protected publish job, which creates/verifies a **draft**, uploads immutable assets, publishes and verifies unauthenticated public bytes. The final protected `expose_update` job verifies public signed assets again and publishes the sole discovery manifest **last**, under global authority concurrency. Publication never rebuilds or overwrites signed installers. Mutable manifest replacement can briefly return 404; recovery rules and owner gates are in the preparation report.
+The read-only resolve job requires exact current main for a new release and rejects conflicting tags/releases; explicit recovery is bound to an existing release ID. The protected Windows build runs frontend, Rust and release-tool checks, builds official Tauri signed installers, inspects Windows product metadata and signatures, and records exact hashes/sizes. It transfers selected installers/signatures, immutable `release-assets.json` and generated `launcher-update.json` privately for seven days. Owner accepts those exact bytes before approving the separately protected publish job, which creates/verifies a **draft**, uploads immutable assets, publishes and verifies unauthenticated public bytes. The final protected `advance_update_authority` job verifies public signed assets again and publishes the sole discovery manifest **last**, under global authority concurrency. Publication never rebuilds or overwrites signed installers. Non-forced authority advancement can temporarily serve stale raw content; current recovery rules and gates are in UPDATE_AUTHORITY.md.
 
 GitHub releases are the public release location. The workflow summary and release notes report version, source SHA, filename, format, architecture, size, and SHA-256. Workflow publication is never triggered by a push, pull request, schedule, or another workflow. Do not create the production tag or invoke the workflow until the developer makes the final publication decision.
 
@@ -85,4 +89,4 @@ For final acceptance, install the exact final installer in a clean, disposable W
 
 Phase L implements official Tauri self-updates through one owner-published `launcher-update.json` and a compile-time minisign public key, plus fingerprinted SHA-256 Client transactions from one published `aurora-releases.json`; see [PHASE_L_PRODUCTION_UPDATES.md](PHASE_L_PRODUCTION_UPDATES.md). There are no public channels. One bounded startup discovery check is silent unless an update exists; a single explicit Settings action checks both domains and Update applies Client before Launcher. No polling or automatic installation exists. Missing signing configuration fails honestly unconfigured. The prepared workflow consumes owner-supplied signing inputs and verifies official signed NSIS outputs before separately gated manifest-last publication. No real key or manifest was configured/published during preparation. Commits/builds alone never become updates. Launcher and Client versions remain independent; installed newer never downgrades.
 
-The historical initial-release provider roadmap has since advanced through the integrated content/modpack/update work. The current owner roadmap is 1.4.0 preparation, owner signing, signed-build acceptance and publication, normal-user testing, a separately scoped correction release, Launcher feature freeze, then website/ecosystem work. This preparation starts none of those later tasks.
+The historical initial-release provider roadmap has since advanced through the integrated content/modpack/update work and accepted 1.4.0 publication. Review this local authority correction before any push or separately scoped 1.4.1 correction/release work. The first normal production self-update acceptance is expected to be 1.4.1 → 1.4.2. This implementation starts no feature-freeze or website work.

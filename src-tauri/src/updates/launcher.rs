@@ -4,13 +4,9 @@
 //! Trust model, stated honestly: the updater enforces minisign-style
 //! signature verification against a public verification key compiled into
 //! the launcher — it cannot be disabled, and no frontend- or file-supplied
-//! URL or key ever participates. Production builds compile without a key
-//! until the owner generates the production keypair (documented in the
-//! Phase L publication contract); such builds report launcher updates as
-//! honestly unconfigured rather than weakening verification. Diagnostic
-//! builds compile the diagnostic public key through `AURORA_UPDATER_PUBKEY`
-//! so the full signed lifecycle is testable without touching production
-//! trust.
+//! URL or key ever participates. Builds without a compiled public key report
+//! honestly unconfigured rather than weakening verification. The production
+//! private key remains solely in the owner's protected signing environment.
 //!
 //! The updater endpoint serves one owner-published production manifest; nothing about a commit, branch, or CI build is ever an
 //! update candidate. On Windows the install step launches the verified
@@ -32,13 +28,8 @@ use crate::updates::{CheckDomain, LauncherPhase, UpdateAvailability, begin_check
 pub const UPDATER_PUBKEY: Option<&str> = option_env!("AURORA_UPDATER_PUBKEY");
 
 /// One authoritative production manifest, published only through the owner's
-/// manual release gate. Compile-time injection is reserved for diagnostics.
-pub const PRODUCTION_MANIFEST_URL: &str = match option_env!("AURORA_LAUNCHER_MANIFEST_URL") {
-    Some(diagnostic) => diagnostic,
-    None => {
-        "https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/launcher-updates/launcher-update.json"
-    }
-};
+/// manual release gate. No environment or runtime endpoint override exists.
+pub const PRODUCTION_MANIFEST_URL: &str = "https://raw.githubusercontent.com/kalibsolomon-pixel/Aurora-Launcher/launcher-update-authority/launcher-update.json";
 
 /// The user-facing launcher update status.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -102,7 +93,7 @@ fn build_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, Launc
     let endpoint = url::Url::parse(PRODUCTION_MANIFEST_URL).map_err(|_| {
         LauncherUpdateError::new("updater_unconfigured", "The update endpoint is not valid.")
     })?;
-    validate_source(&endpoint)?;
+    validate_authority(&endpoint)?;
     build_configured_updater(app, pubkey, endpoint)
 }
 
@@ -118,6 +109,17 @@ pub(crate) fn build_configured_updater<R: tauri::Runtime>(
     app.updater_builder()
         .pubkey(pubkey.to_owned())
         .timeout(std::time::Duration::from_secs(30))
+        .header("Cache-Control", "no-cache")
+        .map_err(|_| LauncherUpdateError::new("updater_unconfigured", "Invalid cache policy."))?
+        .configure_client(|client| {
+            client.redirect(reqwest::redirect::Policy::custom(|attempt| {
+                if redirect_allowed(attempt.previous(), attempt.url()) {
+                    attempt.follow()
+                } else {
+                    attempt.error("Unexpected updater redirect")
+                }
+            }))
+        })
         .endpoints(vec![endpoint])
         .map_err(|error| LauncherUpdateError::new("updater_unconfigured", error.to_string()))?
         .build()
@@ -186,7 +188,7 @@ pub async fn download(
             "Update changed while you were reviewing it.",
         ));
     }
-    validate_source(&update.download_url)?;
+    validate_artifact(&update.download_url, &update.version)?;
     update.timeout = Some(std::time::Duration::from_secs(300));
     let version = update.version.clone();
     let mut downloaded: u64 = 0;
@@ -276,6 +278,7 @@ pub async fn install(
             "The launcher update changed. Check again.",
         ));
     }
+    validate_artifact(&fresh.download_url, &fresh.version)?;
     pending.update.install(&pending.bytes).map_err(|error| {
         LauncherUpdateError::new(
             "update_install_failed",
@@ -312,64 +315,133 @@ pub fn set_phase(phase: Option<LauncherPhase>) {
     state.launcher_phase = phase;
 }
 
-fn validate_source(endpoint: &url::Url) -> Result<(), LauncherUpdateError> {
-    if !endpoint.username().is_empty()
-        || endpoint.password().is_some()
-        || !(endpoint.scheme() == "https"
-            || (endpoint.scheme() == "http" && crate::downloads::is_loopback_host(endpoint)))
-    {
-        return Err(LauncherUpdateError::new(
+fn secure_url(endpoint: &url::Url) -> bool {
+    endpoint.scheme() == "https"
+        && endpoint.username().is_empty()
+        && endpoint.password().is_none()
+        && endpoint.port_or_known_default() == Some(443)
+        && endpoint.query().is_none()
+        && endpoint.fragment().is_none()
+}
+
+fn validate_authority(endpoint: &url::Url) -> Result<(), LauncherUpdateError> {
+    if secure_url(endpoint) && endpoint.as_str() == PRODUCTION_MANIFEST_URL {
+        Ok(())
+    } else {
+        Err(LauncherUpdateError::new(
             "updater_unconfigured",
-            "The update source must use HTTPS or explicit loopback transport.",
-        ));
+            "Unexpected launcher update authority.",
+        ))
     }
-    Ok(())
+}
+
+fn validate_artifact(endpoint: &url::Url, version: &str) -> Result<(), LauncherUpdateError> {
+    #[cfg(test)]
+    if endpoint.scheme() == "http"
+        && crate::downloads::is_loopback_host(endpoint)
+        && endpoint.username().is_empty()
+        && endpoint.password().is_none()
+    {
+        return Ok(());
+    }
+    let parsed = semver::Version::parse(version).ok();
+    let valid_version =
+        parsed.is_some_and(|v| v.to_string() == version && v.pre.is_empty() && v.build.is_empty());
+    let expected = format!(
+        "https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/v{version}/Aurora.Launcher_{version}_x64-setup.exe"
+    );
+    if valid_version && secure_url(endpoint) && endpoint.as_str() == expected {
+        Ok(())
+    } else {
+        Err(LauncherUpdateError::new(
+            "update_stale",
+            "Unexpected signed launcher artifact location.",
+        ))
+    }
+}
+
+// The raw authority never redirects. GitHub installers require its asset CDN;
+// redirect transport remains HTTPS, while the compiled key verifies the payload.
+fn redirect_allowed(previous: &[url::Url], next: &url::Url) -> bool {
+    previous.len() < 5
+        && previous.first().is_some_and(|first| {
+            first.host_str() == Some("github.com")
+                && first
+                    .path()
+                    .starts_with("/kalibsolomon-pixel/Aurora-Launcher/releases/download/")
+        })
+        && next.scheme() == "https"
+        && next.username().is_empty()
+        && next.password().is_none()
+        && next.port_or_known_default() == Some(443)
+        && next.host_str() == Some("release-assets.githubusercontent.com")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn one_production_manifest_is_the_only_launcher_source() {
-        if option_env!("AURORA_LAUNCHER_MANIFEST_URL").is_none() {
-            assert_eq!(
-                PRODUCTION_MANIFEST_URL,
-                "https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/launcher-updates/launcher-update.json"
-            );
-        }
+        assert_eq!(
+            PRODUCTION_MANIFEST_URL,
+            "https://raw.githubusercontent.com/kalibsolomon-pixel/Aurora-Launcher/launcher-update-authority/launcher-update.json"
+        );
+        assert!(validate_authority(&url::Url::parse(PRODUCTION_MANIFEST_URL).unwrap()).is_ok());
     }
-
     #[test]
     fn without_compiled_trust_material_the_updater_is_unconfigured() {
-        // Test builds compile without AURORA_UPDATER_PUBKEY: the honest
-        // unconfigured state, exactly what production builds report until
-        // the owner provides the production public key. The full signed
-        // check/download/verify path is exercised by the Phase L
-        // diagnostic acceptance (a real diagnostic build against a signed
-        // loopback update) because a mock-runtime build of this host cannot
-        // load the updater plugin.
         if option_env!("AURORA_UPDATER_PUBKEY").is_none() {
             assert!(UPDATER_PUBKEY.is_none());
         }
     }
-
     #[test]
-    fn launcher_sources_reject_insecure_or_credential_bearing_urls() {
-        for valid in [
-            "https://example.com/launcher-update.json",
-            "http://127.0.0.1:8789/update.json",
-            "http://[::1]/update.json",
-            "http://localhost/update.json",
-        ] {
-            assert!(validate_source(&url::Url::parse(valid).unwrap()).is_ok());
-        }
+    fn authority_is_exact_and_has_no_runtime_override() {
         for invalid in [
-            "http://example.com/update.json",
-            "https://user:secret@example.com/update.json",
-            "file:///installer.exe",
+            "http://localhost/update.json",
+            "https://example.com/update.json",
+            "https://raw.githubusercontent.com/foreign/repo/launcher-update-authority/launcher-update.json",
+            "https://raw.githubusercontent.com/kalibsolomon-pixel/Aurora-Launcher/main/launcher-update.json",
+            "https://user:secret@raw.githubusercontent.com/kalibsolomon-pixel/Aurora-Launcher/launcher-update-authority/launcher-update.json",
         ] {
-            assert!(validate_source(&url::Url::parse(invalid).unwrap()).is_err());
+            assert!(validate_authority(&url::Url::parse(invalid).unwrap()).is_err());
         }
+        for suffix in ["?x=1", "#fragment"] {
+            assert!(
+                validate_authority(
+                    &url::Url::parse(&format!("{PRODUCTION_MANIFEST_URL}{suffix}")).unwrap()
+                )
+                .is_err()
+            );
+        }
+    }
+    #[test]
+    fn installer_is_pinned_to_version_repository_and_nsis() {
+        let valid = "https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/v1.4.1/Aurora.Launcher_1.4.1_x64-setup.exe";
+        assert!(validate_artifact(&url::Url::parse(valid).unwrap(), "1.4.1").is_ok());
+        for wrong in [
+            valid.replace("1.4.1", "1.4.0"),
+            valid.replace("kalibsolomon-pixel", "foreign"),
+            valid.replace("https:", "http:"),
+            format!("{valid}?x=1"),
+            valid.replace("setup.exe", "setup.msi"),
+        ] {
+            assert!(validate_artifact(&url::Url::parse(&wrong).unwrap(), "1.4.1").is_err());
+        }
+    }
+    #[test]
+    fn redirects_cannot_replace_authority_or_leave_asset_cdn() {
+        let raw = url::Url::parse(PRODUCTION_MANIFEST_URL).unwrap();
+        let cdn = url::Url::parse("https://release-assets.githubusercontent.com/github-production-release-asset/1?token=opaque").unwrap();
+        assert!(!redirect_allowed(&[raw], &cdn));
+        let github = url::Url::parse("https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/v1.4.1/Aurora.Launcher_1.4.1_x64-setup.exe").unwrap();
+        assert!(redirect_allowed(&[github.clone()], &cdn));
+        assert!(!redirect_allowed(
+            &[github.clone()],
+            &url::Url::parse("https://evil.example/payload").unwrap()
+        ));
+        assert!(!redirect_allowed(
+            &[github],
+            &url::Url::parse("http://release-assets.githubusercontent.com/payload").unwrap()
+        ));
     }
 }

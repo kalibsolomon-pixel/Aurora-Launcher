@@ -1,3 +1,5 @@
+> Current authority lifecycle: see `UPDATE_AUTHORITY.md`. Immutable versioned releases, mutable discovery ref and compiled signing key are separate identities. Public 1.4.0 retains its retired endpoint and requires manual bootstrap to 1.4.1. Historical acceptance below is preserved.
+
 # Aurora Launcher architecture
 
 ## Phase L production updates (current)
@@ -8,7 +10,7 @@ Aurora has **one public production release stream**, with two independent Rust e
 
 **Client security.** Discovery is bounded HTTPS bootstrap metadata, honestly not independently signed. Expected SHA-256 verified acquisition, fingerprinted preview/apply, instance/registry/launch exclusion, staged activation, deep revalidation, commit-last pinning, sidecar exact release persistence, and byte-exact rollback remain intact. User content and credentials remain untouched.
 
-**Launcher security.** The official updater (existing >=2.12 floor) uses a compile-time `AURORA_UPDATER_PUBKEY`; absent trust fails honestly unconfigured. `updates::launcher::PRODUCTION_MANIFEST_URL` points to `https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/launcher-updates/launcher-update.json`. Compile-time diagnostic injection is `AURORA_LAUNCHER_MANIFEST_URL`; no frontend URL/key/hash override exists. Signatures remain mandatory. Before download the version is rechecked; before installation version/URL/signature must still match the verified retained bytes. Windows official passive NSIS installation exits and relaunches; it never fabricates the running version.
+**Launcher security.** The official updater (existing >=2.12 floor) uses a compile-time `AURORA_UPDATER_PUBKEY`; absent trust fails honestly unconfigured. `updates::launcher::PRODUCTION_MANIFEST_URL` points to `https://raw.githubusercontent.com/kalibsolomon-pixel/Aurora-Launcher/launcher-update-authority/launcher-update.json`. The endpoint is a fixed Rust constant, with no environment/frontend/runtime URL override. Signatures remain mandatory. Before download the version is rechecked; before installation version/URL/signature must still match the verified retained bytes. Windows official passive NSIS installation exits and relaunches; it never fabricates the running version.
 
 **Configuration.** Schema 7 has no meaningful update preference. Original schema-7 stable/beta/nightly settings validate then discard in memory; the next ordinary atomic save removes the obsolete field while preserving unrelated settings. Schemas 1–6 retain existing explicit migrations. Unknown/malformed state remains read-only and fails deliberately. No instance pin migration or filesystem move occurs.
 

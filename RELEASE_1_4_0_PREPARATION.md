@@ -1,3 +1,5 @@
+> Historical record: mutable release-asset authority and compile-time diagnostic endpoint assumptions are superseded by `UPDATE_AUTHORITY.md`. Accepted public 1.4.0 bytes and original evidence are preserved.
+
 # Aurora Launcher 1.4.0 — production release preparation
 
 Prepared locally on 2026-10-03. **READY FOR OWNER SIGNING SETUP; DO NOT RELEASE YET.** This is preparation for a real production release, not a diagnostic distribution. Nothing was pushed, tagged, uploaded or published. No production key or password was generated or configured. No installer was built, installed or executed in this task. Owner signing setup, exact signed-build acceptance and publication remain separate tasks.
