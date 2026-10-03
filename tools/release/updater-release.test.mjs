@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { expectedAssetName } from "./release-state.mjs";
-import { installerName, publicKeyPacket, verifyUpdaterSignature, createManifest, publicationDecision, sha256, verifyDirectory, repository } from "./updater-release.mjs";
-import { publishManifest, authorityRef, authorityUrl, initializationMessage, blobSha } from "./publish-manifest.mjs";
+import { installerName, publicKeyPacket, verifyUpdaterSignature, createManifest, publicationDecision, sha256, verifyDirectory, validateManifest, repository } from "./updater-release.mjs";
+import { publishManifest, authorityToken, authorityRef, authorityUrl, initializationMessage, blobSha } from "./publish-manifest.mjs";
 
 // DIAGNOSTIC unit keys exist only in memory, never persisted or supplied to a production build.
 const { privateKey, publicKey } = generateKeyPairSync("ed25519");
@@ -59,7 +59,7 @@ test("identical manifest is a no-op; downgrade and same-version drift refuse", (
   assert.throws(() => publicationDecision(current, older));
   assert.equal(publicationDecision(older, current), "replace");
 });
-function fixture(previous = null, candidateVersion = version) {
+function fixture(previous = null, candidateVersion = version, shared = null) {
   const candidateName = installerName(candidateVersion, "nsis");
   const candidateSignature = signature(`timestamp:1\tfile:${candidateName}\tversion:${candidateVersion}`);
   const sigBytes = Buffer.from(candidateSignature + "\n");
@@ -69,38 +69,56 @@ function fixture(previous = null, candidateVersion = version) {
   const metadataBytes = Buffer.from(JSON.stringify(metadata));
   const manifestBytes = Buffer.from(JSON.stringify(createManifest(candidateVersion, `# Aurora Launcher ${candidateVersion}\nAurora Client 2.1.5`, candidateSignature)));
   const publicBytes = new Map([[candidateName, bytes], [sig.name, sigBytes], ["release-assets.json", metadataBytes]]);
-  const release = { id: 10, tag_name: `v${candidateVersion}`, target_commitish: sourceSha, draft: false, prerelease: false, immutable: true,
+  const release = { id: Number(candidateVersion.replaceAll('.', '')), tag_name: `v${candidateVersion}`, target_commitish: sourceSha, draft: false, prerelease: false, immutable: true,
     assets: [...publicBytes].map(([file, content], index) => ({ id: index + 1, name: file.replaceAll(" ", "."), size: content.length, browser_download_url: `https://github.com/${repository}/releases/download/v${candidateVersion}/${file.replaceAll(" ", ".")}` })) };
-  const objects = new Map(), calls = [], states = [], waits = [];
-  let counter = 10, head = "1".repeat(40), rawQueue = [];
-  const identity = () => (++counter).toString(16).padStart(40, "0");
+  const storage = shared ?? { objects: new Map(), counter: 10, head: null, root: null, latest: null };
+  const objects = storage.objects, calls = [], states = [], waits = [];
+  let rawQueue = [];
+  const identity = () => (++storage.counter).toString(16).padStart(40, "0");
   function addBlob(content) { const sha = blobSha(content); objects.set('/git/blobs/'+sha, {sha, encoding:'base64', size:content.length, content:content.toString('base64')}); return sha; }
   function addCommit(content, parent, message) {
     const treeSha = identity(); objects.set('/git/trees/'+treeSha, {sha:treeSha, truncated:false, tree:content ? [{path:'launcher-update.json',mode:'100644',type:'blob',sha:addBlob(content)}] : []});
     const sha = identity(); objects.set('/git/commits/'+sha, {sha, message, tree:{sha:treeSha}, parents:parent ? [{sha:parent}] : []});return sha;
   }
-  head = addCommit(null, null, initializationMessage);
-  const root = head;
-  if (previous) head = addCommit(previous, root, 'Prior accepted publication');
-  const initialHead = head;
+  if (!shared) {
+    storage.root = addCommit(null, null, initializationMessage);
+    storage.head = previous ? addCommit(previous, storage.root, 'Prior accepted publication') : storage.root;
+  }
+  const root = storage.root, initialHead = storage.head;
+  const isAncestor = (ancestor, descendant) => {
+    const pending = [descendant], seen = new Set();
+    while (pending.length) {
+      const sha = pending.pop();
+      if (sha === ancestor) return true;
+      if (seen.has(sha)) continue;
+      seen.add(sha);
+      pending.push(...(objects.get('/git/commits/' + sha)?.parents ?? []).map(p => p.sha));
+    }
+    return false;
+  };
   const contentAtHead = () => {
-    const commit = objects.get('/git/commits/'+head); const tree = objects.get('/git/trees/'+commit.tree.sha); const entry=tree.tree[0];
+    const commit = objects.get('/git/commits/'+storage.head); const tree = objects.get('/git/trees/'+commit.tree.sha); const entry=tree.tree[0];
     return entry ? Buffer.from(objects.get('/git/blobs/'+entry.sha).content,'base64') : null;
   };
   const api = async (path, options = {}) => {
     calls.push([options.method ?? 'GET', path, options.body]);
-    if (path === `/releases/tags/v${candidateVersion}` || path === '/releases/latest') return release;
-    if (path === '/git/ref/heads/launcher-update-authority') return {ref:authorityRef,object:{type:'commit',sha:head}};
+    if (path === `/releases/tags/v${candidateVersion}`) return release;
+    if (path === '/releases/latest') return storage.latest ?? release;
+    if (path === '/git/ref/heads/launcher-update-authority') {
+      if (!storage.head) throw Error('404 missing authority');
+      return {ref:authorityRef,object:{type:'commit',sha:storage.head}};
+    }
     if (options.method === 'POST') {
       if (path === '/git/blobs') return {sha:addBlob(Buffer.from(options.body.content,'base64'))};
-      if (path === '/git/trees') { const sha=identity();objects.set('/git/trees/'+sha,{sha,truncated:false,tree:options.body.tree});return {sha}; }
-      if (path === '/git/commits') { const sha=identity();objects.set('/git/commits/'+sha,{sha,message:options.body.message,tree:{sha:options.body.tree},parents:options.body.parents.map(sha=>({sha}))});return {sha}; }
+      if (path === '/git/trees') { const sha=storage.identicalObjects ? createHash('sha1').update(JSON.stringify(options.body)).digest('hex') : identity();objects.set('/git/trees/'+sha,{sha,truncated:false,tree:options.body.tree});return {sha}; }
+      if (path === '/git/commits') { const sha=storage.identicalObjects ? createHash('sha1').update(JSON.stringify(options.body)).digest('hex') : identity();objects.set('/git/commits/'+sha,{sha,message:options.body.message,tree:{sha:options.body.tree},parents:options.body.parents.map(sha=>({sha}))});return {sha}; }
       throw Error('Unexpected mutation');
     }
     if (options.method === 'PATCH') {
       assert.equal(path,'/git/refs/heads/launcher-update-authority');assert.equal(options.body.force,false);
-      if (objects.get('/git/commits/'+options.body.sha).parents[0].sha !== head) throw Error('Non-fast-forward');
-      head=options.body.sha;return {ref:authorityRef,object:{type:'commit',sha:head}};
+      if (!storage.head) throw Error('404 missing authority');
+      if (!isAncestor(storage.head, options.body.sha)) throw Error('Non-fast-forward');
+      storage.head=options.body.sha;return {ref:authorityRef,object:{type:'commit',sha:storage.head}};
     }
     if (objects.has(path)) return structuredClone(objects.get(path));
     throw Error('Unexpected/missing diagnostic API path '+path);
@@ -112,7 +130,7 @@ function fixture(previous = null, candidateVersion = version) {
   };
   return {version:candidateVersion,sourceSha,metadata,metadataBytes,manifestBytes,publicKey:encodedPublic,api,download,calls,objects,release,publicBytes,states,waits,
     publicAttempts:3,wait:async(ms)=>waits.push(ms),report:state=>states.push(state),initialHead,root,
-    head:()=>head,setHead:sha=>{head=sha;},raw:queue=>{rawQueue=queue;},contentAtHead,addCommit};
+    storage,isAncestor,head:()=>storage.head,setHead:sha=>{storage.head=sha;},raw:queue=>{rawQueue=queue;},contentAtHead,addCommit};
 }
 const mutateCalls = v => v.calls.filter(([method])=>['POST','PATCH','DELETE'].includes(method));
 const patchCalls = v => v.calls.filter(([method])=>method==='PATCH');
@@ -173,7 +191,7 @@ test('transferred signature verification rejects tampering without mutation',asy
  await verifyDirectory(directory,version,sourceSha,encodedPublic);await writeFile(join(directory,name),'tampered');await assert.rejects(verifyDirectory(directory,version,sourceSha,encodedPublic));
 });
 test('workflow boundaries are manual, individually protected and publication precedes authority',async()=>{
- const text=await readFile('.github/workflows/launcher-release.yml','utf8');assert.match(text,/workflow_dispatch:/);assert.equal((text.match(/environment: launcher-production/g)||[]).length,3);assert.match(text,/advance_update_authority:[\s\S]*needs: \[resolve, build, publish\]/);assert.match(text,/cancel-in-progress: false/);
+ const text=await readFile('.github/workflows/launcher-release.yml','utf8');assert.match(text,/workflow_dispatch:/);assert.equal((text.match(/environment: launcher-production\s/g)||[]).length,2);assert.match(text,/advance_update_authority:[\s\S]*needs: \[resolve, build, publish\]/);assert.match(text,/cancel-in-progress: false/);
  const frontend=await readFile('src/lib/backend.ts','utf8');assert.doesNotMatch(frontend,/launcherUpdate(?:Download|Install)[\s\S]{0,150}(?:endpoint|pubkey)/);
  const runtime=await readFile('src-tauri/src/updates/launcher.rs','utf8');assert.ok(runtime.includes(authorityUrl));assert.doesNotMatch(runtime,/option_env!\("AURORA_LAUNCHER_MANIFEST_URL"\)/);
 });
@@ -196,3 +214,205 @@ test('missing owner signing configuration fails without creating output or leaki
 test('wrong returned ref identity cannot be silently accepted',async()=>{const v=fixture();const original=v.api;v.api=async(p,o)=>{const r=await original(p,o);if(p.includes('/git/ref/'))r.ref='refs/heads/main';return r;};await assert.rejects(publishManifest(v));assert.equal(mutateCalls(v).length,0);});
 test('malformed previous blob bytes are rejected before construction',async()=>{const v=fixture(previousManifest('1.3.1'));const original=v.api;v.api=async(p,o)=>{const r=await original(p,o);if(p.startsWith('/git/blobs/'))r.content=Buffer.from('corrupt').toString('base64');return r;};await assert.rejects(publishManifest(v));assert.equal(mutateCalls(v).length,0);});
 test('failed outcome reread remains ambiguous and mutation is never repeated',async()=>{const v=fixture();const original=v.api;let uncertain=false,writes=0;v.api=async(p,o)=>{if(o?.method==='PATCH'){writes++;uncertain=true;throw Error('connection lost');}if(uncertain&&p.includes('/git/ref/'))throw Error('read unavailable');return original(p,o);};await assert.rejects(publishManifest(v));assert.equal(writes,1);assert.equal(v.head(),v.initialHead);});
+
+test('authority credential selection has no ordinary Actions/gh fallback', () => {
+  for (const env of [{}, { GH_TOKEN: 'ordinary' }, { GITHUB_TOKEN: 'ordinary' },
+    { AURORA_AUTHORITY_TOKEN: '' }, { AURORA_AUTHORITY_TOKEN: 'bad token' },
+    { AURORA_AUTHORITY_TOKEN: 'ordinary', GH_TOKEN: 'ordinary' },
+    { AURORA_AUTHORITY_TOKEN: 'ordinary', GITHUB_TOKEN: 'ordinary' }]) {
+    assert.throws(() => authorityToken(env), /Dedicated authority credential/);
+  }
+  assert.equal(authorityToken({ AURORA_AUTHORITY_TOKEN: 'dedicated', GH_TOKEN: 'ordinary' }), 'dedicated');
+});
+test('manual CLI with ordinary token only fails before reading artifacts or network', () => {
+  const result = spawnSync(process.execPath, ['tools/release/publish-manifest.mjs', version, sourceSha, 'unused'], {
+    env: { ...process.env, GITHUB_REPOSITORY: repository, GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/heads/main',
+      AURORA_AUTHORITY_TOKEN: '', GH_TOKEN: 'diagnostic-ordinary', GITHUB_TOKEN: 'diagnostic-ordinary' }, encoding: 'utf8',
+  });
+  assert.equal(result.status, 1);
+  assert.doesNotMatch(result.stderr, /diagnostic-ordinary|Bearer|ENOENT/);
+});
+test('workflow isolates App inputs/token to approved authority job and mints late', async () => {
+  const source = (await readFile('.github/workflows/launcher-release.yml', 'utf8')).replaceAll('\r\n', '\n');
+  const jobs = Object.fromEntries([...source.matchAll(/^  (resolve|build|publish|advance_update_authority):\n([\s\S]*?)(?=^  \w+:|$(?![\s\S]))/gm)].map(m => [m[1], m[2]]));
+  assert.deepEqual(Object.keys(jobs), ['resolve', 'build', 'publish', 'advance_update_authority']);
+  const authority = jobs.advance_update_authority;
+  assert.match(authority, /^    environment: launcher-update-authority-production$/m);
+  assert.match(authority, /^    permissions:\n      contents: read$/m);
+  assert.match(jobs.publish, /^    permissions:\n      contents: write$/m);
+  assert.match(authority, /actions\/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1/);
+  assert.match(authority, /client-id: \$\{\{ vars\.AURORA_AUTHORITY_APP_CLIENT_ID \}\}/);
+  assert.match(authority, /private-key: \$\{\{ secrets\.AURORA_AUTHORITY_APP_PRIVATE_KEY \}\}/);
+  assert.match(authority, /owner: kalibsolomon-pixel\n          repositories: Aurora-Launcher/);
+  assert.deepEqual([...authority.matchAll(/^          permission-(\w+): (\w+)$/gm)].map(m => [m[1], m[2]]), [['contents', 'write']]);
+  assert.match(authority, /skip-token-revoke: false/);
+  assert.match(authority, /AURORA_AUTHORITY_TOKEN: \$\{\{ steps\.authority-token\.outputs\.token \}\}/);
+  assert.doesNotMatch(authority, /GH_TOKEN:|GITHUB_TOKEN:|github\.token|outputs:\n|TAURI_SIGNING/);
+  assert.ok(authority.indexOf('actions/download-artifact@') < authority.indexOf('id: authority-token'));
+  assert.ok(authority.indexOf('id: authority-token') < authority.indexOf('node tools/release/publish-manifest.mjs'));
+  assert.match(authority, /persist-credentials: false/);
+  for (const job of [jobs.resolve, jobs.build, jobs.publish]) assert.doesNotMatch(job, /AURORA_AUTHORITY_|create-github-app-token/);
+  // This verifies source wiring, not installed GitHub rulesets/reviewer settings.
+});
+
+const malformedUtf8 = [
+  ['isolated FF', Buffer.from([0xff])],
+  ['truncated sequence', Buffer.from([0xe2, 0x82])],
+  ['invalid continuation', Buffer.from([0xe2, 0x28, 0xa1])],
+];
+function withNoteBytes(original, extra) {
+  const offset = original.indexOf('2.1.5') + 5;
+  return Buffer.concat([original.subarray(0, offset), extra, original.subarray(offset)]);
+}
+for (const [label, invalid] of malformedUtf8) {
+  test(`UTF-8 ${label} candidate is rejected before any publication objects`, async () => {
+    const v = fixture(); v.manifestBytes = withNoteBytes(v.manifestBytes, invalid);
+    assert.throws(() => validateManifest(v.manifestBytes));
+    await assert.rejects(publishManifest(v));
+    assert.equal(mutateCalls(v).length, 0); assert.equal(v.head(), v.initialHead);
+  });
+  test(`UTF-8 ${label} existing authority is rejected before preparation`, async () => {
+    const v = fixture(withNoteBytes(previousManifest('1.3.1'), invalid));
+    await assert.rejects(publishManifest(v));
+    assert.equal(mutateCalls(v).length, 0); assert.equal(v.head(), v.initialHead);
+  });
+  test(`UTF-8 ${label} transferred directory fails strict validation`, async () => {
+    const v = fixture();
+    const directory = await mkdtemp(join(tmpdir(), 'aurora-utf8-test-'));
+    for (const [name, content] of v.publicBytes) await writeFile(join(directory, name), content);
+    await writeFile(join(directory, 'launcher-update.json'), withNoteBytes(v.manifestBytes, invalid));
+    await assert.rejects(verifyDirectory(directory, version, sourceSha, encodedPublic));
+  });
+}
+for (const [label, extra] of [['ASCII', Buffer.from(' text')], ['non-ASCII', Buffer.from(' café 雪 🚀')]]) {
+  test(`valid ${label} manifest preserves exact bytes through publication`, async () => {
+    const v = fixture(); v.manifestBytes = withNoteBytes(v.manifestBytes, extra);
+    validateManifest(v.manifestBytes);
+    assert.equal(await publishManifest(v), 'published');
+    assert.ok(v.contentAtHead().equals(v.manifestBytes)); assert.equal(patchCalls(v).length, 1);
+  });
+}
+
+function barrier() {
+  let arrive, release;
+  const arrived = new Promise(done => { arrive = done; });
+  const released = new Promise(done => { release = done; });
+  return { arrived, release, pause: async () => { arrive(); await released; } };
+}
+function pausePublisher(v, phase) {
+  const gate = barrier(), api = v.api;
+  v.api = async (path, options) => {
+    if ((phase === 'PATCH' && options?.method === 'PATCH') ||
+      (phase === 'final read' && path.includes('/git/ref/') && v.states.some(s => s.state === 'PREPARED'))) await gate.pause();
+    return api(path, options);
+  };
+  return gate;
+}
+const preparedSha = v => v.states.find(s => s.state === 'PREPARED').sha;
+for (const [label, drift] of [['A/C sibling movement after final read', false], ['F identical-version publishers', false], ['G different same-version publishers', true]]) {
+  test(`two-publisher schedule ${label}`, { timeout: 10000 }, async () => {
+    const a = fixture(previousManifest('1.3.1')), b = fixture(null, version, a.storage);
+    if (drift) b.manifestBytes = withNoteBytes(b.manifestBytes, Buffer.from(' changed notes'));
+    const ga = pausePublisher(a, 'PATCH'), gb = pausePublisher(b, 'PATCH');
+    const pa = publishManifest(a), pb = publishManifest(b);
+    const rejected = assert.rejects(pb, /Concurrent/);
+    await Promise.all([ga.arrived, gb.arrived]);
+    ga.release(); assert.equal(await pa, 'published'); gb.release(); await rejected;
+    assert.equal(a.head(), preparedSha(a)); assert.equal(patchCalls(a).length, 1); assert.equal(patchCalls(b).length, 1);
+    const rerun = fixture(null, version, a.storage); rerun.manifestBytes = b.manifestBytes;
+    if (drift) await assert.rejects(publishManifest(rerun), /same-version drift/);
+    else assert.equal(await publishManifest(rerun), 'unchanged');
+    assert.equal(mutateCalls(rerun).length, 0); assert.equal(a.head(), preparedSha(a));
+  });
+}
+test('two-publisher B movement before final read prevents the second PATCH', { timeout: 10000 }, async () => {
+  const a = fixture(previousManifest('1.3.1')), b = fixture(null, version, a.storage);
+  const gate = pausePublisher(b, 'final read'); const pb = publishManifest(b);
+  const rejected = assert.rejects(pb, /moved/); await gate.arrived;
+  assert.equal(await publishManifest(a), 'published'); gate.release(); await rejected;
+  assert.equal(a.head(), preparedSha(a)); assert.equal(patchCalls(a).length, 1); assert.equal(patchCalls(b).length, 0);
+});
+test('F identical prepared Git objects allow both publishers to verify the same head', { timeout: 10000 }, async () => {
+  const a = fixture(previousManifest('1.3.1')), b = fixture(null, version, a.storage);
+  // Git may return the same object when bytes, parent, author and timestamp match.
+  a.storage.identicalObjects = true;
+  const ga = pausePublisher(a, 'PATCH'), gb = pausePublisher(b, 'PATCH');
+  const pa = publishManifest(a), pb = publishManifest(b);
+  await Promise.all([ga.arrived, gb.arrived]);
+  assert.equal(preparedSha(a), preparedSha(b));
+  ga.release(); assert.equal(await pa, 'published'); gb.release(); assert.equal(await pb, 'published');
+  assert.equal(a.head(), preparedSha(a)); assert.equal(patchCalls(a).length, 1); assert.equal(patchCalls(b).length, 1);
+});
+for (const newerWins of [false, true]) {
+  test(`H older/newer after-final-read race: ${newerWins ? 'newer' : 'older'} wins`, { timeout: 10000 }, async () => {
+    const older = fixture(previousManifest('1.3.1'), '1.4.1'), newer = fixture(null, '1.4.2', older.storage);
+    older.storage.latest = older.release;
+    const go = pausePublisher(older, 'PATCH'), po = publishManifest(older); await go.arrived;
+    older.storage.latest = newer.release;
+    const gn = pausePublisher(newer, 'PATCH'), pn = publishManifest(newer); await gn.arrived;
+    const winner = newerWins ? newer : older, loser = newerWins ? older : newer;
+    const rejected = assert.rejects(newerWins ? po : pn, /Concurrent/);
+    (newerWins ? gn : go).release(); assert.equal(await (newerWins ? pn : po), 'published');
+    (newerWins ? go : gn).release(); await rejected;
+    assert.equal(winner.head(), preparedSha(winner)); assert.equal(patchCalls(older).length, 1); assert.equal(patchCalls(newer).length, 1);
+    const retry = fixture(null, '1.4.2', older.storage);
+    assert.equal(await publishManifest(retry), newerWins ? 'unchanged' : 'published');
+    assert.equal(JSON.parse(retry.contentAtHead()).version, '1.4.2');
+    const stale = fixture(null, '1.4.1', older.storage);
+    await assert.rejects(publishManifest(stale)); assert.equal(mutateCalls(stale).length, 0);
+    assert.equal(JSON.parse(stale.contentAtHead()).version, '1.4.2');
+    assert.equal(loser.states.some(s => s.state === 'VERIFIED'), false);
+  });
+}
+test('D/E accepted PATCH then response failure and later publisher: stop without retry', async () => {
+  const v = fixture(), api = v.api; let later;
+  v.api = async (path, options) => {
+    const result = await api(path, options);
+    if (options?.method === 'PATCH') {
+      later = fixture(null, '1.4.1', v.storage);
+      v.storage.latest = later.release;
+      assert.equal(await publishManifest(later), 'published');
+      throw Error('Lost response');
+    }
+    return result;
+  };
+  await assert.rejects(publishManifest(v), /Concurrent/);
+  assert.equal(v.head(), preparedSha(later));
+  assert.equal(patchCalls(v).length, 1); assert.equal(patchCalls(later).length, 1);
+  assert.equal(JSON.parse(v.contentAtHead()).version, '1.4.1');
+  assert.equal(v.states.some(s => s.state === 'VERIFIED'), false);
+});
+test('I/L fixture accepts descendants and rejects rewind, sibling and unrelated history', async () => {
+  const v = fixture(previousManifest('1.3.1'));
+  const child = v.addCommit(previousManifest('1.4.0'), v.head(), 'child');
+  const grandchild = v.addCommit(previousManifest('1.4.1'), child, 'grandchild');
+  const sibling = v.addCommit(previousManifest('1.4.2'), v.initialHead, 'sibling');
+  const unrelated = v.addCommit(previousManifest('1.4.2'), null, 'unrelated');
+  const patch = sha => v.api('/git/refs/heads/launcher-update-authority', { method: 'PATCH', body: { sha, force: false } });
+  await patch(child); assert.equal(v.head(), child);
+  await patch(grandchild); assert.equal(v.head(), grandchild);
+  for (const sha of [v.root, child, sibling, unrelated]) await assert.rejects(patch(sha), /Non-fast-forward/);
+  assert.equal(v.head(), grandchild);
+});
+test('J deletion between final read and PATCH fails and never recreates authority', async () => {
+  const v = fixture(), api = v.api;
+  v.api = (path, options) => { if (options?.method === 'PATCH') v.setHead(null); return api(path, options); };
+  await assert.rejects(publishManifest(v), /missing authority/);
+  assert.equal(v.head(), null); assert.equal(patchCalls(v).length, 1);
+  assert.equal(v.calls.some(([method, path]) => method === 'POST' && path === '/git/refs'), false);
+});
+for (const recreate of [false, true]) {
+  test(`${recreate ? 'K recreation' : 'I external rewind'} at ancestor demonstrates required ruleset boundary`, async () => {
+    const v = fixture(previousManifest('1.3.1')), api = v.api;
+    v.api = (path, options) => {
+      if (options?.method === 'PATCH') { if (recreate) v.setHead(null); v.setHead(v.root); }
+      return api(path, options);
+    };
+    // Deliberately disable external protection in this fixture: GitHub can
+    // accept this fast-forward. Code cannot replace no-bypass history rules.
+    assert.equal(await publishManifest(v), 'published');
+    assert.equal(v.head(), preparedSha(v)); assert.equal(patchCalls(v).length, 1);
+    assert.equal(v.objects.get('/git/commits/' + v.head()).parents[0].sha, v.initialHead);
+  });
+}

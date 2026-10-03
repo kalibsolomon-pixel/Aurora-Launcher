@@ -7,6 +7,9 @@ import { expectedAssetName, verifyBytes, verifyNotesIdentity } from "./release-s
 export const repository = "kalibsolomon-pixel/Aurora-Launcher";
 export const manifestName = "launcher-update.json";
 export const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+// Preserve a BOM so manifests reject it like serde_json; inventory callers may
+// explicitly strip the existing PowerShell BOM after strict decoding.
+export const strictUtf8 = (bytes) => new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
 export function versionParts(version) {
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version ?? "")) throw new Error("Invalid production version");
   const parts = version.split(".").map(Number);
@@ -64,11 +67,9 @@ export function createManifest(version, notes, signature) {
   } } };
 }
 export function publicationDecision(previousBytes, nextBytes) {
-  validateManifest(previousBytes);
-  validateManifest(nextBytes);
+  const previous = validateManifest(previousBytes);
+  const next = validateManifest(nextBytes);
   if (previousBytes.equals(nextBytes)) return "unchanged";
-  const previous = JSON.parse(previousBytes.toString("utf8"));
-  const next = JSON.parse(nextBytes.toString("utf8"));
   const left = versionParts(previous.version), right = versionParts(next.version);
   const difference = right.map((part, index) => part - left[index]).find((part) => part !== 0) ?? 0;
   if (difference <= 0) throw new Error("Refusing manifest downgrade or same-version drift");
@@ -78,7 +79,7 @@ export function publicationDecision(previousBytes, nextBytes) {
 }
 export async function verifyDirectory(directory, version, sourceSha, publicKey) {
   versionParts(version); publicKeyPacket(publicKey);
-  const manifest = JSON.parse((await readFile(join(directory, "release-assets.json"), "utf8")).replace(/^\uFEFF/, ""));
+  const manifest = JSON.parse(strictUtf8(await readFile(join(directory, "release-assets.json"))).replace(/^\uFEFF/, ""));
   if (manifest.version !== version || manifest.sourceSha !== sourceSha || !/^[0-9a-f]{40}$/.test(sourceSha) ||
       manifest.updater?.publicKeySha256 !== sha256(Buffer.from(publicKey)) || manifest.updater?.platform !== "windows-x86_64") throw new Error("Release updater provenance mismatch");
   if (!Array.isArray(manifest.artifacts) || !manifest.artifacts.some((entry) => entry.format === "nsis") ||
@@ -94,7 +95,7 @@ export async function verifyDirectory(directory, version, sourceSha, publicKey) 
     verifyUpdaterSignature(bytes, signatureBytes.toString("utf8").trim(), publicKey, version, entry.name);
   }
   const updaterBytes = await readFile(join(directory, manifestName));
-  const updater = JSON.parse(updaterBytes.toString("utf8"));
+  const updater = validateManifest(updaterBytes);
   const nsisSignature = (await readFile(join(directory, installerName(version, "nsis") + ".sig"), "utf8")).trim();
   if (JSON.stringify(updater) !== JSON.stringify(createManifest(version, updater.notes, nsisSignature))) throw new Error("Update manifest differs from verified installers");
   return manifest;
@@ -102,7 +103,7 @@ export async function verifyDirectory(directory, version, sourceSha, publicKey) 
 /** Strict single-stream metadata; payload verification remains separate. */
 export function validateManifest(bytes) {
   if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > 16384) throw new Error("Invalid manifest size");
-  const value = JSON.parse(bytes.toString("utf8"));
+  const value = JSON.parse(strictUtf8(bytes));
   const target = value?.platforms?.["windows-x86_64"];
   const expected = createManifest(value?.version, value?.notes, target?.signature);
   if (JSON.stringify(value) !== JSON.stringify(expected)) throw new Error("Unexpected production manifest semantics");
@@ -120,7 +121,7 @@ async function main() {
   const directory = resolve(directoryArg), root = resolve(rootArg);
   if (mode === "pack") {
     const path = join(directory, "release-assets.json");
-    const manifest = JSON.parse((await readFile(path, "utf8")).replace(/^\uFEFF/, ""));
+    const manifest = JSON.parse(strictUtf8(await readFile(path)).replace(/^\uFEFF/, ""));
     const signatures = [];
     for (const entry of manifest.artifacts) {
       if (entry.name !== installerName(version, entry.format)) throw new Error("Unexpected installer name");

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { selectAsset, verifyBytes, expectedAssetName } from "./release-state.mjs";
-import { repository, manifestName, sha256, publicationDecision, verifyDirectory, validateManifest, installerName, verifyUpdaterSignature } from "./updater-release.mjs";
+import { repository, manifestName, sha256, publicationDecision, verifyDirectory, validateManifest, strictUtf8, installerName, verifyUpdaterSignature } from "./updater-release.mjs";
 
 export const authorityRef = "refs/heads/launcher-update-authority";
 export const authorityUrl = `https://raw.githubusercontent.com/${repository}/launcher-update-authority/${manifestName}`;
@@ -13,6 +13,15 @@ const updatePath = "/git/refs/heads/launcher-update-authority";
 const shaPattern = /^[0-9a-f]{40}$/;
 export const blobSha = (bytes) => createHash("sha1").update(Buffer.from(`blob ${bytes.length}\0`)).update(bytes).digest("hex");
 const requireSha = (sha) => { if (!shaPattern.test(sha ?? "")) throw new Error("Invalid Git object identity"); return sha; };
+
+// Explicit credential contract: ordinary Actions/gh credentials are never a
+// fallback. Repository rulesets, not a token's spelling, enforce App identity.
+export function authorityToken(env) {
+  const token = env.AURORA_AUTHORITY_TOKEN;
+  if (typeof token !== "string" || !token.length || /\s/.test(token) ||
+      token === env.GH_TOKEN || token === env.GITHUB_TOKEN) throw new Error("Dedicated authority credential is required");
+  return token;
+}
 
 async function currentRef(api) {
   const ref = await api(refPath);
@@ -39,7 +48,7 @@ async function inspectCommit(api, sha) {
 async function verifyPublic({ api, download, version, sourceSha, metadata, metadataBytes, manifestBytes, publicKey }) {
   const candidate = validateManifest(manifestBytes);
   if (candidate.version !== version || metadata.version !== version || metadata.sourceSha !== sourceSha || !shaPattern.test(sourceSha) ||
-      JSON.stringify(JSON.parse(metadataBytes)) !== JSON.stringify(metadata) || metadata.updater?.platform !== "windows-x86_64" ||
+      JSON.stringify(JSON.parse(strictUtf8(metadataBytes).replace(/^\uFEFF/, ""))) !== JSON.stringify(metadata) || metadata.updater?.platform !== "windows-x86_64" ||
       metadata.updater?.publicKeySha256 !== sha256(Buffer.from(publicKey ?? ""))) throw new Error("Candidate provenance differs");
   const release = await api(`/releases/tags/v${version}`);
   if (release.draft || release.prerelease || release.immutable !== true || release.target_commitish !== sourceSha || release.tag_name !== `v${version}`) throw new Error("Public immutable release identity differs");
@@ -117,7 +126,8 @@ export async function publishManifest(options) {
 
 async function main() {
   const [version, sourceSha, directoryArg] = process.argv.slice(2);
-  if (!directoryArg || process.env.GITHUB_REPOSITORY !== repository || !process.env.GH_TOKEN || process.env.GITHUB_ACTIONS !== "true" || process.env.GITHUB_EVENT_NAME !== "workflow_dispatch") throw new Error("Protected manual release environment is required");
+  if (!directoryArg || process.env.GITHUB_REPOSITORY !== repository || process.env.GITHUB_REF !== "refs/heads/main" || process.env.GITHUB_ACTIONS !== "true" || process.env.GITHUB_EVENT_NAME !== "workflow_dispatch") throw new Error("Protected manual release environment is required");
+  const token = authorityToken(process.env);
   const directory = resolve(directoryArg);
   const publicKey = process.env.AURORA_UPDATER_PUBKEY?.trim();
   const metadata = await verifyDirectory(directory, version, sourceSha, publicKey);
@@ -125,7 +135,7 @@ async function main() {
     if (!path.startsWith("/") || path.includes("..")) throw new Error("Unexpected API path");
     const response = await fetch(`https://api.github.com/repos/${repository}${path}`, {
       method: options.method ?? "GET", body: options.body ? JSON.stringify(options.body) : undefined,
-      headers: { Authorization: `Bearer ${process.env.GH_TOKEN}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" },
       redirect: "error", signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) throw new Error(`Authority API HTTP ${response.status}`);

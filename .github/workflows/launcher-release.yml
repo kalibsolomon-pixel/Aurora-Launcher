@@ -219,12 +219,12 @@ jobs:
     name: Advance update discovery ref (separate owner gate)
     needs: [resolve, build, publish]
     runs-on: windows-latest
-    environment: launcher-production
+    environment: launcher-update-authority-production
     concurrency:
       group: aurora-launcher-production-update-authority
       cancel-in-progress: false
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -237,12 +237,24 @@ jobs:
         with:
           name: aurora-launcher-${{ inputs.version }}-${{ inputs.installer_format }}
           path: ${{ runner.temp }}/aurora-release-assets
+      # Only this approved environment contains the dedicated App credentials.
+      # Mint late, scope to this repository/Contents, and revoke at job completion.
+      - name: Issue dedicated authority installation token
+        id: authority-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AURORA_AUTHORITY_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AURORA_AUTHORITY_APP_PRIVATE_KEY }}
+          owner: kalibsolomon-pixel
+          repositories: Aurora-Launcher
+          permission-contents: write
+          skip-token-revoke: false
       - name: Verify immutable public bytes and advance discovery ref LAST
         shell: pwsh
         env:
           VERSION: ${{ inputs.version }}
           SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
-          GH_TOKEN: ${{ github.token }}
+          AURORA_AUTHORITY_TOKEN: ${{ steps.authority-token.outputs.token }}
           AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
         run: |
           node tools/release/publish-manifest.mjs $env:VERSION $env:SOURCE_SHA (Join-Path $env:RUNNER_TEMP 'aurora-release-assets')
