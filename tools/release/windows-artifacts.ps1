@@ -42,6 +42,7 @@ $names = [ordered]@{
     msi = "Aurora Launcher_${Version}_x64_en-US.msi"
 }
 $selected = if ($Format -eq 'both') { @('nsis', 'msi') } else { @($Format) }
+if ('nsis' -notin $selected) { throw 'Signed production updates require the NSIS installer; select nsis or both' }
 $manifestPath = Join-Path $OutputDirectory 'release-assets.json'
 
 if ($Mode -eq 'Pack') {
@@ -63,7 +64,8 @@ if ($Mode -eq 'Pack') {
     $artifacts = @()
     foreach ($kind in @('nsis', 'msi')) {
         $folder = Join-Path $RepositoryRoot "src-tauri/target/release/bundle/$kind"
-        $files = @(Get-ChildItem -LiteralPath $folder -File | Where-Object { if ($kind -eq 'nsis') { $_.Name -like '*-setup.exe' } else { $_.Extension -eq '.msi' } })
+        # Preserve historical installers; inspect only the exact requested version.
+        $files = @(Get-ChildItem -LiteralPath $folder -File | Where-Object { $_.Name -ceq $names[$kind] })
         if ($files.Count -ne 1 -or $files[0].Name -cne $names[$kind]) {
             throw "Expected exactly one $kind installer named $($names[$kind])"
         }
@@ -83,13 +85,15 @@ if ($Mode -eq 'Pack') {
     }
     [pscustomobject]@{ version = $Version; sourceSha = $SourceSha; artifacts = $artifacts } |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+    & node (Join-Path $PSScriptRoot 'updater-release.mjs') pack $Version $SourceSha $OutputDirectory $RepositoryRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Signed updater preparation failed' }
 }
 
 if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'Release artifact manifest is missing' }
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if ($manifest.version -cne $Version -or $manifest.sourceSha -cne $SourceSha) { throw 'Release artifact manifest version/source mismatch' }
 if (@($manifest.artifacts).Count -ne $selected.Count) { throw 'Release artifact count is wrong' }
-$expectedFiles = @('release-assets.json') + @($selected | ForEach-Object { $names[$_] })
+$expectedFiles = @('release-assets.json', 'launcher-update.json') + @($selected | ForEach-Object { $names[$_]; "$($names[$_]).sig" })
 $actualFiles = @(Get-ChildItem -LiteralPath $OutputDirectory -File | Select-Object -ExpandProperty Name)
 if (@($actualFiles).Count -ne $expectedFiles.Count -or @(Compare-Object $expectedFiles $actualFiles).Count -ne 0) {
     throw 'Release artifact directory has missing or unexpected files'
@@ -108,3 +112,5 @@ foreach ($kind in $selected) {
     }
     Write-Output "$($entry[0].name) | $kind | x64 | $($item.Length) bytes | SHA-256 $hash | product $Version"
 }
+& node (Join-Path $PSScriptRoot 'updater-release.mjs') verify $Version $SourceSha $OutputDirectory $RepositoryRoot
+if ($LASTEXITCODE -ne 0) { throw 'Signed updater transfer verification failed' }

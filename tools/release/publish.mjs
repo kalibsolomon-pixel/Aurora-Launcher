@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { selectRelease, selectAsset, verifyBytes, verifyNotesIdentity } from "./release-state.mjs";
+import { verifyDirectory, repository as productionRepository } from "./updater-release.mjs";
 
 const [version, sourceSha, assetsDirectory, resumeIdText, mode] = process.argv.slice(2);
 if (!/^\d+\.\d+\.\d+$/.test(version ?? "") || !/^[0-9a-f]{40}$/.test(sourceSha ?? "") || !assetsDirectory) {
@@ -39,13 +40,15 @@ async function tagSha() {
 }
 async function state() { return selectRelease(await listReleases(), tag, sourceSha, resumeId, await tagSha()); }
 const directory = resolve(assetsDirectory);
+if (repository !== productionRepository) throw new Error("Unexpected production repository");
+await verifyDirectory(directory, version, sourceSha, process.env.AURORA_UPDATER_PUBKEY?.trim());
 const manifestPath = join(directory, "release-assets.json");
 const manifestBytes = await readFile(manifestPath);
 const manifest = JSON.parse(manifestBytes.toString("utf8"));
 if (manifest.version !== version || manifest.sourceSha !== sourceSha || !Array.isArray(manifest.artifacts) || manifest.artifacts.length === 0) {
   throw new Error("Validated artifact manifest does not match source");
 }
-const expected = [...manifest.artifacts, { name: "release-assets.json", sizeBytes: manifestBytes.length, sha256: (await import("node:crypto")).createHash("sha256").update(manifestBytes).digest("hex") }];
+const expected = [...manifest.artifacts, ...manifest.updater.signatures, { name: "release-assets.json", sizeBytes: manifestBytes.length, sha256: (await import("node:crypto")).createHash("sha256").update(manifestBytes).digest("hex") }];
 for (const entry of expected) verifyBytes(await readFile(join(directory, entry.name)), entry);
 const notesFile = join(import.meta.dirname, `../../RELEASE_${version.replaceAll(".", "_")}_NOTES.md`);
 const sourceNotes = (await readFile(notesFile, "utf8")).trim();
@@ -61,7 +64,13 @@ async function verifyRelease(release, publicDownload = false) {
   if (release.assets.length !== expected.length) throw new Error("Release asset count differs from build");
   for (const entry of expected) {
     const asset = selectAsset(release.assets, entry);
-    const response = await api(publicDownload ? asset.browser_download_url : `/releases/assets/${asset.id}`, { headers: { Accept: "application/octet-stream" } });
+    // Public verification is deliberately unauthenticated, including redirects.
+    const publicUrl = `https://github.com/${repository}/releases/download/${tag}/${entry.name.replaceAll(" ", ".")}`;
+    if (publicDownload && asset.browser_download_url !== publicUrl) throw new Error("Public asset URL differs from intended release");
+    const response = publicDownload
+      ? await fetch(publicUrl, { headers: { Accept: "application/octet-stream" }, signal: AbortSignal.timeout(300_000) })
+      : await api(`/releases/assets/${asset.id}`, { headers: { Accept: "application/octet-stream" } });
+    if (!response.ok) throw new Error(`Public asset HTTP ${response.status}`);
     const bytes = Buffer.from(await response.arrayBuffer());
     verifyBytes(bytes, entry);
     if (publicDownload) console.log(`Public asset verified: ${asset.name} (${bytes.length} bytes, ${entry.sha256})`);

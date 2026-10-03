@@ -17,7 +17,6 @@ on:
         type: choice
         options:
           - nsis
-          - msi
           - both
       resume_release_id:
         description: Existing draft release ID to resume (leave empty for a new release)
@@ -60,6 +59,7 @@ jobs:
             echo 'Aurora Launcher 1.0.0 publishes NSIS only' >&2
             exit 1
           fi
+          test "$INSTALLER_FORMAT" != 'msi' # One Windows updater authority uses NSIS.
           [[ "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]
           git cat-file -e "$SOURCE_REF^{commit}"
           git fetch --no-tags origin main
@@ -86,6 +86,7 @@ jobs:
   build:
     needs: resolve
     runs-on: windows-latest
+    environment: launcher-production
     env:
       # Public Aurora Client application identity, embedded by Rust at compile time.
       AURORA_DISCORD_APPLICATION_ID: '1553653987545317396'
@@ -118,6 +119,8 @@ jobs:
           if ($env:AURORA_DISCORD_APPLICATION_ID -ne '1553653987545317396') { throw 'Production Discord application configuration is missing or incorrect' }
           npm test
           if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed' }
+          node --test tools/release/*.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Release tooling tests failed' }
           npm run check
           if ($LASTEXITCODE -ne 0) { throw 'Frontend check failed' }
           cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
@@ -128,7 +131,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Rust tests failed' }
           npm run build
           if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
-          npm run tauri build
+      - name: Build with owner-provided production updater signing
+        shell: pwsh
+        env:
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $config = Join-Path $env:RUNNER_TEMP 'aurora-production-updater.json'
+          node tools/release/updater-release.mjs config $config
+          if ($LASTEXITCODE -ne 0) { throw 'Production signing configuration is missing or invalid' }
+          $env:AURORA_UPDATER_PUBKEY = $env:AURORA_UPDATER_PUBKEY.Trim()
+          npm run tauri build -- --config $config
           if ($LASTEXITCODE -ne 0) { throw 'Tauri installer build failed' }
       - name: Inspect and hash installer bytes
         shell: pwsh
@@ -136,6 +150,7 @@ jobs:
           VERSION: ${{ inputs.version }}
           FORMAT: ${{ inputs.installer_format }}
           SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
         run: |
           & ./tools/release/windows-artifacts.ps1 -Version $env:VERSION -Format $env:FORMAT -Mode Pack -SourceSha $env:SOURCE_SHA -OutputDirectory (Join-Path $env:RUNNER_TEMP 'aurora-release-assets')
           if (-not $?) { throw 'Installer inspection failed' }
@@ -161,7 +176,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -178,6 +193,7 @@ jobs:
           SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
           RESUME_RELEASE_ID: ${{ inputs.resume_release_id }}
           GH_TOKEN: ${{ github.token }}
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
         run: |
           node tools/release/check-collision.mjs $env:VERSION $env:SOURCE_SHA $env:RESUME_RELEASE_ID
           if ($LASTEXITCODE -ne 0) { throw 'Release collision check failed' }
@@ -191,7 +207,40 @@ jobs:
           SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
           RESUME_RELEASE_ID: ${{ inputs.resume_release_id }}
           GH_TOKEN: ${{ github.token }}
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
         run: |
           $resume = if ($env:RESUME_RELEASE_ID) { [long]$env:RESUME_RELEASE_ID } else { 0 }
           & ./tools/release/publish.ps1 -Version $env:VERSION -Format $env:FORMAT -SourceSha $env:SOURCE_SHA -AssetsDirectory (Join-Path $env:RUNNER_TEMP 'aurora-release-assets') -ResumeReleaseId $resume
           if (-not $?) { throw 'Release publication or public-byte verification failed' }
+
+  expose_update:
+    needs: [resolve, build, publish]
+    runs-on: windows-latest
+    environment: launcher-production
+    concurrency:
+      group: aurora-launcher-production-update-authority
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: aurora-launcher-${{ inputs.version }}-${{ inputs.installer_format }}
+          path: ${{ runner.temp }}/aurora-release-assets
+      - name: Verify public signed assets and expose the single manifest last
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+        run: |
+          node tools/release/publish-manifest.mjs $env:VERSION $env:SOURCE_SHA (Join-Path $env:RUNNER_TEMP 'aurora-release-assets')
+          if ($LASTEXITCODE -ne 0) { throw 'Single update manifest publication failed; retain immutable release artifacts' }
