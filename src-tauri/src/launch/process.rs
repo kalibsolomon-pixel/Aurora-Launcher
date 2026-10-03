@@ -94,6 +94,30 @@ pub(crate) fn with_test_state<T>(
     result
 }
 
+/// Test-only guard that marks one instance as Running for the lifetime of
+/// the guard, so async transactions can be exercised against a running
+/// process without blocking inside a sync closure.
+#[cfg(test)]
+pub(crate) struct TestRunningGuard(String);
+
+#[cfg(test)]
+impl Drop for TestRunningGuard {
+    fn drop(&mut self) {
+        process_states().lock().unwrap().remove(&self.0);
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn force_running(instance_id: &str) -> TestRunningGuard {
+    let mut state = ProcessSnapshot::stopped(instance_id);
+    state.status = LaunchProcessStatus::Running;
+    process_states()
+        .lock()
+        .unwrap()
+        .insert(instance_id.into(), state);
+    TestRunningGuard(instance_id.to_owned())
+}
+
 fn preparations() -> &'static Mutex<HashSet<String>> {
     static PREPARATIONS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
     PREPARATIONS.get_or_init(|| Mutex::new(HashSet::new()))

@@ -171,6 +171,14 @@ impl AuroraInstalledState {
         &self.installation_id
     }
 
+    /// Replaces the recorded Fabric API entry with an explicitly
+    /// provider-owned one carried across an update. Crate-visible for the
+    /// update transaction only; ordinary installs derive it from the
+    /// release.
+    pub(crate) fn set_provider_fabric_api(&mut self, fabric_api: Option<InstalledFabricApi>) {
+        self.fabric_api = fabric_api;
+    }
+
     /// Parses and validates an installed-state document. Unknown schema
     /// versions and malformed content fail deliberately; the caller never
     /// repairs or overwrites a damaged record.
@@ -337,6 +345,135 @@ fn validate_managed_mod_path(path: &str, prefix: &str) -> Result<(), String> {
 pub struct InstalledAurora {
     pub state: AuroraInstalledState,
     pub artifact_path: PathBuf,
+}
+
+/// A persisted release entry installed through the published-manifest update
+/// path (`aurora-release.json`, schema 1). Launcher-owned, derived state:
+/// it records the exact intentionally published release metadata an update
+/// verified against, so an instance pinned to a version newer than this
+/// launcher build's embedded manifest still resolves, validates, and
+/// launches. Inert whenever the embedded manifest already knows the pin.
+pub const INSTANCE_RELEASE_FILE_NAME: &str = "aurora-release.json";
+const INSTANCE_RELEASE_SCHEMA_VERSION: u32 = 1;
+
+/// The persisted shape of [`INSTANCE_RELEASE_FILE_NAME`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InstanceReleaseDocument {
+    schema_version: u32,
+    /// Provenance of the entry; only the published-manifest update path
+    /// writes this document today.
+    source: String,
+    release: crate::distribution::AuroraRelease,
+}
+
+/// Loads the persisted installed-release entry, if present. A malformed or
+/// unsupported document is a deliberate error, never overwritten.
+pub fn load_instance_release(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<Option<crate::distribution::AuroraRelease>, AuroraInstallError> {
+    let path = managed
+        .instance_paths(instance)
+        .root()
+        .join(INSTANCE_RELEASE_FILE_NAME);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(AuroraInstallError::StateRead(error)),
+    };
+    let document: InstanceReleaseDocument = serde_json::from_str(&text).map_err(|error| {
+        AuroraInstallError::State(AuroraStateError::Malformed {
+            reason: format!("the persisted release entry is malformed: {error}"),
+        })
+    })?;
+    if document.schema_version != INSTANCE_RELEASE_SCHEMA_VERSION {
+        return Err(AuroraInstallError::State(AuroraStateError::Malformed {
+            reason: format!(
+                "the persisted release entry schema {} is unsupported",
+                document.schema_version
+            ),
+        }));
+    }
+    // Re-validate the entry through the manifest boundary: one entry,
+    // full manifest validation, no second parser.
+    let manifest = crate::distribution::ReleaseManifest::from_json(
+        &serde_json::to_string(&serde_json::json!({
+            "schemaVersion": crate::distribution::ReleaseManifest::SCHEMA_VERSION,
+            "releases": [document.release],
+        }))
+        .map_err(|error| {
+            AuroraInstallError::State(AuroraStateError::Malformed {
+                reason: error.to_string(),
+            })
+        })?,
+    )
+    .map_err(|error| {
+        AuroraInstallError::State(AuroraStateError::Malformed {
+            reason: error.to_string(),
+        })
+    })?;
+    Ok(manifest.releases().first().cloned())
+}
+
+/// Persists the installed-release entry atomically. Called only by the
+/// verified update transaction, beside the installed-state commit.
+pub(crate) fn write_instance_release(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    release: &crate::distribution::AuroraRelease,
+) -> Result<(), AuroraInstallError> {
+    let document = InstanceReleaseDocument {
+        schema_version: INSTANCE_RELEASE_SCHEMA_VERSION,
+        source: "published-release-manifest".to_owned(),
+        release: release.clone(),
+    };
+    let target = managed
+        .instance_paths(instance)
+        .root()
+        .join(INSTANCE_RELEASE_FILE_NAME);
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(AuroraInstallError::StateWrite)?;
+    }
+    let json = serde_json::to_string_pretty(&document).map_err(|error| {
+        AuroraInstallError::State(AuroraStateError::Malformed {
+            reason: error.to_string(),
+        })
+    })?;
+    let mut temporary = target.clone().into_os_string();
+    temporary.push(".tmp");
+    let temporary = PathBuf::from(temporary);
+    std::fs::write(&temporary, format!("{json}\n")).map_err(AuroraInstallError::StateWrite)?;
+    std::fs::rename(&temporary, &target).map_err(|error| {
+        let _ = std::fs::remove_file(&temporary);
+        AuroraInstallError::StateWrite(error)
+    })
+}
+
+/// The embedded manifest extended with this instance's persisted release
+/// entry, when the embedded manifest does not already know that version.
+///
+/// Resolution stays exact: the sidecar only adds one reviewable entry, and
+/// embedded entries always win over a stale sidecar.
+pub fn merged_release_manifest(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    embedded: &crate::distribution::ReleaseManifest,
+) -> Result<crate::distribution::ReleaseManifest, AuroraInstallError> {
+    let Some(persisted) = load_instance_release(managed, instance)? else {
+        return Ok(embedded.clone());
+    };
+    if embedded
+        .resolve_exact(persisted.aurora_version(), Some(persisted.channel()))
+        .is_some()
+    {
+        return Ok(embedded.clone());
+    }
+    embedded.with_release(persisted).map_err(|error| {
+        AuroraInstallError::State(AuroraStateError::Malformed {
+            reason: error.to_string(),
+        })
+    })
 }
 
 /// Acquires the release's artifact through the SHA-256 verified store and
@@ -506,7 +643,7 @@ pub async fn install_aurora(
 }
 
 /// Read-only collision check, also used before changing a ready registry record.
-fn compatible_provider_api(
+pub(crate) fn compatible_provider_api(
     managed: &ManagedPaths,
     instance: &InstanceId,
     release: &AuroraRelease,

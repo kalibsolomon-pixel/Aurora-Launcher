@@ -324,7 +324,8 @@ pub async fn create_instance(
     request.configuration().validate()?;
 
     progress(report(InstancePhase::ResolvingRelease, None));
-    let installed = resolve_installed_configuration(endpoints, request.configuration()).await?;
+    let installed =
+        resolve_installed_configuration(endpoints, request.configuration(), None).await?;
 
     // Allocate the identity and persist the explicit installing record.
     // Display-name validation happens in record construction — before
@@ -388,7 +389,8 @@ pub async fn begin_pack_instance(
         ));
     }
     progress(report(InstancePhase::ResolvingRelease, None));
-    let installed = resolve_installed_configuration(endpoints, request.configuration()).await?;
+    let installed =
+        resolve_installed_configuration(endpoints, request.configuration(), None).await?;
     let instance_id = allocate_instance_id(managed, registry_path)?;
     let mut record = InstanceRecord::from_installed(
         instance_id,
@@ -589,12 +591,13 @@ pub(crate) async fn resolve_packed_fabric_configuration(
             "a pack instance requires an independent pinned Fabric configuration".into(),
         ));
     }
-    resolve_installed_configuration(endpoints, configuration).await
+    resolve_installed_configuration(endpoints, configuration, None).await
 }
 
 async fn resolve_installed_configuration(
     endpoints: &InstanceEndpoints,
     configuration: &InstanceConfiguration,
+    preserve: Option<&super::platform::InstalledConfiguration>,
 ) -> Result<super::platform::InstalledConfiguration, InstanceError> {
     require_executable_configuration(configuration)?;
     if configuration.loader().kind() == super::settings::LoaderKind::Vanilla {
@@ -604,6 +607,26 @@ async fn resolve_installed_configuration(
             platform: super::platform::PlatformPin::Vanilla {},
             aurora: None,
         });
+    }
+    // A reconfiguration that does not change the platform identity keeps
+    // the installed Aurora pin and loader verbatim: re-deriving from this
+    // build's embedded manifest could silently move a Client updated
+    // through the published manifest (never a downgrade path).
+    if let Some(preserved) = preserve {
+        let loader_agrees = match configuration.loader().policy() {
+            super::settings::LoaderPolicy::Automatic {} => true,
+            super::settings::LoaderPolicy::Pinned { version } => {
+                Some(version.as_str()) == preserved.platform.version()
+            }
+        };
+        if preserved.minecraft_version == configuration.minecraft_version()
+            && preserved.aurora.is_some() == configuration.aurora_enabled()
+            && preserved.platform.require_fabric().is_ok()
+            && loader_agrees
+        {
+            configuration.validate()?;
+            return Ok(preserved.clone());
+        }
     }
     if configuration.loader().kind() == super::settings::LoaderKind::NeoForge {
         if configuration.aurora_enabled() {
@@ -692,16 +715,24 @@ async fn resolve_installed_configuration(
     })
 }
 
-fn resolve_optional_aurora<'a>(
-    endpoints: &'a InstanceEndpoints,
+pub(crate) fn resolve_optional_aurora(
+    managed: &ManagedPaths,
+    endpoints: &InstanceEndpoints,
     record: &InstanceRecord,
-) -> Result<Option<&'a crate::distribution::AuroraRelease>, InstanceError> {
+) -> Result<Option<crate::distribution::AuroraRelease>, InstanceError> {
     let Some(pin) = &record.installed().aurora else {
         return Ok(None);
     };
-    let release = endpoints
-        .release_manifest()
+    // The embedded manifest first; an instance updated through a published
+    // manifest resolves from its own persisted release entry next. Embedded
+    // entries always win over a stale sidecar, and a malformed sidecar is a
+    // deliberate error, never silently skipped.
+    let manifest =
+        crate::aurora::merged_release_manifest(managed, record.id(), endpoints.release_manifest())
+            .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
+    let release = manifest
         .resolve_exact(&pin.version, Some(pin.channel))
+        .cloned()
         .ok_or_else(|| InstanceError::AuroraReleaseNotFound {
             channel: pin.channel,
             aurora_version: pin.version.clone(),
@@ -713,7 +744,7 @@ fn resolve_optional_aurora<'a>(
             "Aurora release does not match the configured Minecraft/platform pin".into(),
         ));
     }
-    super::platform::required_content(record.installed(), Some(release))
+    super::platform::required_content(record.installed(), Some(&release))
         .map_err(InstanceError::ReleaseInvalid)?;
     Ok(Some(release))
 }
@@ -893,10 +924,22 @@ pub async fn install_instance_configuration(
     configuration.validate()?;
 
     progress(report(InstancePhase::ResolvingRelease, None));
-    let installed = resolve_installed_configuration(endpoints, &configuration).await?;
+    let preserved = {
+        let registry = InstanceRegistry::load(registry_path)?;
+        registry
+            .find(instance_id)
+            .map(|record| record.installed().clone())
+    };
+    let installed =
+        resolve_installed_configuration(endpoints, &configuration, preserved.as_ref()).await?;
     if let Some(pin) = &installed.aurora {
-        let release = endpoints
-            .release_manifest()
+        let merged = crate::aurora::merged_release_manifest(
+            managed,
+            instance_id,
+            endpoints.release_manifest(),
+        )
+        .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
+        let release = merged
             .resolve_exact(&pin.version, Some(pin.channel))
             .ok_or_else(|| InstanceError::AuroraReleaseNotFound {
                 channel: pin.channel,
@@ -948,11 +991,11 @@ async fn install_instance_components(
     finish: bool,
 ) -> Result<(), InstanceError> {
     let started = std::time::Instant::now();
-    let release = resolve_optional_aurora(endpoints, record)?;
+    let release = resolve_optional_aurora(managed, endpoints, record)?;
     let release_finished = std::time::Instant::now();
 
     progress(report(InstancePhase::ResolvingGame, None));
-    let plan = resolve_record_game_plan(managed, endpoints, record, release).await?;
+    let plan = resolve_record_game_plan(managed, endpoints, record, release.as_ref()).await?;
     let metadata_finished = std::time::Instant::now();
 
     // A NeoForge plan executes bounded installer processors during game
@@ -1017,7 +1060,7 @@ async fn install_instance_components(
         install_aurora(
             managed,
             record.id(),
-            release,
+            &release,
             endpoints.install.download_options(),
         )
         .await?;
@@ -1088,7 +1131,7 @@ async fn install_instance_components(
     Ok(())
 }
 
-async fn resolve_record_game_plan(
+pub(crate) async fn resolve_record_game_plan(
     managed: &ManagedPaths,
     endpoints: &InstanceEndpoints,
     record: &InstanceRecord,
@@ -1244,8 +1287,8 @@ pub async fn resolve_instance_game_plan(
             ),
         });
     }
-    let release = resolve_optional_aurora(endpoints, &record)?;
-    resolve_record_game_plan(managed, endpoints, &record, release).await
+    let release = resolve_optional_aurora(managed, endpoints, &record)?;
+    resolve_record_game_plan(managed, endpoints, &record, release.as_ref()).await
 }
 
 pub async fn validate_instance_runtime(
@@ -1561,17 +1604,33 @@ pub fn validate_instance(
 
         // Cross-component consistency.
         if let Some(aurora) = &aurora_state {
-            let manifest = crate::distribution::production_manifest()
+            // The authorities for digest agreement are the embedded
+            // production manifest and, when a published-manifest update
+            // installed this version, the instance's own persisted release
+            // entry. An installed version unknown to both skips the digest
+            // cross-check rather than failing on missing metadata.
+            let production = crate::distribution::production_manifest()
                 .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
-            if let Some(release) = manifest.resolve_exact(pin.aurora_version(), Some(pin.channel()))
-            {
+            let persisted = crate::aurora::load_instance_release(managed, record.id())
+                .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
+            let releases: Vec<&crate::distribution::AuroraRelease> = production
+                .releases()
+                .iter()
+                .chain(persisted.iter())
+                .collect();
+            for release in releases {
+                if release.aurora_version() != pin.aurora_version()
+                    || release.channel() != pin.channel
+                {
+                    continue;
+                }
                 if aurora.artifact().sha256() != release.artifact().sha256()
                     || Some(aurora.artifact().size_bytes()) != release.artifact().size_bytes()
                 {
                     problems.push(InstanceProblem {
                     component: "aurora",
                     reason:
-                        "the installed Aurora artifact does not match production release metadata"
+                        "the installed Aurora artifact does not match published release metadata"
                             .to_owned(),
                 });
                 }
@@ -1592,9 +1651,10 @@ pub fn validate_instance(
                 }) {
                     problems.push(InstanceProblem {
                         component: "aurora",
-                        reason: "the release-required Fabric API installation does not match production metadata".to_owned(),
+                        reason: "the release-required Fabric API installation does not match published metadata".to_owned(),
                     });
                 }
+                break;
             }
             if aurora.aurora_version() != pin.aurora_version()
                 || aurora.channel() != pin.channel()
@@ -1898,7 +1958,7 @@ impl From<RuntimeInstallError> for InstanceError {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
@@ -2081,7 +2141,7 @@ mod tests {
     /// game artifact (client, logging, libraries, native archive, asset
     /// index and objects), the Fabric Meta loader list and profile, and the
     /// Aurora release artifact.
-    struct SyntheticWorld {
+    pub(crate) struct SyntheticWorld {
         server: TestServer,
         release_manifest: ReleaseManifest,
         broken: std::sync::Arc<StdMutex<HashSet<String>>>,
@@ -2089,11 +2149,11 @@ mod tests {
     }
 
     impl SyntheticWorld {
-        fn new(name: &str) -> Self {
+        pub(crate) fn new(name: &str) -> Self {
             Self::with_api(name, false)
         }
 
-        fn with_api(name: &str, api: bool) -> Self {
+        pub(crate) fn with_api(name: &str, api: bool) -> Self {
             let client = b"synthetic client jar bytes".to_vec();
             let logging = b"<Configuration status=\"WARN\"></Configuration>".to_vec();
             let mojang_library = b"synthetic mojang library jar".to_vec();
@@ -2364,7 +2424,7 @@ mod tests {
             }
         }
 
-        fn endpoints(&self) -> InstanceEndpoints {
+        pub(crate) fn endpoints(&self) -> InstanceEndpoints {
             InstanceEndpoints::for_testing(
                 self.release_manifest.clone(),
                 crate::minecraft::metadata::MetadataEndpoints::loopback_for_testing(
@@ -2402,11 +2462,26 @@ mod tests {
             self.managed.config_file()
         }
 
-        fn break_path(&self, path: &str) {
+        pub(crate) fn managed(&self) -> &ManagedPaths {
+            &self.managed
+        }
+
+        pub(crate) fn server(&self) -> &TestServer {
+            &self.server
+        }
+
+        pub(crate) fn break_path(&self, path: &str) {
             self.broken.lock().unwrap().insert(path.to_owned());
         }
 
-        async fn create(&self, display_name: &str) -> Result<InstanceRecord, InstanceError> {
+        pub(crate) fn unbreak_path(&self, path: &str) {
+            self.broken.lock().unwrap().remove(path);
+        }
+
+        pub(crate) async fn create(
+            &self,
+            display_name: &str,
+        ) -> Result<InstanceRecord, InstanceError> {
             self.create_with_configuration(
                 display_name,
                 InstanceConfiguration::for_minecraft_version("26.2"),
@@ -2414,7 +2489,7 @@ mod tests {
             .await
         }
 
-        async fn create_with_configuration(
+        pub(crate) async fn create_with_configuration(
             &self,
             display_name: &str,
             configuration: InstanceConfiguration,

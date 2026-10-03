@@ -106,6 +106,28 @@ impl ReleaseManifest {
                 && channel.is_none_or(|required| release.channel() == required)
         })
     }
+
+    /// Returns this manifest extended by one additional release entry,
+    /// validated like every embedded entry.
+    ///
+    /// Used only to make an instance's own persisted release metadata
+    /// resolvable; an entry whose version this manifest already knows is
+    /// ignored (embedded entries win), and the result still rejects
+    /// duplicates across channels.
+    pub fn with_release(&self, release: AuroraRelease) -> Result<Self, ManifestError> {
+        if self
+            .resolve_exact(release.aurora_version(), Some(release.channel()))
+            .is_some()
+        {
+            return Ok(self.clone());
+        }
+        let mut merged = self.clone();
+        merged.releases.push(release);
+        Self::from_json(
+            &serde_json::to_string(&merged)
+                .map_err(|error| ManifestError::Json(error.to_string()))?,
+        )
+    }
 }
 
 /// The development fixture, parsed and validated like any other manifest.
@@ -144,6 +166,11 @@ pub fn creation_manifest() -> Result<ReleaseManifest, ManifestError> {
     }
 }
 
+/// Upper bound for release notes carried by a manifest entry. Notes are
+/// untrusted display text; the bound keeps a hostile manifest from shipping
+/// arbitrarily large documents into memory.
+const MAX_NOTES_BYTES: usize = 8 * 1024;
+
 /// A single released Aurora build and its compatibility mapping.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -154,6 +181,11 @@ pub struct AuroraRelease {
     fabric_loader_version: String,
     java: JavaRequirement,
     artifact: ReleaseArtifact,
+    /// Optional plain-text release notes for update presentation. An
+    /// additive, optional schema-1 field: the embedded manifests carry none,
+    /// remote update manifests may carry it, and both parse identically.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    notes: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     fabric_api: Option<RequiredFabricApi>,
 }
@@ -204,10 +236,29 @@ impl AuroraRelease {
         self.fabric_api.as_ref()
     }
 
+    /// Optional plain-text release notes for update presentation. Untrusted
+    /// display text; never markup, never commands.
+    pub fn notes(&self) -> Option<&str> {
+        self.notes.as_deref()
+    }
+
     fn validate(&self) -> Result<(), String> {
         validate_version_field("Aurora version", &self.aurora_version)?;
         validate_version_field("Minecraft version", &self.minecraft_version)?;
         validate_version_field("Fabric Loader version", &self.fabric_loader_version)?;
+        if let Some(notes) = &self.notes {
+            if notes.len() > MAX_NOTES_BYTES {
+                return Err(format!(
+                    "release notes must not exceed {MAX_NOTES_BYTES} bytes"
+                ));
+            }
+            if notes
+                .chars()
+                .any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t')
+            {
+                return Err("release notes must not contain control characters".to_owned());
+            }
+        }
         self.java.validate()?;
         self.artifact.validate()?;
         if let Some(fabric_api) = &self.fabric_api {

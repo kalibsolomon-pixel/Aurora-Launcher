@@ -577,7 +577,11 @@ pub(crate) fn verified_required_mods(
     instance: &InstanceId,
 ) -> Result<Vec<ModMetadata>, ModError> {
     let manifest = crate::distribution::operational_manifest()
-        .map_err(|error| ModError::InstalledState(error.to_string()))?;
+        .map_err(|error| ModError::InstalledState(error.to_string()))
+        .and_then(|embedded| {
+            crate::aurora::merged_release_manifest(managed, instance, &embedded)
+                .map_err(|error| ModError::InstalledState(error.to_string()))
+        })?;
     verified_required_mods_with_manifest(managed, instance, &manifest)
 }
 

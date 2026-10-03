@@ -218,7 +218,8 @@ pub fn preview(
         instance_mods::verified_required_mods_with_manifest(
             managed,
             id,
-            endpoints.release_manifest(),
+            &aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
+                .map_err(|error| invalid(error.to_string()))?,
         )
         .map_err(invalid)?;
     }
@@ -331,8 +332,9 @@ pub fn preview(
                 .aurora
                 .as_ref()
                 .ok_or_else(|| invalid("unexpected Aurora ownership"))?;
-            let release = endpoints
-                .release_manifest()
+            let merged = aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
+                .map_err(|error| invalid(error.to_string()))?;
+            let release = merged
                 .resolve_exact(&pin.version, Some(pin.channel))
                 .ok_or_else(|| invalid("release metadata unavailable"))?;
             super::platform::required_content(record.installed(), Some(release))
@@ -526,8 +528,9 @@ pub async fn apply(
     let mut acquired = Vec::new();
     if enabled {
         let pin = approved.target.aurora.as_ref().expect("enable target");
-        let release = endpoints
-            .release_manifest()
+        let merged = aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
+            .map_err(|error| invalid(error.to_string()))?;
+        let release = merged
             .resolve_exact(&pin.version, Some(pin.channel))
             .ok_or_else(|| invalid("release disappeared"))?;
         let game_plan = super::lifecycle::resolve_instance_game_plan(
@@ -687,8 +690,9 @@ fn commit(
         state_touched = true;
         if enabled {
             let pin = approved.target.aurora.as_ref().expect("enable target");
-            let release = endpoints
-                .release_manifest()
+            let merged = aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
+                .map_err(|error| invalid(error.to_string()))?;
+            let release = merged
                 .resolve_exact(&pin.version, Some(pin.channel))
                 .expect("revalidated release");
             for file in &approved.install {
@@ -731,7 +735,8 @@ fn commit(
         instance_mods::verified_required_mods_with_manifest(
             managed,
             id,
-            endpoints.release_manifest(),
+            &aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
+                .map_err(|error| invalid(error.to_string()))?,
         )
         .map_err(invalid)?;
         // Rollback copies remain until every retirement and staging cleanup succeeds.
