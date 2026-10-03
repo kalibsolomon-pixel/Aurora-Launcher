@@ -1,6 +1,15 @@
 # Aurora Launcher release baseline
 
-## Current 1.1.0 candidate
+## Current 1.4.0 preparation
+
+Aurora Launcher **1.4.0** is prepared locally for owner production signing setup;
+it has not been built as a signed release or published. Aurora Client remains
+**2.1.5**. See [RELEASE_1_4_0_PREPARATION.md](RELEASE_1_4_0_PREPARATION.md) for
+signing inputs, artifact names, publication gates, recovery rules and exact-byte
+fresh-install/1.3.1-upgrade acceptance. The unpublished user-facing draft is
+[RELEASE_1_4_0_NOTES.md](RELEASE_1_4_0_NOTES.md).
+
+## Historical 1.1.0 candidate record
 
 The synchronized local candidate version is 1.1.0. New compatible production
 instances select the verified immutable Aurora Client 2.1.3 entry; historical
@@ -16,7 +25,7 @@ selected installer format in a disposable environment. Existing installer files
 must be preserved during local verification, even when older versions coexist
 in the build output directory.
 
-Aurora Launcher and Aurora Client are separate products. Launcher releases live in this repository; the launcher currently bundles a reviewed production entry for Aurora Client 2.1.2. Publishing a new Aurora Client artifact alone does not change launcher availability or any existing instance pin.
+Aurora Launcher and Aurora Client are separate products. Launcher releases live in this repository. The initial release baseline bundled Client 2.1.2; the current prepared Launcher retains Client 2.1.5 and historical pins. Publishing a new Aurora Client artifact alone does not change launcher availability or any existing instance pin.
 
 ## Version and identity
 
@@ -40,22 +49,23 @@ The Windows product name is **Aurora Launcher**, the executable is `aurora-launc
 
 The NSIS preinstall hook checks the product-named user Start and desktop slots before Tauri's stock shortcut creation; a foreign or unreadable existing link stops installation before copying files. The stock NSIS uninstaller removes a shortcut only when it targets the installed executable. Settings can manage its own per-user desktop shortcut only when ownership is proven; it reports installer-owned Start shortcuts without changing them. The MSI uses WiX components for common shortcuts, so its foreign-slot behavior must be tested in an isolated environment before MSI is selected as a public format. The launcher-managed data root (`%LOCALAPPDATA%\com.aurora.launcher`: configuration, accounts reference, caches, runtimes, and isolated instances including user content) is outside the installation directory. **Default NSIS uninstall and MSI uninstall preserve it.** The stock interactive NSIS uninstaller also offers an unchecked **Delete app data** option; selecting it recursively deletes that data, including instances. Leave it unchecked during acceptance and make that consequence explicit in distribution guidance. Reinstall should reuse and validate preserved data. Do not delete `.minecraft` or instance content merely to make uninstall look clean.
 
-Both formats currently build **unsigned**. Windows may show an unknown-publisher and SmartScreen/reputation warning; a successful hash check does not replace publisher authentication. Code signing is a separate developer decision before public distribution. Do not add a fabricated certificate or private key to the repository. If a trusted signing identity is obtained, insert signing after the build and before final artifact metadata/hash recording and upload, then verify Authenticode on the exact bytes transferred to the publish job before publication. Ordinary tests and development builds must not require signing credentials.
+Neither format has configured **Windows Authenticode publisher signing**. Windows may show an unknown-publisher and SmartScreen/reputation warning; updater minisign signing does not replace Windows publisher authentication. Authenticode is a separate owner decision. Do not add a fabricated certificate or private key to the repository. If a trusted publisher identity is obtained, sign before final updater signatures/artifact metadata/hash recording and verify Authenticode on the exact transferred bytes. Ordinary tests/development require no signing credentials. The prepared 1.4.0 workflow separately requires genuine updater minisign inputs.
 
 ## Manual release workflow
 
 `.github/workflows/launcher-release.yml` has only `workflow_dispatch`. Before invoking it:
 
 1. Audit and normally push reviewed history to `main`; do not force-push or move a tag.
-2. Verify the synchronized 1.0.0 version, then complete production NSIS installer acceptance on a disposable Windows user/profile or VM. Keep existing developer installation and launcher data intact.
+2. Verify the synchronized release version, then accept the exact signed production NSIS installer on a disposable Windows user/profile or VM before approving publication. Keep existing developer installation and launcher data intact.
 3. Configure a GitHub Actions environment named `launcher-production` with required reviewers (preferably disallow self-review). GitHub does not make a newly named environment reviewer-gated automatically. Ensure Actions can create releases with its scoped `GITHUB_TOKEN`; no broad PAT is needed.
-4. For 1.0.0, dispatch from `main` with the exact 40-character current `main` commit SHA, `version=1.0.0`, and `installer_format=nsis`.
+4. Configure owner-only signing inputs and the dedicated authority as described in the preparation document, under separate authorization.
+5. Dispatch only after owner authorization from `main`, with the exact 40-character current reviewed main SHA, matching version and `installer_format=nsis` (or `both` after MSI acceptance). Historical 1.0.0 remains NSIS-only.
 
-The read-only resolve job requires the exact current `main` SHA, validates the version, and rejects an existing tag or release. The Windows build job runs frontend and Rust tests/checks, builds the frontend and both Tauri installers, checks executable/installer product metadata, and records exact sizes and SHA-256 values. It uploads only the selected installer(s) plus `release-assets.json` as a private workflow artifact. The reviewer-gated publish job downloads and re-hashes those same bytes, checks collisions again, creates a **draft**, uploads and verifies its asset list and sizes, then publishes. Finally it downloads the public installers without an authorization token and compares their sizes and SHA-256 values. A failure before publication leaves a draft for manual review; a failure after publication requires human investigation. The job does not rebuild installers.
+The read-only resolve job requires exact current main for a new release and rejects conflicting tags/releases; explicit recovery is bound to an existing release ID. The protected Windows build runs frontend, Rust and release-tool checks, builds official Tauri signed installers, inspects Windows product metadata and signatures, and records exact hashes/sizes. It transfers selected installers/signatures, immutable `release-assets.json` and generated `launcher-update.json` privately for seven days. Owner accepts those exact bytes before approving the separately protected publish job, which creates/verifies a **draft**, uploads immutable assets, publishes and verifies unauthenticated public bytes. The final protected `expose_update` job verifies public signed assets again and publishes the sole discovery manifest **last**, under global authority concurrency. Publication never rebuilds or overwrites signed installers. Mutable manifest replacement can briefly return 404; recovery rules and owner gates are in the preparation report.
 
 GitHub releases are the public release location. The workflow summary and release notes report version, source SHA, filename, format, architecture, size, and SHA-256. Workflow publication is never triggered by a push, pull request, schedule, or another workflow. Do not create the production tag or invoke the workflow until the developer makes the final publication decision.
 
-## Local verification and acceptance
+## Local verification and historical initial-release acceptance
 
 ```sh
 npm ci
@@ -73,6 +83,6 @@ For final acceptance, install the exact final installer in a clean, disposable W
 
 ## Future launcher updates
 
-Phase L implements official Tauri self-updates through one owner-published `launcher-update.json` and a compile-time minisign public key, plus fingerprinted SHA-256 Client transactions from one published `aurora-releases.json`; see [PHASE_L_PRODUCTION_UPDATES.md](PHASE_L_PRODUCTION_UPDATES.md). There are no public channels. One bounded startup discovery check is silent unless an update exists; a single explicit Settings action checks both domains and Update applies Client before Launcher. No polling or automatic installation exists. Missing production signing configuration fails honestly unconfigured. The manual workflow described here does not yet supply updater signing or publish its manifest: the owner must configure real keys, official signed NSIS updater artifacts, and the one-manifest manual gate before production self-updates ship. Commits and successful builds alone never become updates. Launcher and Client versions remain independent; installed newer never downgrades.
+Phase L implements official Tauri self-updates through one owner-published `launcher-update.json` and a compile-time minisign public key, plus fingerprinted SHA-256 Client transactions from one published `aurora-releases.json`; see [PHASE_L_PRODUCTION_UPDATES.md](PHASE_L_PRODUCTION_UPDATES.md). There are no public channels. One bounded startup discovery check is silent unless an update exists; a single explicit Settings action checks both domains and Update applies Client before Launcher. No polling or automatic installation exists. Missing signing configuration fails honestly unconfigured. The prepared workflow consumes owner-supplied signing inputs and verifies official signed NSIS outputs before separately gated manifest-last publication. No real key or manifest was configured/published during preparation. Commits/builds alone never become updates. Launcher and Client versions remain independent; installed newer never downgrades.
 
-After the launcher baseline, the planned sequence is instance content-management foundations, then Modrinth, then CurseForge, then unified browsing and update UX. None of those provider behaviors belongs to this release.
+The historical initial-release provider roadmap has since advanced through the integrated content/modpack/update work. The current owner roadmap is 1.4.0 preparation, owner signing, signed-build acceptance and publication, normal-user testing, a separately scoped correction release, Launcher feature freeze, then website/ecosystem work. This preparation starts none of those later tasks.
