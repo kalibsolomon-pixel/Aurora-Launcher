@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize};
 use crate::appearance::AppearancePreferences;
 use crate::instances::InstanceId;
 
-/// Schema 6 adds bounded Aurora motion speed; schemas 1–5 migrate explicitly.
+/// Schema 7 adds the launcher-wide update preferences (release channel);
+/// schemas 1–6 migrate explicitly.
+/// Schema 6 added bounded Aurora motion speed.
 /// Schema 5 added the independent bundled background selection.
 /// Schema 4 added independently opt-in world/server/address preferences.
 /// Schemas 1, 2 and 3 migrate explicitly; malformed documents remain untouched.
@@ -22,7 +24,7 @@ use crate::instances::InstanceId;
 /// Version 2 added the launcher-wide appearance preferences. Version 1 files
 /// (selected instance only) migrate deterministically on load with the
 /// default appearance; anything else fails deliberately.
-pub const CONFIG_SCHEMA_VERSION: u32 = 6;
+pub const CONFIG_SCHEMA_VERSION: u32 = 7;
 /// The schema version before appearance preferences existed.
 const LEGACY_CONFIG_SCHEMA_VERSION: u32 = 1;
 
@@ -38,6 +40,7 @@ pub struct LauncherConfig {
     appearance: AppearancePreferences,
     home_widgets: crate::home_widgets::HomeLayout,
     discord: crate::discord::DiscordPreferences,
+    updates: crate::updates::UpdatePreferences,
 }
 
 impl Default for LauncherConfig {
@@ -48,6 +51,7 @@ impl Default for LauncherConfig {
             appearance: AppearancePreferences::new(),
             home_widgets: Default::default(),
             discord: Default::default(),
+            updates: Default::default(),
         }
     }
 }
@@ -91,6 +95,15 @@ impl LauncherConfig {
     pub fn set_discord(&mut self, preferences: crate::discord::DiscordPreferences) {
         self.discord = preferences;
     }
+    pub fn updates(&self) -> &crate::updates::UpdatePreferences {
+        &self.updates
+    }
+    /// Changes only the update channel policy. Never mutates installed
+    /// software: the channel changes what future update checks consider
+    /// eligible, nothing else.
+    pub fn set_updates(&mut self, preferences: crate::updates::UpdatePreferences) {
+        self.updates = preferences;
+    }
 
     /// Parses and validates a configuration from JSON text.
     ///
@@ -126,11 +139,23 @@ impl LauncherConfig {
         if matches!(schema_version, 2..=5) {
             let appearance = document
                 .get_mut("appearance")
-                .and_then(serde_json::Value::as_object_mut)
+                .and_then(|d| d.as_object_mut())
                 .ok_or_else(|| {
                     ConfigError::Malformed("the appearance preferences are missing".into())
                 })?;
             appearance.insert("auroraMotionSpeed".into(), 50.into());
+        }
+
+        // Explicit Phase L migration: update preferences are new state, so
+        // every earlier schema selects the documented default (stable) — no
+        // historical policy is fabricated because none existed.
+        if matches!(schema_version, 2..=6) {
+            document
+                .as_object_mut()
+                .ok_or_else(|| {
+                    ConfigError::Malformed("the configuration is not a JSON object".into())
+                })?
+                .insert("updates".into(), serde_json::json!({ "channel": "stable" }));
         }
 
         let config = match schema_version {
@@ -138,7 +163,7 @@ impl LauncherConfig {
                 serde_json::from_value::<Self>(document)
                     .map_err(|error| ConfigError::Malformed(error.to_string()))?
             }
-            4 | 5 => {
+            4 | 5 | 6 => {
                 document["schemaVersion"] = CONFIG_SCHEMA_VERSION.into();
                 serde_json::from_value::<Self>(document)
                     .map_err(|error| ConfigError::Malformed(error.to_string()))?
@@ -184,6 +209,7 @@ impl LauncherConfig {
                     appearance: legacy.appearance,
                     home_widgets: Default::default(),
                     discord: Default::default(),
+                    updates: Default::default(),
                 }
             }
             version if version == u64::from(LEGACY_CONFIG_SCHEMA_VERSION) => {
@@ -195,6 +221,7 @@ impl LauncherConfig {
                     appearance: AppearancePreferences::new(),
                     home_widgets: Default::default(),
                     discord: Default::default(),
+                    updates: Default::default(),
                 }
             }
             found => {
@@ -559,6 +586,7 @@ mod tests {
             selected_instance_id: Some(InstanceId::new("aurora-default").unwrap()),
             home_widgets: Default::default(),
             discord: Default::default(),
+            updates: Default::default(),
             appearance: AppearancePreferences {
                 aurora_motion_speed: 50,
                 background: crate::appearance::BackgroundId::Simple,
@@ -586,7 +614,7 @@ mod tests {
     fn serializes_to_inspectable_camel_case_json() {
         let json = LauncherConfig::default().to_json();
 
-        assert!(json.contains("\"schemaVersion\": 6"));
+        assert!(json.contains("\"schemaVersion\": 7"));
         assert!(json.contains("\"selectedInstanceId\": null"));
         assert!(json.contains("\"appearance\": {"));
         assert!(json.contains("\"theme\": \"aurora-dark\""));
@@ -609,15 +637,15 @@ mod tests {
 
     #[test]
     fn unsupported_schema_versions_fail_deliberately() {
-        let json = r#"{ "schemaVersion": 7, "selectedInstanceId": null }"#;
+        let json = r#"{ "schemaVersion": 8, "selectedInstanceId": null }"#;
 
         let error = LauncherConfig::from_json(json).unwrap_err();
 
         assert!(matches!(
             error,
             ConfigError::UnsupportedSchema {
-                found: 7,
-                supported: 6
+                found: 8,
+                supported: 7
             }
         ));
     }
@@ -638,7 +666,7 @@ mod tests {
         assert_eq!(config.appearance(), &AppearancePreferences::new());
         let reserialized = LauncherConfig::from_json(&config.to_json()).unwrap();
         assert_eq!(reserialized, config);
-        assert!(config.to_json().contains("\"schemaVersion\": 6"));
+        assert!(config.to_json().contains("\"schemaVersion\": 7"));
     }
 
     #[test]
@@ -735,6 +763,7 @@ mod tests {
             selected_instance_id: Some(InstanceId::new("beta-playground").unwrap()),
             home_widgets: Default::default(),
             discord: Default::default(),
+            updates: Default::default(),
             appearance: AppearancePreferences {
                 aurora_motion_speed: 50,
                 background: crate::appearance::BackgroundId::Simple,
