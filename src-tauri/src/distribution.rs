@@ -176,6 +176,7 @@ const MAX_NOTES_BYTES: usize = 8 * 1024;
 #[serde(rename_all = "camelCase")]
 pub struct AuroraRelease {
     aurora_version: String,
+    #[serde(default = "legacy_channel_default")]
     channel: ReleaseChannel,
     minecraft_version: String,
     fabric_loader_version: String,
@@ -276,7 +277,14 @@ impl AuroraRelease {
     }
 }
 
-/// The distribution channel a release was published to.
+// New public entries omit channel. Keep old exact pins readable without
+// migrating or rewriting installed state; this value never grants eligibility.
+fn legacy_channel_default() -> ReleaseChannel {
+    ReleaseChannel::Stable
+}
+
+/// Historical release classification retained solely for exact persisted-pin
+/// compatibility and development fixtures. It is not a product preference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ReleaseChannel {

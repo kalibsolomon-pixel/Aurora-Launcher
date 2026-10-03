@@ -752,7 +752,7 @@ pub(crate) fn resolve_optional_aurora(
 /// Resolves the Aurora release a configuration's Minecraft version requires.
 ///
 /// The release manifest maps each release to one Minecraft version; when
-/// several releases target the same version, the most stable channel wins
+/// several releases target the same version, the newest semantic version wins
 /// deterministically. No release matching the version is an explicit,
 /// honest error — game configuration and Aurora release compatibility stay
 /// separate concepts, and an unavailable combination is never silently
@@ -761,20 +761,21 @@ fn resolve_release_for_configuration(
     manifest: &ReleaseManifest,
     configuration: &InstanceConfiguration,
 ) -> Result<crate::distribution::AuroraRelease, InstanceError> {
-    fn channel_preference(channel: ReleaseChannel) -> u8 {
-        match channel {
-            ReleaseChannel::Stable => 0,
-            ReleaseChannel::Beta => 1,
-            ReleaseChannel::Nightly => 2,
-        }
-    }
-
     let mut matching: Vec<&crate::distribution::AuroraRelease> = manifest
         .releases()
         .iter()
         .filter(|release| release.minecraft_version() == configuration.minecraft_version())
         .collect();
-    matching.sort_by_key(|release| channel_preference(release.channel()));
+    // Public release identity has no channel preference. Newest semver
+    // precedence wins; historical pin classifications remain persistence only.
+    matching.retain(|release| {
+        crate::updates::parse_release_version(release.aurora_version()).is_some()
+    });
+    matching.sort_by(|left, right| {
+        let left = crate::updates::parse_release_version(left.aurora_version()).unwrap();
+        let right = crate::updates::parse_release_version(right.aurora_version()).unwrap();
+        right.cmp_precedence(&left)
+    });
 
     matching
         .into_iter()

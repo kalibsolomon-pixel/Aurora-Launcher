@@ -20,7 +20,7 @@ use url::Url;
 
 use crate::aurora::{self, AuroraInstalledState};
 use crate::cache::ArtifactCache;
-use crate::distribution::{AuroraRelease, ManifestError, ReleaseChannel, ReleaseManifest};
+use crate::distribution::{AuroraRelease, ManifestError, ReleaseManifest};
 use crate::downloads::{self, ArtifactSource, DownloadOptions};
 use crate::instance_content::{ContentState, ContentType};
 use crate::instance_mods;
@@ -30,7 +30,7 @@ use crate::instances::transition;
 use crate::instances::{InstanceId, InstanceRecord, InstanceRegistry, InstanceState};
 use crate::integrity::{ArtifactDigest, verify_file};
 use crate::paths::ManagedPaths;
-use crate::updates::{UpdateAvailability, eligible_channels, parse_release_version};
+use crate::updates::{UpdateAvailability, parse_release_version};
 
 /// The location the owner's manual publication gate exposes the Aurora
 /// Client release manifest at. It exists only when the owner has published
@@ -173,7 +173,7 @@ pub async fn fetch_published_manifest(
     ReleaseManifest::from_json(&text).map_err(ClientUpdateError::from)
 }
 
-/// The outcome of candidate selection for one instance and channel.
+/// The outcome of candidate selection for one instance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CandidateOutcome {
     /// An eligible, compatible, semver-newer release exists.
@@ -186,9 +186,9 @@ pub enum CandidateOutcome {
 }
 
 /// Selects the update candidate for one installed Client against one
-/// published manifest under one selected channel.
+/// intentionally published manifest. Legacy channel metadata has no eligibility role.
 ///
-/// Eligibility is channel policy; "newer" is semver precedence only;
+/// Publication is authority; "newer" is semver precedence only;
 /// compatibility is exact environment identity (Minecraft version and
 /// Fabric Loader version). Malformed version strings never become
 /// candidates, and an installed version that cannot be compared fails
@@ -197,7 +197,7 @@ pub fn select_candidate(
     remote: &ReleaseManifest,
     installed: &InstalledConfiguration,
     installed_state: &AuroraInstalledState,
-    selected: ReleaseChannel,
+    required_java_major: u32,
 ) -> Result<CandidateOutcome, ClientUpdateError> {
     let Some(pin) = &installed.aurora else {
         return Err(ClientUpdateError::Inapplicable(
@@ -213,14 +213,12 @@ pub fn select_candidate(
 
     let mut newest: Option<(semver::Version, AuroraRelease)> = None;
     for release in remote.releases() {
-        if !eligible_channels(selected).contains(&release.channel()) {
-            continue;
-        }
         // Exact environment identity: a release for another Minecraft or
         // Loader version is incompatible with this instance, whatever its
         // version number says.
         if release.minecraft_version() != installed_state.minecraft_version()
             || release.fabric_loader_version() != installed_state.fabric_loader_version()
+            || release.java().major_version() != required_java_major
         {
             continue;
         }
@@ -228,10 +226,13 @@ pub fn select_candidate(
             // Malformed version strings never become candidates.
             continue;
         };
-        if version <= installed_version {
+        if !version.cmp_precedence(&installed_version).is_gt() {
             continue;
         }
-        if newest.as_ref().is_none_or(|(known, _)| version > *known) {
+        if newest
+            .as_ref()
+            .is_none_or(|(known, _)| version.cmp_precedence(known).is_gt())
+        {
             newest = Some((version, release.clone()));
         }
     }
@@ -243,7 +244,7 @@ pub fn select_candidate(
                 remote,
                 installed_state,
                 &installed_version,
-                selected,
+                required_java_major,
             ) {
                 CandidateOutcome::InstalledNewer
             } else {
@@ -260,14 +261,14 @@ fn manifest_holds_older_eligible_release(
     remote: &ReleaseManifest,
     installed_state: &AuroraInstalledState,
     installed_version: &semver::Version,
-    selected: ReleaseChannel,
+    required_java_major: u32,
 ) -> bool {
     remote.releases().iter().any(|release| {
-        eligible_channels(selected).contains(&release.channel())
-            && release.minecraft_version() == installed_state.minecraft_version()
+        release.minecraft_version() == installed_state.minecraft_version()
             && release.fabric_loader_version() == installed_state.fabric_loader_version()
+            && release.java().major_version() == required_java_major
             && parse_release_version(release.aurora_version())
-                .is_some_and(|version| version < *installed_version)
+                .is_some_and(|version| version.cmp_precedence(installed_version).is_lt())
     })
 }
 
@@ -276,7 +277,6 @@ fn manifest_holds_older_eligible_release(
 #[serde(rename_all = "camelCase")]
 pub struct ClientUpdateCandidate {
     pub version: String,
-    pub channel: ReleaseChannel,
     pub notes: Option<String>,
     pub minecraft_version: String,
     pub fabric_loader_version: String,
@@ -290,7 +290,6 @@ impl ClientUpdateCandidate {
     fn from_release(release: &AuroraRelease) -> Self {
         Self {
             version: release.aurora_version().to_owned(),
-            channel: release.channel(),
             notes: release.notes().map(|notes| notes.to_owned()),
             minecraft_version: release.minecraft_version().to_owned(),
             fabric_loader_version: release.fabric_loader_version().to_owned(),
@@ -308,7 +307,6 @@ impl ClientUpdateCandidate {
 pub struct ClientUpdatePreview {
     pub instance_id: String,
     pub installed_version: String,
-    pub installed_channel: ReleaseChannel,
     /// `updateAvailable`, `upToDate`, or `installedNewer`.
     pub outcome: &'static str,
     pub candidate: Option<ClientUpdateCandidate>,
@@ -326,7 +324,6 @@ pub fn preview_update(
     managed: &ManagedPaths,
     endpoints: &lifecycle::InstanceEndpoints,
     id: &InstanceId,
-    selected: ReleaseChannel,
     remote: &ReleaseManifest,
 ) -> Result<ClientUpdatePreview, ClientUpdateError> {
     let invalid = |reason: String| ClientUpdateError::Inapplicable(reason);
@@ -365,14 +362,11 @@ pub fn preview_update(
     // locally persisted release metadata of a prior remote update).
     let merged = aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
         .map_err(|error| invalid(error.to_string()))?;
-    if merged
+    let current_release = merged
         .resolve_exact(&pin.version, Some(pin.channel))
-        .is_none()
-    {
-        return Err(invalid(
-            "the installed release metadata is missing; no update can be planned".into(),
-        ));
-    }
+        .ok_or_else(|| {
+            invalid("the installed release metadata is missing; no update can be planned".into())
+        })?;
 
     let validation = lifecycle::validate_instance(managed, &registry, id)
         .map_err(|error| invalid(error.to_string()))?;
@@ -388,7 +382,12 @@ pub fn preview_update(
         )));
     }
 
-    let outcome = select_candidate(remote, record.installed(), &state, selected)?;
+    let outcome = select_candidate(
+        remote,
+        record.installed(),
+        &state,
+        current_release.java().major_version(),
+    )?;
     let mut blockers = Vec::new();
     let mut warnings = Vec::new();
     let mut candidate_release = None;
@@ -490,20 +489,12 @@ pub fn preview_update(
         );
     }
 
-    let fingerprint = fingerprint_update(
-        &record,
-        &state,
-        managed,
-        id,
-        candidate_release.as_ref(),
-        selected,
-    )
-    .map_err(|error| invalid(error.to_string()))?;
+    let fingerprint = fingerprint_update(&record, &state, managed, id, candidate_release.as_ref())
+        .map_err(|error| invalid(error.to_string()))?;
 
     Ok(ClientUpdatePreview {
         instance_id: id.to_string(),
         installed_version: pin.version,
-        installed_channel: pin.channel,
         outcome: outcome_label,
         candidate: candidate_dto,
         blockers,
@@ -514,15 +505,13 @@ pub fn preview_update(
 
 /// Hashes the exact world the approval covered: the registry record, the
 /// installed state bytes, retained ownership, provider state, the mod
-/// inventory, the installed game manifest, the full candidate release, and
-/// the selected channel. Any drift refuses the stale plan.
+/// inventory, the installed game manifest, the full candidate release. Any drift refuses the stale plan.
 fn fingerprint_update(
     record: &InstanceRecord,
     state: &AuroraInstalledState,
     managed: &ManagedPaths,
     id: &InstanceId,
     candidate: Option<&AuroraRelease>,
-    selected: ReleaseChannel,
 ) -> Result<String, ClientUpdateError> {
     let instance_paths = managed.instance_paths(id);
     let root = instance_paths.root();
@@ -546,7 +535,6 @@ fn fingerprint_update(
         "inventory": inventory,
         "game": game_manifest,
         "candidate": candidate,
-        "selectedChannel": selected,
     });
     let bytes = serde_json::to_vec(&snapshot)
         .map_err(|error| ClientUpdateError::Inapplicable(error.to_string()))?;
@@ -574,13 +562,12 @@ pub async fn apply_update(
     endpoints: &lifecycle::InstanceEndpoints,
     id: &InstanceId,
     fingerprint: &str,
-    selected: ReleaseChannel,
     remote: &ReleaseManifest,
     options: &DownloadOptions,
     progress: &mut (dyn FnMut(crate::updates::ClientPhase) + Send),
     faults: UpdateFaults,
 ) -> Result<InstanceRecord, ClientUpdateError> {
-    let approved = preview_update(managed, endpoints, id, selected, remote)?;
+    let approved = preview_update(managed, endpoints, id, remote)?;
     if approved.fingerprint != fingerprint {
         return Err(ClientUpdateError::Stale(
             "The approved update changed. Request a new preview.".into(),
@@ -592,7 +579,7 @@ pub async fn apply_update(
     let release = approved
         .candidate
         .as_ref()
-        .and_then(|candidate| remote.resolve_exact(&candidate.version, Some(candidate.channel)))
+        .and_then(|candidate| remote.resolve_exact(&candidate.version, None))
         .cloned()
         .ok_or_else(|| ClientUpdateError::Stale("The approved candidate vanished".into()))?;
 
@@ -681,7 +668,6 @@ pub async fn apply_update(
             managed,
             endpoints,
             id,
-            selected,
             remote,
             &release,
             &acquired,
@@ -702,7 +688,6 @@ fn commit_update(
     managed: &ManagedPaths,
     endpoints: &lifecycle::InstanceEndpoints,
     id: &InstanceId,
-    selected: ReleaseChannel,
     remote: &ReleaseManifest,
     release: &AuroraRelease,
     acquired: &[(String, ArtifactDigest, u64, PathBuf)],
@@ -716,7 +701,7 @@ fn commit_update(
 
     // The world must still match the approval exactly, re-derived under the
     // instance and registry locks.
-    let current = preview_update(managed, endpoints, id, selected, remote)?;
+    let current = preview_update(managed, endpoints, id, remote)?;
     if current.fingerprint != fingerprint {
         return Err(ClientUpdateError::Stale(
             "State changed during acquisition. Request a new preview.".into(),
@@ -1009,9 +994,8 @@ pub async fn check_client_update(
     managed: &ManagedPaths,
     endpoints: &lifecycle::InstanceEndpoints,
     id: &InstanceId,
-    selected: ReleaseChannel,
 ) -> UpdateAvailability {
-    check_client_update_with_url(managed, endpoints, id, selected, PRODUCTION_MANIFEST_URL).await
+    check_client_update_with_url(managed, endpoints, id, PRODUCTION_MANIFEST_URL).await
 }
 
 /// The same check against an explicit manifest URL; the production wrapper
@@ -1021,18 +1005,16 @@ pub(crate) async fn check_client_update_with_url(
     managed: &ManagedPaths,
     endpoints: &lifecycle::InstanceEndpoints,
     id: &InstanceId,
-    selected: ReleaseChannel,
     url: &str,
 ) -> UpdateAvailability {
     match fetch_published_manifest(url, endpoints.download_options()).await {
-        Ok(remote) => match preview_update(managed, endpoints, id, selected, &remote) {
+        Ok(remote) => match preview_update(managed, endpoints, id, &remote) {
             Ok(preview) => match preview.outcome {
                 "updateAvailable" => {
                     let candidate = preview.candidate.expect("outcome carries a candidate");
                     UpdateAvailability::UpdateAvailable {
                         current: preview.installed_version,
                         candidate: candidate.version,
-                        channel: candidate.channel,
                         notes: candidate.notes,
                     }
                 }
@@ -1316,7 +1298,6 @@ mod tests {
             lab.world.managed(),
             &lab.endpoints(),
             &lab.instance,
-            ReleaseChannel::Stable,
             &remote,
         )
         .expect("preview runs");
@@ -1334,14 +1315,8 @@ mod tests {
         lab.publish(vec![lab.newer_release(&newer_artifact())]);
         let remote = lab.remote().await;
         let endpoints = lab.endpoints();
-        let preview = preview_update(
-            lab.world.managed(),
-            &endpoints,
-            &lab.instance,
-            ReleaseChannel::Stable,
-            &remote,
-        )
-        .expect("preview runs");
+        let preview = preview_update(lab.world.managed(), &endpoints, &lab.instance, &remote)
+            .expect("preview runs");
         assert_eq!(preview.outcome, "updateAvailable");
         let candidate = preview.candidate.as_ref().unwrap();
         assert_eq!(candidate.version, "0.4.0");
@@ -1361,7 +1336,6 @@ mod tests {
             &endpoints,
             &lab.instance,
             &preview.fingerprint,
-            ReleaseChannel::Stable,
             &remote,
             &lab.options(),
             &mut |phase| phases.push(phase),
@@ -1420,7 +1394,6 @@ mod tests {
             lab.world.managed(),
             &endpoints,
             &lab.instance,
-            ReleaseChannel::Stable,
             &lab.remote().await,
         )
         .expect("preview runs");
@@ -1428,107 +1401,71 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stable_channel_does_not_receive_a_beta_release() {
-        let lab = Lab::new("beta-hidden").await;
-        let entry = lab.release_entry(
-            "0.4.0-beta.1",
-            "beta",
-            "26.2",
-            "0.19.5",
-            25,
-            "/aurora/aurora-0.4.0-beta.1-dev.jar",
-            b"beta bytes",
-            None,
-        );
-        lab.publish(vec![entry]);
-        let preview = preview_update(
-            lab.world.managed(),
-            &lab.endpoints(),
-            &lab.instance,
-            ReleaseChannel::Stable,
-            &lab.remote().await,
-        )
-        .expect("preview runs");
-        assert_eq!(preview.outcome, "upToDate");
-    }
-
-    #[tokio::test]
-    async fn beta_channel_receives_the_eligible_beta_release() {
-        let lab = Lab::new("beta-eligible").await;
-        lab.publish(vec![lab.release_entry(
-            "0.4.0-beta.1",
-            "beta",
-            "26.2",
-            "0.19.5",
-            25,
-            "/aurora/aurora-0.4.0-beta.1-dev.jar",
-            b"beta bytes",
-            None,
-        )]);
-        let preview = preview_update(
-            lab.world.managed(),
-            &lab.endpoints(),
-            &lab.instance,
-            ReleaseChannel::Beta,
-            &lab.remote().await,
-        )
-        .expect("preview runs");
-        assert_eq!(preview.outcome, "updateAvailable");
-        assert_eq!(preview.candidate.as_ref().unwrap().version, "0.4.0-beta.1");
-        assert_eq!(
-            preview.candidate.as_ref().unwrap().channel,
-            ReleaseChannel::Beta
-        );
-    }
-
-    #[tokio::test]
-    async fn nightly_channel_orders_candidates_by_semver() {
-        let lab = Lab::new("nightly-order").await;
+    async fn published_history_is_ordered_without_channel_filtering() {
+        let lab = Lab::new("single-stream").await;
         lab.publish(vec![
             lab.release_entry(
-                "0.4.0-beta.1",
-                "beta",
+                "0.4.0",
+                "stable",
                 "26.2",
                 "0.19.5",
                 25,
-                "/aurora/beta.jar",
-                b"beta bytes",
+                "/aurora/older.jar",
+                b"older",
                 None,
             ),
             lab.release_entry(
-                "0.5.0-nightly.20261001",
+                "0.5.0-diag.1",
                 "nightly",
                 "26.2",
                 "0.19.5",
                 25,
-                "/aurora/nightly.jar",
-                b"nightly bytes",
+                "/aurora/newer.jar",
+                b"newer",
+                None,
+            ),
+            lab.release_entry(
+                "0.4.1",
+                "beta",
+                "26.2",
+                "0.19.5",
+                25,
+                "/aurora/middle.jar",
+                b"middle",
                 None,
             ),
         ]);
-        let nightly = preview_update(
+        let preview = preview_update(
             lab.world.managed(),
             &lab.endpoints(),
             &lab.instance,
-            ReleaseChannel::Nightly,
             &lab.remote().await,
         )
-        .expect("preview runs");
-        assert_eq!(nightly.outcome, "updateAvailable");
-        assert_eq!(
-            nightly.candidate.as_ref().unwrap().version,
-            "0.5.0-nightly.20261001",
-            "semver precedence wins over manifest order"
+        .unwrap();
+        assert_eq!(preview.candidate.unwrap().version, "0.5.0-diag.1");
+    }
+
+    #[tokio::test]
+    async fn unpublished_development_entries_never_enter_discovery() {
+        let lab = Lab::new("unpublished").await;
+        lab.publish(vec![]);
+        // The operational catalog includes development artifacts. None is
+        // an update unless it appears in the pinned published document.
+        assert!(
+            !crate::distribution::development_manifest()
+                .unwrap()
+                .releases()
+                .is_empty()
         );
-        let beta = preview_update(
+        let preview = preview_update(
             lab.world.managed(),
             &lab.endpoints(),
             &lab.instance,
-            ReleaseChannel::Beta,
             &lab.remote().await,
         )
-        .expect("preview runs");
-        assert_eq!(beta.candidate.as_ref().unwrap().version, "0.4.0-beta.1");
+        .unwrap();
+        assert_eq!(preview.outcome, "upToDate");
+        assert!(preview.candidate.is_none());
     }
 
     #[tokio::test]
@@ -1551,7 +1488,6 @@ mod tests {
             lab.world.managed(),
             &lab.endpoints(),
             &lab.instance,
-            ReleaseChannel::Stable,
             &lab.remote().await,
         )
         .expect("preview runs");
@@ -1559,6 +1495,63 @@ mod tests {
             preview.candidate.as_ref().unwrap().version,
             "0.4.0",
             "the malformed version is skipped, not guessed"
+        );
+    }
+
+    #[tokio::test]
+    async fn build_metadata_alone_is_not_a_newer_release() {
+        let lab = Lab::new("build-precedence").await;
+        lab.publish(vec![lab.release_entry(
+            "0.3.0+public-build",
+            "nightly",
+            "26.2",
+            "0.19.5",
+            25,
+            "/aurora/build.jar",
+            b"build bytes",
+            None,
+        )]);
+        let preview = preview_update(
+            lab.world.managed(),
+            &lab.endpoints(),
+            &lab.instance,
+            &lab.remote().await,
+        )
+        .unwrap();
+        assert_eq!(preview.outcome, "upToDate");
+        assert!(preview.candidate.is_none());
+    }
+
+    #[tokio::test]
+    async fn channel_free_published_entry_can_be_installed_and_validated() {
+        let lab = Lab::new("channel-free").await;
+        let mut entry = lab.newer_release(&newer_artifact());
+        entry.as_object_mut().unwrap().remove("channel");
+        lab.publish(vec![entry]);
+        let endpoints = lab.endpoints();
+        let remote = lab.remote().await;
+        let preview =
+            preview_update(lab.world.managed(), &endpoints, &lab.instance, &remote).unwrap();
+        let record = apply_update(
+            lab.world.managed(),
+            &endpoints,
+            &lab.instance,
+            &preview.fingerprint,
+            &remote,
+            &lab.options(),
+            &mut |_| {},
+            UpdateFaults::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(record.installed().aurora.as_ref().unwrap().version, "0.4.0");
+        let registry =
+            InstanceRegistry::load(&lab.world.managed().instance_registry_file()).unwrap();
+        assert_eq!(
+            lifecycle::validate_instance(lab.world.managed(), &registry, &lab.instance)
+                .unwrap()
+                .status,
+            lifecycle::InstanceStatus::Ready
         );
     }
 
@@ -1580,7 +1573,6 @@ mod tests {
             lab.world.managed(),
             &lab.endpoints(),
             &lab.instance,
-            ReleaseChannel::Stable,
             &lab.remote().await,
         )
         .expect("preview runs");
@@ -1618,7 +1610,6 @@ mod tests {
             lab.world.managed(),
             &lab.endpoints(),
             &lab.instance,
-            ReleaseChannel::Stable,
             &lab.remote().await,
         )
         .expect("preview runs");
@@ -1629,7 +1620,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn java_mismatch_fails_closed_at_apply() {
+    async fn java_mismatch_is_not_offered_and_cannot_apply() {
         let lab = Lab::new("java-mismatch").await;
         lab.publish(vec![lab.release_entry(
             "0.4.0",
@@ -1643,22 +1634,15 @@ mod tests {
         )]);
         let endpoints = lab.endpoints();
         let remote = lab.remote().await;
-        let preview = preview_update(
-            lab.world.managed(),
-            &endpoints,
-            &lab.instance,
-            ReleaseChannel::Stable,
-            &remote,
-        )
-        .expect("preview runs");
-        assert_eq!(preview.outcome, "updateAvailable");
+        let preview = preview_update(lab.world.managed(), &endpoints, &lab.instance, &remote)
+            .expect("preview runs");
+        assert_eq!(preview.outcome, "upToDate");
         let state_before = lab.state_bytes();
         let error = apply_update(
             lab.world.managed(),
             &endpoints,
             &lab.instance,
             &preview.fingerprint,
-            ReleaseChannel::Stable,
             &remote,
             &lab.options(),
             &mut |_| {},
@@ -1666,7 +1650,7 @@ mod tests {
         )
         .await
         .expect_err("the Java assertion must fail closed");
-        assert!(matches!(error, ClientUpdateError::Incompatible(_)));
+        assert!(matches!(error, ClientUpdateError::Stale(_)));
         assert_eq!(lab.state_bytes(), state_before, "nothing changed");
     }
 
@@ -1689,14 +1673,8 @@ mod tests {
         })]);
         let endpoints = lab.endpoints();
         let remote = lab.remote().await;
-        let preview = preview_update(
-            lab.world.managed(),
-            &endpoints,
-            &lab.instance,
-            ReleaseChannel::Stable,
-            &remote,
-        )
-        .expect("preview runs");
+        let preview = preview_update(lab.world.managed(), &endpoints, &lab.instance, &remote)
+            .expect("preview runs");
         let state_before = lab.state_bytes();
         let registry_before = lab.registry_bytes();
         let error = apply_update(
@@ -1704,7 +1682,6 @@ mod tests {
             &endpoints,
             &lab.instance,
             &preview.fingerprint,
-            ReleaseChannel::Stable,
             &remote,
             &lab.options(),
             &mut |_| {},
@@ -1726,14 +1703,8 @@ mod tests {
         lab.publish(vec![lab.newer_release(&newer_artifact())]);
         let endpoints = lab.endpoints();
         let remote = lab.remote().await;
-        let preview = preview_update(
-            lab.world.managed(),
-            &endpoints,
-            &lab.instance,
-            ReleaseChannel::Stable,
-            &remote,
-        )
-        .expect("preview runs");
+        let preview = preview_update(lab.world.managed(), &endpoints, &lab.instance, &remote)
+            .expect("preview runs");
         (endpoints, remote, preview.fingerprint)
     }
 
@@ -1747,7 +1718,6 @@ mod tests {
             &endpoints,
             &lab.instance,
             &fingerprint,
-            ReleaseChannel::Stable,
             &remote,
             &lab.options(),
             &mut |_| {},
@@ -1778,7 +1748,6 @@ mod tests {
             &endpoints,
             &lab.instance,
             &fingerprint,
-            ReleaseChannel::Stable,
             &remote,
             &lab.options(),
             &mut |_| {},
@@ -1810,7 +1779,6 @@ mod tests {
             &endpoints,
             &lab.instance,
             &fingerprint,
-            ReleaseChannel::Stable,
             &remote,
             &lab.options(),
             &mut |_| {},
@@ -1841,7 +1809,6 @@ mod tests {
             &endpoints,
             &lab.instance,
             &fingerprint,
-            ReleaseChannel::Stable,
             &remote,
             &lab.options(),
             &mut |_| {},
@@ -1888,7 +1855,6 @@ mod tests {
             &endpoints,
             &lab.instance,
             &fingerprint,
-            ReleaseChannel::Stable,
             &remote,
             &lab.options(),
             &mut |_| {},
@@ -1905,14 +1871,8 @@ mod tests {
         let lab = Lab::new("running").await;
         let (endpoints, remote, _fingerprint) = approved_newer(&lab).await;
         let _guard = crate::launch::process::force_running(lab.instance.as_str());
-        let preview = preview_update(
-            lab.world.managed(),
-            &endpoints,
-            &lab.instance,
-            ReleaseChannel::Stable,
-            &remote,
-        )
-        .expect("preview runs read-only");
+        let preview = preview_update(lab.world.managed(), &endpoints, &lab.instance, &remote)
+            .expect("preview runs read-only");
         assert!(
             preview
                 .blockers
@@ -1926,7 +1886,6 @@ mod tests {
             &endpoints,
             &lab.instance,
             &fingerprint,
-            ReleaseChannel::Stable,
             &remote,
             &lab.options(),
             &mut |_| {},
@@ -1947,14 +1906,8 @@ mod tests {
         lab.publish(vec![lab.newer_release(&newer_artifact())]);
         let endpoints = lab.endpoints();
         let remote = lab.remote().await;
-        let preview = preview_update(
-            lab.world.managed(),
-            &endpoints,
-            &lab.instance,
-            ReleaseChannel::Stable,
-            &remote,
-        )
-        .expect("preview runs");
+        let preview = preview_update(lab.world.managed(), &endpoints, &lab.instance, &remote)
+            .expect("preview runs");
         // Break acquisition, fail once, then heal and retry.
         lab.break_path("/aurora/aurora-0.4.0-dev.jar");
         let first = apply_update(
@@ -1962,7 +1915,6 @@ mod tests {
             &endpoints,
             &lab.instance,
             &preview.fingerprint,
-            ReleaseChannel::Stable,
             &remote,
             &lab.options(),
             &mut |_| {},
@@ -1977,7 +1929,6 @@ mod tests {
             lab.world.managed(),
             &endpoints,
             &lab.instance,
-            ReleaseChannel::Stable,
             &lab.remote().await,
         )
         .expect("preview runs");
@@ -1986,7 +1937,6 @@ mod tests {
             &endpoints,
             &lab.instance,
             &fresh.fingerprint,
-            ReleaseChannel::Stable,
             &lab.remote().await,
             &lab.options(),
             &mut |_| {},
@@ -2073,14 +2023,8 @@ mod tests {
         let instance = lab.instance.clone();
         drop(lab.server);
         drop(lab.bodies);
-        let availability = check_client_update_with_url(
-            &managed,
-            &endpoints,
-            &instance,
-            ReleaseChannel::Stable,
-            &dead_url,
-        )
-        .await;
+        let availability =
+            check_client_update_with_url(&managed, &endpoints, &instance, &dead_url).await;
         assert!(
             matches!(availability, UpdateAvailability::Unavailable { .. }),
             "offline discovery is honest unavailability, not an error"

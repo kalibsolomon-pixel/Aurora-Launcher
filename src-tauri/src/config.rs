@@ -13,8 +13,9 @@ use serde::{Deserialize, Serialize};
 use crate::appearance::AppearancePreferences;
 use crate::instances::InstanceId;
 
-/// Schema 7 adds the launcher-wide update preferences (release channel);
-/// schemas 1–6 migrate explicitly.
+/// Schema 7 remains current. Its former update-channel preference is
+/// validated and discarded on load; new documents omit it. Schemas 1–6
+/// retain their explicit migrations for the preferences that still exist.
 /// Schema 6 added bounded Aurora motion speed.
 /// Schema 5 added the independent bundled background selection.
 /// Schema 4 added independently opt-in world/server/address preferences.
@@ -40,7 +41,6 @@ pub struct LauncherConfig {
     appearance: AppearancePreferences,
     home_widgets: crate::home_widgets::HomeLayout,
     discord: crate::discord::DiscordPreferences,
-    updates: crate::updates::UpdatePreferences,
 }
 
 impl Default for LauncherConfig {
@@ -51,7 +51,6 @@ impl Default for LauncherConfig {
             appearance: AppearancePreferences::new(),
             home_widgets: Default::default(),
             discord: Default::default(),
-            updates: Default::default(),
         }
     }
 }
@@ -95,16 +94,6 @@ impl LauncherConfig {
     pub fn set_discord(&mut self, preferences: crate::discord::DiscordPreferences) {
         self.discord = preferences;
     }
-    pub fn updates(&self) -> &crate::updates::UpdatePreferences {
-        &self.updates
-    }
-    /// Changes only the update channel policy. Never mutates installed
-    /// software: the channel changes what future update checks consider
-    /// eligible, nothing else.
-    pub fn set_updates(&mut self, preferences: crate::updates::UpdatePreferences) {
-        self.updates = preferences;
-    }
-
     /// Parses and validates a configuration from JSON text.
     ///
     /// Schema 1 (the pre-appearance shape) migrates deterministically: the
@@ -146,16 +135,21 @@ impl LauncherConfig {
             appearance.insert("auroraMotionSpeed".into(), 50.into());
         }
 
-        // Explicit Phase L migration: update preferences are new state, so
-        // every earlier schema selects the documented default (stable) — no
-        // historical policy is fabricated because none existed.
-        if matches!(schema_version, 2..=6) {
-            document
-                .as_object_mut()
-                .ok_or_else(|| {
-                    ConfigError::Malformed("the configuration is not a JSON object".into())
-                })?
-                .insert("updates".into(), serde_json::json!({ "channel": "stable" }));
+        // Both the original and corrected schema-7 shapes are known. Validate
+        // legacy state before discarding it; malformed preferences are never
+        // guessed into a usable configuration. Loading remains read-only.
+        if schema_version == 7 {
+            if let Some(legacy) = document.get("updates") {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct LegacyUpdates {
+                    #[allow(dead_code)]
+                    channel: crate::distribution::ReleaseChannel,
+                }
+                serde_json::from_value::<LegacyUpdates>(legacy.clone())
+                    .map_err(|error| ConfigError::Malformed(error.to_string()))?;
+                document.as_object_mut().unwrap().remove("updates");
+            }
         }
 
         let config = match schema_version {
@@ -209,7 +203,6 @@ impl LauncherConfig {
                     appearance: legacy.appearance,
                     home_widgets: Default::default(),
                     discord: Default::default(),
-                    updates: Default::default(),
                 }
             }
             version if version == u64::from(LEGACY_CONFIG_SCHEMA_VERSION) => {
@@ -221,7 +214,6 @@ impl LauncherConfig {
                     appearance: AppearancePreferences::new(),
                     home_widgets: Default::default(),
                     discord: Default::default(),
-                    updates: Default::default(),
                 }
             }
             found => {
@@ -405,6 +397,71 @@ mod tests {
     use super::*;
 
     #[test]
+    fn current_configuration_has_no_update_preference() {
+        let document = serde_json::to_value(LauncherConfig::default()).unwrap();
+        assert!(document.get("updates").is_none());
+        assert_eq!(document["schemaVersion"], 7);
+    }
+
+    #[test]
+    fn every_legacy_channel_becomes_identical_production_behavior_without_state_loss() {
+        let mut expected = LauncherConfig::default();
+        expected.set_selected_instance_id(Some(InstanceId::new("selected").unwrap()));
+        expected.appearance.theme = "oled".into();
+        expected.appearance.background = crate::appearance::BackgroundId::Borealis;
+        expected.appearance.aurora_motion_speed = 37;
+        expected.discord.enabled = true;
+        expected.discord.server = true;
+        expected.home_widgets.widgets.swap(0, 1);
+        expected.home_widgets.widgets[0].enabled = false;
+        for channel in ["stable", "beta", "nightly"] {
+            let directory = test_directory("aurora-config-single-stream");
+            let path = directory.join("config.json");
+            let mut legacy = serde_json::to_value(&expected).unwrap();
+            legacy["updates"] = serde_json::json!({"channel": channel});
+            let original = legacy.to_string();
+            std::fs::write(&path, &original).unwrap();
+            let migrated = load(&path).unwrap().unwrap();
+            assert_eq!(migrated, expected, "{channel} must have no residual effect");
+            assert_eq!(
+                std::fs::read_to_string(&path).unwrap(),
+                original,
+                "load is read-only"
+            );
+            save(&path, &migrated).unwrap();
+            let saved: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            assert!(saved.get("updates").is_none());
+            for key in ["selectedInstanceId", "appearance", "homeWidgets", "discord"] {
+                assert_eq!(saved[key], legacy[key], "preserve {key} for {channel}");
+            }
+            assert_eq!(load(&path).unwrap().unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn malformed_legacy_update_preferences_are_never_overwritten() {
+        for bad in [
+            serde_json::json!({"channel":"future"}),
+            serde_json::json!({}),
+            serde_json::json!({"channel":"beta","url":"http://other"}),
+            serde_json::Value::Null,
+        ] {
+            let directory = test_directory("aurora-config-malformed-legacy-updates");
+            let path = directory.join("config.json");
+            let mut document = serde_json::to_value(LauncherConfig::default()).unwrap();
+            document["updates"] = bad;
+            let original = document.to_string();
+            std::fs::write(&path, &original).unwrap();
+            assert!(matches!(
+                load_or_initialize(&path),
+                Err(ConfigError::Malformed(_))
+            ));
+            assert_eq!(std::fs::read_to_string(path).unwrap(), original);
+        }
+    }
+
+    #[test]
     fn schema_two_migration_preserves_unrelated_preferences_and_is_idempotent() {
         let json = r##"{"schemaVersion":2,"selectedInstanceId":"aurora-default","appearance":{"theme":"oled","accent":{"type":"custom","hex":"#7300d1"}}}"##;
         let config = LauncherConfig::from_json(json).unwrap();
@@ -586,7 +643,6 @@ mod tests {
             selected_instance_id: Some(InstanceId::new("aurora-default").unwrap()),
             home_widgets: Default::default(),
             discord: Default::default(),
-            updates: Default::default(),
             appearance: AppearancePreferences {
                 aurora_motion_speed: 50,
                 background: crate::appearance::BackgroundId::Simple,
@@ -763,7 +819,6 @@ mod tests {
             selected_instance_id: Some(InstanceId::new("beta-playground").unwrap()),
             home_widgets: Default::default(),
             discord: Default::default(),
-            updates: Default::default(),
             appearance: AppearancePreferences {
                 aurora_motion_speed: 50,
                 background: crate::appearance::BackgroundId::Simple,

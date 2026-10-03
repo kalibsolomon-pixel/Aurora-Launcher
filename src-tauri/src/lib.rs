@@ -171,8 +171,6 @@ pub fn run() {
             application::get_update_overview,
             application::startup_update_check,
             application::check_for_updates,
-            application::set_update_channel,
-            application::dismiss_update_notice,
             application::preview_client_update,
             application::apply_client_update,
             application::launcher_update_download,

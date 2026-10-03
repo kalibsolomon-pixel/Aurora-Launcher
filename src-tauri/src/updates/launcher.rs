@@ -12,8 +12,7 @@
 //! so the full signed lifecycle is testable without touching production
 //! trust.
 //!
-//! The updater endpoint serves one owner-published, signed manifest per
-//! release channel; nothing about a commit, branch, or CI build is ever an
+//! The updater endpoint serves one owner-published production manifest; nothing about a commit, branch, or CI build is ever an
 //! update candidate. On Windows the install step launches the verified
 //! NSIS installer and the application exits — that platform behavior is
 //! surfaced truthfully instead of being hidden behind a fabricated restart.
@@ -25,7 +24,6 @@ use serde::Serialize;
 use tauri::AppHandle;
 use tauri_plugin_updater::UpdaterExt;
 
-use crate::distribution::ReleaseChannel;
 use crate::updates::{CheckDomain, LauncherPhase, UpdateAvailability, begin_check, finish_check};
 
 /// The minisign-style public verification key compiled into this build.
@@ -33,23 +31,14 @@ use crate::updates::{CheckDomain, LauncherPhase, UpdateAvailability, begin_check
 /// every check reports unconfigured, and nothing is ever downloaded or run.
 pub const UPDATER_PUBKEY: Option<&str> = option_env!("AURORA_UPDATER_PUBKEY");
 
-/// The base URL of the owner-published per-channel launcher update
-/// manifests. The publication gate attaches `<channel>.json` (the Tauri
-/// update manifest for the newest intentionally published release of that
-/// channel) to a dedicated owner-controlled release; the URL exists only
-/// once the owner has published. Diagnostic builds may compile a loopback
-/// base through `AURORA_LAUNCHER_UPDATES_URL`.
-pub const UPDATES_BASE_URL: &str = match option_env!("AURORA_LAUNCHER_UPDATES_URL") {
+/// One authoritative production manifest, published only through the owner's
+/// manual release gate. Compile-time injection is reserved for diagnostics.
+pub const PRODUCTION_MANIFEST_URL: &str = match option_env!("AURORA_LAUNCHER_MANIFEST_URL") {
     Some(diagnostic) => diagnostic,
     None => {
-        "https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/launcher-updates"
+        "https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/launcher-updates/launcher-update.json"
     }
 };
-
-/// The updater endpoint for one channel.
-pub fn channel_endpoint(channel: ReleaseChannel) -> String {
-    format!("{UPDATES_BASE_URL}/{}.json", channel.as_str())
-}
 
 /// The user-facing launcher update status.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -101,21 +90,19 @@ fn installed_version(app: &AppHandle) -> String {
     app.package_info().version.to_string()
 }
 
-/// Builds the configured updater for one channel. Fails closed when this
+/// Builds the configured updater for production. Fails closed when this
 /// build carries no trust material.
-fn build_updater(
-    app: &AppHandle,
-    channel: ReleaseChannel,
-) -> Result<tauri_plugin_updater::Updater, LauncherUpdateError> {
+fn build_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, LauncherUpdateError> {
     let pubkey = UPDATER_PUBKEY.ok_or_else(|| {
         LauncherUpdateError::new(
             "updater_unconfigured",
             "Launcher updates are not configured in this build.",
         )
     })?;
-    let endpoint = url::Url::parse(&channel_endpoint(channel)).map_err(|_| {
+    let endpoint = url::Url::parse(PRODUCTION_MANIFEST_URL).map_err(|_| {
         LauncherUpdateError::new("updater_unconfigured", "The update endpoint is not valid.")
     })?;
+    validate_source(&endpoint)?;
     build_configured_updater(app, pubkey, endpoint)
 }
 
@@ -130,21 +117,22 @@ pub(crate) fn build_configured_updater<R: tauri::Runtime>(
 ) -> Result<tauri_plugin_updater::Updater, LauncherUpdateError> {
     app.updater_builder()
         .pubkey(pubkey.to_owned())
+        .timeout(std::time::Duration::from_secs(30))
         .endpoints(vec![endpoint])
         .map_err(|error| LauncherUpdateError::new("updater_unconfigured", error.to_string()))?
         .build()
         .map_err(|error| LauncherUpdateError::new("updater_unconfigured", error.to_string()))
 }
 
-/// The one-shot read-only launcher update check for one channel. The check
+/// The one-shot read-only launcher update check for production. The check
 /// itself never installs anything; failures are honest unavailability.
-pub async fn check_launcher_update(app: &AppHandle, channel: ReleaseChannel) -> UpdateAvailability {
+pub async fn check_launcher_update(app: &AppHandle) -> UpdateAvailability {
     let Some(_) = UPDATER_PUBKEY else {
         return UpdateAvailability::unavailable(
             "Launcher updates are not configured in this build.",
         );
     };
-    let updater = match build_updater(app, channel) {
+    let updater = match build_updater(app) {
         Ok(updater) => updater,
         Err(error) => return UpdateAvailability::unavailable(error.message),
     };
@@ -153,7 +141,6 @@ pub async fn check_launcher_update(app: &AppHandle, channel: ReleaseChannel) -> 
         Ok(Some(update)) => UpdateAvailability::UpdateAvailable {
             current: installed_version(app),
             candidate: update.version.clone(),
-            channel,
             notes: update.body.clone(),
         },
         Err(error) => {
@@ -164,11 +151,11 @@ pub async fn check_launcher_update(app: &AppHandle, channel: ReleaseChannel) -> 
 
 /// Runs the de-duplicated launcher check and records it in the update
 /// center. `None` means a check is already in flight.
-pub async fn run_check(app: &AppHandle, channel: ReleaseChannel) -> Option<UpdateAvailability> {
+pub async fn run_check(app: &AppHandle) -> Option<UpdateAvailability> {
     if begin_check(CheckDomain::Launcher) == crate::updates::CheckStart::Duplicate {
         return None;
     }
-    let availability = check_launcher_update(app, channel).await;
+    let availability = check_launcher_update(app).await;
     finish_check(CheckDomain::Launcher, availability.clone());
     Some(availability)
 }
@@ -178,11 +165,10 @@ pub async fn run_check(app: &AppHandle, channel: ReleaseChannel) -> Option<Updat
 /// callbacks; nothing is fabricated.
 pub async fn download(
     app: &AppHandle,
-    channel: ReleaseChannel,
     presented_version: &str,
     mut progress: impl FnMut(u64, Option<u64>) + Send,
 ) -> Result<LauncherUpdateStatus, LauncherUpdateError> {
-    let updater = build_updater(app, channel)?;
+    let updater = build_updater(app)?;
     // Stale defense: revalidate the offer before any bytes are accepted.
     let fresh = updater.check().await.map_err(|error| {
         LauncherUpdateError::new(
@@ -190,7 +176,7 @@ pub async fn download(
             format!("Could not check for updates: {error}"),
         )
     })?;
-    let Some(update) = fresh else {
+    let Some(mut update) = fresh else {
         return Err(LauncherUpdateError::gone(
             "The update is no longer offered.",
         ));
@@ -200,6 +186,8 @@ pub async fn download(
             "Update changed while you were reviewing it.",
         ));
     }
+    validate_source(&update.download_url)?;
+    update.timeout = Some(std::time::Duration::from_secs(300));
     let version = update.version.clone();
     let mut downloaded: u64 = 0;
     let mut total: Option<u64> = None;
@@ -236,7 +224,6 @@ pub async fn download(
         availability: UpdateAvailability::UpdateAvailable {
             current: installed_version(app),
             candidate: version,
-            channel,
             notes: None,
         },
         phase: Some(LauncherPhase::ReadyToInstall),
@@ -250,7 +237,6 @@ pub async fn download(
 /// behavior, surfaced truthfully to the UI before the call.
 pub async fn install(
     app: &AppHandle,
-    channel: ReleaseChannel,
     presented_version: &str,
 ) -> Result<LauncherUpdateStatus, LauncherUpdateError> {
     let downloaded = {
@@ -270,6 +256,26 @@ pub async fn install(
             "Update changed while you were reviewing it.",
         ));
     }
+    // The one-click UI still crosses two native steps. Revalidate the exact
+    // offered installer before installation, including same-version drift.
+    let fresh = build_updater(app)?
+        .check()
+        .await
+        .map_err(|_| {
+            LauncherUpdateError::new(
+                "update_check_unavailable",
+                "Could not revalidate the launcher update.",
+            )
+        })?
+        .ok_or_else(|| LauncherUpdateError::gone("The update is no longer offered."))?;
+    if fresh.version != pending.version
+        || fresh.download_url != pending.update.download_url
+        || fresh.signature != pending.update.signature
+    {
+        return Err(LauncherUpdateError::gone(
+            "The launcher update changed. Check again.",
+        ));
+    }
     pending.update.install(&pending.bytes).map_err(|error| {
         LauncherUpdateError::new(
             "update_install_failed",
@@ -283,7 +289,6 @@ pub async fn install(
         availability: UpdateAvailability::UpdateAvailable {
             current: installed_version(app),
             candidate: presented_version.to_owned(),
-            channel,
             notes: None,
         },
         phase: Some(LauncherPhase::Installing),
@@ -307,23 +312,31 @@ pub fn set_phase(phase: Option<LauncherPhase>) {
     state.launcher_phase = phase;
 }
 
+fn validate_source(endpoint: &url::Url) -> Result<(), LauncherUpdateError> {
+    if !endpoint.username().is_empty()
+        || endpoint.password().is_some()
+        || !(endpoint.scheme() == "https"
+            || (endpoint.scheme() == "http" && crate::downloads::is_loopback_host(endpoint)))
+    {
+        return Err(LauncherUpdateError::new(
+            "updater_unconfigured",
+            "The update source must use HTTPS or explicit loopback transport.",
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn channel_endpoints_address_the_published_manifests_per_channel() {
-        assert!(
-            channel_endpoint(ReleaseChannel::Stable).ends_with("/stable.json"),
-            "{}",
-            channel_endpoint(ReleaseChannel::Stable)
-        );
-        assert!(channel_endpoint(ReleaseChannel::Beta).ends_with("/beta.json"));
-        assert!(channel_endpoint(ReleaseChannel::Nightly).ends_with("/nightly.json"));
-        // Production builds compile the documented owner-controlled
-        // location unless a diagnostic base was provided at build time.
-        if option_env!("AURORA_LAUNCHER_UPDATES_URL").is_none() {
-            assert!(UPDATES_BASE_URL.starts_with("https://"));
+    fn one_production_manifest_is_the_only_launcher_source() {
+        if option_env!("AURORA_LAUNCHER_MANIFEST_URL").is_none() {
+            assert_eq!(
+                PRODUCTION_MANIFEST_URL,
+                "https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/launcher-updates/launcher-update.json"
+            );
         }
     }
 
@@ -338,6 +351,25 @@ mod tests {
         // load the updater plugin.
         if option_env!("AURORA_UPDATER_PUBKEY").is_none() {
             assert!(UPDATER_PUBKEY.is_none());
+        }
+    }
+
+    #[test]
+    fn launcher_sources_reject_insecure_or_credential_bearing_urls() {
+        for valid in [
+            "https://example.com/launcher-update.json",
+            "http://127.0.0.1:8789/update.json",
+            "http://[::1]/update.json",
+            "http://localhost/update.json",
+        ] {
+            assert!(validate_source(&url::Url::parse(valid).unwrap()).is_ok());
+        }
+        for invalid in [
+            "http://example.com/update.json",
+            "https://user:secret@example.com/update.json",
+            "file:///installer.exe",
+        ] {
+            assert!(validate_source(&url::Url::parse(invalid).unwrap()).is_err());
         }
     }
 }

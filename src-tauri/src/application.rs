@@ -5875,22 +5875,12 @@ use crate::updates::launcher as launcher_updates;
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateOverviewDto {
-    channel: crate::distribution::ReleaseChannel,
     launcher: launcher_updates::LauncherUpdateStatus,
     client: crate::updates::UpdateAvailability,
     client_instance_id: Option<String>,
     client_instance_name: Option<String>,
+    client_installed_version: Option<String>,
     startup_check_done: bool,
-    dismissed_launcher: bool,
-    dismissed_client: bool,
-}
-
-fn selected_update_channel(
-    app: &AppHandle,
-) -> Result<crate::distribution::ReleaseChannel, CommandError> {
-    let managed = managed_paths(app)?;
-    let config = crate::config::load(&managed.config_file())?.unwrap_or_default();
-    Ok(config.updates().channel())
 }
 
 fn update_overview(app: &AppHandle) -> Result<UpdateOverviewDto, CommandError> {
@@ -5920,7 +5910,6 @@ fn update_overview(app: &AppHandle) -> Result<UpdateOverviewDto, CommandError> {
         })
     });
     Ok(UpdateOverviewDto {
-        channel: config.updates().channel(),
         launcher: launcher_updates::LauncherUpdateStatus {
             installed_version: app.package_info().version.to_string(),
             availability: state
@@ -5932,9 +5921,14 @@ fn update_overview(app: &AppHandle) -> Result<UpdateOverviewDto, CommandError> {
         client,
         client_instance_id: selected,
         client_instance_name,
+        client_installed_version: config.selected_instance_id().and_then(|id| {
+            registry
+                .as_ref()
+                .and_then(|registry| registry.find(id))
+                .and_then(|record| record.installed().aurora.as_ref())
+                .map(|pin| pin.version.clone())
+        }),
         startup_check_done: state.startup_check_done(),
-        dismissed_launcher: state.dismissed_launcher,
-        dismissed_client: state.dismissed_client,
     })
 }
 
@@ -5945,19 +5939,29 @@ async fn run_update_check(
     app: &AppHandle,
     startup: bool,
 ) -> Result<UpdateOverviewDto, CommandError> {
+    static CHECK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+    let _check = CHECK
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .try_lock()
+        .map_err(|_| {
+            CommandError::new(
+                "update_check_in_progress",
+                "An update check is already in progress.",
+            )
+        })?;
     {
         let mut state = crate::updates::center()
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if startup {
             if state.startup_check_done() {
+                drop(state);
                 return update_overview(app);
             }
             state.mark_startup_check_done();
         }
     }
-    let channel = selected_update_channel(app)?;
-    launcher_updates::run_check(app, channel).await;
+    launcher_updates::run_check(app).await;
 
     let managed = managed_paths(app)?;
     let config = crate::config::load(&managed.config_file())?.unwrap_or_default();
@@ -5965,10 +5969,8 @@ async fn run_update_check(
         let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
             .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
         if crate::updates::begin_check(CheckDomain::Client) == crate::updates::CheckStart::Started {
-            let availability = crate::updates::client::check_client_update(
-                &managed, &endpoints, instance, channel,
-            )
-            .await;
+            let availability =
+                crate::updates::client::check_client_update(&managed, &endpoints, instance).await;
             crate::updates::finish_check(CheckDomain::Client, availability);
             let mut state = crate::updates::center()
                 .lock()
@@ -6001,70 +6003,6 @@ pub fn get_update_overview(app: AppHandle) -> Result<UpdateOverviewDto, CommandE
     update_overview(&app)
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SetUpdateChannelRequest {
-    channel: crate::distribution::ReleaseChannel,
-}
-
-/// Changes the selected release channel. The change never mutates installed
-/// software: it only redefines what future update checks consider eligible,
-/// and prior availability is invalidated so nothing stale is presented.
-#[tauri::command]
-pub fn set_update_channel(
-    app: AppHandle,
-    request: SetUpdateChannelRequest,
-) -> Result<UpdateOverviewDto, CommandError> {
-    let paths = managed_paths(&app)?;
-    let _guard = crate::instances::lifecycle::registry_lock();
-    let mut config = crate::config::load(&paths.config_file())?.unwrap_or_default();
-    config.set_updates(crate::updates::UpdatePreferences::with_channel(
-        request.channel,
-    ));
-    crate::config::save(&paths.config_file(), &config)?;
-    let mut state = crate::updates::center()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    state.launcher = None;
-    state.client = None;
-    state.client_instance_id = None;
-    state.dismissed_launcher = false;
-    state.dismissed_client = false;
-    drop(state);
-    update_overview(&app)
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct DismissUpdateNoticeRequest {
-    domain: String,
-}
-
-/// Session-scoped dismissal of one update notice. Presentation only: no
-/// availability, policy, or suppression state changes.
-#[tauri::command]
-pub fn dismiss_update_notice(
-    app: AppHandle,
-    request: DismissUpdateNoticeRequest,
-) -> Result<UpdateOverviewDto, CommandError> {
-    {
-        let mut state = crate::updates::center()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        match request.domain.as_str() {
-            "launcher" => state.dismissed_launcher = true,
-            "client" => state.dismissed_client = true,
-            _ => {
-                return Err(CommandError::new(
-                    "update_domain_unknown",
-                    "Unknown update domain.",
-                ));
-            }
-        }
-    }
-    update_overview(&app)
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PreviewClientUpdateRequest {
@@ -6082,14 +6020,13 @@ pub async fn preview_client_update(
     let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
     let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
         .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
-    let channel = selected_update_channel(&app)?;
     let remote = crate::updates::client::fetch_published_manifest(
         crate::updates::client::PRODUCTION_MANIFEST_URL,
         endpoints.download_options(),
     )
     .await
     .map_err(|error| CommandError::new(error.code(), error.message()))?;
-    crate::updates::client::preview_update(&managed, &endpoints, &instance, channel, &remote)
+    crate::updates::client::preview_update(&managed, &endpoints, &instance, &remote)
         .map_err(|error| CommandError::new(error.code(), error.message()))
 }
 
@@ -6119,7 +6056,6 @@ pub async fn apply_client_update(
     let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
     let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
         .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
-    let channel = selected_update_channel(&app)?;
     if crate::updates::begin_transaction(CheckDomain::Client)
         == crate::updates::CheckStart::Duplicate
     {
@@ -6147,7 +6083,6 @@ pub async fn apply_client_update(
             &endpoints,
             &instance,
             &request.fingerprint,
-            channel,
             &remote,
             endpoints.download_options(),
             &mut progress,
@@ -6159,13 +6094,13 @@ pub async fn apply_client_update(
     }
     .await;
     crate::updates::finish_transaction(CheckDomain::Client);
-    // The next check re-derives the new truth.
+    let record = result?;
     let mut state = crate::updates::center()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     state.client = Some(crate::updates::UpdateAvailability::UpToDate);
+    state.client_instance_id = Some(instance.to_string());
     drop(state);
-    let record = result?;
     Ok(InstanceSummary::from_record(&record))
 }
 
@@ -6190,7 +6125,6 @@ pub async fn launcher_update_download(
     app: AppHandle,
     request: LauncherUpdateDownloadRequest,
 ) -> Result<launcher_updates::LauncherUpdateStatus, CommandError> {
-    let channel = selected_update_channel(&app)?;
     if crate::updates::begin_transaction(CheckDomain::Launcher)
         == crate::updates::CheckStart::Duplicate
     {
@@ -6201,7 +6135,7 @@ pub async fn launcher_update_download(
     }
     launcher_updates::set_phase(Some(crate::updates::LauncherPhase::Downloading));
     let progress_app = app.clone();
-    let result = launcher_updates::download(&app, channel, &request.version, move |done, total| {
+    let result = launcher_updates::download(&app, &request.version, move |done, total| {
         let _ = progress_app.emit(
             "launcher-update-progress",
             LauncherUpdateProgressEvent {
@@ -6239,7 +6173,6 @@ pub async fn launcher_update_install(
     app: AppHandle,
     request: LauncherUpdateInstallRequest,
 ) -> Result<launcher_updates::LauncherUpdateStatus, CommandError> {
-    let channel = selected_update_channel(&app)?;
     if crate::updates::begin_transaction(CheckDomain::Launcher)
         == crate::updates::CheckStart::Duplicate
     {
@@ -6249,7 +6182,7 @@ pub async fn launcher_update_install(
         ));
     }
     launcher_updates::set_phase(Some(crate::updates::LauncherPhase::Installing));
-    let result = launcher_updates::install(&app, channel, &request.version).await;
+    let result = launcher_updates::install(&app, &request.version).await;
     crate::updates::finish_transaction(CheckDomain::Launcher);
     match result {
         Ok(status) => Ok(status),

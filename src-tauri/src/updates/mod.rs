@@ -8,7 +8,7 @@
 //! * the **launcher self-update** — the official Tauri 2 updater with its
 //!   signature-verified install lifecycle, wrapped natively ([`launcher`]).
 //!
-//! They share release-channel policy, presentation concepts, and this
+//! They share presentation concepts and this
 //! module's in-process status center, and nothing else: artifacts, trust
 //! roots, activation, and rollback are distinct by design.
 //!
@@ -28,62 +28,12 @@ use std::sync::OnceLock;
 
 use serde::Serialize;
 
-use crate::distribution::ReleaseChannel;
-
-/// The release channels an update check may consider eligible for one
-/// selected channel.
-///
-/// `stable` sees stable releases only; `beta` adds beta; `nightly` adds
-/// nightly. A wider channel never removes stable eligibility, and switching
-/// selection never mutates installed software — it only changes what future
-/// checks consider.
-pub fn eligible_channels(selected: ReleaseChannel) -> &'static [ReleaseChannel] {
-    match selected {
-        ReleaseChannel::Stable => &[ReleaseChannel::Stable],
-        ReleaseChannel::Beta => &[ReleaseChannel::Stable, ReleaseChannel::Beta],
-        ReleaseChannel::Nightly => &[
-            ReleaseChannel::Stable,
-            ReleaseChannel::Beta,
-            ReleaseChannel::Nightly,
-        ],
-    }
-}
-
 /// Parses one Aurora version string with semantic-version precedence.
 ///
 /// Malformed versions never become update candidates: discovery skips them
 /// (fail closed) rather than comparing lexically or guessing.
 pub fn parse_release_version(version: &str) -> Option<semver::Version> {
     semver::Version::parse(version).ok()
-}
-
-/// The persisted launcher-wide update preferences (configuration schema 7).
-///
-/// Only preferences implemented behavior needs: the selected release channel
-/// that future update checks consider eligible. Dismissed notices are
-/// session-scoped presentation state; timestamps are not authority.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdatePreferences {
-    channel: ReleaseChannel,
-}
-
-impl Default for UpdatePreferences {
-    fn default() -> Self {
-        Self {
-            channel: ReleaseChannel::Stable,
-        }
-    }
-}
-
-impl UpdatePreferences {
-    pub fn channel(&self) -> ReleaseChannel {
-        self.channel
-    }
-
-    pub fn with_channel(channel: ReleaseChannel) -> Self {
-        Self { channel }
-    }
 }
 
 /// One domain of the update overview shown by the UI.
@@ -98,7 +48,6 @@ pub enum UpdateAvailability {
     UpdateAvailable {
         current: String,
         candidate: String,
-        channel: ReleaseChannel,
         notes: Option<String>,
     },
     /// The checked subject has no update domain (for example an instance
@@ -135,8 +84,6 @@ pub struct UpdateCenter {
     launcher_transaction_running: bool,
     client_transaction_running: bool,
     startup_check_done: bool,
-    pub dismissed_launcher: bool,
-    pub dismissed_client: bool,
 }
 
 impl UpdateCenter {
@@ -275,34 +222,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stable_sees_only_stable_releases() {
-        assert_eq!(
-            eligible_channels(ReleaseChannel::Stable),
-            &[ReleaseChannel::Stable]
-        );
-    }
-
-    #[test]
-    fn beta_widens_without_losing_stable() {
-        assert_eq!(
-            eligible_channels(ReleaseChannel::Beta),
-            &[ReleaseChannel::Stable, ReleaseChannel::Beta]
-        );
-    }
-
-    #[test]
-    fn nightly_includes_every_channel() {
-        assert_eq!(
-            eligible_channels(ReleaseChannel::Nightly),
-            &[
-                ReleaseChannel::Stable,
-                ReleaseChannel::Beta,
-                ReleaseChannel::Nightly
-            ]
-        );
-    }
-
-    #[test]
     fn release_versions_parse_with_semver_precedence() {
         let older = parse_release_version("2.1.5").expect("plain versions parse");
         let newer = parse_release_version("2.2.0").expect("plain versions parse");
@@ -321,14 +240,6 @@ mod tests {
                 "'{malformed}' must never become an update candidate"
             );
         }
-    }
-
-    #[test]
-    fn default_preferences_are_stable_channel() {
-        assert_eq!(
-            UpdatePreferences::default().channel(),
-            ReleaseChannel::Stable
-        );
     }
 
     #[test]

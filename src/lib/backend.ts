@@ -2033,9 +2033,6 @@ export const saveDiscordPreferences = (request: DiscordPreferences): Promise<Dis
 // Phase L: production updates
 // ---------------------------------------------------------------------------
 
-/** Aurora release channels, shared by Client and launcher update policy. */
-export type UpdateReleaseChannel = "stable" | "beta" | "nightly";
-
 /** One update domain's availability, mirroring the Rust enum exactly. */
 export type ProductUpdateAvailability =
   | { kind: "notChecked" }
@@ -2044,7 +2041,6 @@ export type ProductUpdateAvailability =
       kind: "updateAvailable";
       current: string;
       candidate: string;
-      channel: UpdateReleaseChannel;
       notes: string | null;
     }
   | { kind: "notApplicable"; reason: string }
@@ -2059,19 +2055,16 @@ export interface LauncherUpdateStatus {
 }
 
 export interface UpdateOverview {
-  channel: UpdateReleaseChannel;
   launcher: LauncherUpdateStatus;
   client: ProductUpdateAvailability;
   clientInstanceId: string | null;
   clientInstanceName: string | null;
+  clientInstalledVersion: string | null;
   startupCheckDone: boolean;
-  dismissedLauncher: boolean;
-  dismissedClient: boolean;
 }
 
 export interface ClientUpdateCandidate {
   version: string;
-  channel: UpdateReleaseChannel;
   notes: string | null;
   minecraftVersion: string;
   fabricLoaderVersion: string;
@@ -2084,7 +2077,6 @@ export interface ClientUpdateCandidate {
 export interface ClientUpdatePreview {
   instanceId: string;
   installedVersion: string;
-  installedChannel: UpdateReleaseChannel;
   outcome: "updateAvailable" | "upToDate" | "installedNewer";
   candidate: ClientUpdateCandidate | null;
   blockers: string[];
@@ -2112,10 +2104,6 @@ export const startupUpdateCheck = (): Promise<UpdateOverview> =>
   updateCommand<UpdateOverview>("startup_update_check");
 export const checkForUpdates = (): Promise<UpdateOverview> =>
   updateCommand<UpdateOverview>("check_for_updates");
-export const setUpdateChannel = (channel: UpdateReleaseChannel): Promise<UpdateOverview> =>
-  updateCommand<UpdateOverview>("set_update_channel", { channel });
-export const dismissUpdateNotice = (domain: "launcher" | "client"): Promise<UpdateOverview> =>
-  updateCommand<UpdateOverview>("dismiss_update_notice", { domain });
 export const previewClientUpdate = (instanceId: string): Promise<ClientUpdatePreview> =>
   updateCommand<ClientUpdatePreview>("preview_client_update", { instanceId });
 export const applyClientUpdate = (
