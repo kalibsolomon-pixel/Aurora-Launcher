@@ -48,12 +48,21 @@ it("enriched server rows render favicon, name, MOTD and status without addresses
   assert.doesNotMatch(view, /example\.invalid/);
 });
 
-it("rows without a presentation keep the plain history identity and letter tile", () => {
+it("rows without a presentation keep history identity and a deliberate server symbol", () => {
   const view = html(Recent, { mode: "server", size: "small", testFixture: [entry("f".repeat(64), "Plain Realm")] });
   assert.match(view, /Plain Realm/);
-  assert.match(view, /aria-hidden="true">P</);
+  assert.match(view, /class="placeholder[ "]/); assert.match(view, /<svg/); assert.doesNotMatch(view, /<img/);
   assert.doesNotMatch(view, /class="dot/);
   assert.doesNotMatch(view, /Online|Offline/);
+});
+
+it('malformed or remote favicon DTOs render the server fallback without loading a URL', () => {
+  for (const favicon of ['file:///C:/image.png', 'https://example.com/favicon.png', 'data:image/svg+xml;base64,YWJj', 'data:image/png;base64,!']) {
+    const id = '6'.repeat(64);
+    const view = html(Recent, { mode: 'server', size: 'small', testFixture: [entry(id, 'Safe Realm')], testPresentations: [presentation(id, { favicon })] });
+    assert.doesNotMatch(view, /<img/); assert.match(view, /class="placeholder[ "]/);
+    assert.match(view, /Quick Launch server Safe Realm/);
+  }
 });
 
 it("offline presentations retain favicon and MOTD while reporting offline", () => {

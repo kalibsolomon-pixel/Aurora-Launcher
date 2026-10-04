@@ -21,7 +21,7 @@ pub mod protocol;
 
 use std::{
     collections::{HashMap, HashSet},
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
@@ -165,11 +165,21 @@ struct CacheDocument {
 
 fn read_document(paths: &ManagedPaths, endpoint: &Endpoint) -> Option<CacheDocument> {
     let path = Endpoint::cache_path(paths, endpoint.cache_key())?;
-    let bytes = std::fs::read(path).ok()?;
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .ok()?
+        .take((MAX_CACHE_DOCUMENT + 1) as u64)
+        .read_to_end(&mut bytes)
+        .ok()?;
     if bytes.len() > MAX_CACHE_DOCUMENT {
         return None;
     }
-    let document: CacheDocument = serde_json::from_slice(&bytes).ok()?;
+    let mut document: CacheDocument = serde_json::from_slice(&bytes).ok()?;
+    // The cosmetic cache is not a trust authority. Revalidate stored imagery
+    // without network traffic before exposing it through a native DTO.
+    if let Some(presentation) = &mut document.presentation {
+        presentation.favicon = presentation.favicon.as_deref().and_then(validate_favicon);
+    }
     (document.schema_version == CACHE_SCHEMA
         && document.identity == format!("{}:{}", endpoint.host, endpoint.port))
     .then_some(document)
@@ -218,8 +228,7 @@ fn in_flight() -> &'static Mutex<HashSet<String>> {
 // ---------------------------------------------------------------------------
 
 fn validate_favicon(raw: &str) -> Option<String> {
-    // Servers commonly wrap the data URL across JSON lines; surrounding
-    // whitespace is tolerated, internal whitespace is not.
+    // Normalize MIME-style base64 line wrapping into one canonical data URL.
     let raw = raw.trim();
     let (media, encoded) = if let Some(encoded) = raw.strip_prefix("data:image/png;base64,") {
         ("image/png", encoded)
@@ -228,16 +237,23 @@ fn validate_favicon(raw: &str) -> Option<String> {
     } else {
         return None;
     };
-    if encoded.bytes().any(|byte| byte.is_ascii_whitespace()) {
+    if encoded.len() > MAX_FAVICON_BYTES.div_ceil(3) * 4 + 4096 {
         return None;
     }
-    let bytes = Base64::decode_vec(encoded).ok()?;
+    let encoded: String = encoded
+        .chars()
+        .filter(|character| !character.is_ascii_whitespace())
+        .collect();
+    let bytes = Base64::decode_vec(&encoded).ok()?;
     if bytes.is_empty() || bytes.len() > MAX_FAVICON_BYTES {
         return None;
     }
     match media {
         "image/png" => {
-            let decoder = png::Decoder::new(std::io::Cursor::new(&bytes));
+            let mut decoder = png::Decoder::new(std::io::Cursor::new(&bytes));
+            decoder.set_limits(png::Limits {
+                bytes: 4 * 1024 * 1024,
+            });
             let mut reader = decoder.read_info().ok()?;
             let info = reader.info();
             if info.width == 0
@@ -751,9 +767,20 @@ mod tests {
             ))
             .is_none()
         );
-        // Internal whitespace is rejected; surrounding whitespace is trimmed
-        // (servers commonly wrap the data URL across JSON lines).
+        // Invalid wrapped bytes still fail. Valid MIME-style wrapping is normalized.
         assert!(validate_favicon(&format!("data:image/png;base64,AA AA",)).is_none());
+        let canonical = png_favicon_field();
+        let (prefix, encoded) = canonical.split_once(',').unwrap();
+        let wrapped = encoded
+            .as_bytes()
+            .chunks(76)
+            .map(|chunk| std::str::from_utf8(chunk).unwrap())
+            .collect::<Vec<_>>()
+            .join("\r\n");
+        assert_eq!(
+            validate_favicon(&format!("{prefix},{wrapped}")),
+            Some(canonical)
+        );
         assert!(
             validate_favicon(&format!(
                 " data:image/png;base64,{} ",
@@ -795,6 +822,18 @@ mod tests {
         };
         write_document(&path, &document).unwrap();
         assert_eq!(read_document(&paths, &endpoint).unwrap(), document);
+        let mut poisoned = document.clone();
+        poisoned.presentation.as_mut().unwrap().favicon =
+            Some("https://example.invalid/favicon.png".into());
+        write_document(&path, &poisoned).unwrap();
+        assert_eq!(
+            read_document(&paths, &endpoint)
+                .unwrap()
+                .presentation
+                .unwrap()
+                .favicon,
+            None
+        );
         // A document naming a different identity is never served.
         let mut alien = document.clone();
         alien.identity = "other.example.invalid:25565".into();

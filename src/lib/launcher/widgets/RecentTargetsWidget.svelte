@@ -3,7 +3,8 @@
   import { getRecentWorlds, getRecentServers, refreshRecentServerStatus, type RecentGameplayTarget, type RecentServerMotdSegment, type RecentServerPresentation, type WidgetSize } from "$lib/backend";
   import { launcher } from "../store.svelte";
   import { recentLabel } from "../homeHistory";
-  import { fallbackLetter, motdPlainText, presentationsById, rowDetail, rowName, segmentStyle, statusLabel } from "../serverPresentation";
+  import { motdPlainText, presentationsById, rowDetail, rowName, segmentStyle, statusLabel } from "../serverPresentation";
+  import Artwork from '$lib/shell/Artwork.svelte';
   let { mode, size, testFixture, testPresentations }: { mode: "world" | "server"; size: WidgetSize; testFixture?: RecentGameplayTarget[]; testPresentations?: RecentServerPresentation[] } = $props();
   const initialFixture = untrack(() => testFixture);
   let entries = $state<RecentGameplayTarget[]>(initialFixture ?? []);
@@ -71,11 +72,7 @@
       {@const firstMotdLine = detail ? detail.motd.find(line => line.some(segment => segment.text.trim())) : undefined}
       <li class:enriched={mode === "server"}>
         {#if mode === "server"}
-          {#if detail?.favicon}
-            <img class="favicon" src={detail.favicon} alt="" />
-          {:else}
-            <span class="favicon fallback" aria-hidden="true">{fallbackLetter(name)}</span>
-          {/if}
+          <span class="favicon"><Artwork source={detail?.favicon} fallback="server" size={36} /></span>
         {/if}
         <div class="identity">
           <strong title={mode === "server" && rowDetail(detail) ? `${name} — ${rowDetail(detail)}` : name}>{name}{#if mode === "server" && detail}<span class="dot" class:online={detail.status === "online"} class:offline={detail.status === "offline"} title={statusLabel(detail)}></span>{/if}</strong>
@@ -107,8 +104,7 @@
   strong { font-size: var(--text-secondary); font-weight: 600; display: flex; align-items: center; gap: 6px; }
   .meta, .note { font-size: var(--text-metadata); color: var(--color-text-secondary); }
   .note { margin: var(--space-2) 0; }
-  .favicon { flex: none; width: 36px; height: 36px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); object-fit: cover; background: var(--color-surface-sunken); image-rendering: auto; margin-top: 1px; }
-  .favicon.fallback { display: inline-grid; place-items: center; font-size: 15px; font-weight: 600; color: var(--color-text-secondary); background: var(--color-surface-sunken); }
+  .favicon { flex: none; display: inline-grid; width: 36px; height: 36px; margin-top: 1px; }
   .motd { font-size: var(--text-metadata); color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--color-text-muted); }
   .dot.online { background: var(--color-success); }

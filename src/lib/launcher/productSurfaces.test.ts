@@ -275,7 +275,7 @@ it("Play rejects stale instance or account display decisions before invoking nat
 it("a large instance list and long names retain accessible options and selected marker", () => {
   reset(); launcher.launcherState.instances = Array.from({length: 80}, (_, index) => ({ ...instance(), id: index === 0 ? id : String(index), displayName: `Long instance name ${index} `.repeat(5) }));
   const view = html(Home); assert.equal((view.match(/role="option"/g) ?? []).length, 80);
-  assert.match(view, /Long instance name 79/); assert.match(view, /✓ Selected/);
+  assert.match(view, /Long instance name 79/); assert.match(view, /selected-marker/); assert.match(view, />Selected</);
 });
 
 it("shell account modal opens and closes without changing Home, Settings or workspace navigation", () => {

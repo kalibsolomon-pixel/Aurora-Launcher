@@ -134,9 +134,9 @@
   .launch-main { padding: 12px; display: grid; gap: 10px; min-width: 0; }
   .play-hero { width: 100%; min-height: 78px; font-size: 30px; font-weight: 700; letter-spacing: -.03em; border-radius: 15px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 16%), 0 5px 16px rgb(0 0 0 / 15%); }
   .instance-heading { min-width: 0; padding: 4px 14px 12px; text-align: center; }
-  .instance-heading :global(.picker-trigger) { font-size: 16px; font-weight: 550; margin: 0; padding: 12px; }
+  .instance-heading :global(.picker-trigger) { font-size: 16px; margin: 0; }
   .instance-heading :global(.picker-menu) { text-align: left; }
-  .instance-versions { margin: 2px 0 12px; color: var(--color-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+  .instance-versions { margin: 10px 0 12px; color: var(--color-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
   @media (min-width: 1500px) { .home-composition { min-height: 660px; } }
   @media (max-width: 900px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 16px; } .hero-logo { width: 168px; } .home-launch-column { gap: 12px; } .instance-card { max-width: none; } .play-hero { min-height: 68px; font-size: 28px; } }
 </style>

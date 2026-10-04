@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { launcher } from "./store.svelte";
+  import Icon from '$lib/shell/Icon.svelte';
   let { compact = false }: { compact?: boolean } = $props();
   const uid = $props.id();
   const instances = $derived(launcher.launcherState?.instances ?? []);
@@ -35,10 +36,10 @@
 <svelte:window onpointerdown={(event) => { if (open && !root?.contains(event.target as Node)) close(); }} />
 <div class="instance-switcher" class:compact bind:this={root}>
   <button bind:this={trigger} type="button" class="picker-trigger" aria-label="Select Play instance"
-    aria-haspopup="listbox" aria-expanded={open} aria-controls={`${uid}-list`} disabled={busy}
+    aria-haspopup="listbox" aria-expanded={open} aria-controls={`${uid}-list`} disabled={busy || !instances.length}
     onclick={() => open ? close() : void reveal()}
     onkeydown={(event) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); void reveal(); } }}>
-    <span>{selected?.displayName ?? "Choose an instance"}</span><span class="chevron" aria-hidden="true">⌄</span>
+    <span>{selected?.displayName ?? "Choose an instance"}</span><span class="chevron" class:expanded={open}><Icon name="chevron" size={24} /></span>
   </button>
   <div id={`${uid}-list`} class="picker-menu" role="listbox" tabindex="-1" aria-label="Play instances" hidden={!open} onkeydown={key}>
     {#each instances as instance, index (instance.id)}
@@ -47,24 +48,29 @@
         onfocus={() => current = index} onclick={() => void choose(instance.id)}>
         <span class="option-identity"><strong>{instance.displayName}</strong>
           <small>{instance.pack ? `${instance.pack.name} ${instance.pack.packVersion} · ` : ""}Minecraft {instance.minecraftVersion} · {instance.platform.kind === "vanilla" ? "Vanilla" : instance.platform.kind === "neoForge" ? "NeoForge" : "Fabric"}{instance.aurora ? " · Aurora configured" : ""}</small>
-        </span><span class="selected-marker">{instance.id === selectedId ? "✓ Selected" : ""}</span>
+        </span><span class="selected-marker">{#if instance.id === selectedId}<Icon name="check" size={16} /><span>Selected</span>{/if}</span>
       </button>
     {/each}
   </div>
 </div>
 <style>
   .instance-switcher { position: relative; min-width: 0; }
-  .picker-trigger { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); width: 100%; min-width: 0; border: 1px solid transparent; border-radius: var(--radius-sm); padding: var(--space-2); margin-left: calc(-1 * var(--space-2)); background: transparent; color: var(--color-text); font: inherit; font-size: 1.5rem; font-weight: 600; text-align: left; cursor: pointer; }
+  .picker-trigger { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); width: 100%; min-width: 0; min-height: 48px; border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); padding: 8px 12px; background: rgb(255 255 255 / 3%); color: var(--color-text); font: inherit; font-size: 16px; font-weight: 600; text-align: left; cursor: pointer; transition: background var(--f-fast), border-color var(--f-fast); }
   .picker-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .picker-trigger:hover, .picker-trigger[aria-expanded="true"] { background: var(--color-surface-raised); border-color: var(--color-border); }
-  .chevron { color: var(--color-text-muted); font-size: 1rem; }
-  .picker-menu { position: absolute; z-index: 20; top: calc(100% + var(--space-2)); left: 0; width: 100%; max-height: 360px; overflow-y: auto; padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-surface-raised); box-shadow: var(--shadow-group); }
+  .picker-trigger:hover:not(:disabled), .picker-trigger[aria-expanded="true"] { background: rgb(255 255 255 / 7%); border-color: var(--f-edge); }
+  .picker-trigger:disabled { opacity: .55; cursor: default; }
+  .chevron { display: grid; place-items: center; width: 32px; height: 32px; flex: none; color: var(--color-text-secondary); transition: transform var(--f-duration) var(--f-ease); }
+  .chevron.expanded { transform: rotate(180deg); }
+  .picker-menu { position: absolute; z-index: 20; top: calc(100% + var(--space-2)); left: 0; width: 100%; max-height: min(360px, 50dvh); overflow-y: auto; padding: var(--space-2); border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-dialog-panel); backdrop-filter: var(--f-blur); box-shadow: var(--f-shadow); }
   .picker-menu[hidden] { display: none; }
-  .picker-option { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); width: 100%; padding: var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text); font: inherit; text-align: left; cursor: pointer; }
-  .picker-option:hover, .picker-option[aria-selected="true"] { background: var(--color-surface); }
+  .picker-option { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); width: 100%; min-height: 60px; padding: var(--space-3); border: 0; border-radius: var(--f-radius-control); background: transparent; color: var(--color-text); font: inherit; text-align: left; cursor: pointer; transition: background var(--f-fast); }
+  .picker-option + .picker-option { margin-top: var(--space-1); }
+  .picker-option:hover { background: rgb(255 255 255 / 7%); }
+  .picker-option[aria-selected="true"] { background: var(--color-accent-soft); }
   .option-identity { display: grid; gap: var(--space-1); min-width: 0; }
   .option-identity strong { font-size: var(--text-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .option-identity small { color: var(--color-text-secondary); font-size: var(--text-metadata); }
-  .selected-marker { color: var(--color-text-secondary); font-size: var(--text-metadata); white-space: nowrap; }
+  .option-identity small { color: var(--color-text-secondary); font-size: 12px; line-height: 1.5; }
+  .selected-marker { display: flex; align-items: center; gap: 5px; color: var(--color-accent); font-size: 11px; white-space: nowrap; }
   .picker-option:focus-visible, .picker-trigger:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .chevron, .picker-trigger, .picker-option { transition: none; } }
 </style>
