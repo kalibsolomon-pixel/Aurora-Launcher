@@ -1,7 +1,6 @@
 <script module lang="ts">
   import { DefaultBrowseCache } from "./modrinthBrowse";
   const browseDefaultPages = new DefaultBrowseCache();
-  const failedIconUrls = new Set<string>();
 </script>
 
 <script lang="ts">
@@ -19,6 +18,7 @@
     type ProviderConflict, type ModrinthPackPreview,
   } from "$lib/backend";
   import InstallConflicts from "./InstallConflicts.svelte";
+  import Artwork from '$lib/shell/Artwork.svelte';
 
   let {
     instanceId, instanceName, minecraftVersion, loaderLabel = "Fabric", kind, installedProjectIds, dependencyOnlyProjectIds, onInstalled, standalonePackBrowse = false,
@@ -57,7 +57,6 @@
   let quickBusyProjectId = $state<string | null>(null);
   let notice = $state("");
   let noticeExiting = $state(false);
-  let failedIcons = $state<Record<string, true>>({});
   let blockedProjects = $state<Record<string, { message: string; conflict: ProviderConflict | null }>>({});
   let categoryPickerOpen = $state(false);
   let categoryTrigger: HTMLButtonElement | undefined = $state();
@@ -471,11 +470,7 @@
         {#each page.hits as hit (hit.projectId)}
           <article class="browse-row">
             <div class="browse-glyph" aria-hidden="true">
-              {#if hit.iconUrl && !failedIconUrls.has(hit.iconUrl) && !failedIcons[hit.projectId]}
-                <img src={hit.iconUrl} alt="" loading="lazy" onerror={() => { if (hit.iconUrl) failedIconUrls.add(hit.iconUrl); failedIcons = { ...failedIcons, [hit.projectId]: true }; }} />
-              {:else}
-                {browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"}
-              {/if}
+              <Artwork source={hit.iconUrl} provider fallback={browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"} size={44} />
             </div>
             <div class="browse-copy">
               <h4>{hit.title}</h4>
@@ -591,8 +586,7 @@
   .browse-loading { min-height: 96px; }
   .browse-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
   .browse-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-surface-edge); border-radius: var(--radius-md); background: var(--f-panel); }
-  .browse-glyph { display: grid; place-items: center; width: 34px; height: 34px; flex: none; overflow: hidden; border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text-secondary); font-weight: 700; }
-  .browse-glyph img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .browse-glyph { display: grid; place-items: center; width: 44px; height: 44px; flex: none; }
   .browse-actions { display: flex; align-items: center; gap: var(--space-2); flex: none; }
   .install-action { display: flex; align-items: center; justify-content: center; gap: var(--space-1); min-width: 34px; min-height: 32px; font-size: 19px; line-height: 1; }
   .action-state { font-size: var(--text-metadata); }

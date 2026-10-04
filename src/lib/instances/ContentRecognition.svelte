@@ -1,4 +1,5 @@
 <script lang="ts">
+  import InstalledArtwork from './InstalledArtwork.svelte';
   import {
     providerOriginLabel,
     registerRecoveredContent,
@@ -130,6 +131,7 @@
                   {:else}
                     <span class="recognition-marker" aria-hidden="true">—</span>
                   {/if}
+                  <InstalledArtwork compact projectId={candidate.status === 'recognized' ? candidate.recognition?.projectId ?? null : null} fallback={kind === 'mod' ? 'M' : kind === 'resourcePack' ? 'R' : 'S'} />
                   <div class="recognition-identity">
                     <label for={`recognize-${instance.id}-${kind}-${candidate.fileName}`}>
                       <span class="recognition-name">{candidate.fileName}</span>

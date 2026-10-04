@@ -18,6 +18,12 @@
     grip: 'M8 5h.01 M16 5h.01 M8 12h.01 M16 12h.01 M8 19h.01 M16 19h.01',
     check: 'm5 12 4 4L19 6',
     chevron: 'm6 9 6 6 6-6',
+    mod: 'm12 3 9 5v8l-9 5-9-5V8Z M3 8l9 5 9-5 M12 13v8 M7.5 5.5l9 5',
+    resourcePack: 'M4 4h16v16H4Z m0 12 5-5 4 4 3-3 4 4 M8 8h.01',
+    shader: 'M12 2v2 M12 20v2 M2 12h2 M20 12h2 m-15-7 1.5 1.5 M17.5 17.5 19 19 M5 19l1.5-1.5 M17.5 6.5 19 5 M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0',
+    file: 'M5 3h9l5 5v13H5Z M14 3v5h5 M8 12h8 M8 16h6',
+    modpack: 'M4 6h16v14H4Z M8 3h8 M4 10h16 M10 14h4',
+    server: 'M4 4h16v6H4Z M4 14h16v6H4Z M7 7h.01 M7 17h.01 M12 10v4',
   };
 </script>
 <svg style="flex-shrink: 0; aspect-ratio: 1;" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={paths[name] ?? paths.about} /></svg>

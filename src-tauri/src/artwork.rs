@@ -6,7 +6,7 @@
 
 use std::{
     collections::HashSet,
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
 };
@@ -22,6 +22,24 @@ const OFFICIAL_CDN_HOST: &str = "cdn.modrinth.com";
 fn in_flight() -> &'static Mutex<HashSet<String>> {
     static IN_FLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
     IN_FLIGHT.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+struct Acquisition(String);
+impl Acquisition {
+    fn start(project_id: &str) -> Option<Self> {
+        in_flight()
+            .lock()
+            .ok()?
+            .insert(project_id.to_owned())
+            .then(|| Self(project_id.to_owned()))
+    }
+}
+impl Drop for Acquisition {
+    fn drop(&mut self) {
+        if let Ok(mut set) = in_flight().lock() {
+            set.remove(&self.0);
+        }
+    }
 }
 
 /// Provider project ids are exact 8-character base62 identifiers, matching the
@@ -58,6 +76,19 @@ fn data_url(bytes: &[u8]) -> Option<String> {
         return None;
     }
     let media_type = sniff_media_type(bytes)?;
+    if media_type == "image/png" {
+        let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
+        decoder.set_limits(png::Limits {
+            bytes: 16 * 1024 * 1024,
+        });
+        let mut reader = decoder.read_info().ok()?;
+        let info = reader.info();
+        if info.width == 0 || info.height == 0 || info.width > 1024 || info.height > 1024 {
+            return None;
+        }
+        let mut pixels = vec![0; reader.output_buffer_size()];
+        reader.next_frame(&mut pixels).ok()?;
+    }
     Some(format!(
         "data:{media_type};base64,{}",
         Base64::encode_string(bytes)
@@ -85,12 +116,45 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     result
 }
 
+fn persist(paths: &ManagedPaths, project_id: &str, bytes: &[u8]) -> Option<()> {
+    let path = object_path(paths, project_id);
+    let root = paths.data_root().canonicalize().ok()?;
+    // Validate each fixed ancestor before creating the next directory.
+    for directory in [
+        paths.cache_dir(),
+        paths.cache_dir().join("artwork"),
+        path.parent()?.to_owned(),
+    ] {
+        if !directory.exists() {
+            std::fs::create_dir(&directory).ok()?;
+        }
+        if !directory.canonicalize().ok()?.starts_with(&root) {
+            return None;
+        }
+    }
+    write_atomic(&path, bytes).ok()
+}
+
 /// Cache-first read of one project's stored artwork.
 pub fn read_cached(paths: &ManagedPaths, project_id: &str) -> Option<String> {
     if !valid_id(project_id) {
         return None;
     }
-    let bytes = std::fs::read(object_path(paths, project_id)).ok()?;
+    let path = object_path(paths, project_id);
+    if !std::fs::symlink_metadata(&path).ok()?.file_type().is_file()
+        || !path
+            .canonicalize()
+            .ok()?
+            .starts_with(paths.data_root().canonicalize().ok()?)
+    {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .ok()?
+        .take((MAX_ARTWORK + 1) as u64)
+        .read_to_end(&mut bytes)
+        .ok()?;
     data_url(&bytes)
 }
 
@@ -128,33 +192,32 @@ async fn download(http: &reqwest::Client, url: &str, allowed_host: &str) -> Opti
 /// persists them; concurrent requests for the same project fall back this pass
 /// instead of duplicating network work.
 pub async fn cached_artwork(paths: &ManagedPaths, project_id: &str) -> Option<String> {
+    if !valid_id(project_id) {
+        return None;
+    }
     if let Some(hit) = read_cached(paths, project_id) {
         return Some(hit);
     }
+    let _acquisition = Acquisition::start(project_id)?;
     let url = crate::modrinth::Client::official()
         .artwork(project_id)
         .await
         .ok()??;
-    if !valid_id(project_id) {
-        return None;
-    }
-    let tracked = in_flight()
-        .lock()
-        .map(|mut set| set.insert(project_id.to_owned()))
-        .unwrap_or(false);
-    if !tracked {
-        return None;
-    }
-    let http = crate::downloads::build_client(&crate::downloads::DownloadOptions::default());
+    // Cosmetic CDN locators do not require redirects. Refusing all redirects
+    // prevents even an intermediate request to a provider-controlled other host.
+    let http = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(10))
+        .user_agent(format!("aurora-launcher/{}", env!("CARGO_PKG_VERSION")))
+        .build()
+        .ok()?;
     let result = download(&http, &url, OFFICIAL_CDN_HOST).await;
+    let image = result.as_deref().and_then(data_url)?;
     if let Some(bytes) = &result {
         // A stale or damaged cache object is replaced only by verified bytes.
-        let _ = write_atomic(&object_path(paths, project_id), bytes);
+        let _ = persist(paths, project_id, bytes);
     }
-    if let Ok(mut set) = in_flight().lock() {
-        set.remove(project_id);
-    }
-    result.as_deref().and_then(data_url)
+    Some(image)
 }
 
 #[cfg(test)]
@@ -164,6 +227,21 @@ mod tests {
     use std::sync::Arc;
 
     const PNG: &[u8] = b"\x89PNG\r\n\x1a\nrest-of-image";
+
+    fn small_png() -> Vec<u8> {
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut bytes, 32, 32);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            encoder
+                .write_header()
+                .unwrap()
+                .write_image_data(&vec![127; 32 * 32 * 4])
+                .unwrap();
+        }
+        bytes
+    }
 
     fn paths() -> ManagedPaths {
         ManagedPaths::from_app_local_data_dir(
@@ -190,12 +268,15 @@ mod tests {
         let managed = paths();
         assert!(read_cached(&managed, "../escape").is_none());
         assert!(read_cached(&managed, "toolfriendly").is_none());
-        write_atomic(&object_path(&managed, "AAAABBBB"), PNG).unwrap();
+        write_atomic(&object_path(&managed, "AAAABBBB"), &small_png()).unwrap();
         let url = read_cached(&managed, "AAAABBBB").unwrap();
         assert!(url.starts_with("data:image/png;base64,"));
         // An undecodable stored object never becomes renderable data.
         write_atomic(&object_path(&managed, "BBBBCCCC"), b"<html>bytes").unwrap();
         assert!(read_cached(&managed, "BBBBCCCC").is_none());
+        write_atomic(&object_path(&managed, "CCCCDDDD"), PNG).unwrap();
+        assert!(read_cached(&managed, "CCCCDDDD").is_none());
+        assert!(data_url(&vec![0; MAX_ARTWORK + 1]).is_none());
         std::fs::remove_dir_all(managed.data_root()).unwrap();
     }
 
@@ -233,10 +314,9 @@ mod tests {
 
     #[test]
     fn duplicate_acquisitions_are_not_duplicated_in_flight() {
-        let mut set = HashSet::new();
-        assert!(set.insert("AAAABBBB".to_owned()));
-        assert!(!set.insert("AAAABBBB".to_owned()));
-        set.remove("AAAABBBB");
-        assert!(set.insert("AAAABBBB".to_owned()));
+        let guard = Acquisition::start("DUPLICAT").unwrap();
+        assert!(Acquisition::start("DUPLICAT").is_none());
+        drop(guard);
+        assert!(Acquisition::start("DUPLICAT").is_some());
     }
 }

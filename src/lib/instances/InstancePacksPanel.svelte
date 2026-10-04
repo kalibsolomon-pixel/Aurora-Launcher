@@ -191,7 +191,7 @@
           {@const toggleReason = packToggleUnavailableReason(entry)}
           <article class="pack-row">
             <div class="pack-main">
-              <InstalledArtwork compact projectId={entry.provenance?.provider === "modrinth" ? entry.provenance.projectId : null} fallback={kind === "resourcePack" ? "R" : "S"} />
+              <InstalledArtwork compact projectId={entry.ownership === 'providerManaged' && entry.provenance?.provider === "modrinth" ? entry.provenance.projectId : null} fallback={kind === "resourcePack" ? "R" : "S"} />
               <div class="pack-identity">
                 <h4>{entry.displayName}</h4>
                 <p class="pack-meta">{packSourceLabel(entry)}{formatPackSize(entry.sizeBytes) ? ` · ${formatPackSize(entry.sizeBytes)}` : ""}</p>

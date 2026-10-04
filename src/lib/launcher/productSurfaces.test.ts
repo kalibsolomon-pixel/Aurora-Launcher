@@ -112,7 +112,9 @@ it("installation blockers render native identity, filename, ownership and reason
 });
 it("installed artwork failure and Local/Unknown rows preserve a nonfatal glyph", () => {
   for(const projectId of ["ABCDEFGH", null]) {
-    assert.match(html(Artwork,{projectId,fallback:"M"}).replace(/<!--.*?-->/g,""),/installed-artwork[^>]*>M/);
+    const view = html(Artwork,{projectId,fallback:"M"});
+    assert.match(view, /installed-artwork/); assert.match(view, /class="placeholder[ "]/);
+    assert.match(view, /<svg/); assert.doesNotMatch(view, /<img/);
   }
 });
 it("Home permits selection when instances exist without a selected target", () => {
