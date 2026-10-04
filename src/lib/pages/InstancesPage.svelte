@@ -409,8 +409,9 @@
 </div>
 
 <style>
-  .instances-page { max-width: 1500px; width: 100%; margin-inline: auto; }
-  .instances-composition { display: grid; gap: var(--space-5); align-items: start; }
+  .instances-page { --instance-panel-gap: var(--space-5); max-width: 1500px; width: 100%; margin-inline: auto; display: grid; gap: var(--instance-panel-gap); }
+  .instances-page > .page-header, .instances-page > .group { margin: 0; }
+  .instances-composition { display: grid; gap: var(--instance-panel-gap); align-items: start; }
   /* The existing-instance collection is the primary region: left column and
      at least as wide as the creation form. Stacking keeps DOM order, so the
      list stays above creation at narrow widths without CSS reordering. */
@@ -420,6 +421,8 @@
   .instances-composition.creation-first { grid-template-columns: minmax(0, min(100%, 880px)); justify-content: center; }
   .instances-composition > .group { min-width: 0; margin: 0; }
   .instances-composition :global(.field-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .group-form { gap: var(--space-4); padding: var(--space-4) var(--space-5) var(--space-5); }
+  .group-form > .group-footer { padding: 0; border: 0; }
   @media (max-width: 1250px) { .instances-composition.existing-first { grid-template-columns: minmax(0, 1fr); } }
   .instance-name-line {
     display: flex;
