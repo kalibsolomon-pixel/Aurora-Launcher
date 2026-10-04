@@ -8,6 +8,7 @@
   import { getAuroraCompatibility, type AuroraCompatibility, type InstanceLoader, type InstanceSummary } from "$lib/backend";
   import { creationPlatforms, creationBlocked } from "$lib/instances/configurationChoices";
   import ModrinthBrowse from "$lib/instances/ModrinthBrowse.svelte";
+  import { auroraCreationCopy } from '$lib/instances/creationCopy';
 
   let browsingPacks = $state(false);
 
@@ -226,7 +227,7 @@
         <input type="checkbox" bind:checked={launcher.createAuroraEnabled} onchange={() => { launcher.createAuroraPreference = launcher.createAuroraEnabled; }} disabled={!selectedCapability?.auroraSupported || !compatibility?.available || launcher.createBusy} />
         <span>Aurora Client</span>
       </label>
-      <p class="group-footer">{compatibilityError || compatibility?.reason || "Checking Aurora compatibility…"} Aurora Client is included by default when compatible. You can turn it off. {launcher.createAuroraEnabled && compatibility?.loaderVersion ? `Required Fabric Loader: ${compatibility.loaderVersion}.` : ""}</p>
+      <p class="group-footer">{compatibilityError || auroraCreationCopy(compatibility)} {launcher.createAuroraEnabled && compatibility?.loaderVersion ? `Required Fabric Loader: ${compatibility.loaderVersion}.` : ""}</p>
       <label class="check-field">
         <input
           type="checkbox"
@@ -274,8 +275,8 @@
 
     {#if launcher.releases.some((release) => release.source === "production-bundled")}
       <p class="group-footer">
-        Production releases are reviewed and bundled with this launcher build. Aurora 2.1.2 uses
-        Fabric Loader 0.19.5; instances keep their installed versions until you explicitly reinstall.
+        Production releases are reviewed and bundled with this launcher build. Instances keep
+        their installed versions until you choose an update or configuration change.
       </p>
     {/if}
     {#if launcher.releases.some((release) => release.source === "development-fixture")}
