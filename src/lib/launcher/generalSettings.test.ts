@@ -1,12 +1,16 @@
 import { after, before, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'vite';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 let server: any, render: any, general: any, desktop: any, navigation: any;
 const state = (status = 'present', manageable = true) => ({ supported: true, manageable,
   desktopShortcut: { state: status, managedBy: 'aurora' }, startMenuShortcut: { state: 'present', managedBy: 'installer' } });
 before(async () => {
-  server = await createServer({ server: { middlewareMode: true }, logLevel: 'silent' });
+  // This new SSR suite must not invalidate the other workers' shared Vite pre-bundle.
+  server = await createServer({ cacheDir: mkdtempSync(join(tmpdir(), 'aurora-general-test-')), server: { middlewareMode: true }, logLevel: 'silent' });
   ({ render } = await server.ssrLoadModule('svelte/server'));
   ({ desktopIntegration: desktop } = await server.ssrLoadModule('/src/lib/launcher/desktopIntegration.svelte.ts'));
   ({ navigation } = await server.ssrLoadModule('/src/lib/launcher/navigation.svelte.ts'));

@@ -2,6 +2,14 @@
 
 # Aurora Launcher architecture
 
+## Owner correction source (unreleased)
+
+Installed provider artwork and Minecraft server favicons are bounded Rust-owned raster data URLs; production CSP permits `data:` only for images. One shared frontend artwork component accepts these bytes (or exact official Modrinth CDN project images in Browse), keeps a local type-specific SVG fallback visible until decoding succeeds, and removes failed images. Cache reads validate managed containment and bytes; artwork acquisition is coalesced and bounded. Recognition may show an identified project's artwork without adopting ownership. Server status cache reads revalidate/normalize favicon payloads; there is no banner scraping.
+
+Home keeps its typed selection boundary and keyboard listbox behavior with local SVG chevrons. Instances uses one panel gap, and creation copy comes from native Aurora compatibility/version data. Settings General exposes the existing live Windows desktop-shortcut status and create/remove capability, installer-managed Start menu status and refresh. It adds no persisted preferences or schema changes. Accounts uses a 420px left native-dialog drawer with internal scrolling, Escape/backdrop close and focus return; existing account/session actions are unchanged.
+
+Enabled Discord Rich Presence connects automatically on its detached Rust worker. Failed IPC attempts wait 15, 30, 60, then at most 120 seconds; gameplay/preferences events cannot bypass a pending retry. Successful connections are checked every 15 seconds. Disable clears existing activity once and disconnects, then waits without polling or publishing; re-enable starts immediately. Normal UI has status and privacy controls, with no manual Connect/Reconnect action. The legacy narrow command remains compatible and cannot connect while disabled.
+
 ## Phase L production updates (current)
 
 Aurora has **one public production release stream**, with two independent Rust engines: Client artifact transactions and official Tauri Launcher self-updates. Full contract: `PHASE_L_PRODUCTION_UPDATES.md`; corrected acceptance: `PHASE_L_SIMPLIFIED_UPDATES_CORRECTION.md`. Earlier phase sections below are historical where superseded by this current contract.

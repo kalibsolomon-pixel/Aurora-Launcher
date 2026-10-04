@@ -17,7 +17,12 @@
     current = Math.max(0, index); open = true; await tick();
     document.getElementById(`${uid}-${current}`)?.focus();
   }
-  async function choose(id: string) { close(true); if (id !== selectedId) await launcher.runSelect(id); }
+  async function choose(id: string) {
+    close();
+    if (id !== selectedId) await launcher.runSelect(id);
+    // Native selection briefly disables the trigger; restore focus after it is usable.
+    await tick(); trigger?.focus();
+  }
   function key(event: KeyboardEvent) {
     if (event.key === "Escape") { event.preventDefault(); close(true); }
     else if (event.key === "Tab") close();
@@ -61,7 +66,7 @@
   .picker-trigger:disabled { opacity: .55; cursor: default; }
   .chevron { display: grid; place-items: center; width: 32px; height: 32px; flex: none; color: var(--color-text-secondary); transition: transform var(--f-duration) var(--f-ease); }
   .chevron.expanded { transform: rotate(180deg); }
-  .picker-menu { position: absolute; z-index: 20; top: calc(100% + var(--space-2)); left: 0; width: 100%; max-height: min(360px, 50dvh); overflow-y: auto; padding: var(--space-2); border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-dialog-panel); backdrop-filter: var(--f-blur); box-shadow: var(--f-shadow); }
+  .picker-menu { position: absolute; z-index: 20; top: calc(100% + var(--space-2)); left: 0; width: 100%; max-height: min(360px, 50dvh); overflow-y: auto; padding: var(--space-2); border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-dialog-panel); background-color: var(--color-surface-raised); backdrop-filter: var(--f-blur); box-shadow: var(--f-shadow); }
   .picker-menu[hidden] { display: none; }
   .picker-option { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); width: 100%; min-height: 60px; padding: var(--space-3); border: 0; border-radius: var(--f-radius-control); background: transparent; color: var(--color-text); font: inherit; text-align: left; cursor: pointer; transition: background var(--f-fast); }
   .picker-option + .picker-option { margin-top: var(--space-1); }

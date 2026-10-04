@@ -12,6 +12,7 @@
   import { appearance } from '$lib/launcher/appearance.svelte';
   import { homeWidgets } from '$lib/launcher/homeLayout.svelte';
   import { discord } from '$lib/launcher/discord.svelte';
+  import packageMetadata from '../../package.json';
   const id = 'a'.repeat(32), accountId = 'c'.repeat(32);
   const review = new URLSearchParams(location.search);
   // Phase H update-review fixtures: real provider records and a typed
@@ -44,6 +45,7 @@
   const instanceCount = Math.max(0, Math.min(instanceRoster.length, Number(review.get('instances') ?? 2) || 0));
   const seededInstances = instanceRoster.slice(0, instanceCount);
   const fixtureLayout = { widgets: [{id:'recent-worlds',enabled:true,size:'small'}, {id:'playtime',enabled:true,size:'small'}, {id:'content-summary',enabled:false,size:'small'}, {id:'instance-details',enabled:false,size:'small'}] };
+  if (review.has('servers')) fixtureLayout.widgets = [{id:'recent-servers',enabled:true,size:'small'}, {id:'playtime',enabled:true,size:'small'}];
   setContext('borealis-review', { ...(review.has('time') ? {time: Math.max(0, Number(review.get('time')) || 0)} : {}), reducedMotion: review.has('reduced') });
   const restored = sessionStorage.getItem('phase-f-review');
   const saved = restored ? JSON.parse(restored) : null;
@@ -52,7 +54,7 @@
     { kind: 'fabric', canCreate: true, canInstall: true, canValidate: true, canLaunch: true, auroraSupported: true },
   ] } as any;
   launcher.accountsState = { selectedAccountId: accountId, accounts: [account, {...account, accountId:'d'.repeat(32), minecraftName:'SecondPlayer'}] } as any;
-  launcher.status = { launcherVersion: '1.2.0' } as any;
+  launcher.status = { launcherVersion: packageMetadata.version } as any;
   launcher.playReadiness = { instanceId: id, accountId, ready: true, blockers: [], processStatus:'stopped' } as any;
   const modEntry = (name: string, i: number, prov: any = null) => ({ entryId: String(i), displayName: name, fileName: prov ? prov.fileName : name.toLowerCase().replaceAll(' ', '-') + '.jar', enabled: i !== 3, fileType: i === 3 ? 'disabledJar' : 'enabledJar', sizeBytes: 1245000, modifiedUnixMillis: null, ownership: prov ? 'providerManaged' : (i === 0 ? 'auroraManaged' : 'userManaged'), sha256: null, provenance: prov, metadata: { id: name.toLowerCase(), version: prov ? prov.displayVersion : '1.0.0', authors: ['Visual review'] }, warnings: [], canToggle: i !== 0, canRemove: i !== 0, actionBlockedReason: null });
   const modNames = ['Aurora Client','Sodium','Fabric API','Lithium','Iris','Mod Menu','FerriteCore'];
@@ -62,6 +64,10 @@
   const managedResourceRecord = provenance('RESR0001', 'resr0002', 'Faithful 32x 1.21', 'direct');
   managedResourceRecord.contentType = 'resourcePack'; managedResourceRecord.fileName = 'Faithful 32x.zip';
   launcher.contentInventories = Object.fromEntries(['resourcePack','shaderPack'].map(kind=>[`${id}:${kind}`,{instanceId:id,contentType:kind,missingManaged:[],entries:(kind==='resourcePack'?[['Faithful 32x', managedResourceRecord],['Fresh Animations', null]]:[['Complementary Reimagined', managedPackRecord]]).map(([name, prov],i)=>({entryId:kind+i,contentType:kind,displayName:name,fileName:(prov ? prov.fileName : name+'.zip'),fileType:'zip',sizeBytes:4200000,modifiedUnixMillis:null,ownership:prov?'providerManaged':'userManaged',sha256:null,provenance:prov,description:'Visual review fixture',packFormat:46,warnings:[],canRemove:true}))}])) as any;
+  for (const inventory of Object.values(launcher.contentInventories)) for (const entry of inventory.entries) {
+    entry.management = { active: inventory.contentType === 'resourcePack' ? true : null, canToggle: inventory.contentType === 'resourcePack', toggleBlockedReason: null,
+      activationManagedInGame: inventory.contentType === 'shaderPack', canRemove: true, removalPath: entry.provenance ? 'providerGraph' : 'localFile', removalBlockedReason: null };
+  }
   if (review.has('skin')) launcher.accountAvatars[accountId] = { rgba: Array(256).fill(200), model: 'classic', skinHeight: 64, skinRgba: Array(64*64*4).fill(180) } as any;
   launcher.minecraftVersions = [{id:'1.21.11',versionType:'release'}];
   launcher.createMinecraftVersion = '1.21.11';
@@ -74,6 +80,7 @@
   discord.state = {configured:true,connection:'connected',preferences:{enabled:false,instanceName:false,minecraftVersion:false,platform:false,auroraActive:false,elapsedTime:false,world:false,server:false,serverAddress:false}} as any;
   if (review.has('edit')) homeWidgets.editing = true;
   if (review.get('page') === 'settings') navigation.goTo('settings');
+  if (review.get('category') === 'General' || review.get('category') === 'Discord & privacy') navigation.settingsCategory = review.get('category') as 'General' | 'Discord & privacy';
   if (review.get('page') === 'instances') navigation.goTo('instances');
   if (review.has('tab')) navigation.openInstance(id, review.get('tab') as any);
   // Only this standalone review server aliases the native invoke boundary.
@@ -93,8 +100,11 @@
     if (command === 'get_playtime_summary') return {allTimeMs:192600000,last7DaysMs:48900000,last30DaysMs:148320000};
     if (command === 'get_daily_playtime') return [30,80,45,110,55,90,25].map((minutes,i)=>({day:20718+i,durationMs:minutes*60000}));
     if (command === 'get_recent_worlds') return [{id:'fixture-world',displayName:'Highland retreat',instanceId:id,available:true,lastPlayedAt:Date.now()/1000},{id:'fixture-world-2',displayName:'Creative workshop',instanceId:id,available:true,lastPlayedAt:Date.now()/1000-86400}];
-    if (command === 'get_recent_servers') return [];
+    if (command === 'get_recent_servers') return review.has('servers') ? ['mcpvp.club','minemen.club','pvphq.com'].map((displayName,i)=>({id:String(i).repeat(64),displayName,instanceId:id,available:true,lastPlayedAt:Date.now()/1000})) : [];
+    if (command === 'refresh_recent_server_status') return [];
     if (command === 'get_discord_state' || command === 'connect_discord') return discord.state;
+    if (command === 'get_desktop_integration') return { supported:true, manageable:false, desktopShortcut:{state:'present'}, startMenuShortcut:{state:'present'} };
+    if (command === 'get_modrinth_project_artwork') return null;
     if (command === 'set_discord_preferences') return {...discord.state,preferences:args.request};
     if (command === 'select_instance') { launcher.launcherState!.config.selectedInstanceId = args.request.instanceId; return launcher.launcherState; }
     if (command === 'select_account') { launcher.accountsState!.selectedAccountId = args.request.accountId; return launcher.accountsState; }
@@ -111,7 +121,10 @@
         resourcePack: [1,2].map((n)=>({ projectId:'RESR000'+n, title:['Faithful 32x','Fresh Animations'][n-1], summary:'A resource pack fixture.', author:'Visual review', downloads: 400000*n, iconUrl:null, projectType:'resourcePack', categories:['32x'] })),
         shaderPack: [1,2].map((n)=>({ projectId:'SHDR000'+n, title:['Complementary Reimagined','BSL Shaders'][n-1], summary:'A shader pack fixture.', author:'Visual review', downloads: 700000*n, iconUrl:null, projectType:'shaderPack', categories:['fantasy','cartoon'] })),
       };
-      return { offset: args.request.offset, totalHits: hitsFor[browseKeyType]?.length ?? 0, hits: hitsFor[browseKeyType] ?? [] };
+      const hits = hitsFor[browseKeyType] ?? [];
+      // Deliberately failed provider image for the shared component's browser regression.
+      if (review.has('broken-artwork') && hits.length) hits[0].iconUrl = 'https://cdn.modrinth.com/data/AAAA0001/icon.png';
+      return { offset: args.request.offset, totalHits: hits.length, hits };
     }
     if (command === 'get_modrinth_project') {
       const kind = args.request.contentType;
