@@ -15,7 +15,7 @@ import {
  * model stays testable outside Svelte.
  */
 class NavigationStore {
-  settingsCategory = $state<"Appearance" | "Home" | "Updates" | "Discord & privacy">("Appearance");
+  settingsCategory = $state<"General" | "Appearance" | "Home" | "Updates" | "Discord & privacy">("General");
   state = $state<NavigationState>({ kind: "global", page: "home" });
 
   goTo(page: GlobalPage): void {

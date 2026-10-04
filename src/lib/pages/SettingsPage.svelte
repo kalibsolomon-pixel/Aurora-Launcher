@@ -2,11 +2,12 @@
   import { onMount } from 'svelte';
   import DiscordSettings from '$lib/launcher/DiscordSettings.svelte';
   import UpdateSettings from '$lib/launcher/UpdateSettings.svelte';
+  import GeneralSettings from '$lib/launcher/GeneralSettings.svelte';
   import { appearance } from '$lib/launcher/appearance.svelte';
   import { homeWidgets } from '$lib/launcher/homeLayout.svelte';
   import { navigation } from '$lib/launcher/navigation.svelte';
   import Icon from '$lib/shell/Icon.svelte';
-  const categories = ['Appearance', 'Home', 'Updates', 'Discord & privacy'] as const;
+  const categories = ['General', 'Appearance', 'Home', 'Updates', 'Discord & privacy'] as const;
   const category = $derived(navigation.settingsCategory);
   let motionSpeed = $state(50);
   $effect(() => { motionSpeed = appearance.auroraMotionSpeed; });
@@ -22,7 +23,10 @@
       {#each categories as item}<button type="button" aria-current={category === item ? 'page' : undefined} onclick={() => navigation.settingsCategory = item}>{item}</button>{/each}
     </nav>
     <div class="settings-body">
-      {#if category === 'Appearance'}
+      {#if category === 'General'}
+        <div class="section-intro"><h3>General</h3><p>Launcher conveniences for this computer.</p></div>
+        <GeneralSettings />
+      {:else if category === 'Appearance'}
         <section class="appearance-surface f-surface" aria-labelledby="appearance-title">
           <div class="section-intro"><h3 id="appearance-title">Appearance</h3><p>Three choices. One atmosphere.</p></div>
           {#if !appearance.state && !appearance.error}<p role="status">Loading appearance…</p>{/if}

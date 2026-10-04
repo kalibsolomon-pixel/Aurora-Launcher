@@ -2,12 +2,13 @@ import { after, before, it } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "vite";
 
-let server: any, render: any, appearance: any, Settings: any;
+let server: any, render: any, appearance: any, Settings: any, navigation: any;
 
 before(async () => {
   server = await createServer({ server: { middlewareMode: true }, logLevel: "silent" });
   ({ render } = await server.ssrLoadModule("svelte/server"));
   ({ appearance } = await server.ssrLoadModule("/src/lib/launcher/appearance.svelte.ts"));
+  ({ navigation } = await server.ssrLoadModule("/src/lib/launcher/navigation.svelte.ts"));
   Settings = (await server.ssrLoadModule("/src/lib/pages/SettingsPage.svelte")).default;
 });
 
@@ -32,6 +33,7 @@ function resetAppearance() {
 
 it("the Custom circle is the color picker: no redundant custom-color row remains", () => {
   resetAppearance();
+  navigation.settingsCategory = "Appearance";
   const html = render(Settings).head + render(Settings).body;
   // The direct picker input exists and is labelled.
   assert.match(html, /type="color" aria-label="Custom accent color"/);
