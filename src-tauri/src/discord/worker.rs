@@ -10,6 +10,12 @@ use std::{
 };
 use tauri::Emitter;
 use tokio::sync::{mpsc, oneshot};
+use tokio::time::Instant;
+
+const HEALTH_INTERVAL: Duration = Duration::from_secs(15);
+fn retry_delay(failures: u32) -> Duration {
+    Duration::from_secs((15u64 << failures.saturating_sub(1).min(3)).min(120))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,19 +102,49 @@ struct Worker<T> {
     preferences: DiscordPreferences,
     games: BTreeMap<String, GameActivity>,
     connection: Connection,
-    requested: bool,
+    retry_at: Option<Instant>,
+    failures: u32,
+    health_at: Instant,
 }
 impl<T: Transport> Worker<T> {
     fn new(transport: T, preferences: DiscordPreferences) -> Self {
         Self {
             transport,
-            requested: preferences.enabled,
+            retry_at: None,
+            failures: 0,
+            health_at: Instant::now(),
             preferences,
             games: BTreeMap::new(),
             connection: Connection::Ready,
         }
     }
+    fn change_preferences(&mut self, preferences: DiscordPreferences) {
+        if preferences.enabled != self.preferences.enabled {
+            self.retry_at = None;
+            self.failures = 0;
+            self.health_at = Instant::now();
+        }
+        self.preferences = preferences;
+    }
+    fn next_wake(&self, id: Option<&str>) -> Option<Instant> {
+        (self.preferences.enabled && id.is_some())
+            .then_some(self.retry_at.unwrap_or(self.health_at))
+    }
     async fn reconcile(&mut self, id: Option<&str>, reconnect: bool) {
+        if !self.preferences.enabled {
+            if self.connection == Connection::Connected {
+                let _ = self.transport.publish(None).await;
+            }
+            self.transport.disconnect();
+            self.connection = if id.is_some() {
+                Connection::Ready
+            } else {
+                Connection::ConfigurationMissing
+            };
+            self.retry_at = None;
+            self.failures = 0;
+            return;
+        }
         let Some(id) = id else {
             self.connection = Connection::ConfigurationMissing;
             return;
@@ -116,11 +152,16 @@ impl<T: Transport> Worker<T> {
         if reconnect {
             self.transport.disconnect();
             self.connection = Connection::Ready;
+            self.retry_at = None;
+            self.failures = 0;
+        }
+        if self
+            .retry_at
+            .is_some_and(|deadline| Instant::now() < deadline)
+        {
+            return;
         }
         if self.connection != Connection::Connected {
-            if !self.requested {
-                return;
-            }
             match self.transport.connect(id).await {
                 Ok(()) => self.connection = Connection::Connected,
                 Err(error) => {
@@ -144,11 +185,16 @@ impl<T: Transport> Worker<T> {
         let activity = activity(&self.preferences, game);
         if let Err(error) = self.transport.publish(activity.as_ref()).await {
             self.fail(error);
+        } else {
+            self.failures = 0;
+            self.retry_at = None;
+            self.health_at = Instant::now() + HEALTH_INTERVAL;
         }
     }
     fn fail(&mut self, error: Failure) {
-        self.requested = self.preferences.enabled;
         self.transport.disconnect();
+        self.failures = self.failures.saturating_add(1);
+        self.retry_at = Some(Instant::now() + retry_delay(self.failures));
         self.connection = match error {
             Failure::Unavailable => Connection::NotDetected,
             Failure::Closed => Connection::Closed,
@@ -156,7 +202,9 @@ impl<T: Transport> Worker<T> {
         };
     }
     async fn stop(&mut self) {
-        let _ = self.transport.publish(None).await;
+        if self.connection == Connection::Connected {
+            let _ = self.transport.publish(None).await;
+        }
         self.transport.disconnect();
     }
 }
@@ -170,20 +218,19 @@ pub fn initialize(app: tauri::AppHandle, preferences: DiscordPreferences) {
     status().lock().unwrap().preferences = preferences.clone();
     tauri::async_runtime::spawn(async move {
         let mut worker = Worker::new(Native::default(), preferences);
-        let mut timer = tokio::time::interval(Duration::from_secs(15));
-        timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             let mut reconnect = false;
             let mut connected_reply = None;
+            let next_wake = worker.next_wake(application_id());
             tokio::select! {
                 message=receiver.recv()=>match message {
-                    Some(Message::Connect(reply))=> {worker.requested=true; reconnect=true;connected_reply=Some(reply);},
-                    Some(Message::Preferences(preferences))=> {worker.requested=preferences.enabled || worker.connection==Connection::Connected;worker.preferences=preferences;},
+                    Some(Message::Connect(reply))=> {reconnect=true;connected_reply=Some(reply);},
+                    Some(Message::Preferences(preferences))=> {worker.change_preferences(preferences);},
                     Some(Message::Process(game))=> {worker.games.insert(game.instance_id.clone(),game);},
                     Some(Message::Shutdown(reply))=> {worker.stop().await;let _=reply.send(());break;},
                     None=>{worker.stop().await;break;},
                 },
-                _=timer.tick()=>{},
+                _=async { match next_wake { Some(deadline)=>tokio::time::sleep_until(deadline).await, None=>std::future::pending::<()>().await } }=>{},
                 _=gameplay_wake.recv()=>{},
             }
             worker.reconcile(application_id(), reconnect).await;
@@ -250,7 +297,7 @@ mod tests {
         let mut worker = Worker::new(Fake::default(), Default::default());
         worker.reconcile(Some("test-only"), false).await;
         assert_eq!(worker.transport.connections, 0);
-        worker.requested = true;
+        worker.preferences.enabled = true;
         worker.reconcile(None, false).await;
         assert_eq!(worker.connection, Connection::ConfigurationMissing);
         assert_eq!(worker.transport.connections, 0);
@@ -311,5 +358,89 @@ mod tests {
     #[test]
     fn world_and_server_capability_is_available_independently_of_discord_setup() {
         assert!(DiscordState::default().gameplay_capability);
+    }
+
+    #[tokio::test]
+    async fn late_discord_start_honors_capped_backoff_and_recovers_automatically() {
+        let mut worker = Worker::new(
+            Fake {
+                failure: Some(Failure::Unavailable),
+                ..Default::default()
+            },
+            DiscordPreferences {
+                enabled: true,
+                ..Default::default()
+            },
+        );
+        assert!(worker.next_wake(Some("test-only")).is_some());
+        for expected in [15, 30, 60, 120, 120] {
+            worker.retry_at = None; // advance the test clock to the scheduled retry
+            worker.reconcile(Some("test-only"), false).await;
+            assert_eq!(retry_delay(worker.failures).as_secs(), expected);
+            let calls = worker.transport.connections;
+            for _ in 0..10 {
+                worker.reconcile(Some("test-only"), false).await;
+            }
+            assert_eq!(
+                worker.transport.connections, calls,
+                "state events must not bypass backoff"
+            );
+        }
+        worker.transport.failure = None;
+        worker.retry_at = Some(Instant::now());
+        worker.reconcile(Some("test-only"), false).await;
+        assert_eq!(worker.connection, Connection::Connected);
+        assert_eq!(worker.failures, 0);
+        assert!(worker.retry_at.is_none());
+        assert!(worker.next_wake(Some("test-only")).unwrap() > Instant::now());
+    }
+
+    #[tokio::test]
+    async fn disconnect_disable_and_reenable_preserve_activity_and_stop_disabled_ipc() {
+        let mut worker = Worker::new(
+            Fake::default(),
+            DiscordPreferences {
+                enabled: true,
+                ..Default::default()
+            },
+        );
+        worker.reconcile(Some("test-only"), false).await;
+        worker.transport.failure = Some(Failure::Closed);
+        worker.reconcile(Some("test-only"), false).await;
+        assert_eq!(worker.connection, Connection::Closed);
+        worker.transport.failure = None;
+        worker.retry_at = Some(Instant::now());
+        worker.reconcile(Some("test-only"), false).await;
+        assert_eq!(worker.connection, Connection::Connected);
+        worker.change_preferences(DiscordPreferences::default());
+        worker.reconcile(Some("test-only"), false).await;
+        assert_eq!(worker.transport.calls.last(), Some(&None));
+        assert!(!worker.transport.connected);
+        assert!(worker.next_wake(Some("test-only")).is_none());
+        let connections = worker.transport.connections;
+        let publishes = worker.transport.calls.len();
+        for _ in 0..10 {
+            worker.reconcile(Some("test-only"), true).await;
+        }
+        assert_eq!(worker.transport.connections, connections);
+        assert_eq!(worker.transport.calls.len(), publishes);
+        worker.change_preferences(DiscordPreferences {
+            enabled: true,
+            ..Default::default()
+        });
+        worker.reconcile(Some("test-only"), false).await;
+        assert_eq!(worker.connection, Connection::Connected);
+        assert_eq!(worker.transport.connections, connections + 1);
+        assert_eq!(
+            worker
+                .transport
+                .calls
+                .last()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .details,
+            "In Launcher"
+        );
     }
 }

@@ -1,7 +1,7 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { connectDiscord, getDiscordState, saveDiscordPreferences, type DiscordPreferences, type DiscordState } from "$lib/backend";
 export const connectionLabels: Record<DiscordState["connection"], string> = {
-  configurationMissing: "Application setup required", ready: "Ready to connect", connected: "Connected",
+  configurationMissing: "Application setup required", ready: "Connecting automatically", connected: "Connected",
   notDetected: "Discord not detected", closed: "Discord closed", failed: "Connection failed",
 };
 class DiscordStore {

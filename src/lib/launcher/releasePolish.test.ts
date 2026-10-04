@@ -80,14 +80,16 @@ it("Home editor is deliberate, keyboard usable and responsive spans clamp on nar
   assert.match(source, /aria-pressed=\{editing\}/); assert.match(source, /\{#if editing\}/);
   assert.match(source, /Move .* earlier/); assert.match(source, /<select aria-label/); assert.match(source, /max-width: 900px/);
 });
-it("Discord accurately offers Connect and Reconnect with native connection status", () => {
-  reset(); assert.match(html(DiscordSettings), /Ready to connect/); assert.match(html(DiscordSettings), /Connect to Discord/); assert.doesNotMatch(html(DiscordSettings), /Link to Discord/);
-  discord.state.connection = "connected"; assert.match(html(DiscordSettings), /Connected/); assert.match(html(DiscordSettings), /Reconnect to Discord/);
+it("Discord describes automatic connection and shows native status without maintenance controls", () => {
+  reset(); assert.match(html(DiscordSettings), /Rich Presence is off/);
+  discord.state.preferences.enabled = true; assert.match(html(DiscordSettings), /Connecting automatically/);
+  assert.doesNotMatch(html(DiscordSettings), /(?:Connect|Reconnect|Link) to Discord/);
+  discord.state.connection = "connected"; assert.match(html(DiscordSettings), /Connected/);
   discord.state.connection = "notDetected"; assert.match(html(DiscordSettings), /Discord not detected/);
 });
 it("missing application configuration disables connection honestly without hiding privacy choices", () => {
   reset(); discord.state.configured = false; discord.state.connection = "configurationMissing";
-  const view = html(DiscordSettings); assert.match(view, /Application setup required/); assert.match(view, /disabled[^>]*>Connect to Discord/);
+  const view = html(DiscordSettings); assert.match(view, /Application setup required/); assert.doesNotMatch(view, /(?:Connect|Reconnect) to Discord/);
   assert.match(view, /Enable Discord Rich Presence/); assert.match(view, /Display Instance name/); assert.match(view, /Display Show World/); assert.match(view, /Display Show Server/); assert.match(view, /Display Show Server Address/);
 });
 it("Discord preferences and reconnect invoke only native commands and never disturb Play", async () => {
