@@ -104,7 +104,11 @@
     if (command === 'refresh_recent_server_status') return [];
     if (command === 'get_discord_state' || command === 'connect_discord') return discord.state;
     if (command === 'get_desktop_integration') return { supported:true, manageable:false, desktopShortcut:{state:'present'}, startMenuShortcut:{state:'present'} };
-    if (command === 'get_modrinth_project_artwork') return null;
+    // Native-boundary fixtures only: a valid static PNG, a rejected null, or a
+    // deliberately malformed DTO to exercise the renderer's last-resort fallback.
+    if (command === 'get_modrinth_project_artwork') return review.has('validated-artwork')
+      ? 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAN0lEQVR4nO3QQREAMAgDQYpC5CC2XspUBZ+Ngcvs6bovFpebcQcIECBAgAABAgQIECBAgACBLzCTbALj8Oz2OgAAAABJRU5ErkJggg=='
+      : review.has('broken-artwork') ? 'data:image/png;base64,AAAA' : null;
     if (command === 'set_discord_preferences') return {...discord.state,preferences:args.request};
     if (command === 'select_instance') { launcher.launcherState!.config.selectedInstanceId = args.request.instanceId; return launcher.launcherState; }
     if (command === 'select_account') { launcher.accountsState!.selectedAccountId = args.request.accountId; return launcher.accountsState; }

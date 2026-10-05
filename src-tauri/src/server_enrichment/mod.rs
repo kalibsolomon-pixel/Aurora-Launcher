@@ -32,6 +32,7 @@ use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::cosmetic_image::{self, FAVICON};
 use crate::gameplay_history::{Mode, ServerTarget, Store};
 use crate::paths::ManagedPaths;
 
@@ -43,9 +44,7 @@ const CACHE_SCHEMA: u32 = 1;
 /// cannot exceed this; larger files are treated as damaged cache objects.
 const MAX_CACHE_DOCUMENT: usize = 384 * 1024;
 /// Decoded favicon bytes are bounded well beyond the vanilla 64×64 icon.
-const MAX_FAVICON_BYTES: usize = 128 * 1024;
-/// A server favicon must decode as a PNG no larger than this square.
-const MAX_FAVICON_DIMENSION: u32 = 512;
+const MAX_FAVICON_BYTES: usize = FAVICON.max_encoded_bytes;
 /// Server-provided version text is sanitized and bounded for tooltips.
 const MAX_VERSION_CHARS: usize = 64;
 /// A successful status answer stays fresh for this long; repeated widget
@@ -223,20 +222,14 @@ fn in_flight() -> &'static Mutex<HashSet<String>> {
 
 // ---------------------------------------------------------------------------
 // Favicon validation: a server-controlled string that must become renderable
-// image data or nothing. Only data-URL PNG (decoded and dimension-checked)
-// and JPEG (magic-checked) pass; SVG and every other media type are rejected.
+// image data or nothing. Only bounded, decoded static PNG passes the shared
+// policy. JPEG, GIF, WebP, APNG, SVG and every other media type are rejected.
 // ---------------------------------------------------------------------------
 
 fn validate_favicon(raw: &str) -> Option<String> {
     // Normalize MIME-style base64 line wrapping into one canonical data URL.
     let raw = raw.trim();
-    let (media, encoded) = if let Some(encoded) = raw.strip_prefix("data:image/png;base64,") {
-        ("image/png", encoded)
-    } else if let Some(encoded) = raw.strip_prefix("data:image/jpeg;base64,") {
-        ("image/jpeg", encoded)
-    } else {
-        return None;
-    };
+    let encoded = raw.strip_prefix("data:image/png;base64,")?;
     if encoded.len() > MAX_FAVICON_BYTES.div_ceil(3) * 4 + 4096 {
         return None;
     }
@@ -245,38 +238,7 @@ fn validate_favicon(raw: &str) -> Option<String> {
         .filter(|character| !character.is_ascii_whitespace())
         .collect();
     let bytes = Base64::decode_vec(&encoded).ok()?;
-    if bytes.is_empty() || bytes.len() > MAX_FAVICON_BYTES {
-        return None;
-    }
-    match media {
-        "image/png" => {
-            let mut decoder = png::Decoder::new(std::io::Cursor::new(&bytes));
-            decoder.set_limits(png::Limits {
-                bytes: 4 * 1024 * 1024,
-            });
-            let mut reader = decoder.read_info().ok()?;
-            let info = reader.info();
-            if info.width == 0
-                || info.height == 0
-                || info.width > MAX_FAVICON_DIMENSION
-                || info.height > MAX_FAVICON_DIMENSION
-            {
-                return None;
-            }
-            // Full decode proves the payload is a structurally valid image.
-            let mut pixels = vec![0u8; reader.output_buffer_size()];
-            reader.next_frame(&mut pixels).ok()?;
-        }
-        _ => {
-            if bytes.len() < 3 || bytes[0] != 0xFF || bytes[1] != 0xD8 || bytes[2] != 0xFF {
-                return None;
-            }
-        }
-    }
-    Some(format!(
-        "data:{media};base64,{}",
-        Base64::encode_string(&bytes)
-    ))
+    cosmetic_image::validate(&bytes, FAVICON).map(|image| image.data_url())
 }
 
 /// Normalizes one raw status response into cacheable presentation facts.
@@ -752,13 +714,13 @@ mod tests {
             ))
             .is_none()
         );
-        // Valid JPEG magic passes; anything else with a jpeg prefix fails.
+        // A JPEG signature is never sufficient native image validation.
         assert!(
             validate_favicon(&format!(
                 "data:image/jpeg;base64,{}",
                 Base64::encode_string(&[0xFF, 0xD8, 0xFF, 0xE0, 0x00])
             ))
-            .is_some()
+            .is_none()
         );
         assert!(
             validate_favicon(&format!(
@@ -788,6 +750,120 @@ mod tests {
             ))
             .is_some()
         );
+    }
+
+    #[test]
+    fn favicon_bounds_reject_jpeg_even_when_mislabeled_as_png() {
+        use crate::cosmetic_image::fixtures;
+        for bytes in [
+            fixtures::JPEG_4096,
+            fixtures::JPEG_8192,
+            &fixtures::JPEG_4096[..32],
+            b"\xFF\xD8\xFF",
+        ] {
+            for mime in ["jpeg", "png"] {
+                assert!(
+                    validate_favicon(&format!(
+                        "data:image/{mime};base64,{}",
+                        Base64::encode_string(bytes)
+                    ))
+                    .is_none()
+                );
+            }
+        }
+        for bytes in [
+            fixtures::png(513, 1),
+            fixtures::png(1, 513),
+            fixtures::animated_png(),
+        ] {
+            assert!(
+                validate_favicon(&format!(
+                    "data:image/png;base64,{}",
+                    Base64::encode_string(&bytes)
+                ))
+                .is_none()
+            );
+        }
+        assert!(
+            validate_favicon(&format!(
+                "data:image/png;base64,{}",
+                Base64::encode_string(&fixtures::png(512, 512))
+            ))
+            .is_some()
+        );
+    }
+
+    #[test]
+    fn cached_favicons_use_the_current_policy_without_rewriting_history_or_cache() {
+        use crate::cosmetic_image::fixtures;
+        let paths = managed();
+        let endpoint = Endpoint::from_target(
+            &ServerTarget::parse("old-cache.example.invalid".into()).unwrap(),
+        )
+        .unwrap();
+        let path = Endpoint::cache_path(&paths, endpoint.cache_key()).unwrap();
+        for favicon in [
+            format!(
+                "data:image/jpeg;base64,{}",
+                Base64::encode_string(fixtures::JPEG_4096)
+            ),
+            "data:image/jpeg;base64,/9j/".into(),
+            "data:image/png;base64,AAAA".into(),
+            format!(
+                "data:image/png;base64,{}",
+                Base64::encode_string(&fixtures::animated_png())
+            ),
+            png_favicon_field(),
+        ] {
+            let document = CacheDocument {
+                schema_version: CACHE_SCHEMA,
+                identity: format!("{}:{}", endpoint.host, endpoint.port),
+                saved_at: now_secs(),
+                failure_count: 0,
+                next_attempt_at: 0,
+                presentation: Some(CachedPresentation {
+                    online: true,
+                    players_online: Some(7),
+                    favicon: Some(favicon.clone()),
+                    ..Default::default()
+                }),
+            };
+            write_document(&path, &document).unwrap();
+            let stored = std::fs::read(&path).unwrap();
+            let read = read_document(&paths, &endpoint)
+                .unwrap()
+                .presentation
+                .unwrap();
+            assert_eq!(read.favicon, validate_favicon(&favicon));
+            assert_eq!(read.players_online, Some(7));
+            assert_eq!(std::fs::read(&path).unwrap(), stored);
+        }
+        std::fs::remove_dir_all(paths.data_root()).unwrap();
+    }
+
+    #[tokio::test]
+    async fn hostile_jpeg_status_uses_fallback_but_preserves_other_server_facts() {
+        use crate::cosmetic_image::fixtures;
+        let (paths, store) = history();
+        for bytes in [fixtures::JPEG_4096, fixtures::JPEG_8192, b"\xFF\xD8\xFF"] {
+            let mut payload = minimal_status_json();
+            payload["favicon"] = json!(format!(
+                "data:image/jpeg;base64,{}",
+                Base64::encode_string(bytes)
+            ));
+            let server = RawTcpServer::spawn(answer_with(status_packet(&payload)));
+            let id = seed_server_visit(
+                &store,
+                &format!("127.0.0.1:{}", server.port()),
+                Some(&format!("JPEG {}", bytes.len())),
+            );
+            let presentations = refresh(&paths, &store, &[id], fast_options()).await;
+            assert_eq!(presentations[0].status, "online");
+            assert_eq!(presentations[0].favicon, None);
+            assert_eq!(presentations[0].players_online, Some(7));
+            assert_eq!(presentations[0].motd[0][0].text, "A friendly place");
+        }
+        std::fs::remove_dir_all(paths.data_root()).unwrap();
     }
 
     #[test]

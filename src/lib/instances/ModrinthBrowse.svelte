@@ -18,7 +18,7 @@
     type ProviderConflict, type ModrinthPackPreview,
   } from "$lib/backend";
   import InstallConflicts from "./InstallConflicts.svelte";
-  import Artwork from '$lib/shell/Artwork.svelte';
+  import InstalledArtwork from './InstalledArtwork.svelte';
 
   let {
     instanceId, instanceName, minecraftVersion, loaderLabel = "Fabric", kind, installedProjectIds, dependencyOnlyProjectIds, onInstalled, standalonePackBrowse = false,
@@ -470,7 +470,7 @@
         {#each page.hits as hit (hit.projectId)}
           <article class="browse-row">
             <div class="browse-glyph" aria-hidden="true">
-              <Artwork source={hit.iconUrl} provider fallback={browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"} size={44} />
+              <InstalledArtwork projectId={hit.projectId} fallback={browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"} />
             </div>
             <div class="browse-copy">
               <h4>{hit.title}</h4>

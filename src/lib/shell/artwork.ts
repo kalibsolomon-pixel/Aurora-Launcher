@@ -1,13 +1,7 @@
-/** Defense in depth for native cosmetic DTOs. No file paths, SVG or arbitrary hosts. */
-export function artworkSource(value: string | null | undefined, provider = false): string | null {
+/** Defense in depth for native-validated static PNG DTOs. No direct remote sources. */
+export function artworkSource(value: string | null | undefined): string | null {
   if (!value || value.length > 700_000) return null;
-  if (/^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value)) return value;
-  if (!provider) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && url.hostname === 'cdn.modrinth.com' && !url.port &&
-      !url.username && !url.password && !url.hash && url.pathname.startsWith('/data/') ? url.href : null;
-  } catch { return null; }
+  return /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null;
 }
 
 export function artworkSymbol(fallback: string): string {

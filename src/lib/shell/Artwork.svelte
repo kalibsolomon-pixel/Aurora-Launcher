@@ -1,10 +1,10 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import { artworkSource, artworkSymbol } from './artwork';
-  let { source = null, fallback, size = 44, provider = false }: {
-    source?: string | null; fallback: string; size?: number; provider?: boolean;
+  let { source = null, fallback, size = 44 }: {
+    source?: string | null; fallback: string; size?: number;
   } = $props();
-  const safeSource = $derived(artworkSource(source, provider));
+  const safeSource = $derived(artworkSource(source));
   let loaded = $state<string | null>(null);
   let failed = $state<string | null>(null);
 </script>

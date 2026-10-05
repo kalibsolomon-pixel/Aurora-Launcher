@@ -1,7 +1,8 @@
 //! Persisted provider project artwork for installed content surfaces.
 //! Installed rows render Aurora-cached bytes, never live provider URLs: the
-//! cache is keyed by managed provider identity, bounded, magic-validated and
-//! only replaced through a freshly verified acquisition. Artwork is cosmetic;
+//! cache is keyed by provider identity, bounded, decoded and normalized through
+//! the shared static-PNG policy. Only freshly validated acquisition replaces it.
+//! Artwork is cosmetic;
 //! every failure degrades to the caller's generic fallback.
 
 use std::{
@@ -11,12 +12,12 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use base64ct::{Base64, Encoding as _};
 use uuid::Uuid;
 
+use crate::cosmetic_image::{self, ARTWORK, ValidatedPng};
 use crate::paths::ManagedPaths;
 
-const MAX_ARTWORK: usize = 512 * 1024;
+const MAX_ARTWORK: usize = ARTWORK.max_encoded_bytes;
 const OFFICIAL_CDN_HOST: &str = "cdn.modrinth.com";
 
 fn in_flight() -> &'static Mutex<HashSet<String>> {
@@ -56,43 +57,8 @@ fn object_path(paths: &ManagedPaths, project_id: &str) -> PathBuf {
         .join(format!("{project_id}.img"))
 }
 
-/// Magic-byte image typing; unknown bytes never become renderable data.
-fn sniff_media_type(bytes: &[u8]) -> Option<&'static str> {
-    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        Some("image/png")
-    } else if bytes.len() >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF {
-        Some("image/jpeg")
-    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
-        Some("image/gif")
-    } else if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
-        Some("image/webp")
-    } else {
-        None
-    }
-}
-
 fn data_url(bytes: &[u8]) -> Option<String> {
-    if bytes.len() > MAX_ARTWORK {
-        return None;
-    }
-    let media_type = sniff_media_type(bytes)?;
-    if media_type == "image/png" {
-        let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
-        decoder.set_limits(png::Limits {
-            bytes: 16 * 1024 * 1024,
-        });
-        let mut reader = decoder.read_info().ok()?;
-        let info = reader.info();
-        if info.width == 0 || info.height == 0 || info.width > 1024 || info.height > 1024 {
-            return None;
-        }
-        let mut pixels = vec![0; reader.output_buffer_size()];
-        reader.next_frame(&mut pixels).ok()?;
-    }
-    Some(format!(
-        "data:{media_type};base64,{}",
-        Base64::encode_string(bytes)
-    ))
+    cosmetic_image::validate(bytes, ARTWORK).map(|image| image.data_url())
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
@@ -116,7 +82,7 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     result
 }
 
-fn persist(paths: &ManagedPaths, project_id: &str, bytes: &[u8]) -> Option<()> {
+fn persist(paths: &ManagedPaths, project_id: &str, image: &ValidatedPng) -> Option<()> {
     let path = object_path(paths, project_id);
     let root = paths.data_root().canonicalize().ok()?;
     // Validate each fixed ancestor before creating the next directory.
@@ -132,7 +98,7 @@ fn persist(paths: &ManagedPaths, project_id: &str, bytes: &[u8]) -> Option<()> {
             return None;
         }
     }
-    write_atomic(&path, bytes).ok()
+    write_atomic(&path, image.bytes()).ok()
 }
 
 /// Cache-first read of one project's stored artwork.
@@ -161,7 +127,7 @@ pub fn read_cached(paths: &ManagedPaths, project_id: &str) -> Option<String> {
 /// Bounded acquisition of one provider-published icon. The locator comes from
 /// the provider's own project document (never the frontend), and redirects
 /// must stay on the official CDN host.
-async fn download(http: &reqwest::Client, url: &str, allowed_host: &str) -> Option<Vec<u8>> {
+async fn download(http: &reqwest::Client, url: &str, allowed_host: &str) -> Option<ValidatedPng> {
     let mut response = http.get(url).send().await.ok()?;
     if !response.status().is_success() {
         return None;
@@ -183,8 +149,7 @@ async fn download(http: &reqwest::Client, url: &str, allowed_host: &str) -> Opti
         }
         body.extend_from_slice(&chunk);
     }
-    sniff_media_type(&body)?;
-    Some(body)
+    cosmetic_image::validate(&body, ARTWORK)
 }
 
 /// Cache-first artwork for installed content rows. A miss resolves the icon
@@ -211,18 +176,16 @@ pub async fn cached_artwork(paths: &ManagedPaths, project_id: &str) -> Option<St
         .user_agent(format!("aurora-launcher/{}", env!("CARGO_PKG_VERSION")))
         .build()
         .ok()?;
-    let result = download(&http, &url, OFFICIAL_CDN_HOST).await;
-    let image = result.as_deref().and_then(data_url)?;
-    if let Some(bytes) = &result {
-        // A stale or damaged cache object is replaced only by verified bytes.
-        let _ = persist(paths, project_id, bytes);
-    }
-    Some(image)
+    let image = download(&http, &url, OFFICIAL_CDN_HOST).await?;
+    // A stale or damaged cosmetic object is replaced only by validated pixels.
+    let _ = persist(paths, project_id, &image);
+    Some(image.data_url())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cosmetic_image::fixtures;
     use crate::test_support::{TestResponse, TestServer};
     use std::sync::Arc;
 
@@ -251,16 +214,18 @@ mod tests {
     }
 
     #[test]
-    fn media_typing_accepts_known_formats_only() {
-        assert_eq!(sniff_media_type(PNG), Some("image/png"));
-        assert_eq!(sniff_media_type(b"\xFF\xD8\xFFjpeg"), Some("image/jpeg"));
-        assert_eq!(sniff_media_type(b"GIF89aanim"), Some("image/gif"));
-        assert_eq!(
-            sniff_media_type(b"RIFF\x00\x00\x00\x00WEBPVP8 "),
-            Some("image/webp")
-        );
-        assert_eq!(sniff_media_type(b"<html>"), None);
-        assert_eq!(sniff_media_type(b""), None);
+    fn only_decoded_static_png_becomes_a_data_url() {
+        assert!(data_url(&small_png()).is_some());
+        for bytes in [
+            PNG,
+            b"\xFF\xD8\xFF",
+            b"GIF89aanim",
+            b"RIFF\0\0\0\0WEBPVP8 ",
+            b"<html>",
+            b"",
+        ] {
+            assert!(data_url(bytes).is_none());
+        }
     }
 
     #[test]
@@ -280,11 +245,40 @@ mod tests {
         std::fs::remove_dir_all(managed.data_root()).unwrap();
     }
 
+    #[test]
+    fn old_cache_images_are_revalidated_without_mutating_them() {
+        let managed = paths();
+        for bytes in [
+            fixtures::JPEG_4096,
+            fixtures::JPEG_8192,
+            b"\xFF\xD8\xFF",
+            &fixtures::png(1025, 1),
+            &fixtures::animated_png(),
+        ] {
+            let path = object_path(&managed, "OLDCACHE");
+            write_atomic(&path, bytes).unwrap();
+            assert!(read_cached(&managed, "OLDCACHE").is_none());
+            assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        }
+        let validated = cosmetic_image::validate(&small_png(), ARTWORK).unwrap();
+        persist(&managed, "NEWCACHE", &validated).unwrap();
+        assert_eq!(
+            read_cached(&managed, "NEWCACHE"),
+            Some(validated.data_url())
+        );
+        std::fs::remove_dir_all(managed.data_root()).unwrap();
+    }
+
     #[tokio::test]
     async fn acquisition_stays_on_the_official_cdn_and_is_bounded() {
         crate::downloads::ensure_rustls_crypto_provider();
         let server = TestServer::spawn(Arc::new(move |request| match request.path.as_str() {
-            "/icon.png" => TestResponse::ok(PNG).with_header("Content-Type", "image/png"),
+            "/icon.png" => TestResponse::ok(&small_png()).with_header("Content-Type", "image/png"),
+            "/truncated" => TestResponse::ok(PNG),
+            "/jpeg" => TestResponse::ok(b"\xFF\xD8\xFF").with_header("Content-Type", "image/png"),
+            "/jpeg4096" => TestResponse::ok(fixtures::JPEG_4096),
+            "/jpeg8192" => TestResponse::ok(fixtures::JPEG_8192),
+            "/animated" => TestResponse::ok(&fixtures::animated_png()),
             "/redirect-away" => TestResponse::redirect_to("https://example.com/icon.png".into()),
             "/oversized" => TestResponse::ok(&vec![0u8; MAX_ARTWORK + 1])
                 .with_header("Content-Type", "image/png")
@@ -304,7 +298,17 @@ mod tests {
             .to_owned();
         let icon = format!("{}/icon.png", server.base_url());
         assert!(download(&http, &icon, &host).await.is_some());
-        for path in ["/redirect-away", "/oversized", "/html", "/missing"] {
+        for path in [
+            "/redirect-away",
+            "/oversized",
+            "/html",
+            "/missing",
+            "/truncated",
+            "/jpeg",
+            "/jpeg4096",
+            "/jpeg8192",
+            "/animated",
+        ] {
             let url = format!("{}{path}", server.base_url());
             assert!(download(&http, &url, &host).await.is_none(), "{path}");
         }

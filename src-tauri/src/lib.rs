@@ -7,6 +7,7 @@ pub mod cache;
 pub mod config;
 pub mod content_recognition;
 pub mod content_updates;
+mod cosmetic_image;
 pub mod cosmetics;
 pub mod discord;
 pub mod distribution;

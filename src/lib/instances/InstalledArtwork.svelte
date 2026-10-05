@@ -5,8 +5,9 @@
 <script lang="ts">
   import { getModrinthProjectArtwork } from "$lib/backend";
   import Artwork from '$lib/shell/Artwork.svelte';
-  // Managed provider identity in, Aurora-cached artwork bytes out; local and
-  // unknown content renders the caller's type fallback.
+  // Native provider identity in, validated Aurora-cached PNG out. Installed
+  // callers supply provenance; Browse supplies the native search project id.
+  // Artwork resolution never adopts local content or grants managed ownership.
   let { projectId, fallback, compact = false }: { projectId: string | null; fallback: string; compact?: boolean } = $props();
   let url = $state<string | null>(null);
   $effect(() => {

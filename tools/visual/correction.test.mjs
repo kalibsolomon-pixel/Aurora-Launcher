@@ -40,13 +40,20 @@ try {
   await page.keyboard.press('Escape'); await page.setViewportSize({ width: 1440, height: 960 });
   console.log('PASS accounts: left geometry, native focus containment, return focus, Escape, backdrop and narrow width');
 
-  await page.route('https://cdn.modrinth.com/**', route => route.fulfill({ status: 200, contentType: 'image/png', body: 'invalid image' }));
+  let directProviderRequests = 0;
+  await page.route('https://cdn.modrinth.com/**', route => { directProviderRequests++; return route.abort(); });
+  await page.goto(`${origin}/?tab=mods&validated-artwork=1&broken-artwork=1`);
+  await page.getByRole('button', { name: 'Browse Modrinth', exact: true }).click();
+  await page.getByRole('button', { name: /Sodium/ }).first().waitFor();
+  await page.waitForFunction(() => document.querySelector('.browse-glyph .artwork img')?.naturalWidth === 32);
+  assert.match(await page.locator('.browse-glyph .artwork img').first().getAttribute('src'), /^data:image\/png;base64,/);
   await page.goto(`${origin}/?tab=mods&broken-artwork=1`);
   await page.getByRole('button', { name: 'Browse Modrinth', exact: true }).click();
   await page.getByRole('button', { name: /Sodium/ }).first().waitFor();
   await page.waitForFunction(() => document.querySelector('.browse-glyph .artwork img') === null);
   assert.equal(await page.locator('.browse-glyph .artwork svg').first().isVisible(), true);
-  console.log('PASS artwork: malformed provider response removes image and keeps the local SVG fallback');
+  assert.equal(directProviderRequests, 0, 'Browse must acquire artwork through native validation, never the search icon URL');
+  console.log('PASS artwork: native PNG renders, malformed DTO keeps fallback, and Browse never loads provider URLs directly');
   await page.goto(`${origin}/?page=settings`);
   await page.getByRole('heading', { name: 'General', exact: true }).waitFor();
   await page.getByText('Desktop shortcut', { exact: true }).waitFor();
