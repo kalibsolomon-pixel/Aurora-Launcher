@@ -325,4 +325,16 @@ it("the bottom-left chip opens the shell modal rather than inventing account nav
   assert.match(shell,/class="account-chip"[\s\S]*onclick=\{\(\) => accountManager.show\(\)\}/);
   assert.match(shell,/aria-haspopup="dialog"/); assert.match(shell,/<AccountDialog \/>/);
   assert.doesNotMatch(shell,/navigation.goTo\("accounts"\)/);
+  assert.match(shell, /<div class="sidebar-spacer"><\/div>[\s\S]*class="account-chip"[\s\S]*<AccountIdentity \{account\} small \/>\s*<\/button>\s*<\/nav>/);
+  assert.doesNotMatch(shell, /sidebar-version|launcherVersion/);
+});
+
+it("the shared account identity uses the exact signed-in label and preserves sign-in states", () => {
+  reset();
+  const signedIn = html(Identity, { account, small: true });
+  assert.match(signedIn, /PlayerName/);
+  assert.match(signedIn, /class="identity-detail[^\"]*">Minecraft Account</);
+  assert.doesNotMatch(signedIn, /Minecraft account/);
+  assert.match(html(Identity, { account: null, small: true }), /Sign in to play Minecraft/);
+  assert.match(html(Identity, { account: { ...account, status: "reauthenticationRequired" }, small: true }), /Sign in again/);
 });

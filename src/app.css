@@ -353,7 +353,6 @@ p {
 .sidebar > .nav,
 .sidebar .brand,
 .sidebar .account-chip,
-.sidebar .sidebar-version,
 .sidebar .sidebar-label {
   flex-shrink: 0;
 }
@@ -427,12 +426,6 @@ p {
   white-space: nowrap;
 }
 
-.sidebar-version {
-  margin: 0;
-  padding: 0 var(--space-2);
-  color: var(--color-text-muted);
-  font-size: 0.72rem;
-}
 
 /* ------------------------------------------------------------------ */
 /* Content region                                                      */

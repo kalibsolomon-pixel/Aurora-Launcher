@@ -49,10 +49,6 @@
     >
       <AccountIdentity {account} small />
     </button>
-
-    <p class="sidebar-version">
-      {launcher.status ? `v${launcher.status.launcherVersion}` : "Aurora Launcher"}
-    </p>
   </nav>
 
   <main class="content">

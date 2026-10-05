@@ -23,8 +23,30 @@ try {
   console.log('PASS selector: keyboard selection, focus return, Escape and outside close');
 
   const dock = page.getByRole('button', { name: /^Accounts —/ });
+  assert.equal(await dock.locator('.identity-detail').innerText(), 'Minecraft Account');
+  assert.equal(await page.locator('.sidebar-version').count(), 0);
+  for (const height of [960, 650, 520]) {
+    await page.setViewportSize({ width: 1120, height });
+    const layout = await dock.evaluate(card => {
+      const sidebar = card.closest('.sidebar');
+      const navigation = sidebar.querySelector('.rail-navigation');
+      const spacer = sidebar.querySelector('.sidebar-spacer');
+      return {
+        last: sidebar.lastElementChild === card,
+        column: getComputedStyle(sidebar).display === 'flex' && getComputedStyle(sidebar).flexDirection === 'column',
+        grows: Number(getComputedStyle(spacer).flexGrow) > 0,
+        contained: card.getBoundingClientRect().bottom <= sidebar.getBoundingClientRect().bottom,
+        separated: navigation.getBoundingClientRect().bottom < card.getBoundingClientRect().top,
+        overflows: sidebar.scrollHeight > sidebar.clientHeight,
+      };
+    });
+    assert.deepEqual(layout, { last: true, column: true, grows: true, contained: true, separated: true, overflows: false });
+  }
+  await page.setViewportSize({ width: 1440, height: 960 });
+  console.log('PASS sidebar: exact account label, no version row, flex spacing and containment at 960/650/520 heights');
   await dock.click(); const drawer = page.getByRole('dialog');
   await drawer.waitFor({ state: 'visible' });
+  assert.equal(await drawer.getByRole('region', { name: 'Active Minecraft account' }).locator('.identity-name').innerText(), await dock.locator('.identity-name').innerText());
   const rect = await drawer.boundingBox(); assert.equal(rect.x, 0); assert.equal(rect.width, 420);
   for (let i = 0; i < 12; i++) {
     await page.keyboard.press(i === 0 ? 'Shift+Tab' : 'Tab');
@@ -33,7 +55,11 @@ try {
   }
   await page.keyboard.press('Escape'); await drawer.waitFor({ state: 'hidden' });
   await page.waitForFunction(() => document.activeElement?.classList.contains('account-chip'));
+  await dock.click(); await drawer.getByRole('button', { name: 'Close accounts' }).click();
+  await drawer.waitFor({ state: 'hidden' });
+  await page.waitForFunction(() => document.activeElement?.classList.contains('account-chip'));
   await dock.click(); await page.mouse.click(1000, 450); await drawer.waitFor({ state: 'hidden' });
+  await page.waitForFunction(() => document.activeElement?.classList.contains('account-chip'));
   await page.setViewportSize({ width: 520, height: 740 }); await dock.click();
   assert.equal((await drawer.boundingBox()).width, 520);
   assert.equal(await drawer.locator('.drawer-body').evaluate(el => getComputedStyle(el).overflowY), 'auto');

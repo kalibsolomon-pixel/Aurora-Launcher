@@ -20,7 +20,7 @@
   {/if}
   <span class="identity-text">
     <span class="identity-name" title={account?.minecraftName}>{account?.minecraftName ?? "Not signed in"}</span>
-    <span class="identity-detail">{!account ? "Sign in to play Minecraft" : account.status === "reauthenticationRequired" ? "Sign in again" : "Minecraft account"}</span>
+    <span class="identity-detail">{!account ? "Sign in to play Minecraft" : account.status === "reauthenticationRequired" ? "Sign in again" : "Minecraft Account"}</span>
   </span>
 </span>
 
