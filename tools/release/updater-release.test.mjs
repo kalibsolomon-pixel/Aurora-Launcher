@@ -289,7 +289,7 @@ test('1.4.1 recovery only transfers accepted artifacts and uses the protected Ap
   assert.match(source, /environment: launcher-update-authority-production/);
   assert.match(source, /group: aurora-launcher-production-update-authority\n      cancel-in-progress: false/);
   assert.match(source, /test "\$GITHUB_REF" = 'refs\/heads\/main'/);
-  assert.match(source, /artifact-ids: '11372122788'\n          run-id: '37372030977'/);
+  assert.match(source, /artifact-ids: '11372122788'\n          run-id: '37372030977'\n          merge-multiple: true/);
   assert.match(source, /089e04f4d0f6bfd1c727a99e005f27bbf117897a59cac2164d9aeb7a402e2ded/);
   assert.match(source, /EXPECTED_PARENT: '90a32b0dd6cb7b49d2eebad0b5b23068706e3b3b'/);
   const issuer = source.indexOf('      - name: Issue dedicated authority installation token');

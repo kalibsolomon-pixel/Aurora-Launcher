@@ -68,6 +68,7 @@ jobs:
         with:
           artifact-ids: '11372122788'
           run-id: '37372030977'
+          merge-multiple: true
           github-token: ${{ github.token }}
           repository: kalibsolomon-pixel/Aurora-Launcher
           path: ${{ runner.temp }}/aurora-release-assets
