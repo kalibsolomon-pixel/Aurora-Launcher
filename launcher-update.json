@@ -1,0 +1,10 @@
+{
+  "version": "1.4.1",
+  "notes": "# Aurora Launcher 1.4.1 — release notes\r\n\r\nA corrective release that restores launcher artwork, improves reliability, and refines the interface.\r\n\r\n- Restored project artwork for Mods, Resource Packs and Shaders, with safe fallback images.\r\n- Restored Recent Servers icons with reliable fallbacks.\r\n- Improved validation and handling of launcher artwork and server icons.\r\n- Refined the Home instance selector and Instances spacing.\r\n- Reorganized General settings around Windows desktop integration, including Start menu status and desktop shortcut controls.\r\n- Discord Rich Presence now connects automatically while enabled and reconnects on its own after interruptions.\r\n- Accounts now open in a side drawer, and the account card sits at the bottom of the sidebar.\r\n- Instance creation shows current Aurora compatibility information instead of outdated hard-coded text.\r\n- Interface polish, including consistent \"Minecraft Account\" capitalization and removal of the standalone sidebar version label.\r\n\r\nNew compatible Aurora instances continue to use Aurora Client 2.1.5. Existing instance pins are preserved; nothing updates automatically.\r\n\r\nExisting Aurora Launcher 1.4.0 installations require manual installation of 1.4.1. Launcher updates use signed installers verified by Aurora.",
+  "platforms": {
+    "windows-x86_64": {
+      "url": "https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/v1.4.1/Aurora.Launcher_1.4.1_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRNERBYUxRcmQ3ZW5xdXNRNWFsVStuYjB2OXUvM3ZOb1BmMnkzZ1ROR3FueGNMTGJwMjcwZ01xMnZueEFZS0VDeFVtMCtZNjJRSmt6OUpNdlFaM0dFUWQ4Qlp1NDkxckFzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMjM2NDU5CWZpbGU6QXVyb3JhIExhdW5jaGVyXzEuNC4xX3g2NC1zZXR1cC5leGUKZDJGTnp5ZjgvLzJ1ekdibGErQXh6YWZQT0FjOGN6cXEwbmttazVSRm1TeTlidzF4T3RRMS9YeWhrY2MyYkp0VFFmTVRpR2JWVXVHYzdLZkNiOXB2QWc9PQo="
+    }
+  }
+}
