@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { expectedAssetName } from "./release-state.mjs";
 import { installerName, publicKeyPacket, verifyUpdaterSignature, createManifest, publicationDecision, sha256, verifyDirectory, validateManifest, repository } from "./updater-release.mjs";
-import { publishManifest, authorityToken, authorityRef, authorityUrl, initializationMessage, blobSha } from "./publish-manifest.mjs";
+import { publishManifest, authorityToken, authorityRef, authorityUrl, initializationMessage, emptyTreeSha, blobSha } from "./publish-manifest.mjs";
 
 // DIAGNOSTIC unit keys exist only in memory, never persisted or supplied to a production build.
 const { privateKey, publicKey } = generateKeyPairSync("ed25519");
@@ -77,7 +77,7 @@ function fixture(previous = null, candidateVersion = version, shared = null) {
   const identity = () => (++storage.counter).toString(16).padStart(40, "0");
   function addBlob(content) { const sha = blobSha(content); objects.set('/git/blobs/'+sha, {sha, encoding:'base64', size:content.length, content:content.toString('base64')}); return sha; }
   function addCommit(content, parent, message) {
-    const treeSha = identity(); objects.set('/git/trees/'+treeSha, {sha:treeSha, truncated:false, tree:content ? [{path:'launcher-update.json',mode:'100644',type:'blob',sha:addBlob(content)}] : []});
+    const treeSha = content ? identity() : emptyTreeSha; objects.set('/git/trees/'+treeSha, {sha:treeSha, truncated:false, tree:content ? [{path:'launcher-update.json',mode:'100644',type:'blob',sha:addBlob(content)}] : []});
     const sha = identity(); objects.set('/git/commits/'+sha, {sha, message, tree:{sha:treeSha}, parents:parent ? [{sha:parent}] : []});return sha;
   }
   if (!shared) {
@@ -142,6 +142,32 @@ test('explicit empty root supports first publication; PREPARED PUBLISHED VERIFIE
   const firstMutation=v.calls.findIndex(([m])=>m==='POST');assert.equal(v.calls.slice(0,firstMutation).filter(([m])=>m==='download').length,3);
   assert.equal(patchCalls(v).length,1);assert.equal(v.calls.some(([,p])=>p.includes('launcher-updates')),false);
 });
+test('canonical empty-tree API 404 does not block initialized zero-parent publication', async () => {
+  const v = fixture(null, '1.4.1');
+  const root = v.objects.get('/git/commits/' + v.root);
+  assert.equal(root.tree.sha, emptyTreeSha); assert.deepEqual(root.parents, []);
+  v.objects.delete('/git/trees/' + emptyTreeSha);
+  const api = v.api;
+  v.api = (path, options) => {
+    if (path === '/git/trees/' + emptyTreeSha) throw Error('Authority API HTTP 404');
+    return api(path, options);
+  };
+  assert.equal(await publishManifest(v), 'published');
+  assert.ok(v.contentAtHead().equals(v.manifestBytes));
+  assert.equal(v.objects.get('/git/commits/' + v.head()).parents[0].sha, v.root);
+  assert.equal(patchCalls(v).length, 1); assert.equal(patchCalls(v)[0][2].force, false);
+  assert.equal(v.calls.some(([, path]) => path === '/git/trees/' + emptyTreeSha), false);
+});
+for (const problem of ['message', 'tree', 'parent']) {
+  test(`empty-tree initializer with wrong ${problem} fails before mutation`, async () => {
+    const v = fixture(), root = v.objects.get('/git/commits/' + v.root);
+    if (problem === 'message') root.message = 'Unrelated root';
+    if (problem === 'tree') root.tree.sha = 'f'.repeat(40);
+    if (problem === 'parent') root.parents = [{ sha: 'f'.repeat(40) }];
+    await assert.rejects(publishManifest(v));
+    assert.equal(mutateCalls(v).length, 0); assert.equal(v.head(), v.root);
+  });
+}
 test('future 1.4.1 and 1.4.2 advance from observed parent; immutable release untouched',async()=>{
   for(const [old,next] of [['1.4.0','1.4.1'],['1.4.1','1.4.2']]){const v=fixture(previousManifest(old),next);await publishManifest(v);assert.equal(v.states[0].parent,v.initialHead);assert.ok(mutateCalls(v).every(([,p])=>p.startsWith('/git/')));}
 });
@@ -153,7 +179,7 @@ for(const [name,prior] of [['same version different content',Buffer.from(previou
 }
 for(const problem of ['repository','ref','parent','candidate','channel','url','signature','publicHash','immutable','latest','missingAuthority','extraFile','truncatedTree','initialMessage','blobIdentity']){
  test(problem+' prerequisite fails closed',async()=>{
-  const v=fixture();const original=v.api;
+  const v=fixture(['extraFile','truncatedTree'].includes(problem) ? previousManifest('1.3.1') : null);const original=v.api;
   if(problem==='repository')v.repository='foreign/repo';
   if(problem==='ref')v.ref='refs/heads/main';
   if(problem==='parent')v.expectedParent='e'.repeat(40);
@@ -254,6 +280,26 @@ test('workflow isolates App inputs/token to approved authority job and mints lat
   assert.match(authority, /persist-credentials: false/);
   for (const job of [jobs.resolve, jobs.build, jobs.publish]) assert.doesNotMatch(job, /AURORA_AUTHORITY_|create-github-app-token/);
   // This verifies source wiring, not installed GitHub rulesets/reviewer settings.
+});
+test('1.4.1 recovery only transfers accepted artifacts and uses the protected App publisher', async () => {
+  const source = (await readFile('.github/workflows/launcher-authority-recovery.yml', 'utf8')).replaceAll('\r\n', '\n');
+  assert.match(source, /on:\s+workflow_dispatch:/);
+  assert.doesNotMatch(source, /(?:push|pull_request|schedule):|^\s+contents: write|npm |cargo |tauri build|publish\.ps1|check-collision/m);
+  assert.match(source, /permissions:\n  contents: read\n  actions: read/);
+  assert.match(source, /environment: launcher-update-authority-production/);
+  assert.match(source, /group: aurora-launcher-production-update-authority\n      cancel-in-progress: false/);
+  assert.match(source, /test "\$GITHUB_REF" = 'refs\/heads\/main'/);
+  assert.match(source, /artifact-ids: '11372122788'\n          run-id: '37372030977'/);
+  assert.match(source, /089e04f4d0f6bfd1c727a99e005f27bbf117897a59cac2164d9aeb7a402e2ded/);
+  assert.match(source, /EXPECTED_PARENT: '90a32b0dd6cb7b49d2eebad0b5b23068706e3b3b'/);
+  const issuer = source.indexOf('      - name: Issue dedicated authority installation token');
+  assert.ok(source.indexOf('await verifyDirectory(') < issuer);
+  const privileged = source.slice(issuer);
+  assert.match(privileged, /actions\/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1/);
+  assert.match(privileged, /owner: kalibsolomon-pixel\n          repositories: Aurora-Launcher\n          permission-contents: write\n          skip-token-revoke: false/);
+  assert.match(privileged, /AURORA_AUTHORITY_TOKEN: \$\{\{ steps\.authority-token\.outputs\.token \}\}/);
+  assert.match(privileged, /publish-manifest\.mjs "\$VERSION" "\$SOURCE_SHA" "\$RUNNER_TEMP\/aurora-release-assets" "\$EXPECTED_PARENT"/);
+  assert.doesNotMatch(privileged, /GH_TOKEN:|GITHUB_TOKEN:|github\.token|TAURI_SIGNING/);
 });
 
 const malformedUtf8 = [

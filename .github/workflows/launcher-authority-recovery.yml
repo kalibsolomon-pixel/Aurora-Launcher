@@ -1,0 +1,109 @@
+name: Aurora Launcher 1.4.1 authority recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  recover_authority:
+    name: Publish accepted 1.4.1 update discovery (owner gate)
+    runs-on: ubuntu-latest
+    environment: launcher-update-authority-production
+    concurrency:
+      group: aurora-launcher-production-update-authority
+      cancel-in-progress: false
+    env:
+      VERSION: '1.4.1'
+      SOURCE_SHA: '13d8d2aec27e2871926e90f1ce3c215089841672'
+      EXPECTED_PARENT: '90a32b0dd6cb7b49d2eebad0b5b23068706e3b3b'
+    steps:
+      # Use the reviewed tooling commit, while keeping released-source identity
+      # and the accepted original build artifact fixed. No build/release writes.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check fixed recovery provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$SOURCE_SHA" "$GITHUB_SHA"
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import assert from 'node:assert/strict';
+          const repo = 'kalibsolomon-pixel/Aurora-Launcher';
+          assert.equal(process.env.GITHUB_REPOSITORY, repo);
+          const api = path => JSON.parse(execFileSync('gh', ['api', `repos/${repo}${path}`], { encoding: 'utf8' }));
+          assert.equal(api('/git/ref/heads/main').object.sha, process.env.GITHUB_SHA);
+          const artifact = api('/actions/artifacts/11372122788');
+          assert.equal(artifact.id, 11372122788);
+          assert.equal(artifact.name, 'aurora-launcher-1.4.1-nsis');
+          assert.equal(artifact.expired, false);
+          assert.equal(artifact.digest, 'sha256:281af957623e0df4cffc2c74587a522982a5965b8630e7b4ad8e8684fec4b088');
+          assert.equal(artifact.workflow_run.id, 37372030977);
+          assert.equal(artifact.workflow_run.head_sha, process.env.SOURCE_SHA);
+          const release = api('/releases/404112749');
+          assert.equal(release.id, 404112749);
+          assert.equal(release.tag_name, 'v1.4.1');
+          assert.equal(release.target_commitish, process.env.SOURCE_SHA);
+          assert.equal(release.draft, false);
+          assert.equal(release.prerelease, false);
+          assert.equal(release.immutable, true);
+          const tag = api('/git/ref/tags/v1.4.1');
+          assert.equal(tag.object.type, 'commit');
+          assert.equal(tag.object.sha, process.env.SOURCE_SHA);
+          assert.equal(api('/git/ref/heads/launcher-update-authority').object.sha, process.env.EXPECTED_PARENT);
+          console.log('Fixed released source, immutable release and accepted artifact provenance verified.');
+          NODE
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11372122788'
+          run-id: '37372030977'
+          github-token: ${{ github.token }}
+          repository: kalibsolomon-pixel/Aurora-Launcher
+          path: ${{ runner.temp }}/aurora-release-assets
+      - name: Verify accepted private bytes before issuing App token
+        env:
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, readdir } from 'node:fs/promises';
+          import { join } from 'node:path';
+          import assert from 'node:assert/strict';
+          import { sha256, verifyDirectory } from './tools/release/updater-release.mjs';
+          const directory = join(process.env.RUNNER_TEMP, 'aurora-release-assets');
+          const hashes = {
+            'Aurora Launcher_1.4.1_x64-setup.exe': 'aaba35418887a615b1892ef351cd089e28812c39c6ae5b3764d2a725ac7a02f5',
+            'Aurora Launcher_1.4.1_x64-setup.exe.sig': 'd59f6cd0b3662ddb29a5ada235616f1bf158699e5b407ca4d538b504bdddd938',
+            'release-assets.json': 'b6b2cf4c04b0c551612fd0a53eb753a4ba8e90973b85332d3c87be2094627c57',
+            'launcher-update.json': '089e04f4d0f6bfd1c727a99e005f27bbf117897a59cac2164d9aeb7a402e2ded',
+          };
+          assert.deepEqual((await readdir(directory)).sort(), Object.keys(hashes).sort());
+          for (const [name, digest] of Object.entries(hashes)) assert.equal(sha256(await readFile(join(directory, name))), digest);
+          await verifyDirectory(directory, process.env.VERSION, process.env.SOURCE_SHA, process.env.AURORA_UPDATER_PUBKEY.trim());
+          console.log('Original accepted four-file artifact and manifest bytes verified.');
+          NODE
+      - name: Issue dedicated authority installation token
+        id: authority-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AURORA_AUTHORITY_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AURORA_AUTHORITY_APP_PRIVATE_KEY }}
+          owner: kalibsolomon-pixel
+          repositories: Aurora-Launcher
+          permission-contents: write
+          skip-token-revoke: false
+      - name: Verify immutable public bytes and advance discovery ref LAST
+        env:
+          AURORA_AUTHORITY_TOKEN: ${{ steps.authority-token.outputs.token }}
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+        run: node tools/release/publish-manifest.mjs "$VERSION" "$SOURCE_SHA" "$RUNNER_TEMP/aurora-release-assets" "$EXPECTED_PARENT"

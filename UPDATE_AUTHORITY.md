@@ -80,6 +80,29 @@ Never routinely edit or upload the manifest manually. Never attach it to the ret
 
 ## Concurrency and recovery
 
+### Accepted 1.4.1 authority-only recovery
+
+The initialized zero-parent commit references Git's canonical empty tree
+`4b825dc642cb6eb9a060e54bf8d69288fbee4904`. GitHub's Git Data tree GET can
+return 404 for that tree while the ref and commit remain readable. The publisher
+recognizes initialization only from that exact tree identity, zero parents and
+the exact initialization message, without requesting the empty tree. Other
+commits still require the complete minimal tree/blob validation.
+
+`.github/workflows/launcher-authority-recovery.yml` is a manual, main-only recovery
+for the already immutable release 404112749 / v1.4.1. It uses corrected tooling
+from the dispatch commit and downloads original artifact 11372122788 from run
+37372030977. It pins released source, artifact digest, all four accepted file
+hashes and expected authority parent `90a32b0dd6cb7b49d2eebad0b5b23068706e3b3b`.
+It never builds or writes release assets. The existing protected authority
+environment, global concurrency group and late-issued Contents-only App token
+remain required. Its ordinary token has read-only Contents/Actions permissions
+for cross-run artifact transfer, and is never passed to the publisher. The
+publisher rechecks immutable public bytes before its single non-forced advance.
+After advancement this fixed recovery refuses a changed parent; do not dispatch
+it as a general release workflow. The CLI's optional fourth argument pins the
+expected authority parent without changing the normal publication path.
+
 GitHub non-forced fast-forward is not a literal expected-old-SHA CAS. With forbidden rewinds/deletion and all writers creating sole-parent commits from their observed head, concurrent sibling writers cannot overwrite one another: one advance wins, the other fails non-fast-forward. Rechecks narrow races but do not replace ref protection. All authority jobs share a global concurrency group with cancellation disabled. External manual writers are prohibited.
 
 The publisher validates the current minimal commit/tree and generated immediate parent, not the full ancestral history or a permanently pinned root. A root pin would detect an unrelated recreated history but cannot detect rewind to an ancestor or close a rewind after the final GET. Adding a mutable root setting/traversal would complicate initialization without replacing history protection; rulesets intentionally remain the primary control. A direct authorized writer could append an older valid manifest by fast-forward. Application monotonicity is guaranteed only for this validated protocol, not an arbitrary writer.

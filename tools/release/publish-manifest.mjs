@@ -8,6 +8,7 @@ import { repository, manifestName, sha256, publicationDecision, verifyDirectory,
 export const authorityRef = "refs/heads/launcher-update-authority";
 export const authorityUrl = `https://raw.githubusercontent.com/${repository}/launcher-update-authority/${manifestName}`;
 export const initializationMessage = "Initialize Aurora Launcher update authority";
+export const emptyTreeSha = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 const refPath = "/git/ref/heads/launcher-update-authority";
 const updatePath = "/git/refs/heads/launcher-update-authority";
 const shaPattern = /^[0-9a-f]{40}$/;
@@ -32,9 +33,15 @@ async function inspectCommit(api, sha) {
   const commit = await api(`/git/commits/${requireSha(sha)}`);
   if (commit.sha !== sha || !Array.isArray(commit.parents) || commit.parents.length > 1) throw new Error("Unexpected authority commit");
   const treeSha = requireSha(commit.tree?.sha);
+  // GitHub can return 404 for the canonical empty tree even when its root
+  // commit is readable. Its Git object identity proves emptiness; do not treat
+  // an arbitrary missing tree or a non-root commit as initialization.
+  if (commit.parents.length === 0) {
+    if (treeSha !== emptyTreeSha || commit.message !== initializationMessage) throw new Error("Unexpected authority initializer");
+    return { commit, bytes: null };
+  }
   const tree = await api(`/git/trees/${treeSha}`);
   if (tree.sha !== treeSha || tree.truncated || !Array.isArray(tree.tree)) throw new Error("Incomplete authority tree");
-  if (tree.tree.length === 0 && commit.parents.length === 0 && commit.message === initializationMessage) return { commit, bytes: null };
   const entry = tree.tree[0];
   if (commit.parents.length !== 1 || tree.tree.length !== 1 || entry.path !== manifestName || entry.type !== "blob" || entry.mode !== "100644") throw new Error("Unexpected authority files or history");
   const blob = await api(`/git/blobs/${requireSha(entry.sha)}`);
@@ -125,8 +132,9 @@ export async function publishManifest(options) {
 }
 
 async function main() {
-  const [version, sourceSha, directoryArg] = process.argv.slice(2);
+  const [version, sourceSha, directoryArg, expectedParent] = process.argv.slice(2);
   if (!directoryArg || process.env.GITHUB_REPOSITORY !== repository || process.env.GITHUB_REF !== "refs/heads/main" || process.env.GITHUB_ACTIONS !== "true" || process.env.GITHUB_EVENT_NAME !== "workflow_dispatch") throw new Error("Protected manual release environment is required");
+  if (expectedParent !== undefined) requireSha(expectedParent);
   const token = authorityToken(process.env);
   const directory = resolve(directoryArg);
   const publicKey = process.env.AURORA_UPDATER_PUBKEY?.trim();
@@ -153,7 +161,7 @@ async function main() {
     return Buffer.concat(chunks);
   };
   console.log(`Single authority ${await publishManifest({ version, sourceSha, metadata, publicKey,
-    metadataBytes: await readFile(join(directory, "release-assets.json")), manifestBytes: await readFile(join(directory, manifestName)), api, download,
+    metadataBytes: await readFile(join(directory, "release-assets.json")), manifestBytes: await readFile(join(directory, manifestName)), expectedParent, api, download,
     report: (state) => console.log(JSON.stringify(state)) })}.`);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch((error) => {
