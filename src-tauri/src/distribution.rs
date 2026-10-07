@@ -732,7 +732,23 @@ mod tests {
                 .resolve_exact("2.1.2", Some(ReleaseChannel::Stable))
                 .is_some()
         );
-        assert_eq!(production.releases().len(), 3);
+        assert_eq!(production.releases().len(), 4);
+        let current = production
+            .resolve_exact("3.0.0", Some(ReleaseChannel::Stable))
+            .unwrap();
+        assert_eq!(current.minecraft_version(), "1.21.11");
+        assert_eq!(current.fabric_loader_version(), "0.19.5");
+        assert_eq!(current.java().major_version(), 21);
+        assert_eq!(
+            current.artifact().url(),
+            "https://github.com/kalibsolomon-pixel/Aurora-Client/releases/download/v3.0.0/aurora-3.0.0.jar"
+        );
+        assert_eq!(
+            current.artifact().sha256(),
+            "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c"
+        );
+        assert_eq!(current.artifact().size_bytes(), Some(3077377));
+        assert_eq!(current.fabric_api().unwrap().version(), "0.141.6+1.21.11");
         let release = production
             .resolve_exact("2.1.3", Some(ReleaseChannel::Stable))
             .unwrap();

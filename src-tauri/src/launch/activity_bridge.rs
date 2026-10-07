@@ -24,14 +24,19 @@ const ACCEPTED: &[u8] = b"{\"type\":\"accepted\",\"schemaVersion\":1}\n";
 const ACCEPTED_V2: &[u8] = b"{\"type\":\"accepted\",\"schemaVersion\":2}\n";
 const FRAME_TIMEOUT: Duration = Duration::from_secs(2);
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
-/// Independently verified immutable v2.1.5 artifact; bridge classes match
-/// reviewed a5497f6 (byte-identical to the reviewed 2.1.4 candidate except
-/// the embedded version string). Production bridge protocol is v2.
-pub const BRIDGE_ARTIFACT_SHA256: &str =
-    "fdc344e28c95a93b84af4b4fb1e61f9d3cc5774339f753f45f603c901df324d6";
+/// Independently verified immutable production artifacts. All eight bridge
+/// classes in v3.0.0 are byte-identical to reviewed v2.1.5; both speak v2.
+/// See CLIENT_3_0_0_PRODUCTION_CORRECTION.md. Keep exact historical support;
+/// a version label or future catalog entry alone never grants capability.
+pub const BRIDGE_ARTIFACT_SHA256S: [&str; 2] = [
+    "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+    "fdc344e28c95a93b84af4b4fb1e61f9d3cc5774339f753f45f603c901df324d6",
+];
 
 pub fn supported(active: bool, minecraft: &str, digest: Option<&str>) -> bool {
-    active && minecraft == "1.21.11" && digest == Some(BRIDGE_ARTIFACT_SHA256)
+    active
+        && minecraft == "1.21.11"
+        && digest.is_some_and(|digest| BRIDGE_ARTIFACT_SHA256S.contains(&digest))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -509,6 +514,7 @@ mod tests {
         })
         .await
         .expect("Java harness exit");
+        assert_eq!(process::snapshot(&running.instance_id).exit_code, Some(0));
         assert_eq!(
             process::snapshot(&running.instance_id).status,
             crate::launch::state::LaunchProcessStatus::Exited
@@ -882,8 +888,13 @@ mod tests {
     }
     #[test]
     fn artifact_support_uses_verified_identity_not_version_or_filename() {
-        assert!(supported(true, "1.21.11", Some(BRIDGE_ARTIFACT_SHA256)));
-        assert!(!supported(false, "1.21.11", Some(BRIDGE_ARTIFACT_SHA256)));
+        for digest in BRIDGE_ARTIFACT_SHA256S {
+            assert!(supported(true, "1.21.11", Some(digest)));
+            assert!(!supported(false, "1.21.11", Some(digest)));
+            assert!(!supported(true, "other", Some(digest)));
+            let tampered = format!("0{}", &digest[1..]);
+            assert!(!supported(true, "1.21.11", Some(&tampered)));
+        }
         assert!(!supported(
             true,
             "1.21.11",
@@ -896,7 +907,6 @@ mod tests {
             "1.21.11",
             Some("4bf78dc1ef8f18e124377575c508ca357327be1c230b203e9f8181bdcb9ebc81")
         ));
-        assert!(!supported(true, "other", Some(BRIDGE_ARTIFACT_SHA256)));
         assert!(!supported(true, "1.21.11", None));
     }
     /// Compile an external same-package harness against the inspected client JAR.

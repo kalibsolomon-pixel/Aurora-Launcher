@@ -53,7 +53,7 @@ async function inspectCommit(api, sha) {
 }
 
 async function verifyPublic({ api, download, version, sourceSha, metadata, metadataBytes, manifestBytes, publicKey }) {
-  const candidate = validateManifest(manifestBytes);
+  const candidate = validateManifest(manifestBytes, { requireCurrentClient: true });
   if (candidate.version !== version || metadata.version !== version || metadata.sourceSha !== sourceSha || !shaPattern.test(sourceSha) ||
       JSON.stringify(JSON.parse(strictUtf8(metadataBytes).replace(/^\uFEFF/, ""))) !== JSON.stringify(metadata) || metadata.updater?.platform !== "windows-x86_64" ||
       metadata.updater?.publicKeySha256 !== sha256(Buffer.from(publicKey ?? ""))) throw new Error("Candidate provenance differs");

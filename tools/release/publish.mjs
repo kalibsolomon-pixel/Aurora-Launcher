@@ -52,10 +52,7 @@ const expected = [...manifest.artifacts, ...manifest.updater.signatures, { name:
 for (const entry of expected) verifyBytes(await readFile(join(directory, entry.name)), entry);
 const notesFile = join(import.meta.dirname, `../../RELEASE_${version.replaceAll(".", "_")}_NOTES.md`);
 const sourceNotes = (await readFile(notesFile, "utf8")).trim();
-const productionManifest = JSON.parse((await readFile(join(import.meta.dirname, "../../src-tauri/production/aurora-releases.json"), "utf8")).toString("utf8"));
-const productionClient = productionManifest.releases?.[0]?.auroraVersion;
-if (typeof productionClient !== "string" || productionClient === "") throw new Error("Production Aurora Client selection is missing");
-verifyNotesIdentity(sourceNotes, version, productionClient);
+verifyNotesIdentity(sourceNotes, version);
 const notes = `${sourceNotes}\n\n## Installer artifacts\n\n| File | Architecture | Bytes | SHA-256 |\n| --- | --- | ---: | --- |\n${manifest.artifacts.map((a) => `| ${a.name} | ${a.architecture} | ${a.sizeBytes} | \`${a.sha256}\` |`).join("\n")}\n`;
 const normalized = (value) => value.replaceAll("\r\n", "\n").trim();
 async function verifyRelease(release, publicDownload = false) {

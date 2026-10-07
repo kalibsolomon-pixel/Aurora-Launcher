@@ -2701,19 +2701,27 @@ versionRange="[1,2)"
         );
         let mut release: serde_json::Value =
             serde_json::from_str(include_str!("../production/aurora-releases.json")).unwrap();
+        // This fixture intentionally exercises an existing historical pin,
+        // independently of whichever release is first in the creation catalog.
+        let pinned_index = release["releases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .position(|entry| entry["auroraVersion"] == "2.1.5")
+            .unwrap();
         for (field, path) in [("artifact", &aurora_path), ("fabricApi", &api_path)] {
             let bytes = std::fs::read(path).unwrap();
             let artifact = if field == "artifact" {
-                &mut release["releases"][0][field]
+                &mut release["releases"][pinned_index][field]
             } else {
-                &mut release["releases"][0][field]["artifact"]
+                &mut release["releases"][pinned_index][field]["artifact"]
             };
             artifact["sha256"] = serde_json::json!(format!("{:x}", sha2::Sha256::digest(&bytes)));
             artifact["sizeBytes"] = serde_json::json!(bytes.len());
         }
         let manifest =
             crate::distribution::ReleaseManifest::from_json(&release.to_string()).unwrap();
-        let declaration = &release["releases"][0];
+        let declaration = &release["releases"][pinned_index];
         let state = serde_json::json!({"schemaVersion":1,"auroraVersion":"2.1.5","channel":"stable","minecraftVersion":"1.21.11","fabricLoaderVersion":"0.19.5","installationId":"fixture","installedAtUnixSeconds":1,"artifact":{"relativePath":"mods/aurora-2.1.5.jar","sizeBytes":declaration["artifact"]["sizeBytes"],"sha256":declaration["artifact"]["sha256"]},"fabricApi":{"version":"0.141.6+1.21.11","artifact":{"relativePath":"mods/fabric-api-0.141.6+1.21.11.jar","sizeBytes":declaration["fabricApi"]["artifact"]["sizeBytes"],"sha256":declaration["fabricApi"]["artifact"]["sha256"]}}});
         let state_path = fixture
             .managed

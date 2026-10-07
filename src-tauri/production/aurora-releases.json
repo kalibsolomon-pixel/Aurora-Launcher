@@ -2,6 +2,28 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "auroraVersion": "3.0.0",
+      "channel": "stable",
+      "minecraftVersion": "1.21.11",
+      "fabricLoaderVersion": "0.19.5",
+      "java": {
+        "majorVersion": 21
+      },
+      "artifact": {
+        "url": "https://github.com/kalibsolomon-pixel/Aurora-Client/releases/download/v3.0.0/aurora-3.0.0.jar",
+        "sha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+        "sizeBytes": 3077377
+      },
+      "fabricApi": {
+        "version": "0.141.6+1.21.11",
+        "artifact": {
+          "url": "https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.141.6%2B1.21.11/fabric-api-0.141.6%2B1.21.11.jar",
+          "sha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+          "sizeBytes": 2426039
+        }
+      }
+    },
+    {
       "auroraVersion": "2.1.5",
       "channel": "stable",
       "minecraftVersion": "1.21.11",

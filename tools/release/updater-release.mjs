@@ -2,7 +2,7 @@ import { createHash, createPublicKey, verify } from "node:crypto";
 import { readFile, writeFile, copyFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expectedAssetName, verifyBytes, verifyNotesIdentity } from "./release-state.mjs";
+import { expectedAssetName, verifyBytes, verifyNotesIdentity, productionClientVersion, productionClientVersions } from "./release-state.mjs";
 
 export const repository = "kalibsolomon-pixel/Aurora-Launcher";
 export const manifestName = "launcher-update.json";
@@ -57,8 +57,11 @@ export function verifyUpdaterSignature(bytes, encodedSignature, encodedPublicKey
       (versions.length === 1 && versions[0].slice(8) !== version)) throw new Error("Signed installer identity differs from release");
 }
 export function createManifest(version, notes, signature) {
+  return manifestForClient(version, notes, signature, productionClientVersion);
+}
+function manifestForClient(version, notes, signature, clientVersion) {
   versionParts(version);
-  verifyNotesIdentity(notes, version, "2.1.5");
+  verifyNotesIdentity(notes, version, clientVersion);
   if (notes.length > 8192 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(notes)) throw new Error("Invalid release notes");
   decodeBase64(signature);
   return { version, notes: notes.trim(), platforms: { "windows-x86_64": {
@@ -68,13 +71,13 @@ export function createManifest(version, notes, signature) {
 }
 export function publicationDecision(previousBytes, nextBytes) {
   const previous = validateManifest(previousBytes);
-  const next = validateManifest(nextBytes);
+  const next = validateManifest(nextBytes, { requireCurrentClient: true });
   if (previousBytes.equals(nextBytes)) return "unchanged";
   const left = versionParts(previous.version), right = versionParts(next.version);
   const difference = right.map((part, index) => part - left[index]).find((part) => part !== 0) ?? 0;
   if (difference <= 0) throw new Error("Refusing manifest downgrade or same-version drift");
   const target = previous.platforms?.["windows-x86_64"];
-  if (target?.url !== createManifest(previous.version, `# Aurora Launcher ${previous.version}\nAurora Client 2.1.5`, target?.signature).platforms["windows-x86_64"].url) throw new Error("Unexpected previous update authority");
+  if (target?.url !== `https://github.com/${repository}/releases/download/v${previous.version}/${expectedAssetName(installerName(previous.version, "nsis"))}`) throw new Error("Unexpected previous update authority");
   return "replace";
 }
 export async function verifyDirectory(directory, version, sourceSha, publicKey) {
@@ -95,17 +98,24 @@ export async function verifyDirectory(directory, version, sourceSha, publicKey) 
     verifyUpdaterSignature(bytes, signatureBytes.toString("utf8").trim(), publicKey, version, entry.name);
   }
   const updaterBytes = await readFile(join(directory, manifestName));
-  const updater = validateManifest(updaterBytes);
+  const updater = validateManifest(updaterBytes, { requireCurrentClient: true });
   const nsisSignature = (await readFile(join(directory, installerName(version, "nsis") + ".sig"), "utf8")).trim();
   if (JSON.stringify(updater) !== JSON.stringify(createManifest(version, updater.notes, nsisSignature))) throw new Error("Update manifest differs from verified installers");
   return manifest;
 }
 /** Strict single-stream metadata; payload verification remains separate. */
-export function validateManifest(bytes) {
+export function validateManifest(bytes, { requireCurrentClient = false } = {}) {
   if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > 16384) throw new Error("Invalid manifest size");
   const value = JSON.parse(strictUtf8(bytes));
   const target = value?.platforms?.["windows-x86_64"];
-  const expected = createManifest(value?.version, value?.notes, target?.signature);
+  // Existing accepted authority may name an immutable older Client pin. New
+  // candidate build verification still requires createManifest's current identity.
+  const identities = requireCurrentClient ? [productionClientVersion] : productionClientVersions;
+  const clientVersion = identities.find((identity) => {
+    try { verifyNotesIdentity(value?.notes, value?.version, identity); return true; } catch { return false; }
+  });
+  if (!clientVersion) throw new Error("Unknown production Client identity");
+  const expected = manifestForClient(value?.version, value?.notes, target?.signature, clientVersion);
   if (JSON.stringify(value) !== JSON.stringify(expected)) throw new Error("Unexpected production manifest semantics");
   return value;
 }

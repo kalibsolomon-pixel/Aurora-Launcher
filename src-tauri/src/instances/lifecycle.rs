@@ -1967,11 +1967,24 @@ pub(crate) mod tests {
         let manifest = crate::distribution::production_manifest().unwrap();
         let configuration = InstanceConfiguration::for_minecraft_version("1.21.11");
         let selected = resolve_release_for_configuration(&manifest, &configuration).unwrap();
-        assert_eq!(selected.aurora_version(), "2.1.5");
+        assert_eq!(selected.aurora_version(), "3.0.0");
         assert_eq!(
             selected.artifact().sha256(),
-            crate::launch::activity_bridge::BRIDGE_ARTIFACT_SHA256
+            "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c"
         );
+        assert!(crate::launch::activity_bridge::supported(
+            true,
+            selected.minecraft_version(),
+            Some(selected.artifact().sha256())
+        ));
+        let previous = manifest
+            .resolve_exact("2.1.5", Some(ReleaseChannel::Stable))
+            .unwrap();
+        assert!(crate::launch::activity_bridge::supported(
+            true,
+            previous.minecraft_version(),
+            Some(previous.artifact().sha256())
+        ));
         assert!(
             manifest
                 .resolve_exact("2.1.3", Some(ReleaseChannel::Stable))
@@ -3964,7 +3977,7 @@ pub(crate) mod tests {
     /// Opt-in production-source diagnostic in a uniquely created temp root.
     /// The root is retained for manual readiness and launch inspection.
     #[tokio::test]
-    #[ignore = "downloads the real production Aurora 2.1.2 instance"]
+    #[ignore = "downloads real production Aurora instances from official sources"]
     async fn benchmark_live_production_instances() {
         use std::time::Instant;
 
@@ -4058,6 +4071,7 @@ pub(crate) mod tests {
         );
 
         for record in [first, second] {
+            assert_eq!(record.aurora_release().unwrap().aurora_version(), "3.0.0");
             let validation = validate_instance(
                 &managed,
                 &InstanceRegistry::load(&registry_path).unwrap(),
@@ -4069,6 +4083,10 @@ pub(crate) mod tests {
                 InstanceStatus::Ready,
                 "{:?}",
                 validation.problems
+            );
+            println!(
+                "PRODUCTION BENCH Client 3.0.0 verified Ready: {}",
+                record.id()
             );
         }
     }

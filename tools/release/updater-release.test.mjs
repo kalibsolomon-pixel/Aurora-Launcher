@@ -5,7 +5,7 @@ import { mkdtemp, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { expectedAssetName } from "./release-state.mjs";
+import { expectedAssetName, productionClientVersion } from "./release-state.mjs";
 import { installerName, publicKeyPacket, verifyUpdaterSignature, createManifest, publicationDecision, sha256, verifyDirectory, validateManifest, repository } from "./updater-release.mjs";
 import { publishManifest, authorityToken, authorityRef, authorityUrl, initializationMessage, emptyTreeSha, blobSha } from "./publish-manifest.mjs";
 
@@ -16,7 +16,7 @@ const rawPublic = publicKey.export({ type: "spki", format: "der" }).subarray(-32
 const encodedPublic = Buffer.from(`untrusted comment: diagnostic unit key\n${Buffer.concat([Buffer.from("Ed"), keyId, rawPublic]).toString("base64")}\n`).toString("base64");
 const version = "1.4.0", sourceSha = "a".repeat(40), name = installerName(version, "nsis");
 const bytes = Buffer.from("DIAGNOSTIC installer bytes: not executable, not a release");
-const notes = "# Aurora Launcher 1.4.0\n\nAurora Client 2.1.5 remains unchanged.";
+const notes = `# Aurora Launcher 1.4.0\n\nAurora Client ${productionClientVersion} is current.`;
 function signature(comment = `timestamp:1\tfile:${name}\tversion:${version}`) {
   const signature = sign(null, createHash("blake2b512").update(bytes).digest(), privateKey);
   const packet = Buffer.concat([Buffer.from("ED"), keyId, signature]);
@@ -48,16 +48,30 @@ test("one static manifest derives exact NSIS public URL/signature", () => {
   assert.equal(manifest.platforms["windows-x86_64"].signature, encodedSignature);
 });
 test("rejects stale notes, development versions and unsafe Windows versions", () => {
-  assert.throws(() => createManifest(version, "# Aurora Launcher 1.3.1\nAurora Client 2.1.5", encodedSignature));
+  assert.throws(() => createManifest(version, `# Aurora Launcher 1.3.1\nAurora Client ${productionClientVersion}`, encodedSignature));
+  assert.throws(() => createManifest(version, "# Aurora Launcher 1.4.0\nAurora Client 2.1.5", encodedSignature), /identity mismatch/);
+  assert.throws(() => createManifest(version, "# Aurora Launcher 1.4.0\nAurora Client 3.0.0-fake", encodedSignature), /identity mismatch/);
   for (const value of ["1.4.0-diag.1", "01.4.0", "256.0.0", "1.0.65536"]) assert.throws(() => installerName(value, "nsis"));
 });
 test("identical manifest is a no-op; downgrade and same-version drift refuse", () => {
   const current = Buffer.from(JSON.stringify(createManifest(version, notes, encodedSignature)));
   assert.equal(publicationDecision(current, current), "unchanged");
   assert.throws(() => publicationDecision(current, Buffer.from(JSON.stringify({ ...JSON.parse(current), notes: notes + "changed" }))));
-  const older = Buffer.from(JSON.stringify(createManifest("1.3.1", "# Aurora Launcher 1.3.1\nAurora Client 2.1.5", encodedSignature)));
+  const older = Buffer.from(JSON.stringify(createManifest("1.3.1", `# Aurora Launcher 1.3.1\nAurora Client ${productionClientVersion}`, encodedSignature)));
   assert.throws(() => publicationDecision(current, older));
   assert.equal(publicationDecision(older, current), "replace");
+});
+test("accepted historical Client identity remains valid while new build notes require current identity", async () => {
+  const historical = { ...createManifest(version, notes, encodedSignature), notes: "# Aurora Launcher 1.4.0\nAurora Client 2.1.5" };
+  const previous = Buffer.from(JSON.stringify(historical));
+  assert.deepEqual(validateManifest(previous), historical);
+  const current = Buffer.from(JSON.stringify(createManifest("1.4.1", `# Aurora Launcher 1.4.1\nAurora Client ${productionClientVersion}`, encodedSignature)));
+  assert.equal(publicationDecision(previous, current), "replace");
+  assert.throws(() => validateManifest(Buffer.from(JSON.stringify({ ...historical, notes: "# Aurora Launcher 1.4.0\nAurora Client 9.9.9" }))));
+  const candidate = fixture(null, '1.4.1');
+  candidate.manifestBytes = Buffer.from(JSON.stringify({ ...JSON.parse(candidate.manifestBytes), notes: '# Aurora Launcher 1.4.1\nAurora Client 2.1.5' }));
+  await assert.rejects(publishManifest(candidate));
+  assert.equal(mutateCalls(candidate).length, 0);
 });
 function fixture(previous = null, candidateVersion = version, shared = null) {
   const candidateName = installerName(candidateVersion, "nsis");
@@ -67,7 +81,7 @@ function fixture(previous = null, candidateVersion = version, shared = null) {
   const sig = { name: candidateName + ".sig", sizeBytes: sigBytes.length, sha256: sha256(sigBytes) };
   const metadata = { version: candidateVersion, sourceSha, artifacts: [artifact], updater: { platform: "windows-x86_64", publicKeySha256: sha256(Buffer.from(encodedPublic)), signatures: [sig] } };
   const metadataBytes = Buffer.from(JSON.stringify(metadata));
-  const manifestBytes = Buffer.from(JSON.stringify(createManifest(candidateVersion, `# Aurora Launcher ${candidateVersion}\nAurora Client 2.1.5`, candidateSignature)));
+  const manifestBytes = Buffer.from(JSON.stringify(createManifest(candidateVersion, `# Aurora Launcher ${candidateVersion}\nAurora Client ${productionClientVersion}`, candidateSignature)));
   const publicBytes = new Map([[candidateName, bytes], [sig.name, sigBytes], ["release-assets.json", metadataBytes]]);
   const release = { id: Number(candidateVersion.replaceAll('.', '')), tag_name: `v${candidateVersion}`, target_commitish: sourceSha, draft: false, prerelease: false, immutable: true,
     assets: [...publicBytes].map(([file, content], index) => ({ id: index + 1, name: file.replaceAll(" ", "."), size: content.length, browser_download_url: `https://github.com/${repository}/releases/download/v${candidateVersion}/${file.replaceAll(" ", ".")}` })) };
@@ -174,7 +188,7 @@ test('future 1.4.1 and 1.4.2 advance from observed parent; immutable release unt
 test('exact successful rerun is idempotent and still verifies public bytes',async()=>{
   const v=fixture();await publishManifest(v);v.calls.length=0;assert.equal(await publishManifest(v),'unchanged');assert.equal(mutateCalls(v).length,0);
 });
-for(const [name,prior] of [['same version different content',Buffer.from(previousManifest('1.4.0').toString().replace('Aurora Client 2.1.5','Aurora Client 2.1.5 changed'))],['downgrade',previousManifest('1.4.1')],['malformed current manifest',Buffer.from('{')]]){
+for(const [name,prior] of [['same version different content',Buffer.from(previousManifest('1.4.0').toString().replace(`Aurora Client ${productionClientVersion}`,`Aurora Client ${productionClientVersion} changed`))],['downgrade',previousManifest('1.4.1')],['malformed current manifest',Buffer.from('{')]]){
  test(name+' fails before constructing objects',async()=>{const v=fixture(prior);await assert.rejects(publishManifest(v));assert.equal(mutateCalls(v).length,0);assert.equal(v.head(),v.initialHead);});
 }
 for(const problem of ['repository','ref','parent','candidate','channel','url','signature','publicHash','immutable','latest','missingAuthority','extraFile','truncatedTree','initialMessage','blobIdentity']){
@@ -308,7 +322,7 @@ const malformedUtf8 = [
   ['invalid continuation', Buffer.from([0xe2, 0x28, 0xa1])],
 ];
 function withNoteBytes(original, extra) {
-  const offset = original.indexOf('2.1.5') + 5;
+  const offset = original.indexOf(productionClientVersion) + productionClientVersion.length;
   return Buffer.concat([original.subarray(0, offset), extra, original.subarray(offset)]);
 }
 for (const [label, invalid] of malformedUtf8) {

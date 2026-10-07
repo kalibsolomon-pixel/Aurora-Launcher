@@ -1555,13 +1555,18 @@ mod tests {
         assert!(
             matches!(validated,crate::install::ValidationOutcome::Installed(report) if report.status==crate::install::ValidationStatus::Valid)
         );
-        let digest =
-            crate::integrity::ArtifactDigest::parse(activity_bridge::BRIDGE_ARTIFACT_SHA256)
-                .unwrap();
+        let manifest = crate::distribution::production_manifest().unwrap();
+        let release = manifest.resolve_exact("3.0.0", None).unwrap();
+        let digest = crate::integrity::ArtifactDigest::parse(release.artifact().sha256()).unwrap();
+        assert!(activity_bridge::supported(
+            true,
+            release.minecraft_version(),
+            Some(release.artifact().sha256())
+        ));
         crate::integrity::verify_file(
-            &paths.mods().join("aurora-2.1.2.jar"),
+            &paths.mods().join("aurora-3.0.0.jar"),
             &digest,
-            Some(2_467_058),
+            release.artifact().size_bytes(),
         )
         .unwrap();
         let platform = PlatformProfile::current().unwrap();

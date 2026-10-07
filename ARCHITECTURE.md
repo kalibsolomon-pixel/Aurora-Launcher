@@ -12,6 +12,12 @@ Enabled Discord Rich Presence connects automatically on its detached Rust worker
 
 ## Phase L production updates (current)
 
+The corrected bundled catalog selects Client 3.0.0 for new compatible Minecraft
+1.21.11 instances. Immutable older pins remain resolvable, and verified 3.0.0 and
+2.1.5 artifacts both retain bridge v2 capability. The published 1.4.1 installer
+has not been replaced; its users explicitly apply the Client update after creation.
+See `CLIENT_3_0_0_PRODUCTION_CORRECTION.md` for current evidence and limits.
+
 Aurora has **one public production release stream**, with two independent Rust engines: Client artifact transactions and official Tauri Launcher self-updates. Full contract: `PHASE_L_PRODUCTION_UPDATES.md`; corrected acceptance: `PHASE_L_SIMPLIFIED_UPDATES_CORRECTION.md`. Earlier phase sections below are historical where superseded by this current contract.
 
 **Release authority.** Only the owner-published Client `aurora-releases.json` and single Launcher `launcher-update.json` become offers. Commits, local tags/builds and CI success do not publish updates. Client selection chooses the newest semver-compatible intentionally published release, without public channel filtering; equal/build-metadata-only versions are current and installed newer never downgrades. Exact Minecraft/Loader and Java assertions remain checked. Legacy release classifications remain only to resolve persisted exact identities; no public preference or eligibility ladder exists. Modrinth per-item release policies remain independent.

@@ -1,4 +1,23 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+
+// Deterministic build-source identity; never fetch publication authority here.
+export function productionClientIdentities(catalog) {
+  if (catalog?.schemaVersion !== 1 || !Array.isArray(catalog.releases)) throw new Error("Invalid production Client catalog");
+  const versions = catalog.releases.filter((release) => release.channel === "stable").map((release) => release.auroraVersion);
+  if (!versions.length || versions.some((version) => typeof version !== "string" || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version) ||
+      !version.split('.').every((part) => Number.isSafeInteger(Number(part)))) || new Set(versions).size !== versions.length) {
+    throw new Error("Production Client identities must be unique stable semantic versions");
+  }
+  return versions.sort((left, right) => {
+    const a = left.split('.').map(Number), b = right.split('.').map(Number);
+    return b[0] - a[0] || b[1] - a[1] || b[2] - a[2];
+  });
+}
+export const productionClientVersions = Object.freeze(productionClientIdentities(
+  JSON.parse(readFileSync(new URL('../../src-tauri/production/aurora-releases.json', import.meta.url), 'utf8')),
+));
+export const productionClientVersion = productionClientVersions[0];
 
 export function selectRelease(releases, tag, sourceSha, resumeId = null, tagSha = null) {
   if (tagSha && tagSha !== sourceSha) throw new Error(`${tag}: conflicting tag target`);
@@ -26,8 +45,10 @@ export function expectedAssetName(name) {
   return name.replaceAll(" ", ".");
 }
 
-export function verifyNotesIdentity(sourceNotes, version, clientVersion) {
-  if (!sourceNotes.startsWith(`# Aurora Launcher ${version}`) || !sourceNotes.includes(`Aurora Client ${clientVersion}`)) {
+export function verifyNotesIdentity(sourceNotes, version, clientVersion = productionClientVersion) {
+  const heading = sourceNotes.split(/\r?\n/, 1)[0];
+  const clientIdentities = [...sourceNotes.matchAll(/\bAurora Client ([0-9]+\.[0-9]+\.[0-9]+)(?![\w+-]|\.[\w])/g)].map((match) => match[1]);
+  if (!(heading === `# Aurora Launcher ${version}` || heading.startsWith(`# Aurora Launcher ${version} `)) || !clientIdentities.includes(clientVersion)) {
     throw new Error(`Release notes identity mismatch: expected Aurora Launcher ${version} naming the current production Aurora Client ${clientVersion}`);
   }
 }

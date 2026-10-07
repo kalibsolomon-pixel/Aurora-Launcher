@@ -1,12 +1,17 @@
 # Aurora Launcher
 
-The current local release candidate is **1.1.0**, with independently verified
-Aurora Client **2.1.5** selected for new compatible production instances. The
-immutable 2.1.3 and 2.1.2 entries remain available for existing pins. Publication is still
-gated by [RELEASE_1_1_0_ACCEPTANCE.md](RELEASE_1_1_0_ACCEPTANCE.md); candidate notes
-are in [RELEASE_1_1_0_NOTES.md](RELEASE_1_1_0_NOTES.md). The production
-activation of Aurora Client 2.1.5 (bridge v2) is recorded in
-[AURORA_CLIENT_2_1_5_ACTIVATION.md](AURORA_CLIENT_2_1_5_ACTIVATION.md).
+The current public Launcher release is **1.4.1**. The corrected production source
+selects Aurora Client 3.0.0 for new compatible Minecraft 1.21.11 instances, with
+Fabric Loader 0.19.5, Java 21 and Fabric API 0.141.6+1.21.11. Older immutable
+entries remain resolvable for existing pins; nothing updates automatically.
+
+This source correction does not replace the already published 1.4.1 installer.
+With that installer, create a compatible instance, then use **Check for Updates**
+and explicitly apply the Aurora Client 3.0.0 update before playing. The published
+Client update manifest already offers that release. Review
+[Client 3.0.0 production correction](CLIENT_3_0_0_PRODUCTION_CORRECTION.md) for
+artifact/bridge verification and publication limits. The dated earlier activation
+record remains [historical evidence](AURORA_CLIENT_2_1_5_ACTIVATION.md).
 
 The launcher supports executable Vanilla instances, Fabric instances without Aurora, and compatible optional Aurora. Creation uses the Rust capability catalog; compatible Fabric instances include Aurora Client by default, and an explicit off choice is respected. Existing instances change configured Aurora through an explicit preview and fingerprinted content transaction, while Mods supports ordinary bootstrap enable, disable and removal. Provider-managed Fabric API remains provider-managed. See [ARCHITECTURE.md](ARCHITECTURE.md) for the supported lifecycle and transition boundaries.
 
@@ -22,11 +27,17 @@ This repository contains the launcher foundation through Phase 9 plus local inst
 
 **Authentication is live-verified.** The Aurora Client Microsoft application registration exists and has completed Microsoft's Minecraft Services AppID review/allowlisting, and the production OAuth flow has been verified end-to-end against the real services: system-browser authorization with a loopback callback (registered redirect `http://localhost`, ephemeral port, root path), PKCE/state validation, the Microsoft → Xbox Live → XSTS → Minecraft Services exchange chain, entitlement and profile retrieval, and secure persistence across an application restart — with no secret logged or persisted in plaintext. The application (client) ID is public application configuration — a desktop public client has no client secret — and is committed in the repository (`src-tauri/src/auth/flow.rs`), so normal development and official builds sign in without manual environment setup; the optional `AURORA_MICROSOFT_CLIENT_ID` build-environment variable overrides it for fork builds, which otherwise report `auth_configuration_missing` honestly. The launch pipeline is implemented and tested against current official metadata with synthetic sessions and harmless child processes; live production-game acceptance is recorded separately from those deterministic tests.
 
-Aurora Client 2.1.2 is the first production release integrated with this launcher. The reviewed stable entry is embedded from `src-tauri/production/aurora-releases.json`; the separate loopback development fixture is offered for new instances only in debug builds, while existing fixture-pinned instances remain resolvable. Shipping a launcher build with that production manifest is the explicit visibility gate. Publishing an Aurora Client GitHub release alone does not change launcher availability or update existing instances. No remote manifest service or automatic update discovery is implemented.
+Aurora Client 2.1.2 was the first production release integrated with this launcher.
+For new instances, the reviewed production catalog is embedded from
+`src-tauri/production/aurora-releases.json`; debug builds separately offer loopback
+fixtures. Existing exact pins remain resolvable. A corrected build is required to
+ship a changed creation catalog. For existing instances, the separate owner-published
+Client manifest drives bounded update discovery and explicit verified updates; a
+GitHub Client release alone does not change the catalog or an existing pin.
 
 The 2.1.2 entry pins Minecraft 1.21.11, Fabric Loader 0.19.5, and Java 21. Aurora's embedded Fabric Loader requirement is a floor (`>=0.16.0`); the launcher verifies the exact 0.19.5 combination through official Fabric Meta. Aurora also requires Fabric API, so this release pins Fabric API 0.141.6+1.21.11 from the official Fabric Maven repository with its published SHA-256 and exact size. Both mods are acquired through the verified cache and bootstrapped under deterministic names. After installation they are user controllable in Mods, including disable, re-enable and removal; the original release record is provenance, not permanent protection. Normal Play and validation never restore removed content. Active known dependencies still block unsafe changes. The embedded manifest is a manual distribution decision; SHA-256 checks bytes against that entry and does not independently authenticate the publisher.
 
-Instances are fully configurable: each one carries the desired Minecraft version (chosen from official Mojang metadata, snapshots behind an explicit filter), a Fabric Loader policy (the release's exact version or an explicitly matching pin), a memory allocation that produces the real JVM heap argument, additional JVM arguments with strict quoting and conflict rules, an optional custom window size, and a display name — saved atomically, with launch-only changes applying immediately and install-affecting changes applied through a deliberate, verified installation step. Older persisted instances migrate to the new registry schema automatically, preserving their identity and installed content. Instances can be selected, renamed, retried, and completely validated. The selected content-ready instance can install, validate, and reuse its official managed Java runtime. Rust owns Play readiness, exact classpath/native/logging/asset argument assembly, token redaction, structured process spawning, and exit supervision. Instance Settings supports deliberate native deletion of one stopped, registered instance after name confirmation; its user data is removed while shared cache, Java and accounts remain. Custom/system Java selection, Aurora updates, and remote Aurora manifest distribution are **not implemented**.
+Instances are fully configurable: each one carries the desired Minecraft version (chosen from official Mojang metadata, snapshots behind an explicit filter), a Fabric Loader policy (the release's exact version or an explicitly matching pin), a memory allocation that produces the real JVM heap argument, additional JVM arguments with strict quoting and conflict rules, an optional custom window size, and a display name — saved atomically, with launch-only changes applying immediately and install-affecting changes applied through a deliberate, verified installation step. Older persisted instances migrate to the new registry schema automatically, preserving their identity and installed content. Instances can be selected, renamed, retried, and completely validated. The selected content-ready instance can install, validate, and reuse its official managed Java runtime. Rust owns Play readiness, exact classpath/native/logging/asset argument assembly, token redaction, structured process spawning, and exit supervision. Instance Settings supports deliberate native deletion of one stopped, registered instance after name confirmation; its user data is removed while shared cache, Java and accounts remain. Custom/system Java selection remains outside this lifecycle. Current Aurora Client update discovery and explicit verified transactions follow the Phase L contract.
 
 The instance architecture separates Minecraft, a typed platform pin, and optional Aurora in registry schema 4. Existing schema-2/3 Aurora instances migrate conservatively. Vanilla and Fabric are executable choices; Fabric without Aurora adds neither Aurora nor its bootstrap Fabric API. Forge, NeoForge, and Quilt are representable in the schema but have no executable backend support or UI choice. Backend capabilities determine available platform choices.
 
