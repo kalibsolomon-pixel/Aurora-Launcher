@@ -1,8 +1,9 @@
 # Installed artwork reliability correction
 
-Local correction and Windows acceptance, 2026-10-08. Launcher version remains
-1.4.1. No push, publication, update-authority change, installer replacement or
-game launch is part of this work.
+Correction and Windows acceptance, 2026-10-08. Launcher version remains 1.4.1.
+The source correction is prepared for GitHub publication at the owner's subsequent
+request. Installer publication, update-authority changes, installed-executable
+replacement and game launch remain outside this source publication.
 
 ## Confirmed causes
 
@@ -116,8 +117,9 @@ replacement, cache reuse with acquisition forbidden, WebP persistence and the
 original PNG/security limits. Frontend tests cover shared promises, retry expiry,
 unavailable versus transient results and rejected-promise recovery.
 
-Evidence is outside Git at
-`C:/Users/kalib/AppData/Local/Temp/aurora-artwork-2a9becf5-1240-4751-8e0f-b7270e4a7e4a`.
+Raw test logs, per-entry audits and repository-protection manifests are retained
+locally. The six real before/after screenshots are checked in under
+`docs/verification/installed-artwork` for GitHub review.
 
 ## Packaged runtime acceptance and artwork coverage
 
@@ -155,9 +157,9 @@ no-icon evidence is `badoptimizations-source.json`.
 
 | View | Before | After |
 | --- | --- | --- |
-| Mods | [Screenshot](C:/Users/kalib/AppData/Local/Temp/aurora-artwork-2a9becf5-1240-4751-8e0f-b7270e4a7e4a/mods-before.png) | [Screenshot](C:/Users/kalib/AppData/Local/Temp/aurora-artwork-2a9becf5-1240-4751-8e0f-b7270e4a7e4a/mods-after.png) |
-| Resource Packs | [Screenshot](C:/Users/kalib/AppData/Local/Temp/aurora-artwork-2a9becf5-1240-4751-8e0f-b7270e4a7e4a/resourcepacks-before.png) | [Screenshot](C:/Users/kalib/AppData/Local/Temp/aurora-artwork-2a9becf5-1240-4751-8e0f-b7270e4a7e4a/resourcepacks-after.png) |
-| Shaders | [Screenshot](C:/Users/kalib/AppData/Local/Temp/aurora-artwork-2a9becf5-1240-4751-8e0f-b7270e4a7e4a/shaders-before.png) | [Screenshot](C:/Users/kalib/AppData/Local/Temp/aurora-artwork-2a9becf5-1240-4751-8e0f-b7270e4a7e4a/shaders-after.png) |
+| Mods | [Screenshot](docs/verification/installed-artwork/mods-before.png) | [Screenshot](docs/verification/installed-artwork/mods-after.png) |
+| Resource Packs | [Screenshot](docs/verification/installed-artwork/resourcepacks-before.png) | [Screenshot](docs/verification/installed-artwork/resourcepacks-after.png) |
+| Shaders | [Screenshot](docs/verification/installed-artwork/shaders-before.png) | [Screenshot](docs/verification/installed-artwork/shaders-after.png) |
 
 Packaged asynchronous acceptance temporarily injected one typed `retryable`
 response for Continuity at the cosmetic IPC transport, with a shortened 1,200 ms
@@ -197,8 +199,9 @@ restart. A fully network-disconnected packaged startup is therefore **not claime
   changed logo requires cache invalidation rather than ordinary navigation polling.
 - Locally imported exact/no-match cases and corrupt-cache recovery were tested in
   disposable loopback fixtures, not by altering the owner's installed mods.
-- This correction has not been installed over the owner's executable, signed,
-  pushed or published. The local packaged acceptance build has updates disabled.
+- This correction has not been installed over the owner's executable or signed
+  as a production release. The local packaged acceptance build has updates disabled;
+  publishing the source does not distribute a new installer or advance updates.
 - A physically/offline-network packaged boot remains unverified for the policy
   reason above; the native cache path is tested with network acquisition forbidden.
 
@@ -229,3 +232,24 @@ hashes also match. No broad cleanup or deletion occurred. Generated outputs and
 acceptance data remain unstaged. The final commit is the focused, independently
 revertible commit containing this report; its SHA and final status are reported
 in the task's final response.
+
+## GitHub source publication follow-up
+
+The owner subsequently requested the same correction for Resource Packs and
+Shaders and publication to GitHub. Both content types were already included in
+the implementation and packaged verification above. Source publication preserves
+the earlier no-version-bump requirement; it does not replace immutable 1.4.1
+release assets or trigger a new installer/update release.
+
+The artwork patch was applied on a separate branch from `origin/main`
+`4575a0e3f1c28da6cfe072948fe91b60eeaf608f`. The preceding local Client release-policy
+commit `420f54c` was left separate. On that isolated source, Rust format/check and
+all 841 library plus six icon tests passed, frontend checking had zero errors or
+warnings, all 229 frontend tests passed, and the production SPA build passed.
+The first fresh parallel frontend run encountered Vite's
+`ERR_OUTDATED_OPTIMIZED_DEP` shared-cache initialization race; after warming that
+cache, the complete rerun passed. No product code was changed to mask that result.
+
+This follow-up includes six byte-identical real screenshots for GitHub review.
+The original workspace, protected diagnostics, installed files, production
+release catalog, release tooling and update authorities remain unchanged.
