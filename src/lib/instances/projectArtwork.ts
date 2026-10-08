@@ -5,19 +5,21 @@ export function artworkProject(entry: Pick<ModEntry, "ownership" | "provenance">
   return entry.ownership === "providerManaged" && entry.provenance?.provider === "modrinth" ? entry.provenance.projectId : null;
 }
 
-export class ArtworkCache {
-  private entries = new Map<string, { expires: number; promise: Promise<string | null> }>();
+/** Shared in-flight and completed results. A failure has a retry deadline,
+ * never an immortal rejected promise; retries are owned by mounted consumers. */
+export class ResolutionCache<T extends { retryAfterMs: number | null }> {
+  private entries = new Map<string, { expires: number; promise: Promise<T> }>();
   private now: () => number;
   constructor(now = () => Date.now()) { this.now = now; }
-  get(id: string, fetch: (id: string) => Promise<string | null>): Promise<string | null> {
-    const existing = this.entries.get(id);
+  get(key: string, fetch: () => Promise<T>): Promise<T> {
+    const existing = this.entries.get(key);
     if (existing && existing.expires > this.now()) return existing.promise;
-    const promise = fetch(id).catch(() => null);
-    const entry = { expires: this.now() + 600_000, promise };
-    this.entries.delete(id);
-    this.entries.set(id, entry);
-    while(this.entries.size > 128) this.entries.delete(this.entries.keys().next().value!);
-    void promise.then(url => { if (!url) entry.expires = this.now() + 60_000; });
-    return promise;
+    const entry = { expires: Infinity, promise: Promise.resolve().then(fetch) };
+    this.entries.set(key, entry);
+    while (this.entries.size > 128) this.entries.delete(this.entries.keys().next().value!);
+    void entry.promise.then(result => { entry.expires = this.now() + (result.retryAfterMs ?? 600_000); }, () => {
+      entry.expires = this.now() + 60_000;
+    });
+    return entry.promise;
   }
 }

@@ -78,6 +78,7 @@ semver = "1"
 # platform install lifecycle. >= 2.12 required (CVE-2026-95624 fixed there);
 # only the Rust API is used, so no frontend capability is granted.
 tauri-plugin-updater = "2.12"
+image-webp = "0.2.4"
 
 # Windows credential storage (Phase 8): the official Microsoft raw bindings,
 # restricted to the generic Windows Credential Manager API. Linux and macOS
@@ -98,6 +99,9 @@ windows-sys = { version = "0.61", features = [
     "Win32_Security_Credentials",
     "Win32_Networking_WinSock",
     "Win32_NetworkManagement_Dns",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_Debug",
 ] }
 windows = { version = "0.61", default-features = false, features = [
     "Win32_Foundation",
@@ -105,6 +109,9 @@ windows = { version = "0.61", default-features = false, features = [
     "Win32_System_Com",
     "Win32_UI_Shell",
 ] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
 
 # Deterministic async native tests. Icon invariants also use the PNG decoder
 # now shared with production avatar decoding above.

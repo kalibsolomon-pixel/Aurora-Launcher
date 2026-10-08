@@ -3165,6 +3165,31 @@ pub async fn get_modrinth_project_artwork(
     crate::artwork::cached_artwork(&managed, &request.project_id).await
 }
 
+#[tauri::command]
+pub async fn resolve_project_artwork(
+    app: AppHandle,
+    request: ModrinthArtworkRequest,
+) -> Result<crate::artwork::ArtworkResult, CommandError> {
+    let managed = managed_paths(&app)?;
+    Ok(crate::artwork::resolve_artwork(&managed, &request.project_id).await)
+}
+
+#[tauri::command]
+pub async fn get_installed_artwork_identities(
+    app: AppHandle,
+    request: InstanceContentRequest,
+) -> Result<crate::installed_artwork::Identities, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    Ok(crate::installed_artwork::resolve(
+        &managed,
+        &instance,
+        request.content_type,
+        &crate::modrinth::Client::official(),
+    )
+    .await)
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModrinthPackRequest {
