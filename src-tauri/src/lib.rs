@@ -8,6 +8,7 @@ pub mod config;
 pub mod content_recognition;
 pub mod content_updates;
 mod cosmetic_image;
+pub use cosmetic_image::run_artwork_decoder_if_requested;
 pub mod cosmetics;
 pub mod discord;
 pub mod distribution;
@@ -16,6 +17,7 @@ pub mod fabric;
 pub mod gameplay_history;
 pub mod home_widgets;
 pub mod install;
+mod installed_artwork;
 pub mod instance_content;
 pub mod instance_mods;
 pub mod instances;
@@ -125,6 +127,8 @@ pub fn run() {
             application::browse_modrinth_tags,
             application::get_modrinth_project,
             application::get_modrinth_project_artwork,
+            application::resolve_project_artwork,
+            application::get_installed_artwork_identities,
             application::preview_modrinth_pack,
             application::install_modrinth_pack,
             application::check_modpack_update,

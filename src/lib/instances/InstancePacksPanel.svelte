@@ -6,6 +6,7 @@
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
   import InstalledArtwork from "./InstalledArtwork.svelte";
+  import { installedArtworkIdentities } from './installedArtwork';
   import ContentRecognition from "./ContentRecognition.svelte";
   import ContentUpdates from "./ContentUpdates.svelte";
   import Icon from "$lib/shell/Icon.svelte";
@@ -25,6 +26,25 @@
   let providerRemoval = $state<ProviderRemovalPreview | null>(null);
   let providerRemovalEntry = $state<ContentEntry | null>(null);
   let removalBusy = $state(false);
+  let artworkProjects = $state<Record<string, string>>({});
+  $effect(() => {
+    const target = instance.id;
+    const type = kind;
+    const revision = entries.map(entry => entry.entryId).join(':');
+    let current = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    artworkProjects = {};
+    async function resolve() {
+      try {
+        const result = await installedArtworkIdentities(target, type, revision);
+        if (!current) return;
+        artworkProjects = result.projects;
+        if (result.retryAfterMs) timer = setTimeout(resolve, result.retryAfterMs);
+      } catch { if (current) timer = setTimeout(resolve, 60_000); }
+    }
+    if (revision) void resolve();
+    return () => { current = false; clearTimeout(timer); };
+  });
 
   async function refreshLifecycle(targetId: string): Promise<void> {
     try {
@@ -191,7 +211,7 @@
           {@const toggleReason = packToggleUnavailableReason(entry)}
           <article class="pack-row">
             <div class="pack-main">
-              <InstalledArtwork compact projectId={entry.ownership === 'providerManaged' && entry.provenance?.provider === "modrinth" ? entry.provenance.projectId : null} fallback={kind === "resourcePack" ? "R" : "S"} />
+              <InstalledArtwork compact projectId={entry.ownership === 'providerManaged' && entry.provenance?.provider === "modrinth" ? entry.provenance.projectId : artworkProjects[entry.entryId] ?? null} fallback={kind === "resourcePack" ? "R" : "S"} />
               <div class="pack-identity">
                 <h4>{entry.displayName}</h4>
                 <p class="pack-meta">{packSourceLabel(entry)}{formatPackSize(entry.sizeBytes) ? ` · ${formatPackSize(entry.sizeBytes)}` : ""}</p>

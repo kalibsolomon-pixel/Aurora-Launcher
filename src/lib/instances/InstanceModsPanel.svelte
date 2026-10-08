@@ -15,6 +15,7 @@
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
   import InstalledArtwork from "./InstalledArtwork.svelte";
   import { artworkProject } from "./projectArtwork";
+  import { installedArtworkIdentities } from './installedArtwork';
   import ContentRecognition from "./ContentRecognition.svelte";
   import ContentUpdates from "./ContentUpdates.svelte";
   import Icon from "$lib/shell/Icon.svelte";
@@ -35,6 +36,24 @@
   let lifecycleError = $state("");
   let context = $state<InstanceContentContext | null>(null);
   let updatesReport = $state<UpdatesReport | null>(null);
+  let artworkProjects = $state<Record<string, string>>({});
+  $effect(() => {
+    const target = instance.id;
+    const revision = entries.map(entry => entry.entryId).join(':');
+    let current = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    artworkProjects = {};
+    async function resolve() {
+      try {
+        const result = await installedArtworkIdentities(target, 'mod', revision);
+        if (!current) return;
+        artworkProjects = result.projects;
+        if (result.retryAfterMs) timer = setTimeout(resolve, result.retryAfterMs);
+      } catch { if (current) timer = setTimeout(resolve, 60_000); }
+    }
+    if (revision) void resolve();
+    return () => { current = false; clearTimeout(timer); };
+  });
 
   async function refreshLifecycle(targetId: string): Promise<void> {
     try {
@@ -257,7 +276,7 @@
         {#each shown as entry (entry.entryId)}
           <article class="mod-row" class:mod-row-disabled={!entry.enabled}>
             <div class="mod-row-main">
-              <InstalledArtwork projectId={artworkProject(entry)} fallback={entry.metadata ? "M" : "J"} />
+              <InstalledArtwork projectId={artworkProject(entry) ?? artworkProjects[entry.entryId] ?? null} fallback={entry.metadata ? "M" : "J"} />
               <div class="mod-identity">
                 <div class="mod-title-line">
                   <h4>{entry.displayName}</h4>

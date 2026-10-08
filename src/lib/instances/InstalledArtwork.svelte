@@ -1,9 +1,10 @@
 <script module lang="ts">
-  import { ArtworkCache } from "./projectArtwork";
-  const cache = new ArtworkCache();
+  import { ResolutionCache } from "./projectArtwork";
+  import type { ProjectArtworkResult } from '$lib/backend';
+  const cache = new ResolutionCache<ProjectArtworkResult>();
 </script>
 <script lang="ts">
-  import { getModrinthProjectArtwork } from "$lib/backend";
+  import { resolveProjectArtwork } from "$lib/backend";
   import Artwork from '$lib/shell/Artwork.svelte';
   // Native provider identity in, validated Aurora-cached PNG out. Installed
   // callers supply provenance; Browse supplies the native search project id.
@@ -13,9 +14,21 @@
   $effect(() => {
     const project = projectId;
     let current = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     url = null;
-    if(project) void cache.get(project, getModrinthProjectArtwork).then(result => { if(current) url = result; });
-    return () => { current = false; };
+    async function resolve() {
+      if (!project || !current) return;
+      try {
+        const result = await cache.get(project, () => resolveProjectArtwork(project));
+        if (!current) return;
+        url = result.source;
+        if (result.retryAfterMs) timer = setTimeout(resolve, result.retryAfterMs);
+      } catch {
+        if (current) timer = setTimeout(resolve, 60_000);
+      }
+    }
+    void resolve();
+    return () => { current = false; clearTimeout(timer); };
   });
 </script>
 <div class="installed-artwork" class:compact aria-hidden="true">

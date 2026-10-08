@@ -11,8 +11,11 @@
 <span class="artwork" style:--artwork-size={`${size}px`} aria-hidden="true">
   <span class="placeholder"><Icon name={artworkSymbol(fallback)} size={size < 40 ? 20 : 24} /></span>
   {#if safeSource && failed !== safeSource}
-    <img src={safeSource} alt="" loading="lazy" class:loaded={loaded === safeSource}
-      onload={() => loaded = safeSource} onerror={() => failed = safeSource} />
+    {#key safeSource}
+      {@const imageSource = safeSource}
+      <img src={imageSource} alt="" loading="lazy" class:loaded={loaded === imageSource}
+        onload={() => loaded = imageSource} onerror={() => failed = imageSource} />
+    {/key}
   {/if}
 </span>
 <style>
