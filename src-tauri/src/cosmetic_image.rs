@@ -1,5 +1,6 @@
-//! One native boundary for untrusted cosmetic images. Only static PNG is
-//! supported by the existing bounded decoder; other formats are rejected.
+//! One native boundary for untrusted cosmetic images. Static PNG remains the
+//! display/cache format. Provider artwork additionally decodes static WebP in
+//! a byte-only, OS-memory-limited disposable worker; other formats are rejected.
 //! Re-encoding decoded pixels removes source metadata and any alternate browser
 //! interpretation. Neither compressed size nor a MIME/signature is validation.
 
@@ -126,6 +127,298 @@ pub(crate) fn validate(bytes: &[u8], policy: Policy) -> Option<ValidatedPng> {
     Some(ValidatedPng(output.bytes))
 }
 
+/// Provider artwork additionally admits static WebP. Browser input and stored
+/// output remain canonical PNG; server favicons retain their PNG-only policy.
+pub(crate) fn validate_artwork(bytes: &[u8]) -> Option<ValidatedPng> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return validate(bytes, ARTWORK);
+    }
+    webp_dimensions(bytes)?;
+    #[cfg(test)]
+    return decode_webp(bytes);
+    #[cfg(not(test))]
+    isolated_webp(bytes)
+}
+
+fn decode_webp(bytes: &[u8]) -> Option<ValidatedPng> {
+    if bytes.len() < 12
+        || bytes.len() > ARTWORK.max_encoded_bytes
+        || &bytes[..4] != b"RIFF"
+        || &bytes[8..12] != b"WEBP"
+        || u32::from_le_bytes(bytes[4..8].try_into().ok()?) as usize != bytes.len() - 8
+    {
+        return None;
+    }
+    let expected = webp_dimensions(bytes)?;
+    let mut decoder = image_webp::WebPDecoder::new(Cursor::new(bytes)).ok()?;
+    decoder.set_memory_limit(ARTWORK.max_decoded_bytes);
+    let (width, height) = decoder.dimensions();
+    if (width, height) != expected {
+        return None;
+    }
+    let bound = ARTWORK.surface_bound(width, height)?;
+    if decoder.is_animated() {
+        return None;
+    }
+    let size = decoder.output_buffer_size()?;
+    if size > bound {
+        return None;
+    }
+    let mut pixels = Vec::new();
+    pixels.try_reserve_exact(size).ok()?;
+    pixels.resize(size, 0);
+    decoder.read_image(&mut pixels).ok()?;
+    let mut output = BoundedOutput {
+        bytes: Vec::new(),
+        maximum: ARTWORK.max_encoded_bytes,
+    };
+    {
+        let mut encoder = png::Encoder::new(&mut output, width, height);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder.set_color(if decoder.has_alpha() {
+            png::ColorType::Rgba
+        } else {
+            png::ColorType::Rgb
+        });
+        let mut writer = encoder.write_header().ok()?;
+        writer.write_image_data(&pixels).ok()?;
+        writer.finish().ok()?;
+    }
+    validate(&output.bytes, ARTWORK)
+}
+
+// Check every RIFF chunk BEFORE constructing the decoder. In particular an
+// extended canvas must not hide an oversized VP8/VP8L bitstream: some decoder
+// scratch allocations precede its final canvas-consistency check.
+fn webp_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.len() < 12
+        || bytes.len() > ARTWORK.max_encoded_bytes
+        || &bytes[..4] != b"RIFF"
+        || &bytes[8..12] != b"WEBP"
+        || u32::from_le_bytes(bytes[4..8].try_into().ok()?) as usize != bytes.len() - 8
+    {
+        return None;
+    }
+    let mut offset: usize = 12;
+    let mut canvas = None;
+    let mut image = None;
+    let mut chunks = 0;
+    while offset < bytes.len() {
+        chunks += 1;
+        if chunks > 64 {
+            return None;
+        }
+        let header = bytes.get(offset..offset.checked_add(8)?)?;
+        let size = u32::from_le_bytes(header[4..8].try_into().ok()?) as usize;
+        let start = offset.checked_add(8)?;
+        let end = start.checked_add(size)?;
+        let data = bytes.get(start..end)?;
+        let dimensions = match &header[..4] {
+            b"ANIM" | b"ANMF" => return None,
+            b"VP8X" => {
+                if canvas.is_some() || image.is_some() || size != 10 || data[0] & 2 != 0 {
+                    return None;
+                }
+                let width = 1 + u32::from_le_bytes([data[4], data[5], data[6], 0]);
+                let height = 1 + u32::from_le_bytes([data[7], data[8], data[9], 0]);
+                ARTWORK.surface_bound(width, height)?;
+                canvas = Some((width, height));
+                None
+            }
+            b"VP8 " => {
+                if data.len() < 10 || data[0] & 1 != 0 || &data[3..6] != b"\x9d\x01\x2a" {
+                    return None;
+                }
+                Some((
+                    u32::from(u16::from_le_bytes(data[6..8].try_into().ok()?) & 0x3fff),
+                    u32::from(u16::from_le_bytes(data[8..10].try_into().ok()?) & 0x3fff),
+                ))
+            }
+            b"VP8L" => {
+                if data.len() < 5 || data[0] != 0x2f {
+                    return None;
+                }
+                let bits = u32::from_le_bytes(data[1..5].try_into().ok()?);
+                if bits >> 29 != 0 {
+                    return None;
+                }
+                Some((1 + (bits & 0x3fff), 1 + ((bits >> 14) & 0x3fff)))
+            }
+            _ => None,
+        };
+        if let Some(dimensions) = dimensions {
+            if image.is_some() || canvas.is_some_and(|canvas| canvas != dimensions) {
+                return None;
+            }
+            ARTWORK.surface_bound(dimensions.0, dimensions.1)?;
+            image = Some(dimensions);
+        }
+        offset = end.checked_add(size % 2)?;
+        if offset > bytes.len() {
+            return None;
+        }
+    }
+    image
+}
+
+const DECODER_FLAG: &str = "--aurora-artwork-webp-decoder";
+/// Narrow byte-only worker mode; it never initializes Tauri, opens an instance,
+/// reads credentials or accepts paths/URLs. The OS enforces the allocation cap
+/// because image-webp's advisory memory limit does not cover every allocation.
+pub fn run_artwork_decoder_if_requested() -> bool {
+    if std::env::args_os().nth(1).as_deref() != Some(std::ffi::OsStr::new(DECODER_FLAG)) {
+        return false;
+    }
+    if std::env::args_os().count() != 2 || !limit_decoder_memory() {
+        std::process::exit(1);
+    }
+    use std::io::Read as _;
+    let mut bytes = Vec::new();
+    if std::io::stdin()
+        .take((ARTWORK.max_encoded_bytes + 1) as u64)
+        .read_to_end(&mut bytes)
+        .is_err()
+    {
+        std::process::exit(1);
+    }
+    let Some(image) = decode_webp(&bytes) else {
+        std::process::exit(1);
+    };
+    if std::io::stdout().write_all(image.bytes()).is_err() {
+        std::process::exit(1);
+    }
+    true
+}
+
+#[cfg(windows)]
+fn limit_decoder_memory() -> bool {
+    use windows_sys::Win32::{
+        Foundation::CloseHandle,
+        System::{
+            Diagnostics::Debug::{SEM_FAILCRITICALERRORS, SEM_NOGPFAULTERRORBOX, SetErrorMode},
+            JobObjects::*,
+            Threading::GetCurrentProcess,
+        },
+    };
+    // All decoder allocations, including untrusted Huffman tables, are inside
+    // this disposable process. Failure/OOM cannot abort the launcher.
+    unsafe {
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if job.is_null() {
+            return false;
+        }
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_PROCESS_MEMORY;
+        info.ProcessMemoryLimit = ARTWORK.max_decoded_bytes;
+        let accepted = SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            (&info as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
+            std::mem::size_of_val(&info) as u32,
+        ) != 0
+            && AssignProcessToJobObject(job, GetCurrentProcess()) != 0;
+        CloseHandle(job);
+        accepted
+    }
+}
+#[cfg(target_os = "linux")]
+fn limit_decoder_memory() -> bool {
+    // RLIMIT_AS bounds future allocations after the executable's mappings;
+    // RLIMIT_DATA additionally caps the worker's total heap to the same budget.
+    let Some(pages) = std::fs::read_to_string("/proc/self/statm")
+        .ok()
+        .and_then(|s| s.split_whitespace().next()?.parse::<u64>().ok())
+    else {
+        return false;
+    };
+    unsafe {
+        let page_size = libc::sysconf(libc::_SC_PAGESIZE);
+        if page_size <= 0 {
+            return false;
+        }
+        let Some(maximum) = pages
+            .checked_mul(page_size as u64)
+            .and_then(|b| b.checked_add(ARTWORK.max_decoded_bytes as u64))
+        else {
+            return false;
+        };
+        libc::setrlimit(
+            libc::RLIMIT_AS,
+            &libc::rlimit {
+                rlim_cur: maximum,
+                rlim_max: maximum,
+            },
+        ) == 0
+            && libc::setrlimit(
+                libc::RLIMIT_DATA,
+                &libc::rlimit {
+                    rlim_cur: ARTWORK.max_decoded_bytes as u64,
+                    rlim_max: ARTWORK.max_decoded_bytes as u64,
+                },
+            ) == 0
+    }
+}
+#[cfg(not(any(windows, target_os = "linux")))]
+fn limit_decoder_memory() -> bool {
+    false
+}
+
+#[cfg(not(test))]
+fn isolated_webp(bytes: &[u8]) -> Option<ValidatedPng> {
+    use std::{
+        io::Read as _,
+        process::{Command, Stdio},
+        time::{Duration, Instant},
+    };
+    let mut command = Command::new(std::env::current_exe().ok()?);
+    command
+        .arg(DECODER_FLAG)
+        .env_clear()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        if let Some(root) = std::env::var_os("SystemRoot") {
+            command.env("SystemRoot", root);
+        }
+    }
+    let mut child = command.spawn().ok()?;
+    let stdout = child.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut output = Vec::new();
+        stdout
+            .take((ARTWORK.max_encoded_bytes + 1) as u64)
+            .read_to_end(&mut output)
+            .ok()?;
+        Some(output)
+    });
+    let sent = child
+        .stdin
+        .take()
+        .is_some_and(|mut input| input.write_all(bytes).is_ok());
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let success = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break sent && status.success(),
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break false;
+            }
+        }
+    };
+    let output = reader.join().ok().flatten()?;
+    if !success {
+        return None;
+    }
+    validate(&output, ARTWORK)
+}
+
 #[cfg(test)]
 pub(crate) mod fixtures {
     pub(crate) const JPEG_4096: &[u8] = include_bytes!("../tests/fixtures/artwork/solid-4096.jpg");
@@ -166,6 +459,37 @@ pub(crate) mod fixtures {
 mod tests {
     use super::*;
     use fixtures::*;
+
+    #[test]
+    fn static_webp_decodes_to_persistable_png_and_animation_stays_rejected() {
+        let lossy=Base64::decode_vec("UklGRjwAAABXRUJQVlA4IDAAAADQAQCdASoCAAIAAUAmJaACdLoB+AADsAD+8ut//NgVzXPv9//S4P0uD9Lg/9KQAAA=").unwrap();
+        let normalized = validate_artwork(&lossy).unwrap();
+        assert!(validate(normalized.bytes(), ARTWORK).is_some());
+        assert!(validate(&lossy, FAVICON).is_none());
+        let mut lossless = Vec::new();
+        image_webp::WebPEncoder::new(&mut lossless)
+            .encode(&[10, 20, 30, 127], 1, 1, image_webp::ColorType::Rgba8)
+            .unwrap();
+        let image = validate_artwork(&lossless).unwrap();
+        let mut reader = png::Decoder::new(Cursor::new(image.bytes()))
+            .read_info()
+            .unwrap();
+        let mut pixels = vec![0; reader.output_buffer_size()];
+        reader.next_frame(&mut pixels).unwrap();
+        assert_eq!(pixels, [10, 20, 30, 127]);
+        let animated=Base64::decode_vec("UklGRsQAAABXRUJQVlA4WAoAAAACAAAAAQAAAQAAQU5JTQYAAAAAAAAAAABBTk1GSgAAAAAAAAAAAAEAAAEAADIAAAJWUDggMgAAADABAJ0BKgIAAgABQCYloAADcAD+8ut///mwP/bz/wR6Af//0uD//pcH//S4P/SkAAAAQU5NRkYAAAAAAAAAAAABAAABAAAyAAAAVlA4IC4AAAA0AQCdASoCAAIAAAAmJaAAA3AA/vtV4///S4P/+lwf/9Lg/9Lg//rV5Vesq6AA").unwrap();
+        assert!(validate_artwork(&animated).is_none());
+        assert!(validate_artwork(&lossless[..lossless.len() - 1]).is_none());
+        let mut huge = lossy.clone();
+        huge[26..28].copy_from_slice(&1025u16.to_le_bytes());
+        assert!(validate_artwork(&huge).is_none());
+        // A small extended canvas cannot disguise an oversized compressed image.
+        let mut extended = b"RIFF\0\0\0\0WEBPVP8X\x0a\0\0\0\0\0\0\0\x01\0\0\x01\0\0".to_vec();
+        extended.extend_from_slice(&huge[12..]);
+        let size = (extended.len() - 8) as u32;
+        extended[4..8].copy_from_slice(&size.to_le_bytes());
+        assert!(validate_artwork(&extended).is_none());
+    }
 
     #[test]
     fn static_png_and_exact_dimension_pixel_boundaries_are_supported() {

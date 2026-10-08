@@ -912,6 +912,22 @@ export async function getModrinthProjectArtwork(projectId: string): Promise<stri
   return contentInvoke("get_modrinth_project_artwork", { projectId });
 }
 
+export interface ProjectArtworkResult {
+  source: string | null;
+  status: "available" | "unavailable" | "retryable";
+  retryAfterMs: number | null;
+}
+export interface InstalledArtworkIdentities {
+  projects: Record<string, string>;
+  retryAfterMs: number | null;
+}
+export async function resolveProjectArtwork(projectId: string): Promise<ProjectArtworkResult> {
+  return contentInvoke("resolve_project_artwork", { projectId });
+}
+export async function getInstalledArtworkIdentities(instanceId: string, contentType: ContentType): Promise<InstalledArtworkIdentities> {
+  return contentInvoke("get_installed_artwork_identities", { instanceId, contentType });
+}
+
 export type ContentType = "mod" | "resourcePack" | "shaderPack";
 export type ContentOwnership = ModOwnership;
 export type DependencyKind = "required" | "optional" | "incompatible";
