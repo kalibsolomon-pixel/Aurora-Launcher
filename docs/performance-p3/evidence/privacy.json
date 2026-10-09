@@ -1,0 +1,8 @@
+{
+  "filesScanned": 19,
+  "privateIdentifiersFound": 0,
+  "jwtLikeValuesFound": 0,
+  "privateAbsolutePathsFound": 0,
+  "rawJfrCommitted": false,
+  "exportedFields": "code symbols, numeric aggregates, public identities and hashes only"
+}

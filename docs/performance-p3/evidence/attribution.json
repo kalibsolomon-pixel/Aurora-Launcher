@@ -1,0 +1,1297 @@
+{
+  "baselineCount": 10,
+  "partitionMs": {
+    "Knot": {
+      "n": 10,
+      "median": 2626.3025500000003,
+      "min": 2567.2540000000004,
+      "max": 2688.8604000000005,
+      "mean": 2625.74395,
+      "sampleSd": 40.45153808492471
+    },
+    "MinecraftConstructor": {
+      "n": 10,
+      "median": 4003.2453499999992,
+      "min": 3385.9085999999998,
+      "max": 4042.0838000000003,
+      "mean": 3876.34818,
+      "sampleSd": 237.14633215371381
+    },
+    "MinecraftMainBeforeConstructor": {
+      "n": 10,
+      "median": 5181.438400000001,
+      "min": 4601.166700000001,
+      "max": 5611.3976999999995,
+      "mean": 5134.12179,
+      "sampleSd": 356.2091868772408
+    },
+    "afterConstructorToMenu": {
+      "n": 10,
+      "median": 4235.189049999999,
+      "min": 4136.949400000002,
+      "max": 4264.2015,
+      "mean": 4225.05497,
+      "sampleSd": 40.695810028279766
+    },
+    "beforeKnot": {
+      "n": 10,
+      "median": 383.94695,
+      "min": 366.8403,
+      "max": 414.786,
+      "mean": 386.84674,
+      "sampleSd": 15.449071923452221
+    },
+    "beforeMinecraftMain": {
+      "n": 10,
+      "median": 160.8643999999999,
+      "min": 129.0802000000002,
+      "max": 195.51359999999994,
+      "mean": 158.47678999999997,
+      "sampleSd": 20.335509501660095
+    }
+  },
+  "methodInclusiveMs": {
+    "entrypoint.btw.lowercase.skyboxify.SkyboxifyClient.onInitializeClient": {
+      "n": 10,
+      "median": 10.6107,
+      "min": 6.7885,
+      "max": 16.5887,
+      "mean": 11.34826,
+      "sampleSd": 3.5143207699038768
+    },
+    "entrypoint.ca.fxco.moreculling.MoreCullingFabric.onInitializeClient": {
+      "n": 10,
+      "median": 18.8275,
+      "min": 16.2403,
+      "max": 23.4067,
+      "mean": 19.2289,
+      "sampleSd": 2.497742797896622
+    },
+    "entrypoint.ca.spottedleaf.starlight.common.ScalableLuxEntrypoint.onInitialize": {
+      "n": 10,
+      "median": 9.12255,
+      "min": 7.7493,
+      "max": 14.677,
+      "mean": 9.865639999999999,
+      "sampleSd": 2.109051442499948
+    },
+    "entrypoint.com.aurora.client.AuroraClient.onInitializeClient": {
+      "n": 10,
+      "median": 208.09035,
+      "min": 151.7974,
+      "max": 253.0829,
+      "mean": 205.58116,
+      "sampleSd": 36.915708990293005
+    },
+    "entrypoint.com.sun.proxy.jdk.proxy3.$Proxy65.onInitialize": {
+      "n": 10,
+      "median": 1.5972,
+      "min": 1.3319,
+      "max": 8.7197,
+      "mean": 2.27881,
+      "sampleSd": 2.270295472424484
+    },
+    "entrypoint.com.sun.proxy.jdk.proxy3.$Proxy68.onInitializeClient": {
+      "n": 10,
+      "median": 7.7308,
+      "min": 6.0105,
+      "max": 13.1647,
+      "mean": 8.38167,
+      "sampleSd": 2.0916664770517843
+    },
+    "entrypoint.com.terraformersmc.modmenu.ModMenu.onInitializeClient": {
+      "n": 10,
+      "median": 40.303399999999996,
+      "min": 35.4804,
+      "max": 43.6378,
+      "mean": 40.05344,
+      "sampleSd": 2.406562131709417
+    },
+    "entrypoint.de.maxhenkel.voicechat.FabricVoicechatClientMod.onInitializeClient": {
+      "n": 10,
+      "median": 149.9835,
+      "min": 142.3301,
+      "max": 161.0253,
+      "mean": 150.48621,
+      "sampleSd": 6.980978161714399
+    },
+    "entrypoint.de.maxhenkel.voicechat.FabricVoicechatMod.onInitialize": {
+      "n": 10,
+      "median": 65.7575,
+      "min": 39.7092,
+      "max": 112.3749,
+      "mean": 70.33868,
+      "sampleSd": 23.258454110031572
+    },
+    "entrypoint.dev.isxander.yacl3.platform.PlatformEntrypoint.onInitializeClient": {
+      "n": 10,
+      "median": 2.40055,
+      "min": 2.1451,
+      "max": 2.9556,
+      "mean": 2.42273,
+      "sampleSd": 0.24609664339216186
+    },
+    "entrypoint.dev.kostromdan.mods.crash_assistant.fabric.CrashAssistantFabric.onInitialize": {
+      "n": 10,
+      "median": 0.5581499999999999,
+      "min": 0.3209,
+      "max": 0.982,
+      "mean": 0.5759,
+      "sampleSd": 0.1996759318941013
+    },
+    "entrypoint.dev.kostromdan.mods.crash_assistant.fabric.client.CrashAssistantFabricClient.onInitializeClient": {
+      "n": 10,
+      "median": 0.02215,
+      "min": 0.0194,
+      "max": 0.0266,
+      "mean": 0.02265,
+      "sampleSd": 0.0026273137950724077
+    },
+    "entrypoint.dev.tonimatas.packetfixer.PacketFixer.onInitialize": {
+      "n": 10,
+      "median": 3.45775,
+      "min": 1.5656,
+      "max": 4.7081,
+      "mean": 3.24386,
+      "sampleSd": 1.2127278436098787
+    },
+    "entrypoint.dev.tr7zw.entityculling.EntityCullingMod.onInitializeClient": {
+      "n": 10,
+      "median": 23.8459,
+      "min": 16.2735,
+      "max": 37.1087,
+      "mean": 25.83399,
+      "sampleSd": 7.576963340789414
+    },
+    "entrypoint.dev.tr7zw.entityculling.EntityCullingModBase.onInitialize": {
+      "n": 10,
+      "median": 23.7697,
+      "min": 16.2083,
+      "max": 36.9561,
+      "mean": 25.74812,
+      "sampleSd": 7.554401920264032
+    },
+    "entrypoint.dev.tr7zw.entityculling.versionless.EntityCullingVersionlessBase.onInitialize": {
+      "n": 10,
+      "median": 1.2826499999999998,
+      "min": 1.0379,
+      "max": 1.594,
+      "mean": 1.28191,
+      "sampleSd": 0.17234369053338353
+    },
+    "entrypoint.dev.tr7zw.notenoughanimations.NEAnimationsMod.onInitializeClient": {
+      "n": 10,
+      "median": 14.59645,
+      "min": 12.1067,
+      "max": 17.2911,
+      "mean": 14.74267,
+      "sampleSd": 1.7012287357149312
+    },
+    "entrypoint.dev.tr7zw.skinlayers.SkinLayersMod.onInitializeClient": {
+      "n": 10,
+      "median": 1.033,
+      "min": 0.7391,
+      "max": 1.2461,
+      "mean": 1.01772,
+      "sampleSd": 0.13089860197878356
+    },
+    "entrypoint.dev.tr7zw.skinlayers.versionless.ModBase.onInitialize": {
+      "n": 10,
+      "median": 0.9757,
+      "min": 0.6876,
+      "max": 1.1809,
+      "mean": 0.95403,
+      "sampleSd": 0.12760425846255202
+    },
+    "entrypoint.dev.tr7zw.transition.ClientTRansitionMod.onInitializeClient": {
+      "n": 10,
+      "median": 1.5867,
+      "min": 1.1456,
+      "max": 3.8209,
+      "mean": 1.80457,
+      "sampleSd": 0.7974330219871482
+    },
+    "entrypoint.dev.tr7zw.trender.gui.impl.client.LibGuiClient.onInitializeClient": {
+      "n": 10,
+      "median": 0.5535,
+      "min": 0.4458,
+      "max": 1.3359,
+      "mean": 0.62614,
+      "sampleSd": 0.25988675396966443
+    },
+    "entrypoint.dev.tr7zw.waveycapes.WaveyCapesMod.onInitializeClient": {
+      "n": 10,
+      "median": 1.8573499999999998,
+      "min": 1.7282,
+      "max": 3.5914,
+      "mean": 2.11499,
+      "sampleSd": 0.5814447971313452
+    },
+    "entrypoint.fuzs.forgeconfigapiport.fabric.impl.ForgeConfigAPIPortFabric.onInitialize": {
+      "n": 10,
+      "median": 9.889949999999999,
+      "min": 7.3964,
+      "max": 24.8849,
+      "mean": 11.41224,
+      "sampleSd": 5.069569351686152
+    },
+    "entrypoint.fuzs.forgeconfigapiport.fabric.impl.client.ForgeConfigAPIPortFabricClient.onInitializeClient": {
+      "n": 10,
+      "median": 0.68415,
+      "min": 0.5135,
+      "max": 1.1765,
+      "mean": 0.73691,
+      "sampleSd": 0.18134661991764714
+    },
+    "entrypoint.me.fallenbreath.conditionalmixin.fabric.ConditionalMixinFabric.onInitialize": {
+      "n": 10,
+      "median": 0.028249999999999997,
+      "min": 0.0202,
+      "max": 0.056,
+      "mean": 0.031330000000000004,
+      "sampleSd": 0.010605140263098833
+    },
+    "entrypoint.me.flashyreese.mods.sodiumextra.SodiumExtraFabricPreLaunch.onPreLaunch": {
+      "n": 10,
+      "median": 1.41465,
+      "min": 0.6615,
+      "max": 1.8148,
+      "mean": 1.32943,
+      "sampleSd": 0.3934234361487774
+    },
+    "entrypoint.me.pepperbell.continuity.client.ContinuityClient.onInitializeClient": {
+      "n": 10,
+      "median": 23.9632,
+      "min": 21.6438,
+      "max": 32.0126,
+      "mean": 25.74319,
+      "sampleSd": 3.7975808569988927
+    },
+    "entrypoint.me.steinborn.krypton.mod.client.KryptonClientInitializer.onInitializeClient": {
+      "n": 10,
+      "median": 0.8881,
+      "min": 0.5573,
+      "max": 1.1565,
+      "mean": 0.87604,
+      "sampleSd": 0.1877256283930235
+    },
+    "entrypoint.me.steinborn.krypton.mod.shared.KryptonSharedInitializer.onInitialize": {
+      "n": 10,
+      "median": 26.57815,
+      "min": 9.641,
+      "max": 38.6084,
+      "mean": 26.35657,
+      "sampleSd": 10.736971632846739
+    },
+    "entrypoint.net.caffeinemc.mods.lithium.fabric.LithiumFabricMod.onInitialize": {
+      "n": 10,
+      "median": 0.36050000000000004,
+      "min": 0.1086,
+      "max": 0.632,
+      "mean": 0.34791,
+      "sampleSd": 0.16786604083812387
+    },
+    "entrypoint.net.caffeinemc.mods.sodium.fabric.SodiumFabricMod.onInitializeClient": {
+      "n": 10,
+      "median": 64.25955,
+      "min": 42.6979,
+      "max": 89.2272,
+      "mean": 66.07544,
+      "sampleSd": 12.478963736642736
+    },
+    "entrypoint.net.caffeinemc.mods.sodium.fabric.SodiumPreLaunch.onPreLaunch": {
+      "n": 10,
+      "median": 118.35685,
+      "min": 97.0301,
+      "max": 127.658,
+      "mean": 116.55126,
+      "sampleSd": 9.36617780221295
+    },
+    "entrypoint.net.fabricmc.fabric.impl.attachment.AttachmentEntrypoint.onInitialize": {
+      "n": 10,
+      "median": 6.951650000000001,
+      "min": 5.5372,
+      "max": 10.31,
+      "mean": 7.29221,
+      "sampleSd": 1.4883679439424768
+    },
+    "entrypoint.net.fabricmc.fabric.impl.attachment.client.AttachmentSyncClient.onInitializeClient": {
+      "n": 10,
+      "median": 0.8063,
+      "min": 0.6214,
+      "max": 1.1819,
+      "mean": 0.82663,
+      "sampleSd": 0.18392157779275867
+    },
+    "entrypoint.net.fabricmc.fabric.impl.attachment.sync.AttachmentSync.onInitialize": {
+      "n": 10,
+      "median": 43.72885,
+      "min": 27.4584,
+      "max": 58.3856,
+      "mean": 42.06075,
+      "sampleSd": 8.40974525433308
+    },
+    "entrypoint.net.fabricmc.fabric.impl.client.event.lifecycle.ClientLifecycleEventsImpl.onInitializeClient": {
+      "n": 10,
+      "median": 0.21455000000000002,
+      "min": 0.1581,
+      "max": 0.4178,
+      "mean": 0.24664,
+      "sampleSd": 0.09592406950870627
+    },
+    "entrypoint.net.fabricmc.fabric.impl.client.indigo.Indigo.onInitializeClient": {
+      "n": 10,
+      "median": 0.29805000000000004,
+      "min": 0.203,
+      "max": 0.6165,
+      "mean": 0.32318,
+      "sampleSd": 0.1099689127789203
+    },
+    "entrypoint.net.fabricmc.fabric.impl.client.model.loading.CustomUnbakedBlockStateModelInit.onInitializeClient": {
+      "n": 10,
+      "median": 7.75005,
+      "min": 6.7257,
+      "max": 15.4977,
+      "mean": 9.98159,
+      "sampleSd": 3.7093805938308475
+    },
+    "entrypoint.net.fabricmc.fabric.impl.client.particle.ExtendedBlockStateParticleEffectSyncClient.onInitializeClient": {
+      "n": 10,
+      "median": 0.32205,
+      "min": 0.2581,
+      "max": 0.5452,
+      "mean": 0.34739,
+      "sampleSd": 0.08479568188691372
+    },
+    "entrypoint.net.fabricmc.fabric.impl.client.registry.sync.FabricRegistryClientInit.onInitializeClient": {
+      "n": 10,
+      "median": 0.7542,
+      "min": 0.617,
+      "max": 1.1928,
+      "mean": 0.76214,
+      "sampleSd": 0.1710817751187361
+    },
+    "entrypoint.net.fabricmc.fabric.impl.client.rendering.hud.HudStatusBarHeightRegistryImpl.onInitializeClient": {
+      "n": 10,
+      "median": 0.1006,
+      "min": 0.0662,
+      "max": 0.1383,
+      "mean": 0.1004,
+      "sampleSd": 0.023677978517319988
+    },
+    "entrypoint.net.fabricmc.fabric.impl.event.interaction.InteractionEventsRouter.onInitialize": {
+      "n": 10,
+      "median": 2.34885,
+      "min": 1.9734,
+      "max": 4.3777,
+      "mean": 2.5975800000000002,
+      "sampleSd": 0.7875022889561091
+    },
+    "entrypoint.net.fabricmc.fabric.impl.event.lifecycle.LifecycleEventsImpl.onInitialize": {
+      "n": 10,
+      "median": 2.9019000000000004,
+      "min": 1.9947,
+      "max": 8.2831,
+      "mean": 3.28062,
+      "sampleSd": 1.7890249981484325
+    },
+    "entrypoint.net.fabricmc.fabric.impl.lookup.ApiLookupImpl.onInitialize": {
+      "n": 10,
+      "median": 16.96065,
+      "min": 14.0479,
+      "max": 23.6165,
+      "mean": 17.57593,
+      "sampleSd": 2.82958482861591
+    },
+    "entrypoint.net.fabricmc.fabric.impl.loot.v2.LootInitializer.onInitialize": {
+      "n": 10,
+      "median": 4.24285,
+      "min": 2.6255,
+      "max": 6.8896,
+      "mean": 4.19456,
+      "sampleSd": 1.2335161010524165
+    },
+    "entrypoint.net.fabricmc.fabric.impl.particle.ExtendedBlockStateParticleEffectSync.onInitialize": {
+      "n": 10,
+      "median": 0.2165,
+      "min": 0.1807,
+      "max": 0.288,
+      "mean": 0.21991,
+      "sampleSd": 0.03485562125874868
+    },
+    "entrypoint.net.fabricmc.fabric.impl.recipe.ingredient.CustomIngredientInit.onInitialize": {
+      "n": 10,
+      "median": 5.3925,
+      "min": 3.339,
+      "max": 12.5105,
+      "mean": 6.42987,
+      "sampleSd": 3.0959628902635266
+    },
+    "entrypoint.net.fabricmc.fabric.impl.recipe.ingredient.CustomIngredientSync.onInitialize": {
+      "n": 10,
+      "median": 1.23555,
+      "min": 0.8055,
+      "max": 1.6113,
+      "mean": 1.17913,
+      "sampleSd": 0.2730950996346226
+    },
+    "entrypoint.net.fabricmc.fabric.impl.recipe.ingredient.client.CustomIngredientSyncClient.onInitializeClient": {
+      "n": 10,
+      "median": 0.1298,
+      "min": 0.0956,
+      "max": 0.2444,
+      "mean": 0.1323,
+      "sampleSd": 0.04457208892469716
+    },
+    "entrypoint.net.fabricmc.fabric.impl.recipe.sync.RecipeSyncImpl.onInitialize": {
+      "n": 10,
+      "median": 37.650549999999996,
+      "min": 33.4481,
+      "max": 53.9469,
+      "mean": 40.66603,
+      "sampleSd": 6.7993874621256225
+    },
+    "entrypoint.net.fabricmc.fabric.impl.recipe.sync.client.RecipeSyncImplClient.onInitializeClient": {
+      "n": 10,
+      "median": 0.16335,
+      "min": 0.1462,
+      "max": 0.3538,
+      "mean": 0.18619,
+      "sampleSd": 0.061363859251372235
+    },
+    "entrypoint.net.fabricmc.fabric.impl.registry.sync.FabricRegistryInit.onInitialize": {
+      "n": 10,
+      "median": 1.7786,
+      "min": 1.5468,
+      "max": 6.1463,
+      "mean": 2.18192,
+      "sampleSd": 1.401736266841155
+    },
+    "entrypoint.net.fabricmc.fabric.impl.renderer.DebugHudClient.onInitializeClient": {
+      "n": 10,
+      "median": 0.0172,
+      "min": 0.0155,
+      "max": 0.0214,
+      "mean": 0.018,
+      "sampleSd": 0.0022201101073795614
+    },
+    "entrypoint.net.fabricmc.fabric.impl.resource.conditions.ResourceConditionsImpl.onInitialize": {
+      "n": 10,
+      "median": 6.1259999999999994,
+      "min": 4.0097,
+      "max": 13.0625,
+      "mean": 7.39248,
+      "sampleSd": 2.770611957191648
+    },
+    "entrypoint.net.fabricmc.fabric.impl.screenhandler.Networking.onInitialize": {
+      "n": 10,
+      "median": 1.4327,
+      "min": 0.9696,
+      "max": 1.9208,
+      "mean": 1.3429,
+      "sampleSd": 0.2932255294327408
+    },
+    "entrypoint.net.fabricmc.fabric.impl.screenhandler.client.ClientNetworking.onInitializeClient": {
+      "n": 10,
+      "median": 0.1231,
+      "min": 0.1023,
+      "max": 0.1707,
+      "mean": 0.12647,
+      "sampleSd": 0.01947694078191496
+    },
+    "entrypoint.net.fabricmc.fabric.impl.tag.TagInit.onInitialize": {
+      "n": 10,
+      "median": 3.8214,
+      "min": 2.8457,
+      "max": 6.7634,
+      "mean": 4.08112,
+      "sampleSd": 1.157465277424962
+    },
+    "entrypoint.net.fabricmc.fabric.impl.tag.convention.ConventionLogWarnings.onInitialize": {
+      "n": 10,
+      "median": 0.046450000000000005,
+      "min": 0.0401,
+      "max": 0.0952,
+      "mean": 0.05277,
+      "sampleSd": 0.016205900845748203
+    },
+    "entrypoint.net.fabricmc.fabric.impl.tag.convention.v2.TranslationConventionLogWarnings.onInitialize": {
+      "n": 10,
+      "median": 0.029699999999999997,
+      "min": 0.02,
+      "max": 0.0361,
+      "mean": 0.0291,
+      "sampleSd": 0.005014423640304481
+    },
+    "entrypoint.org.embeddedt.modernfix.ModernFixClientFabric.onInitializeClient": {
+      "n": 10,
+      "median": 156.4275,
+      "min": 133.2504,
+      "max": 162.785,
+      "mean": 153.55168,
+      "sampleSd": 10.692177322884236
+    },
+    "entrypoint.org.embeddedt.modernfix.ModernFixFabric.onInitialize": {
+      "n": 10,
+      "median": 9.82315,
+      "min": 3.1044,
+      "max": 12.346,
+      "mean": 8.69063,
+      "sampleSd": 3.500329833998187
+    },
+    "entrypoint.org.embeddedt.modernfix.ModernFixPreLaunchFabric.onPreLaunch": {
+      "n": 10,
+      "median": 0.0867,
+      "min": 0.0605,
+      "max": 0.1366,
+      "mean": 0.09157,
+      "sampleSd": 0.025988375606541218
+    },
+    "entrypoint.org.redlance.dima_dencep.mods.rrls.Rrls.onInitializeClient": {
+      "n": 10,
+      "median": 0.0408,
+      "min": 0.0319,
+      "max": 0.0545,
+      "mean": 0.04179,
+      "sampleSd": 0.00647447123538114
+    },
+    "entrypoint.org.redlance.dima_dencep.mods.rrls.fabric.RrlsFabric.onInitializeClient": {
+      "n": 10,
+      "median": 85.20095,
+      "min": 53.0807,
+      "max": 106.5762,
+      "mean": 80.8223,
+      "sampleSd": 17.7993421628129
+    },
+    "fabric.freeze": {
+      "n": 10,
+      "median": 680.14385,
+      "min": 665.2706,
+      "max": 703.2262,
+      "mean": 682.02309,
+      "sampleSd": 11.53443041771027
+    },
+    "fabric.invokeEntrypoints": {
+      "n": 10,
+      "median": 2070.4184999999998,
+      "min": 1817.3667,
+      "max": 2109.691,
+      "mean": 2021.74173,
+      "sampleSd": 110.31450529620652
+    },
+    "fabric.knot-init": {
+      "n": 10,
+      "median": 2626.3067,
+      "min": 2567.2592,
+      "max": 2688.8626,
+      "mean": 2625.74792,
+      "sampleSd": 40.451137548674375
+    },
+    "fabric.load": {
+      "n": 10,
+      "median": 138.48015,
+      "min": 132.3093,
+      "max": 151.8287,
+      "mean": 140.31834,
+      "sampleSd": 6.648338037468039
+    },
+    "fabric.setup": {
+      "n": 10,
+      "median": 137.90335,
+      "min": 131.8633,
+      "max": 151.2528,
+      "mean": 139.76589,
+      "sampleSd": 6.614953721925969
+    },
+    "minecraft.constructor": {
+      "n": 10,
+      "median": 4003.2384,
+      "min": 3385.8993,
+      "max": 4042.0808,
+      "mean": 3876.34074,
+      "sampleSd": 237.14549307080665
+    },
+    "mixin.transform": {
+      "n": 10,
+      "median": 2183.43705,
+      "min": 2053.5294,
+      "max": 2344.7988,
+      "mean": 2176.94209,
+      "sampleSd": 88.14637277795322
+    }
+  },
+  "nativeEvents": {
+    "12": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 3613.216,
+        "min": 3449.71,
+        "max": 3977.605,
+        "mean": 3646.3519,
+        "sampleSd": 154.42757221317558
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 1.619,
+        "min": 1.579,
+        "max": 1.783,
+        "mean": 1.6462,
+        "sampleSd": 0.064316578128988
+      }
+    },
+    "20": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 826.7639999999999,
+        "min": 806.7270000000001,
+        "max": 852.866,
+        "mean": 826.6243,
+        "sampleSd": 13.465139039179814
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 814.4915,
+        "min": 794.711,
+        "max": 839.892,
+        "mean": 814.0551,
+        "sampleSd": 13.30472041085838
+      }
+    },
+    "21": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 113.80600000000001,
+        "min": 101.23,
+        "max": 396.826,
+        "mean": 163.8117,
+        "sampleSd": 94.88315114222219
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "sampleSd": 0.0
+      }
+    },
+    "22": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 34.560500000000005,
+        "min": 26.361,
+        "max": 94.887,
+        "mean": 40.2613,
+        "sampleSd": 19.62962442075752
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 0.1915,
+        "min": 0.182,
+        "max": 0.272,
+        "mean": 0.2096,
+        "sampleSd": 0.034862268683747165
+      }
+    },
+    "23": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 614.3835,
+        "min": 602.4,
+        "max": 638.671,
+        "mean": 617.42,
+        "sampleSd": 10.822301131357312
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 145.22699999999998,
+        "min": 141.364,
+        "max": 153.507,
+        "mean": 145.953,
+        "sampleSd": 3.226307521334913
+      }
+    },
+    "24": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 355.23400000000004,
+        "min": 350.869,
+        "max": 369.163,
+        "mean": 357.1893,
+        "sampleSd": 6.363478801375507
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 60.3015,
+        "min": 59.251,
+        "max": 62.683,
+        "mean": 60.517,
+        "sampleSd": 1.204475450605413
+      }
+    },
+    "25": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 286.1115,
+        "min": 281.484,
+        "max": 296.73,
+        "mean": 287.2262,
+        "sampleSd": 5.68096169088768
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "sampleSd": 0.0
+      }
+    },
+    "26": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 1602.4135,
+        "min": 1426.5,
+        "max": 1698.55,
+        "mean": 1585.5284,
+        "sampleSd": 94.65620165771847
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "sampleSd": 0.0
+      }
+    },
+    "27": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 1602.401,
+        "min": 1426.488,
+        "max": 1698.537,
+        "mean": 1585.516,
+        "sampleSd": 94.6557651105661
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "sampleSd": 0.0
+      }
+    },
+    "28": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 0.001,
+        "min": 0.0,
+        "max": 0.001,
+        "mean": 0.0007,
+        "sampleSd": 0.00048304589153964797
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "sampleSd": 0.0
+      }
+    },
+    "29": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 0.004,
+        "min": 0.003,
+        "max": 0.004,
+        "mean": 0.0037,
+        "sampleSd": 0.00048304589153964797
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "sampleSd": 0.0
+      }
+    },
+    "30": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 580.0455,
+        "min": 562.704,
+        "max": 603.907,
+        "mean": 581.5539,
+        "sampleSd": 10.445340177961354
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "sampleSd": 0.0
+      }
+    },
+    "31": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 5.753500000000001,
+        "min": 5.391,
+        "max": 6.687,
+        "mean": 5.805,
+        "sampleSd": 0.3455115370320103
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "sampleSd": 0.0
+      }
+    },
+    "36": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 82.243,
+        "min": 72.42,
+        "max": 136.192,
+        "mean": 92.0066,
+        "sampleSd": 23.243098938538008
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "sampleSd": 0.0
+      }
+    },
+    "37": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 29.943,
+        "min": 16.312,
+        "max": 312.387,
+        "mean": 70.4993,
+        "sampleSd": 96.34657016676826
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "sampleSd": 0.0
+      }
+    },
+    "38": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 27.4155,
+        "min": 0,
+        "max": 93.507,
+        "mean": 25.6374,
+        "sampleSd": 29.094598926795868
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 0.0,
+        "min": 0,
+        "max": 0,
+        "mean": 0.0,
+        "sampleSd": 0.0
+      }
+    },
+    "44": {
+      "inclusiveMs": {
+        "n": 10,
+        "median": 1151.356,
+        "min": 1123.0230000000001,
+        "max": 1178.961,
+        "mean": 1152.5027,
+        "sampleSd": 17.701495580568547
+      },
+      "hashMs": {
+        "n": 10,
+        "median": 6.2325,
+        "min": 5.977,
+        "max": 6.606,
+        "mean": 6.263199999999999,
+        "sampleSd": 0.1910269323652791
+      }
+    }
+  },
+  "pairedOverhead": {
+    "harnessPlayToMenuMs": {
+      "profiledMinusControlMs": [
+        -1392.827392578125,
+        997.111328125,
+        1641.647216796875,
+        101.698486328125,
+        1147.49755859375
+      ],
+      "statistics": {
+        "n": 5,
+        "median": 997.111328125,
+        "min": -1392.827392578125,
+        "max": 1641.647216796875,
+        "mean": 499.025439453125,
+        "sampleSd": 1194.9022986840002
+      }
+    },
+    "playToMenuMs": {
+      "profiledMinusControlMs": [
+        -1394.6232795715332,
+        997.394323348999,
+        1640.2270793914795,
+        98.4644889831543,
+        1149.9996185302734
+      ],
+      "statistics": {
+        "n": 5,
+        "median": 997.394323348999,
+        "min": -1394.6232795715332,
+        "max": 1640.2270793914795,
+        "mean": 498.2924461364746,
+        "sampleSd": 1195.913037073338
+      }
+    },
+    "agentOriginToMenuMs": {
+      "profiledMinusControlMs": [
+        -1519.439458847046,
+        768.2507038116455,
+        1803.539752960205,
+        -91.21084213256836,
+        1168.3497428894043
+      ],
+      "statistics": {
+        "n": 5,
+        "median": 768.2507038116455,
+        "min": -1519.439458847046,
+        "max": 1803.539752960205,
+        "mean": 425.8979797363281,
+        "sampleSd": 1286.2810877906013
+      }
+    },
+    "playToCreationMs": {
+      "profiledMinusControlMs": [
+        106.5371036529541,
+        202.2879123687744,
+        -202.3792266845703,
+        152.817964553833,
+        -45.4859733581543
+      ],
+      "statistics": {
+        "n": 5,
+        "median": 106.5371036529541,
+        "min": -202.3792266845703,
+        "max": 202.2879123687744,
+        "mean": 42.75555610656738,
+        "sampleSd": 165.46149212998782
+      }
+    }
+  },
+  "executionSamples": 2906,
+  "leafOwnership": {
+    "Aurora": 22,
+    "JVM/JDK": 417,
+    "Minecraft/Mojang": 1377,
+    "Mixin": 40,
+    "Sodium (injected)": 435,
+    "graphics/native support": 101,
+    "third-party mod/library": 505,
+    "Fabric": 8,
+    "research": 1
+  },
+  "resourceTextureModelFontLeafSamples": 1699,
+  "topLeafMethods": [
+    [
+      "com.mojang.blaze3d.platform.TextureUtil.solidify",
+      464
+    ],
+    [
+      "net.minecraft.client.renderer.texture.SpriteContents.scanSpriteContents",
+      433
+    ],
+    [
+      "com.mojang.blaze3d.platform.NativeImage.method_61940",
+      111
+    ],
+    [
+      "net.minecraft.client.renderer.block.model.ItemModelGenerator.method_3477",
+      107
+    ],
+    [
+      "com.mojang.blaze3d.platform.NativeImage.method_48462",
+      93
+    ],
+    [
+      "net.minecraft.client.renderer.texture.SpriteContents.method_45810",
+      84
+    ],
+    [
+      "com.mojang.blaze3d.platform.NativeImage.method_61941",
+      61
+    ],
+    [
+      "net.minecraft.client.gui.font.CodepointMap.method_51601",
+      41
+    ],
+    [
+      "org.objectweb.asm.ClassReader.readCode",
+      32
+    ],
+    [
+      "net.minecraft.client.gui.font.CodepointMap.method_51598",
+      31
+    ],
+    [
+      "net.minecraft.client.renderer.texture.MipmapGenerator.method_76765",
+      28
+    ],
+    [
+      "net.minecraft.client.gui.font.providers.UnihexProvider.method_51654",
+      25
+    ],
+    [
+      "net.minecraft.client.gui.font.providers.UnihexProvider.method_51652",
+      24
+    ],
+    [
+      "org.joml.Vector3f.equals",
+      24
+    ],
+    [
+      "net.minecraft.client.renderer.block.model.FaceBakery.method_3462",
+      21
+    ],
+    [
+      "it.unimi.dsi.fastutil.ints.IntOpenHashSet.rehash",
+      21
+    ],
+    [
+      "com.aurora.client.ui.render.blur.BlurPanelRenderer$Frame.readback",
+      20
+    ],
+    [
+      "it.unimi.dsi.fastutil.ints.AbstractIntCollection.addAll",
+      20
+    ],
+    [
+      "net.caffeinemc.mods.sodium.client.render.immediate.model.ImprovedItemModelBuilder$FaceStorage.tryInsertPixel",
+      20
+    ],
+    [
+      "it.unimi.dsi.fastutil.ints.IntOpenHashSet.add",
+      19
+    ],
+    [
+      "net.caffeinemc.mods.sodium.client.render.immediate.model.ImprovedItemModelBuilder.lambda$buildSideFaces$0",
+      18
+    ],
+    [
+      "org.lwjgl.system.Checks.check",
+      18
+    ],
+    [
+      "it.unimi.dsi.fastutil.ints.IntArrayFIFOQueue.reduce",
+      18
+    ],
+    [
+      "java.lang.StringBuilder.<init>",
+      17
+    ],
+    [
+      "com.mojang.blaze3d.platform.NativeImage.method_36559",
+      17
+    ],
+    [
+      "java.util.zip.ZipFile$Source.getEntryPos",
+      16
+    ],
+    [
+      "it.unimi.dsi.fastutil.ints.IntArrayFIFOQueue.dequeueInt",
+      16
+    ],
+    [
+      "net.caffeinemc.mods.sodium.api.util.ColorABGR.unpackAlpha",
+      14
+    ],
+    [
+      "org.joml.Vector3f.mulPositionGeneric",
+      14
+    ],
+    [
+      "it.unimi.dsi.fastutil.PriorityQueue.isEmpty",
+      14
+    ]
+  ],
+  "topNativeMethods": [
+    [
+      "sun.nio.ch.WEPoll.wait",
+      2609
+    ],
+    [
+      "sun.nio.fs.WindowsNativeDispatcher.GetQueuedCompletionStatus0",
+      617
+    ],
+    [
+      "java.util.zip.Inflater.inflateBytesBytes",
+      124
+    ],
+    [
+      "sun.nio.ch.Net.poll",
+      103
+    ],
+    [
+      "jdk.jfr.internal.JVM.emitEvent",
+      51
+    ],
+    [
+      "java.io.RandomAccessFile.readBytes0",
+      49
+    ],
+    [
+      "sun.nio.fs.WindowsNativeDispatcher.FindFirstFile0",
+      37
+    ],
+    [
+      "org.lwjgl.system.JNI.invokePI",
+      33
+    ],
+    [
+      "org.lwjgl.opengl.GL11C.nglReadPixels",
+      31
+    ],
+    [
+      "jdk.internal.loader.NativeLibraries.load",
+      21
+    ],
+    [
+      "org.lwjgl.system.JNI.invokeD",
+      21
+    ],
+    [
+      "sun.nio.fs.WindowsNativeDispatcher.GetVolumePathName0",
+      18
+    ],
+    [
+      "java.lang.ClassLoader.defineClass1",
+      17
+    ],
+    [
+      "com.sun.jna.Native.invokeInt",
+      17
+    ],
+    [
+      "org.lwjgl.opengl.GL20C.nglGetShaderiv",
+      15
+    ]
+  ],
+  "jfrInclusiveDurationsMs": {
+    "jdk.ClassLoad": {
+      "n": 10,
+      "median": 3085.063,
+      "min": 2958.7036,
+      "max": 3501.2903,
+      "mean": 3135.49382,
+      "sampleSd": 173.4220711740887
+    },
+    "jdk.Compilation": {
+      "n": 10,
+      "median": 53675.82415,
+      "min": 47650.5139,
+      "max": 57541.2834,
+      "mean": 53232.119696148686,
+      "sampleSd": 3443.1366170022807
+    },
+    "jdk.FileRead": {
+      "n": 10,
+      "median": 27.526,
+      "min": 0,
+      "max": 302.2802,
+      "mean": 62.230819999999994,
+      "sampleSd": 93.67500961834662
+    },
+    "jdk.GCPhasePause": {
+      "n": 10,
+      "median": 189.05255,
+      "min": 150.4861,
+      "max": 203.2978,
+      "mean": 186.11581999999999,
+      "sampleSd": 16.20488495751273
+    },
+    "jdk.GarbageCollection": {
+      "n": 10,
+      "median": 567.3453,
+      "min": 454.7824,
+      "max": 631.6884,
+      "mean": 546.43953,
+      "sampleSd": 59.60669631408967
+    }
+  },
+  "unionDurationsMs": {
+    "mainRenderBlocking": {
+      "n": 10,
+      "median": 134.44161415100098,
+      "min": 105.21364212036133,
+      "max": 162.3091697692871,
+      "mean": 132.4735164642334,
+      "sampleSd": 18.27743203283037
+    },
+    "gcPause": {
+      "n": 10,
+      "median": 189.05270099639893,
+      "min": 150.48623085021973,
+      "max": 203.29785346984863,
+      "mean": 186.1159086227417,
+      "sampleSd": 16.204802732928204
+    }
+  },
+  "cpuLoad": {
+    "jvmUser": {
+      "n": 152,
+      "median": 0.110467835,
+      "min": 0.0,
+      "max": 0.5877711,
+      "mean": 0.13318720982236842,
+      "sampleSd": 0.11749711610138167
+    },
+    "jvmSystem": {
+      "n": 152,
+      "median": 0.02401462,
+      "min": 0.0,
+      "max": 0.55971485,
+      "mean": 0.03394848172828947,
+      "sampleSd": 0.0485706326385689
+    },
+    "machineTotal": {
+      "n": 152,
+      "median": 0.18086029,
+      "min": 0.07429671,
+      "max": 1.0,
+      "mean": 0.2593737765131579,
+      "sampleSd": 0.2133185262511282
+    }
+  },
+  "nativeStartupAuditCounts": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "maximumJfrClockSpreadUs": 321.1498260498047
+}

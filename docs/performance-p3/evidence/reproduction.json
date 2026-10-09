@@ -1,0 +1,11 @@
+{
+  "independentReductions": 2,
+  "allFiveOutputsByteIdentical": true,
+  "sha256": {
+    "trials.json": "753c5f6c0a825b4eeb8d9c94ca8eb47d2dba4379f237b5d4c23b94546de4121e",
+    "statistics.json": "42ba550586876aba76bb8178f735afb961fcb5b240540453777ae92923a198c7",
+    "jfr.json": "3ec09451d6f233b91c2a2b00dfedcac5cd69da8915d0863d0369fc0b86d435f0",
+    "exclusions.json": "3c981cfce14c79b1d44bcc67c2129e89cfcbef3f74744a63863f50016b14217c",
+    "attribution.json": "1c7dd7123b6f39f3ebcbe157390597d8a293ea0e8bd04730a96fe845fe6e2373"
+  }
+}

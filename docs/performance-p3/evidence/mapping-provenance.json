@@ -1,0 +1,7 @@
+{
+  "minecraft": "1.21.11",
+  "versionDocumentExpectedSha1": "6827f8e998ee6add1b3acff9286b6c95ebeebdc1",
+  "mappingExpectedSha1": "031a68bebf55d824f66d6573d8c752f0e1bf232a",
+  "mappingSha256": "517799a8485e107e932dc1bd27c002b2d0b9207eb2396b685bcfe6c3321a9fbd",
+  "source": "https://piston-data.mojang.com/v1/objects/031a68bebf55d824f66d6573d8c752f0e1bf232a/client.txt"
+}

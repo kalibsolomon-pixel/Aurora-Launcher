@@ -1,0 +1,17 @@
+[
+  {
+    "exitCode": 1,
+    "reason": "did not reach deterministic usable menu",
+    "trial": "pilot-01"
+  },
+  {
+    "exitCode": 1,
+    "reason": "did not reach deterministic usable menu",
+    "trial": "pilot-02"
+  },
+  {
+    "exitCode": 1,
+    "reason": "did not reach deterministic usable menu",
+    "trial": "pilot-03"
+  }
+]

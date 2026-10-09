@@ -1,0 +1,60 @@
+{
+  "checks": [
+    {
+      "check": "frontend-check",
+      "exitCode": 0,
+      "logSha256": "aaec24128b6a64ae719e6abe0b1e85f36604db4a40b411c7e3f5e4c945be8f41"
+    },
+    {
+      "check": "frontend-test",
+      "exitCode": 4294967295,
+      "logSha256": "9fb97a0a017ab0224db275c977b5dd809da7e01eb6c06118dc7b154d4a3a71f1"
+    },
+    {
+      "check": "frontend-test",
+      "exitCode": 0,
+      "logSha256": "4e69135c362c221efcbd8b6317290ced67a93b140b9198f75382b699275cf8fd"
+    },
+    {
+      "check": "frontend-build",
+      "exitCode": 0,
+      "logSha256": "0c451a35935ab19e7584c49feb37e52d5680b7ae057e6b34d5ada10ebc2630fa"
+    },
+    {
+      "check": "rust-format",
+      "exitCode": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "rust-check",
+      "exitCode": 0,
+      "logSha256": "15053c74c73566654f576120784d8473afe45e397befbe51daf36e46768fd3b6"
+    },
+    {
+      "check": "rust-test",
+      "exitCode": 0,
+      "logSha256": "01ad70651d759b97d7a8cd1c5a444b0dcfda5e2eb210223166305a76b2688fde"
+    },
+    {
+      "check": "release-build",
+      "exitCode": 0,
+      "logSha256": "c566a7900418bd21d08f3a63c17088eaa0141fa8571a0af99d0021d7e8576f4b"
+    }
+  ],
+  "originalTrackedCount": 641,
+  "originalUntrackedCount": 15144,
+  "clientTrackedCount": 422,
+  "clientUntrackedCount": 4,
+  "originalRepositoryFilesUnchanged": true,
+  "originalUntrackedFilesStaged": 0,
+  "stagedDeletions": 0,
+  "javawSha256": "1ba6a4fb32a6a3d5c925fe837ae6717e2f75743a71e013e668e6dadb909245ba",
+  "jmc": {
+    "version": "9.1.2",
+    "sha256": "d901afb52131ecea5851f3171d3be3930177b7b6a8e0edc28e17f04efcf41fa5",
+    "expectedDigestVerified": true,
+    "source": "https://github.com/adoptium/jmc-build/releases/download/9.1.2/org.openjdk.jmc-9.1.2-win32.win32.x86_64.zip"
+  },
+  "rawIndexSha256": "54c55c64b80cdd1fd7033300f2ebd63238d43f6bffa7cf48797c656680314092",
+  "rawRecordingCount": 17
+}

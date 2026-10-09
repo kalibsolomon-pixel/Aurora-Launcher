@@ -1,0 +1,17 @@
+{
+  "exitCode": 0,
+  "overlayRejected": true,
+  "firstFrameRejected": true,
+  "secondFrameAccepted": true,
+  "entrypointMeasured": true,
+  "deniedEventCounts": {
+    "fixture.SecretEvent": 0,
+    "jdk.JVMInformation": 0,
+    "jdk.InitialSystemProperty": 0,
+    "jdk.InitialEnvironmentVariable": 0,
+    "jdk.ProcessStart": 0,
+    "jdk.SocketRead": 0,
+    "jdk.SocketWrite": 0
+  },
+  "recordingValid": true
+}

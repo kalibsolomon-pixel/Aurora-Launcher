@@ -1,0 +1,26 @@
+{
+  "checked": 43617,
+  "missing": 0,
+  "changed": 38,
+  "mtimeChanged": 39,
+  "kinds": {
+    "launcher-tracked": 641,
+    "launcher-untracked": 15144,
+    "launcher-diagnostic": 137,
+    "client-tracked": 422,
+    "client-untracked": 4,
+    "operational": 3072,
+    "managed": 24193,
+    "installed": 1,
+    "native-temp": 3
+  },
+  "protectedJnaChecked": 17,
+  "installedExecutableSha256": "15bfd5d71bbe73c9ad7f3010c052f3f1669d81abfa4790b8c48efb8b169fd868",
+  "originalTrackedMissing": 0,
+  "protectedMissing": 0,
+  "protectedChanged": 0,
+  "protectedMtimeChanged": 0,
+  "operationalMissing": 0,
+  "operationalChanged": 38,
+  "operationalMtimeChanged": 39
+}

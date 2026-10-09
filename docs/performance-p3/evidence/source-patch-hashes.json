@@ -1,0 +1,18 @@
+[
+  {
+    "path": "src-tauri/Cargo.toml",
+    "sha256": "0cf02e7e62f219299101244f99c9bbd41574e57ad6cfb00975e5745f637c6d8c"
+  },
+  {
+    "path": "src-tauri/src/launch/process.rs",
+    "sha256": "54a4bfcfbd6d77e5518d91d55eed2472473de98d54695dd70c176da67c05d60f"
+  },
+  {
+    "path": "src-tauri/src/paths.rs",
+    "sha256": "de2ca86c6cc750a1891a46e129923265148055a3f6f5e8c8a879bcb4d0d2ffdc"
+  },
+  {
+    "path": "src-tauri/src/performance.rs",
+    "sha256": "36e22baa12fbda079fc5156eb28534a000ba6dc622f8c086c339978fdf5da152"
+  }
+]

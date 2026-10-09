@@ -1,0 +1,7 @@
+{
+  "method": "net.minecraft.client.renderer.texture.SpriteContents.scanSpriteContents",
+  "declaredInModClass": "net.caffeinemc.mods.sodium.mixin.features.textures.scan.SpriteContentsMixin",
+  "modId": "sodium",
+  "jarSha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d",
+  "proof": "javap -p exact artifact declares scanSpriteContents; official mappings do not"
+}

@@ -1,0 +1,29 @@
+{
+  "javaSha256": "0afb1170b83c156dfdb7f54bb34c9b058064175c329a5d80b782bcc9dbaa2164",
+  "jnaSha256": "b3a9408e7c51e08ef0e3bfcc08f443f6ec0f6191ba8cd7c18d53d2b22e5bdbc0",
+  "trials": [
+    {
+      "trial": 0,
+      "exitCode": 0,
+      "cleanupInside": true,
+      "extractionInside": true,
+      "outsideSentinelsUnchanged": true
+    },
+    {
+      "trial": 1,
+      "exitCode": 0,
+      "cleanupInside": true,
+      "extractionInside": true,
+      "outsideSentinelsUnchanged": true
+    },
+    {
+      "trial": 2,
+      "exitCode": 0,
+      "cleanupInside": true,
+      "extractionInside": true,
+      "outsideSentinelsUnchanged": true
+    }
+  ],
+  "protectedJnaFilesChecked": 17,
+  "protectedJnaChanged": 0
+}

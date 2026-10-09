@@ -1,0 +1,464 @@
+{
+  "launcherHead": "7a7eeb62d145857df26c30da4c3bf61c4260479d",
+  "clientHead": "5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d",
+  "artifacts": {
+    "executableSha256": "6a70811a22b40c880ec9ee5b0f2a599ad3f81ab29433ef573aa1d713c251c7bd",
+    "agentSha256": "e9879e690dd57afa9297b2fa7fc2b5ea52fcbfd527d6aa805ba5da4f28241c03",
+    "markerBridgeSha256": "9dc52fd92675dbde405e48885d6910582952c43e229b5b978adb26f0927b8f67",
+    "asmSha256": "ed825d10ab1399c8c0cb669e688cf0c8c82629b4c8399b58352b68e92ca10fcb",
+    "jfrConfigSha256": "9199890517a72b9b9d41a3cb54cd827a901a4b63666e2774e6ed9545a4f4b644",
+    "javaSha256": "0afb1170b83c156dfdb7f54bb34c9b058064175c329a5d80b782bcc9dbaa2164",
+    "compiledResearchSources": {
+      "BuildConfig.java": "1699abf8c2ed1fd4869c6a8cf53dca1be6ac6d56e3dde144e5ffa02016f8b135",
+      "JnaProbe.java": "a1fcec3d508a13f792698defdcf52e1f56abb5d27e88f5a064b99c6f4193be54",
+      "Markers.java": "b72cce15195358064f70febbc2f14b0c8131ee70206a2855ed3090a7e4da2360",
+      "ResearchAgent.java": "559140144d1532a331330fe46cb0c614271fb7bf0e8e1b7bdeb442d30b5e4c29"
+    }
+  },
+  "java": "Microsoft OpenJDK 21.0.7+6 LTS",
+  "minecraft": "1.21.11",
+  "fabric": "0.19.5",
+  "aurora": "3.0.0",
+  "mods": [
+    {
+      "id": "aurora",
+      "version": "3.0.0",
+      "sha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+      "bytes": 3077377,
+      "entrypoints": {
+        "client": [
+          "com.aurora.client.AuroraClient"
+        ]
+      }
+    },
+    {
+      "id": "badoptimizations",
+      "version": "2.4.1",
+      "sha256": "91cec18c7d5b915e3d0700b65d93f246208ab835458ce06adb079bacb31306b5",
+      "bytes": 269545,
+      "entrypoints": {
+        "modmenu": [
+          "fabric.me.thosea.badoptimizations.fabric.modmenu.BadOptimizationsModMenu"
+        ]
+      }
+    },
+    {
+      "id": "cloth-config",
+      "version": "21.11.153",
+      "sha256": "8a40c84e5ecde525acfb6c4e13b8002dacfca3ef9534d7faf6e8049656f423c8",
+      "bytes": 1148427,
+      "entrypoints": {
+        "client": [
+          "me.shedaniel.autoconfig.example.ExampleInits::exampleCommonInit"
+        ],
+        "modmenu": [
+          "me.shedaniel.clothconfig2.fabric.ClothConfigModMenuDemo"
+        ]
+      }
+    },
+    {
+      "id": "continuity",
+      "version": "3.0.1-beta.1+1.21.11",
+      "sha256": "1d4d4e86fb20bd0b078fcc518f4641d21985cc8bfaefa6dd49cfa1beff52ac83",
+      "bytes": 997125,
+      "entrypoints": {
+        "client": [
+          "me.pepperbell.continuity.client.ContinuityClient"
+        ],
+        "modmenu": [
+          "me.pepperbell.continuity.client.config.ModMenuApiImpl"
+        ],
+        "sodium:config_api_user": [
+          "me.pepperbell.continuity.client.config.SodiumConfigImpl"
+        ]
+      }
+    },
+    {
+      "id": "controlling",
+      "version": "29.0.1",
+      "sha256": "13f6111514115d540ef16c76b2a21c80ddae3657f129488970abe2d73a5fa26f",
+      "bytes": 83259,
+      "entrypoints": {}
+    },
+    {
+      "id": "crash_assistant",
+      "version": "1.11.12",
+      "sha256": "44474c582d2833fcc1c689b684c2bc7bbaaaceee2d77a26406e37bd79c303e3f",
+      "bytes": 3492588,
+      "entrypoints": {
+        "main": [
+          "dev.kostromdan.mods.crash_assistant.fabric.CrashAssistantFabric"
+        ],
+        "client": [
+          "dev.kostromdan.mods.crash_assistant.fabric.client.CrashAssistantFabricClient"
+        ]
+      }
+    },
+    {
+      "id": "cubes-without-borders",
+      "version": "3.0.0-build.14+mc1.21.11",
+      "sha256": "6b45bbaa330321705dca8543a5dee53aefcbcc68c507f8ca8445a957d186e53f",
+      "bytes": 78535,
+      "entrypoints": {
+        "modmenu": [
+          "dev.kir.cubeswithoutborders.client.compat.modmenu.ModMenuCompat"
+        ],
+        "sodium:config_api_user": [
+          "dev.kir.cubeswithoutborders.client.compat.sodium.SodiumCompat"
+        ]
+      }
+    },
+    {
+      "id": "entityculling",
+      "version": "1.11.2",
+      "sha256": "a10ca01afca2784c7b5af75209dc8e17f926d8663d66ff8dad948d169de002a2",
+      "bytes": 1528856,
+      "entrypoints": {
+        "client": [
+          "dev.tr7zw.entityculling.EntityCullingMod"
+        ],
+        "modmenu": [
+          "dev.tr7zw.entityculling.config.EntityCullingModMenu"
+        ]
+      }
+    },
+    {
+      "id": "fabric-api",
+      "version": "0.141.6+1.21.11",
+      "sha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+      "bytes": 2426039,
+      "entrypoints": {}
+    },
+    {
+      "id": "ferritecore",
+      "version": "8.2.0",
+      "sha256": "f76bd760cbf48280cc7c43180f5089a46235fa24d934a8acf3da04a664c2c715",
+      "bytes": 80138,
+      "entrypoints": {}
+    },
+    {
+      "id": "forgeconfigapiport",
+      "version": "21.11.1",
+      "sha256": "31a0686904fad1cfdeb1d6b011ac1c2280990d6e76ac2416468147e2246b4db1",
+      "bytes": 598009,
+      "entrypoints": {
+        "modmenu": [
+          "fuzs.forgeconfigapiport.fabric.impl.integration.modmenu.ModMenuApiImpl"
+        ],
+        "client": [
+          "fuzs.forgeconfigapiport.fabric.impl.client.ForgeConfigAPIPortFabricClient"
+        ],
+        "main": [
+          "fuzs.forgeconfigapiport.fabric.impl.ForgeConfigAPIPortFabric"
+        ]
+      }
+    },
+    {
+      "id": "immediatelyfast",
+      "version": "1.14.3+1.21.11",
+      "sha256": "c6e939744ed80345a1a70c351c481b8832d33970d6574b8d444dfe750abc2a86",
+      "bytes": 302709,
+      "entrypoints": {}
+    },
+    {
+      "id": "krypton",
+      "version": "0.2.10",
+      "sha256": "94291d5690a0ced7fe7da7f380fdbdcbe03cdac8ad4227a037866ba7455eff8b",
+      "bytes": 270195,
+      "entrypoints": {
+        "client": [
+          "me.steinborn.krypton.mod.client.KryptonClientInitializer"
+        ],
+        "server": [
+          "me.steinborn.krypton.mod.server.KryptonServerInitializer"
+        ],
+        "main": [
+          "me.steinborn.krypton.mod.shared.KryptonSharedInitializer"
+        ]
+      }
+    },
+    {
+      "id": "lithium",
+      "version": "0.21.4+mc1.21.11",
+      "sha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b",
+      "bytes": 900462,
+      "entrypoints": {
+        "main": [
+          "net.caffeinemc.mods.lithium.fabric.LithiumFabricMod"
+        ]
+      }
+    },
+    {
+      "id": "modernfix",
+      "version": "5.26.3-build.2",
+      "sha256": "e0aaf2e8cd692bb730a95bf3c8edcd47e12ce289d601bf1b5b2780e451b208d4",
+      "bytes": 630900,
+      "entrypoints": {
+        "main": [
+          "org.embeddedt.modernfix.ModernFixFabric"
+        ],
+        "client": [
+          "org.embeddedt.modernfix.ModernFixClientFabric"
+        ],
+        "modmenu": [
+          "org.embeddedt.modernfix.fabric.modmenu.ModernFixModMenuApiImpl"
+        ],
+        "preLaunch": [
+          "org.embeddedt.modernfix.ModernFixPreLaunchFabric"
+        ]
+      }
+    },
+    {
+      "id": "modmenu",
+      "version": "17.0.1",
+      "sha256": "2eb2d6db9964fcf2e44e2be1e4d172b8c4e829e385c8f31636de94a1708c2076",
+      "bytes": 960882,
+      "entrypoints": {
+        "client": [
+          "com.terraformersmc.modmenu.ModMenu"
+        ],
+        "modmenu": [
+          "com.terraformersmc.modmenu.ModMenuModMenuCompat"
+        ]
+      }
+    },
+    {
+      "id": "moreculling",
+      "version": "1.6.2",
+      "sha256": "45e5e32cd33d38662db9fe45d15dc777c1503ac186522c4397d98c54ed0dda43",
+      "bytes": 340975,
+      "entrypoints": {
+        "client": [
+          "ca.fxco.moreculling.MoreCullingFabric"
+        ],
+        "modmenu": [
+          "ca.fxco.moreculling.config.ModMenuCompat"
+        ],
+        "sodium:config_api_user": [
+          "ca.fxco.moreculling.config.sodium.MoreCullingSodiumConfigBuilder"
+        ]
+      }
+    },
+    {
+      "id": "notenoughanimations",
+      "version": "1.12.6",
+      "sha256": "8a623a5a34f822d32a402f18f169fbbb9767b6e5234aad75b143fb5884adb3d3",
+      "bytes": 1883253,
+      "entrypoints": {
+        "client": [
+          "dev.tr7zw.notenoughanimations.NEAnimationsMod"
+        ],
+        "modmenu": [
+          "dev.tr7zw.notenoughanimations.NEAModMenu"
+        ]
+      }
+    },
+    {
+      "id": "packetfixer",
+      "version": "3.3.5",
+      "sha256": "64d5128bd67522edfed81f316b3c8dd65c69081d0a9e4777142e145c42650516",
+      "bytes": 31237,
+      "entrypoints": {
+        "main": [
+          "dev.tonimatas.packetfixer.PacketFixer"
+        ]
+      }
+    },
+    {
+      "id": "placeholder-api",
+      "version": "2.8.2+1.21.10",
+      "sha256": "975c7e575c27bf6fa82baaf8cd7645051a298f74bf95cf58092b104dd21de5ed",
+      "bytes": 268662,
+      "entrypoints": {}
+    },
+    {
+      "id": "reeses-sodium-options",
+      "version": "2.2.4+mc1.21.11",
+      "sha256": "ec0d7b10b5a4ec03b2d722c24c320166d6d20c31dff0d05525d2d11082ef10c7",
+      "bytes": 258250,
+      "entrypoints": {
+        "controlify": [
+          "me.flashyreese.mods.reeses_sodium_options.client.controlify.ReeseSodiumOptionsControlifyEntrypoint"
+        ],
+        "sodium:config_api_user": [
+          "me.flashyreese.mods.reeses_sodium_options.client.config.ReeseSodiumOptionsConfigEntryPoint"
+        ]
+      }
+    },
+    {
+      "id": "rrls",
+      "version": "5.1.15+mc.1.21.11",
+      "sha256": "a7fc702717cfa4cacbe6bda570ee27df7c4e4020fe5395ec21b61ba51692b399",
+      "bytes": 198379,
+      "entrypoints": {
+        "client": [
+          "org.redlance.dima_dencep.mods.rrls.fabric.RrlsFabric"
+        ]
+      }
+    },
+    {
+      "id": "scalablelux",
+      "version": "0.1.6+fabric.c25518a",
+      "sha256": "7a4a7371386183c755523b56b55a251d75ac2c23f40af8a4f0f8a335b05d4fc2",
+      "bytes": 182846,
+      "entrypoints": {
+        "main": [
+          "ca.spottedleaf.starlight.common.ScalableLuxEntrypoint"
+        ]
+      }
+    },
+    {
+      "id": "searchables",
+      "version": "1.0.4",
+      "sha256": "41b45aef9b7950b3b4b4fc2d9161e95c8be3d276fc3acbe299c47d8eac8e7044",
+      "bytes": 79919,
+      "entrypoints": {}
+    },
+    {
+      "id": "skinlayers3d",
+      "version": "1.11.3",
+      "sha256": "6063bcd25485beb05f59f8dfb1e47d95a3a0dc87fcd892ac9ecb151eae93b4b1",
+      "bytes": 1912000,
+      "entrypoints": {
+        "client": [
+          "dev.tr7zw.skinlayers.SkinLayersMod"
+        ],
+        "modmenu": [
+          "dev.tr7zw.skinlayers.config.SkinLayersModMenu"
+        ]
+      }
+    },
+    {
+      "id": "skyboxify",
+      "version": "3.4",
+      "sha256": "17020ec5bf3f495f18626b882c03a207b2f93da7b89e6f4b96249079a85494d1",
+      "bytes": 306901,
+      "entrypoints": {
+        "modmenu": [
+          "btw.lowercase.skyboxify.config.ModMenuIntegration"
+        ],
+        "client": [
+          "btw.lowercase.skyboxify.SkyboxifyClient"
+        ]
+      }
+    },
+    {
+      "id": "sodium-extra",
+      "version": "0.9.4+mc1.21.11",
+      "sha256": "ff6ef489193a960c1abf9ac28416f11277db5650a40493bf11d1ec7d96737f4d",
+      "bytes": 471588,
+      "entrypoints": {
+        "preLaunch": [
+          "me.flashyreese.mods.sodiumextra.SodiumExtraFabricPreLaunch"
+        ],
+        "sodium:config_api_user": [
+          "me.flashyreese.mods.sodiumextra.client.config.SodiumExtraConfig"
+        ]
+      }
+    },
+    {
+      "id": "sodium",
+      "version": "0.8.14+mc1.21.11",
+      "sha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d",
+      "bytes": 1909150,
+      "entrypoints": {
+        "client": [
+          "net.caffeinemc.mods.sodium.fabric.SodiumFabricMod"
+        ],
+        "preLaunch": [
+          "net.caffeinemc.mods.sodium.fabric.SodiumPreLaunch"
+        ]
+      }
+    },
+    {
+      "id": "voicechat",
+      "version": "1.21.11-2.6.22",
+      "sha256": "cb23bfdfb809671288b6d9f9ac3ff5842cd02e1397dd0040be260a73d4e32c62",
+      "bytes": 5591115,
+      "entrypoints": {
+        "client": [
+          "de.maxhenkel.voicechat.FabricVoicechatClientMod"
+        ],
+        "main": [
+          "de.maxhenkel.voicechat.FabricVoicechatMod"
+        ],
+        "modmenu": [
+          "de.maxhenkel.voicechat.integration.ModMenu"
+        ]
+      }
+    },
+    {
+      "id": "waveycapes",
+      "version": "1.11.2",
+      "sha256": "5a14fe801674678046ae18aa4f3de91b7417b8ec42d243b06bb463b8b8128732",
+      "bytes": 1794934,
+      "entrypoints": {
+        "client": [
+          "dev.tr7zw.waveycapes.WaveyCapesMod"
+        ],
+        "modmenu": [
+          "dev.tr7zw.waveycapes.WaveyCapesModMenu"
+        ]
+      }
+    },
+    {
+      "id": "yet_another_config_lib_v3",
+      "version": "3.8.2+1.21.11-fabric",
+      "sha256": "49c279bc28c80ca17d6c21c3dd299ec1c115b892272f21b3f034ed782829babd",
+      "bytes": 1126948,
+      "entrypoints": {
+        "client": [
+          "dev.isxander.yacl3.platform.PlatformEntrypoint"
+        ]
+      }
+    }
+  ],
+  "packs": [
+    {
+      "alias": "resourcepacks-1",
+      "sha256": "41fdc447b80a8a171752799169a6380bdf7630a61ba138136055fe443d769571",
+      "bytes": 17818583,
+      "selectedInOptions": false
+    },
+    {
+      "alias": "resourcepacks-3",
+      "sha256": "d6c325f080da68131508896558d5ea909b4ac4550bb963eabf411200c7f83e43",
+      "bytes": 43044,
+      "selectedInOptions": false
+    },
+    {
+      "alias": "resourcepacks-4",
+      "sha256": "6cc56dd0b63808b8cd4a2fdafc27b85967e3d04212c759ff9b200cd42851e2a2",
+      "bytes": 897289,
+      "selectedInOptions": false
+    },
+    {
+      "alias": "shaderpacks-1",
+      "sha256": "fed6c879e732cf7fc7bc6570ebb1def43235aa7e96f62859fbdbdbfa0b484b38",
+      "bytes": 553397,
+      "selectedInOptions": null
+    }
+  ],
+  "resourceSelection": {
+    "vanillaSelected": true,
+    "unavailableFileSelections": 1,
+    "directoryPacksPresent": 1,
+    "directoryPacksSelected": 0
+  },
+  "graphics": {
+    "enableVsync": "false",
+    "fullscreen": "true",
+    "guiScale": "3",
+    "maxFps": "260",
+    "mipmapLevels": "4",
+    "particles": "0",
+    "renderDistance": "20",
+    "simulationDistance": "20",
+    "useNativeTransport": "true"
+  },
+  "irisPresent": false,
+  "irisConfigurationPresent": false,
+  "memoryMiB": 6144,
+  "additionalUserJvmArguments": [],
+  "installedLauncherSha256": "15bfd5d71bbe73c9ad7f3010c052f3f1669d81abfa4790b8c48efb8b169fd868"
+}
