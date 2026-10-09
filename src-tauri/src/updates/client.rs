@@ -119,58 +119,61 @@ pub async fn fetch_published_manifest(
     url: &str,
     options: &DownloadOptions,
 ) -> Result<ReleaseManifest, ClientUpdateError> {
-    let parsed = Url::parse(url).map_err(|_| {
-        ClientUpdateError::ManifestUnavailable("the manifest URL is not valid".into())
-    })?;
-    if parsed.scheme() == "https" {
-        // Production transport.
-    } else if parsed.scheme() == "http" && downloads::is_loopback_host(&parsed) {
-        // The documented diagnostic/test transport only.
-    } else {
-        return Err(ClientUpdateError::ManifestUnavailable(
-            "the manifest endpoint must use HTTPS".into(),
-        ));
-    }
+    crate::performance::measure(crate::performance::Event::ClientManifestHttp, async {
+        let parsed = Url::parse(url).map_err(|_| {
+            ClientUpdateError::ManifestUnavailable("the manifest URL is not valid".into())
+        })?;
+        if parsed.scheme() == "https" {
+            // Production transport.
+        } else if parsed.scheme() == "http" && downloads::is_loopback_host(&parsed) {
+            // The documented diagnostic/test transport only.
+        } else {
+            return Err(ClientUpdateError::ManifestUnavailable(
+                "the manifest endpoint must use HTTPS".into(),
+            ));
+        }
 
-    let client = downloads::build_client(options);
-    let response = client
-        .get(parsed)
-        .send()
-        .await
-        .map_err(|error| ClientUpdateError::ManifestUnavailable(error.to_string()))?;
-    if !response.status().is_success() {
-        return Err(ClientUpdateError::ManifestUnavailable(format!(
-            "the manifest endpoint answered HTTP {}",
-            response.status().as_u16()
-        )));
-    }
-    if response
-        .content_length()
-        .is_some_and(|declared| declared as usize > MAX_MANIFEST_BYTES)
-    {
-        return Err(ClientUpdateError::ManifestInvalid(
-            "the published manifest exceeds the size limit".into(),
-        ));
-    }
-
-    let mut document = Vec::new();
-    let mut response = response;
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|error| ClientUpdateError::ManifestUnavailable(error.to_string()))?
-    {
-        if document.len() + chunk.len() > MAX_MANIFEST_BYTES {
+        let client = downloads::build_client(options);
+        let response = client
+            .get(parsed)
+            .send()
+            .await
+            .map_err(|error| ClientUpdateError::ManifestUnavailable(error.to_string()))?;
+        if !response.status().is_success() {
+            return Err(ClientUpdateError::ManifestUnavailable(format!(
+                "the manifest endpoint answered HTTP {}",
+                response.status().as_u16()
+            )));
+        }
+        if response
+            .content_length()
+            .is_some_and(|declared| declared as usize > MAX_MANIFEST_BYTES)
+        {
             return Err(ClientUpdateError::ManifestInvalid(
                 "the published manifest exceeds the size limit".into(),
             ));
         }
-        document.extend_from_slice(&chunk);
-    }
-    let text = String::from_utf8(document).map_err(|_| {
-        ClientUpdateError::ManifestInvalid("the published manifest is not valid UTF-8".into())
-    })?;
-    ReleaseManifest::from_json(&text).map_err(ClientUpdateError::from)
+
+        let mut document = Vec::new();
+        let mut response = response;
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|error| ClientUpdateError::ManifestUnavailable(error.to_string()))?
+        {
+            if document.len() + chunk.len() > MAX_MANIFEST_BYTES {
+                return Err(ClientUpdateError::ManifestInvalid(
+                    "the published manifest exceeds the size limit".into(),
+                ));
+            }
+            document.extend_from_slice(&chunk);
+        }
+        let text = String::from_utf8(document).map_err(|_| {
+            ClientUpdateError::ManifestInvalid("the published manifest is not valid UTF-8".into())
+        })?;
+        ReleaseManifest::from_json(&text).map_err(ClientUpdateError::from)
+    })
+    .await
 }
 
 /// The outcome of candidate selection for one instance.
@@ -326,6 +329,7 @@ pub fn preview_update(
     id: &InstanceId,
     remote: &ReleaseManifest,
 ) -> Result<ClientUpdatePreview, ClientUpdateError> {
+    let _performance = crate::performance::scope(crate::performance::Event::ClientUpdatePreview);
     let invalid = |reason: String| ClientUpdateError::Inapplicable(reason);
     let registry = InstanceRegistry::load(&managed.instance_registry_file())
         .map_err(|error| invalid(error.to_string()))?;
@@ -513,6 +517,8 @@ fn fingerprint_update(
     id: &InstanceId,
     candidate: Option<&AuroraRelease>,
 ) -> Result<String, ClientUpdateError> {
+    let _performance =
+        crate::performance::scope(crate::performance::Event::ClientUpdateFingerprint);
     let instance_paths = managed.instance_paths(id);
     let root = instance_paths.root();
     let ownership_bytes = std::fs::read(root.join(aurora::AURORA_INSTALLED_FILE_NAME))
@@ -1007,29 +1013,32 @@ pub(crate) async fn check_client_update_with_url(
     id: &InstanceId,
     url: &str,
 ) -> UpdateAvailability {
-    match fetch_published_manifest(url, endpoints.download_options()).await {
-        Ok(remote) => match preview_update(managed, endpoints, id, &remote) {
-            Ok(preview) => match preview.outcome {
-                "updateAvailable" => {
-                    let candidate = preview.candidate.expect("outcome carries a candidate");
-                    UpdateAvailability::UpdateAvailable {
-                        current: preview.installed_version,
-                        candidate: candidate.version,
-                        notes: candidate.notes,
+    crate::performance::measure(crate::performance::Event::ClientUpdateDiscovery, async {
+        match fetch_published_manifest(url, endpoints.download_options()).await {
+            Ok(remote) => match preview_update(managed, endpoints, id, &remote) {
+                Ok(preview) => match preview.outcome {
+                    "updateAvailable" => {
+                        let candidate = preview.candidate.expect("outcome carries a candidate");
+                        UpdateAvailability::UpdateAvailable {
+                            current: preview.installed_version,
+                            candidate: candidate.version,
+                            notes: candidate.notes,
+                        }
                     }
+                    _ => UpdateAvailability::UpToDate,
+                },
+                Err(ClientUpdateError::Inapplicable(reason)) => {
+                    UpdateAvailability::NotApplicable { reason }
                 }
-                _ => UpdateAvailability::UpToDate,
+                Err(error) => UpdateAvailability::unavailable(error.message()),
             },
-            Err(ClientUpdateError::Inapplicable(reason)) => {
-                UpdateAvailability::NotApplicable { reason }
-            }
-            Err(error) => UpdateAvailability::unavailable(error.message()),
-        },
-        Err(error) => UpdateAvailability::unavailable(format!(
-            "Could not check for updates: {}",
-            error.message()
-        )),
-    }
+            Err(error) => UpdateAvailability::unavailable(format!(
+                "Could not check for updates: {}",
+                error.message()
+            )),
+        }
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -1306,6 +1315,71 @@ mod tests {
         // Read-only: neither the installed state nor the registry moved.
         assert_eq!(lab.state_bytes(), installed);
         assert_eq!(lab.registry_bytes(), registry);
+    }
+
+    #[tokio::test]
+    async fn discovery_requires_deep_game_validation_even_without_a_new_release() {
+        // P2 attribution/correctness test only: corrupt disposable synthetic
+        // bytes, never an owner's instance. Same-size drift defeats presence
+        // and size-only checks and proves that the digest result is consumed.
+        for (name, version, expects_offer) in [
+            ("p2-current-damage", "0.3.0", false),
+            ("p2-offer-damage", "0.4.0", true),
+        ] {
+            let lab = Lab::new(name).await;
+            let mut entry = lab.newer_release(&newer_artifact());
+            entry["auroraVersion"] = serde_json::json!(version);
+            lab.publish(vec![entry]);
+            let endpoints = lab.endpoints();
+            // Bind the URL beyond each future's lifetime.
+            let url = lab.manifest_url();
+            let healthy =
+                check_client_update_with_url(lab.world.managed(), &endpoints, &lab.instance, &url)
+                    .await;
+            assert_eq!(
+                matches!(healthy, UpdateAvailability::UpdateAvailable { .. }),
+                expects_offer
+            );
+            if !expects_offer {
+                assert!(matches!(healthy, UpdateAvailability::UpToDate));
+            }
+            let registry = lab.registry_bytes();
+            let aurora_state = lab.state_bytes();
+            let game = lab
+                .world
+                .managed()
+                .instance_paths(&lab.instance)
+                .game()
+                .to_path_buf();
+            let manifest = crate::install::state::load_installed_state(&game)
+                .unwrap()
+                .unwrap();
+            let client = manifest
+                .files()
+                .iter()
+                .find(|file| file.role() == crate::install::state::InstalledFileRole::Client)
+                .unwrap();
+            let client_path = game.join(client.path());
+            let mut damaged = std::fs::read(&client_path).unwrap();
+            damaged[0] ^= 1;
+            std::fs::write(&client_path, &damaged).unwrap();
+
+            let remote = lab.remote().await;
+            let failure = preview_update(lab.world.managed(), &endpoints, &lab.instance, &remote)
+                .unwrap_err();
+            assert!(matches!(failure, ClientUpdateError::Inapplicable(_)));
+            assert!(failure.message().contains("must validate"));
+            let discovery =
+                check_client_update_with_url(lab.world.managed(), &endpoints, &lab.instance, &url)
+                    .await;
+            assert!(matches!(
+                discovery,
+                UpdateAvailability::NotApplicable { .. }
+            ));
+            assert_eq!(std::fs::read(&client_path).unwrap(), damaged);
+            assert_eq!(lab.registry_bytes(), registry);
+            assert_eq!(lab.state_bytes(), aurora_state);
+        }
     }
 
     #[tokio::test]

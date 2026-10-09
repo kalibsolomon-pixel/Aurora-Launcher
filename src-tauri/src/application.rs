@@ -6012,7 +6012,11 @@ async fn run_update_check(
             state.mark_startup_check_done();
         }
     }
-    launcher_updates::run_check(app).await;
+    crate::performance::measure(
+        crate::performance::Event::LauncherUpdateDiscovery,
+        launcher_updates::run_check(app),
+    )
+    .await;
 
     let managed = managed_paths(app)?;
     let config = crate::config::load(&managed.config_file())?.unwrap_or_default();
@@ -6029,6 +6033,7 @@ async fn run_update_check(
             state.client_instance_id = Some(instance.to_string());
         }
     }
+    let _performance = crate::performance::scope(crate::performance::Event::UpdatePublication);
     let overview = update_overview(app)?;
     let _ = app.emit("update-status", &overview);
     Ok(overview)
@@ -6039,13 +6044,21 @@ async fn run_update_check(
 /// unreachable.
 #[tauri::command]
 pub async fn startup_update_check(app: AppHandle) -> Result<UpdateOverviewDto, CommandError> {
-    run_update_check(&app, true).await
+    crate::performance::measure(
+        crate::performance::Event::StartupUpdateCheck,
+        run_update_check(&app, true),
+    )
+    .await
 }
 
 /// The explicit user-triggered check across both domains.
 #[tauri::command]
 pub async fn check_for_updates(app: AppHandle) -> Result<UpdateOverviewDto, CommandError> {
-    run_update_check(&app, false).await
+    crate::performance::measure(
+        crate::performance::Event::ManualUpdateCheck,
+        run_update_check(&app, false),
+    )
+    .await
 }
 
 /// The current overview without performing any network work.
@@ -6067,18 +6080,21 @@ pub async fn preview_client_update(
     app: AppHandle,
     request: PreviewClientUpdateRequest,
 ) -> Result<crate::updates::client::ClientUpdatePreview, CommandError> {
-    let managed = managed_paths(&app)?;
-    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
-    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
-        .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
-    let remote = crate::updates::client::fetch_published_manifest(
-        crate::updates::client::PRODUCTION_MANIFEST_URL,
-        endpoints.download_options(),
-    )
+    crate::performance::measure(crate::performance::Event::ClientPreviewCommand, async {
+        let managed = managed_paths(&app)?;
+        let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+        let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+            .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+        let remote = crate::updates::client::fetch_published_manifest(
+            crate::updates::client::PRODUCTION_MANIFEST_URL,
+            endpoints.download_options(),
+        )
+        .await
+        .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        crate::updates::client::preview_update(&managed, &endpoints, &instance, &remote)
+            .map_err(|error| CommandError::new(error.code(), error.message()))
+    })
     .await
-    .map_err(|error| CommandError::new(error.code(), error.message()))?;
-    crate::updates::client::preview_update(&managed, &endpoints, &instance, &remote)
-        .map_err(|error| CommandError::new(error.code(), error.message()))
 }
 
 #[derive(Debug, Clone, Deserialize)]

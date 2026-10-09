@@ -31,6 +31,18 @@ pub(crate) enum Event {
     MojangMetadataHttp = 36,
     FabricMetadataHttp = 37,
     RuntimeMetadataHttp = 38,
+    // P2 attribution only: each root span ID identifies one actual command
+    // request; existing async per-poll context carries it to nested work.
+    StartupUpdateCheck = 39,
+    ManualUpdateCheck = 40,
+    ClientPreviewCommand = 41,
+    ClientUpdateDiscovery = 42,
+    ClientUpdatePreview = 43,
+    InstanceValidation = 44,
+    ClientUpdateFingerprint = 45,
+    LauncherUpdateDiscovery = 46,
+    ClientManifestHttp = 47,
+    UpdatePublication = 48,
 }
 
 /// Closed frontend vocabulary; numeric inputs carry only ephemeral counters.

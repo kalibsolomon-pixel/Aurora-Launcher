@@ -1441,6 +1441,7 @@ pub fn validate_instance(
     registry: &InstanceRegistry,
     instance_id: &InstanceId,
 ) -> Result<InstanceValidation, InstanceError> {
+    let _performance = crate::performance::scope(crate::performance::Event::InstanceValidation);
     let Some(record) = registry.find(instance_id) else {
         return Ok(InstanceValidation {
             instance_id: instance_id.to_string(),
