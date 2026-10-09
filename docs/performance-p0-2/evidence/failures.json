@@ -1,0 +1,63 @@
+[
+  {
+    "kind": "page_accessibility_delayed",
+    "trial": "profile-01",
+    "latencyExcluded": true,
+    "nativeCountsRetained": true
+  },
+  {
+    "kind": "page_accessibility_timeout",
+    "trial": "control-01",
+    "latencyExcluded": true,
+    "laterVisibleReadyConfirmed": true
+  },
+  {
+    "kind": "fixed_settle_pilot",
+    "trial": "profile-02",
+    "latencyExcluded": true,
+    "nativeCountsRetained": true
+  },
+  {
+    "kind": "early_activation_recovery_pilot",
+    "trial": "control-02",
+    "latencyExcluded": true
+  },
+  {
+    "kind": "close_control_geometry_unavailable",
+    "trial": "profile-01",
+    "actionRetriedOnlyAfterFreshObservation": true,
+    "normalCloseShortcutUsed": true
+  },
+  {
+    "kind": "competing_session_guard_refusal",
+    "trial": "control-01",
+    "newProcessStarted": false
+  },
+  {
+    "kind": "observer_before_trial_creation",
+    "trial": "control-01",
+    "newProcessStarted": false
+  },
+  {
+    "kind": "exit_trace_read_before_exit",
+    "trial": "profile-01",
+    "prematureDataUsed": false
+  },
+  {
+    "kind": "frontend_native_typescript_import_resolution",
+    "corrected": true,
+    "fullRetestPass": 229
+  },
+  {
+    "kind": "client_crlf_checkout_source_assertions",
+    "failures": 17,
+    "ownerSourceChanged": false,
+    "finalOriginalBytesTestPass": 443
+  },
+  {
+    "kind": "jna_preservation_game_gate",
+    "playAttempts": 0,
+    "startupJfrAttempts": 0,
+    "blocked": true
+  }
+]

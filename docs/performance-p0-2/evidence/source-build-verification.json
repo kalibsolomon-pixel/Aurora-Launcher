@@ -1,0 +1,10 @@
+{
+  "sourceHead": "6cbabd38bc1c5268b9f6c80034f18da3a26f1e21",
+  "postBuildTrackedDiffEmpty": true,
+  "postRefreshTrackedStatus": " M src-tauri/Cargo.toml\n",
+  "cargoManifestCleanFilteredBlob": "6b9a99e30697f47860d9fef0c2b9e80f4c6caded",
+  "cargoManifestHeadBlob": "6b9a99e30697f47860d9fef0c2b9e80f4c6caded",
+  "artifactCaptureStatusNote": "Tauri CLI left Cargo.toml with LF in the CRLF checkout (core.autocrlf=true). Git reports M, but the full HEAD diff is empty and Git-clean-filtered bytes exactly match the HEAD blob. This line-ending status is retained; no semantic manifest change was found.",
+  "sharedRuntimeFilesChecked": 1219,
+  "sharedRuntimeChanged": 0
+}

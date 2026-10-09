@@ -1,0 +1,62 @@
+[
+  {
+    "entry": "assets/aurora/font/fira_sans.json",
+    "deployedBytes": 192,
+    "builtBytes": 205,
+    "equalAfterCRLFNormalization": true
+  },
+  {
+    "entry": "assets/aurora/font/inter.json",
+    "deployedBytes": 195,
+    "builtBytes": 208,
+    "equalAfterCRLFNormalization": true
+  },
+  {
+    "entry": "assets/aurora/font/inter_italic.json",
+    "deployedBytes": 202,
+    "builtBytes": 215,
+    "equalAfterCRLFNormalization": true
+  },
+  {
+    "entry": "assets/aurora/font/jetbrains_mono.json",
+    "deployedBytes": 197,
+    "builtBytes": 210,
+    "equalAfterCRLFNormalization": true
+  },
+  {
+    "entry": "assets/aurora/font/nunito.json",
+    "deployedBytes": 446,
+    "builtBytes": 459,
+    "equalAfterCRLFNormalization": true
+  },
+  {
+    "entry": "assets/aurora/font/oswald.json",
+    "deployedBytes": 446,
+    "builtBytes": 459,
+    "equalAfterCRLFNormalization": true
+  },
+  {
+    "entry": "assets/aurora/font/poppins.json",
+    "deployedBytes": 190,
+    "builtBytes": 203,
+    "equalAfterCRLFNormalization": true
+  },
+  {
+    "entry": "assets/aurora/font/quicksand.json",
+    "deployedBytes": 449,
+    "builtBytes": 462,
+    "equalAfterCRLFNormalization": true
+  },
+  {
+    "entry": "assets/aurora/font/roboto.json",
+    "deployedBytes": 191,
+    "builtBytes": 204,
+    "equalAfterCRLFNormalization": true
+  },
+  {
+    "entry": "assets/aurora/shaders/core/masked_glint.fsh",
+    "deployedBytes": 766,
+    "builtBytes": 787,
+    "equalAfterCRLFNormalization": true
+  }
+]

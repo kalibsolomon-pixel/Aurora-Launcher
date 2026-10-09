@@ -1,0 +1,44 @@
+{
+  "sourceHead": "5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d",
+  "build": "Gradle --no-daemon build -x test",
+  "testsRun": 443,
+  "testFailures": 17,
+  "failingTests": [
+    "com.aurora.client.screen.AuroraScreenNavigationTest.layoutPairAdoptsThePeerSelectionContract()",
+    "com.aurora.client.screen.AuroraScreenNavigationTest.exactManualControlInventory()",
+    "com.aurora.client.screen.AuroraScreenNavigationTest.registrationIsInitOnlyInVisualOrder()",
+    "com.aurora.client.screen.AuroraScreenNavigationTest.soundOwnershipModel()",
+    "com.aurora.client.screen.AuroraScreenNavigationTest.canonicalHoverVocabularyAcrossAdoptedFamilies()",
+    "com.aurora.client.screen.AuroraScreenNavigationTest.focusIsTheButtonFamilyHairlineAndNeverHover()",
+    "com.aurora.client.screen.AuroraScreenSemanticHostingTest.availabilityUsesTheC1ClipBandAndActionableControlRect()",
+    "com.aurora.client.screen.AuroraScreenViewportCouplingTest.settingsWalkFiresAvailabilityChanges()",
+    "com.aurora.client.screen.AuroraScreenViewportCouplingTest.tileCullHoverAndClickUseTheViewport()",
+    "com.aurora.client.screen.AuroraScreenViewportCouplingTest.settingsClickWalkIsGatedToTheViewport()",
+    "com.aurora.client.screen.PackTabsPilotTest.selectedTabRemainsFocusableAndTraversable()",
+    "com.aurora.client.screen.PhaseC8ClipCouplingTest.managerKeyboardAndPointerRoutesAreBandGated()",
+    "com.aurora.client.screen.setting.AccentSettingPilotTest.selectionNeverPinsHoverAndHoverNeverErasesSelection()",
+    "com.aurora.client.screen.setting.IconActionRolloutTest.effectRowRemoveUsesThePrimitiveUnderContainerOwnership()",
+    "com.aurora.client.screen.setting.SegmentedSettingPilotTest.hoverIsCanonicalPointerOnlyAndNeverGatedOnSelection()",
+    "com.aurora.client.ui.component.ColorSwatchDataOnlyTest.dataOnlyRenderNeverComputesInteractionState()",
+    "com.aurora.client.ui.util.SquareModeConformanceTest.managerToastRoutesThroughThemeRoundness()"
+  ],
+  "builtJar": {
+    "sha256": "5efa5f5323ba802099684c46dd7d4fb408e1010b4fe3ce1cfdba0770b41d448c",
+    "bytes": 3077403
+  },
+  "deployedJar": {
+    "sha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+    "bytes": 3077377,
+    "sourceRevisionEstablished": false
+  },
+  "zipEntryComparison": {
+    "deployedCount": 435,
+    "builtCount": 435,
+    "sameBytes": 425,
+    "differentBytes": 10,
+    "onlyDeployed": 0,
+    "onlyBuilt": 0,
+    "zipTimestampsIgnored": true
+  },
+  "installedJarModified": false
+}

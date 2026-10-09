@@ -1,0 +1,53 @@
+{
+  "sourceHead": "6cbabd38bc1c5268b9f6c80034f18da3a26f1e21",
+  "sourceTree": "50b68ee5f96d2ffc88f8e0aeb6eeca1be6c9deb7",
+  "toolchains": {
+    "rustc": {
+      "exit": 0,
+      "text": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-pc-windows-msvc\nrelease: 1.98.1\nLLVM version: 22.1.8"
+    },
+    "cargo": {
+      "exit": 0,
+      "text": "cargo 1.98.1 (797e8a9bc 2026-08-05)"
+    },
+    "node": {
+      "exit": 0,
+      "text": "v24.21.0"
+    },
+    "npm": {
+      "exit": 0,
+      "text": "11.19.0"
+    },
+    "javaBuild": {
+      "exit": 0,
+      "text": "openjdk 25.0.4.1 2026-08-18 LTS\nOpenJDK Runtime Environment Temurin-25.0.4.1+1 (build 25.0.4.1+1-LTS)\nOpenJDK 64-Bit Server VM Temurin-25.0.4.1+1 (build 25.0.4.1+1-LTS, mixed mode, sharing)"
+    }
+  },
+  "inputSha256": {
+    "package.json": "b71f7e0a65c19ca92b668ebe28f0f3b15a2b04a6cb0802c385fffcea7cea22b9",
+    "package-lock.json": "b86f0aae61579fc922821869b351bf65ed7493411e9cf4330c9eb3b2a22f8443",
+    "src-tauri/Cargo.toml": "b3dca71b99d4152971ec4382596a065e1bb0ad764008935689ed37772d7f7372",
+    "src-tauri/Cargo.lock": "58632de0a3543518d210e7e2fc9901775f033d5ba6a33f95111cda8c01e9e8c6",
+    "src-tauri/tauri.conf.json": "1d5f54e271e73fc25cd10eabd1b8bc58b50bd3c102896b3b320106c8e0ce37bf",
+    "vite.config.js": "ff64c375899326df8b8dc53b2d036a9fa0ab26bc03dba09775e8e669e1b1419b",
+    "svelte.config.js": "fadc69dca3da4956622f7450056da248d1d52ea3f119d6a706e06195b07d9a34"
+  },
+  "releaseIdentity": {
+    "version": "1.4.1",
+    "identifier": "com.aurora.launcher"
+  },
+  "updaterTrust": {
+    "sha256": "bb2998279b09a39daeb44cd405a2f0f6d664fa751ce3d02e002463f89f8c50bc",
+    "source": "GitHub launcher-production environment public variable",
+    "trustChanged": false
+  },
+  "productionProfile": {
+    "codegenUnits": 1,
+    "lto": true,
+    "optLevel": 3,
+    "panic": "abort",
+    "strip": true
+  },
+  "bundleInstallerCreated": false,
+  "installedLauncherModified": false
+}

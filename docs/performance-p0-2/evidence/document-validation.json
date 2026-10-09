@@ -1,0 +1,17 @@
+{
+  "numericTraceSchema": "pass",
+  "traces": 10,
+  "metadataPrivacyPatterns": "pass",
+  "artifactManifestFingerprints": "pass",
+  "retainedArtifactBytesChecked": true,
+  "frontendArtifactFilesChecked": 69,
+  "criticalRepositoryFiles": 22,
+  "resolvedLocalLinks": 31,
+  "newGameLaunches": 0,
+  "summaryRegeneration": "byte_identical",
+  "summarySha256": "450cf6e5131b56654b6d3ac4e96455bb24322d79134cc4aa26c5e5f46a2f833e",
+  "uiObserverNotebookSyntax": "pass",
+  "validationToolSha256": "b868af9a872b90fc326c3c33d5c064db22b7eb67af950bb10f05d35a6f448270",
+  "analysisToolSha256": "cb780152719bc4509ca39d4bdecde29d05e01757c4535fcb01524ee40a4dfb39",
+  "observerNotebookSha256": "95cce1cd71990a9d704e1cb45a488e55659c663883e6a782cefe9bec0b6b910d"
+}

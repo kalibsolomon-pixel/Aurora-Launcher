@@ -1,0 +1,104 @@
+{
+  "checks": [
+    {
+      "check": "default-check",
+      "logSha256": "1e39b3cf3c11e819294b8501f13d560e6ae4c459c451373e2bb8c23c15708d26",
+      "results": [
+        "Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.15s"
+      ]
+    },
+    {
+      "check": "default-tests",
+      "logSha256": "1eec647621969374c8c7bbb13d3a51191c861051e737e2796f70d69c00ba4d14",
+      "results": [
+        "Finished `test` profile [unoptimized + debuginfo] target(s) in 34.22s",
+        "test result: ok. 841 passed; 0 failed; 29 ignored; 0 measured; 0 filtered out; finished in 54.29s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "check": "feature-check-final",
+      "logSha256": "270947fd2eae222bc54d717992d719bf3646594ec9f4ab52ad37ba75af46c9b4",
+      "results": [
+        "Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.72s"
+      ]
+    },
+    {
+      "check": "feature-tests-final",
+      "logSha256": "dca3986d1e7315e7b6d29bba5197aa34b24acccba25675821b6885b255c3f55e",
+      "results": [
+        "Finished `test` profile [unoptimized + debuginfo] target(s) in 13.19s",
+        "test result: ok. 845 passed; 0 failed; 29 ignored; 0 measured; 0 filtered out; finished in 54.27s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "check": "probe-tests",
+      "logSha256": "8043af1d5f094352647904948bc99b3799edfa8f63294f2ed44874c74b1ec986",
+      "results": [
+        "Finished `test` profile [unoptimized + debuginfo] target(s) in 19.27s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 869 filtered out; finished in 0.23s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "check": "frontend-tests",
+      "logSha256": "1f12cd5db074fc5c383f9535e2b4bf64818e98af216cdb17c9ab8077e8651e97",
+      "results": []
+    },
+    {
+      "check": "profile-release-build",
+      "logSha256": "005354634e6fa4e0d94082772554237384cebe5766e73ba6bcaab3cf393865f4",
+      "results": [
+        "Finished `release` profile [optimized] target(s) in 4m 58s",
+        "Built application: task-created output only"
+      ]
+    },
+    {
+      "check": "control-release-build",
+      "logSha256": "2c209d6416560a76bf13a7087aa6bae2120971af6fc3b146e6a08544bf41b6c8",
+      "results": [
+        "Finished `release` profile [optimized] target(s) in 4m 28s",
+        "Built application: task-created output only"
+      ]
+    },
+    {
+      "check": "client-owner-bytes-build",
+      "logSha256": "990858e394ebb61e874afc58e538ecf98d9bf498f773fda26f22c3e1d8818229",
+      "results": [
+        "BUILD SUCCESSFUL in 17s"
+      ]
+    }
+  ],
+  "rustExistingWarnings": 4,
+  "featurePrivacyTests": [
+    "bounded numeric serialization",
+    "closed vocabulary rejects private payloads",
+    "nested context and hash ownership",
+    "pending future cross-thread restoration"
+  ],
+  "noGameLaunchAcceptance": true,
+  "frontendTests": {
+    "tests": 229,
+    "pass": 229,
+    "fail": 0
+  },
+  "frontendCheck": {
+    "errors": 0,
+    "warnings": 0,
+    "command": "npm run check"
+  },
+  "rustFormat": {
+    "command": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check",
+    "exit": 0
+  },
+  "ipcReleaseBuild": {
+    "logSha256": "90cd15254bab8f78e708980811f9759e222f792d95bd26389eee902c6e411d3c",
+    "completed": true
+  }
+}

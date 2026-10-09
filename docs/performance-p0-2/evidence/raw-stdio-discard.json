@@ -1,0 +1,6 @@
+{
+  "discardedCurrentTestStdIoFiles": 36,
+  "reason": "Ordinary application stdio is outside the numeric-only retained evidence contract; contents never exported or inspected",
+  "preExistingFilesRemoved": 0,
+  "recursiveCleanup": false
+}

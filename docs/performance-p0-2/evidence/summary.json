@@ -1,0 +1,4115 @@
+{
+  "cohorts": {
+    "profile": {
+      "firstReadyUpper": {
+        "n": 6,
+        "medianMs": 3195.0,
+        "minMs": 2248,
+        "worstMs": 3374,
+        "p95Ms": null,
+        "sampleStdDevMs": 414.33484848207814
+      },
+      "stableReadyUpper": {
+        "n": 6,
+        "medianMs": 4305.5,
+        "minMs": 4180,
+        "worstMs": 5017,
+        "p95Ms": null,
+        "sampleStdDevMs": 313.8131609732135
+      },
+      "worstObserverCaptureMs": 28.955700000049546
+    },
+    "control": {
+      "firstReadyUpper": {
+        "n": 6,
+        "medianMs": 2089.0,
+        "minMs": 1916,
+        "worstMs": 3284,
+        "p95Ms": null,
+        "sampleStdDevMs": 649.3576569708458
+      },
+      "stableReadyUpper": {
+        "n": 6,
+        "medianMs": 4442.0,
+        "minMs": 4200,
+        "worstMs": 4738,
+        "p95Ms": null,
+        "sampleStdDevMs": 204.81666598855344
+      },
+      "worstObserverCaptureMs": 28.847400000086054
+    },
+    "ipc": {
+      "firstReadyUpper": {
+        "n": 0
+      },
+      "stableReadyUpper": {
+        "n": 0
+      },
+      "worstObserverCaptureMs": null
+    }
+  },
+  "pairedProfileMinusControlFirstReady": {
+    "n": 6,
+    "medianMs": 608.5,
+    "minMs": -101,
+    "worstMs": 1458,
+    "p95Ms": null,
+    "sampleStdDevMs": 726.8217571500365
+  },
+  "pairedProfileMinusControlStableReady": {
+    "n": 6,
+    "medianMs": -89.5,
+    "minMs": -343,
+    "worstMs": 279,
+    "p95Ms": null,
+    "sampleStdDevMs": 225.1856271316326
+  },
+  "totalRealStartupTrials": 18,
+  "excludedUiPilots": 4,
+  "primaryNativeCounts": {
+    "initialization": 6,
+    "runtimeStatus": 6,
+    "readiness": 12,
+    "play": 0,
+    "unrelatedIpc": 18,
+    "selection": 0,
+    "gameIntegrity": 24,
+    "gameMetadata": 18,
+    "runtimeMetadata": 18,
+    "modInventory": 42,
+    "runtimeIntegrity": 18,
+    "javaDiagnostic": 6,
+    "session": 0,
+    "ensureSession": 0,
+    "sessionLock": 0,
+    "contentLock": 0,
+    "lockedValidation": 0,
+    "javaSpawn": 0,
+    "blockingQueue": 0,
+    "blockingWorker": 0,
+    "dispatch": 18,
+    "modInventoryCommand": 0,
+    "mojangHttp": 36,
+    "fabricHttp": 36,
+    "runtimeHttp": 18
+  },
+  "allTracedNativeCounts": {
+    "initialization": 10,
+    "runtimeStatus": 10,
+    "readiness": 20,
+    "play": 0,
+    "unrelatedIpc": 130,
+    "selection": 0,
+    "gameIntegrity": 40,
+    "gameMetadata": 30,
+    "runtimeMetadata": 30,
+    "modInventory": 70,
+    "runtimeIntegrity": 30,
+    "javaDiagnostic": 10,
+    "session": 0,
+    "ensureSession": 0,
+    "sessionLock": 0,
+    "contentLock": 0,
+    "lockedValidation": 0,
+    "javaSpawn": 0,
+    "blockingQueue": 0,
+    "blockingWorker": 0,
+    "dispatch": 30,
+    "modInventoryCommand": 0,
+    "mojangHttp": 60,
+    "fabricHttp": 60,
+    "runtimeHttp": 30
+  },
+  "primaryEventCorrelationTimings": {
+    "event1/correlation0": {
+      "n": 6,
+      "medianMs": 5.5325,
+      "minMs": 4.535,
+      "worstMs": 6.704,
+      "p95Ms": null,
+      "sampleStdDevMs": 0.8356192314684958
+    },
+    "event10/correlation1": {
+      "n": 6,
+      "medianMs": 1647.0745,
+      "minMs": 1517.897,
+      "worstMs": 2271.43,
+      "p95Ms": null,
+      "sampleStdDevMs": 281.42528607619226
+    },
+    "event11/correlation2": {
+      "n": 6,
+      "medianMs": 1531.123,
+      "minMs": 1403.236,
+      "worstMs": 1761.134,
+      "p95Ms": null,
+      "sampleStdDevMs": 142.3006416410926
+    },
+    "event11/correlation3": {
+      "n": 6,
+      "medianMs": 1158.234,
+      "minMs": 1143.252,
+      "worstMs": 1206.365,
+      "p95Ms": null,
+      "sampleStdDevMs": 24.874026368215247
+    },
+    "event13/correlation0": {
+      "n": 18,
+      "medianMs": 2.8049999999999997,
+      "minMs": 0.975,
+      "worstMs": 4.106,
+      "p95Ms": null,
+      "sampleStdDevMs": 1.0576335543533582
+    },
+    "event20/correlation0": {
+      "n": 6,
+      "medianMs": 571.052,
+      "minMs": 550.063,
+      "worstMs": 587.745,
+      "p95Ms": null,
+      "sampleStdDevMs": 15.370735030136546
+    },
+    "event20/correlation1": {
+      "n": 6,
+      "medianMs": 635.547,
+      "minMs": 624.82,
+      "worstMs": 652.901,
+      "p95Ms": null,
+      "sampleStdDevMs": 10.096639607645011
+    },
+    "event20/correlation2": {
+      "n": 6,
+      "medianMs": 611.2075,
+      "minMs": 595.588,
+      "worstMs": 621.221,
+      "p95Ms": null,
+      "sampleStdDevMs": 8.274993496472785
+    },
+    "event20/correlation3": {
+      "n": 6,
+      "medianMs": 563.4939999999999,
+      "minMs": 556.199,
+      "worstMs": 582.531,
+      "p95Ms": null,
+      "sampleStdDevMs": 9.200594279719107
+    },
+    "event21/correlation1": {
+      "n": 6,
+      "medianMs": 383.47900000000004,
+      "minMs": 284.347,
+      "worstMs": 1025.864,
+      "p95Ms": null,
+      "sampleStdDevMs": 283.22521548266144
+    },
+    "event21/correlation2": {
+      "n": 6,
+      "medianMs": 377.85450000000003,
+      "minMs": 291.98,
+      "worstMs": 630.819,
+      "p95Ms": null,
+      "sampleStdDevMs": 134.78003897709283
+    },
+    "event21/correlation3": {
+      "n": 6,
+      "medianMs": 122.807,
+      "minMs": 115.68,
+      "worstMs": 146.119,
+      "p95Ms": null,
+      "sampleStdDevMs": 11.760269974225361
+    },
+    "event22/correlation1": {
+      "n": 6,
+      "medianMs": 30.042,
+      "minMs": 27.822,
+      "worstMs": 45.141,
+      "p95Ms": null,
+      "sampleStdDevMs": 6.488259818061131
+    },
+    "event22/correlation2": {
+      "n": 6,
+      "medianMs": 51.577,
+      "minMs": 24.507,
+      "worstMs": 128.793,
+      "p95Ms": null,
+      "sampleStdDevMs": 46.22402948106825
+    },
+    "event22/correlation3": {
+      "n": 6,
+      "medianMs": 28.5365,
+      "minMs": 27.444,
+      "worstMs": 43.668,
+      "p95Ms": null,
+      "sampleStdDevMs": 6.250683048008966
+    },
+    "event23/correlation0": {
+      "n": 12,
+      "medianMs": 161.3125,
+      "minMs": 156.786,
+      "worstMs": 166.699,
+      "p95Ms": null,
+      "sampleStdDevMs": 3.166511300813851
+    },
+    "event23/correlation1": {
+      "n": 6,
+      "medianMs": 183.343,
+      "minMs": 177.252,
+      "worstMs": 223.299,
+      "p95Ms": null,
+      "sampleStdDevMs": 19.585696284959255
+    },
+    "event23/correlation2": {
+      "n": 12,
+      "medianMs": 171.36849999999998,
+      "minMs": 158.352,
+      "worstMs": 223.632,
+      "p95Ms": null,
+      "sampleStdDevMs": 20.6276366667281
+    },
+    "event23/correlation3": {
+      "n": 12,
+      "medianMs": 165.6035,
+      "minMs": 158.05,
+      "worstMs": 177.008,
+      "p95Ms": null,
+      "sampleStdDevMs": 5.228686331192569
+    },
+    "event24/correlation1": {
+      "n": 6,
+      "medianMs": 382.051,
+      "minMs": 373.772,
+      "worstMs": 385.265,
+      "p95Ms": null,
+      "sampleStdDevMs": 4.456618075028043
+    },
+    "event24/correlation2": {
+      "n": 6,
+      "medianMs": 93.663,
+      "minMs": 92.003,
+      "worstMs": 98.389,
+      "p95Ms": null,
+      "sampleStdDevMs": 2.566453246538238
+    },
+    "event24/correlation3": {
+      "n": 6,
+      "medianMs": 95.6935,
+      "minMs": 94.439,
+      "worstMs": 100.873,
+      "p95Ms": null,
+      "sampleStdDevMs": 2.7131921175373255
+    },
+    "event25/correlation1": {
+      "n": 6,
+      "medianMs": 284.5635,
+      "minMs": 277.614,
+      "worstMs": 288.634,
+      "p95Ms": null,
+      "sampleStdDevMs": 4.720475526893462
+    },
+    "event34/correlation1": {
+      "n": 6,
+      "medianMs": 1647.0790000000002,
+      "minMs": 1517.911,
+      "worstMs": 2271.434,
+      "p95Ms": null,
+      "sampleStdDevMs": 281.42378859767115
+    },
+    "event34/correlation2": {
+      "n": 6,
+      "medianMs": 1531.126,
+      "minMs": 1403.24,
+      "worstMs": 1761.137,
+      "p95Ms": null,
+      "sampleStdDevMs": 142.3002462452777
+    },
+    "event34/correlation3": {
+      "n": 6,
+      "medianMs": 1158.237,
+      "minMs": 1143.254,
+      "worstMs": 1206.368,
+      "p95Ms": null,
+      "sampleStdDevMs": 24.873596655221895
+    },
+    "event36/correlation1": {
+      "n": 12,
+      "medianMs": 205.54500000000002,
+      "minMs": 23.998,
+      "worstMs": 750.985,
+      "p95Ms": null,
+      "sampleStdDevMs": 203.37189169305233
+    },
+    "event36/correlation2": {
+      "n": 12,
+      "medianMs": 126.03949999999999,
+      "minMs": 25.401,
+      "worstMs": 505.56,
+      "p95Ms": null,
+      "sampleStdDevMs": 144.51405556228988
+    },
+    "event36/correlation3": {
+      "n": 12,
+      "medianMs": 47.233999999999995,
+      "minMs": 27.092,
+      "worstMs": 68.427,
+      "p95Ms": null,
+      "sampleStdDevMs": 14.822496651026675
+    },
+    "event37/correlation1": {
+      "n": 12,
+      "medianMs": 26.962,
+      "minMs": 10.467,
+      "worstMs": 166.71,
+      "p95Ms": null,
+      "sampleStdDevMs": 53.40844200287294
+    },
+    "event37/correlation2": {
+      "n": 12,
+      "medianMs": 30.805,
+      "minMs": 6.788,
+      "worstMs": 166.649,
+      "p95Ms": null,
+      "sampleStdDevMs": 52.37100828290574
+    },
+    "event37/correlation3": {
+      "n": 12,
+      "medianMs": 15.7295,
+      "minMs": 8.917,
+      "worstMs": 21.768,
+      "p95Ms": null,
+      "sampleStdDevMs": 3.589474954219586
+    },
+    "event38/correlation1": {
+      "n": 6,
+      "medianMs": 28.6595,
+      "minMs": 26.48,
+      "worstMs": 43.492,
+      "p95Ms": null,
+      "sampleStdDevMs": 6.375781972955682
+    },
+    "event38/correlation2": {
+      "n": 6,
+      "medianMs": 49.8595,
+      "minMs": 23.23,
+      "worstMs": 127.522,
+      "p95Ms": null,
+      "sampleStdDevMs": 46.250566167345454
+    },
+    "event38/correlation3": {
+      "n": 6,
+      "medianMs": 27.0605,
+      "minMs": 25.821,
+      "worstMs": 42.219,
+      "p95Ms": null,
+      "sampleStdDevMs": 6.293493605833461
+    }
+  },
+  "primaryRunsWithReadyCheckingReady": 5,
+  "primaryNativeFinalReady": {
+    "n": 6,
+    "medianMs": 3159.5715,
+    "minMs": 3050.119,
+    "worstMs": 3832.07,
+    "p95Ms": null,
+    "sampleStdDevMs": 296.5589633954211
+  },
+  "traces": {
+    "trace-ipc-01.json": {
+      "inputSha256": "54fd8d54aedaa943c97fb2a55f2690f77a7ad2cbf4cb329fda49d5479ab4fa8e",
+      "recordCount": 305,
+      "counts": {
+        "initialization": 1,
+        "runtimeStatus": 1,
+        "readiness": 2,
+        "play": 0,
+        "unrelatedIpc": 53,
+        "selection": 0,
+        "gameIntegrity": 4,
+        "gameMetadata": 3,
+        "runtimeMetadata": 3,
+        "modInventory": 7,
+        "runtimeIntegrity": 3,
+        "javaDiagnostic": 1,
+        "session": 0,
+        "ensureSession": 0,
+        "sessionLock": 0,
+        "contentLock": 0,
+        "lockedValidation": 0,
+        "javaSpawn": 0,
+        "blockingQueue": 0,
+        "blockingWorker": 0,
+        "dispatch": 3,
+        "modInventoryCommand": 0,
+        "mojangHttp": 6,
+        "fabricHttp": 6,
+        "runtimeHttp": 3
+      },
+      "spanWallMsInclusive": {
+        "initialization": {
+          "n": 1,
+          "medianMs": 5.846,
+          "minMs": 5.846,
+          "worstMs": 5.846,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "runtimeStatus": {
+          "n": 1,
+          "medianMs": 1570.238,
+          "minMs": 1570.238,
+          "worstMs": 1570.238,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "readiness": {
+          "n": 2,
+          "medianMs": 1246.7335,
+          "minMs": 1139.404,
+          "worstMs": 1354.063,
+          "p95Ms": null,
+          "sampleStdDevMs": 151.78683454272317
+        },
+        "unrelatedIpc": {
+          "n": 53,
+          "medianMs": 0.253,
+          "minMs": 0.17,
+          "worstMs": 2.95,
+          "p95Ms": 1.149,
+          "sampleStdDevMs": 0.5608675428125178
+        },
+        "gameIntegrity": {
+          "n": 4,
+          "medianMs": 592.2864999999999,
+          "minMs": 558.757,
+          "worstMs": 637.366,
+          "p95Ms": null,
+          "sampleStdDevMs": 36.687365572723635
+        },
+        "gameMetadata": {
+          "n": 3,
+          "medianMs": 258.833,
+          "minMs": 102.884,
+          "worstMs": 278.015,
+          "p95Ms": null,
+          "sampleStdDevMs": 96.05459115003302
+        },
+        "runtimeMetadata": {
+          "n": 3,
+          "medianMs": 40.012,
+          "minMs": 31.621,
+          "worstMs": 86.589,
+          "p95Ms": null,
+          "sampleStdDevMs": 29.61223517962353
+        },
+        "modInventory": {
+          "n": 7,
+          "medianMs": 167.085,
+          "minMs": 160.283,
+          "worstMs": 181.982,
+          "p95Ms": null,
+          "sampleStdDevMs": 8.615736773071538
+        },
+        "runtimeIntegrity": {
+          "n": 3,
+          "medianMs": 95.756,
+          "minMs": 91.067,
+          "worstMs": 376.34,
+          "p95Ms": null,
+          "sampleStdDevMs": 163.36566974428868
+        },
+        "javaDiagnostic": {
+          "n": 1,
+          "medianMs": 278.892,
+          "minMs": 278.892,
+          "worstMs": 278.892,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "dispatch": {
+          "n": 3,
+          "medianMs": 1354.067,
+          "minMs": 1139.416,
+          "worstMs": 1570.246,
+          "p95Ms": null,
+          "sampleStdDevMs": 215.41545160534181
+        },
+        "mojangHttp": {
+          "n": 6,
+          "medianMs": 37.710499999999996,
+          "minMs": 21.488,
+          "worstMs": 216.171,
+          "p95Ms": null,
+          "sampleStdDevMs": 90.380554464811
+        },
+        "fabricHttp": {
+          "n": 6,
+          "medianMs": 18.076999999999998,
+          "minMs": 7.742,
+          "worstMs": 21.7,
+          "p95Ms": null,
+          "sampleStdDevMs": 4.8576693348422415
+        },
+        "runtimeHttp": {
+          "n": 3,
+          "medianMs": 38.296,
+          "minMs": 30.084,
+          "worstMs": 85.185,
+          "p95Ms": null,
+          "sampleStdDevMs": 29.72691111322085
+        }
+      },
+      "hashFileIoAndDigest": {
+        "runtimeStatus": {
+          "wallMs": 3.094,
+          "calls": 2
+        },
+        "readiness": {
+          "wallMs": 6.13,
+          "calls": 4
+        },
+        "unrelatedIpc": {
+          "wallMs": 3.591,
+          "calls": 2
+        },
+        "gameIntegrity": {
+          "wallMs": 2348.024,
+          "calls": 18708
+        },
+        "runtimeMetadata": {
+          "wallMs": 0.87,
+          "calls": 3
+        },
+        "modInventory": {
+          "wallMs": 266.398,
+          "calls": 434
+        },
+        "runtimeIntegrity": {
+          "wallMs": 211.317,
+          "calls": 1206
+        }
+      },
+      "durationsByEventCorrelationMs": {
+        "event1/correlation0": [
+          5.846
+        ],
+        "event10/correlation1": [
+          1570.238
+        ],
+        "event11/correlation3": [
+          1354.063
+        ],
+        "event11/correlation19": [
+          1139.404
+        ],
+        "event13/correlation0": [
+          1.058,
+          2.95,
+          2.933,
+          1.149,
+          1.111,
+          0.954,
+          1.025,
+          1.049,
+          0.623,
+          0.293,
+          0.228,
+          0.198,
+          0.251,
+          0.225,
+          0.211,
+          0.377,
+          0.233,
+          0.23,
+          0.285,
+          0.249,
+          0.273,
+          0.23,
+          0.297,
+          0.306,
+          0.196,
+          0.227,
+          0.281,
+          0.17,
+          0.22,
+          0.529,
+          0.252,
+          0.25,
+          0.197,
+          0.249,
+          0.392,
+          0.251,
+          0.526,
+          0.349,
+          0.263,
+          0.239,
+          0.336,
+          0.219,
+          0.222,
+          0.215,
+          0.239,
+          0.299,
+          0.209,
+          0.338,
+          0.189,
+          0.215,
+          0.326,
+          0.253,
+          0.312
+        ],
+        "event20/correlation0": [
+          570.899
+        ],
+        "event20/correlation1": [
+          637.366
+        ],
+        "event20/correlation3": [
+          613.674
+        ],
+        "event20/correlation19": [
+          558.757
+        ],
+        "event21/correlation1": [
+          278.015
+        ],
+        "event21/correlation3": [
+          258.833
+        ],
+        "event21/correlation19": [
+          102.884
+        ],
+        "event22/correlation1": [
+          86.589
+        ],
+        "event22/correlation3": [
+          31.621
+        ],
+        "event22/correlation19": [
+          40.012
+        ],
+        "event23/correlation0": [
+          161.556,
+          166.145
+        ],
+        "event23/correlation1": [
+          181.982
+        ],
+        "event23/correlation3": [
+          180.549,
+          167.085
+        ],
+        "event23/correlation19": [
+          160.283,
+          171.279
+        ],
+        "event24/correlation1": [
+          376.34
+        ],
+        "event24/correlation3": [
+          91.067
+        ],
+        "event24/correlation19": [
+          95.756
+        ],
+        "event25/correlation1": [
+          278.892
+        ],
+        "event34/correlation1": [
+          1570.246
+        ],
+        "event34/correlation3": [
+          1354.067
+        ],
+        "event34/correlation19": [
+          1139.416
+        ],
+        "event36/correlation1": [
+          216.171,
+          21.488
+        ],
+        "event36/correlation3": [
+          192.204,
+          25.865
+        ],
+        "event36/correlation19": [
+          48.101,
+          27.32
+        ],
+        "event37/correlation1": [
+          19.658,
+          18.544
+        ],
+        "event37/correlation3": [
+          21.7,
+          16.379
+        ],
+        "event37/correlation19": [
+          17.61,
+          7.742
+        ],
+        "event38/correlation1": [
+          85.185
+        ],
+        "event38/correlation3": [
+          30.084
+        ],
+        "event38/correlation19": [
+          38.296
+        ]
+      },
+      "gameAuditHashWallFractions": [
+        0.9859358673038725,
+        0.986874138386179,
+        0.9874110832213754,
+        0.9848485119649508
+      ],
+      "readyFlashMs": [
+        172.09900000000016
+      ],
+      "frontendInitializeAfterNativeOriginMs": 289.11,
+      "runtimeReadinessOverlap": [
+        {
+          "runtimeCorrelation": 1,
+          "readinessCorrelation": 3,
+          "wallMs": 1354.063
+        }
+      ],
+      "frontendTransitions": [
+        {
+          "event": 105,
+          "afterFrontendInitMs": 114.601
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 1471.301
+        },
+        {
+          "event": 105,
+          "afterFrontendInitMs": 1643.4
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 2784.4
+        }
+      ],
+      "firstReadyAfterNativeOriginMs": 1758.964,
+      "lastReadyAfterNativeOriginMs": 3072.026,
+      "firstReadyAfterFrontendInitMs": 1471.301,
+      "lastReadyAfterFrontendInitMs": 2784.4,
+      "unattributedGameAudits": 1,
+      "gameAuditsByCorrelation": {
+        "0": 1,
+        "1": 1,
+        "3": 1,
+        "19": 1
+      },
+      "discardedReadiness": 0,
+      "instanceGenerations": [
+        0,
+        1
+      ],
+      "accountGenerations": [
+        0,
+        1
+      ],
+      "ipcRtt": {
+        "n": 50,
+        "medianMs": 2.1,
+        "minMs": 1.5,
+        "worstMs": 114.4,
+        "p95Ms": 6.0,
+        "sampleStdDevMs": 15.880457958748918
+      },
+      "ipcWhileValidationRequestPending": {
+        "n": 27,
+        "medianMs": 1.9,
+        "minMs": 1.5,
+        "worstMs": 114.4,
+        "p95Ms": 6.1,
+        "sampleStdDevMs": 21.598837019643895
+      },
+      "ipcWhileNoValidationRequestPending": {
+        "n": 23,
+        "medianMs": 2.201,
+        "minMs": 1.6,
+        "worstMs": 2.901,
+        "p95Ms": 2.801,
+        "sampleStdDevMs": 0.3520842795708843
+      }
+    },
+    "trace-ipc-02.json": {
+      "inputSha256": "f05acf24aab651ce52e2435438bf4eca37fa1b6a74a12ba5b7128b6912ecc4c8",
+      "recordCount": 305,
+      "counts": {
+        "initialization": 1,
+        "runtimeStatus": 1,
+        "readiness": 2,
+        "play": 0,
+        "unrelatedIpc": 53,
+        "selection": 0,
+        "gameIntegrity": 4,
+        "gameMetadata": 3,
+        "runtimeMetadata": 3,
+        "modInventory": 7,
+        "runtimeIntegrity": 3,
+        "javaDiagnostic": 1,
+        "session": 0,
+        "ensureSession": 0,
+        "sessionLock": 0,
+        "contentLock": 0,
+        "lockedValidation": 0,
+        "javaSpawn": 0,
+        "blockingQueue": 0,
+        "blockingWorker": 0,
+        "dispatch": 3,
+        "modInventoryCommand": 0,
+        "mojangHttp": 6,
+        "fabricHttp": 6,
+        "runtimeHttp": 3
+      },
+      "spanWallMsInclusive": {
+        "initialization": {
+          "n": 1,
+          "medianMs": 5.344,
+          "minMs": 5.344,
+          "worstMs": 5.344,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "runtimeStatus": {
+          "n": 1,
+          "medianMs": 1644.704,
+          "minMs": 1644.704,
+          "worstMs": 1644.704,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "readiness": {
+          "n": 2,
+          "medianMs": 1350.8290000000002,
+          "minMs": 1127.862,
+          "worstMs": 1573.796,
+          "p95Ms": null,
+          "sampleStdDevMs": 315.32295536164185
+        },
+        "unrelatedIpc": {
+          "n": 53,
+          "medianMs": 0.246,
+          "minMs": 0.173,
+          "worstMs": 2.836,
+          "p95Ms": 1.238,
+          "sampleStdDevMs": 0.5463894951464441
+        },
+        "gameIntegrity": {
+          "n": 4,
+          "medianMs": 592.3795,
+          "minMs": 557.038,
+          "worstMs": 633.43,
+          "p95Ms": null,
+          "sampleStdDevMs": 32.74319118407161
+        },
+        "gameMetadata": {
+          "n": 3,
+          "medianMs": 405.41,
+          "minMs": 110.418,
+          "worstMs": 406.805,
+          "p95Ms": null,
+          "sampleStdDevMs": 170.71783731155142
+        },
+        "runtimeMetadata": {
+          "n": 3,
+          "medianMs": 32.176,
+          "minMs": 30.603,
+          "worstMs": 113.187,
+          "p95Ms": null,
+          "sampleStdDevMs": 47.23235738700042
+        },
+        "modInventory": {
+          "n": 7,
+          "medianMs": 163.745,
+          "minMs": 159.002,
+          "worstMs": 182.135,
+          "p95Ms": null,
+          "sampleStdDevMs": 9.431573531798083
+        },
+        "runtimeIntegrity": {
+          "n": 3,
+          "medianMs": 96.364,
+          "minMs": 91.483,
+          "worstMs": 382.623,
+          "p95Ms": null,
+          "sampleStdDevMs": 166.6985996951784
+        },
+        "javaDiagnostic": {
+          "n": 1,
+          "medianMs": 289.806,
+          "minMs": 289.806,
+          "worstMs": 289.806,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "dispatch": {
+          "n": 3,
+          "medianMs": 1573.8,
+          "minMs": 1127.866,
+          "worstMs": 1644.708,
+          "p95Ms": null,
+          "sampleStdDevMs": 280.1817058577047
+        },
+        "mojangHttp": {
+          "n": 6,
+          "medianMs": 40.685500000000005,
+          "minMs": 26.59,
+          "worstMs": 243.78,
+          "p95Ms": null,
+          "sampleStdDevMs": 98.42039634885985
+        },
+        "fabricHttp": {
+          "n": 6,
+          "medianMs": 16.322,
+          "minMs": 8.782,
+          "worstMs": 164.833,
+          "p95Ms": null,
+          "sampleStdDevMs": 65.84541653802994
+        },
+        "runtimeHttp": {
+          "n": 3,
+          "medianMs": 30.624,
+          "minMs": 29.106,
+          "worstMs": 111.869,
+          "p95Ms": null,
+          "sampleStdDevMs": 47.351114942874716
+        }
+      },
+      "hashFileIoAndDigest": {
+        "runtimeStatus": {
+          "wallMs": 3.131,
+          "calls": 2
+        },
+        "readiness": {
+          "wallMs": 6.112,
+          "calls": 4
+        },
+        "unrelatedIpc": {
+          "wallMs": 3.598,
+          "calls": 2
+        },
+        "gameIntegrity": {
+          "wallMs": 2344.325,
+          "calls": 18708
+        },
+        "runtimeMetadata": {
+          "wallMs": 0.747,
+          "calls": 3
+        },
+        "modInventory": {
+          "wallMs": 265.126,
+          "calls": 434
+        },
+        "runtimeIntegrity": {
+          "wallMs": 209.737,
+          "calls": 1206
+        }
+      },
+      "durationsByEventCorrelationMs": {
+        "event1/correlation0": [
+          5.344
+        ],
+        "event10/correlation1": [
+          1644.704
+        ],
+        "event11/correlation3": [
+          1573.796
+        ],
+        "event11/correlation20": [
+          1127.862
+        ],
+        "event13/correlation0": [
+          1.124,
+          2.833,
+          2.836,
+          1.002,
+          1.238,
+          0.951,
+          0.996,
+          1.018,
+          0.488,
+          0.243,
+          0.253,
+          0.217,
+          0.232,
+          0.235,
+          0.227,
+          0.37,
+          0.19,
+          0.264,
+          0.32,
+          0.337,
+          0.278,
+          0.24,
+          0.231,
+          0.238,
+          0.226,
+          0.215,
+          0.217,
+          0.238,
+          0.241,
+          0.194,
+          0.239,
+          0.283,
+          0.273,
+          0.732,
+          0.413,
+          0.248,
+          0.712,
+          0.239,
+          0.246,
+          0.306,
+          0.284,
+          0.173,
+          0.235,
+          0.322,
+          0.203,
+          0.212,
+          0.192,
+          0.298,
+          0.202,
+          0.211,
+          0.3,
+          0.242,
+          0.228
+        ],
+        "event20/correlation0": [
+          580.331
+        ],
+        "event20/correlation1": [
+          633.43
+        ],
+        "event20/correlation3": [
+          604.428
+        ],
+        "event20/correlation20": [
+          557.038
+        ],
+        "event21/correlation1": [
+          405.41
+        ],
+        "event21/correlation3": [
+          406.805
+        ],
+        "event21/correlation20": [
+          110.418
+        ],
+        "event22/correlation1": [
+          30.603
+        ],
+        "event22/correlation3": [
+          113.187
+        ],
+        "event22/correlation20": [
+          32.176
+        ],
+        "event23/correlation0": [
+          159.19,
+          159.002
+        ],
+        "event23/correlation1": [
+          182.135
+        ],
+        "event23/correlation3": [
+          178.129,
+          163.745
+        ],
+        "event23/correlation20": [
+          160.363,
+          165.887
+        ],
+        "event24/correlation1": [
+          382.623
+        ],
+        "event24/correlation3": [
+          96.364
+        ],
+        "event24/correlation20": [
+          91.483
+        ],
+        "event25/correlation1": [
+          289.806
+        ],
+        "event34/correlation1": [
+          1644.708
+        ],
+        "event34/correlation3": [
+          1573.8
+        ],
+        "event34/correlation20": [
+          1127.866
+        ],
+        "event36/correlation1": [
+          202.682,
+          26.59
+        ],
+        "event36/correlation3": [
+          243.78,
+          35.216
+        ],
+        "event36/correlation20": [
+          46.155,
+          30.957
+        ],
+        "event37/correlation1": [
+          164.833,
+          8.782
+        ],
+        "event37/correlation3": [
+          109.149,
+          16.749
+        ],
+        "event37/correlation20": [
+          15.574,
+          15.895
+        ],
+        "event38/correlation1": [
+          29.106
+        ],
+        "event38/correlation3": [
+          111.869
+        ],
+        "event38/correlation20": [
+          30.624
+        ]
+      },
+      "gameAuditHashWallFractions": [
+        0.9876781964857996,
+        0.987439364159172,
+        0.9874106328974327,
+        0.9852810759768633
+      ],
+      "readyFlashMs": [
+        25.100000000000136
+      ],
+      "frontendInitializeAfterNativeOriginMs": 289.25,
+      "runtimeReadinessOverlap": [
+        {
+          "runtimeCorrelation": 1,
+          "readinessCorrelation": 3,
+          "wallMs": 1573.796
+        }
+      ],
+      "frontendTransitions": [
+        {
+          "event": 105,
+          "afterFrontendInitMs": 115.2
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 1693.3
+        },
+        {
+          "event": 105,
+          "afterFrontendInitMs": 1718.4
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 2847.9
+        }
+      ],
+      "firstReadyAfterNativeOriginMs": 1981.553,
+      "lastReadyAfterNativeOriginMs": 3135.882,
+      "firstReadyAfterFrontendInitMs": 1693.3,
+      "lastReadyAfterFrontendInitMs": 2847.9,
+      "unattributedGameAudits": 1,
+      "gameAuditsByCorrelation": {
+        "0": 1,
+        "1": 1,
+        "3": 1,
+        "20": 1
+      },
+      "discardedReadiness": 0,
+      "instanceGenerations": [
+        0,
+        1
+      ],
+      "accountGenerations": [
+        0,
+        1
+      ],
+      "ipcRtt": {
+        "n": 50,
+        "medianMs": 2.201,
+        "minMs": 1.5,
+        "worstMs": 110.8,
+        "p95Ms": 6.3,
+        "sampleStdDevMs": 15.368127957694835
+      },
+      "ipcWhileValidationRequestPending": {
+        "n": 28,
+        "medianMs": 2.0,
+        "minMs": 1.5,
+        "worstMs": 110.8,
+        "p95Ms": 6.401,
+        "sampleStdDevMs": 20.534322568774105
+      },
+      "ipcWhileNoValidationRequestPending": {
+        "n": 22,
+        "medianMs": 2.2995,
+        "minMs": 1.6,
+        "worstMs": 3.101,
+        "p95Ms": 3.0,
+        "sampleStdDevMs": 0.4119631729222356
+      }
+    },
+    "trace-profile-01.json": {
+      "inputSha256": "d1cedb093b81e8a095c5214aed444a4c69fabf0a3b5e79a392ba7cf22cbe1264",
+      "recordCount": 105,
+      "counts": {
+        "initialization": 1,
+        "runtimeStatus": 1,
+        "readiness": 2,
+        "play": 0,
+        "unrelatedIpc": 3,
+        "selection": 0,
+        "gameIntegrity": 4,
+        "gameMetadata": 3,
+        "runtimeMetadata": 3,
+        "modInventory": 7,
+        "runtimeIntegrity": 3,
+        "javaDiagnostic": 1,
+        "session": 0,
+        "ensureSession": 0,
+        "sessionLock": 0,
+        "contentLock": 0,
+        "lockedValidation": 0,
+        "javaSpawn": 0,
+        "blockingQueue": 0,
+        "blockingWorker": 0,
+        "dispatch": 3,
+        "modInventoryCommand": 0,
+        "mojangHttp": 6,
+        "fabricHttp": 6,
+        "runtimeHttp": 3
+      },
+      "spanWallMsInclusive": {
+        "initialization": {
+          "n": 1,
+          "medianMs": 5.681,
+          "minMs": 5.681,
+          "worstMs": 5.681,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "runtimeStatus": {
+          "n": 1,
+          "medianMs": 2407.058,
+          "minMs": 2407.058,
+          "worstMs": 2407.058,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "readiness": {
+          "n": 2,
+          "medianMs": 1560.8875,
+          "minMs": 1185.861,
+          "worstMs": 1935.914,
+          "p95Ms": null,
+          "sampleStdDevMs": 530.3675625493134
+        },
+        "unrelatedIpc": {
+          "n": 3,
+          "medianMs": 3.233,
+          "minMs": 1.058,
+          "worstMs": 4.068,
+          "p95Ms": null,
+          "sampleStdDevMs": 1.5539170934555462
+        },
+        "gameIntegrity": {
+          "n": 4,
+          "medianMs": 689.573,
+          "minMs": 582.169,
+          "worstMs": 834.783,
+          "p95Ms": null,
+          "sampleStdDevMs": 130.97384109940938
+        },
+        "gameMetadata": {
+          "n": 3,
+          "medianMs": 613.291,
+          "minMs": 119.085,
+          "worstMs": 617.349,
+          "p95Ms": null,
+          "sampleStdDevMs": 286.5085954196372
+        },
+        "runtimeMetadata": {
+          "n": 3,
+          "medianMs": 41.203,
+          "minMs": 35.286,
+          "worstMs": 301.372,
+          "p95Ms": null,
+          "sampleStdDevMs": 151.94553785594803
+        },
+        "modInventory": {
+          "n": 7,
+          "medianMs": 168.471,
+          "minMs": 163.225,
+          "worstMs": 219.638,
+          "p95Ms": null,
+          "sampleStdDevMs": 25.79943391128684
+        },
+        "runtimeIntegrity": {
+          "n": 3,
+          "medianMs": 98.365,
+          "minMs": 96.375,
+          "worstMs": 422.23,
+          "p95Ms": null,
+          "sampleStdDevMs": 187.5606476805125
+        },
+        "javaDiagnostic": {
+          "n": 1,
+          "medianMs": 326.209,
+          "minMs": 326.209,
+          "worstMs": 326.209,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "dispatch": {
+          "n": 3,
+          "medianMs": 1935.916,
+          "minMs": 1185.864,
+          "worstMs": 2407.068,
+          "p95Ms": null,
+          "sampleStdDevMs": 615.8870864349515
+        },
+        "mojangHttp": {
+          "n": 6,
+          "medianMs": 39.159,
+          "minMs": 26.875,
+          "worstMs": 243.157,
+          "p95Ms": null,
+          "sampleStdDevMs": 102.63513826885345
+        },
+        "fabricHttp": {
+          "n": 6,
+          "medianMs": 166.398,
+          "minMs": 15.517,
+          "worstMs": 195.533,
+          "p95Ms": null,
+          "sampleStdDevMs": 82.60495967535282
+        },
+        "runtimeHttp": {
+          "n": 3,
+          "medianMs": 39.727,
+          "minMs": 25.439,
+          "worstMs": 300.01,
+          "p95Ms": null,
+          "sampleStdDevMs": 154.5642374947495
+        }
+      },
+      "hashFileIoAndDigest": {
+        "runtimeStatus": {
+          "wallMs": 3.382,
+          "calls": 2
+        },
+        "readiness": {
+          "wallMs": 6.51,
+          "calls": 4
+        },
+        "unrelatedIpc": {
+          "wallMs": 4.152,
+          "calls": 2
+        },
+        "gameIntegrity": {
+          "wallMs": 2760.444,
+          "calls": 18708
+        },
+        "runtimeMetadata": {
+          "wallMs": 9.038,
+          "calls": 3
+        },
+        "modInventory": {
+          "wallMs": 278.7,
+          "calls": 434
+        },
+        "runtimeIntegrity": {
+          "wallMs": 215.61,
+          "calls": 1206
+        }
+      },
+      "durationsByEventCorrelationMs": {
+        "event1/correlation0": [
+          5.681
+        ],
+        "event10/correlation1": [
+          2407.058
+        ],
+        "event11/correlation2": [
+          1935.914
+        ],
+        "event11/correlation3": [
+          1185.861
+        ],
+        "event13/correlation0": [
+          1.058,
+          4.068,
+          3.233
+        ],
+        "event20/correlation0": [
+          591.598
+        ],
+        "event20/correlation1": [
+          834.783
+        ],
+        "event20/correlation2": [
+          787.548
+        ],
+        "event20/correlation3": [
+          582.169
+        ],
+        "event21/correlation1": [
+          617.349
+        ],
+        "event21/correlation2": [
+          613.291
+        ],
+        "event21/correlation3": [
+          119.085
+        ],
+        "event22/correlation1": [
+          301.372
+        ],
+        "event22/correlation2": [
+          35.286
+        ],
+        "event22/correlation3": [
+          41.203
+        ],
+        "event23/correlation0": [
+          165.509,
+          163.225
+        ],
+        "event23/correlation1": [
+          219.589
+        ],
+        "event23/correlation2": [
+          219.638,
+          169.547
+        ],
+        "event23/correlation3": [
+          167.803,
+          168.471
+        ],
+        "event24/correlation1": [
+          422.23
+        ],
+        "event24/correlation2": [
+          98.365
+        ],
+        "event24/correlation3": [
+          96.375
+        ],
+        "event25/correlation1": [
+          326.209
+        ],
+        "event34/correlation1": [
+          2407.068
+        ],
+        "event34/correlation2": [
+          1935.916
+        ],
+        "event34/correlation3": [
+          1185.864
+        ],
+        "event36/correlation1": [
+          218.181,
+          28.161
+        ],
+        "event36/correlation2": [
+          243.157,
+          26.875
+        ],
+        "event36/correlation3": [
+          50.157,
+          27.735
+        ],
+        "event37/correlation1": [
+          195.533,
+          168.726
+        ],
+        "event37/correlation2": [
+          171.718,
+          164.07
+        ],
+        "event37/correlation3": [
+          17.371,
+          15.517
+        ],
+        "event38/correlation1": [
+          300.01
+        ],
+        "event38/correlation2": [
+          25.439
+        ],
+        "event38/correlation3": [
+          39.727
+        ]
+      },
+      "gameAuditHashWallFractions": [
+        0.9875404745904025,
+        0.9877099554566833,
+        0.9869320045030578,
+        0.9865279669649191
+      ],
+      "readyFlashMs": [
+        424.5
+      ],
+      "frontendInitializeAfterNativeOriginMs": 359.049,
+      "runtimeReadinessOverlap": [
+        {
+          "runtimeCorrelation": 1,
+          "readinessCorrelation": 2,
+          "wallMs": 1935.914
+        }
+      ],
+      "frontendTransitions": [
+        {
+          "event": 105,
+          "afterFrontendInitMs": 111.399
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 2062.699
+        },
+        {
+          "event": 105,
+          "afterFrontendInitMs": 2487.199
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 3675.099
+        }
+      ],
+      "firstReadyAfterNativeOriginMs": 2420.321,
+      "lastReadyAfterNativeOriginMs": 4032.938,
+      "firstReadyAfterFrontendInitMs": 2062.699,
+      "lastReadyAfterFrontendInitMs": 3675.099,
+      "unattributedGameAudits": 1,
+      "gameAuditsByCorrelation": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 1
+      },
+      "discardedReadiness": 0,
+      "instanceGenerations": [
+        0,
+        1
+      ],
+      "accountGenerations": [
+        0,
+        1
+      ],
+      "ipcRtt": {
+        "n": 0
+      },
+      "ipcWhileValidationRequestPending": {
+        "n": 0
+      },
+      "ipcWhileNoValidationRequestPending": {
+        "n": 0
+      }
+    },
+    "trace-profile-02.json": {
+      "inputSha256": "91eb634928744f26b610775e2879a7ea4b1ded2e85fc54bc7150e797ebeba797",
+      "recordCount": 105,
+      "counts": {
+        "initialization": 1,
+        "runtimeStatus": 1,
+        "readiness": 2,
+        "play": 0,
+        "unrelatedIpc": 3,
+        "selection": 0,
+        "gameIntegrity": 4,
+        "gameMetadata": 3,
+        "runtimeMetadata": 3,
+        "modInventory": 7,
+        "runtimeIntegrity": 3,
+        "javaDiagnostic": 1,
+        "session": 0,
+        "ensureSession": 0,
+        "sessionLock": 0,
+        "contentLock": 0,
+        "lockedValidation": 0,
+        "javaSpawn": 0,
+        "blockingQueue": 0,
+        "blockingWorker": 0,
+        "dispatch": 3,
+        "modInventoryCommand": 0,
+        "mojangHttp": 6,
+        "fabricHttp": 6,
+        "runtimeHttp": 3
+      },
+      "spanWallMsInclusive": {
+        "initialization": {
+          "n": 1,
+          "medianMs": 4.541,
+          "minMs": 4.541,
+          "worstMs": 4.541,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "runtimeStatus": {
+          "n": 1,
+          "medianMs": 1779.021,
+          "minMs": 1779.021,
+          "worstMs": 1779.021,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "readiness": {
+          "n": 2,
+          "medianMs": 1414.0715,
+          "minMs": 1211.369,
+          "worstMs": 1616.774,
+          "p95Ms": null,
+          "sampleStdDevMs": 286.66462462693227
+        },
+        "unrelatedIpc": {
+          "n": 3,
+          "medianMs": 2.802,
+          "minMs": 1.058,
+          "worstMs": 2.889,
+          "p95Ms": null,
+          "sampleStdDevMs": 1.0329299750386438
+        },
+        "gameIntegrity": {
+          "n": 4,
+          "medianMs": 597.6,
+          "minMs": 572.325,
+          "worstMs": 645.808,
+          "p95Ms": null,
+          "sampleStdDevMs": 31.233991626378227
+        },
+        "gameMetadata": {
+          "n": 3,
+          "medianMs": 498.856,
+          "minMs": 138.426,
+          "worstMs": 503.517,
+          "p95Ms": null,
+          "sampleStdDevMs": 209.4528380097375
+        },
+        "runtimeMetadata": {
+          "n": 3,
+          "medianMs": 32.25,
+          "minMs": 27.441,
+          "worstMs": 36.624,
+          "p95Ms": null,
+          "sampleStdDevMs": 4.593216846611971
+        },
+        "modInventory": {
+          "n": 7,
+          "medianMs": 168.0,
+          "minMs": 157.512,
+          "worstMs": 201.515,
+          "p95Ms": null,
+          "sampleStdDevMs": 17.821271343136946
+        },
+        "runtimeIntegrity": {
+          "n": 3,
+          "medianMs": 100.838,
+          "minMs": 93.48,
+          "worstMs": 390.123,
+          "p95Ms": null,
+          "sampleStdDevMs": 169.1828502134106
+        },
+        "javaDiagnostic": {
+          "n": 1,
+          "medianMs": 289.1,
+          "minMs": 289.1,
+          "worstMs": 289.1,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "dispatch": {
+          "n": 3,
+          "medianMs": 1616.782,
+          "minMs": 1211.373,
+          "worstMs": 1779.026,
+          "p95Ms": null,
+          "sampleStdDevMs": 292.37803760029584
+        },
+        "mojangHttp": {
+          "n": 6,
+          "medianMs": 51.024,
+          "minMs": 27.669,
+          "worstMs": 246.081,
+          "p95Ms": null,
+          "sampleStdDevMs": 101.68201842689132
+        },
+        "fabricHttp": {
+          "n": 6,
+          "medianMs": 55.0415,
+          "minMs": 10.41,
+          "worstMs": 183.218,
+          "p95Ms": null,
+          "sampleStdDevMs": 73.58544764467133
+        },
+        "runtimeHttp": {
+          "n": 3,
+          "medianMs": 30.745,
+          "minMs": 26.047,
+          "worstMs": 35.304,
+          "p95Ms": null,
+          "sampleStdDevMs": 4.628673928171366
+        }
+      },
+      "hashFileIoAndDigest": {
+        "runtimeStatus": {
+          "wallMs": 3.212,
+          "calls": 2
+        },
+        "readiness": {
+          "wallMs": 6.255,
+          "calls": 4
+        },
+        "unrelatedIpc": {
+          "wallMs": 3.597,
+          "calls": 2
+        },
+        "gameIntegrity": {
+          "wallMs": 2382.299,
+          "calls": 18708
+        },
+        "runtimeMetadata": {
+          "wallMs": 0.711,
+          "calls": 3
+        },
+        "modInventory": {
+          "wallMs": 271.233,
+          "calls": 434
+        },
+        "runtimeIntegrity": {
+          "wallMs": 219.617,
+          "calls": 1206
+        }
+      },
+      "durationsByEventCorrelationMs": {
+        "event1/correlation0": [
+          4.541
+        ],
+        "event10/correlation1": [
+          1779.021
+        ],
+        "event11/correlation2": [
+          1616.774
+        ],
+        "event11/correlation3": [
+          1211.369
+        ],
+        "event13/correlation0": [
+          1.058,
+          2.889,
+          2.802
+        ],
+        "event20/correlation0": [
+          572.325
+        ],
+        "event20/correlation1": [
+          645.808
+        ],
+        "event20/correlation2": [
+          604.504
+        ],
+        "event20/correlation3": [
+          590.696
+        ],
+        "event21/correlation1": [
+          498.856
+        ],
+        "event21/correlation2": [
+          503.517
+        ],
+        "event21/correlation3": [
+          138.426
+        ],
+        "event22/correlation1": [
+          32.25
+        ],
+        "event22/correlation2": [
+          36.624
+        ],
+        "event22/correlation3": [
+          27.441
+        ],
+        "event23/correlation0": [
+          157.512,
+          162.985
+        ],
+        "event23/correlation1": [
+          201.515
+        ],
+        "event23/correlation2": [
+          200.386,
+          166.951
+        ],
+        "event23/correlation3": [
+          168.0,
+          174.318
+        ],
+        "event24/correlation1": [
+          390.123
+        ],
+        "event24/correlation2": [
+          93.48
+        ],
+        "event24/correlation3": [
+          100.838
+        ],
+        "event25/correlation1": [
+          289.1
+        ],
+        "event34/correlation1": [
+          1779.026
+        ],
+        "event34/correlation2": [
+          1616.782
+        ],
+        "event34/correlation3": [
+          1211.373
+        ],
+        "event36/correlation1": [
+          225.397,
+          27.669
+        ],
+        "event36/correlation2": [
+          246.081,
+          31.306
+        ],
+        "event36/correlation3": [
+          56.511,
+          45.537
+        ],
+        "event37/correlation1": [
+          56.564,
+          183.218
+        ],
+        "event37/correlation2": [
+          53.519,
+          161.569
+        ],
+        "event37/correlation3": [
+          19.362,
+          10.41
+        ],
+        "event38/correlation1": [
+          30.745
+        ],
+        "event38/correlation2": [
+          35.304
+        ],
+        "event38/correlation3": [
+          26.047
+        ]
+      },
+      "gameAuditHashWallFractions": [
+        0.9868289027079256,
+        0.9874938792795416,
+        0.9873568339667147,
+        0.9869103565962865
+      ],
+      "readyFlashMs": [
+        120.5
+      ],
+      "frontendInitializeAfterNativeOriginMs": 291.471,
+      "runtimeReadinessOverlap": [
+        {
+          "runtimeCorrelation": 1,
+          "readinessCorrelation": 2,
+          "wallMs": 1616.774
+        }
+      ],
+      "frontendTransitions": [
+        {
+          "event": 105,
+          "afterFrontendInitMs": 110.2
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 1730.6
+        },
+        {
+          "event": 105,
+          "afterFrontendInitMs": 1851.1
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 3064.2
+        }
+      ],
+      "firstReadyAfterNativeOriginMs": 2021.199,
+      "lastReadyAfterNativeOriginMs": 3354.896,
+      "firstReadyAfterFrontendInitMs": 1730.6,
+      "lastReadyAfterFrontendInitMs": 3064.2,
+      "unattributedGameAudits": 1,
+      "gameAuditsByCorrelation": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 1
+      },
+      "discardedReadiness": 0,
+      "instanceGenerations": [
+        0,
+        1
+      ],
+      "accountGenerations": [
+        0,
+        1
+      ],
+      "ipcRtt": {
+        "n": 0
+      },
+      "ipcWhileValidationRequestPending": {
+        "n": 0
+      },
+      "ipcWhileNoValidationRequestPending": {
+        "n": 0
+      }
+    },
+    "trace-profile-03.json": {
+      "inputSha256": "e8d694f8276cdd3d4113ff885575a4b47499423c79186cff93f0ea0685415441",
+      "recordCount": 105,
+      "counts": {
+        "initialization": 1,
+        "runtimeStatus": 1,
+        "readiness": 2,
+        "play": 0,
+        "unrelatedIpc": 3,
+        "selection": 0,
+        "gameIntegrity": 4,
+        "gameMetadata": 3,
+        "runtimeMetadata": 3,
+        "modInventory": 7,
+        "runtimeIntegrity": 3,
+        "javaDiagnostic": 1,
+        "session": 0,
+        "ensureSession": 0,
+        "sessionLock": 0,
+        "contentLock": 0,
+        "lockedValidation": 0,
+        "javaSpawn": 0,
+        "blockingQueue": 0,
+        "blockingWorker": 0,
+        "dispatch": 3,
+        "modInventoryCommand": 0,
+        "mojangHttp": 6,
+        "fabricHttp": 6,
+        "runtimeHttp": 3
+      },
+      "spanWallMsInclusive": {
+        "initialization": {
+          "n": 1,
+          "medianMs": 4.623,
+          "minMs": 4.623,
+          "worstMs": 4.623,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "runtimeStatus": {
+          "n": 1,
+          "medianMs": 1717.28,
+          "minMs": 1717.28,
+          "worstMs": 1717.28,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "readiness": {
+          "n": 2,
+          "medianMs": 1393.2475,
+          "minMs": 1143.252,
+          "worstMs": 1643.243,
+          "p95Ms": null,
+          "sampleStdDevMs": 353.54702663224305
+        },
+        "unrelatedIpc": {
+          "n": 3,
+          "medianMs": 3.084,
+          "minMs": 1.088,
+          "worstMs": 4.106,
+          "p95Ms": null,
+          "sampleStdDevMs": 1.5349714438168982
+        },
+        "gameIntegrity": {
+          "n": 4,
+          "medianMs": 575.8934999999999,
+          "minMs": 550.063,
+          "worstMs": 624.82,
+          "p95Ms": null,
+          "sampleStdDevMs": 35.13501334851038
+        },
+        "gameMetadata": {
+          "n": 3,
+          "medianMs": 474.917,
+          "minMs": 124.055,
+          "worstMs": 483.822,
+          "p95Ms": null,
+          "sampleStdDevMs": 205.18923638030657
+        },
+        "runtimeMetadata": {
+          "n": 3,
+          "medianMs": 33.79,
+          "minMs": 32.852,
+          "worstMs": 128.793,
+          "p95Ms": null,
+          "sampleStdDevMs": 55.122780127638705
+        },
+        "modInventory": {
+          "n": 7,
+          "medianMs": 160.351,
+          "minMs": 158.05,
+          "worstMs": 181.628,
+          "p95Ms": null,
+          "sampleStdDevMs": 9.954990803851194
+        },
+        "runtimeIntegrity": {
+          "n": 3,
+          "medianMs": 95.272,
+          "minMs": 94.357,
+          "worstMs": 382.941,
+          "p95Ms": null,
+          "sampleStdDevMs": 166.35054144887334
+        },
+        "javaDiagnostic": {
+          "n": 1,
+          "medianMs": 288.634,
+          "minMs": 288.634,
+          "worstMs": 288.634,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "dispatch": {
+          "n": 3,
+          "medianMs": 1643.246,
+          "minMs": 1143.254,
+          "worstMs": 1717.285,
+          "p95Ms": null,
+          "sampleStdDevMs": 312.24599344800794
+        },
+        "mojangHttp": {
+          "n": 6,
+          "medianMs": 43.483000000000004,
+          "minMs": 23.998,
+          "worstMs": 227.536,
+          "p95Ms": null,
+          "sampleStdDevMs": 95.65239182581897
+        },
+        "fabricHttp": {
+          "n": 6,
+          "medianMs": 60.7595,
+          "minMs": 15.203,
+          "worstMs": 166.71,
+          "p95Ms": null,
+          "sampleStdDevMs": 69.48675098654898
+        },
+        "runtimeHttp": {
+          "n": 3,
+          "medianMs": 32.303,
+          "minMs": 31.379,
+          "worstMs": 127.522,
+          "p95Ms": null,
+          "sampleStdDevMs": 55.24338299138942
+        }
+      },
+      "hashFileIoAndDigest": {
+        "runtimeStatus": {
+          "wallMs": 3.216,
+          "calls": 2
+        },
+        "readiness": {
+          "wallMs": 6.074,
+          "calls": 4
+        },
+        "unrelatedIpc": {
+          "wallMs": 4.182,
+          "calls": 2
+        },
+        "gameIntegrity": {
+          "wallMs": 2296.223,
+          "calls": 18708
+        },
+        "runtimeMetadata": {
+          "wallMs": 0.703,
+          "calls": 3
+        },
+        "modInventory": {
+          "wallMs": 267.597,
+          "calls": 434
+        },
+        "runtimeIntegrity": {
+          "wallMs": 211.251,
+          "calls": 1206
+        }
+      },
+      "durationsByEventCorrelationMs": {
+        "event1/correlation0": [
+          4.623
+        ],
+        "event10/correlation1": [
+          1717.28
+        ],
+        "event11/correlation2": [
+          1643.243
+        ],
+        "event11/correlation3": [
+          1143.252
+        ],
+        "event13/correlation0": [
+          1.088,
+          3.084,
+          4.106
+        ],
+        "event20/correlation0": [
+          550.063
+        ],
+        "event20/correlation1": [
+          624.82
+        ],
+        "event20/correlation2": [
+          595.588
+        ],
+        "event20/correlation3": [
+          556.199
+        ],
+        "event21/correlation1": [
+          483.822
+        ],
+        "event21/correlation2": [
+          474.917
+        ],
+        "event21/correlation3": [
+          124.055
+        ],
+        "event22/correlation1": [
+          33.79
+        ],
+        "event22/correlation2": [
+          128.793
+        ],
+        "event22/correlation3": [
+          32.852
+        ],
+        "event23/correlation0": [
+          158.428,
+          159.933
+        ],
+        "event23/correlation1": [
+          181.628
+        ],
+        "event23/correlation2": [
+          178.691,
+          160.351
+        ],
+        "event23/correlation3": [
+          158.05,
+          166.723
+        ],
+        "event24/correlation1": [
+          382.941
+        ],
+        "event24/correlation2": [
+          94.357
+        ],
+        "event24/correlation3": [
+          95.272
+        ],
+        "event25/correlation1": [
+          288.634
+        ],
+        "event34/correlation1": [
+          1717.285
+        ],
+        "event34/correlation2": [
+          1643.246
+        ],
+        "event34/correlation3": [
+          1143.254
+        ],
+        "event36/correlation1": [
+          227.536,
+          23.998
+        ],
+        "event36/correlation2": [
+          208.678,
+          26.716
+        ],
+        "event36/correlation3": [
+          54.64,
+          32.326
+        ],
+        "event37/correlation1": [
+          59.195,
+          166.71
+        ],
+        "event37/correlation2": [
+          62.324,
+          166.649
+        ],
+        "event37/correlation3": [
+          15.203,
+          15.375
+        ],
+        "event38/correlation1": [
+          32.303
+        ],
+        "event38/correlation2": [
+          127.522
+        ],
+        "event38/correlation3": [
+          31.379
+        ]
+      },
+      "gameAuditHashWallFractions": [
+        0.9871723056240197,
+        0.9875484395253095,
+        0.9868833206378178,
+        0.9859744443984977
+      ],
+      "readyFlashMs": [
+        28.69900000000007
+      ],
+      "frontendInitializeAfterNativeOriginMs": 284.476,
+      "runtimeReadinessOverlap": [
+        {
+          "runtimeCorrelation": 1,
+          "readinessCorrelation": 2,
+          "wallMs": 1643.243
+        }
+      ],
+      "frontendTransitions": [
+        {
+          "event": 105,
+          "afterFrontendInitMs": 106.9
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 1756.5
+        },
+        {
+          "event": 105,
+          "afterFrontendInitMs": 1785.199
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 2929.9
+        }
+      ],
+      "firstReadyAfterNativeOriginMs": 2039.714,
+      "lastReadyAfterNativeOriginMs": 3212.761,
+      "firstReadyAfterFrontendInitMs": 1756.5,
+      "lastReadyAfterFrontendInitMs": 2929.9,
+      "unattributedGameAudits": 1,
+      "gameAuditsByCorrelation": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 1
+      },
+      "discardedReadiness": 0,
+      "instanceGenerations": [
+        0,
+        1
+      ],
+      "accountGenerations": [
+        0,
+        1
+      ],
+      "ipcRtt": {
+        "n": 0
+      },
+      "ipcWhileValidationRequestPending": {
+        "n": 0
+      },
+      "ipcWhileNoValidationRequestPending": {
+        "n": 0
+      }
+    },
+    "trace-profile-04.json": {
+      "inputSha256": "3335e30fab21a457f08748c43761e8c3d114047c8fcfe74524fa04ce5f73702e",
+      "recordCount": 105,
+      "counts": {
+        "initialization": 1,
+        "runtimeStatus": 1,
+        "readiness": 2,
+        "play": 0,
+        "unrelatedIpc": 3,
+        "selection": 0,
+        "gameIntegrity": 4,
+        "gameMetadata": 3,
+        "runtimeMetadata": 3,
+        "modInventory": 7,
+        "runtimeIntegrity": 3,
+        "javaDiagnostic": 1,
+        "session": 0,
+        "ensureSession": 0,
+        "sessionLock": 0,
+        "contentLock": 0,
+        "lockedValidation": 0,
+        "javaSpawn": 0,
+        "blockingQueue": 0,
+        "blockingWorker": 0,
+        "dispatch": 3,
+        "modInventoryCommand": 0,
+        "mojangHttp": 6,
+        "fabricHttp": 6,
+        "runtimeHttp": 3
+      },
+      "spanWallMsInclusive": {
+        "initialization": {
+          "n": 1,
+          "medianMs": 5.401,
+          "minMs": 5.401,
+          "worstMs": 5.401,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "runtimeStatus": {
+          "n": 1,
+          "medianMs": 2271.43,
+          "minMs": 2271.43,
+          "worstMs": 2271.43,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "readiness": {
+          "n": 2,
+          "medianMs": 1483.7495,
+          "minMs": 1206.365,
+          "worstMs": 1761.134,
+          "p95Ms": null,
+          "sampleStdDevMs": 392.2809218920798
+        },
+        "unrelatedIpc": {
+          "n": 3,
+          "medianMs": 3.237,
+          "minMs": 0.975,
+          "worstMs": 3.641,
+          "p95Ms": null,
+          "sampleStdDevMs": 1.4368609304081357
+        },
+        "gameIntegrity": {
+          "n": 4,
+          "medianMs": 601.876,
+          "minMs": 571.253,
+          "worstMs": 630.471,
+          "p95Ms": null,
+          "sampleStdDevMs": 28.88409024590065
+        },
+        "gameMetadata": {
+          "n": 3,
+          "medianMs": 630.819,
+          "minMs": 118.325,
+          "worstMs": 1025.864,
+          "p95Ms": null,
+          "sampleStdDevMs": 455.03437389974545
+        },
+        "runtimeMetadata": {
+          "n": 3,
+          "medianMs": 45.141,
+          "minMs": 43.668,
+          "worstMs": 57.191,
+          "p95Ms": null,
+          "sampleStdDevMs": 7.4189370083141535
+        },
+        "modInventory": {
+          "n": 7,
+          "medianMs": 172.205,
+          "minMs": 161.649,
+          "worstMs": 178.429,
+          "p95Ms": null,
+          "sampleStdDevMs": 6.469822761979544
+        },
+        "runtimeIntegrity": {
+          "n": 3,
+          "medianMs": 100.873,
+          "minMs": 98.389,
+          "worstMs": 381.161,
+          "p95Ms": null,
+          "sampleStdDevMs": 162.5461663569256
+        },
+        "javaDiagnostic": {
+          "n": 1,
+          "medianMs": 277.614,
+          "minMs": 277.614,
+          "worstMs": 277.614,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "dispatch": {
+          "n": 3,
+          "medianMs": 1761.137,
+          "minMs": 1206.368,
+          "worstMs": 2271.434,
+          "p95Ms": null,
+          "sampleStdDevMs": 532.6877221421572
+        },
+        "mojangHttp": {
+          "n": 6,
+          "medianMs": 148.559,
+          "minMs": 34.611,
+          "worstMs": 750.985,
+          "p95Ms": null,
+          "sampleStdDevMs": 296.0632792633471
+        },
+        "fabricHttp": {
+          "n": 6,
+          "medianMs": 15.244,
+          "minMs": 8.917,
+          "worstMs": 40.938,
+          "p95Ms": null,
+          "sampleStdDevMs": 13.28774333988532
+        },
+        "runtimeHttp": {
+          "n": 3,
+          "medianMs": 43.492,
+          "minMs": 42.219,
+          "worstMs": 55.632,
+          "p95Ms": null,
+          "sampleStdDevMs": 7.403925737967212
+        }
+      },
+      "hashFileIoAndDigest": {
+        "runtimeStatus": {
+          "wallMs": 3.29,
+          "calls": 2
+        },
+        "readiness": {
+          "wallMs": 6.541,
+          "calls": 4
+        },
+        "unrelatedIpc": {
+          "wallMs": 3.97,
+          "calls": 2
+        },
+        "gameIntegrity": {
+          "wallMs": 2374.371,
+          "calls": 18708
+        },
+        "runtimeMetadata": {
+          "wallMs": 0.789,
+          "calls": 3
+        },
+        "modInventory": {
+          "wallMs": 274.549,
+          "calls": 434
+        },
+        "runtimeIntegrity": {
+          "wallMs": 222.41,
+          "calls": 1206
+        }
+      },
+      "durationsByEventCorrelationMs": {
+        "event1/correlation0": [
+          5.401
+        ],
+        "event10/correlation1": [
+          2271.43
+        ],
+        "event11/correlation2": [
+          1761.134
+        ],
+        "event11/correlation3": [
+          1206.365
+        ],
+        "event13/correlation0": [
+          0.975,
+          3.237,
+          3.641
+        ],
+        "event20/correlation0": [
+          571.253
+        ],
+        "event20/correlation1": [
+          630.471
+        ],
+        "event20/correlation2": [
+          621.221
+        ],
+        "event20/correlation3": [
+          582.531
+        ],
+        "event21/correlation1": [
+          1025.864
+        ],
+        "event21/correlation2": [
+          630.819
+        ],
+        "event21/correlation3": [
+          118.325
+        ],
+        "event22/correlation1": [
+          45.141
+        ],
+        "event22/correlation2": [
+          57.191
+        ],
+        "event22/correlation3": [
+          43.668
+        ],
+        "event23/correlation0": [
+          164.046,
+          161.649
+        ],
+        "event23/correlation1": [
+          178.429
+        ],
+        "event23/correlation2": [
+          174.72,
+          168.017
+        ],
+        "event23/correlation3": [
+          172.205,
+          177.008
+        ],
+        "event24/correlation1": [
+          381.161
+        ],
+        "event24/correlation2": [
+          98.389
+        ],
+        "event24/correlation3": [
+          100.873
+        ],
+        "event25/correlation1": [
+          277.614
+        ],
+        "event34/correlation1": [
+          2271.434
+        ],
+        "event34/correlation2": [
+          1761.137
+        ],
+        "event34/correlation3": [
+          1206.368
+        ],
+        "event36/correlation1": [
+          239.149,
+          750.985
+        ],
+        "event36/correlation2": [
+          505.56,
+          46.059
+        ],
+        "event36/correlation3": [
+          57.969,
+          34.611
+        ],
+        "event37/correlation1": [
+          10.467,
+          19.936
+        ],
+        "event37/correlation2": [
+          40.938,
+          31.946
+        ],
+        "event37/correlation3": [
+          8.917,
+          10.552
+        ],
+        "event38/correlation1": [
+          43.492
+        ],
+        "event38/correlation2": [
+          55.632
+        ],
+        "event38/correlation3": [
+          42.219
+        ]
+      },
+      "gameAuditHashWallFractions": [
+        0.9869018559140706,
+        0.9874617889607724,
+        0.9874871554285054,
+        0.9864213235003803
+      ],
+      "readyFlashMs": [
+        461.9000000000001
+      ],
+      "frontendInitializeAfterNativeOriginMs": 286.177,
+      "runtimeReadinessOverlap": [
+        {
+          "runtimeCorrelation": 1,
+          "readinessCorrelation": 2,
+          "wallMs": 1761.134
+        }
+      ],
+      "frontendTransitions": [
+        {
+          "event": 105,
+          "afterFrontendInitMs": 110.7
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 1877.5
+        },
+        {
+          "event": 105,
+          "afterFrontendInitMs": 2339.4
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 3547.301
+        }
+      ],
+      "firstReadyAfterNativeOriginMs": 2162.026,
+      "lastReadyAfterNativeOriginMs": 3832.07,
+      "firstReadyAfterFrontendInitMs": 1877.5,
+      "lastReadyAfterFrontendInitMs": 3547.301,
+      "unattributedGameAudits": 1,
+      "gameAuditsByCorrelation": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 1
+      },
+      "discardedReadiness": 0,
+      "instanceGenerations": [
+        0,
+        1
+      ],
+      "accountGenerations": [
+        0,
+        1
+      ],
+      "ipcRtt": {
+        "n": 0
+      },
+      "ipcWhileValidationRequestPending": {
+        "n": 0
+      },
+      "ipcWhileNoValidationRequestPending": {
+        "n": 0
+      }
+    },
+    "trace-profile-05.json": {
+      "inputSha256": "fb2da37b35c87914b50024a7300d6339c6c4f125a4da08b20373b6e496b510df",
+      "recordCount": 104,
+      "counts": {
+        "initialization": 1,
+        "runtimeStatus": 1,
+        "readiness": 2,
+        "play": 0,
+        "unrelatedIpc": 3,
+        "selection": 0,
+        "gameIntegrity": 4,
+        "gameMetadata": 3,
+        "runtimeMetadata": 3,
+        "modInventory": 7,
+        "runtimeIntegrity": 3,
+        "javaDiagnostic": 1,
+        "session": 0,
+        "ensureSession": 0,
+        "sessionLock": 0,
+        "contentLock": 0,
+        "lockedValidation": 0,
+        "javaSpawn": 0,
+        "blockingQueue": 0,
+        "blockingWorker": 0,
+        "dispatch": 3,
+        "modInventoryCommand": 0,
+        "mojangHttp": 6,
+        "fabricHttp": 6,
+        "runtimeHttp": 3
+      },
+      "spanWallMsInclusive": {
+        "initialization": {
+          "n": 1,
+          "medianMs": 6.052,
+          "minMs": 6.052,
+          "worstMs": 6.052,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "runtimeStatus": {
+          "n": 1,
+          "medianMs": 1517.897,
+          "minMs": 1517.897,
+          "worstMs": 1517.897,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "readiness": {
+          "n": 2,
+          "medianMs": 1324.52,
+          "minMs": 1171.138,
+          "worstMs": 1477.902,
+          "p95Ms": null,
+          "sampleStdDevMs": 216.91490462391016
+        },
+        "unrelatedIpc": {
+          "n": 3,
+          "medianMs": 2.736,
+          "minMs": 1.051,
+          "worstMs": 2.936,
+          "p95Ms": null,
+          "sampleStdDevMs": 1.0354105465949244
+        },
+        "gameIntegrity": {
+          "n": 4,
+          "medianMs": 600.0740000000001,
+          "minMs": 567.313,
+          "worstMs": 638.005,
+          "p95Ms": null,
+          "sampleStdDevMs": 30.601580236974694
+        },
+        "gameMetadata": {
+          "n": 3,
+          "medianMs": 284.347,
+          "minMs": 136.182,
+          "worstMs": 307.218,
+          "p95Ms": null,
+          "sampleStdDevMs": 92.8522690101504
+        },
+        "runtimeMetadata": {
+          "n": 3,
+          "medianMs": 30.223,
+          "minMs": 28.13,
+          "worstMs": 121.826,
+          "p95Ms": null,
+          "sampleStdDevMs": 53.501449628335614
+        },
+        "modInventory": {
+          "n": 7,
+          "medianMs": 165.896,
+          "minMs": 158.352,
+          "worstMs": 177.252,
+          "p95Ms": null,
+          "sampleStdDevMs": 6.60922902354838
+        },
+        "runtimeIntegrity": {
+          "n": 3,
+          "medianMs": 95.359,
+          "minMs": 92.45,
+          "worstMs": 377.79,
+          "p95Ms": null,
+          "sampleStdDevMs": 163.90782350760443
+        },
+        "javaDiagnostic": {
+          "n": 1,
+          "medianMs": 283.653,
+          "minMs": 283.653,
+          "worstMs": 283.653,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "dispatch": {
+          "n": 3,
+          "medianMs": 1477.905,
+          "minMs": 1171.14,
+          "worstMs": 1517.911,
+          "p95Ms": null,
+          "sampleStdDevMs": 189.71705761563274
+        },
+        "mojangHttp": {
+          "n": 6,
+          "medianMs": 49.733000000000004,
+          "minMs": 27.1,
+          "worstMs": 222.286,
+          "p95Ms": null,
+          "sampleStdDevMs": 92.72627437661166
+        },
+        "fabricHttp": {
+          "n": 6,
+          "medianMs": 19.586,
+          "minMs": 9.732,
+          "worstMs": 30.366,
+          "p95Ms": null,
+          "sampleStdDevMs": 8.874997599999675
+        },
+        "runtimeHttp": {
+          "n": 3,
+          "medianMs": 28.83,
+          "minMs": 26.539,
+          "worstMs": 120.257,
+          "p95Ms": null,
+          "sampleStdDevMs": 53.45903187488528
+        }
+      },
+      "hashFileIoAndDigest": {
+        "runtimeStatus": {
+          "wallMs": 3.147,
+          "calls": 2
+        },
+        "readiness": {
+          "wallMs": 6.163,
+          "calls": 4
+        },
+        "unrelatedIpc": {
+          "wallMs": 3.686,
+          "calls": 2
+        },
+        "gameIntegrity": {
+          "wallMs": 2374.238,
+          "calls": 18708
+        },
+        "runtimeMetadata": {
+          "wallMs": 0.803,
+          "calls": 3
+        },
+        "modInventory": {
+          "wallMs": 272.574,
+          "calls": 434
+        },
+        "runtimeIntegrity": {
+          "wallMs": 210.671,
+          "calls": 1206
+        }
+      },
+      "durationsByEventCorrelationMs": {
+        "event1/correlation0": [
+          6.052
+        ],
+        "event10/correlation1": [
+          1517.897
+        ],
+        "event11/correlation2": [
+          1477.902
+        ],
+        "event11/correlation3": [
+          1171.138
+        ],
+        "event13/correlation0": [
+          1.051,
+          2.936,
+          2.736
+        ],
+        "event20/correlation0": [
+          587.745
+        ],
+        "event20/correlation1": [
+          638.005
+        ],
+        "event20/correlation2": [
+          612.403
+        ],
+        "event20/correlation3": [
+          567.313
+        ],
+        "event21/correlation1": [
+          284.347
+        ],
+        "event21/correlation2": [
+          307.218
+        ],
+        "event21/correlation3": [
+          136.182
+        ],
+        "event22/correlation1": [
+          30.223
+        ],
+        "event22/correlation2": [
+          121.826
+        ],
+        "event22/correlation3": [
+          28.13
+        ],
+        "event23/correlation0": [
+          164.701,
+          165.896
+        ],
+        "event23/correlation1": [
+          177.252
+        ],
+        "event23/correlation2": [
+          175.331,
+          158.352
+        ],
+        "event23/correlation3": [
+          169.427,
+          164.484
+        ],
+        "event24/correlation1": [
+          377.79
+        ],
+        "event24/correlation2": [
+          92.45
+        ],
+        "event24/correlation3": [
+          95.359
+        ],
+        "event25/correlation1": [
+          283.653
+        ],
+        "event34/correlation1": [
+          1517.911
+        ],
+        "event34/correlation2": [
+          1477.905
+        ],
+        "event34/correlation3": [
+          1171.14
+        ],
+        "event36/correlation1": [
+          209.949,
+          27.1
+        ],
+        "event36/correlation2": [
+          222.286,
+          31.039
+        ],
+        "event36/correlation3": [
+          68.427,
+          29.984
+        ],
+        "event37/correlation1": [
+          30.366,
+          11.186
+        ],
+        "event37/correlation2": [
+          29.664,
+          17.404
+        ],
+        "event37/correlation3": [
+          9.732,
+          21.768
+        ],
+        "event38/correlation1": [
+          28.83
+        ],
+        "event38/correlation2": [
+          120.257
+        ],
+        "event38/correlation3": [
+          26.539
+        ]
+      },
+      "gameAuditHashWallFractions": [
+        0.9871678121644815,
+        0.9873906561528928,
+        0.9871849186296778,
+        0.9862738911324084
+      ],
+      "readyFlashMs": [],
+      "frontendInitializeAfterNativeOriginMs": 292.328,
+      "runtimeReadinessOverlap": [
+        {
+          "runtimeCorrelation": 1,
+          "readinessCorrelation": 2,
+          "wallMs": 1468.761
+        }
+      ],
+      "frontendTransitions": [
+        {
+          "event": 105,
+          "afterFrontendInitMs": 111.5
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 2758.7
+        }
+      ],
+      "firstReadyAfterNativeOriginMs": 3050.119,
+      "lastReadyAfterNativeOriginMs": 3050.119,
+      "firstReadyAfterFrontendInitMs": 2758.7,
+      "lastReadyAfterFrontendInitMs": 2758.7,
+      "unattributedGameAudits": 1,
+      "gameAuditsByCorrelation": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 1
+      },
+      "discardedReadiness": 1,
+      "instanceGenerations": [
+        0,
+        1
+      ],
+      "accountGenerations": [
+        0,
+        1
+      ],
+      "ipcRtt": {
+        "n": 0
+      },
+      "ipcWhileValidationRequestPending": {
+        "n": 0
+      },
+      "ipcWhileNoValidationRequestPending": {
+        "n": 0
+      }
+    },
+    "trace-profile-06.json": {
+      "inputSha256": "43f440c26d2f65e850fc551e8f55d86ea595e6b042072d3bb73f95c42a609152",
+      "recordCount": 105,
+      "counts": {
+        "initialization": 1,
+        "runtimeStatus": 1,
+        "readiness": 2,
+        "play": 0,
+        "unrelatedIpc": 3,
+        "selection": 0,
+        "gameIntegrity": 4,
+        "gameMetadata": 3,
+        "runtimeMetadata": 3,
+        "modInventory": 7,
+        "runtimeIntegrity": 3,
+        "javaDiagnostic": 1,
+        "session": 0,
+        "ensureSession": 0,
+        "sessionLock": 0,
+        "contentLock": 0,
+        "lockedValidation": 0,
+        "javaSpawn": 0,
+        "blockingQueue": 0,
+        "blockingWorker": 0,
+        "dispatch": 3,
+        "modInventoryCommand": 0,
+        "mojangHttp": 6,
+        "fabricHttp": 6,
+        "runtimeHttp": 3
+      },
+      "spanWallMsInclusive": {
+        "initialization": {
+          "n": 1,
+          "medianMs": 4.535,
+          "minMs": 4.535,
+          "worstMs": 4.535,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "runtimeStatus": {
+          "n": 1,
+          "medianMs": 1576.869,
+          "minMs": 1576.869,
+          "worstMs": 1576.869,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "readiness": {
+          "n": 2,
+          "medianMs": 1290.536,
+          "minMs": 1172.985,
+          "worstMs": 1408.087,
+          "p95Ms": null,
+          "sampleStdDevMs": 166.24221847051976
+        },
+        "unrelatedIpc": {
+          "n": 3,
+          "medianMs": 2.8,
+          "minMs": 1.04,
+          "worstMs": 2.81,
+          "p95Ms": null,
+          "sampleStdDevMs": 1.0190354916946383
+        },
+        "gameIntegrity": {
+          "n": 4,
+          "medianMs": 595.802,
+          "minMs": 560.266,
+          "worstMs": 652.901,
+          "p95Ms": null,
+          "sampleStdDevMs": 40.03562381492262
+        },
+        "gameMetadata": {
+          "n": 3,
+          "medianMs": 288.787,
+          "minMs": 146.119,
+          "worstMs": 291.98,
+          "p95Ms": null,
+          "sampleStdDevMs": 83.30644712345698
+        },
+        "runtimeMetadata": {
+          "n": 3,
+          "medianMs": 27.822,
+          "minMs": 24.507,
+          "worstMs": 28.759,
+          "p95Ms": null,
+          "sampleStdDevMs": 2.2340806461122504
+        },
+        "modInventory": {
+          "n": 7,
+          "medianMs": 164.674,
+          "minMs": 160.976,
+          "worstMs": 212.21,
+          "p95Ms": null,
+          "sampleStdDevMs": 23.549490170398897
+        },
+        "runtimeIntegrity": {
+          "n": 3,
+          "medianMs": 96.028,
+          "minMs": 92.969,
+          "worstMs": 384.845,
+          "p95Ms": null,
+          "sampleStdDevMs": 167.63860749938644
+        },
+        "javaDiagnostic": {
+          "n": 1,
+          "medianMs": 287.004,
+          "minMs": 287.004,
+          "worstMs": 287.004,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "dispatch": {
+          "n": 3,
+          "medianMs": 1408.091,
+          "minMs": 1172.987,
+          "worstMs": 1576.873,
+          "p95Ms": null,
+          "sampleStdDevMs": 202.84852942363995
+        },
+        "mojangHttp": {
+          "n": 6,
+          "medianMs": 54.570499999999996,
+          "minMs": 25.364,
+          "worstMs": 201.141,
+          "p95Ms": null,
+          "sampleStdDevMs": 84.286940487045
+        },
+        "fabricHttp": {
+          "n": 6,
+          "medianMs": 15.8195,
+          "minMs": 6.788,
+          "worstMs": 50.028,
+          "p95Ms": null,
+          "sampleStdDevMs": 18.867244491446016
+        },
+        "runtimeHttp": {
+          "n": 3,
+          "medianMs": 26.48,
+          "minMs": 23.23,
+          "worstMs": 27.297,
+          "p95Ms": null,
+          "sampleStdDevMs": 2.1513746768055073
+        }
+      },
+      "hashFileIoAndDigest": {
+        "runtimeStatus": {
+          "wallMs": 3.221,
+          "calls": 2
+        },
+        "readiness": {
+          "wallMs": 6.414,
+          "calls": 4
+        },
+        "unrelatedIpc": {
+          "wallMs": 3.617,
+          "calls": 2
+        },
+        "gameIntegrity": {
+          "wallMs": 2371.288,
+          "calls": 18708
+        },
+        "runtimeMetadata": {
+          "wallMs": 0.647,
+          "calls": 3
+        },
+        "modInventory": {
+          "wallMs": 270.426,
+          "calls": 434
+        },
+        "runtimeIntegrity": {
+          "wallMs": 212.211,
+          "calls": 1206
+        }
+      },
+      "durationsByEventCorrelationMs": {
+        "event1/correlation0": [
+          4.535
+        ],
+        "event10/correlation1": [
+          1576.869
+        ],
+        "event11/correlation2": [
+          1408.087
+        ],
+        "event11/correlation3": [
+          1172.985
+        ],
+        "event13/correlation0": [
+          1.04,
+          2.8,
+          2.81
+        ],
+        "event20/correlation0": [
+          581.63
+        ],
+        "event20/correlation1": [
+          652.901
+        ],
+        "event20/correlation2": [
+          609.974
+        ],
+        "event20/correlation3": [
+          560.266
+        ],
+        "event21/correlation1": [
+          288.787
+        ],
+        "event21/correlation2": [
+          291.98
+        ],
+        "event21/correlation3": [
+          146.119
+        ],
+        "event22/correlation1": [
+          27.822
+        ],
+        "event22/correlation2": [
+          24.507
+        ],
+        "event22/correlation3": [
+          28.759
+        ],
+        "event23/correlation0": [
+          162.34,
+          160.976
+        ],
+        "event23/correlation1": [
+          211.637
+        ],
+        "event23/correlation2": [
+          212.21,
+          164.674
+        ],
+        "event23/correlation3": [
+          163.666,
+          167.568
+        ],
+        "event24/correlation1": [
+          384.845
+        ],
+        "event24/correlation2": [
+          92.969
+        ],
+        "event24/correlation3": [
+          96.028
+        ],
+        "event25/correlation1": [
+          287.004
+        ],
+        "event34/correlation1": [
+          1576.873
+        ],
+        "event34/correlation2": [
+          1408.091
+        ],
+        "event34/correlation3": [
+          1172.987
+        ],
+        "event36/correlation1": [
+          201.141,
+          25.364
+        ],
+        "event36/correlation2": [
+          200.515,
+          25.401
+        ],
+        "event36/correlation3": [
+          63.836,
+          45.305
+        ],
+        "event37/correlation1": [
+          46.141,
+          10.499
+        ],
+        "event37/correlation2": [
+          50.028,
+          6.788
+        ],
+        "event37/correlation3": [
+          15.74,
+          15.899
+        ],
+        "event38/correlation1": [
+          26.48
+        ],
+        "event38/correlation2": [
+          23.23
+        ],
+        "event38/correlation3": [
+          27.297
+        ]
+      },
+      "gameAuditHashWallFractions": [
+        0.9850551007092105,
+        0.9861893303885275,
+        0.9867114832453622,
+        0.9863975326005862
+      ],
+      "readyFlashMs": [
+        126.29999999999995
+      ],
+      "frontendInitializeAfterNativeOriginMs": 282.187,
+      "runtimeReadinessOverlap": [
+        {
+          "runtimeCorrelation": 1,
+          "readinessCorrelation": 2,
+          "wallMs": 1408.087
+        }
+      ],
+      "frontendTransitions": [
+        {
+          "event": 105,
+          "afterFrontendInitMs": 111.5
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 1524.401
+        },
+        {
+          "event": 105,
+          "afterFrontendInitMs": 1650.701
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 2825.401
+        }
+      ],
+      "firstReadyAfterNativeOriginMs": 1805.769,
+      "lastReadyAfterNativeOriginMs": 3106.382,
+      "firstReadyAfterFrontendInitMs": 1524.401,
+      "lastReadyAfterFrontendInitMs": 2825.401,
+      "unattributedGameAudits": 1,
+      "gameAuditsByCorrelation": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 1
+      },
+      "discardedReadiness": 0,
+      "instanceGenerations": [
+        0,
+        1
+      ],
+      "accountGenerations": [
+        0,
+        1
+      ],
+      "ipcRtt": {
+        "n": 0
+      },
+      "ipcWhileValidationRequestPending": {
+        "n": 0
+      },
+      "ipcWhileNoValidationRequestPending": {
+        "n": 0
+      }
+    },
+    "trace-profile-07.json": {
+      "inputSha256": "d965eae013cec50bb565a6afd707bb64a0fae775b639213580800395b42d8bfe",
+      "recordCount": 105,
+      "counts": {
+        "initialization": 1,
+        "runtimeStatus": 1,
+        "readiness": 2,
+        "play": 0,
+        "unrelatedIpc": 3,
+        "selection": 0,
+        "gameIntegrity": 4,
+        "gameMetadata": 3,
+        "runtimeMetadata": 3,
+        "modInventory": 7,
+        "runtimeIntegrity": 3,
+        "javaDiagnostic": 1,
+        "session": 0,
+        "ensureSession": 0,
+        "sessionLock": 0,
+        "contentLock": 0,
+        "lockedValidation": 0,
+        "javaSpawn": 0,
+        "blockingQueue": 0,
+        "blockingWorker": 0,
+        "dispatch": 3,
+        "modInventoryCommand": 0,
+        "mojangHttp": 6,
+        "fabricHttp": 6,
+        "runtimeHttp": 3
+      },
+      "spanWallMsInclusive": {
+        "initialization": {
+          "n": 1,
+          "medianMs": 5.664,
+          "minMs": 5.664,
+          "worstMs": 5.664,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "runtimeStatus": {
+          "n": 1,
+          "medianMs": 1545.543,
+          "minMs": 1545.543,
+          "worstMs": 1545.543,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "readiness": {
+          "n": 2,
+          "medianMs": 1273.7675,
+          "minMs": 1144.299,
+          "worstMs": 1403.236,
+          "p95Ms": null,
+          "sampleStdDevMs": 183.09610860010113
+        },
+        "unrelatedIpc": {
+          "n": 3,
+          "medianMs": 2.782,
+          "minMs": 0.98,
+          "worstMs": 3.053,
+          "p95Ms": null,
+          "sampleStdDevMs": 1.1267929416416014
+        },
+        "gameIntegrity": {
+          "n": 4,
+          "medianMs": 590.78,
+          "minMs": 565.491,
+          "worstMs": 633.089,
+          "p95Ms": null,
+          "sampleStdDevMs": 32.4113919478939
+        },
+        "gameMetadata": {
+          "n": 3,
+          "medianMs": 300.987,
+          "minMs": 121.559,
+          "worstMs": 313.559,
+          "p95Ms": null,
+          "sampleStdDevMs": 107.40613139543449
+        },
+        "runtimeMetadata": {
+          "n": 3,
+          "medianMs": 29.861,
+          "minMs": 28.314,
+          "worstMs": 45.963,
+          "p95Ms": null,
+          "sampleStdDevMs": 9.773730215906992
+        },
+        "modInventory": {
+          "n": 7,
+          "medianMs": 161.842,
+          "minMs": 156.786,
+          "worstMs": 185.058,
+          "p95Ms": null,
+          "sampleStdDevMs": 11.327860931601974
+        },
+        "runtimeIntegrity": {
+          "n": 3,
+          "medianMs": 94.439,
+          "minMs": 92.003,
+          "worstMs": 373.772,
+          "p95Ms": null,
+          "sampleStdDevMs": 161.98077475737668
+        },
+        "javaDiagnostic": {
+          "n": 1,
+          "medianMs": 277.637,
+          "minMs": 277.637,
+          "worstMs": 277.637,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "dispatch": {
+          "n": 3,
+          "medianMs": 1403.24,
+          "minMs": 1144.304,
+          "worstMs": 1545.547,
+          "p95Ms": null,
+          "sampleStdDevMs": 203.42692356798133
+        },
+        "mojangHttp": {
+          "n": 6,
+          "medianMs": 53.629999999999995,
+          "minMs": 27.092,
+          "worstMs": 223.145,
+          "p95Ms": null,
+          "sampleStdDevMs": 90.36093132635733
+        },
+        "fabricHttp": {
+          "n": 6,
+          "medianMs": 21.448999999999998,
+          "minMs": 8.111,
+          "worstMs": 28.719,
+          "p95Ms": null,
+          "sampleStdDevMs": 7.734945291769468
+        },
+        "runtimeHttp": {
+          "n": 3,
+          "medianMs": 28.489,
+          "minMs": 26.824,
+          "worstMs": 44.087,
+          "p95Ms": null,
+          "sampleStdDevMs": 9.522613419294798
+        }
+      },
+      "hashFileIoAndDigest": {
+        "runtimeStatus": {
+          "wallMs": 3.184,
+          "calls": 2
+        },
+        "readiness": {
+          "wallMs": 6.711,
+          "calls": 4
+        },
+        "unrelatedIpc": {
+          "wallMs": 3.629,
+          "calls": 2
+        },
+        "gameIntegrity": {
+          "wallMs": 2349.535,
+          "calls": 18708
+        },
+        "runtimeMetadata": {
+          "wallMs": 0.983,
+          "calls": 3
+        },
+        "modInventory": {
+          "wallMs": 264.43,
+          "calls": 434
+        },
+        "runtimeIntegrity": {
+          "wallMs": 210.858,
+          "calls": 1206
+        }
+      },
+      "durationsByEventCorrelationMs": {
+        "event1/correlation0": [
+          5.664
+        ],
+        "event10/correlation1": [
+          1545.543
+        ],
+        "event11/correlation2": [
+          1403.236
+        ],
+        "event11/correlation3": [
+          1144.299
+        ],
+        "event13/correlation0": [
+          0.98,
+          3.053,
+          2.782
+        ],
+        "event20/correlation0": [
+          570.851
+        ],
+        "event20/correlation1": [
+          633.089
+        ],
+        "event20/correlation2": [
+          610.709
+        ],
+        "event20/correlation3": [
+          565.491
+        ],
+        "event21/correlation1": [
+          313.559
+        ],
+        "event21/correlation2": [
+          300.987
+        ],
+        "event21/correlation3": [
+          121.559
+        ],
+        "event22/correlation1": [
+          29.861
+        ],
+        "event22/correlation2": [
+          45.963
+        ],
+        "event22/correlation3": [
+          28.314
+        ],
+        "event23/correlation0": [
+          156.786,
+          158.384
+        ],
+        "event23/correlation1": [
+          185.058
+        ],
+        "event23/correlation2": [
+          180.473,
+          162.291
+        ],
+        "event23/correlation3": [
+          160.964,
+          161.842
+        ],
+        "event24/correlation1": [
+          373.772
+        ],
+        "event24/correlation2": [
+          92.003
+        ],
+        "event24/correlation3": [
+          94.439
+        ],
+        "event25/correlation1": [
+          277.637
+        ],
+        "event34/correlation1": [
+          1545.547
+        ],
+        "event34/correlation2": [
+          1403.24
+        ],
+        "event34/correlation3": [
+          1144.304
+        ],
+        "event36/correlation1": [
+          223.145,
+          31.119
+        ],
+        "event36/correlation2": [
+          206.283,
+          51.564
+        ],
+        "event36/correlation3": [
+          55.696,
+          27.092
+        ],
+        "event37/correlation1": [
+          25.205,
+          28.719
+        ],
+        "event37/correlation2": [
+          25.587,
+          8.111
+        ],
+        "event37/correlation3": [
+          15.719,
+          17.693
+        ],
+        "event38/correlation1": [
+          28.489
+        ],
+        "event38/correlation2": [
+          44.087
+        ],
+        "event38/correlation3": [
+          26.824
+        ]
+      },
+      "gameAuditHashWallFractions": [
+        0.9877284236497554,
+        0.9870085425300757,
+        0.9871963086689872,
+        0.986572730600487
+      ],
+      "readyFlashMs": [
+        99.29999999999995
+      ],
+      "frontendInitializeAfterNativeOriginMs": 290.982,
+      "runtimeReadinessOverlap": [
+        {
+          "runtimeCorrelation": 1,
+          "readinessCorrelation": 2,
+          "wallMs": 1403.236
+        }
+      ],
+      "frontendTransitions": [
+        {
+          "event": 105,
+          "afterFrontendInitMs": 110.3
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 1517.8
+        },
+        {
+          "event": 105,
+          "afterFrontendInitMs": 1617.1
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 2763.1
+        }
+      ],
+      "firstReadyAfterNativeOriginMs": 1807.335,
+      "lastReadyAfterNativeOriginMs": 3052.623,
+      "firstReadyAfterFrontendInitMs": 1517.8,
+      "lastReadyAfterFrontendInitMs": 2763.1,
+      "unattributedGameAudits": 1,
+      "gameAuditsByCorrelation": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 1
+      },
+      "discardedReadiness": 0,
+      "instanceGenerations": [
+        0,
+        1
+      ],
+      "accountGenerations": [
+        0,
+        1
+      ],
+      "ipcRtt": {
+        "n": 0
+      },
+      "ipcWhileValidationRequestPending": {
+        "n": 0
+      },
+      "ipcWhileNoValidationRequestPending": {
+        "n": 0
+      }
+    },
+    "trace-profile-08.json": {
+      "inputSha256": "2fb4c11a6902fea3494377df1e466afe33062d76637e36f503a58636ae98d8f9",
+      "recordCount": 105,
+      "counts": {
+        "initialization": 1,
+        "runtimeStatus": 1,
+        "readiness": 2,
+        "play": 0,
+        "unrelatedIpc": 3,
+        "selection": 0,
+        "gameIntegrity": 4,
+        "gameMetadata": 3,
+        "runtimeMetadata": 3,
+        "modInventory": 7,
+        "runtimeIntegrity": 3,
+        "javaDiagnostic": 1,
+        "session": 0,
+        "ensureSession": 0,
+        "sessionLock": 0,
+        "contentLock": 0,
+        "lockedValidation": 0,
+        "javaSpawn": 0,
+        "blockingQueue": 0,
+        "blockingWorker": 0,
+        "dispatch": 3,
+        "modInventoryCommand": 0,
+        "mojangHttp": 6,
+        "fabricHttp": 6,
+        "runtimeHttp": 3
+      },
+      "spanWallMsInclusive": {
+        "initialization": {
+          "n": 1,
+          "medianMs": 6.704,
+          "minMs": 6.704,
+          "worstMs": 6.704,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "runtimeStatus": {
+          "n": 1,
+          "medianMs": 1745.387,
+          "minMs": 1745.387,
+          "worstMs": 1745.387,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "readiness": {
+          "n": 2,
+          "medianMs": 1364.837,
+          "minMs": 1145.33,
+          "worstMs": 1584.344,
+          "p95Ms": null,
+          "sampleStdDevMs": 310.42977643583106
+        },
+        "unrelatedIpc": {
+          "n": 3,
+          "medianMs": 2.872,
+          "minMs": 0.998,
+          "worstMs": 3.086,
+          "p95Ms": null,
+          "sampleStdDevMs": 1.1487250904082025
+        },
+        "gameIntegrity": {
+          "n": 4,
+          "medianMs": 586.6015,
+          "minMs": 551.581,
+          "worstMs": 644.063,
+          "p95Ms": null,
+          "sampleStdDevMs": 43.446640156825325
+        },
+        "gameMetadata": {
+          "n": 3,
+          "medianMs": 448.491,
+          "minMs": 115.68,
+          "worstMs": 453.399,
+          "p95Ms": null,
+          "sampleStdDevMs": 193.58089314547547
+        },
+        "runtimeMetadata": {
+          "n": 3,
+          "medianMs": 28.042,
+          "minMs": 27.444,
+          "worstMs": 28.623,
+          "p95Ms": null,
+          "sampleStdDevMs": 0.5895204265615692
+        },
+        "modInventory": {
+          "n": 7,
+          "medianMs": 166.699,
+          "minMs": 159.878,
+          "worstMs": 223.632,
+          "p95Ms": null,
+          "sampleStdDevMs": 29.040580081606336
+        },
+        "runtimeIntegrity": {
+          "n": 3,
+          "medianMs": 99.937,
+          "minMs": 96.738,
+          "worstMs": 385.265,
+          "p95Ms": null,
+          "sampleStdDevMs": 165.66539113224584
+        },
+        "javaDiagnostic": {
+          "n": 1,
+          "medianMs": 285.474,
+          "minMs": 285.474,
+          "worstMs": 285.474,
+          "p95Ms": null,
+          "sampleStdDevMs": null
+        },
+        "dispatch": {
+          "n": 3,
+          "medianMs": 1584.347,
+          "minMs": 1145.334,
+          "worstMs": 1745.392,
+          "p95Ms": null,
+          "sampleStdDevMs": 310.57406780508893
+        },
+        "mojangHttp": {
+          "n": 6,
+          "medianMs": 39.0655,
+          "minMs": 27.423,
+          "worstMs": 244.337,
+          "p95Ms": null,
+          "sampleStdDevMs": 108.03138532420412
+        },
+        "fabricHttp": {
+          "n": 6,
+          "medianMs": 23.6345,
+          "minMs": 16.042,
+          "worstMs": 150.375,
+          "p95Ms": null,
+          "sampleStdDevMs": 66.80321832666448
+        },
+        "runtimeHttp": {
+          "n": 3,
+          "medianMs": 26.628,
+          "minMs": 25.821,
+          "worstMs": 27.235,
+          "p95Ms": null,
+          "sampleStdDevMs": 0.7093534614938676
+        }
+      },
+      "hashFileIoAndDigest": {
+        "runtimeStatus": {
+          "wallMs": 3.26,
+          "calls": 2
+        },
+        "readiness": {
+          "wallMs": 6.336,
+          "calls": 4
+        },
+        "unrelatedIpc": {
+          "wallMs": 3.682,
+          "calls": 2
+        },
+        "gameIntegrity": {
+          "wallMs": 2336.19,
+          "calls": 18708
+        },
+        "runtimeMetadata": {
+          "wallMs": 0.76,
+          "calls": 3
+        },
+        "modInventory": {
+          "wallMs": 271.061,
+          "calls": 434
+        },
+        "runtimeIntegrity": {
+          "wallMs": 219.562,
+          "calls": 1206
+        }
+      },
+      "durationsByEventCorrelationMs": {
+        "event1/correlation0": [
+          6.704
+        ],
+        "event10/correlation1": [
+          1745.387
+        ],
+        "event11/correlation2": [
+          1584.344
+        ],
+        "event11/correlation3": [
+          1145.33
+        ],
+        "event13/correlation0": [
+          0.998,
+          2.872,
+          3.086
+        ],
+        "event20/correlation0": [
+          551.581
+        ],
+        "event20/correlation1": [
+          644.063
+        ],
+        "event20/correlation2": [
+          611.706
+        ],
+        "event20/correlation3": [
+          561.497
+        ],
+        "event21/correlation1": [
+          453.399
+        ],
+        "event21/correlation2": [
+          448.491
+        ],
+        "event21/correlation3": [
+          115.68
+        ],
+        "event22/correlation1": [
+          28.623
+        ],
+        "event22/correlation2": [
+          28.042
+        ],
+        "event22/correlation3": [
+          27.444
+        ],
+        "event23/correlation0": [
+          159.878,
+          166.699
+        ],
+        "event23/correlation1": [
+          223.299
+        ],
+        "event23/correlation2": [
+          223.632,
+          163.98
+        ],
+        "event23/correlation3": [
+          162.78,
+          167.538
+        ],
+        "event24/correlation1": [
+          385.265
+        ],
+        "event24/correlation2": [
+          96.738
+        ],
+        "event24/correlation3": [
+          99.937
+        ],
+        "event25/correlation1": [
+          285.474
+        ],
+        "event34/correlation1": [
+          1745.392
+        ],
+        "event34/correlation2": [
+          1584.347
+        ],
+        "event34/correlation3": [
+          1145.334
+        ],
+        "event36/correlation1": [
+          239.824,
+          28.395
+        ],
+        "event36/correlation2": [
+          244.337,
+          28.968
+        ],
+        "event36/correlation3": [
+          49.163,
+          27.423
+        ],
+        "event37/correlation1": [
+          25.182,
+          150.375
+        ],
+        "event37/correlation2": [
+          22.087,
+          147.657
+        ],
+        "event37/correlation3": [
+          16.042,
+          16.063
+        ],
+        "event38/correlation1": [
+          27.235
+        ],
+        "event38/correlation2": [
+          26.628
+        ],
+        "event38/correlation3": [
+          25.821
+        ]
+      },
+      "gameAuditHashWallFractions": [
+        0.9844712983034334,
+        0.9873319846039906,
+        0.9867272440493781,
+        0.9863258396750116
+      ],
+      "readyFlashMs": [
+        129.3989999999999
+      ],
+      "frontendInitializeAfterNativeOriginMs": 293.886,
+      "runtimeReadinessOverlap": [
+        {
+          "runtimeCorrelation": 1,
+          "readinessCorrelation": 2,
+          "wallMs": 1584.344
+        }
+      ],
+      "frontendTransitions": [
+        {
+          "event": 105,
+          "afterFrontendInitMs": 98.4
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 1685.101
+        },
+        {
+          "event": 105,
+          "afterFrontendInitMs": 1814.5
+        },
+        {
+          "event": 106,
+          "afterFrontendInitMs": 2961.301
+        }
+      ],
+      "firstReadyAfterNativeOriginMs": 1978.835,
+      "lastReadyAfterNativeOriginMs": 3254.386,
+      "firstReadyAfterFrontendInitMs": 1685.101,
+      "lastReadyAfterFrontendInitMs": 2961.301,
+      "unattributedGameAudits": 1,
+      "gameAuditsByCorrelation": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 1
+      },
+      "discardedReadiness": 0,
+      "instanceGenerations": [
+        0,
+        1
+      ],
+      "accountGenerations": [
+        0,
+        1
+      ],
+      "ipcRtt": {
+        "n": 0
+      },
+      "ipcWhileValidationRequestPending": {
+        "n": 0
+      },
+      "ipcWhileNoValidationRequestPending": {
+        "n": 0
+      }
+    }
+  },
+  "newPlayTrials": 0,
+  "notes": [
+    "No p95 for cohorts smaller than 20.",
+    "UI values are observation upper bounds, not exact paint times.",
+    "Span durations are inclusive and overlapping; never sum as independent cost.",
+    "Hash counters include file I/O, not pure hashing CPU time.",
+    "IPC pending classification uses one frontend clock and outstanding validation requests.",
+    "No matched Play/JFR overhead claim."
+  ]
+}

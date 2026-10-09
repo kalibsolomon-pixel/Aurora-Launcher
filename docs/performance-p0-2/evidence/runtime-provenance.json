@@ -1,0 +1,10 @@
+{
+  "component": "java-runtime-delta",
+  "platform": "windows-x64",
+  "manifestSha1": "cb4394a27089d19f65d5baa6cf0482c27c3c7865",
+  "javaExeSha256": "0afb1170b83c156dfdb7f54bb34c9b058064175c329a5d80b782bcc9dbaa2164",
+  "diagnosticExit": 0,
+  "diagnostic": "openjdk version \"21.0.7\" 2025-04-15 LTS\nOpenJDK Runtime Environment Microsoft-11369940 (build 21.0.7+6-LTS)\nOpenJDK 64-Bit Server VM Microsoft-11369940 (build 21.0.7+6-LTS, mixed mode)",
+  "runtimeFilesPreservedBaseline": 1219,
+  "usedForGameInP02": false
+}

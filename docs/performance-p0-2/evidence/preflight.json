@@ -1,0 +1,105 @@
+{
+  "launcher": {
+    "head": "36bda4f1f1c8a1b0830ad1bfac1ec295f2e4470d",
+    "branch": "codex/client-3-production-authority",
+    "tracked": 452,
+    "protectedUntracked": 15143,
+    "missing": 0,
+    "trackedModifications": [],
+    "aheadBehind": {
+      "exit": 128,
+      "stdout": "",
+      "errorKind": "upstream_not_configured"
+    },
+    "cachedOriginMain": {
+      "exit": 0,
+      "stdout": "8\t0\n"
+    },
+    "remoteHead": {
+      "exit": 0,
+      "stdout": "ref: refs/heads/main\tHEAD\n4575a0e3f1c28da6cfe072948fe91b60eeaf608f\tHEAD\n"
+    },
+    "documents": [
+      {
+        "document": "AGENTS.md",
+        "characters": 18712,
+        "lines": 132,
+        "sha256": "e9e1656365c9ff2768c83892450479aabd21ce4f54afa5efd0ccc7dea7c3a330"
+      },
+      {
+        "document": "ARCHITECTURE.md",
+        "characters": 281784,
+        "lines": 1648,
+        "sha256": "28f099c66ad352cb427ef4639cde4f9dbc9cf8f73a8efd9bf56a9e58ebd70628"
+      },
+      {
+        "document": "PERFORMANCE_RESEARCH_P0.md",
+        "characters": 55020,
+        "lines": 695,
+        "sha256": "3265602bf22bac38847a20f26d0b10827fa0105e76e0f46c0513af7d7490fdc2"
+      },
+      {
+        "document": "PERFORMANCE_RESEARCH_P0_1.md",
+        "characters": 23303,
+        "lines": 328,
+        "sha256": "eb15a92d7eb6665bbebe7aaf973f1287f774fde20aeca4ad9d02436d406635ce"
+      },
+      {
+        "document": "docs/performance-p0/README.md",
+        "characters": 9197,
+        "lines": 143,
+        "sha256": "720b650549f1d9f3c46cd6a0a4eb8198e76c445c5bc8049c70a730093ef67b49"
+      },
+      {
+        "document": "docs/performance-p0-1/README.md",
+        "characters": 10572,
+        "lines": 136,
+        "sha256": "ebcc5fc099827858b7cceaf771ad6e4a233ad31cc5424dcbdc550e26d08e8cea"
+      }
+    ]
+  },
+  "client": {
+    "head": "5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d",
+    "branch": "codex/unified-theme-pilot",
+    "tracked": 422,
+    "protectedUntracked": 4,
+    "missing": 0,
+    "trackedModifications": [],
+    "aheadBehind": {
+      "exit": 0,
+      "stdout": "0\t0\n"
+    },
+    "cachedOriginMain": {
+      "exit": 128,
+      "stdout": "",
+      "errorKind": "cached_ref_unavailable"
+    },
+    "remoteHead": {
+      "exit": 0,
+      "stdout": "ref: refs/heads/master\tHEAD\nd8eecd89b9187619b3ad7a47adf97cd74d4f1c77\tHEAD\n"
+    },
+    "documents": [
+      {
+        "document": "AGENTS.md",
+        "characters": 177676,
+        "lines": 2271,
+        "sha256": "55f3581f22c6489f3c68b596545fbc290037f40f014d10a93c3347cbd3f54f8c"
+      },
+      {
+        "document": "ARCHITECTURE.md",
+        "characters": 184597,
+        "lines": 2773,
+        "sha256": "90e7971c5dec67c85e4968a1c90c60744f235f7bd93c4c0e7470587e954eba04"
+      }
+    ]
+  },
+  "historicalManagedProtection": {
+    "checked": 11821,
+    "changedOrMissing": 0,
+    "jnaTemporaryFiles": 4
+  },
+  "installedLauncher": {
+    "sha256": "15bfd5d71bbe73c9ad7f3010c052f3f1669d81abfa4790b8c48efb8b169fd868",
+    "bytes": 19211264
+  }
+}

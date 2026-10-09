@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-09",
+  "timezone": "America/New_York",
+  "cpu": "Intel Core i7-14700F",
+  "physicalCores": 20,
+  "logicalProcessors": 28,
+  "os": "Windows 11 Home",
+  "osBuild": "10.0.26300",
+  "gpu": "AMD Radeon RX 9070 XT",
+  "driverVersion": "32.0.31041.1004",
+  "powerScheme": "Ultimate Performance",
+  "storageAndAccount": "Previously authorized same-user as-is arrangement; no data-root override or account isolation claimed",
+  "conditions": [
+    "Normal online host and existing caches",
+    "No reboot, cache purge, firewall or power-setting changes",
+    "Builds and tests completed before the matched cohort",
+    "Foreground activation immediately after each primary window appeared",
+    "Discord and ordinary owner background activity were not controlled",
+    "No content, instance selection, account selection or settings changes",
+    "Zero competing Launcher/Java before each launch; all trial windows closed normally",
+    "60 ms polling delay; capture durations retained; one-second observed Ready hold"
+  ],
+  "pairedOrder": [
+    "P3/C3",
+    "C4/P4",
+    "P5/C5",
+    "C6/P6",
+    "P7/C7",
+    "C8/P8"
+  ],
+  "controlHasNoResearchTrace": true,
+  "gameTrials": 0
+}

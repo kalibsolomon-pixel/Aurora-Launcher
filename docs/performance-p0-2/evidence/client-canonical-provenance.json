@@ -1,0 +1,13 @@
+{
+  "sourceHead": "5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d",
+  "checkout": "fresh detached checkout with core.autocrlf=false/core.eol=lf",
+  "build": "gradlew --no-daemon test build",
+  "testsRun": 443,
+  "testFailures": 0,
+  "builtJarSha256": "c84ad6ecdc50b63e2ed4318d81ae67f398a8569cf6395b7e63d555fdd366adcb",
+  "builtJarBytes": 3077305,
+  "deployedJarSha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+  "allEntryBytesMatch": false,
+  "entries": 435,
+  "installedJarModified": false
+}

@@ -1,0 +1,14 @@
+{
+  "sourceHead": "5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d",
+  "checkout": "task-created detached checkout populated only with the original 422 tracked files after per-file baseline SHA256 verification",
+  "build": "gradlew --no-daemon test build",
+  "testsRun": 443,
+  "testFailures": 0,
+  "builtJarSha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+  "builtJarBytes": 3077377,
+  "deployedJarSha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+  "allEntryBytesMatch": true,
+  "entries": 435,
+  "differentEntries": [],
+  "installedJarModified": false
+}
