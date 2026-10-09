@@ -1,0 +1,40 @@
+{
+  "checked": 43131,
+  "missing": 0,
+  "unexpected": 0,
+  "kinds": {
+    "diagnostic": {
+      "checked": 124,
+      "changed": 0
+    },
+    "installed": {
+      "checked": 1,
+      "changed": 0
+    },
+    "managed": {
+      "checked": 24193,
+      "changed": 0
+    },
+    "operational": {
+      "checked": 3066,
+      "changed": 37
+    },
+    "tracked": {
+      "checked": 604,
+      "changed": 4
+    },
+    "untracked": {
+      "checked": 15143,
+      "changed": 0
+    }
+  },
+  "jnaNamedFilesChecked": 15,
+  "jnaChangedOrMissing": 0,
+  "installedExecutableSha256": "15bfd5d71bbe73c9ad7f3010c052f3f1669d81abfa4790b8c48efb8b169fd868",
+  "operationalDomains": [
+    "EBWebView",
+    "cache/server-enrichment"
+  ],
+  "newOperationalFiles": 6,
+  "newProtectedManagedFiles": 0
+}

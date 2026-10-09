@@ -1,0 +1,4 @@
+*.py text eol=lf
+*.md text eol=lf
+*.js text eol=lf
+evidence/** -text whitespace=cr-at-eol

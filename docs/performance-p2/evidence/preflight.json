@@ -1,0 +1,12 @@
+{
+  "head": "6633a66c5c80d9af8e1cfc5b503adffe39ac5baa",
+  "p1Ancestor": true,
+  "counts": {
+    "diagnostic": 124,
+    "installed": 1,
+    "managed": 24193,
+    "operational": 3066,
+    "tracked": 604,
+    "untracked": 15143
+  }
+}

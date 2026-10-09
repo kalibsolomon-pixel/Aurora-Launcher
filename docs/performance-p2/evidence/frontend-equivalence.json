@@ -1,0 +1,69 @@
+{
+  "exactContentMatches": 17,
+  "totalFiles": 23,
+  "frontendSourceInputsChecked": 119,
+  "canonicalSourceDifferences": 0,
+  "lineEndingOnlySourceDifferences": [
+    "src/app.html",
+    "src/lib/authMessages.ts",
+    "src/lib/instances/AuroraTransitionPanel.svelte",
+    "src/lib/instances/InstallConflicts.svelte",
+    "src/lib/instances/configurationChoices.test.ts",
+    "src/lib/instances/configurationChoices.ts",
+    "src/lib/instances/installedArtwork.ts",
+    "src/lib/instances/mods.test.ts",
+    "src/lib/instances/mods.ts",
+    "src/lib/instances/projectArtwork.test.ts",
+    "src/lib/instances/projectArtwork.ts",
+    "src/lib/launcher/accountManager.svelte.ts",
+    "src/lib/launcher/desktopIntegration.svelte.ts",
+    "src/lib/launcher/historyWidgets.test.ts",
+    "src/lib/launcher/home.ts",
+    "src/lib/launcher/homeHistory.test.ts",
+    "src/lib/launcher/homeHistory.ts",
+    "src/lib/launcher/performance.ts",
+    "src/lib/launcher/playerModel.test.ts",
+    "src/lib/launcher/playerPixels.test.ts",
+    "src/lib/launcher/playerPixels.ts",
+    "src/lib/launcher/startupReadiness.test.ts",
+    "src/lib/launcher/widgets/CapeSelectorWidget.svelte",
+    "src/lib/launcher/widgets/CapeThumbnail.svelte",
+    "src/lib/launcher/widgets/PlaytimeWidget.svelte",
+    "src/lib/launcher/widgets/SessionWidget.svelte",
+    "src/lib/pages/DeveloperPage.svelte",
+    "src/routes/+layout.svelte"
+  ],
+  "normalization": "SvelteKit build version/global identifier and consequent generated filenames only",
+  "generatedFiles": [
+    {
+      "baseline": "_app/immutable/chunks/BBCwZBDl.js",
+      "attribution": "_app/immutable/chunks/Bet--z_1.js",
+      "normalizedEqual": true
+    },
+    {
+      "baseline": "_app/immutable/entry/app.B3y4wv-o.js",
+      "attribution": "_app/immutable/entry/app.CMK9TmaA.js",
+      "normalizedEqual": true
+    },
+    {
+      "baseline": "_app/immutable/entry/start.Bta1ZRsF.js",
+      "attribution": "_app/immutable/entry/start.DL_FdLT5.js",
+      "normalizedEqual": true
+    },
+    {
+      "baseline": "_app/immutable/nodes/1.k02cVajN.js",
+      "attribution": "_app/immutable/nodes/1.C38Y0jsa.js",
+      "normalizedEqual": true
+    },
+    {
+      "baseline": "_app/version.json",
+      "attribution": "_app/version.json",
+      "normalizedEqual": true
+    },
+    {
+      "baseline": "index.html",
+      "attribution": "index.html",
+      "normalizedEqual": true
+    }
+  ]
+}

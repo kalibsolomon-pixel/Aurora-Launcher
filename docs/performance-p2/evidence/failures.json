@@ -1,0 +1,26 @@
+{
+  "successfulStarts": 15,
+  "primaryStarts": 12,
+  "failedPrimaryStarts": 0,
+  "excludedPrimaryStarts": 0,
+  "excludedPilotStarts": 1,
+  "featureOffControls": 2,
+  "pilotReason": "Predeclared observer and attribution pilot; not pooled with primary timing series.",
+  "setupCorrections": [
+    "Notebook VM evaluation did not bind functions in the persistent session; direct loading corrected this before any trial.",
+    "Different embedded bundle hashes were investigated: six generated files differ only in the build timestamp, global identifier and dependent chunk filenames; seventeen match byte-for-byte.",
+    "Exact frontend source hashes differed on twenty-eight checkout line endings; canonical source comparison found no application content change. Original files were not rewritten.",
+    "The metadata pattern initially matched a sensitive-identifier substring in the repository filename AccountIdentity.svelte; exact identifier boundaries corrected the false positive. Closed numeric trace checks were unchanged."
+  ],
+  "limits": [
+    "One healthy selected instance on one Windows host with warm caches and ordinary online services.",
+    "Remote response bytes, network latency, page-cache temperature and owner background activity were uncontrolled.",
+    "No audit-removal experiment; indirect disk, CPU or executor contention is not quantified.",
+    "No availability result payload or duplicate-render count is in numeric traces; failure consumption is established by source and a disposable-fixture corruption test.",
+    "Normal window close and trace completion were observed; application exit codes were not collected.",
+    "Feature-off controls have no operation counts because they emitted no trace.",
+    "No game launch, explicit update apply, installation, production optimization or live owner-content fault injection."
+  ],
+  "productionOptimizationImplemented": false,
+  "recommendedAuditRetention": true
+}

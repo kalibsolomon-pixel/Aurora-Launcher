@@ -1,0 +1,57 @@
+{
+  "frontend-check": {
+    "exitCode": 0,
+    "logSha256": "c1601b4bbc9304688d9a17bddf33e462cfa9b54e7d58e04d36608296180278ee",
+    "results": [
+      "svelte-check found 0 errors and 0 warnings"
+    ]
+  },
+  "frontend-test": {
+    "exitCode": 0,
+    "logSha256": "33b188d186bec05e77566c88f76880024127884f6b047a1b193c2f3f8e4d1bf4",
+    "results": [
+      "\u2139 pass 252",
+      "\u2139 fail 0"
+    ]
+  },
+  "frontend-build": {
+    "exitCode": 0,
+    "logSha256": "256df9cef01153a69fba52ecb4fe00f9a53d7db1049a940a85bfe7709aa11e4f",
+    "results": []
+  },
+  "rust-format": {
+    "exitCode": 0,
+    "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "results": []
+  },
+  "rust-check-ordinary": {
+    "exitCode": 0,
+    "logSha256": "794278e8da325ab4136628271c4987b81a8018a4b9466f4876ae5d1a7f247098",
+    "results": []
+  },
+  "rust-test-ordinary": {
+    "exitCode": 0,
+    "logSha256": "e43b34c96eb84974ff610a24787e3decd0ea9071cabeb0c9d80e1e83ddfeb499",
+    "results": [
+      "test result: ok. 842 passed; 0 failed; 29 ignored; 0 measured; 0 filtered out; finished in 54.37s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ]
+  },
+  "rust-check-research": {
+    "exitCode": 0,
+    "logSha256": "d8db6472990b31672e908537071a541d1ba6781b287ef3a34f62fccd8eed3e90",
+    "results": []
+  },
+  "rust-test-research": {
+    "exitCode": 0,
+    "logSha256": "29ba129341a994f16bd39b640d0f2bbd704471a75b82ff2f903ef19cfcaed51c",
+    "results": [
+      "test result: ok. 846 passed; 0 failed; 29 ignored; 0 measured; 0 filtered out; finished in 54.34s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ]
+  }
+}

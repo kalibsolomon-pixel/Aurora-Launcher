@@ -1,0 +1,12 @@
+{
+  "numericTracesValidated": 13,
+  "strictNegativeSchemaTests": 4,
+  "summaryByteReproducible": true,
+  "sanitizedMetadataPatternChecks": true,
+  "originalTrackedFilesPresent": 604,
+  "criticalFilesPresent": 12,
+  "trackedDeletions": 0,
+  "artifactBundlesRehashed": 3,
+  "canonicalFrontendSourceDifferences": 0,
+  "arbitraryTextSafetyClaim": false
+}
