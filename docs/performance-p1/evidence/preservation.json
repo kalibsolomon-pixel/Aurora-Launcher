@@ -1,0 +1,35 @@
+{
+  "checked": 42874,
+  "changed": 47,
+  "unexpected": 0,
+  "missing": 0,
+  "normalOperationalWrites": 44,
+  "protectedManagedChecked": 24193,
+  "protectedManagedChanged": 0,
+  "protectedKinds": {
+    "untracked": {
+      "checked": 15143,
+      "changed": 0
+    },
+    "managed": {
+      "checked": 27238,
+      "changed": 44
+    },
+    "installed": {
+      "checked": 1,
+      "changed": 0
+    }
+  },
+  "historicalProtectedFiles": 11821,
+  "historicalChangedOrMissing": 0,
+  "jnaNamedFilesChecked": 7,
+  "jnaTemporaryPairsChecked": 2,
+  "jnaChangedOrMissing": 0,
+  "originalTrackedFiles": 492,
+  "installedExecutableSha256": "15bfd5d71bbe73c9ad7f3010c052f3f1669d81abfa4790b8c48efb8b169fd868",
+  "operationalDomains": [
+    "EBWebView",
+    "cache/server-enrichment"
+  ],
+  "operationalWritesInvestigated": true
+}

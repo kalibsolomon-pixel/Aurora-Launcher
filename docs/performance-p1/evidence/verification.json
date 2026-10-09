@@ -1,0 +1,80 @@
+{
+  "checks": {
+    "frontend-check-corrected": {
+      "passed": true,
+      "logSha256": "15a4e9f0b63bcc30101b2fe2705ac7c4c1d9584e4b87ff96aac835268267d17b",
+      "results": [
+        "svelte-check found 0 errors and 0 warnings"
+      ]
+    },
+    "frontend-tests-corrected": {
+      "passed": true,
+      "logSha256": "63bf282670500c2cd7760b45a5e957a3554c65faba8499318d220284b9c8d1fc",
+      "results": [
+        "\u2139 tests 252",
+        "\u2139 pass 252",
+        "\u2139 fail 0"
+      ]
+    },
+    "rust-validation": {
+      "passed": true,
+      "logSha256": "60635ecbb7fca050bf7cffcb1ebac47ad74963153b680cfa91a0457d790ed215",
+      "results": [
+        "test result: ok. 841 passed; 0 failed; 29 ignored; 0 measured; 0 filtered out; finished in 54.45s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 845 passed; 0 failed; 29 ignored; 0 measured; 0 filtered out; finished in 54.37s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ]
+    },
+    "build-npm-ci": {
+      "passed": true,
+      "logSha256": "8f78b734fbb8c19ff3df028b2fb5f09ec576aecfbafa466a2a9698c188c29d79",
+      "results": []
+    },
+    "candidate-build": {
+      "passed": true,
+      "logSha256": "6d83b36d6fd4d3733fba2fd0dbf3e47c8a7ad4f42eb115f149572ee32f1fa331",
+      "results": [
+        "Finished `release` profile [optimized] target(s) in 4m 07s"
+      ]
+    },
+    "candidate-control-build": {
+      "passed": true,
+      "logSha256": "1f8c1e6b7bee9925f7642d24a156f7a493e8f139645202073a01df81d50480f8",
+      "results": [
+        "Finished `release` profile [optimized] target(s) in 4m 06s"
+      ]
+    },
+    "candidate-ipc-build": {
+      "passed": true,
+      "logSha256": "c3918a9ffed4afc9b06c847deca8640aa0cea7c7ffc95d40667061094e30af42",
+      "results": [
+        "Finished `release` profile [optimized] target(s) in 4m 09s"
+      ]
+    }
+  },
+  "newDeterministicTests": 23,
+  "rustFormatCheck": "passed",
+  "rustAllTargetsDefaultCheck": "passed",
+  "rustAllTargetsResearchCheck": "passed",
+  "rustDefaultTests": {
+    "passed": 841,
+    "ignored": 29,
+    "iconTestsPassed": 6
+  },
+  "rustResearchTests": {
+    "passed": 845,
+    "ignored": 29,
+    "iconTestsPassed": 6
+  },
+  "nativeSourceChanged": false,
+  "packagedControlStarts": 8,
+  "primaryStarts": 40,
+  "featureOffTraces": 0,
+  "gameLaunches": 0,
+  "existingWarnings": "Four Rust library warnings and deprecated STATIC_VCRUNTIME build warning; no new source warnings"
+}

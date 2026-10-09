@@ -1,0 +1,39 @@
+{
+  "candidateHead": "0d68340f0e280978f675c6f83330a10fb97bf678",
+  "nativeSourceChanges": [],
+  "postBuildCopies": {
+    "candidate": {
+      "sourceInputsChecked": 493,
+      "semanticDifferences": 0,
+      "canonicalLineEndingChecks": []
+    },
+    "candidate-control": {
+      "sourceInputsChecked": 493,
+      "semanticDifferences": 0,
+      "canonicalLineEndingChecks": []
+    },
+    "candidate-ipc": {
+      "sourceInputsChecked": 493,
+      "semanticDifferences": 0,
+      "canonicalLineEndingChecks": []
+    }
+  },
+  "criticalFiles": {
+    "README.md": true,
+    "AGENTS.md": true,
+    "ARCHITECTURE.md": true,
+    "package.json": true,
+    "package-lock.json": true,
+    "src-tauri/Cargo.toml": true,
+    "src-tauri/Cargo.lock": true,
+    "src-tauri/tauri.conf.json": true,
+    "src-tauri/build.rs": true
+  },
+  "trackedDeletions": [],
+  "lockfilesChanged": false,
+  "dependencyChanges": false,
+  "identifierChanged": false,
+  "authorityChanges": false,
+  "sourceSnapshotFileSha256": "4199c03cb8a168d83423a19162774e75d2f20499ff9d33ba553cff5405932a9b",
+  "sourceSnapshotSha256": "0ec6604331d22332c1d69de491e438575c3fdda636d5dd23d75b1dc39c182ee2"
+}

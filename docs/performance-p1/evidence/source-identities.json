@@ -1,0 +1,28 @@
+{
+  "head": "0d68340f0e280978f675c6f83330a10fb97bf678",
+  "sourceTree": "53d12b25bd1dfd3a1f0b75f8d5c5c18e675c749b",
+  "files": {
+    "AGENTS.md": "e9e1656365c9ff2768c83892450479aabd21ce4f54afa5efd0ccc7dea7c3a330",
+    "ARCHITECTURE.md": "93ae6cd8d6ac2cb89efc48edd9c8d225ffdac8a73fb5a605cd8d0f002a9faecf",
+    "PERFORMANCE_RESEARCH_P0.md": "3265602bf22bac38847a20f26d0b10827fa0105e76e0f46c0513af7d7490fdc2",
+    "PERFORMANCE_RESEARCH_P0_1.md": "eb15a92d7eb6665bbebe7aaf973f1287f774fde20aeca4ad9d02436d406635ce",
+    "PERFORMANCE_RESEARCH_P0_2.md": "b64254e85c412e1a019b5eea477edfaec610a7a0730e28cbc88d62281be146c1",
+    "docs/performance-p0-2/README.md": "b17a733bbe3cb6af359afc4f32b04e9ffdfcb3a7fc8ad594d29c353a3c12a23c",
+    "package.json": "b71f7e0a65c19ca92b668ebe28f0f3b15a2b04a6cb0802c385fffcea7cea22b9",
+    "package-lock.json": "b86f0aae61579fc922821869b351bf65ed7493411e9cf4330c9eb3b2a22f8443",
+    "src-tauri/Cargo.toml": "b3dca71b99d4152971ec4382596a065e1bb0ad764008935689ed37772d7f7372",
+    "src-tauri/Cargo.lock": "4c47697614c4587e879c19e3793a66624c77df9e709cf27520fc84f71ad8ee28",
+    "src-tauri/tauri.conf.json": "1d5f54e271e73fc25cd10eabd1b8bc58b50bd3c102896b3b320106c8e0ce37bf",
+    "vite.config.js": "ff64c375899326df8b8dc53b2d036a9fa0ab26bc03dba09775e8e669e1b1419b",
+    "svelte.config.js": "fadc69dca3da4956622f7450056da248d1d52ea3f119d6a706e06195b07d9a34"
+  },
+  "toolchains": {
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "nativeSourceChanges": [],
+  "authenticationRegistration": "Unchanged checked-in production registration; no environment override",
+  "updaterTrust": "Unchanged approved public key; no authority/endpoints/signatures changed"
+}

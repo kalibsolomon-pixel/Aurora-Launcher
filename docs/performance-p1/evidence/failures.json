@@ -1,0 +1,17 @@
+{
+  "primarySuccessful": 40,
+  "primaryFailed": 0,
+  "primaryExcluded": 0,
+  "finalPilotExcluded": 1,
+  "supersededStartsExcluded": 23,
+  "supersededSource": "f1e42c29531e88c37587058e3d4153c84d769567",
+  "supersededReason": "Object-identity comparison falsely invalidated an equivalent read-only state reload; candidate trial 7 had two readiness requests. All superseded starts retained separately.",
+  "observerSetupFailures": [
+    "Notebook vm binding did not replace old closure context",
+    "Eval import was unsupported",
+    "Old root binding reached an existing exclusive trial directory; no evidence overwritten"
+  ],
+  "finalPilotReason": "Observer attached about 43 seconds late after setup correction; excluded from timing acceptance",
+  "operationalWrites": "Normal WebView profile/cache/log and derived server-enrichment writes investigated; never claimed byte-preserved",
+  "playAcceptance": "Not run: existing JNA temporary-file preservation blocker. No Minecraft launched; no end-to-end Play claim."
+}

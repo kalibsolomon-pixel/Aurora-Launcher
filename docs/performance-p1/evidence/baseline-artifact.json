@@ -1,0 +1,125 @@
+{
+  "cohort": "baseline",
+  "sourceHead": "6cbabd38bc1c5268b9f6c80034f18da3a26f1e21",
+  "sourceStatus": " M src-tauri/Cargo.toml\n",
+  "executableSha256": "21cf2b08bfcd95af8a78e9ad33dabbb3a276b9a6543f06abb3ff78fbb82993e9",
+  "executableBytes": 19629568,
+  "frontendFiles": [
+    {
+      "path": "_app/immutable/assets/0.CXD6rOfz.css",
+      "bytes": 13967,
+      "sha256": "a636d31eab2e60b934b0b326462b610bb75f5a4b54d6c2ab356ed7d139a509ce"
+    },
+    {
+      "path": "_app/immutable/assets/2.DyahxsI8.css",
+      "bytes": 79457,
+      "sha256": "1ee2f1a47786f6681379f74e3f5d91f9a88d0e98e27d1c2892f9b8e03e420287"
+    },
+    {
+      "path": "_app/immutable/chunks/Bjy-W4x2.js",
+      "bytes": 1365,
+      "sha256": "f07424758318dd6b5f32b0fe8de9d2ffb8d97a17c841758626d18ba0faa0456a"
+    },
+    {
+      "path": "_app/immutable/chunks/BKnwzu3A.js",
+      "bytes": 1138,
+      "sha256": "bbe515bea10f3c961daeab0862382b0bf08fd641926954b4b8182eb9115986e2"
+    },
+    {
+      "path": "_app/immutable/chunks/ByfK1f-y.js",
+      "bytes": 51388,
+      "sha256": "c571f76f631d7e6f923228c3c8955937130fa824a3ffa34bb85b0be791be7b4d"
+    },
+    {
+      "path": "_app/immutable/chunks/CzW8Gfx6.js",
+      "bytes": 28384,
+      "sha256": "955c53e14f77b045963ba104c902f41d6923da37dd211395c4211774e1812250"
+    },
+    {
+      "path": "_app/immutable/chunks/DpJQGib6.js",
+      "bytes": 19552,
+      "sha256": "6a4fe633cddf0783240f81ac904a29d4dc2fa8fe7060dcf4477895f8c9fee46e"
+    },
+    {
+      "path": "_app/immutable/chunks/uBIymjUX.js",
+      "bytes": 1233,
+      "sha256": "e1a22f3f73566f21ff932e058d32243e4a118f3491b91e96893aa5ab7eb49a00"
+    },
+    {
+      "path": "_app/immutable/chunks/xihTtKlq.js",
+      "bytes": 65,
+      "sha256": "0214edcff77242079f540507a53803aa22d857b6ad673e60e39748b6c7aa08c1"
+    },
+    {
+      "path": "_app/immutable/chunks/Y_FxbOuO.js",
+      "bytes": 1822,
+      "sha256": "75a4155416c4d3816d0b32e4d3ae340c6dfb51198056e2310cd68c71dd41b6a4"
+    },
+    {
+      "path": "_app/immutable/entry/app.xoFJXM7l.js",
+      "bytes": 2959,
+      "sha256": "33ed19c04733ededafd3c76b34610aaabb733eaf163beaaffc8f440be98f322a"
+    },
+    {
+      "path": "_app/immutable/entry/start.w1aGFNHf.js",
+      "bytes": 77,
+      "sha256": "9e7bb2c803ec933d0781d7805abdfe98e03ac1bc66d33683175ce8322f363757"
+    },
+    {
+      "path": "_app/immutable/nodes/0.BNn1XvFs.js",
+      "bytes": 853,
+      "sha256": "70669dffb85e91a85cd0bbf416f0b4fffbc05e9046d1db7bb5e5e150d2e59629"
+    },
+    {
+      "path": "_app/immutable/nodes/1.BsYJEFXP.js",
+      "bytes": 578,
+      "sha256": "387a0ad16773b82c5873afe427214de7f6cd329c6cc9b02d9fd3afec17c62be7"
+    },
+    {
+      "path": "_app/immutable/nodes/2.VCgVa33B.js",
+      "bytes": 289877,
+      "sha256": "ca17fe1ec7d15b3bff4a81fe6b5701f0acb9c3fb87fcbf76e0f58363ceb200fc"
+    },
+    {
+      "path": "_app/version.json",
+      "bytes": 27,
+      "sha256": "1a05dcf1d8415f092586757ef91bfd65994eb6bf3b933516adb10ca29d3e04f3"
+    },
+    {
+      "path": "aurora-app-icon.png",
+      "bytes": 150425,
+      "sha256": "c77d23d256b9bf326b72e4c36c342e688e6477847385018c85c0633a31e60f31"
+    },
+    {
+      "path": "aurora-icon.png",
+      "bytes": 1083860,
+      "sha256": "faba1af24b964cfd085505c63e9e43d7abedebd70d70794e841a3251d0fa5a19"
+    },
+    {
+      "path": "backgrounds/borealis-loop.mp4",
+      "bytes": 6372600,
+      "sha256": "cb9a88c8a7dac6ca9c46ff5e296759f308013064c6969c75234e9e23d0145deb"
+    },
+    {
+      "path": "backgrounds/borealis.webp",
+      "bytes": 92030,
+      "sha256": "45f4911aff457c5288625b1526f30ff536ea267ae27f958d36324a50711001a9"
+    },
+    {
+      "path": "backgrounds/README.md",
+      "bytes": 4250,
+      "sha256": "37acb0a200db7069eb008c8612f7e810b1058feeb88c1e86e257b3ef654a1e69"
+    },
+    {
+      "path": "favicon.png",
+      "bytes": 13237,
+      "sha256": "8e75257cc872c7df2078597f05a403b990f10b7b4b5f139015623fa74b0fee98"
+    },
+    {
+      "path": "index.html",
+      "bytes": 1783,
+      "sha256": "12c6c1179fc7779204b8b6aed0b9a3e5634aad5f6b3a0fcc92c181e871931668"
+    }
+  ],
+  "frontendTreeSha256": "6fa20eb305f8a20bb403951c18d0264e834e2c6ffe3fada54d13a7d3b43ebaf2"
+}

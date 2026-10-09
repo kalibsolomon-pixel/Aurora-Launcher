@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-09",
+  "timezone": "America/New_York",
+  "cpu": "Intel(R) Core(TM) i7-14700F",
+  "physicalCores": 20,
+  "logicalProcessors": 28,
+  "os": "Microsoft Windows 11 Home",
+  "osBuild": "10.0.26300",
+  "gpu": "AMD Radeon RX 9070 XT",
+  "driverVersion": "32.0.31041.1004",
+  "powerScheme": "Power Scheme GUID: 16cccdeb-b6f7-4a6b-9337-2ffb6adebbee  (Ultimate Performance)",
+  "conditions": [
+    "Same-user as-is; no data-root, account, credential or browser-profile isolation claimed",
+    "Existing selected instance/account/content/settings retained",
+    "Warm ordinary caches and online network; no cache purge/reboot/power changes",
+    "Primary trials begin only after all build/test/hash activity ends",
+    "Normal window activation; 60ms polling; >=8 seconds observation and one-second Ready hold",
+    "No competing Launcher/Java before each start; no Minecraft game launched",
+    "Owner background activity remains uncontrolled"
+  ],
+  "baselineSource": "6cbabd38bc1c5268b9f6c80034f18da3a26f1e21",
+  "candidateSource": "0d68340f0e280978f675c6f83330a10fb97bf678"
+}
