@@ -1,0 +1,334 @@
+[
+  {
+    "run": "native-online",
+    "instance": "instance-1",
+    "stage": "complete-instance",
+    "firstObservedMs": 848.7733,
+    "nRepeated": 20,
+    "p50Ms": 1249.93405,
+    "p95Ms": 1296.1723,
+    "worstMs": 1390.2269000000001,
+    "minMs": 815.7004,
+    "sampleStdDevMs": 114.43182982004188,
+    "sampleVarianceMs2": 13094.643675963027,
+    "facts": {
+      "problems": 0,
+      "status": "ready"
+    }
+  },
+  {
+    "run": "native-online",
+    "instance": "instance-1",
+    "stage": "game-integrity",
+    "firstObservedMs": 629.0352,
+    "nRepeated": 20,
+    "p50Ms": 977.1868,
+    "p95Ms": 1053.56,
+    "worstMs": 1056.5924,
+    "minMs": 637.126,
+    "sampleStdDevMs": 91.35116952542678,
+    "sampleVarianceMs2": 8345.036173663264,
+    "facts": {
+      "bytes": 556755619,
+      "files": 4677,
+      "problems": 0,
+      "valid": true
+    }
+  },
+  {
+    "run": "native-online",
+    "instance": "instance-1",
+    "stage": "launch-plan-resolution-including-integrity",
+    "firstObservedMs": 2062.1307,
+    "nRepeated": 4,
+    "p50Ms": 1209.2717499999999,
+    "p95Ms": null,
+    "worstMs": 1379.3914,
+    "minMs": 1096.638,
+    "sampleStdDevMs": 145.63651043966448,
+    "sampleVarianceMs2": 21209.9931730425,
+    "facts": {
+      "ok": true
+    }
+  },
+  {
+    "run": "native-online",
+    "instance": "instance-1",
+    "stage": "mods-scan",
+    "firstObservedMs": 185.26690000000002,
+    "nRepeated": 20,
+    "p50Ms": 272.69624999999996,
+    "p95Ms": 297.40549999999996,
+    "worstMs": 301.0018,
+    "minMs": 198.4531,
+    "sampleStdDevMs": 29.137824580023302,
+    "sampleVarianceMs2": 849.0128212562101,
+    "facts": {
+      "bytes": 33201203,
+      "entries": 31,
+      "missing": 0
+    }
+  },
+  {
+    "run": "native-online",
+    "instance": "instance-1",
+    "stage": "resourcepacks-scan",
+    "firstObservedMs": 25.761300000000002,
+    "nRepeated": 20,
+    "p50Ms": 44.52315,
+    "p95Ms": 47.404,
+    "worstMs": 48.7293,
+    "minMs": 24.610500000000002,
+    "sampleStdDevMs": 7.247134240286766,
+    "sampleVarianceMs2": 52.52095469673683,
+    "facts": {
+      "entries": 3,
+      "missing": 0
+    }
+  },
+  {
+    "run": "native-online",
+    "instance": "instance-1",
+    "stage": "runtime-integrity-no-java-diagnostic",
+    "firstObservedMs": 115.1581,
+    "nRepeated": 4,
+    "p50Ms": 130.04595,
+    "p95Ms": null,
+    "worstMs": 169.52210000000002,
+    "minMs": 105.2103,
+    "sampleStdDevMs": 31.475577892113446,
+    "sampleVarianceMs2": 990.7120036425006,
+    "facts": {
+      "bytes": 99041788,
+      "files": 402,
+      "status": "ready"
+    }
+  },
+  {
+    "run": "native-online",
+    "instance": "instance-1",
+    "stage": "shaders-scan",
+    "firstObservedMs": 4.4116,
+    "nRepeated": 20,
+    "p50Ms": 7.6861,
+    "p95Ms": 8.7713,
+    "worstMs": 9.2969,
+    "minMs": 4.1831000000000005,
+    "sampleStdDevMs": 1.187190411766147,
+    "sampleVarianceMs2": 1.4094210737894737,
+    "facts": {
+      "entries": 1,
+      "missing": 0
+    }
+  },
+  {
+    "run": "native-online",
+    "instance": "shared",
+    "stage": "artwork-disk-decode-batch",
+    "firstObservedMs": 25.376099999999997,
+    "nRepeated": 20,
+    "p50Ms": 40.813050000000004,
+    "p95Ms": 44.7179,
+    "worstMs": 45.8016,
+    "minMs": 22.5273,
+    "sampleStdDevMs": 9.157995218680146,
+    "sampleVarianceMs2": 83.86887642536841,
+    "facts": {
+      "available": 42,
+      "objects": 42
+    }
+  },
+  {
+    "run": "native-small",
+    "instance": "instance-1",
+    "stage": "complete-instance",
+    "firstObservedMs": 457.0364,
+    "nRepeated": 20,
+    "p50Ms": 657.08645,
+    "p95Ms": 728.2818,
+    "worstMs": 732.7086,
+    "minMs": 504.41089999999997,
+    "sampleStdDevMs": 64.61652896464692,
+    "sampleVarianceMs2": 4175.2958154390535,
+    "facts": {
+      "problems": 0,
+      "status": "ready"
+    }
+  },
+  {
+    "run": "native-small",
+    "instance": "instance-1",
+    "stage": "game-integrity",
+    "firstObservedMs": 517.9631999999999,
+    "nRepeated": 20,
+    "p50Ms": 624.6363,
+    "p95Ms": 698.6084000000001,
+    "worstMs": 706.313,
+    "minMs": 442.32890000000003,
+    "sampleStdDevMs": 61.44688342304035,
+    "sampleVarianceMs2": 3775.71948240471,
+    "facts": {
+      "bytes": 556755619,
+      "files": 4677,
+      "problems": 0,
+      "valid": true
+    }
+  },
+  {
+    "run": "native-small",
+    "instance": "instance-1",
+    "stage": "mods-scan",
+    "firstObservedMs": 31.1785,
+    "nRepeated": 20,
+    "p50Ms": 45.3339,
+    "p95Ms": 51.981399999999994,
+    "worstMs": 55.4077,
+    "minMs": 30.0008,
+    "sampleStdDevMs": 6.218736400357517,
+    "sampleVarianceMs2": 38.67268241713157,
+    "facts": {
+      "bytes": 5503416,
+      "entries": 2,
+      "missing": 0
+    }
+  },
+  {
+    "run": "native-small",
+    "instance": "instance-1",
+    "stage": "resourcepacks-scan",
+    "firstObservedMs": 0.7236,
+    "nRepeated": 20,
+    "p50Ms": 1.0791,
+    "p95Ms": 1.2927,
+    "worstMs": 1.2941,
+    "minMs": 0.46099999999999997,
+    "sampleStdDevMs": 0.22557854484577394,
+    "sampleVarianceMs2": 0.05088567989473684,
+    "facts": {
+      "entries": 0,
+      "missing": 0
+    }
+  },
+  {
+    "run": "native-small",
+    "instance": "instance-1",
+    "stage": "shaders-scan",
+    "firstObservedMs": 0.5589,
+    "nRepeated": 20,
+    "p50Ms": 0.92055,
+    "p95Ms": 1.25,
+    "worstMs": 1.2830000000000001,
+    "minMs": 0.4107,
+    "sampleStdDevMs": 0.2240229967048731,
+    "sampleVarianceMs2": 0.05018630305263159,
+    "facts": {
+      "entries": 0,
+      "missing": 0
+    }
+  },
+  {
+    "run": "native-typical",
+    "instance": "instance-1",
+    "stage": "complete-instance",
+    "firstObservedMs": 887.1463000000001,
+    "nRepeated": 20,
+    "p50Ms": 1328.86905,
+    "p95Ms": 1409.0366999999999,
+    "worstMs": 1438.5802999999999,
+    "minMs": 979.5807,
+    "sampleStdDevMs": 89.12132770930872,
+    "sampleVarianceMs2": 7942.611052669997,
+    "facts": {
+      "problems": 0,
+      "status": "ready"
+    }
+  },
+  {
+    "run": "native-typical",
+    "instance": "instance-1",
+    "stage": "game-integrity",
+    "firstObservedMs": 694.2402,
+    "nRepeated": 20,
+    "p50Ms": 1060.6043,
+    "p95Ms": 1091.6052,
+    "worstMs": 1092.0312000000001,
+    "minMs": 642.3626,
+    "sampleStdDevMs": 94.76333778170753,
+    "sampleVarianceMs2": 8980.090187529999,
+    "facts": {
+      "bytes": 556755619,
+      "files": 4677,
+      "problems": 0,
+      "valid": true
+    }
+  },
+  {
+    "run": "native-typical",
+    "instance": "instance-1",
+    "stage": "mods-scan",
+    "firstObservedMs": 188.6127,
+    "nRepeated": 20,
+    "p50Ms": 301.2445,
+    "p95Ms": 316.88640000000004,
+    "worstMs": 336.1447,
+    "minMs": 277.9677,
+    "sampleStdDevMs": 12.337583209932173,
+    "sampleVarianceMs2": 152.21595946200026,
+    "facts": {
+      "bytes": 33201203,
+      "entries": 31,
+      "missing": 0
+    }
+  },
+  {
+    "run": "native-typical",
+    "instance": "instance-1",
+    "stage": "resourcepacks-scan",
+    "firstObservedMs": 30.9649,
+    "nRepeated": 20,
+    "p50Ms": 46.5262,
+    "p95Ms": 49.603500000000004,
+    "worstMs": 50.803000000000004,
+    "minMs": 26.6051,
+    "sampleStdDevMs": 5.06435759333122,
+    "sampleVarianceMs2": 25.647717833131583,
+    "facts": {
+      "entries": 3,
+      "missing": 0
+    }
+  },
+  {
+    "run": "native-typical",
+    "instance": "instance-1",
+    "stage": "shaders-scan",
+    "firstObservedMs": 4.8679,
+    "nRepeated": 20,
+    "p50Ms": 8.1296,
+    "p95Ms": 9.1693,
+    "worstMs": 9.965,
+    "minMs": 4.3583,
+    "sampleStdDevMs": 1.4008093251947715,
+    "sampleVarianceMs2": 1.9622667655526314,
+    "facts": {
+      "entries": 1,
+      "missing": 0
+    }
+  },
+  {
+    "run": "native-typical",
+    "instance": "shared",
+    "stage": "artwork-disk-decode-batch",
+    "firstObservedMs": 49.7152,
+    "nRepeated": 20,
+    "p50Ms": 46.4479,
+    "p95Ms": 48.6028,
+    "worstMs": 49.321999999999996,
+    "minMs": 42.8099,
+    "sampleStdDevMs": 1.965185683312071,
+    "sampleVarianceMs2": 3.8619547698947323,
+    "facts": {
+      "available": 42,
+      "objects": 42
+    }
+  }
+]

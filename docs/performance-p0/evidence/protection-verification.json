@@ -1,0 +1,19 @@
+[
+  {
+    "repository": "launcher",
+    "checkedFiles": 15539,
+    "changedOrMissing": [],
+    "trackedRemoved": []
+  },
+  {
+    "repository": "client",
+    "checkedFiles": 426,
+    "changedOrMissing": [],
+    "trackedRemoved": []
+  },
+  {
+    "repository": "managed-content",
+    "checkedFiles": 11820,
+    "changedOrMissing": []
+  }
+]
