@@ -723,56 +723,59 @@ async fn fetch_document(
     context: &str,
     options: &DownloadOptions,
 ) -> Result<Vec<u8>, MetadataError> {
-    let client = downloads::build_client(options);
-    let response = client
-        .get(url.clone())
-        .send()
-        .await
-        .map_err(|error| MetadataError::Network(DownloadError::from_transport(error)))?;
+    crate::performance::measure(crate::performance::Event::MojangMetadataHttp, async {
+        let client = downloads::build_client(options);
+        let response = client
+            .get(url.clone())
+            .send()
+            .await
+            .map_err(|error| MetadataError::Network(DownloadError::from_transport(error)))?;
 
-    let status = response.status();
-    if !status.is_success() {
-        return Err(MetadataError::Network(DownloadError::HttpStatus {
-            status: status.as_u16(),
-        }));
-    }
+        let status = response.status();
+        if !status.is_success() {
+            return Err(MetadataError::Network(DownloadError::HttpStatus {
+                status: status.as_u16(),
+            }));
+        }
 
-    if response
-        .content_length()
-        .is_some_and(|declared| declared as usize > MAX_METADATA_DOCUMENT_BYTES)
-    {
-        return Err(MetadataError::ResponseTooLarge {
-            limit_bytes: MAX_METADATA_DOCUMENT_BYTES,
-        });
-    }
-
-    let mut document = Vec::new();
-    let mut response = response;
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|error| MetadataError::Network(DownloadError::from_transport(error)))?
-    {
-        if document.len() + chunk.len() > MAX_METADATA_DOCUMENT_BYTES {
+        if response
+            .content_length()
+            .is_some_and(|declared| declared as usize > MAX_METADATA_DOCUMENT_BYTES)
+        {
             return Err(MetadataError::ResponseTooLarge {
                 limit_bytes: MAX_METADATA_DOCUMENT_BYTES,
             });
         }
-        document.extend_from_slice(&chunk);
-    }
 
-    if let Some(expected) = expected_sha1 {
-        let actual = Sha1Digest::compute(&document);
-        if actual != expected {
-            return Err(MetadataError::Integrity {
-                context: format!("Minecraft version document '{context}'"),
-                expected: expected.as_hex(),
-                actual: actual.as_hex(),
-            });
+        let mut document = Vec::new();
+        let mut response = response;
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|error| MetadataError::Network(DownloadError::from_transport(error)))?
+        {
+            if document.len() + chunk.len() > MAX_METADATA_DOCUMENT_BYTES {
+                return Err(MetadataError::ResponseTooLarge {
+                    limit_bytes: MAX_METADATA_DOCUMENT_BYTES,
+                });
+            }
+            document.extend_from_slice(&chunk);
         }
-    }
 
-    Ok(document)
+        if let Some(expected) = expected_sha1 {
+            let actual = Sha1Digest::compute(&document);
+            if actual != expected {
+                return Err(MetadataError::Integrity {
+                    context: format!("Minecraft version document '{context}'"),
+                    expected: expected.as_hex(),
+                    actual: actual.as_hex(),
+                });
+            }
+        }
+
+        Ok(document)
+    })
+    .await
 }
 
 /// Decodes fetched bytes as document text.

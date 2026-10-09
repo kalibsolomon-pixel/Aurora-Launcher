@@ -33,6 +33,7 @@ pub mod pack_activation;
 pub mod pack_state;
 pub mod pack_update;
 pub mod paths;
+mod performance;
 pub mod runtime;
 pub mod server_enrichment;
 pub mod shortcuts;
@@ -44,6 +45,7 @@ mod test_support;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let initialization = performance::scope(performance::Event::Initialization);
     eprintln!("[aurora-launcher] starting native backend");
 
     use tauri::Manager;
@@ -72,6 +74,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            performance::performance_mark,
+            performance::performance_readiness,
+            performance::performance_runtime_status,
+            performance::performance_play,
             application::get_application_status,
             application::get_launcher_state,
             application::get_home_widgets,
@@ -183,9 +189,13 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("failed to run Aurora Launcher");
+    drop(initialization);
     app.run(|_, event| {
         if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
             tauri::async_runtime::block_on(crate::discord::shutdown());
+        }
+        if matches!(event, tauri::RunEvent::Exit) {
+            performance::flush();
         }
     });
 }

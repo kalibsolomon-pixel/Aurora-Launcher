@@ -209,6 +209,7 @@ struct NestedJarDeclaration {
 
 /// Reads the authoritative local inventory for one validated instance.
 pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventory, ModError> {
+    let _performance = crate::performance::scope(crate::performance::Event::ModInventory);
     let mods = validate_mods_directory(managed, instance)?;
     let managed_file = managed_artifact_file_name(managed, instance)?;
     // The loader family owns the metadata format read from mod jars.
@@ -2318,6 +2319,7 @@ fn opaque_id(material: &[u8]) -> String {
 }
 
 fn file_digest(path: &Path) -> Result<String, std::io::Error> {
+    let _performance_hash = crate::performance::hash();
     let mut input = std::fs::File::open(path)?;
     let mut hash = sha2::Sha256::new();
     let mut buffer = [0u8; 64 * 1024];

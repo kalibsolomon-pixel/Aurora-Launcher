@@ -283,84 +283,87 @@ pub async fn ensure_session(
     account_id: &str,
     progress: &mut (dyn FnMut(AuthPhase) + Send),
 ) -> Result<Arc<MinecraftSession>, AuthError> {
-    accounts::AccountId::validate(account_id)?;
+    crate::performance::measure(crate::performance::Event::SessionExchange, async {
+        accounts::AccountId::validate(account_id)?;
 
-    // Play, account checks and cosmetic profile requests share restoration.
-    // Serialize refresh redemption, then recheck the cache inside the gate.
-    let _restoration = session_restoration_guard().await;
+        // Play, account checks and cosmetic profile requests share restoration.
+        // Serialize refresh redemption, then recheck the cache inside the gate.
+        let _restoration = session_restoration_guard().await;
 
-    if let Some(cached) = SessionCache::usable(account_id) {
-        return Ok(cached);
-    }
+        if let Some(cached) = SessionCache::usable(account_id) {
+            return Ok(cached);
+        }
 
-    progress(AuthPhase::RestoringSession);
-    let document = accounts::load(context.accounts_path)?;
-    if document.find(account_id).is_none() {
-        return Err(AuthError::AccountNotFound {
-            account_id: account_id.to_owned(),
-        });
-    }
-
-    let credential = context.credentials.load(account_id)?;
-    let Some(credential) = credential else {
-        return Err(AuthError::ReauthenticationRequired {
-            reason: "no stored Microsoft credential remains".to_owned(),
-        });
-    };
-    if credential.client_id() != context.oauth.client_id() {
-        return Err(AuthError::ReauthenticationRequired {
-            reason: "the stored credential belongs to a different application registration"
-                .to_owned(),
-        });
-    }
-
-    progress(AuthPhase::ExchangingMicrosoftToken);
-    let tokens = match metadata::request_microsoft_token(
-        context.endpoints,
-        context.oauth.client_id(),
-        TokenGrant::RefreshToken {
-            refresh_token: credential.refresh_token(),
-        },
-    )
-    .await
-    {
-        Ok(tokens) => tokens,
-        Err(metadata::TokenExchangeError::Rejected(rejection))
-            if rejection.error == "invalid_grant" =>
-        {
-            // The credential is provably dead (revoked or expired beyond
-            // redemption). Remove it; the account record remains so the
-            // user sees reauthentication-required rather than a vanished
-            // account.
-            context.credentials.delete(account_id)?;
-            return Err(AuthError::ReauthenticationRequired {
-                reason: "the stored Microsoft credential is no longer valid".to_owned(),
+        progress(AuthPhase::RestoringSession);
+        let document = accounts::load(context.accounts_path)?;
+        if document.find(account_id).is_none() {
+            return Err(AuthError::AccountNotFound {
+                account_id: account_id.to_owned(),
             });
         }
-        Err(other) => return Err(other.into()),
-    };
 
-    // Persist the rotated refresh credential immediately.
-    context.credentials.save(
-        account_id,
-        &PersistedCredential::new(context.oauth.client_id(), tokens.refresh_token.clone()),
-    )?;
+        let credential = context.credentials.load(account_id)?;
+        let Some(credential) = credential else {
+            return Err(AuthError::ReauthenticationRequired {
+                reason: "no stored Microsoft credential remains".to_owned(),
+            });
+        };
+        if credential.client_id() != context.oauth.client_id() {
+            return Err(AuthError::ReauthenticationRequired {
+                reason: "the stored credential belongs to a different application registration"
+                    .to_owned(),
+            });
+        }
 
-    let session = downstream_chain(context, &tokens.access_token, progress).await?;
+        progress(AuthPhase::ExchangingMicrosoftToken);
+        let tokens = match metadata::request_microsoft_token(
+            context.endpoints,
+            context.oauth.client_id(),
+            TokenGrant::RefreshToken {
+                refresh_token: credential.refresh_token(),
+            },
+        )
+        .await
+        {
+            Ok(tokens) => tokens,
+            Err(metadata::TokenExchangeError::Rejected(rejection))
+                if rejection.error == "invalid_grant" =>
+            {
+                // The credential is provably dead (revoked or expired beyond
+                // redemption). Remove it; the account record remains so the
+                // user sees reauthentication-required rather than a vanished
+                // account.
+                context.credentials.delete(account_id)?;
+                return Err(AuthError::ReauthenticationRequired {
+                    reason: "the stored Microsoft credential is no longer valid".to_owned(),
+                });
+            }
+            Err(other) => return Err(other.into()),
+        };
 
-    if session.profile().uuid() != account_id {
-        // The credential now resolves to a different Minecraft account —
-        // inconsistent state; remove the credential and demand a fresh sign-in.
-        context.credentials.delete(account_id)?;
-        return Err(AuthError::ReauthenticationRequired {
-            reason: "the stored credential now resolves to a different Minecraft account"
-                .to_owned(),
-        });
-    }
+        // Persist the rotated refresh credential immediately.
+        context.credentials.save(
+            account_id,
+            &PersistedCredential::new(context.oauth.client_id(), tokens.refresh_token.clone()),
+        )?;
 
-    update_record_name_if_changed(context.accounts_path, account_id, session.profile().name())?;
+        let session = downstream_chain(context, &tokens.access_token, progress).await?;
 
-    Ok(SessionCache::put(session))
+        if session.profile().uuid() != account_id {
+            // The credential now resolves to a different Minecraft account —
+            // inconsistent state; remove the credential and demand a fresh sign-in.
+            context.credentials.delete(account_id)?;
+            return Err(AuthError::ReauthenticationRequired {
+                reason: "the stored credential now resolves to a different Minecraft account"
+                    .to_owned(),
+            });
+        }
+
+        update_record_name_if_changed(context.accounts_path, account_id, session.profile().name())?;
+
+        Ok(SessionCache::put(session))
+    })
+    .await
 }
 
 // ---------------------------------------------------------------------------
@@ -370,11 +373,14 @@ pub async fn ensure_session(
 /// The command boundary also takes this gate before local account removal,
 /// so an in-flight cosmetic restoration cannot recreate a removed credential.
 pub(crate) async fn session_restoration_guard() -> tokio::sync::MutexGuard<'static, ()> {
-    static RESTORATION: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
-    RESTORATION
-        .get_or_init(|| tokio::sync::Mutex::new(()))
-        .lock()
-        .await
+    crate::performance::measure(crate::performance::Event::SessionLockWait, async {
+        static RESTORATION: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+        RESTORATION
+            .get_or_init(|| tokio::sync::Mutex::new(()))
+            .lock()
+            .await
+    })
+    .await
 }
 
 /// Removes one account from Aurora: deletes the persisted credential,

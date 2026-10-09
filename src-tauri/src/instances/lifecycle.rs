@@ -1138,58 +1138,64 @@ pub(crate) async fn resolve_record_game_plan(
     record: &InstanceRecord,
     release: Option<&crate::distribution::AuroraRelease>,
 ) -> Result<crate::fabric::plan::GameInstallPlan, InstanceError> {
-    let installed = record.installed();
-    let game_version =
-        crate::minecraft::metadata::MinecraftVersionId::new(&installed.minecraft_version)
+    crate::performance::measure(crate::performance::Event::GameMetadata, async {
+        let installed = record.installed();
+        let game_version =
+            crate::minecraft::metadata::MinecraftVersionId::new(&installed.minecraft_version)
+                .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+        if installed.platform == (super::platform::PlatformPin::Vanilla {}) {
+            let minecraft = crate::minecraft::resolve_install_plan(
+                &endpoints.minecraft,
+                &game_version,
+                PlatformProfile::current().map_err(InstanceError::Platform)?,
+                endpoints.install.download_options(),
+            )
+            .await
             .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-    if installed.platform == (super::platform::PlatformPin::Vanilla {}) {
-        let minecraft = crate::minecraft::resolve_install_plan(
-            &endpoints.minecraft,
-            &game_version,
-            PlatformProfile::current().map_err(InstanceError::Platform)?,
-            endpoints.install.download_options(),
+            return Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft));
+        }
+        if let super::platform::PlatformPin::NeoForge { version } = &installed.platform {
+            let loader_version = crate::neoforge::metadata::NeoForgeVersionId::new(version)
+                .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+            let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
+            return crate::neoforge::resolve_neoforge_game_plan(
+                managed,
+                &endpoints.minecraft,
+                endpoints.neoforge(),
+                &game_version,
+                &loader_version,
+                platform,
+                endpoints.install.download_options(),
+            )
+            .await
+            .map_err(InstanceError::NeoForgeResolution);
+        }
+        let loader_version = crate::fabric::metadata::LoaderVersionId::new(
+            installed
+                .platform
+                .require_fabric()
+                .map_err(InstanceError::ReleaseInvalid)?,
         )
-        .await
         .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-        return Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft));
-    }
-    if let super::platform::PlatformPin::NeoForge { version } = &installed.platform {
-        let loader_version = crate::neoforge::metadata::NeoForgeVersionId::new(version)
-            .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
         let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
-        return crate::neoforge::resolve_neoforge_game_plan(
-            managed,
+        let plan = crate::fabric::resolve_game_plan(
             &endpoints.minecraft,
-            endpoints.neoforge(),
+            &endpoints.fabric,
             &game_version,
             &loader_version,
             platform,
             endpoints.install.download_options(),
         )
-        .await
-        .map_err(InstanceError::NeoForgeResolution);
-    }
-    let loader_version = crate::fabric::metadata::LoaderVersionId::new(
-        installed
-            .platform
-            .require_fabric()
-            .map_err(InstanceError::ReleaseInvalid)?,
-    )
-    .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-    let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
-    let plan = crate::fabric::resolve_game_plan(
-        &endpoints.minecraft,
-        &endpoints.fabric,
-        &game_version,
-        &loader_version,
-        platform,
-        endpoints.install.download_options(),
-    )
-    .await?;
-    if let Some(release) = release {
-        validate_release_java_major(release.java().major_version(), plan.java().major_version())?;
-    }
-    Ok(plan)
+        .await?;
+        if let Some(release) = release {
+            validate_release_java_major(
+                release.java().major_version(),
+                plan.java().major_version(),
+            )?;
+        }
+        Ok(plan)
+    })
+    .await
 }
 
 fn validate_release_java_major(

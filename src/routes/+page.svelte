@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { ipcSeries } from "$lib/launcher/performance";
   import { launcher } from "$lib/launcher/store.svelte";
   import { updates } from "$lib/launcher/updates.svelte";
   import { navigation } from "$lib/launcher/navigation.svelte";
@@ -27,6 +28,7 @@
 
   onMount(() => {
     launcher.initialize();
+    ipcSeries();
     void updates.initialize();
     return () => {
       launcher.dispose();

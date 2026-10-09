@@ -259,7 +259,11 @@ pub(crate) fn spawn_supervised_with_bridge(
         redactions.push(bridge.redaction());
     }
 
-    let mut child = match command.spawn() {
+    let spawned = {
+        let _performance = crate::performance::scope(crate::performance::Event::JavaSpawn);
+        command.spawn()
+    };
+    let mut child = match spawned {
         Ok(child) => child,
         Err(error) => {
             return fail_before_spawn(

@@ -750,6 +750,7 @@ pub fn validate_installed_game(
     managed: &ManagedPaths,
     instance: &InstanceId,
 ) -> Result<ValidationOutcome, InstallError> {
+    let _performance = crate::performance::scope(crate::performance::Event::GameIntegrity);
     let game_directory = managed.instance_paths(instance).game().to_path_buf();
     if !game_directory.is_dir() {
         return Ok(ValidationOutcome::NotInstalled);

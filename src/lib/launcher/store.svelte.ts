@@ -1,3 +1,4 @@
+import { mark } from "./performance";
 import { listen } from "@tauri-apps/api/event";
 import {
   acquireArtifact,
@@ -218,6 +219,7 @@ class LauncherStore {
   initialize(): void {
     if (this.initialized) return;
     this.initialized = true;
+    mark("initialize");
 
     void this.loadInitialStatus();
     void this.subscribeToEvents();
@@ -345,6 +347,8 @@ class LauncherStore {
       );
       if (serial === this.readinessSerial && this.launcherState?.config.selectedInstanceId === instanceId && (this.accountsState?.selectedAccountId ?? null) === accountId) {
         this.playReadiness = decision;
+      } else {
+        mark("readinessDiscarded");
       }
     } catch (cause: unknown) {
       if (serial === this.readinessSerial) {

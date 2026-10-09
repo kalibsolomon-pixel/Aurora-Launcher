@@ -72,7 +72,11 @@ impl LaunchSnapshot {
         spawn: impl FnOnce(&InstalledGameManifest) -> Result<T, E>,
     ) -> Result<T, E> {
         let id = self.record.id();
+        let acquisition = crate::performance::scope(crate::performance::Event::FinalContentLock);
         crate::instance_content::with_instance_lock(id, || {
+            drop(acquisition);
+            let locked_validation =
+                crate::performance::scope(crate::performance::Event::FinalLockedValidation);
             let _registry_guard = registry_lock();
             Ok((|| {
                 let current = Self::capture(managed, id)?;
@@ -86,6 +90,7 @@ impl LaunchSnapshot {
                 if validation.status != InstanceStatus::Ready {
                     return Err(BoundaryError::Invalid.into());
                 }
+                drop(locked_validation);
                 spawn(current.game.as_ref().ok_or(BoundaryError::Invalid)?)
             })())
         })

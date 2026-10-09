@@ -527,45 +527,47 @@ async fn fetch_document(
     url: &Url,
     options: &DownloadOptions,
 ) -> Result<Vec<u8>, FabricMetadataError> {
-    let client = downloads::build_client(options);
-    let response = client
-        .get(url.clone())
-        .send()
-        .await
-        .map_err(|error| FabricMetadataError::Network(DownloadError::from_transport(error)))?;
+    crate::performance::measure(crate::performance::Event::FabricMetadataHttp, async {
+        let client = downloads::build_client(options);
+        let response =
+            client.get(url.clone()).send().await.map_err(|error| {
+                FabricMetadataError::Network(DownloadError::from_transport(error))
+            })?;
 
-    let status = response.status();
-    if !status.is_success() {
-        return Err(FabricMetadataError::HttpStatus {
-            status: status.as_u16(),
-        });
-    }
+        let status = response.status();
+        if !status.is_success() {
+            return Err(FabricMetadataError::HttpStatus {
+                status: status.as_u16(),
+            });
+        }
 
-    if response
-        .content_length()
-        .is_some_and(|declared| declared as usize > MAX_METADATA_DOCUMENT_BYTES)
-    {
-        return Err(FabricMetadataError::ResponseTooLarge {
-            limit_bytes: MAX_METADATA_DOCUMENT_BYTES,
-        });
-    }
-
-    let mut document = Vec::new();
-    let mut response = response;
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|error| FabricMetadataError::Network(DownloadError::from_transport(error)))?
-    {
-        if document.len() + chunk.len() > MAX_METADATA_DOCUMENT_BYTES {
+        if response
+            .content_length()
+            .is_some_and(|declared| declared as usize > MAX_METADATA_DOCUMENT_BYTES)
+        {
             return Err(FabricMetadataError::ResponseTooLarge {
                 limit_bytes: MAX_METADATA_DOCUMENT_BYTES,
             });
         }
-        document.extend_from_slice(&chunk);
-    }
 
-    Ok(document)
+        let mut document = Vec::new();
+        let mut response = response;
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|error| FabricMetadataError::Network(DownloadError::from_transport(error)))?
+        {
+            if document.len() + chunk.len() > MAX_METADATA_DOCUMENT_BYTES {
+                return Err(FabricMetadataError::ResponseTooLarge {
+                    limit_bytes: MAX_METADATA_DOCUMENT_BYTES,
+                });
+            }
+            document.extend_from_slice(&chunk);
+        }
+
+        Ok(document)
+    })
+    .await
 }
 
 /// Decodes fetched bytes as document text.

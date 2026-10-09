@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+// @ts-expect-error Node's native TypeScript tests require the explicit extension.
+import { startProbe, endProbe } from "./launcher/performance.ts";
 
 export type BackendStatus = "ready";
 
@@ -1745,8 +1747,10 @@ export interface RuntimeProgressEvent {
 }
 
 export async function getInstanceRuntimeStatus(instanceId: string): Promise<RuntimeStatusDto> {
+  const probe = startProbe("runtime", instanceId);
   try {
-    return await invoke<RuntimeStatusDto>("get_instance_runtime_status", {
+    return await invoke<RuntimeStatusDto>(probe ? "performance_runtime_status" : "get_instance_runtime_status", {
+      ...(probe ? { probe } : {}),
       request: { instanceId },
     });
   } catch (error: unknown) {
@@ -1757,6 +1761,8 @@ export async function getInstanceRuntimeStatus(instanceId: string): Promise<Runt
       "backend_unavailable",
       "The managed Java status could not be loaded.",
     );
+  } finally {
+    endProbe("runtime", probe);
   }
 }
 
@@ -1989,8 +1995,10 @@ export async function getPlayReadiness(
   instanceId: string,
   accountId: string | null,
 ): Promise<PlayReadiness> {
+  const probe = startProbe("readiness", instanceId, accountId);
   try {
-    return await invoke<PlayReadiness>("get_play_readiness", {
+    return await invoke<PlayReadiness>(probe ? "performance_readiness" : "get_play_readiness", {
+      ...(probe ? { probe } : {}),
       request: { instanceId, accountId },
     });
   } catch (error: unknown) {
@@ -2001,6 +2009,8 @@ export async function getPlayReadiness(
       "backend_unavailable",
       "Play readiness could not be determined.",
     );
+  } finally {
+    endProbe("readiness", probe);
   }
 }
 
@@ -2008,8 +2018,10 @@ export async function playInstance(
   instanceId: string,
   accountId: string,
 ): Promise<LaunchProcess> {
+  const probe = startProbe("play", instanceId, accountId);
   try {
-    return await invoke<LaunchProcess>("play_instance", {
+    return await invoke<LaunchProcess>(probe ? "performance_play" : "play_instance", {
+      ...(probe ? { probe } : {}),
       request: { instanceId, accountId },
     });
   } catch (error: unknown) {
@@ -2017,6 +2029,8 @@ export async function playInstance(
       throw new LauncherBackendError(error.code, error.message);
     }
     throw new LauncherBackendError("backend_unavailable", "Minecraft could not be started.");
+  } finally {
+    endProbe("play", probe);
   }
 }
 

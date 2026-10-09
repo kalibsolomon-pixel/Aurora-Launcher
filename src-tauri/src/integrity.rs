@@ -64,6 +64,7 @@ pub fn verify_file_sha512(
     expected: &Sha512Digest,
     expected_size: Option<u64>,
 ) -> Result<(u64, ArtifactDigest), VerifyFileError> {
+    let _performance_hash = crate::performance::hash();
     use std::io::Read as _;
     let mut file = std::fs::File::open(path).map_err(VerifyFileError::Io)?;
     let mut sha512 = Sha512::new();
@@ -623,6 +624,7 @@ pub fn verify_file(
     expected: &ArtifactDigest,
     expected_size: Option<u64>,
 ) -> Result<u64, VerifyFileError> {
+    let _performance_hash = crate::performance::hash();
     let mut file = std::fs::File::open(path).map_err(VerifyFileError::Io)?;
     let mut verifier = StreamingVerifier::new(expected_size);
     let mut chunk = vec![0u8; STREAM_CHUNK_BYTES];
@@ -650,6 +652,7 @@ pub fn verify_file_sha1(
     expected: &Sha1Digest,
     expected_size: Option<u64>,
 ) -> Result<u64, VerifyFileError> {
+    let _performance_hash = crate::performance::hash();
     let mut file = std::fs::File::open(path).map_err(VerifyFileError::Io)?;
     let mut verifier = StreamingSha1Verifier::new(expected_size);
     let mut chunk = vec![0u8; STREAM_CHUNK_BYTES];

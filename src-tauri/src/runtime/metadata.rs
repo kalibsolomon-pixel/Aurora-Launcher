@@ -131,135 +131,139 @@ pub async fn resolve_runtime_plan(
     platform: RuntimePlatform,
     options: &DownloadOptions,
 ) -> Result<JavaRuntimePlan, RuntimeMetadataError> {
-    validate_component(component).map_err(RuntimeMetadataError::Plan)?;
-    let platform_key = platform.mojang_key().map_err(RuntimeMetadataError::Plan)?;
-    let index_bytes = fetch_index(endpoints.index_url(), options).await?;
-    let index: RuntimeIndexDocument = serde_json::from_slice(&index_bytes)
-        .map_err(|error| RuntimeMetadataError::IndexInvalid(error.to_string()))?;
+    crate::performance::measure(crate::performance::Event::RuntimeMetadata, async {
+        validate_component(component).map_err(RuntimeMetadataError::Plan)?;
+        let platform_key = platform.mojang_key().map_err(RuntimeMetadataError::Plan)?;
+        let index_bytes = fetch_index(endpoints.index_url(), options).await?;
+        let index: RuntimeIndexDocument = serde_json::from_slice(&index_bytes)
+            .map_err(|error| RuntimeMetadataError::IndexInvalid(error.to_string()))?;
 
-    let platform_components = index.platforms.get(platform_key).ok_or_else(|| {
-        RuntimeMetadataError::PlatformUnavailable {
-            platform: platform_key.to_owned(),
-        }
-    })?;
-    let candidates = platform_components.get(component).ok_or_else(|| {
-        RuntimeMetadataError::ComponentUnavailable {
-            platform: platform_key.to_owned(),
-            component: component.to_owned(),
-        }
-    })?;
-    let entry = match candidates.as_slice() {
-        [] => {
-            return Err(RuntimeMetadataError::ComponentUnavailable {
+        let platform_components = index.platforms.get(platform_key).ok_or_else(|| {
+            RuntimeMetadataError::PlatformUnavailable {
+                platform: platform_key.to_owned(),
+            }
+        })?;
+        let candidates = platform_components.get(component).ok_or_else(|| {
+            RuntimeMetadataError::ComponentUnavailable {
                 platform: platform_key.to_owned(),
                 component: component.to_owned(),
-            });
+            }
+        })?;
+        let entry = match candidates.as_slice() {
+            [] => {
+                return Err(RuntimeMetadataError::ComponentUnavailable {
+                    platform: platform_key.to_owned(),
+                    component: component.to_owned(),
+                });
+            }
+            [entry] => entry,
+            entries => {
+                return Err(RuntimeMetadataError::AmbiguousComponent {
+                    platform: platform_key.to_owned(),
+                    component: component.to_owned(),
+                    candidates: entries.len(),
+                });
+            }
+        };
+        if entry.version.name.trim().is_empty() || entry.version.released.trim().is_empty() {
+            return Err(RuntimeMetadataError::IndexInvalid(format!(
+                "runtime component '{component}' has incomplete version identity"
+            )));
         }
-        [entry] => entry,
-        entries => {
-            return Err(RuntimeMetadataError::AmbiguousComponent {
-                platform: platform_key.to_owned(),
-                component: component.to_owned(),
-                candidates: entries.len(),
-            });
+        if parse_java_major(&entry.version.name) != Some(required_major_version) {
+            return Err(RuntimeMetadataError::Plan(
+                RuntimePlanError::MajorVersionMismatch {
+                    required: required_major_version,
+                    published: parse_java_major(&entry.version.name).unwrap_or(0),
+                },
+            ));
         }
-    };
-    if entry.version.name.trim().is_empty() || entry.version.released.trim().is_empty() {
-        return Err(RuntimeMetadataError::IndexInvalid(format!(
-            "runtime component '{component}' has incomplete version identity"
-        )));
-    }
-    if parse_java_major(&entry.version.name) != Some(required_major_version) {
-        return Err(RuntimeMetadataError::Plan(
-            RuntimePlanError::MajorVersionMismatch {
-                required: required_major_version,
-                published: parse_java_major(&entry.version.name).unwrap_or(0),
-            },
-        ));
-    }
-    if entry.manifest.size == 0 || entry.manifest.size > MAX_FILE_MANIFEST_BYTES {
-        return Err(RuntimeMetadataError::IndexInvalid(format!(
-            "runtime manifest size {} is outside the supported 1..={MAX_FILE_MANIFEST_BYTES} byte range",
-            entry.manifest.size
-        )));
-    }
-    let manifest_sha1 = Sha1Digest::parse(&entry.manifest.sha1).map_err(|error| {
-        RuntimeMetadataError::IndexInvalid(format!("runtime manifest SHA-1 is invalid: {error}"))
-    })?;
-    let source = Sha1ArtifactSource::https_or_loopback(
-        &entry.manifest.url,
-        &manifest_sha1.as_hex(),
-        Some(entry.manifest.size),
-    )
-    .map_err(|error| {
-        RuntimeMetadataError::IndexInvalid(format!("runtime manifest source is unusable: {error}"))
-    })?;
-    let cache = ArtifactCache::new(managed.clone());
-    let verified = cache
-        .acquire_sha1(&source, options)
-        .await
-        .map_err(RuntimeMetadataError::ManifestAcquisition)?;
-    let bytes = std::fs::read(&verified.path).map_err(RuntimeMetadataError::ManifestRead)?;
-    if bytes.len() as u64 > MAX_FILE_MANIFEST_BYTES {
-        return Err(RuntimeMetadataError::IndexInvalid(
-            "the verified runtime manifest exceeds the parser bound".to_owned(),
-        ));
-    }
-    let document: RuntimeFileDocument = serde_json::from_slice(&bytes)
-        .map_err(|error| RuntimeMetadataError::ManifestInvalid(error.to_string()))?;
-    let selection = RuntimeSelection {
-        version_name: entry.version.name.clone(),
-        released: entry.version.released.clone(),
-        manifest_sha1,
-    };
-    JavaRuntimePlan::from_metadata(
-        component,
-        required_major_version,
-        platform,
-        selection,
-        document,
-    )
-    .map_err(RuntimeMetadataError::Plan)
+        if entry.manifest.size == 0 || entry.manifest.size > MAX_FILE_MANIFEST_BYTES {
+            return Err(RuntimeMetadataError::IndexInvalid(format!(
+                "runtime manifest size {} is outside the supported 1..={MAX_FILE_MANIFEST_BYTES} byte range",
+                entry.manifest.size
+            )));
+        }
+        let manifest_sha1 = Sha1Digest::parse(&entry.manifest.sha1).map_err(|error| {
+            RuntimeMetadataError::IndexInvalid(format!("runtime manifest SHA-1 is invalid: {error}"))
+        })?;
+        let source = Sha1ArtifactSource::https_or_loopback(
+            &entry.manifest.url,
+            &manifest_sha1.as_hex(),
+            Some(entry.manifest.size),
+        )
+        .map_err(|error| {
+            RuntimeMetadataError::IndexInvalid(format!("runtime manifest source is unusable: {error}"))
+        })?;
+        let cache = ArtifactCache::new(managed.clone());
+        let verified = cache
+            .acquire_sha1(&source, options)
+            .await
+            .map_err(RuntimeMetadataError::ManifestAcquisition)?;
+        let bytes = std::fs::read(&verified.path).map_err(RuntimeMetadataError::ManifestRead)?;
+        if bytes.len() as u64 > MAX_FILE_MANIFEST_BYTES {
+            return Err(RuntimeMetadataError::IndexInvalid(
+                "the verified runtime manifest exceeds the parser bound".to_owned(),
+            ));
+        }
+        let document: RuntimeFileDocument = serde_json::from_slice(&bytes)
+            .map_err(|error| RuntimeMetadataError::ManifestInvalid(error.to_string()))?;
+        let selection = RuntimeSelection {
+            version_name: entry.version.name.clone(),
+            released: entry.version.released.clone(),
+            manifest_sha1,
+        };
+        JavaRuntimePlan::from_metadata(
+            component,
+            required_major_version,
+            platform,
+            selection,
+            document,
+        )
+        .map_err(RuntimeMetadataError::Plan)
+    })
+    .await
 }
 
 async fn fetch_index(
     url: &Url,
     options: &DownloadOptions,
 ) -> Result<Vec<u8>, RuntimeMetadataError> {
-    let client = downloads::build_client(options);
-    let response = client.get(url.clone()).send().await.map_err(|error| {
-        RuntimeMetadataError::IndexNetwork(DownloadError::from_transport(error))
-    })?;
-    if !response.status().is_success() {
-        return Err(RuntimeMetadataError::IndexNetwork(
-            DownloadError::HttpStatus {
-                status: response.status().as_u16(),
-            },
-        ));
-    }
-    if response
-        .content_length()
-        .is_some_and(|size| size > MAX_INDEX_BYTES as u64)
-    {
-        return Err(RuntimeMetadataError::IndexTooLarge {
-            limit_bytes: MAX_INDEX_BYTES,
-        });
-    }
-    let mut body = Vec::new();
-    let mut response = response;
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|error| RuntimeMetadataError::IndexNetwork(DownloadError::from_transport(error)))?
-    {
-        if body.len() + chunk.len() > MAX_INDEX_BYTES {
+    crate::performance::measure(crate::performance::Event::RuntimeMetadataHttp, async {
+        let client = downloads::build_client(options);
+        let response = client.get(url.clone()).send().await.map_err(|error| {
+            RuntimeMetadataError::IndexNetwork(DownloadError::from_transport(error))
+        })?;
+        if !response.status().is_success() {
+            return Err(RuntimeMetadataError::IndexNetwork(
+                DownloadError::HttpStatus {
+                    status: response.status().as_u16(),
+                },
+            ));
+        }
+        if response
+            .content_length()
+            .is_some_and(|size| size > MAX_INDEX_BYTES as u64)
+        {
             return Err(RuntimeMetadataError::IndexTooLarge {
                 limit_bytes: MAX_INDEX_BYTES,
             });
         }
-        body.extend_from_slice(&chunk);
-    }
-    Ok(body)
+        let mut body = Vec::new();
+        let mut response = response;
+        while let Some(chunk) = response.chunk().await.map_err(|error| {
+            RuntimeMetadataError::IndexNetwork(DownloadError::from_transport(error))
+        })? {
+            if body.len() + chunk.len() > MAX_INDEX_BYTES {
+                return Err(RuntimeMetadataError::IndexTooLarge {
+                    limit_bytes: MAX_INDEX_BYTES,
+                });
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Ok(body)
+    })
+    .await
 }
 
 #[derive(Debug)]

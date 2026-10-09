@@ -383,68 +383,71 @@ pub async fn validate_runtime(
     execute_diagnostic: bool,
     timeout: Duration,
 ) -> Result<RuntimeValidation, RuntimeInstallError> {
-    let root = plan.installation_dir(managed);
-    let root_metadata = match std::fs::symlink_metadata(&root) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(RuntimeValidation {
-                status: RuntimeValidationStatus::Missing,
-                component: plan.component().to_owned(),
-                required_major_version: plan.required_major_version(),
-                runtime_version: None,
-                root,
-                launch_executable: None,
-                checked_files: 0,
-                verified_bytes: 0,
-                diagnostic: None,
-                problems: Vec::new(),
-            });
-        }
-        Err(error) => {
+    crate::performance::measure(crate::performance::Event::RuntimeIntegrity, async {
+        let root = plan.installation_dir(managed);
+        let root_metadata = match std::fs::symlink_metadata(&root) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(RuntimeValidation {
+                    status: RuntimeValidationStatus::Missing,
+                    component: plan.component().to_owned(),
+                    required_major_version: plan.required_major_version(),
+                    runtime_version: None,
+                    root,
+                    launch_executable: None,
+                    checked_files: 0,
+                    verified_bytes: 0,
+                    diagnostic: None,
+                    problems: Vec::new(),
+                });
+            }
+            Err(error) => {
+                return Ok(damaged(
+                    plan,
+                    root,
+                    vec![format!("the runtime location is unreadable: {error}")],
+                ));
+            }
+        };
+        if !root_metadata.file_type().is_dir() {
             return Ok(damaged(
                 plan,
                 root,
-                vec![format!("the runtime location is unreadable: {error}")],
+                vec!["the runtime location exists but is not a directory".to_owned()],
             ));
         }
-    };
-    if !root_metadata.file_type().is_dir() {
-        return Ok(damaged(
-            plan,
-            root,
-            vec!["the runtime location exists but is not a directory".to_owned()],
-        ));
-    }
-    let state = match load_runtime_state(&root) {
-        Ok(Some(state)) => state,
-        Ok(None) => {
-            return Ok(damaged(
-                plan,
-                root,
-                vec!["the runtime completion state is missing".to_owned()],
-            ));
+        let state = match load_runtime_state(&root) {
+            Ok(Some(state)) => state,
+            Ok(None) => {
+                return Ok(damaged(
+                    plan,
+                    root,
+                    vec!["the runtime completion state is missing".to_owned()],
+                ));
+            }
+            Err(error) => return Ok(damaged(plan, root, vec![error.to_string()])),
+        };
+        let mut validation = validate_root_against_state(&root, plan, &state);
+        if validation.problems.is_empty() && execute_diagnostic {
+            match run_java_diagnostic(
+                &join_relative(&root, state.diagnostic_executable()),
+                plan.required_major_version(),
+                timeout,
+            )
+            .await
+            {
+                Ok(diagnostic) => validation.diagnostic = Some(diagnostic),
+                Err(reason) => validation.problems.push(reason),
+            }
         }
-        Err(error) => return Ok(damaged(plan, root, vec![error.to_string()])),
-    };
-    let mut validation = validate_root_against_state(&root, plan, &state);
-    if validation.problems.is_empty() && execute_diagnostic {
-        match run_java_diagnostic(
-            &join_relative(&root, state.diagnostic_executable()),
-            plan.required_major_version(),
-            timeout,
-        )
-        .await
-        {
-            Ok(diagnostic) => validation.diagnostic = Some(diagnostic),
-            Err(reason) => validation.problems.push(reason),
-        }
-    }
-    validation.status = if validation.problems.is_empty() {
-        RuntimeValidationStatus::Ready
-    } else {
-        RuntimeValidationStatus::Damaged
-    };
-    Ok(validation)
+        validation.status = if validation.problems.is_empty() {
+            RuntimeValidationStatus::Ready
+        } else {
+            RuntimeValidationStatus::Damaged
+        };
+        Ok(validation)
+    })
+    .await
 }
 
 fn validate_root_against_state(
@@ -669,30 +672,33 @@ async fn run_java_diagnostic(
     expected_major: u32,
     timeout: Duration,
 ) -> Result<JavaDiagnostic, String> {
-    let output = run_process(executable, &["-version"], timeout).await?;
-    let combined = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    if !output.status.success() {
-        return Err(format!(
-            "managed Java diagnostic exited with status {}: {}",
-            output.status,
-            sanitize_diagnostic(&combined)
-        ));
-    }
-    let reported = parse_reported_java_major(&combined).ok_or_else(|| {
-        format!(
-            "managed Java diagnostic did not report a recognizable version: {}",
-            sanitize_diagnostic(&combined)
-        )
-    })?;
-    validate_reported_major(reported, expected_major)?;
-    Ok(JavaDiagnostic {
-        reported_major_version: reported,
-        summary: sanitize_diagnostic(&combined),
+    crate::performance::measure(crate::performance::Event::JavaDiagnostic, async {
+        let output = run_process(executable, &["-version"], timeout).await?;
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if !output.status.success() {
+            return Err(format!(
+                "managed Java diagnostic exited with status {}: {}",
+                output.status,
+                sanitize_diagnostic(&combined)
+            ));
+        }
+        let reported = parse_reported_java_major(&combined).ok_or_else(|| {
+            format!(
+                "managed Java diagnostic did not report a recognizable version: {}",
+                sanitize_diagnostic(&combined)
+            )
+        })?;
+        validate_reported_major(reported, expected_major)?;
+        Ok(JavaDiagnostic {
+            reported_major_version: reported,
+            summary: sanitize_diagnostic(&combined),
+        })
     })
+    .await
 }
 
 fn validate_reported_major(reported: u32, expected: u32) -> Result<(), String> {

@@ -5,6 +5,7 @@
   import { updates } from "$lib/launcher/updates.svelte";
   import { isUpdateAvailable } from "$lib/launcher/updatePresentation";
   import InstanceSwitcher from "$lib/launcher/InstanceSwitcher.svelte";
+  import { mark } from "$lib/launcher/performance";
   import { homeLaunchState } from "$lib/launcher/home";
   import HomeWidgets from "$lib/launcher/HomeWidgets.svelte";
   import PlayerPreview from "$lib/launcher/PlayerPreview.svelte";
@@ -27,6 +28,15 @@
 
   const updateNotice = $derived(isUpdateAvailable(updates.overview?.launcher.availability) ||
     (updates.overview?.clientInstanceId === instance?.id && isUpdateAvailable(updates.overview?.client)));
+  if (import.meta.env.MODE === "performance-p0-2") {
+    let previousLabel: string | undefined;
+    $effect(() => {
+      if (launch.label === previousLabel) return;
+      previousLabel = launch.label;
+      if (launch.label === "Ready") mark("ready");
+      else if (launch.label === "Checking…") mark("checking");
+    });
+  }
 </script>
 
 <!--
