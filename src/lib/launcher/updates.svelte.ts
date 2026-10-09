@@ -43,7 +43,9 @@ class UpdateStore {
       ));
       await this.refresh();
       // Wait for normal launcher state before the single non-blocking check.
-      await launcher.refreshState();
+      // This startup discovery reload performs no content mutation. Readiness
+      // still compares the returned DTOs; equal objects do not invalidate it.
+      await launcher.refreshState(false);
       void this.controller.startup();
     } catch { /* Update initialization is optional and nonfatal. */ }
   }

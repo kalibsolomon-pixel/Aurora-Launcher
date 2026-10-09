@@ -4,6 +4,23 @@
 
 ## Owner correction source (unreleased)
 
+### Startup presentation readiness (P1)
+
+Startup retains concurrent runtime status and native Play readiness. Once both
+finish, a healthy Ready decision from that exact readiness request makes the
+runtime-status follow-up redundant. Suppression requires unchanged request serial,
+mutation revision, complete launcher/account/process DTO values and selected
+identities, and a Ready runtime status. Mutation-triggered state reloads invalidate
+across their whole duration, including changes absent from summary DTOs. The
+read-only startup update-discovery reload compares DTO values without invalidating
+equal data. A newer explicit or mutation-triggered check owns publication;
+startup never replaces it. Failed/blocked initial readiness retains the follow-up,
+and runtime-status failure leaves independent readiness and its own error intact.
+Explicit runtime checks, runtime installation and all mutation refresh callbacks
+continue to request fresh native readiness. This is one startup coordination rule,
+with no persisted cache, filesystem freshness inference or launch authorization.
+Native validation and final locked launch checks are unchanged.
+
 ### Installed artwork reliability correction
 
 Installed Mods, Resource Packs and Shaders share cosmetic identity resolution in

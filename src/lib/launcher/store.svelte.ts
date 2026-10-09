@@ -163,6 +163,8 @@ class LauncherStore {
   avatarBusy = $state<string | null>(null);
   private avatarSerial = 0;
   private readinessSerial = 0;
+  private readinessRevision = 0;
+  private runtimeSerial = 0;
 
   // Play surface. Rust owns the readiness decision and process state; the
   // frontend only renders the non-secret DTOs.
@@ -229,9 +231,17 @@ class LauncherStore {
     for (const stop of this.unsubscribers) stop();
     this.unsubscribers = [];
     this.initialized = false;
+    // Discard in-flight readiness/runtime responses on disposal.
+    this.readinessSerial++;
+    this.runtimeSerial++;
   }
 
   private async loadInitialStatus(): Promise<void> {
+    let runtimeCheck: Promise<boolean> | undefined;
+    let initial: {
+      request: Promise<void>; serial: number; instanceId: string | null | undefined;
+      accountId: string | null; revision: number; inputs: string;
+    } | undefined;
     try {
       this.status = await getApplicationStatus();
     } catch (cause: unknown) {
@@ -241,7 +251,7 @@ class LauncherStore {
     try {
       this.launcherState = await getLauncherState();
       const selected = this.selectedInstance;
-      if (selected?.state === "ready") void this.runRuntimeStatus(selected.id);
+      if (selected?.state === "ready") runtimeCheck = this.refreshRuntimeStatus(selected.id);
     } catch (cause: unknown) {
       this.stateError = backendError(cause, "The launcher state could not be loaded.");
     }
@@ -256,9 +266,29 @@ class LauncherStore {
       this.accountsState = await getAccounts();
       this.hydrateCachedAvatars();
       if (this.selectedAccount?.status === "signedIn") void this.refreshAvatar(this.selectedAccount.accountId);
-      void this.refreshPlayReadiness();
+      const request = this.refreshPlayReadiness();
+      initial = { request, serial: this.readinessSerial,
+        instanceId: this.launcherState?.config.selectedInstanceId,
+        accountId: this.accountsState.selectedAccountId,
+        revision: this.readinessRevision, inputs: this.readinessInputs() };
     } catch (cause: unknown) {
       this.accountsError = backendError(cause, "The account list could not be loaded.");
+    }
+    // Runtime status is read-only. Readiness independently validates the
+    // runtime, so completing status does not invalidate this request. Wait
+    // for both regardless of completion order. Only startup can omit a check;
+    // explicit refreshes and mutation callbacks always dispatch fresh work.
+    if (runtimeCheck && await runtimeCheck) {
+      if (initial) {
+        await initial.request;
+        if (initial.serial !== this.readinessSerial) return; // A newer check owns publication.
+        if (this.readinessRevision === initial.revision && this.readinessInputs() === initial.inputs &&
+            this.launcherState?.config.selectedInstanceId === initial.instanceId &&
+            this.accountsState?.selectedAccountId === initial.accountId &&
+            this.playReadiness?.ready &&
+            this.runtimeStatus?.status === "ready") return;
+      }
+      void this.refreshPlayReadiness();
     }
   }
 
@@ -321,19 +351,37 @@ class LauncherStore {
     });
   }
 
-  async refreshState(): Promise<void> {
+  async refreshState(readinessMayHaveChanged = true): Promise<void> {
+    // Mutation callbacks use the conservative default, including when their
+    // content change is absent from the summary DTO. Invalidate across the
+    // entire reload, so a check started during it cannot survive completion.
+    if (readinessMayHaveChanged) this.readinessRevision++;
     try {
       this.launcherState = await getLauncherState();
     } catch {
       // State refresh is best-effort after mutations; load errors surface
       // through the dedicated state card.
+    } finally {
+      if (readinessMayHaveChanged) this.readinessRevision++;
     }
+  }
+
+  private readinessInputs(): string {
+    // In-memory DTO comparison only. Equal read-only reloads are harmless;
+    // actual pins/configuration/account/process changes still invalidate.
+    return JSON.stringify([this.launcherState, this.accountsState, this.playProcess]);
   }
 
   async refreshPlayReadiness(): Promise<void> {
     const serial = ++this.readinessSerial;
+    const revision = this.readinessRevision;
+    const inputs = this.readinessInputs();
     const instanceId = this.launcherState?.config.selectedInstanceId;
     const accountId = this.accountsState?.selectedAccountId ?? null;
+    const isCurrent = () => serial === this.readinessSerial &&
+      revision === this.readinessRevision && inputs === this.readinessInputs() &&
+      this.launcherState?.config.selectedInstanceId === instanceId &&
+      (this.accountsState?.selectedAccountId ?? null) === accountId;
     if (!instanceId) {
       this.playReadiness = null;
       this.playReadinessBusy = false;
@@ -345,13 +393,13 @@ class LauncherStore {
         instanceId,
         accountId,
       );
-      if (serial === this.readinessSerial && this.launcherState?.config.selectedInstanceId === instanceId && (this.accountsState?.selectedAccountId ?? null) === accountId) {
+      if (isCurrent()) {
         this.playReadiness = decision;
       } else {
         mark("readinessDiscarded");
       }
     } catch (cause: unknown) {
-      if (serial === this.readinessSerial) {
+      if (isCurrent()) {
         this.playReadiness = null;
         this.playError = backendError(cause, "Play readiness could not be loaded.");
       }
@@ -743,16 +791,27 @@ class LauncherStore {
   }
 
   async runRuntimeStatus(id: string): Promise<void> {
+    if (await this.refreshRuntimeStatus(id)) void this.refreshPlayReadiness();
+  }
+
+  private async refreshRuntimeStatus(id: string): Promise<boolean> {
+    const serial = ++this.runtimeSerial;
+    const selectedId = this.launcherState?.config.selectedInstanceId;
+    const isCurrent = () => serial === this.runtimeSerial &&
+      this.launcherState?.config.selectedInstanceId === selectedId;
     this.runtimeBusy = true;
     this.runtimeError = null;
     this.runtimeProgress = null;
     try {
-      this.runtimeStatus = await getInstanceRuntimeStatus(id);
-      void this.refreshPlayReadiness();
+      const status = await getInstanceRuntimeStatus(id);
+      if (!isCurrent()) return false;
+      this.runtimeStatus = status;
+      return true;
     } catch (cause: unknown) {
-      this.runtimeError = backendError(cause, "The managed Java status failed.");
+      if (isCurrent()) this.runtimeError = backendError(cause, "The managed Java status failed.");
+      return false;
     } finally {
-      this.runtimeBusy = false;
+      if (serial === this.runtimeSerial) this.runtimeBusy = false;
     }
   }
 
