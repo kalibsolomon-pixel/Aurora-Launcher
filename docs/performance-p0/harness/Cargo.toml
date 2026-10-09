@@ -1,0 +1,18 @@
+[package]
+name = "aurora-performance-p0-readonly"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+aurora_launcher_lib = { package = "aurora-launcher", path = "../../../src-tauri" }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+
+# Match the launcher's production profile; dependency manifests cannot set this.
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

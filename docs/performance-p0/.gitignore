@@ -1,0 +1,8 @@
+# Local safety inventories and raw diagnostic output can contain private paths.
+evidence/*-baseline.json
+evidence/instance-protection.json
+evidence/small-root.local.txt
+evidence/harness-build*.log
+evidence/*.jfr
+__pycache__/
+harness/target/
