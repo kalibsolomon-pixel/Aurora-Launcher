@@ -1,0 +1,64 @@
+{
+  "investigatedLauncherHead": "8c2d7466be278d15b896589de5f50848cee43950",
+  "investigatedClientHead": "5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d",
+  "launcherBranch": "codex/client-3-production-authority",
+  "clientBranch": "codex/unified-theme-pilot",
+  "productionSourceChangedSinceP0": false,
+  "committedChangesSinceProductionCodeHead": [
+    "PERFORMANCE_RESEARCH_P0.md",
+    "docs/performance-p0/.gitignore",
+    "docs/performance-p0/README.md",
+    "docs/performance-p0/evidence/jfr-aggregate.json",
+    "docs/performance-p0/evidence/jfr-event-summary.txt",
+    "docs/performance-p0/evidence/jfr-pilot-aggregate.json",
+    "docs/performance-p0/evidence/jfr-pilot-event-summary.txt",
+    "docs/performance-p0/evidence/jfr-start.json",
+    "docs/performance-p0/evidence/native-online.jsonl",
+    "docs/performance-p0/evidence/native-small.jsonl",
+    "docs/performance-p0/evidence/native-typical.jsonl",
+    "docs/performance-p0/evidence/pilot-small.jsonl",
+    "docs/performance-p0/evidence/pilot-typical.jsonl",
+    "docs/performance-p0/evidence/protection-verification.json",
+    "docs/performance-p0/evidence/resources.jsonl",
+    "docs/performance-p0/evidence/runtime-version.json",
+    "docs/performance-p0/evidence/summary.json",
+    "docs/performance-p0/harness/Cargo.lock",
+    "docs/performance-p0/harness/Cargo.toml",
+    "docs/performance-p0/harness/src/main.rs",
+    "docs/performance-p0/prepare-small.py",
+    "docs/performance-p0/record-jfr.py",
+    "docs/performance-p0/sample-resources.ps1",
+    "docs/performance-p0/snapshot.py",
+    "docs/performance-p0/summarize-jfr.py",
+    "docs/performance-p0/summarize.py",
+    "docs/performance-p0/verify-protection.py"
+  ],
+  "launcherAheadBehindCachedOriginMain": [
+    "4",
+    "0"
+  ],
+  "buildIdentities": [
+    {
+      "alias": "owner-installed-launcher",
+      "present": true,
+      "sha256": "15bfd5d71bbe73c9ad7f3010c052f3f1669d81abfa4790b8c48efb8b169fd868",
+      "bytes": 19211264
+    },
+    {
+      "alias": "existing-local-release-launcher",
+      "present": true,
+      "sha256": "33b07bafdb93868db68232a8a72bbcdd98dbd8c9a167bbff215d036cd13349aa",
+      "bytes": 19540480
+    }
+  ],
+  "runningLauncherCount": 1,
+  "runningJavaCount": 2,
+  "launcherHasRunningJavaChild": true,
+  "productionIdentifier": "com.aurora.launcher",
+  "launcherDeclaredVersion": "1.4.1",
+  "packagedReleaseDataRootOverride": false,
+  "debugOnlyDataRootOverride": true,
+  "credentialScopeFollowsDataRoot": false,
+  "packagedLifecycleTrialsStarted": 0,
+  "ownerBoundary": "active supervised Java child; isolated production test session not prepared"
+}
