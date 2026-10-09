@@ -1,0 +1,9 @@
+{
+  "missingTemporaryJnaFilesDetected": 2,
+  "restoredFiles": 2,
+  "restoredBytes": 273408,
+  "method": "exclusive creation of exact missing pre-existing paths from byte-identical surviving native siblings; expected SHA-256 checked before and after",
+  "launcherAndJavaClosed": true,
+  "originalBytesRestored": true,
+  "otherFilesModifiedOrDeletedByRestoration": 0
+}

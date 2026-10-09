@@ -1,0 +1,30 @@
+[
+  {
+    "domain": "launcher",
+    "checkedFiles": 15574,
+    "changedCount": 0,
+    "unexpectedChangedCount": 0,
+    "trackedRemovedCount": 0
+  },
+  {
+    "domain": "client",
+    "checkedFiles": 426,
+    "changedCount": 0,
+    "unexpectedChangedCount": 0,
+    "trackedRemovedCount": 0
+  },
+  {
+    "domain": "managed-protected-content-and-state",
+    "checkedFiles": 11821,
+    "changedCount": 2,
+    "unexpectedChangedCount": 2,
+    "trackedRemovedCount": 0
+  },
+  {
+    "domain": "owner-installed-executable",
+    "checkedFiles": 1,
+    "changedCount": 0,
+    "unexpectedChangedCount": 0,
+    "trackedRemovedCount": 0
+  }
+]

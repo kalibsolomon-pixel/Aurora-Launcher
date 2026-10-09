@@ -1,0 +1,250 @@
+{
+  "durationInterpretation": "automation-request to observed state; upper bounds include input and observation overhead",
+  "ui": {
+    "startup_home_ready": {
+      "n": 29,
+      "firstMs": 2245.3559000000823,
+      "p50Ms": 3222.403399999952,
+      "empiricalP95Ms": 3499.1758999999147,
+      "worstMs": 3547.285699999891,
+      "worstRepeatMs": 3547.285699999891,
+      "sampleStdDevMs": 620.8597325160564,
+      "sampleVarianceMs2": 385466.8074599091,
+      "medianObservationWidthMs": 109.39079999993555,
+      "maxObservationWidthMs": 346.68590000015683
+    },
+    "startup_ready_stable_1s": {
+      "n": 20,
+      "firstMs": 4676.765800000168,
+      "p50Ms": 4439.805849999888,
+      "empiricalP95Ms": 4734.314900000114,
+      "worstMs": 4852.287100000074,
+      "worstRepeatMs": 4852.287100000074,
+      "sampleStdDevMs": 159.00954121451176,
+      "sampleVarianceMs2": 25284.03419724951
+    },
+    "startup_navigation_response": {
+      "n": 2,
+      "firstMs": 321.36939999996684,
+      "p50Ms": 246.93739999993704,
+      "empiricalP95Ms": null,
+      "worstMs": 321.36939999996684,
+      "worstRepeatMs": 172.50539999990724,
+      "sampleStdDevMs": 105.26274387459635,
+      "sampleVarianceMs2": 11080.245248008872,
+      "medianObservationWidthMs": 111.56214999989606,
+      "maxObservationWidthMs": 115.43999999994412
+    },
+    "mods_refresh_complete": {
+      "n": 1,
+      "firstMs": 403.65549999987707,
+      "p50Ms": 403.65549999987707,
+      "empiricalP95Ms": null,
+      "worstMs": 403.65549999987707,
+      "worstRepeatMs": null,
+      "sampleStdDevMs": null,
+      "sampleVarianceMs2": null,
+      "medianObservationWidthMs": 111.16879999963567,
+      "maxObservationWidthMs": 111.16879999963567
+    },
+    "mods_populated": {
+      "firstInFinalProcessMs": 385.54389999993145,
+      "repeats": {
+        "n": 20,
+        "firstMs": 222.7168000000529,
+        "p50Ms": 233.74645000020973,
+        "empiricalP95Ms": 249.24979999987409,
+        "worstMs": 251.63139999983832,
+        "worstRepeatMs": 251.63139999983832,
+        "sampleStdDevMs": 8.83255000474365,
+        "sampleVarianceMs2": 78.01393958629707
+      },
+      "medianObservationWidthMs": 168.52180000022054,
+      "maxObservationWidthMs": 184.73860000027344,
+      "maxCaptureMs": 19.98849999997765,
+      "expectedRows": 31
+    },
+    "resource_packs_populated": {
+      "firstInFinalProcessMs": 272.25050000008196,
+      "repeats": {
+        "n": 20,
+        "firstMs": 159.9851000001654,
+        "p50Ms": 257.17740000016056,
+        "empiricalP95Ms": 266.14990000007674,
+        "worstMs": 266.9388999999501,
+        "worstRepeatMs": 266.9388999999501,
+        "sampleStdDevMs": 22.681142779462323,
+        "sampleVarianceMs2": 514.4342377823558
+      },
+      "medianObservationWidthMs": 193.69634999986738,
+      "maxObservationWidthMs": 202.7390000000596,
+      "maxCaptureMs": 95.14589999988675,
+      "expectedRows": 4
+    },
+    "shaders_populated": {
+      "firstInFinalProcessMs": 207.07059999997728,
+      "repeats": {
+        "n": 20,
+        "firstMs": 220.64740000013262,
+        "p50Ms": 233.14825000008568,
+        "empiricalP95Ms": 248.97970000002533,
+        "worstMs": 488.73829999985173,
+        "worstRepeatMs": 488.73829999985173,
+        "sampleStdDevMs": 61.06633473159018,
+        "sampleVarianceMs2": 3729.097237550617
+      },
+      "medianObservationWidthMs": 169.4026999999769,
+      "maxObservationWidthMs": 422.4153999998234,
+      "maxCaptureMs": 93.15810000011697,
+      "expectedRows": 1
+    },
+    "os_process_creation_to_first_ready_proxy": {
+      "n": 29,
+      "firstMs": 2208.3559000000823,
+      "p50Ms": 3195.403399999952,
+      "empiricalP95Ms": 3473.1758999999147,
+      "worstMs": 3516.285699999891,
+      "worstRepeatMs": 3516.285699999891,
+      "sampleStdDevMs": 621.244022663701,
+      "sampleVarianceMs2": 385944.1356953771
+    }
+  },
+  "games": [
+    {
+      "trial": 0,
+      "trigger": "workspace",
+      "actionRequestWallMs": 1791526039087,
+      "windowAndLoadingObservedUpperMs": 19894.8203,
+      "menuWithoutOverlayObservedUpperMs": 30052.7661,
+      "menuLowerObservationMs": 19894.8203,
+      "menuObservationMethod": "manual screenshot; loading overlay absent; normal Quit response follows",
+      "observerGapIncludesModelDelay": true,
+      "playRequestToOsChildCreationMs": 5889,
+      "childObservationDelayMs": 118,
+      "childCreationAfterSupervisorLogMs": 1,
+      "childAttribution": "unique exact-parent Java child within 1s after independent supervisor-log creation; earlier diagnostic child excluded; native returned handle not instrumented",
+      "supervisedExitCode": 0,
+      "osChildCreationToMenuObservedUpperMs": 24163.7661,
+      "menuLowerObservationInterpretation": "previous loading screenshot return time; not a strict present-time lower bound"
+    },
+    {
+      "trial": 1,
+      "trigger": "workspace",
+      "actionRequestWallMs": 1791526131326,
+      "windowObservedLowerMs": 13791.137199999997,
+      "windowObservedUpperMs": 13906.977500000037,
+      "menuLowerObservationMs": 17038.1511,
+      "menuWithoutOverlayObservedUpperMs": 25391.601800000062,
+      "menuObservationMethod": "manual screenshot; loading overlay absent; normal Quit response follows",
+      "observerGapIncludesModelDelay": true,
+      "playRequestToOsChildCreationMs": 3827,
+      "childObservationDelayMs": 141,
+      "childCreationAfterSupervisorLogMs": 0,
+      "childAttribution": "unique exact-parent Java child within 1s after independent supervisor-log creation; earlier diagnostic child excluded; native returned handle not instrumented",
+      "supervisedExitCode": 0,
+      "osChildCreationToMenuObservedUpperMs": 21564.601800000062,
+      "osChildCreationToWindowObservedUpperMs": 10079.977500000037,
+      "osChildCreationToWindowObservedLowerMs": 9964.137199999997,
+      "menuLowerObservationInterpretation": "previous loading screenshot return time; not a strict present-time lower bound"
+    },
+    {
+      "trial": 2,
+      "trigger": "home",
+      "actionRequestWallMs": 1791526412029,
+      "windowObservedLowerMs": 13196.148899999913,
+      "windowObservedUpperMs": 13308.985099999933,
+      "menuLowerObservationMs": 16454.538599999854,
+      "menuWithoutOverlayObservedUpperMs": 20547.564699999988,
+      "menuObservationMethod": "manual screenshot; loading overlay absent; normal Quit response follows",
+      "observerGapIncludesModelDelay": true,
+      "playRequestToOsChildCreationMs": 2743,
+      "childObservationDelayMs": 136,
+      "childCreationAfterSupervisorLogMs": 0,
+      "childAttribution": "unique exact-parent Java child within 1s after independent supervisor-log creation; earlier diagnostic child excluded; native returned handle not instrumented",
+      "supervisedExitCode": 0,
+      "osChildCreationToMenuObservedUpperMs": 17804.564699999988,
+      "osChildCreationToWindowObservedUpperMs": 10565.985099999933,
+      "osChildCreationToWindowObservedLowerMs": 10453.148899999913,
+      "menuLowerObservationInterpretation": "previous loading screenshot return time; not a strict present-time lower bound"
+    }
+  ],
+  "idle": {
+    "home": {
+      "samples": 6,
+      "seconds": 60.4787261,
+      "meanCpuOneCorePercent": 8.887422646952876,
+      "workingSetMiBRange": [
+        572.0546875,
+        578.8671875
+      ],
+      "privateMiBRange": [
+        493.546875,
+        500.4609375
+      ],
+      "processes": [
+        7
+      ],
+      "handlesRange": [
+        5132,
+        5143
+      ],
+      "threadsRange": [
+        240,
+        244
+      ]
+    },
+    "workspace": {
+      "samples": 6,
+      "seconds": 60.5282317,
+      "meanCpuOneCorePercent": 9.18992649177293,
+      "workingSetMiBRange": [
+        551.1953125,
+        551.75390625
+      ],
+      "privateMiBRange": [
+        475.6796875,
+        476.2578125
+      ],
+      "processes": [
+        7
+      ],
+      "handlesRange": [
+        5141,
+        5143
+      ],
+      "threadsRange": [
+        243,
+        244
+      ]
+    }
+  },
+  "sourceProvenanceOfInstalledBinary": "unknown",
+  "observationOutcomes": {
+    "pilotRecords": 5,
+    "unsuccessfulMeasurementRecords": [
+      {
+        "boundary": "shaders_refresh_complete",
+        "timeoutMs": 3000,
+        "inconclusiveIfNoBusy": true
+      },
+      {
+        "boundary": "resource_packs_populated",
+        "timeoutMs": 30000,
+        "inconclusiveIfNoBusy": false
+      },
+      {
+        "boundary": "resource_packs_refresh_complete",
+        "timeoutMs": 3000,
+        "inconclusiveIfNoBusy": true
+      }
+    ]
+  },
+  "inputDigests": {
+    "as-is-game-observations.jsonl": "a4fada4e8a93fb6ea4fee469a0d85a766edf1c10730ec8f9bc0c9af3cfe4aa8f",
+    "as-is-idle-home.jsonl": "0b438d432cf923bda175259c9e26a9b0dc36c1e1f7bbd537e4748fb6e5f893dd",
+    "as-is-idle-workspace.jsonl": "c33b04ec31dce320e5bef11391fb784dda4787b40571b0c0414a39f1ae7260ec",
+    "as-is-ui-observations.jsonl": "71a2380609e45f351ecbd39fbffa3b20d7ec05007e4f86db997f85b80fdb93a5",
+    "as-is-process-timings.json": "761e9fca075b7800b08184a66eb54b9de65c34058abd127cb20565085c7da7c8",
+    "as-is-supervised-exits.json": "3852d4551f1e2a0c3f899dca45d739ef77cdffaa3e6e497312ec7cb37c76b189"
+  }
+}

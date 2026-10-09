@@ -1,0 +1,197 @@
+[
+  {
+    "kind": "javaChild",
+    "trialAlias": 0,
+    "createdWallMs": 1791526044976,
+    "observedWallMs": 1791526045094,
+    "correlation": "exact installed-launcher parentage retained privately; unique supervisor-log creation pairing"
+  },
+  {
+    "kind": "javaChild",
+    "trialAlias": 1,
+    "createdWallMs": 1791526135153,
+    "observedWallMs": 1791526135294,
+    "correlation": "exact installed-launcher parentage retained privately; unique supervisor-log creation pairing"
+  },
+  {
+    "kind": "javaChild",
+    "trialAlias": 2,
+    "createdWallMs": 1791526414772,
+    "observedWallMs": 1791526414908,
+    "correlation": "exact installed-launcher parentage retained privately; unique supervisor-log creation pairing"
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 0,
+    "createdWallMs": 1791526490803,
+    "observedWallMs": 1791526490882
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 1,
+    "createdWallMs": 1791526555190,
+    "observedWallMs": 1791526555286
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 2,
+    "createdWallMs": 1791526568328,
+    "observedWallMs": 1791526568569
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 3,
+    "createdWallMs": 1791526581402,
+    "observedWallMs": 1791526581525
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 4,
+    "createdWallMs": 1791526594862,
+    "observedWallMs": 1791526594991
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 5,
+    "createdWallMs": 1791526631493,
+    "observedWallMs": 1791526631623
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 6,
+    "createdWallMs": 1791526645966,
+    "observedWallMs": 1791526646027
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 7,
+    "createdWallMs": 1791526658999,
+    "observedWallMs": 1791526659108
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 8,
+    "createdWallMs": 1791526672525,
+    "observedWallMs": 1791526672733
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 9,
+    "createdWallMs": 1791526729653,
+    "observedWallMs": 1791526729764
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 10,
+    "createdWallMs": 1791526761959,
+    "observedWallMs": 1791526762185
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 11,
+    "createdWallMs": 1791526776160,
+    "observedWallMs": 1791526776331
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 12,
+    "createdWallMs": 1791526791441,
+    "observedWallMs": 1791526791555
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 13,
+    "createdWallMs": 1791526807155,
+    "observedWallMs": 1791526807380
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 14,
+    "createdWallMs": 1791526839843,
+    "observedWallMs": 1791526840053
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 15,
+    "createdWallMs": 1791526856483,
+    "observedWallMs": 1791526856602
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 16,
+    "createdWallMs": 1791526873028,
+    "observedWallMs": 1791526873165
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 17,
+    "createdWallMs": 1791526887025,
+    "observedWallMs": 1791526887141
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 18,
+    "createdWallMs": 1791526902671,
+    "observedWallMs": 1791526902818
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 19,
+    "createdWallMs": 1791526917311,
+    "observedWallMs": 1791526917494
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 20,
+    "createdWallMs": 1791526935855,
+    "observedWallMs": 1791526936053
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 21,
+    "createdWallMs": 1791526949998,
+    "observedWallMs": 1791526950199
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 22,
+    "createdWallMs": 1791526964153,
+    "observedWallMs": 1791526964325
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 23,
+    "createdWallMs": 1791526982192,
+    "observedWallMs": 1791526982350
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 24,
+    "createdWallMs": 1791526997439,
+    "observedWallMs": 1791526997664
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 25,
+    "createdWallMs": 1791527037329,
+    "observedWallMs": 1791527037489
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 26,
+    "createdWallMs": 1791527052071,
+    "observedWallMs": 1791527052209
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 27,
+    "createdWallMs": 1791527069050,
+    "observedWallMs": 1791527069130
+  },
+  {
+    "kind": "launcher",
+    "trialAlias": 28,
+    "createdWallMs": 1791527083911,
+    "observedWallMs": 1791527084059
+  }
+]

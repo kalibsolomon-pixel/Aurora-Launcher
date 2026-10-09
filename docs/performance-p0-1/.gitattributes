@@ -1,0 +1,7 @@
+# Preserve exact research bytes and recorded hashes across checkout platforms.
+/evidence/as-is-*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/evidence/as-is-*.jsonl -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/ui-observer-notebook.js -text
+/observe-processes.ps1 -text
+/analyze-as-is.py -text
+/verify-resume.py -text

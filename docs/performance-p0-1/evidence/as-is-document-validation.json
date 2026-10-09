@@ -1,0 +1,17 @@
+{
+  "jsonArtifactsParsed": 14,
+  "forbiddenPrivacyFieldsFound": 0,
+  "checkedLocalDocumentLinks": 29,
+  "criticalFilesPresent": 11,
+  "unexpectedTrackedDeletions": 0,
+  "summaryRegenerationByteIdentical": true,
+  "toolAndSourceDocumentHashesMatch": true,
+  "pythonSyntaxPassed": true,
+  "nodeNotebookSyntaxPassed": true,
+  "powershellObserverSyntaxPassed": true,
+  "productionTestSuiteRerun": false,
+  "reason": "research-only changes; installed binary booted separately",
+  "stagedInputDigestsMatch": true,
+  "researchCommitRangeWhitespaceCheckPassed": true,
+  "rawEvidenceEolPolicy": "preserve collected bytes; recognize CR at EOL while retaining default trailing-whitespace checks"
+}

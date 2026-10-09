@@ -1,0 +1,44 @@
+{
+  "capturedAtUtc": "2026-10-09T05:50:13.772363+00:00",
+  "ownerDate": "2026-10-09",
+  "launcherSourceHead": "1142a1bb1640dd7ac39512c63440a6362673a4f4",
+  "clientSourceHead": "5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d",
+  "previousMinecraftPidPresent": false,
+  "runningJavaCount": 0,
+  "runningLauncherCount": 0,
+  "previousLauncherSamePidAndCreationTimePresent": false,
+  "supervisedLogHeadersSincePreviousLauncherStart": 1,
+  "supervisedHeaderExitCodes": [
+    0
+  ],
+  "exactPreviousPidTaggedInLog": false,
+  "normalExitAssessment": "one session log records exit 0; consistent with normal exit, exact PID not retained",
+  "administratorToken": false,
+  "enabledTestAccountCandidatesExcludingOwnerAndSystemAccounts": 0,
+  "isolationValidation": {
+    "managedApplicationData": "not performed; no owner-provided test session",
+    "webViewStorage": "not performed; no owner-provided test session",
+    "windowsCredentialManager": "not performed; no owner-provided test session",
+    "instancePaths": "not performed; no owner-provided test session"
+  },
+  "buildIdentities": [
+    {
+      "alias": "owner-installed-launcher",
+      "sha256": "15bfd5d71bbe73c9ad7f3010c052f3f1669d81abfa4790b8c48efb8b169fd868",
+      "bytes": 19211264
+    },
+    {
+      "alias": "existing-local-release-launcher",
+      "sha256": "33b07bafdb93868db68232a8a72bbcdd98dbd8c9a167bbff215d036cd13349aa",
+      "bytes": 19540480
+    }
+  ],
+  "managedBaselineFiles": 11820,
+  "managedDifferencesFromRetainedP0Baseline": 0,
+  "packagedLifecycleTrialsStarted": 0,
+  "accountCreationAttempted": false,
+  "authenticationAttempted": false,
+  "everydayInstallationModified": false,
+  "copiedOwnerData": false,
+  "ownerBoundary": "owner must create and initialize a separate Windows test account"
+}

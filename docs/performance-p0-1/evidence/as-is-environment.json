@@ -1,0 +1,43 @@
+{
+  "capturedAtUtc": "2026-10-09T06:43:14.9708458+00:00",
+  "os": [
+    {
+      "Caption": "Microsoft Windows 11 Home",
+      "Version": "10.0.26300",
+      "BuildNumber": "26300"
+    }
+  ],
+  "gpu": [
+    {
+      "Name": "AMD Radeon RX 9070 XT",
+      "DriverVersion": "32.0.31041.1004",
+      "CurrentHorizontalResolution": 2560,
+      "CurrentVerticalResolution": 1440
+    }
+  ],
+  "cpu": [
+    {
+      "Name": "Intel(R) Core(TM) i7-14700F",
+      "NumberOfCores": 20,
+      "NumberOfLogicalProcessors": 28
+    }
+  ],
+  "powerScheme": "Power Scheme GUID: 16cccdeb-b6f7-4a6b-9337-2ffb6adebbee  (Ultimate Performance)",
+  "launcherWindowCapturePixels": [
+    1122,
+    791
+  ],
+  "gameWindowCapturePixels": [
+    2048,
+    1152
+  ],
+  "networkCondition": "normal host network; endpoint completion not separately traced",
+  "filesystemCondition": "existing populated caches; no reboot or cache eviction",
+  "observer": "node_repl @oai/sky; 60 ms UI and process polling targets; actual observation intervals retained",
+  "foregroundRequestedForIdle": true,
+  "visibilityContinuouslyVerified": false,
+  "watcherOverheadQuantified": false,
+  "backgroundLoadControlled": false,
+  "remainingLauncherProcesses": 0,
+  "remainingJavaProcesses": 0
+}

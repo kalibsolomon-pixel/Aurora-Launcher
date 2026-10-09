@@ -1,377 +1,328 @@
-# Aurora Performance P0.1 — controlled baseline preflight
+# Aurora Performance P0.1 — owner-authorized as-is baseline
 
-Date: 2026-10-08, America/New_York. **Verdict: BLOCKED at the owner-interaction
-boundary.** This is a measurement preparation deliverable, not an optimization.
+Date: 2026-10-09, America/New_York. **Verdict: as-is measurements completed;
+the original fully controlled P0.1 matrix remains partial.** Stop for owner review.
+No performance optimization or production change is included.
 
-## Result and reason for stopping
+## Result and revised authorization
 
-**Zero new packaged lifecycle trials ran.** The owner's installed Launcher still
-has a running Java child, and another Java process exists. No game was closed,
-restarted, paused or profiled, and no competing Launcher was started. No UI was
-activated, no account/session/credential operation ran, and no owner selection or
-cache was changed.
+The owner superseded the separate-account requirement with: **“we dont need
+another windows account, run the check as-is.”** Measurements therefore used the
+everyday installed executable, current Windows account and existing managed
+instance. No second Launcher competed with it. The original BLOCKED report and
+preflight are historical evidence, not the current authorization boundary.
 
-The P0.1 request explicitly requires: "Never overwrite the owner's installed
-Launcher or interfere with an active Minecraft session" and "If owner interaction,
-credentials, elevation, or machine reboot is necessary, stop at that boundary and
-provide a precise procedure." The first controlled restart/foreground/Play series
-requires the owner to finish the current session normally. It also requires a
-separate validated production test environment. These are real prerequisites,
-not elapsed-time approval or permission to operate the owner's live instance.
+The previous Minecraft PID was absent, no Java process remained, and Launcher
+was closed before the pilot began. One bounded supervisor-log header records
+exit code 0 for the earlier session; this is consistent with normal exit, but
+that historical log does not retain the previous PID. No process was terminated.
 
-P0's native-function measurements and gameplay JFR remain available, but do not
-complete these missing end-to-end measurements. No native repeats, mocked browser,
-simulated invocation count, or static call graph is substituted for a packaged run.
+New observations include 29 packaged starts, 20 sustained-readiness observations,
+20 repeat entries into each content tab, three actual Play-to-menu launches,
+one observed mod-refresh completion, and two approximately 60-second idle states.
+All three games exited through the visible Quit button and have supervisor exit
+code 0. Launcher and Java were closed at the final check.
 
-## Exact identities and reconciliation
+This is a black-box baseline of the installed payload. Exact native readiness
+invocation/audit counts, causal stage attribution, complete artwork-decode timing,
+true filesystem-cold runs, offline runs and a source-proven current build remain
+unmeasured. The report does not claim that the original controlled acceptance
+criteria have all passed. Repeating black-box trials cannot recover those missing
+internal markers.
 
-| Repository | Investigated HEAD | Branch | State before P0.1 |
-|---|---|---|---|
-| Launcher | `8c2d7466be278d15b896589de5f50848cee43950` | `codex/client-3-production-authority` | No tracked changes; 423 tracked files, 15,143 protected untracked files |
-| Client | `5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d` | `codex/unified-theme-pilot` | No tracked changes; 422 tracked files, four protected untracked bytecode files |
+## Identities and preserved state
 
-Live remote default HEADs remain Launcher `origin/main`
-`4575a0e3f1c28da6cfe072948fe91b60eeaf608f` and Client `origin/master`
-`d8eecd89b9187619b3ad7a47adf97cd74d4f1c77`. Launcher has no upstream and is
-4 ahead / 0 behind cached `origin/main` before P0.1 commits. Client is 0 ahead /
-0 behind its own tracking branch `origin/codex/unified-theme-pilot`; that is a
-different comparison from its remote default. Queries were read-only; no fetch,
-push, release or publication ran.
-
-No intervening agent changes were found. The two P0 commits add only the report,
-research tools and evidence. All production source/package/native configuration
-at P0.1's starting HEAD matches P0's investigated code HEAD
-`fad40125f8fd87b8fa0893c97827e8e4a890081b`. Existing uncommitted tracked changes
-were absent. No new optimization was incorporated into the comparison.
-
-| Payload | SHA-256 | Bytes | What identity establishes |
-|---|---|---:|---|
-| Owner's installed Launcher | `15bfd5d71bbe73c9ad7f3010c052f3f1669d81abfa4790b8c48efb8b169fd868` | 19,211,264 | Same payload observed in P0; not presumed to contain current source |
-| Existing local release executable | `33b07bafdb93868db68232a8a72bbcdd98dbd8c9a167bbff215d036cd13349aa` | 19,540,480 | Same local payload observed in P0; no new P0.1 build/provenance record |
-
-Both existing payloads differ. The declared Launcher version is still 1.4.1;
-version text alone cannot establish exact source identity. No executable or
-installer was rebuilt, installed, replaced or run in P0.1. A future baseline
-must record exact source commit, compiler/profile, frontend bundle hash, updater
-trust configuration identity and executable/installer SHA. Secret build values
-must not enter the record. Client source HEAD does not prove the deployed 3.0.0
-JAR contains that revision; retain release artifact digest provenance separately.
-
-Full Git statuses, tracked inventories and hashes are local in
-`docs/performance-p0-1/private/`. The P0.1 inventory deliberately includes all
-pre-existing P0 documents, evidence and tooling. Critical root documentation,
-frontend manifests/lockfile and native build configuration remain protected.
-Website was not accessed. Repository historical architecture snapshots are
-interpreted against current code, not as current release/authentication policy.
-
-## Isolation finding: a data-root override is insufficient
-
-`src-tauri/src/paths.rs:18` honors `AURORA_DIAGNOSTIC_DATA_ROOT` only under
-`#[cfg(debug_assertions)]`. Release builds ignore it. Setting the variable and
-launching the production executable would still open the owner's platform
-application-data directory. `application.rs:511` and native setup use Tauri's
-platform resolver. No release-root mechanism was implemented here.
-
-The debug override covers `ManagedPaths`, not every external storage domain.
-There is no explicit independent WebView data directory in the current Tauri
-window configuration. `auth/credentials.rs:177` derives the Windows credential
-target from the account UUID under the fixed application namespace; it does not
-derive it from the managed root. A temporary instance root therefore does not
-isolate Credential Manager for the same Windows user. Session restoration can
-rotate the credential, so copying account summaries or testing Play in a second
-same-user process is not an acceptable isolation shortcut.
-
-Launch exclusion is process-local. A fresh competing process does not inherit
-the owner's supervised-child state. It cannot prove that the owner's instance
-is idle just because its own snapshot says stopped. This further rules out
-unisolated restart/Play testing while the owner game remains active.
-
-**Preferred test environment:** a separate owner-provided Windows test account
-or VM with its own platform application-data, WebView profile and OS credential
-store. Keep `com.aurora.launcher`, production version/release configuration,
-updater key/authorities and normal authentication/launch semantics unchanged.
-This uses OS isolation rather than changing the production security namespace.
-A VM is safer for offline and reboot tests; its timing results must be labeled
-virtualized and never pooled with the original physical-machine baseline.
-
-No environment is assumed prepared. Before use, validate isolation separately:
-
-1. Resolve the actual app-data and WebView profile in that environment without
-   exporting private paths. Confirm they differ from the owner's locations.
-2. Start with no copied accounts/credentials/history. Missing authentication must
-   remain an honest blocker. The owner signs in manually through the system browser
-   only after the test-profile isolation passes; never copy or enumerate credentials.
-3. Use distinct validated managed UUIDs/independent regular files. Validate registry,
-   manifests, artifact hashes and runtime identity through existing native checks.
-4. Prove UI selection/cache/metadata changes touch only the test profile; compare
-   owner's protected state before/after. Refuse links/reparse escapes. Do not point
-   the test profile at the owner's data through junctions, hard links or `.minecraft`.
-5. Preserve updater trust and compiled authorities. Check is permitted; installing
-   or publishing updates is outside the measurement task.
-6. Review any development-only timing patch separately; require production-disabled
-   behavior, privacy/overhead tests and the repository's full startup/native checks
-   before using its packaged artifact. No patch is implemented or validated here.
-
-A new compile-gated root mechanism is an alternative design only if OS isolation
-is unavailable. It would have to isolate WebView state as well as managed storage,
-fail closed for unsafe roots and retain unchanged Credential Manager semantics.
-It would still require a separate credential context for authenticated Play. It
-must never be added by merely enabling debug assertions on a nominal release build:
-other debug behavior would then confound the comparison.
-
-## New end-to-end timing table
-
-All entries have **n = 0**. Dashes mean not observed; no latency or failure-rate
-distribution exists. No failed attempt was relabeled a successful timing sample.
-
-| Boundary | n | p50 | Empirical p95 | Worst | Status / required observer |
-|---|---:|---|---|---|---|
-| Process → visible window | 0 | — | — | — | Blocked; exact test PID → first visible nonblank window |
-| Process → interactive UI | 0 | — | — | — | Blocked; first shell paint plus a harmless navigation response |
-| Selection → updated UI | 0 | — | — | — | Blocked; input → new selection committed/rendered |
-| Selection → verified readiness | 0 | — | — | — | Blocked; matching native result plus publication; account requirement preserved |
-| Play → Java spawned | 0 | — | — | — | Blocked; real authorized Play → returned exact child handle |
-| Java spawn → Minecraft window | 0 | — | — | — | Blocked; supervised-child native window observer, no title/arguments logged |
-| Java spawn → usable main menu | 0 | — | — | — | Blocked; menu controls usable, not merely CLIENT_STARTED or Running |
-| Mods tab → populated list | 0 | — | — | — | Blocked; expected row count / DOM commit / paint marker |
-| Mods tab → available artwork rendered | 0 | — | — | — | Blocked; validated identities and successfully decoded available images; unavailable icons separate |
-| Resource Packs → populated list | 0 | — | — | — | Blocked; scan/IPC/expected rows/paint |
-| Shaders → populated list | 0 | — | — | — | Blocked; scan/IPC/expected rows/paint; installed shader files do not prove activation |
-| Content refresh → complete | 0 | — | — | — | Blocked; explicitly name content domain; final inventory/artwork publication |
-| Update check → complete | 0 | — | — | — | Blocked; signed Launcher/Client check and provider-content check are separate workloads |
-| Controlled idle resources | 0 | — | — | — | Blocked; fixed Home/Workspace and visibility state, no game/build competing load |
-
-First/subsequent process, first/repeated selection, populated/empty reconstructable
-caches, online/offline and true filesystem-cold cases all remain unmeasured in
-P0.1. No genuine large modpack was provisioned. A large workload is conditional on
-a lawful compatible pack and the same validation criteria; duplicate/conflicting
-JARs are never a size substitute.
-
-## Readiness invocation and audit count: source model, not observed counts
-
-There are no new packaged invocation counts. The following conditional healthy-
-path model identifies what the future trace must test. It assumes ready content,
-successful official plan resolution/runtime status, no concurrent mutation, no
-extra explicit check and a launchable account. Errors/early blockers change it.
-
-| Trigger | Source call pattern | Predicted game audits if all branches complete |
-|---|---|---:|
-| Startup with a selected ready instance | `loadInitialStatus:232` starts runtime status and readiness; runtime success refreshes readiness | 3: one runtime-status plan resolution, two readiness resolutions |
-| Explicit selection | `runSelect:679` starts runtime status and readiness; runtime success refreshes readiness | 3 |
-| Runtime status completion alone | `runRuntimeStatus:741` refreshes readiness after the already-completed runtime work | 1 additional |
-| Home Play after completed selection | `runPlay:359` calls `play_instance`; launch preparation resolves plans and final boundary audits again | 2 additional; selection-to-Home-Play model totals 5 |
-| Workspace Play after completed selection | `runWorkspacePlay:669` explicitly refreshes readiness, then same Play pipeline | 3 additional; selection-to-Workspace-Play model totals 6 |
-
-These are **predictions, not five or six measured audits**. Startup is a separate
-sequence and must not be silently added to selection trials. Workspace navigation
-does not always invoke selection. Failed runtime status does not trigger its success
-refresh; Play guards or authentication failure can prevent the final audit.
-Concurrent jobs can overlap, so multiplying P0 duration by these counts would not
-produce a valid selection/Play latency estimate.
-Runtime provisioning (`runEnsureRuntime`) is a separate workload: its successful
-completion also requests readiness, but installer validation is not included in
-the runtime-status-only row above. Actual provisioning counts remain unmeasured.
-
-Native mapping: `get_instance_runtime_status:4500` → `validate_instance_runtime`
-→ `resolve_instance_runtime_plan:1210` → `resolve_instance_launch_plans:1229`
-→ `resolve_instance_game_plan:1256` → `validate_instance:1433`
-→ `install::validate_installed_game:749`. Runtime status also requests the bounded
-Java diagnostic. `calculate_play_readiness:5424` reaches that same deep-game path
-and validates runtime without Java execution. Play preparation (`application.rs:5572`)
-does deep game/mod/runtime validation plus diagnostic/session restoration. The
-locked `LaunchSnapshot::with_validated:69` repeats complete-instance validation
-and compatibility before structured spawn. No additional internal double game
-audit is assumed inside a single plan-resolution call.
-
-Required security work remains: preparation validation, exact runtime/session/
-compatibility checks, snapshot consistency and final locked validation/spawn.
-Independent equal-generation presentation requests are a potential duplicate;
-their actual number, necessity after mutations and queue cost require observation.
-Do not remove security checks based on this call model.
-
-## Per-stage attribution and instrumentation design
-
-No causal stage attribution was measured in P0.1. Before a timing patch, attempt
-safe external CPU sampling and packaged WebView timelines in the isolated profile.
-WPR is available, this caller is not elevated, and WPA is not installed. No
-elevation, ETW recording, new JFR or DevTools session was requested or started.
-
-Generic process/file/network traces are not automatically suitable: Java process
-arguments contain a reusable token, filesystem events contain private paths,
-network events can contain server addresses, and heap snapshots can retain user
-identities. Do not record raw ProcessStart arguments, File I/O filenames, request
-bodies or full heap/console dumps and promise to sanitize later. Use a reviewed
-allowlist/exporter whose retained schema excludes those fields at collection.
-
-If external facilities cannot distinguish phases safely, the proposed separate
-development-only patch would collect bounded, typed records in memory:
-
-| Fields | Allowed values / purpose |
+| Item | Identity |
 |---|---|
-| run/trial/request/parent sequence | Ephemeral integers only; no UUIDs, names or hashes of private identity |
-| command, trigger, stage, outcome | Closed enums: startup/selection/runtime completion/Home Play/Workspace Play; success/block/error class |
-| start/end ticks, clock kind | Rust monotonic ticks and frontend `performance.now()`; calibrated correlation offset and uncertainty |
-| files/bytes/requests/active/queued | Counts; no paths, URLs, payloads, DTO/debug dumps or argument arrays |
-| dropped-record count | Overflow invalidates attribution; capped storage, no persistent telemetry |
+| Launcher source at resume | `1142a1bb1640dd7ac39512c63440a6362673a4f4`, `codex/client-3-production-authority` |
+| Production source investigated in P0 | `fad40125f8fd87b8fa0893c97827e8e4a890081b`; production files unchanged since P0 |
+| Client source | `5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d`, `codex/unified-theme-pilot` |
+| Installed Launcher SHA-256 | `15bfd5d71bbe73c9ad7f3010c052f3f1669d81abfa4790b8c48efb8b169fd868`; 19,211,264 bytes |
+| Existing local release SHA-256, not run | `33b07bafdb93868db68232a8a72bbcdd98dbd8c9a167bbff215d036cd13349aa`; 19,540,480 bytes |
+| Deployed Aurora 3.0.0 JAR SHA-256 | `43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c` |
+| UI-declared workload | Minecraft 1.21.11, Fabric 0.19.5, Aurora 3.0.0; 31 mod rows, four resource-pack rows, one shader row |
 
-Instrument native command entry/exit, actual deep-audit entry/exit, mod/runtime
-checks, official metadata request roles, blocking-job enqueue/start/end, session
-reuse/refresh **phase only**, final content-lock wait/audit and spawn return. Carry
-correlation across async and blocking boundaries; temporal proximity alone cannot
-assign overlapping work to the right request. Count every audit, including jobs
-whose obsolete result the frontend rejects. Never log `LaunchSpec`, sessions or
-command arguments/results.
+Launcher version remains 1.4.1. **The installed binary's exact source revision,
+compiler/profile and embedded frontend bundle identity are unknown.** Neither
+source HEAD nor version text proves its provenance. Client HEAD likewise does not
+prove the deployed JAR's source. No binary was rebuilt, installed or replaced.
 
-Frontend markers surround actual invocation send/completion, reactive DOM commit
-and image decode completion. Record expected/visible row and usable-image counts,
-not DOM text or account display. A `requestAnimationFrame` marker is not a precise
-compositor-present timestamp; label it and report observer polling uncertainty.
-Cross-clock IPC residual is not pure queue time unless native entry/start and
-serialization/transport phases are also measured. Attribute bytes/open/read/hash
-updates separately with sanitized counters, or use validated CPU samples; summed
-file-read wall time does not establish CPU hashing time. Do not subtract medians
-of unmatched runs as a network estimate.
+At resume, both repositories had no tracked changes. Launcher had 431 tracked
+and 15,143 protected untracked files; Client had 422 tracked and four untracked
+files. Launcher was 6 ahead / 0 behind cached `origin/main`, with no upstream;
+Client was 0/0 against its own tracking branch. Read-only remote default queries
+still returned Launcher main `4575a0e3f1c28da6cfe072948fe91b60eeaf608f` and Client
+master `d8eecd89b9187619b3ad7a47adf97cd74d4f1c77`. No fetch, push or publication ran.
 
-Probe unrelated harmless IPC while validation is active and while idle; compare
-response distributions with matched conditions and job concurrency. One async
-function containing synchronous I/O proves a scheduling concern, not measured UI
-starvation. For retention, use numeric WebView heap/DOM/listener metrics and stable
-process-tree private memory across matched navigation batches; working set alone
-does not establish a leak. Avoid raw heap snapshots containing private strings.
+Before UI use, all 11,820 retained P0 managed hashes matched. An additional existing
+resource-pack content file was protected separately; 11,821 managed files were
+checked afterward. The UI's four pack rows are the observed current workload,
+not P0's inherited three-pack fixture. Installed rows do not establish enabled
+mods, active packs or shader activation; existing game preferences were retained
+and not exported.
 
-Validation before use must cover compile-time production absence, bounded record
-storage/overflow, secret/path field exclusion, cancellation/stale publication,
-correlation across worker boundaries, unchanged outcomes/locks/argument assembly,
-and all required type/Rust format/check/test/production-build/real-boot checks.
-Measure enabled-versus-disabled observer overhead in paired fixture runs. This
-design is not an implemented or validated instrumentation mechanism.
+## Storage and environment boundary
 
-## Precise owner procedure and benchmark matrix
+No isolated environment is claimed. The owner-authorized as-is run shares these
+domains deliberately:
 
-1. **Owner boundary now:** finish the current Minecraft session normally and close
-   its Launcher after supervised exit. Identify the other Java application's owner
-   and finish or hold its workload consistently; never terminate Java by name.
-   Resume only after the owner has made a test session available. No reboot or
-   elevation is needed merely to release this boundary.
-2. Prepare a separate Windows test profile/VM and pass the isolation gates above.
-   The owner supplies the interactive system-browser sign-in when authenticated
-   Play is required. Do not share account documents or credentials with the live
-   profile, change application IDs or invent authentication.
-3. Rebuild the exact reviewed source without dependency/version/release changes.
-   Record source/artifact/toolchain/profile identities. If timing instrumentation
-   is necessary, validate and commit it separately before benchmark collection.
-   Retain an otherwise matched uninstrumented build for overhead checks. Install
-   into the test profile only; never replace the owner's installed executable.
-4. Reuse P0's minimal game/two-required-JAR fixture as source data and a reviewed
-   typical inventory of 31 mods, three resource packs and one shader pack. Build
-   independent managed test instances and deeply validate them. Copy only approved
-   game/content/runtime/release/ownership files, no accounts/history/worlds/logs.
-   Inspect absolute ownership metadata before copying; do not make unvalidated
-   provider claims. Keep original instances byte-exact. Record actual installed
-   counts, digest pins, active packs/shader and enabled mods after preparation.
-5. Define fixed viewport/theme/visibility, supported GPU/driver/runtime, power state,
-   observer version, endpoint reachability and background processes. Freeze update
-   installation and gameplay configuration for the series. A VM remains its own
-   machine class; physical-machine timings need a later isolated physical session.
-6. Use separate test-profile snapshots for populated and absent **reconstructable**
-   caches. Preserve manifests/game/runtime and user content. Treat absent metadata/
-   artwork caches separately from artifact stores; never purge the owner's caches.
-   First call in a new process with warmed files is not filesystem-cold.
-7. Collect first/subsequent process starts and first/repeated selection separately.
-   Alternate small/typical blocks to reduce order bias. Target at least 20 comparable
-   successful observations per critical boundary and state, with full settle between
-   actions. Log failures/blockers separately. Use normal exact-child/game exit
-   between Play trials; never issue a second Play while Starting/Running.
-8. Offline tests use only the disposable VM/test network. No host firewall/proxy or
-   live security-setting change. Missing cache or expired session failures remain
-   failures. Fresh online session reuse versus real refresh are separate cases;
-   never manipulate token expiry to manufacture them.
-9. True filesystem-cold testing requires an owner-approved isolated-machine reboot
-   or separately validated safe cache-control procedure. Stop before that owner
-   boundary. If unavailable, report warmed filesystem only. Do not purge host caches.
-10. Record at least 60 seconds per controlled idle state after settled startup,
-    matching process start identities and all WebView descendants, excluding Java.
-    Then compare equal navigation batches and retention after settle; require a
-    trend beyond allocator/cache high-water behavior before claiming a leak.
-11. Report raw sanitized durations, n, first-call result, repeated median,
-    nearest-rank empirical p95 when n permits, worst **all** and worst repeat,
-    sample standard deviation/variance, failures, background load and uncertainty.
-    Do not pool online/offline, cache miss/hit, small/typical or profiled/unprofiled.
-
-For game startup, use safe matching Java-21 diagnostic tools and a pre-start JFR
-allowlist, explicitly disabling custom Minecraft events as P0's audit demonstrated.
-Keep environment/properties/arguments/file/socket/custom-network payloads absent.
-Measure JVM/Fabric/Client/resource/shader phases without treating CLIENT_STARTED
-as the first usable menu. Pair with unprofiled launches and actual menu observers.
-
-## Focused questions: current answers
-
-| Question | Evidence-backed answer |
+| Domain | What was established |
 |---|---|
-| How many full game audits selection → Play? | Actual count unknown; conditional source model is 5 for Home, 6 for Workspace; must be traced |
-| Required versus presentation duplicates? | Final locked audit plus launch preparation/runtime/session/compatibility are required; equal-generation presentation jobs are candidates, not removed |
-| Hash/open/metadata/network/queue shares? | Unmeasured; P0 inclusive medians cannot be decomposed by subtraction |
-| Unrelated IPC delayed by synchronous validation? | Unmeasured; source shows synchronous hashing within async paths |
-| Launcher preparation versus game loading? | Unmeasured; P0 recorded already-running gameplay only |
-| Lists: native scan/artwork/frontend? | Unmeasured end-to-end; P0 has native component costs, not render dominance |
-| Retention beyond bounded caches? | Unmeasured; P0's stable uncontrolled process tree cannot prove leak absence/presence |
+| Managed application data | Existing platform-resolved owner tree; hashed protected files, no alternate root or copied account database |
+| Instance paths | Existing validated managed identity and files; no clone, new instance, junction, external game path or `.minecraft` use |
+| WebView storage | Same Windows account/application context; no independent profile configured; actual profile path/contents were not exported or independently instrumented |
+| Windows Credential Manager | Existing user and fixed application credential namespace; no enumeration/copy/alternate store; Play exercised normal authenticated operation |
 
-## Optimization priorities and first experiment
+The debug-only `AURORA_DIAGNOSTIC_DATA_ROOT` remains insufficient for full isolation
+and is ignored by release builds. Changing managed roots would not isolate
+WebView storage or the per-user credential namespace. No such override was used.
+Normal session restoration may rotate an OS credential; its phase was not traced,
+so credential immutability is not claimed. No password, token, account database,
+world, log or configuration was copied into another environment.
 
-No new verified user-impact bottleneck is established. P0's largest separately
-observed local components remain game integrity (typical median 1,060.60 ms), mod
-scan (301.24 ms) and runtime audit (130.05 ms, four repeats). These are carried-
-forward exploratory values, not fresh controlled P0.1 timings. Whole plan resolution
-overlaps integrity; do not rank it as another independent bottleneck. Cached PNG
-decode was 46.45 ms for 42 objects; this does not prove artwork is the leading delay.
+Physical host: Windows 11 Home build 26300, i7-14700F with 28 logical processors,
+31.76 GiB RAM, Radeon RX 9070 XT driver 32.0.31041.1004. The existing power scheme
+was Ultimate Performance; no setting changed. Desktop resolution was 2560×1440;
+returned captures were 1122×791 for Launcher and 2048×1152 for Minecraft. These
+capture dimensions are not an independently measured Minecraft framebuffer size.
 
-Priority 1 is the isolated packaged baseline and real request/audit counts.
-Priority 2 is a read/open/hash-count experiment on an unchanged disposable provider
-JAR inventory to quantify the second pass in `instance_mods.rs:777,817`. Priority 3
-is correlation of equal-generation readiness requests and unrelated IPC waits.
-Priority 4 is storage/worker-count and native/frontend attribution. Client startup
-and retention require their own controlled traces before implementation proposals.
+The host kept its normal network and existing populated caches. No reboot, cache
+eviction, token-expiry manipulation, firewall/proxy change, install/update, world
+entry or server connection was performed. Background applications were not closed
+or fully controlled. No build, preservation hashing or game ran during idle
+collection. CPU/GPU utilization of unrelated applications, GPU resource usage and
+the process watcher's perturbation were not quantified.
 
-**Does one-pass hashing remain the best first implementation?** It remains the
-smallest well-defined Launcher implementation candidate from P0, because the same
-entry is read for expected SHA-256 and again for revision. Its saved cost is still
-unmeasured. P0.1 has not established that it is the best first change by user impact.
-The recommended first **measurement experiment** is the controlled provider-JAR
-read-count/per-pass attribution run, followed by a separately authorized one-pass
-A/B only after baseline review. Do not implement hashing or readiness coalescing
-under this request. Final fresh hashing, ownership, path, compatibility, exact
-runtime/session and locked launch checks remain mandatory.
+## Measurement method and limits
 
-## Evidence, verification and stopping point
+Windows UI actions used the Computer Use skill's `node_repl` and `@oai/sky` API.
+Each input followed an inspected returned UI state. Raw accessibility/account/
+server text and screenshots were not saved in research artifacts. The notebook
+retains only numeric timings, closed boundary labels, counts and outcomes.
 
-- [Evidence index and read-only tools](docs/performance-p0-1/README.md).
-- [Source/build/process preflight](docs/performance-p0-1/evidence/preflight.json).
-- [Preservation verification](docs/performance-p0-1/evidence/protection-verification.json).
-- Full inventories/status/history/live remote responses and path-level verification
-  are local only under `docs/performance-p0-1/private/`, excluded from Git.
-- [Previous P0 report](PERFORMANCE_RESEARCH_P0.md) and
-  [previous native observations](docs/performance-p0/evidence/summary.json) remain
-  unchanged, with their original methodology and limitations.
+UI durations start at the **automation request**, before input delivery, and end
+at the first matching accessible state. They include helper/input/capture/polling
+overhead. The target polling pause was 60 ms, but actual observation intervals were
+often much wider. They are observational upper bounds, not exact physical-click,
+image-paint or compositor timestamps. Raw last-negative capture-start and positive
+capture-end values retain uncertainty. A first positive with no negative has
+the entire request-to-observation interval as its uncertainty range.
 
-Only P0.1 research documents, safe preflight evidence and read-only helper scripts
-are added. No production source, manifest, lockfile, dependency, release version,
-identifier, updater authority/trust, credential target, launch behavior or user
-instance is changed. No production checks/build/boot were rerun because no such
-code is edited. Helpers receive syntax/preflight and preservation checks; these
-are not application validation or benchmark success.
+First Ready required an enabled Play control and Ready text on Home. Trial 8's
+immediate full-state follow-up showed Checking again. The later cohort therefore
+also required Ready/enabled Play without Checking for at least one second of
+successive observations. This operational settled-readiness proxy **includes the
+one-second hold** and does not prove every internal request is finished. The first
+nine starts were closed after the first-Ready observation; the next 20 continued
+through this stability criterion. First-Ready collection used the same prefix in
+both cohorts; its combined distribution is exploratory, not randomized.
 
-The independently revertible read-only tooling commit is
-`6fc1887c809c1e63840b9fe030dad03a0150d40a`. It contains no runtime instrumentation.
-The separate report/evidence commit is identified in the final handoff.
+Two harmless Instances navigation actions verified input response after startup.
+Their timing begins at that later navigation request, not process creation.
+Window discovery can find a blank/loading WebView, so it is not substituted for
+first visible nonblank paint. Native frontend-ready/paint/IPC markers were absent.
 
-Final hash comparisons passed for all **15,566** pre-existing Launcher files,
-**426** Client files and **11,820** managed-content/state files protected by the
-retained P0 inventory: zero changed/missing files and zero removed tracked paths.
-This covers the protected game/content/state set, not mutable worlds, logs or
-player settings belonging to the running game. All critical repository files
-remain present. The helper scripts parse, evidence JSON and document links pass,
-and the private inventories are ignored; no private path-level output is staged.
+The process observer read installed-executable identity, PID, parentage and OS
+creation time only, never child arguments or output. **A Java child is not always
+Minecraft:** each Play also produced an earlier auxiliary Java child. The game
+child was paired with the independently created supervisor log: exactly one
+same-parent Java creation followed it within one second, at a rounded 0–1 ms
+offset in all three trials. Earlier children were excluded. This is external
+correlation, not instrumentation of the returned native child handle. Log headers
+were read only to 96 bytes, excluding stdout/stderr. Public timing exports remove
+PIDs and paths; exact parentage remains in ignored local evidence.
 
-The next action belongs to the owner: finish the current session normally and
-provide an isolated test profile/session. This phase stops at that boundary for
-owner review. No new primary timings or actual invocation counts are claimed.
+UI intervals use monotonic `performance.now()`. OS creation/log times use wall
+clock, paired to each action's `Date.now()`; no independent drift calibration ran.
+Millisecond-precise numbers in raw records do not justify sub-millisecond claims.
+The first game trial had a gap between Play and window polling; its combined
+window/loading screenshot timing is reported separately. Minecraft exposes no
+usable UIA menu tree here. Screenshots distinguish the loading overlay from the
+menu, and normal Quit responses establish usability afterward. Manual observation
+gaps include model/tool time. The previous screenshot's return time is **not** a
+strict lower bound on menu presentation; no menu p95 or tight paint latency is claimed.
+
+## New packaged observations
+
+Milliseconds below are observed upper bounds, except explicitly labeled OS creation
+differences. Empirical p95 uses nearest rank only for n≥20. Raw sample standard
+deviations/variances, first values, worst repeat and failures are in the summary.
+
+| Boundary / condition | n | First | p50 | Empirical p95 | Worst |
+|---|---:|---:|---:|---:|---:|
+| Startup request → first accessible Ready; new process, warmed files | 29 | 2,245 | 3,222 | 3,499 | 3,547 |
+| OS process creation → same first-Ready proxy | 29 | 2,208 | 3,195 | 3,473 | 3,516 |
+| Startup request → Ready sustained ≥1 s; later cohort, includes hold | 20 | 4,677 | 4,440 | 4,734 | 4,852 |
+| Later Instances navigation request → accessible list | 2 | 321 | 247 | — | 321 |
+| Mods → 31 rows, repeated in final process | 20 | 223 | 234 | 249 | 252 |
+| Resource Packs → four rows, repeated in final process | 20 | 160 | 257 | 266 | 267 |
+| Shaders → one row, repeated in final process | 20 | 221 | 233 | 249 | 489 |
+| Explicit Mods refresh, busy state observed → complete | 1 | 404 | 404 | — | 404 |
+
+The first entries into Mods/Packs/Shaders in the final process were respectively
+386/272/207 ms and are excluded from the 20-repeat distributions. Earlier-process
+observations and pilot trials are also separate. Repeated-start median excluding
+the first start was 3,231 ms. No filesystem-cold first call is claimed.
+
+Median observation widths were 109 ms for first Ready and 169/194/169 ms for
+Mods/Packs/Shaders. The worst shader sample's width was 422 ms; it cannot establish
+a 489 ms application render stall. Tab measurements verify accessible rows and a
+ready Refresh control, not all artwork decoded, viewport rows painted or each
+native scan/IPC stage independently complete.
+
+The defined startup and 20-repeat content series had no failed observations.
+Five saved pilot records are excluded; pilot errors included a wrong workspace
+predicate and an incorrect expected pack count. Outside the repeat series, one
+30-second resource-tab attempt left the Mods page visible. It is retained as an
+unsuccessful observation; a fresh screenshot and coordinate action reached Packs
+within 294 ms. Attribution to application versus observer/input remains unresolved.
+Resource-pack and shader refresh probes did not observe their transient busy state
+within three seconds, so they are **inconclusive**, not three-second refresh times
+or application failures. Geometry/input errors before valid trials are excluded
+and described in the evidence index.
+
+Settled screenshots showed both real artwork and fallback tiles in the installed
+payload. Complete image decode/paint counts and timings remain n=0; they cannot
+validate current source's artwork correction. No fallback was changed.
+
+### Actual game startup, paired per trial
+
+| Trial / trigger | Play request → correlated game OS creation | OS creation → game window observation | Play request → menu without overlay, upper bound | OS creation → menu, upper bound | Exit |
+|---|---:|---:|---:|---:|---:|
+| First Workspace Play in pilot process | 5,889 ms | Not separately resolved; combined window/loading snapshot by Play+19.895 s | 30.053 s | 24.164 s | 0 |
+| Repeated Workspace Play, same process | 3,827 ms | 9.964–10.080 s | 25.392 s | 21.565 s | 0 |
+| Home Play, same process | 2,743 ms | 10.453–10.566 s | 20.548 s | 17.805 s | 0 |
+
+There are two Workspace and one Home trials, not 20 comparable launches per state.
+No tail distribution or failure-rate assurance is inferred. Order, session/cache
+reuse and trigger differ; Home is not proven faster. Java creation to window is
+measured externally in the latter two trials, with observation widths of about
+116/113 ms. It is a window-discovery boundary, not a first-present marker. The
+loading overlay remained at the first screenshots; visible menu controls alone
+were insufficient. No new startup JFR or CPU-phase recording was collected.
+
+## Controlled idle within the as-is session
+
+Exact Launcher ancestry plus WebView descendants were included; Java excluded.
+Foreground was requested for the settled view, but continuously visible/unoccluded
+state was not independently verified. The process observer remained enabled and
+other owner background applications stayed in place. These are two short samples
+within one process, in Workspace-then-Home order, not an isolated A/B.
+
+| View | Duration / samples | CPU, one-core equivalent | Working set | Private bytes | Tree |
+|---|---|---:|---:|---:|---|
+| Workspace / Shaders | 60.53 s / six intervals | 9.19% | 551.20–551.75 MiB | 475.68–476.26 MiB | Seven processes, stable |
+| Home | 60.48 s / six intervals | 8.89% | 572.05–578.87 MiB | 493.55–500.46 MiB | Seven processes, stable |
+
+CPU is summed process CPU seconds divided by elapsed time, not whole-machine CPU
+percent. Handles/threads were 5,141–5,143 / 243–244 in Workspace and 5,132–5,143 /
+240–244 on Home. There was no Minecraft process in any interval. These results
+do not establish a leak, retention plateau after repeated navigation, GPU cost,
+or a causal memory difference between pages. No heap snapshot was taken.
+
+## Actual readiness counts and remaining matrix
+
+Actual command, deep-game-audit and runtime-audit counts remain **unknown**. UI
+Ready/Checking transitions and auxiliary Java creations cannot count those calls.
+The inherited healthy-path source model predicts three game audits at selected-
+instance startup or explicit selection; selection-to-Home-Play totals five,
+selection-to-Workspace-Play six. These remain conditional **predictions** about
+the investigated source, not measured counts in the installed binary. Overlap,
+errors and guards invalidate multiplication of P0 timings by predicted counts.
+
+The picker had one instance. Same-instance selection is not a different-instance
+benchmark; current source explicitly skips its selection command when IDs match.
+The picker was opened and closed without changing selection. No artificial second
+instance, duplicate modpack or copied user configuration was created.
+
+| Requested boundary / condition | Current evidence / gap |
+|---|---|
+| Packaged startup / response | First-Ready and sustained-Ready proxies measured; two later navigation responses; precise first-paint/full interactive marker absent |
+| Instance selection / invocation counts | One existing instance; actual selection-change n=0 and internal counts unknown |
+| Play → spawn / window / menu | Three real launches; log-correlated OS child creation; two distinct window boundaries; coarse manual menu upper bounds |
+| Content lists / artwork | 20 repeated row-ready observations per domain; full artwork decode/paint timing absent |
+| Refresh / update checks | One observed mod-refresh completion; two inconclusive refresh probes; explicit update checks n=0, no updates applied |
+| Idle / retention | Two 60-second idle states; long-term retention/navigation trend and heap/DOM metrics absent |
+| Cold / warm | New-process warm-filesystem/populated-cache case only; no cache-miss or true cold series |
+| Online / offline | Normal host network only; no endpoint-role attribution or offline case |
+| Small / typical / large | Existing typical inventory only; no synthetic size substitute |
+| Fresh auth / session reuse | Normal existing authentication; reuse/refresh phase not traced; no fresh login test |
+
+Closing these gaps requires a source-proven payload and reviewed, privacy-safe
+native/frontend markers. The existing P0.1 instrumentation design remains a design:
+bounded typed correlation IDs, monotonic phase records, actual audit entries,
+blocking-job queue boundaries, image-decode/DOM markers, overflow/privacy tests and
+matched enabled/disabled overhead checks. Preserve production-disabled behavior,
+all integrity/ownership/runtime/session/final locked launch checks and full required
+startup/native verification. No such patch was implemented for this as-is run.
+Future cache eviction, offline, fresh-auth or reboot work needs an appropriately
+authorized disposable context; none is currently scheduled or required from the owner.
+
+## Ranked measurement-supported roadmap
+
+These are investigation/implementation candidates for a subsequent authorized
+phase, not promised savings. Costs refer to their own boundaries and are not summed.
+
+| Rank | Candidate and measured reason | Next discriminating experiment / security constraint |
+|---:|---|---|
+| 1 | Profile Minecraft/Fabric/Client startup before the window: two paired post-spawn intervals were about 10.0–10.6 s; menu observation is later | Source-proven JAR/runtime plus reviewed pre-start JFR allowlist and finer window/menu observer, paired unprofiled. Separate class loading, mixins, resource/shader work; do not infer startup causes from P0's gameplay JFR |
+| 2 | Attribute Launcher preparation and startup readiness orchestration: game creation followed Play by 2.743–5.889 s; first Ready can revert to Checking; sustained proxy p50 4.440 s including hold | Count real equal-generation requests/audits, queue waits and session/metadata phases. Coalesce only proven presentation duplicates. Keep fresh preparation, exact compatibility/runtime/session and final locked validation mandatory |
+| 3 | Quantify redundant provider-JAR reads before a one-pass implementation | Inherited P0 typical mod scan median 301.24 ms; current repeated UI list proxy 233.75 ms is a different, cached workload. Record actual bytes/opens/per-pass cost on unchanged disposable files, then reviewed A/B. Preserve exact hashes, ownership, paths and freshness |
+| 4 | Separate idle presentation/resource cost before rendering changes | Stable short-sample tree used 551–579 MiB working set and about 9% of one CPU core. Paired fixed/static versus existing presentation in a test context; measure GPU, descendants and observer overhead. Longer navigation/settle batches before any leak claim |
+| 5 | Instrument list-to-artwork decode/paint and explicit update surfaces | Warm list upper bounds were around 0.23–0.26 s, with wide observer intervals; full decode and update timings absent. Source-proven image counters/cache hit/miss and native/IPC/DOM phases before changing caching or virtualization |
+
+P0's typical game-integrity median **1,060.60 ms**, mod scan **301.24 ms**, runtime
+audit **130.05 ms** (four repeats), and cached decode **46.45 ms** for 42 PNG objects
+are inherited native-component measurements. They are not new packaged timings
+or independent additive costs. Whole-plan resolution overlaps integrity. No hash,
+network, queue, filesystem-open or UI-blocking share was established here.
+
+One-pass provider hashing remains a narrow, well-defined first Launcher
+implementation candidate from P0, but is not demonstrated to be the largest
+user-impact improvement. The new evidence puts post-spawn startup profiling and
+real readiness correlation ahead of claiming that result. **No optimization is
+implemented under this report.**
+
+## Preservation, verification and review
+
+The first post-run hash comparison detected two missing pre-existing temporary
+JNA native files, a DLL and its `.x` marker. The installed JNA library is 5.17.0;
+its published initialization removes marked temporary libraries and their markers.
+That behavior is consistent with the observed pair, although no file-deletion
+trace was captured. [JNA 5.17.0 source](https://github.com/java-native-access/jna/blob/5.17.0/src/com/sun/jna/Native.java#L1275).
+
+Investigation stopped before commits. With Launcher/Java closed, exact missing
+original paths were recreated exclusively from surviving siblings whose bytes
+matched the saved original SHA-256s, verified before and after. Two files totaling
+273,408 bytes were restored. No unrelated file was overwritten, deleted or reset.
+The failed comparison is retained, not replaced by a passing record.
+
+The subsequent comparison passed all **15,574** pre-existing Launcher repository
+files, **426** Client files and **11,821** protected managed files, with zero missing
+or changed bytes and no removed tracked paths. Report/index edits are the only
+authorized changes to pre-existing repository files in the final comparison.
+The installed executable SHA remains identical. New ordinary game logs/native
+temporary files and reconstructable cache activity were retained; worlds/player
+settings/log bodies were not inventoried or copied, so comprehensive byte equality
+of mutable game/session/WebView/credential state is not claimed.
+
+Research tools/evidence receive syntax, numeric-summary reproducibility, JSON,
+privacy-field, document-link, diff/deletion and preservation checks. No application
+type/Rust/build test suite was rerun: production source, package metadata, lockfiles
+and native configuration did not change. UI boots here validate the installed
+payload, not the current source build. No dependency, version, identifier, updater
+key/release authority, integrity policy, launch argument, mod or game setting changed.
+
+See the [evidence index and reproduction procedure](docs/performance-p0-1/README.md),
+[numeric summary](docs/performance-p0-1/evidence/as-is-summary.json),
+[JNA preservation record](docs/performance-p0-1/evidence/as-is-jna-preservation.json),
+[post-restoration comparison](docs/performance-p0-1/evidence/as-is-after-jna-restoration-protection.json),
+and [final comparison](docs/performance-p0-1/evidence/as-is-final-protection.json).
+P0's [report](PERFORMANCE_RESEARCH_P0.md) and evidence remain unchanged.
+The former BLOCKED report is preserved in commit `1142a1b`; its existing preflight
+records remain in the evidence index. The new commits contain research only.
+The independently reviewable observer/tooling commit is `2e6916a`; the separate
+report/evidence commit is identified in the owner handoff.
+
+**Stop for owner review.** No further game run, optimization, update, push,
+publication or environment change is authorized by this deliverable itself.

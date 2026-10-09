@@ -1,0 +1,27 @@
+{
+  "launcherSourceAtCollection": "1142a1bb1640dd7ac39512c63440a6362673a4f4",
+  "clientSourceAtCollection": "5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d",
+  "installedLauncherSourceProvenance": "unknown; no new build or install",
+  "installedLauncherSha256": "15bfd5d71bbe73c9ad7f3010c052f3f1669d81abfa4790b8c48efb8b169fd868",
+  "compiledUpdaterTrustIdentity": "not independently extracted from installed payload",
+  "nodeReplRuntimeVersion": "not exposed by sandbox global; not asserted",
+  "computerUseSkillVersion": "26.1002.52244",
+  "toolAndSourceDocumentSha256": {
+    "AGENTS.md": "e9e1656365c9ff2768c83892450479aabd21ce4f54afa5efd0ccc7dea7c3a330",
+    "ARCHITECTURE.md": "28f099c66ad352cb427ef4639cde4f9dbc9cf8f73a8efd9bf56a9e58ebd70628",
+    "package.json": "b71f7e0a65c19ca92b668ebe28f0f3b15a2b04a6cb0802c385fffcea7cea22b9",
+    "package-lock.json": "b86f0aae61579fc922821869b351bf65ed7493411e9cf4330c9eb3b2a22f8443",
+    "src-tauri/Cargo.toml": "67455607b3c73951ae22c8dccb4b684a4474105abe908e0b136cb97332430e15",
+    "src-tauri/Cargo.lock": "4c47697614c4587e879c19e3793a66624c77df9e709cf27520fc84f71ad8ee28",
+    "src-tauri/tauri.conf.json": "1d5f54e271e73fc25cd10eabd1b8bc58b50bd3c102896b3b320106c8e0ce37bf",
+    "src-tauri/build.rs": "4ae2333b11623039cc115e29b696e7ff5cdfcd5b7d628280ddf48fa733e6418d",
+    "docs/performance-p0-1/observe-processes.ps1": "d50c86fec754b6f8b19148dca63464fb65f1a182afc1cf2622eebd18a3401d09",
+    "docs/performance-p0-1/ui-observer-notebook.js": "4f17ed10a4a134d22bb4f50ff01103d7df4c540a3af7e8d5660b9343bc514ccb",
+    "docs/performance-p0-1/analyze-as-is.py": "b51adbb6b4fbd1b6e4642bfc7e2cb5ed8ddc5db92da106254805594e45a63122",
+    "docs/performance-p0-1/verify-resume.py": "c5c2d2411c7097f17af937e0fe66ea2ece4a2f5f51158f624ce6da555005fed3",
+    "docs/performance-p0/sample-resources.ps1": "ff70a05f72a09a90e3e60216d39290ff1d7c219cfa8edf248676e5acf6b71128"
+  },
+  "ownerAuthorization": "we dont need another windows account, run the check as-is",
+  "isolatedEnvironmentClaimed": false,
+  "productionSourceOrAuthoritiesChanged": false
+}
