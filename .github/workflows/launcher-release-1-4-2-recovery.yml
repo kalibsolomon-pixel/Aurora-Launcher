@@ -1,0 +1,139 @@
+name: Aurora Launcher accepted 1.4.2 draft recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  VERSION: '1.4.2'
+  SOURCE_SHA: 'cde51a00a6dbce47adbde06b361219defd963dfb'
+  RELEASE_ID: '408878140'
+
+concurrency:
+  group: aurora-launcher-release-1.4.2
+  cancel-in-progress: false
+
+jobs:
+  complete_and_publish:
+    name: Complete accepted 1.4.2 draft and publish (owner gate)
+    runs-on: windows-latest
+    environment: launcher-production
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify reviewed recovery and accepted original provenance
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+        run: |
+          if ($env:GITHUB_REF -cne 'refs/heads/main') { throw 'Main-only recovery' }
+          if ((git rev-parse HEAD) -cne $env:GITHUB_SHA) { throw 'Checkout identity differs' }
+          $remote = gh api repos/kalibsolomon-pixel/Aurora-Launcher/git/ref/heads/main --jq '.object.sha'
+          if ($LASTEXITCODE -ne 0 -or $remote -cne $env:GITHUB_SHA) { throw 'Reviewed main moved' }
+          git merge-base --is-ancestor $env:SOURCE_SHA $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Accepted source is not an ancestor' }
+          $allowed = @('.github/workflows/launcher-release-1-4-2-recovery.yml', 'tools/release/complete-1-4-2-draft.mjs', 'tools/release/complete-1-4-2-draft.test.mjs', 'RELEASE_1_4_2_RECOVERY.md')
+          $changed = @(git diff --name-only $env:SOURCE_SHA $env:GITHUB_SHA)
+          if ($LASTEXITCODE -ne 0 -or @($changed | Where-Object { $_ -cnotin $allowed }).Count -ne 0) { throw 'Recovery contains unexpected source changes' }
+          node --test tools/release/*.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Release recovery checks failed' }
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11666957499'
+          run-id: '38044389751'
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: kalibsolomon-pixel/Aurora-Launcher
+          path: ${{ runner.temp }}/aurora-release-assets
+      - name: Reverify Windows metadata and exact signed original bytes
+        shell: pwsh
+        env:
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+        run: |
+          & ./tools/release/windows-artifacts.ps1 -Version $env:VERSION -Format nsis -Mode Verify -SourceSha $env:SOURCE_SHA -OutputDirectory (Join-Path $env:RUNNER_TEMP 'aurora-release-assets')
+          if (-not $? -or $LASTEXITCODE -ne 0) { throw 'Original accepted bytes differ' }
+      # This is the separately owner-authorized exception for the proven incomplete
+      # draft. Only missing exact accepted bytes may be added; never overwrite.
+      - name: Complete only the fixed accepted draft
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+          AURORA_COMPLETE_ACCEPTED_DRAFT: '408878140'
+        run: |
+          node tools/release/complete-1-4-2-draft.mjs (Join-Path $env:RUNNER_TEMP 'aurora-release-assets')
+          if ($LASTEXITCODE -ne 0) { throw 'Draft completion stopped; retain all bytes and inspect before retry' }
+      - name: Normal explicit-ID draft verification and publication
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+        run: |
+          node tools/release/publish.mjs $env:VERSION $env:SOURCE_SHA (Join-Path $env:RUNNER_TEMP 'aurora-release-assets') $env:RELEASE_ID verify-only
+          if ($LASTEXITCODE -ne 0) { throw 'Complete draft verification failed' }
+          & ./tools/release/publish.ps1 -Version $env:VERSION -Format nsis -SourceSha $env:SOURCE_SHA -AssetsDirectory (Join-Path $env:RUNNER_TEMP 'aurora-release-assets') -ResumeReleaseId ([long]$env:RELEASE_ID)
+          if (-not $? -or $LASTEXITCODE -ne 0) { throw 'Publication/public verification incomplete; inspect state without rebuilding' }
+
+  advance_update_authority:
+    name: Advance accepted 1.4.2 discovery LAST (separate owner gate)
+    needs: complete_and_publish
+    runs-on: windows-latest
+    environment: launcher-update-authority-production
+    concurrency:
+      group: aurora-launcher-production-update-authority
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11666957499'
+          run-id: '38044389751'
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: kalibsolomon-pixel/Aurora-Launcher
+          path: ${{ runner.temp }}/aurora-release-assets
+      - name: Verify accepted artifacts before issuing App token
+        shell: pwsh
+        env:
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+        run: |
+          node tools/release/updater-release.mjs verify $env:VERSION $env:SOURCE_SHA (Join-Path $env:RUNNER_TEMP 'aurora-release-assets') $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) { throw 'Accepted signature/artifact verification failed' }
+      - name: Issue dedicated authority installation token
+        id: authority-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.AURORA_AUTHORITY_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AURORA_AUTHORITY_APP_PRIVATE_KEY }}
+          owner: kalibsolomon-pixel
+          repositories: Aurora-Launcher
+          permission-contents: write
+          skip-token-revoke: false
+      - name: Normal public-byte verification and non-forced authority advance LAST
+        shell: pwsh
+        env:
+          AURORA_AUTHORITY_TOKEN: ${{ steps.authority-token.outputs.token }}
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+        run: |
+          node tools/release/publish-manifest.mjs $env:VERSION $env:SOURCE_SHA (Join-Path $env:RUNNER_TEMP 'aurora-release-assets') '959bf5fd833744abbdcce5a610ef4c5aac0fb62a'
+          if ($LASTEXITCODE -ne 0) { throw 'Authority incomplete; inspect PREPARED/PUBLISHED/VERIFIED without rewinding or blindly retrying' }
