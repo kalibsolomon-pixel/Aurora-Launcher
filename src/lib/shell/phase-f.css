@@ -10,6 +10,7 @@
   --f-edge: rgb(255 255 255 / 7%);
   --f-shadow: 0 12px 36px rgb(0 0 0 / 16%);
   --f-blur: none;
+  --f-content-panel: var(--f-panel);
   --f-dialog-panel: color-mix(in srgb, var(--color-background) 94%, transparent);
   --f-dialog-group: color-mix(in srgb, var(--color-surface) 94%, transparent);
   --f-dialog-dim: rgb(0 0 0 / 52%);
@@ -31,6 +32,9 @@
   --f-edge: rgb(222 242 255 / 19%);
   --f-shadow: inset 0 1px 0 rgb(235 250 255 / 9%), 0 16px 48px rgb(0 0 0 / 18%);
   --f-blur: blur(28px) saturate(135%) brightness(.92);
+  /* Scrolling content uses a dark translucent backing rather than sampling
+     the animated video through a filter on every result/entire list. */
+  --f-content-panel: linear-gradient(145deg, rgb(184 224 235 / 5%), rgb(9 16 26 / 12%)), rgb(8 17 27 / 80%);
   --f-dialog-panel: linear-gradient(145deg, rgb(184 224 235 / 11%), rgb(9 16 26 / 38%)), rgb(8 17 27 / 56%);
   --f-dialog-group: rgb(13 21 32 / 52%);
   --f-dialog-dim: rgb(0 0 0 / 38%);
@@ -120,9 +124,10 @@
 
 @supports not (backdrop-filter: blur(1px)) { :root[data-background="borealis"] { --f-panel: var(--color-surface); --f-dialog-panel: var(--color-background); --f-dialog-group: var(--color-surface); --f-accent-fill: var(--color-accent-strong); --f-accent-fill-hover: var(--color-accent-hover); --f-accent-fill-pressed: var(--color-accent-pressed); --f-accent-edge: var(--color-accent-strong); --f-accent-inset: none; --f-accent-shadow: none; --f-accent-blur: none; --f-logo-opacity: 1; --f-logo-ground: none; } }
 
-/* Content surfaces share diffusion; rows and controls avoid nested heavy blur. */
-.f-pilot .mod-list, .f-pilot .packs-list { border-color: var(--f-edge); border-radius: var(--f-radius-panel); backdrop-filter: var(--f-blur); }
-.f-pilot .browse-row, .f-pilot .project, .f-pilot .preview { backdrop-filter: var(--f-blur); border-color: var(--f-edge); }
+/* Keep growing scroll surfaces out of the backdrop-filter pipeline. Static
+   shell/dialog glass retains selective diffusion; artwork and rows stay live. */
+.f-pilot .mod-list, .f-pilot .packs-list { background: var(--f-content-panel); border-color: var(--f-edge); border-radius: var(--f-radius-panel); backdrop-filter: none; }
+.f-pilot .browse-row, .f-pilot .project, .f-pilot .preview { background: var(--f-content-panel); backdrop-filter: none; border-color: var(--f-edge); }
 
 /* ------------------------------------------------------------------ */
 /* Accent glass (Borealis only)                                        */
