@@ -41,15 +41,20 @@ icon derived from the canonical first-party mark, without inventing Modrinth ide
 Project artwork shares the existing `cache/artwork/modrinth/<project>.img` store
 with Browse. Reads validate full images and containment; static WebP (lossy/lossless,
 including transparency) is now admitted for provider artwork and normalized to static
-PNG before storage/display. Validated legacy WebP cache objects are normalized once.
+PNG before storage/display. GIF provider icons now use a static first-frame snapshot
+through the same isolated worker, with canvas/frame containment, at most 64 frames,
+16 MiB total decoded frame work and full-stream validation. The standard GIF decoder
+accepts complete image blocks with an omitted LZW end code (observed in Enchant Icons);
+truncated blocks, missing trailer and incomplete pixels remain rejected. Validated
+legacy WebP/GIF cache objects are normalized once.
 PNG validation and all encoded-byte, dimension, pixel and decoder limits remain;
-JPEG/GIF/SVG and animated PNG/WebP are rejected. RIFF lengths/chunks and both extended
+JPEG/SVG and animated PNG/WebP are rejected. RIFF lengths/chunks and both extended
 canvas and actual VP8/VP8L dimensions are checked before decoding. Because the decoder's
 advisory allocation limit is incomplete, production WebP decoding runs in a byte-only
 disposable invocation of the current executable, before Tauri initialization: no URLs,
 paths, instances, credentials, inherited environment or network. Windows enforces a
 16 MiB process-memory Job Object; Linux uses address-space/data limits. Other platforms
-currently refuse WebP safely until an equivalent enforcement boundary is implemented.
+currently refuse WebP/GIF safely until an equivalent enforcement boundary is implemented.
 The parent bounds input/output and waits at most ten seconds for the exact child;
 only a fully revalidated normalized PNG can leave the worker. Server favicons retain
 their PNG-only policy. Frontend CSP no longer admits the provider CDN directly.
@@ -64,7 +69,8 @@ during ordinary navigation; mounted consumers retry only transient outcomes and
 update reactively after completion, canceling timers and stale results on unmount or
 identity change. No content interface redesign, file adoption, update authority or
 launcher version change accompanies this correction. Acceptance and limits are recorded
-in `INSTALLED_ARTWORK_RELIABILITY.md`.
+in `INSTALLED_ARTWORK_RELIABILITY.md`; subsequent browsing and GIF acceptance is in
+`LAUNCHER_REFINEMENT_L1.md`.
 
 Provider artwork (including Browse) and Minecraft server favicons use one Rust-owned normalized-PNG output boundary, with the bounded provider WebP extension described above. Artwork permits at most 512 KiB encoded bytes, 1024×1024 and 1,048,576 pixels with a 16 MiB decoder budget; favicons permit 128 KiB, 512×512 and 262,144 pixels with a 4 MiB decoder budget. Dimensions and worst-case pixel bytes use checked arithmetic before surface allocation. Full decoding and completion are required, then pixels are re-encoded without source metadata into a bounded static PNG; only that normalized image can be persisted or emitted. Cache reuse applies the same policy. Production CSP retains `data:` only for images. The frontend accepts native PNG data URLs only, keeps a local type-specific SVG fallback visible until decoding succeeds, and removes failed images. Browse resolves its native search project identity through the shared cached artwork command, never renders a remote search icon URL. Acquisition stays coalesced and bounded. Recognition may show an identified project's artwork without adopting ownership. Invalid server cache icons become absent while other status facts remain usable; there is no banner scraping or persistence migration.
 

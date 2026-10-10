@@ -83,6 +83,9 @@ semver = "1"
 # only the Rust API is used, so no frontend capability is granted.
 tauri-plugin-updater = "2.12"
 image-webp = "0.2.4"
+# Real Modrinth GIF icons normalize to one static PNG in the existing isolated
+# cosmetic worker. No animation, quantizer or general image framework is needed.
+gif = { version = "0.14.2", default-features = false, features = ["std"] }
 
 # Windows credential storage (Phase 8): the official Microsoft raw bindings,
 # restricted to the generic Windows Credential Manager API. Linux and macOS

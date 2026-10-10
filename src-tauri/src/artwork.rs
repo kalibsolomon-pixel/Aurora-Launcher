@@ -1,8 +1,8 @@
 //! Persisted provider project artwork for installed content surfaces.
 //! Installed rows render Aurora-cached bytes, never live provider URLs: the
 //! cache is keyed by provider identity, bounded, decoded and normalized through
-//! the shared image policy. Static WebP sources normalize to PNG; only validated
-//! pixels replace stored objects.
+//! the shared image policy. Static WebP and first-frame GIF sources normalize to
+//! PNG; only validated pixels replace stored objects.
 //! Artwork is cosmetic;
 //! every failure degrades to the caller's generic fallback.
 
@@ -149,9 +149,9 @@ pub fn read_cached(paths: &ManagedPaths, project_id: &str) -> Option<String> {
         .read_to_end(&mut bytes)
         .ok()?;
     let image = cosmetic_image::validate_artwork(&bytes)?;
-    // Validated legacy WebP objects become canonical PNG once, so ordinary
+    // Validated provider formats become canonical PNG once, so ordinary
     // navigation and offline restarts need no decoder worker or CDN request.
-    if bytes.starts_with(b"RIFF") {
+    if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         let _ = persist(paths, project_id, &image);
     }
     Some(image.data_url())
@@ -438,6 +438,47 @@ mod tests {
     }
 
     #[test]
+    fn gif_cache_normalizes_once_and_corruption_remains_recoverable() {
+        let managed = paths();
+        write_atomic(&object_path(&managed, "GIFCACHE"), &fixtures::gif(3)).unwrap();
+        let image = read_cached(&managed, "GIFCACHE").unwrap();
+        let stored = std::fs::read(object_path(&managed, "GIFCACHE")).unwrap();
+        assert!(stored.starts_with(b"\x89PNG\r\n\x1a\n"));
+        assert_eq!(read_cached(&managed, "GIFCACHE"), Some(image.clone()));
+        write_atomic(&object_path(&managed, "GIFCACHE"), b"broken").unwrap();
+        assert!(read_cached(&managed, "GIFCACHE").is_none());
+        let validated = cosmetic_image::validate_artwork(&fixtures::gif(3)).unwrap();
+        persist(&managed, "GIFCACHE", &validated).unwrap();
+        assert_eq!(read_cached(&managed, "GIFCACHE"), Some(image));
+        std::fs::remove_dir_all(managed.data_root()).unwrap();
+    }
+
+    #[tokio::test]
+    async fn persistence_failure_keeps_valid_pixels_available_and_can_recover() {
+        let managed = paths();
+        std::fs::create_dir_all(managed.data_root()).unwrap();
+        // An exact disposable fixture blocks the cache directory. No owner
+        // cache or filesystem permission changes are needed for this case.
+        std::fs::write(managed.cache_dir(), b"blocked cache directory").unwrap();
+        let acquire = || async {
+            let image = cosmetic_image::validate_artwork(&fixtures::gif(3)).unwrap();
+            let _ = persist(&managed, "DISKFAIL", &image);
+            ArtworkResult::available(image.data_url())
+        };
+        let first = resolve_with(&managed, "DISKFAIL", acquire).await;
+        assert_eq!(first.status, "available");
+        assert!(first.source.is_some());
+        assert!(read_cached(&managed, "DISKFAIL").is_none());
+        std::fs::remove_file(managed.cache_dir()).unwrap();
+        assert_eq!(
+            resolve_with(&managed, "DISKFAIL", acquire).await.source,
+            first.source
+        );
+        assert_eq!(read_cached(&managed, "DISKFAIL"), first.source);
+        std::fs::remove_dir_all(managed.data_root()).unwrap();
+    }
+
+    #[test]
     fn only_decoded_static_png_becomes_a_data_url() {
         assert!(data_url(&small_png()).is_some());
         for bytes in [
@@ -498,6 +539,9 @@ mod tests {
         crate::downloads::ensure_rustls_crypto_provider();
         let server = TestServer::spawn(Arc::new(move |request| match request.path.as_str() {
             "/icon.png" => TestResponse::ok(&small_png()).with_header("Content-Type", "image/png"),
+            "/icon.gif" => {
+                TestResponse::ok(&fixtures::gif(3)).with_header("Content-Type", "image/gif")
+            }
             "/truncated" => TestResponse::ok(PNG),
             "/jpeg" => TestResponse::ok(b"\xFF\xD8\xFF").with_header("Content-Type", "image/png"),
             "/jpeg4096" => TestResponse::ok(fixtures::JPEG_4096),
@@ -522,6 +566,11 @@ mod tests {
             .to_owned();
         let icon = format!("{}/icon.png", server.base_url());
         assert!(download(&http, &icon, &host).await.is_ok());
+        assert!(
+            download(&http, &format!("{}/icon.gif", server.base_url()), &host)
+                .await
+                .is_ok()
+        );
         for path in [
             "/redirect-away",
             "/oversized",

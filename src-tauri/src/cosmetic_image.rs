@@ -1,6 +1,7 @@
 //! One native boundary for untrusted cosmetic images. Static PNG remains the
-//! display/cache format. Provider artwork additionally decodes static WebP in
-//! a byte-only, OS-memory-limited disposable worker; other formats are rejected.
+//! display/cache format. Provider artwork additionally decodes static WebP and
+//! a GIF's first frame in a byte-only, OS-memory-limited disposable worker;
+//! other formats are rejected.
 //! Re-encoding decoded pixels removes source metadata and any alternate browser
 //! interpretation. Neither compressed size nor a MIME/signature is validation.
 
@@ -127,17 +128,109 @@ pub(crate) fn validate(bytes: &[u8], policy: Policy) -> Option<ValidatedPng> {
     Some(ValidatedPng(output.bytes))
 }
 
-/// Provider artwork additionally admits static WebP. Browser input and stored
-/// output remain canonical PNG; server favicons retain their PNG-only policy.
+/// Provider artwork additionally admits static WebP and static GIF snapshots.
+/// Browser input and stored output remain canonical PNG; server favicons retain
+/// their PNG-only policy.
 pub(crate) fn validate_artwork(bytes: &[u8]) -> Option<ValidatedPng> {
     if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         return validate(bytes, ARTWORK);
     }
-    webp_dimensions(bytes)?;
+    if bytes.starts_with(b"GIF") {
+        gif_dimensions(bytes)?;
+    } else {
+        webp_dimensions(bytes)?;
+    }
     #[cfg(test)]
-    return decode_webp(bytes);
+    return decode_provider_image(bytes);
     #[cfg(not(test))]
-    isolated_webp(bytes)
+    isolated_provider_image(bytes)
+}
+
+fn decode_provider_image(bytes: &[u8]) -> Option<ValidatedPng> {
+    if bytes.starts_with(b"GIF") {
+        decode_gif(bytes)
+    } else {
+        decode_webp(bytes)
+    }
+}
+
+fn gif_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.len() < 14
+        || bytes.len() > ARTWORK.max_encoded_bytes
+        || !matches!(&bytes[..6], b"GIF87a" | b"GIF89a")
+        || bytes.last() != Some(&0x3b)
+    {
+        return None;
+    }
+    let width = u32::from(u16::from_le_bytes(bytes[6..8].try_into().ok()?));
+    let height = u32::from(u16::from_le_bytes(bytes[8..10].try_into().ok()?));
+    ARTWORK.surface_bound(width, height)?;
+    Some((width, height))
+}
+
+// Freeze the real first frame rather than sending animation to the browser.
+// Decode all frames to reject damaged/truncated streams, without retaining or
+// compositing the later frames. Both count and total decoded work are bounded.
+fn decode_gif(bytes: &[u8]) -> Option<ValidatedPng> {
+    let (width, height) = gif_dimensions(bytes)?;
+    let mut options = gif::DecodeOptions::new();
+    options.set_color_output(gif::ColorOutput::RGBA);
+    options.set_memory_limit(gif::MemoryLimit::Bytes(std::num::NonZeroU64::new(
+        ARTWORK.max_decoded_bytes as u64,
+    )?));
+    options.check_frame_consistency(true);
+    // Keep the decoder's standard GIF compatibility: Enchant Icons omits the
+    // final LZW end code but has complete pixels, image blocks and GIF trailer.
+    // Frame/canvas bounds, full stream decoding and worker budgets still apply.
+    let mut decoder = options.read_info(Cursor::new(bytes)).ok()?;
+    if (u32::from(decoder.width()), u32::from(decoder.height())) != (width, height) {
+        return None;
+    }
+    let mut pixels = Vec::new();
+    let mut frames = 0;
+    let mut decoded = 0usize;
+    while let Some(frame) = decoder.read_next_frame().ok()? {
+        frames += 1;
+        decoded = decoded.checked_add(frame.buffer.len())?;
+        ARTWORK.surface_bound(u32::from(frame.width), u32::from(frame.height))?;
+        if frames > 64 || decoded > ARTWORK.max_decoded_bytes {
+            return None;
+        }
+        if frames == 1 {
+            let size = usize::try_from(u64::from(width) * u64::from(height) * 4).ok()?;
+            pixels.try_reserve_exact(size).ok()?;
+            pixels.resize(size, 0);
+            // A GIF's first image can cover only part of its logical screen.
+            // The untouched canvas stays transparent, preserving icon alpha.
+            let stride = usize::from(frame.width) * 4;
+            if frame.buffer.len() != stride * usize::from(frame.height) {
+                return None;
+            }
+            for row in 0..usize::from(frame.height) {
+                let destination =
+                    ((usize::from(frame.top) + row) * width as usize + usize::from(frame.left)) * 4;
+                pixels
+                    .get_mut(destination..destination + stride)?
+                    .copy_from_slice(&frame.buffer[row * stride..(row + 1) * stride]);
+            }
+        }
+    }
+    if frames == 0 {
+        return None;
+    }
+    let mut output = BoundedOutput {
+        bytes: Vec::new(),
+        maximum: ARTWORK.max_encoded_bytes,
+    };
+    {
+        let mut encoder = png::Encoder::new(&mut output, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().ok()?;
+        writer.write_image_data(&pixels).ok()?;
+        writer.finish().ok()?;
+    }
+    validate(&output.bytes, ARTWORK)
 }
 
 fn decode_webp(bytes: &[u8]) -> Option<ValidatedPng> {
@@ -281,7 +374,7 @@ pub fn run_artwork_decoder_if_requested() -> bool {
     {
         std::process::exit(1);
     }
-    let Some(image) = decode_webp(&bytes) else {
+    let Some(image) = decode_provider_image(&bytes) else {
         std::process::exit(1);
     };
     if std::io::stdout().write_all(image.bytes()).is_err() {
@@ -365,7 +458,7 @@ fn limit_decoder_memory() -> bool {
 }
 
 #[cfg(not(test))]
-fn isolated_webp(bytes: &[u8]) -> Option<ValidatedPng> {
+fn isolated_provider_image(bytes: &[u8]) -> Option<ValidatedPng> {
     use std::{
         io::Read as _,
         process::{Command, Stdio},
@@ -421,6 +514,25 @@ fn isolated_webp(bytes: &[u8]) -> Option<ValidatedPng> {
 
 #[cfg(test)]
 pub(crate) mod fixtures {
+    pub(crate) fn gif(frames: usize) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = gif::Encoder::new(&mut bytes, 2, 2, &[0, 0, 0, 255, 0, 0]).unwrap();
+            for _ in 0..frames {
+                let frame = gif::Frame {
+                    width: 1,
+                    height: 1,
+                    left: 1,
+                    top: 1,
+                    buffer: std::borrow::Cow::Borrowed(&[1]),
+                    transparent: Some(0),
+                    ..Default::default()
+                };
+                encoder.write_frame(&frame).unwrap();
+            }
+        }
+        bytes
+    }
     pub(crate) const JPEG_4096: &[u8] = include_bytes!("../tests/fixtures/artwork/solid-4096.jpg");
     pub(crate) const JPEG_8192: &[u8] = include_bytes!("../tests/fixtures/artwork/solid-8192.jpg");
 
@@ -459,6 +571,76 @@ pub(crate) mod fixtures {
 mod tests {
     use super::*;
     use fixtures::*;
+
+    #[test]
+    fn gif_snapshot_preserves_first_frame_offset_alpha_and_static_output() {
+        for frames in [1, 3, 64] {
+            let source = gif(frames);
+            let image = validate_artwork(&source).unwrap();
+            let mut reader = png::Decoder::new(Cursor::new(image.bytes()))
+                .read_info()
+                .unwrap();
+            assert_eq!((reader.info().width, reader.info().height), (2, 2));
+            assert!(reader.info().animation_control.is_none());
+            let mut pixels = vec![0; reader.output_buffer_size()];
+            reader.next_frame(&mut pixels).unwrap();
+            reader.finish().unwrap();
+            assert_eq!(&pixels[..12], &[0; 12]);
+            assert_eq!(&pixels[12..], &[255, 0, 0, 255]);
+            assert!(validate(&source, FAVICON).is_none());
+        }
+    }
+
+    #[test]
+    fn gif_rejects_truncation_oversized_canvas_frames_and_excessive_work() {
+        let source = gif(3);
+        for length in [6, 14, source.len() - 1] {
+            assert!(validate_artwork(&source[..length]).is_none());
+        }
+        for width in [0u16, 1025, u16::MAX] {
+            let mut image = source.clone();
+            image[6..8].copy_from_slice(&width.to_le_bytes());
+            assert!(validate_artwork(&image).is_none());
+        }
+        let mut outside = source.clone();
+        let descriptor = outside.iter().position(|b| *b == 0x2c).unwrap();
+        outside[descriptor + 1..descriptor + 3].copy_from_slice(&2u16.to_le_bytes());
+        assert!(validate_artwork(&outside).is_none());
+        assert!(validate_artwork(&gif(65)).is_none());
+        // A valid trailer cannot disguise a damaged frame payload.
+        let mut damaged = source.clone();
+        damaged.truncate(damaged.len() - 5);
+        damaged.push(0x3b);
+        assert!(validate_artwork(&damaged).is_none());
+        let mut excessive = Vec::new();
+        {
+            let mut encoder = gif::Encoder::new(&mut excessive, 1024, 1024, &[0, 0, 0]).unwrap();
+            let frame = gif::Frame {
+                width: 1024,
+                height: 1024,
+                buffer: std::borrow::Cow::Owned(vec![0; 1024 * 1024]),
+                ..Default::default()
+            };
+            for _ in 0..5 {
+                encoder.write_frame(&frame).unwrap();
+            }
+        }
+        assert!(validate_artwork(&excessive).is_none());
+    }
+
+    #[test]
+    fn gif_accepts_complete_pixels_with_omitted_lzw_end_code() {
+        let mut source = gif(1);
+        let descriptor = source.iter().position(|b| *b == 0x2c).unwrap();
+        let block_size = descriptor + 11;
+        assert_eq!(&source[block_size..block_size + 3], &[2, 0x4c, 1]);
+        // The one-pixel LZW stream contains clear + red; strip only its end
+        // code, keeping the data-block terminator and final GIF trailer.
+        source[block_size] = 1;
+        source[block_size + 1] = 0x0c;
+        source.remove(block_size + 2);
+        assert!(validate_artwork(&source).is_some());
+    }
 
     #[test]
     fn static_webp_decodes_to_persistable_png_and_animation_stays_rejected() {
