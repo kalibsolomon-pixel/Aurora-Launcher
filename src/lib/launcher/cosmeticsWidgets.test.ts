@@ -1,90 +1,57 @@
 import assert from "node:assert/strict";
 import { after, before, it } from "node:test";
 import { createServer } from "vite";
-
 let server: Awaited<ReturnType<typeof createServer>>;
 let render: any, Skin: any, Cape: any, launcher: any, cosmetics: any, backend: any;
 const a = "a".repeat(32), b = "b".repeat(32);
-const presets = Array.from({ length: 6 }, (_, i) => ({ id: `preset-${i}`, name: i === 0 ? "Very long saved skin ".repeat(8) : `Saved ${i}`, model: i % 2 ? "slim" : "classic", importedAt: 1, sha256: String(i).padStart(64, "0") }));
+const presets = Array.from({length:80},(_,i)=>({id:`preset-${i}`,name:i===0?'Long skin name '.repeat(5):`Saved ${i}`,model:i%2?'slim':'classic',favorite:i===0,importedAt:i,sha256:String(i).padStart(64,'0')}));
 function account(id: string | null) {
-  launcher.accountsState = { selectedAccountId: id, accounts: id ? [{ accountId: id, minecraftName: "Player", status: "signedIn" }] : [] };
-  cosmetics.accountId = id;
+  launcher.accountsState={selectedAccountId:id,accounts:id?[{accountId:id,minecraftName:'Player',status:'signedIn'}]:[]}; cosmetics.accountId=id;
 }
-function state(id = a, active = true, count = 2) {
-  return { accountId: id, currentSkinModel: "classic", hasCurrentSkin: true, capes: Array.from({ length: count }, (_, i) => ({ id: `cape-${i}`, name: `Cape ${i}`, selected: active && i === 0 })) };
+function state(id=a,active=true,count=3) {
+  return {accountId:id,currentSkinModel:'classic',hasCurrentSkin:true,currentSkin:null,capes:Array.from({length:count},(_,i)=>({id:`cape-${i}`,name:`Cape ${i}`,selected:active&&i===0,preview:null}))};
 }
-function html(component: any, size: string) { return render(component, { props: { size } }).body; }
-before(async () => {
-  server = await createServer({ server: { middlewareMode: true }, logLevel: "silent" });
-  ({ render } = await server.ssrLoadModule("svelte/server"));
-  Skin = (await server.ssrLoadModule("/src/lib/launcher/widgets/SkinManagerWidget.svelte")).default;
-  Cape = (await server.ssrLoadModule("/src/lib/launcher/widgets/CapeSelectorWidget.svelte")).default;
-  ({ launcher } = await server.ssrLoadModule("/src/lib/launcher/store.svelte.ts"));
-  ({ cosmetics } = await server.ssrLoadModule("/src/lib/launcher/cosmetics.svelte.ts"));
-  backend = await server.ssrLoadModule("/src/lib/backend.ts");
+function html(component:any,size='small') {return render(component,{props:{size}}).body;}
+before(async()=>{
+  server=await createServer({server:{middlewareMode:true},logLevel:'silent'});
+  ({render}=await server.ssrLoadModule('svelte/server'));
+  Skin=(await server.ssrLoadModule('/src/lib/launcher/widgets/SkinManagerWidget.svelte')).default;
+  Cape=(await server.ssrLoadModule('/src/lib/launcher/widgets/CapeSelectorWidget.svelte')).default;
+  ({launcher}=await server.ssrLoadModule('/src/lib/launcher/store.svelte.ts'));
+  ({cosmetics}=await server.ssrLoadModule('/src/lib/launcher/cosmetics.svelte.ts'));
+  backend=await server.ssrLoadModule('/src/lib/backend.ts');
 });
-after(async () => { await server?.close(); });
-it("skin library renders current state, bounded compact rows, and expansion", () => {
-  account(a); cosmetics.remote = state(); cosmetics.presets = presets; cosmetics.loading = false; cosmetics.offline = false; cosmetics.error = "";
-  const compact = html(Skin, "small"), expanded = html(Skin, "large");
-  assert.match(compact, /Current skin · Classic/);
-  assert.match(compact, /Import skin/);
-  assert.match(compact, /aria-label="Import skin model"/);
-  assert.match(compact, /value="slim"/);
-  assert.equal((compact.match(/<li\b/g) ?? []).length, 3);
-  assert.equal((expanded.match(/<li\b/g) ?? []).length, 6);
-  assert.match(compact, /View library \(6 saved\)/);
-  assert.match(compact, /title="Very long saved skin/);
-  assert.match(compact, /Manage saved skin/);
-  // Management actions stay behind per-row disclosure, not in the collapsed row.
-  assert.doesNotMatch(compact, /Remove saved skin/);
+after(async()=>{await server?.close();});
+it('Home skin summary bounds an eighty-entry library and prioritizes favorites',()=>{
+  account(a);cosmetics.presets=presets;cosmetics.remote=state();cosmetics.loading=false;cosmetics.offline=false;cosmetics.libraryError='';cosmetics.remoteError='';
+  const compact=html(Skin),large=html(Skin,'large');
+  assert.equal((compact.match(/<li\b/g)??[]).length,2);assert.equal((large.match(/<li\b/g)??[]).length,4);
+  assert.match(compact,/Long skin name/);assert.match(compact,/Saved 79/);assert.match(compact,/80 saved/);
+  assert.match(compact,/Current skin · Classic/);assert.match(compact,/Open Skin Library/);
+  assert.doesNotMatch(compact,/Remove from library|>Apply<|Import skin model/);
 });
-it("skin no-account and offline state keep local presets browsable", () => {
-  account(null); cosmetics.remote = null;
-  assert.match(html(Skin, "small"), /Choose a Minecraft account/);
-  account(a); cosmetics.offline = true;
-  const view = html(Skin, "small");
-  assert.match(view, /Saved skins remain available/);
-  assert.match(view, /Saved 1/);
-  assert.match(view, /disabled/);
+it('no account and offline states retain local previews and navigation',()=>{
+  account(null);cosmetics.remote=null;assert.match(html(Skin),/without an account/);
+  account(a);cosmetics.offline=true;assert.match(html(Skin),/Saved skins remain available/);assert.match(html(Skin),/Open saved skin/);
+  assert.match(html(Cape),/Inventory unavailable/);assert.match(html(Cape),/changes are paused/);
 });
-it("current-skin association is proven by content hash", () => {
-  account(a); cosmetics.remote = state(); cosmetics.presets = presets; cosmetics.loading = false; cosmetics.offline = false; cosmetics.error = "";
-  launcher.accountAvatars[a] = { rgba: Array(256).fill(120), model: "classic", skinRgba: [], skinHeight: 64, sha256: presets[2].sha256 };
-  const view = html(Skin, "large");
-  assert.match(view, /In library/);
-  assert.equal((view.match(/>Current</g) ?? []).length, 1);
-  launcher.accountAvatars[a] = null;
+it('cape summary shows current choice, owned count, No Cape, and empty inventory',()=>{
+  account(a);cosmetics.remote=state();cosmetics.offline=false;
+  const view=html(Cape);assert.match(view,/Cape 0/);assert.match(view,/3 owned/);assert.match(view,/Open Cape Library/);
+  assert.doesNotMatch(view,/Select Cape 1|Disable active cape/);
+  cosmetics.remote=state(a,false);assert.match(html(Cape),/No Cape/);
+  cosmetics.remote=state(a,false,0);assert.match(html(Cape),/No capes are reported/);
 });
-it("cape widget renders owned, selected, disabled, empty, and offline states", () => {
-  account(a); cosmetics.remote = state(); cosmetics.offline = false; cosmetics.error = "";
-  assert.match(html(Cape, "small"), /Cape 0 · Active/);
-  assert.match(html(Cape, "small"), /Select Cape 1 cape/);
-  assert.match(html(Cape, "small"), /Disable active cape/);
-  cosmetics.remote = state(a, false, 1);
-  assert.match(html(Cape, "small"), /Cape 0/);
-  cosmetics.remote = state(a, false, 0);
-  assert.match(html(Cape, "small"), /No capes are reported/);
-  cosmetics.offline = true;
-  assert.match(html(Cape, "small"), /Cape changes are paused/);
+it('loading, stale, and remote failures remain honest without hiding the library',()=>{
+  account(a);cosmetics.remote=null;cosmetics.loading=true;
+  assert.match(html(Skin),/Loading current skin/);assert.match(html(Cape),/Loading owned capes/);
+  cosmetics.remote=state();cosmetics.loading=false;cosmetics.offline=true;cosmetics.remoteError='Service is unavailable';
+  assert.match(html(Cape),/Last known choice/);assert.match(html(Cape),/Service is unavailable/);
+  assert.match(html(Skin),/80 saved/);
 });
-it("loading, error, expanded capes, and decoded-preview label stay readable", () => {
-  account(a); cosmetics.remote = null; cosmetics.loading = true; cosmetics.error = "";
-  assert.match(html(Skin, "wide"), /Loading current skin/);
-  assert.match(html(Cape, "small"), /Loading owned capes/);
-  cosmetics.loading = false; cosmetics.error = "Service is rate limiting";
-  cosmetics.remote = state(a, true, 6);
-  cosmetics.remote.capes[0].preview = { width: 64, height: 32, rgba: Array(64 * 32 * 4).fill(0) };
-  const compact = html(Cape, "small"), expanded = html(Cape, "large");
-  assert.equal((compact.match(/<li\b/g) ?? []).length, 3);
-  assert.equal((expanded.match(/<li\b/g) ?? []).length, 6);
-  assert.match(compact, /Cape 0 cape preview/);
-  assert.match(compact, /Service is rate limiting/);
-});
-it("account switch never renders the prior account's cape list", () => {
-  account(a); cosmetics.remote = state(a);
-  account(b);
-  assert.doesNotMatch(html(Cape, "small"), /Cape 0/);
+it('account switch hides the previous account cape and current model immediately',()=>{
+  account(a);cosmetics.remote=state(a);cosmetics.offline=false;account(b);
+  assert.doesNotMatch(html(Cape),/Cape 0|3 owned/);assert.doesNotMatch(html(Skin),/Current skin · Classic/);
 });
 it("semantic native DTOs carry no token or user-selected filesystem path", async () => {
   const calls: Array<{ name: string; args: any }> = [];
