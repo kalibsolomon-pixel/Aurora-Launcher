@@ -9,7 +9,9 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-const SCHEMA: u32 = 1;
+const SCHEMA: u32 = 2;
+const MAX_RECENT_SERVERS: usize = 100;
+const MAX_FAVORITE_SERVERS: usize = 100;
 const MAX_SESSIONS: usize = 256;
 const MAX_VISITS: usize = 16;
 const MAX_DAYS: usize = 3660;
@@ -240,6 +242,31 @@ struct Document {
     schema_version: u32,
     sessions: Vec<SessionRecord>,
     archive: Vec<DayTotal>,
+    servers: Vec<ServerHistory>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ServerHistory {
+    instance: InstanceId,
+    server: ServerTarget,
+    display: String,
+    last_played_at: u64,
+    duration_ms: u64,
+    favorite: bool,
+}
+fn target_id(mode: Mode, instance: &InstanceId, target: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut digest = Sha256::new();
+    digest.update(if mode == Mode::Singleplayer {
+        b"world".as_slice()
+    } else {
+        b"server".as_slice()
+    });
+    digest.update([0]);
+    digest.update(instance.as_str().as_bytes());
+    digest.update([0]);
+    digest.update(target.as_bytes());
+    format!("{:x}", digest.finalize())
 }
 impl Default for Document {
     fn default() -> Self {
@@ -247,6 +274,7 @@ impl Default for Document {
             schema_version: SCHEMA,
             sessions: Vec::new(),
             archive: Vec::new(),
+            servers: Vec::new(),
         }
     }
 }
@@ -259,6 +287,17 @@ impl Document {
             return Err(());
         }
         let mut ids = std::collections::HashSet::new();
+        let mut server_ids = std::collections::HashSet::new();
+        if self.servers.iter().filter(|s| s.favorite).count() > MAX_FAVORITE_SERVERS
+            || self.servers.iter().filter(|s| !s.favorite).count() > MAX_RECENT_SERVERS
+            || self.servers.iter().any(|s| {
+                !server_ids.insert(target_id(Mode::Multiplayer, &s.instance, s.server.as_str()))
+                    || s.display.len() > 512
+                    || crate::launch::activity_bridge::sanitize(&s.display) != s.display
+            })
+        {
+            return Err(());
+        }
         let mut archive_keys = std::collections::HashSet::new();
         for day in &self.archive {
             if !archive_keys.insert((day.day, day.instance.as_str()))
@@ -307,6 +346,70 @@ impl Document {
         Ok(())
     }
     fn retain(&mut self) -> Result<(), ()> {
+        // Summaries live in this same document independently of session retention.
+        // Fold before pruning visits/sessions; never derive launch targets from labels.
+        for session in &self.sessions {
+            for visit in &session.visits {
+                let Some(server) = &visit.server else {
+                    continue;
+                };
+                if visit.mode != Mode::Multiplayer {
+                    continue;
+                }
+                let display = visit
+                    .display
+                    .clone()
+                    .unwrap_or_else(|| "Multiplayer server".into());
+                if let Some(entry) = self
+                    .servers
+                    .iter_mut()
+                    .find(|s| s.instance == session.instance && s.server == *server)
+                {
+                    if visit.ended_at >= entry.last_played_at {
+                        entry.last_played_at = visit.ended_at;
+                        entry.display = display;
+                    }
+                } else {
+                    self.servers.push(ServerHistory {
+                        instance: session.instance.clone(),
+                        server: server.clone(),
+                        display,
+                        last_played_at: visit.ended_at,
+                        duration_ms: 0,
+                        favorite: false,
+                    });
+                }
+            }
+        }
+        for entry in &mut self.servers {
+            let duration: u64 = self
+                .sessions
+                .iter()
+                .filter(|s| s.instance == entry.instance)
+                .flat_map(|s| &s.visits)
+                .filter(|v| v.server.as_ref() == Some(&entry.server))
+                .map(|v| v.duration_ms)
+                .sum();
+            entry.duration_ms = entry.duration_ms.max(duration);
+        }
+        self.servers.sort_by(|a, b| {
+            b.last_played_at.cmp(&a.last_played_at).then_with(|| {
+                target_id(Mode::Multiplayer, &a.instance, a.server.as_str()).cmp(&target_id(
+                    Mode::Multiplayer,
+                    &b.instance,
+                    b.server.as_str(),
+                ))
+            })
+        });
+        let mut recent = 0;
+        self.servers.retain(|s| {
+            if s.favorite {
+                true
+            } else {
+                recent += 1;
+                recent <= MAX_RECENT_SERVERS
+            }
+        });
         self.sessions.sort_by_key(|s| s.started_at);
         while self.sessions.len() > MAX_SESSIONS {
             let index = self
@@ -367,7 +470,33 @@ fn read(path: &Path) -> Result<Document, ()> {
     if bytes.len() > 16 * 1024 * 1024 {
         return Err(());
     }
-    let doc: Document = serde_json::from_slice(&bytes).map_err(|_| ())?;
+    // Only the exact known schema-1 shape migrates. Unknown/malformed documents
+    // remain untouched. The next successful atomic mutation writes schema 2.
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct Legacy {
+        schema_version: u32,
+        sessions: Vec<SessionRecord>,
+        archive: Vec<DayTotal>,
+    }
+    let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| ())?;
+    let doc: Document = if value.get("schemaVersion").and_then(|v| v.as_u64()) == Some(1) {
+        let old: Legacy = serde_json::from_value(value).map_err(|_| ())?;
+        if old.schema_version != 1 {
+            return Err(());
+        }
+        let mut migrated = Document {
+            schema_version: SCHEMA,
+            sessions: old.sessions,
+            archive: old.archive,
+            servers: Vec::new(),
+        };
+        migrated.validate()?;
+        migrated.retain()?;
+        migrated
+    } else {
+        serde_json::from_value(value).map_err(|_| ())?
+    };
     doc.validate()?;
     Ok(doc)
 }
@@ -411,6 +540,16 @@ impl Store {
         }
         let map = memory().lock().map_err(|_| ())?;
         let doc = map.get(&self.path).ok_or(())?;
+        if mode == Mode::Multiplayer {
+            return Ok(doc
+                .servers
+                .iter()
+                .find(|s| target_id(mode, &s.instance, s.server.as_str()) == id)
+                .map(|s| QuickLaunchTarget::Multiplayer {
+                    instance: s.instance.clone(),
+                    server: s.server.clone(),
+                }));
+        }
         for session in &doc.sessions {
             for visit in &session.visits {
                 if visit.mode != mode {
@@ -590,6 +729,23 @@ impl Store {
         }
         let map = memory().lock().map_err(|_| ())?;
         let doc = map.get(&self.path).ok_or(())?;
+        if mode == Mode::Multiplayer {
+            return Ok(doc
+                .servers
+                .iter()
+                .filter(|s| instance.is_none_or(|id| *id == s.instance))
+                .take(limit.min(MAX_RECENT_SERVERS + MAX_FAVORITE_SERVERS))
+                .map(|s| RecentTarget {
+                    id: target_id(mode, &s.instance, s.server.as_str()),
+                    instance_id: s.instance.to_string(),
+                    display_name: s.display.clone(),
+                    last_played_at: s.last_played_at,
+                    duration_ms: s.duration_ms,
+                    available: true,
+                    favorite: s.favorite,
+                })
+                .collect());
+        }
         let mut entries = HashMap::<String, RecentTarget>::new();
         for session in &doc.sessions {
             if !instance.is_none_or(|id| *id == session.instance) {
@@ -625,6 +781,7 @@ impl Store {
                     last_played_at: 0,
                     duration_ms: 0,
                     available: true,
+                    favorite: false,
                 });
                 entry.duration_ms = entry.duration_ms.saturating_add(visit.duration_ms);
                 if visit.ended_at >= entry.last_played_at {
@@ -648,6 +805,27 @@ impl Store {
         });
         result.truncate(limit.min(20));
         Ok(result)
+    }
+    pub fn set_server_favorite(&self, id: &str, favorite: bool) -> Result<(), ()> {
+        // The existing process-wide history mutex serializes with bridge writes.
+        let mut map = memory().lock().map_err(|_| ())?;
+        let mut next = map.get(&self.path).ok_or(())?.clone();
+        let entry = next
+            .servers
+            .iter()
+            .position(|s| target_id(Mode::Multiplayer, &s.instance, s.server.as_str()) == id)
+            .ok_or(())?;
+        if favorite
+            && !next.servers[entry].favorite
+            && next.servers.iter().filter(|s| s.favorite).count() >= MAX_FAVORITE_SERVERS
+        {
+            return Err(());
+        }
+        next.servers[entry].favorite = favorite;
+        next.retain()?;
+        write(&self.path, &next)?;
+        map.insert(self.path.clone(), next);
+        Ok(())
     }
 }
 fn add_daily(buckets: &mut BTreeMap<u64, u64>, start: u64, duration_ms: u64) {
@@ -681,6 +859,7 @@ pub struct RecentTarget {
     pub last_played_at: u64,
     pub duration_ms: u64,
     pub available: bool,
+    pub favorite: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -782,6 +961,117 @@ impl Recorder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn server_session(index: u64, address: &str, instance: InstanceId) -> SessionRecord {
+        SessionRecord {
+            id: uuid::Uuid::new_v4().to_string(),
+            instance,
+            started_at: index,
+            ended_at: Some(index + 1),
+            duration_ms: 1000,
+            outcome: Some(Outcome::Normal),
+            mode: Mode::Multiplayer,
+            visits: vec![Visit {
+                mode: Mode::Multiplayer,
+                started_at: index,
+                ended_at: index + 1,
+                duration_ms: 1000,
+                world: None,
+                server: Some(ServerTarget::parse(address.into()).unwrap()),
+                display: Some(format!("Server {index}")),
+            }],
+        }
+    }
+    #[test]
+    fn server_retention_favorites_restart_and_old_quick_join() {
+        let path = path();
+        let store = Store::open(path.clone()).unwrap();
+        assert!(
+            store
+                .recent(Mode::Multiplayer, None, 200)
+                .unwrap()
+                .is_empty()
+        );
+        store
+            .edit(|doc| doc.sessions.push(server_session(1, "OLD.invalid", id())))
+            .unwrap();
+        let old = store.recent(Mode::Multiplayer, None, 200).unwrap()[0]
+            .id
+            .clone();
+        store.set_server_favorite(&old, true).unwrap();
+        for index in 2..=280 {
+            store
+                .edit(|doc| {
+                    doc.sessions
+                        .push(server_session(index, &format!("s{index}.invalid"), id()))
+                })
+                .unwrap();
+        }
+        let rows = store.recent(Mode::Multiplayer, None, 200).unwrap();
+        assert_eq!(rows.len(), 101);
+        assert_eq!(rows[0].last_played_at, 281);
+        assert!(rows.last().unwrap().favorite);
+        assert!(
+            matches!(store.quick_target(Mode::Multiplayer, &old).unwrap(), Some(QuickLaunchTarget::Multiplayer { server, .. }) if server.as_str() == "old.invalid:25565")
+        );
+        memory().lock().unwrap().remove(&path);
+        let restarted = Store::open(path.clone()).unwrap();
+        assert_eq!(
+            restarted
+                .recent(Mode::Multiplayer, None, 200)
+                .unwrap()
+                .len(),
+            101
+        );
+        assert!(
+            restarted
+                .recent(Mode::Multiplayer, None, 200)
+                .unwrap()
+                .last()
+                .unwrap()
+                .favorite
+        );
+        restarted
+            .edit(|doc| {
+                doc.sessions
+                    .push(server_session(300, "old.invalid:25565", id()))
+            })
+            .unwrap();
+        let joined = restarted.recent(Mode::Multiplayer, None, 200).unwrap();
+        assert_eq!(joined[0].id, old);
+        assert_eq!(joined.iter().filter(|s| s.id == old).count(), 1);
+        assert!(
+            restarted
+                .set_server_favorite(&"f".repeat(64), true)
+                .is_err()
+        );
+        fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn exact_legacy_migration_preserves_visits_and_instance_boundaries() {
+        let path = path();
+        let other = InstanceId::new("b".repeat(32)).unwrap();
+        let legacy = serde_json::json!({"schemaVersion":1,"sessions":[server_session(1,"same.invalid",id()),server_session(2,"SAME.invalid:25565",other.clone())],"archive":[]});
+        let bytes = serde_json::to_vec(&legacy).unwrap();
+        fs::write(&path, &bytes).unwrap();
+        let store = Store::open(path.clone()).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        let rows = store.recent(Mode::Multiplayer, None, 200).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_ne!(rows[0].id, rows[1].id);
+        assert_eq!(
+            store
+                .recent(Mode::Multiplayer, Some(&other), 200)
+                .unwrap()
+                .len(),
+            1
+        );
+        store.set_server_favorite(&rows[0].id, true).unwrap();
+        let persisted: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(persisted["schemaVersion"], 2);
+        assert_eq!(persisted["sessions"], legacy["sessions"]);
+        fs::remove_file(path).unwrap();
+    }
     fn id() -> InstanceId {
         InstanceId::new("1234567890abcdef1234567890abcdef").unwrap()
     }

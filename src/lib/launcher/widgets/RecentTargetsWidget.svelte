@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { getRecentWorlds, getRecentServers, refreshRecentServerStatus, type RecentGameplayTarget, type RecentServerMotdSegment, type RecentServerPresentation, type WidgetSize } from "$lib/backend";
+  import { getRecentWorlds, getRecentServers, setRecentServerFavorite, refreshRecentServerStatus, type RecentGameplayTarget, type RecentServerPresentation, type WidgetSize } from "$lib/backend";
   import { launcher } from "../store.svelte";
   import { recentLabel } from "../homeHistory";
   import { motdPlainText, presentationsById, rowDetail, rowName, segmentStyle, statusLabel } from "../serverPresentation";
@@ -13,7 +13,29 @@
   let error = $state("");
   let pending = $state<string | null>(null);
   let enriching = $state(false);
-  const shown = $derived(entries.slice(0, size === "small" ? 3 : 5));
+  let favoritesOnly = $state(false);
+  let favoriteBusy = $state<string | null>(null);
+  const shown = $derived(mode === "server" ? (favoritesOnly ? entries.filter(entry => entry.favorite) : entries.slice(0, 100)) : entries.slice(0, size === "small" ? 3 : 5));
+  const requested = new Set<string>();
+  const waiting = new Set<string>();
+  let revision = 0;
+  function visible(node: HTMLLIElement, id: string) {
+    if (mode !== "server" || initialFixture) return {};
+    const observer = new IntersectionObserver(rows => {
+      if (rows.some(row => row.isIntersecting) && !requested.has(id)) {
+        waiting.add(id); queueMicrotask(() => void enrich());
+      }
+    }, { root: node.closest(".history-scroll"), rootMargin: "50px" });
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  }
+  async function favorite(entry: RecentGameplayTarget) {
+    if (favoriteBusy) return;
+    favoriteBusy = entry.id; error = "";
+    try { await setRecentServerFavorite(entry.id, !entry.favorite); await load(); }
+    catch (cause) { error = cause instanceof Error ? cause.message : "The favorite could not be saved."; }
+    finally { favoriteBusy = null; }
+  }
   const instances = $derived(launcher.launcherState?.instances ?? []);
   function instanceLabel(id: string): string {
     const found = instances.find(item => item.id === id);
@@ -27,14 +49,20 @@
   /** History renders first; enrichment overlays presentation facts when the
    * bounded native refresh answers. Failure is silent: rows stay usable. */
   async function enrich(): Promise<void> {
-    if (mode !== "server" || initialFixture || enriching || !entries.length) return;
+    if (mode !== "server" || initialFixture || enriching || !waiting.size) return;
+    const ids = [...waiting].filter(id => !requested.has(id)).slice(0, 20);
+    if (!ids.length) return;
+    ids.forEach(id => { waiting.delete(id); requested.add(id); });
+    const current = revision;
     enriching = true;
     try {
-      presentations = presentationsById(await refreshRecentServerStatus(entries.map(entry => entry.id)));
+      const result = await refreshRecentServerStatus(ids);
+      if (current === revision) presentations = new Map([...presentations, ...presentationsById(result)]);
     } catch {
       /* Unavailable enrichment never degrades history rows. */
     } finally {
       enriching = false;
+      if (waiting.size) void enrich();
     }
   }
   async function launch(entry: RecentGameplayTarget): Promise<void> {
@@ -46,10 +74,10 @@
     pending = null;
   }
   async function load(): Promise<void> {
-    try { entries = await (mode === "world" ? getRecentWorlds(null, 5) : getRecentServers(null, 5)); error = ""; }
+    try { entries = await (mode === "world" ? getRecentWorlds(null, 5) : getRecentServers(null, 200)); error = ""; }
     catch (cause) { error = cause instanceof Error ? cause.message : "Recent history is unavailable."; return; }
     finally { loading = false; }
-    await enrich();
+    revision++;
   }
   let lastCompleted = launcher.playProcess;
   $effect(() => {
@@ -62,15 +90,25 @@
   onMount(() => { if (!initialFixture) void load(); });
 </script>
 
+{#if mode === "server" && entries.length}
+  <div class="history-tabs" aria-label="Server history view">
+    <button type="button" aria-pressed={!favoritesOnly} onclick={() => favoritesOnly = false}>Recent</button>
+    <button type="button" aria-pressed={favoritesOnly} onclick={() => favoritesOnly = true}>Favorites · {entries.filter(entry => entry.favorite).length}</button>
+  </div>
+{/if}
 {#if loading}<p class="note">Loading recent {mode === "world" ? "worlds" : "servers"}…</p>
 {:else if !entries.length}<p class="note">No recently played {mode === "world" ? "worlds" : "servers"}.</p>
 {:else}
+  {#if favoritesOnly && !shown.length}<p class="note">Star a server to keep it in Favorites.</p>{/if}
+  <!-- A scroll region needs its own focus stop so PageDown/Arrow keys can scroll without activating a row. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <div class="history-scroll" class:server-history={mode === "server"} role="region" tabindex={mode === "server" ? 0 : undefined} aria-label={mode === "server" ? "Scrollable server history" : "Recent worlds"}>
   <ul>
     {#each shown as entry (entry.id)}
       {@const detail = presentation(entry)}
       {@const name = rowName(entry, detail)}
       {@const firstMotdLine = detail ? detail.motd.find(line => line.some(segment => segment.text.trim())) : undefined}
-      <li class:enriched={mode === "server"}>
+      <li class:enriched={mode === "server"} use:visible={entry.id}>
         {#if mode === "server"}
           <span class="favicon"><Artwork source={detail?.favicon} fallback="server" size={36} /></span>
         {/if}
@@ -83,18 +121,29 @@
           {/if}
           <span class="meta" title={instanceLabel(entry.instanceId)}>{instanceLabel(entry.instanceId)} · {recentLabel(entry.lastPlayedAt, Date.now())}{mode === "server" && statusLabel(detail) ? ` · ${statusLabel(detail)}` : ""}{entry.available ? "" : " · Unavailable"}</span>
         </div>
+        {#if mode === "server"}<button type="button" class="favorite" class:pinned={entry.favorite} aria-pressed={!!entry.favorite} aria-label={`${entry.favorite ? "Unfavorite" : "Favorite"} ${name}`} title={entry.favorite ? "Remove favorite" : "Keep as favorite"} disabled={favoriteBusy !== null} onclick={() => favorite(entry)}>{entry.favorite ? "★" : "☆"}</button>{/if}
         <button type="button" class="launch" aria-label={`Quick Launch ${mode === "world" ? "world" : "server"} ${name} in ${instanceLabel(entry.instanceId)}`} disabled={!entry.available || !launcher.accountsState?.selectedAccountId || launcher.playBusy || pending !== null || (launcher.playProcess?.instanceId === entry.instanceId && ["starting", "running"].includes(launcher.playProcess.status))} onclick={() => launch(entry)} title={entry.available ? "Quick Launch" : "Target unavailable"}>
           {pending === entry.id ? "…" : "▶"}
         </button>
       </li>
     {/each}
   </ul>
+  </div>
 {/if}
 {#if error}<p class="error" role="alert">{error}</p>{/if}
 {#if launcher.playProcess?.status === "failed" && shown.some(entry => entry.instanceId === launcher.playProcess?.instanceId)}
   <p class="error" role="alert">{launcher.playProcess.message ?? "Minecraft could not be started."}</p>
 {/if}
 <style>
+  .server-history { max-height: 246px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; overscroll-behavior: contain; }
+  .server-history:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; border-radius: var(--radius-sm); }
+  .history-tabs { display: flex; gap: var(--space-1); margin-bottom: var(--space-2); }
+  .history-tabs button, .favorite { border: 0; background: transparent; color: var(--color-text-secondary); border-radius: var(--radius-sm); cursor: pointer; }
+  .history-tabs button { padding: 4px 8px; font: inherit; font-size: var(--text-metadata); }
+  .history-tabs button[aria-pressed="true"] { background: var(--color-accent-soft); color: var(--color-accent); }
+  .favorite { width: 28px; height: 32px; flex: none; font-size: 21px; }
+  .favorite:hover, .favorite.pinned { color: var(--color-accent); }
+  .favorite:focus-visible, .history-tabs button:focus-visible { outline: 2px solid var(--color-accent); }
   ul { list-style: none; margin: 0; padding: 0; }
   li { display: flex; align-items: center; gap: var(--space-2); min-width: 0; padding: var(--space-2) 0; border-top: 1px solid var(--color-border); }
   li:first-child { border-top: 0; }

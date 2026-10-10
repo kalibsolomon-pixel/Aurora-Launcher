@@ -98,6 +98,7 @@ export interface RecentGameplayTarget {
   lastPlayedAt: number;
   durationMs: number;
   available: boolean;
+  favorite?: boolean;
 }
 export interface DailyPlaytime { day: number; durationMs: number }
 export async function getDailyPlaytime(days: 7 | 30, instanceId: string | null = null): Promise<DailyPlaytime[]> {
@@ -126,6 +127,9 @@ export async function getRecentWorlds(instanceId: string | null = null, limit = 
 }
 export async function getRecentServers(instanceId: string | null = null, limit = 10): Promise<RecentGameplayTarget[]> {
   return invokeHistory<RecentGameplayTarget[]>("get_recent_servers", { instanceId, limit });
+}
+export async function setRecentServerFavorite(targetId: string, favorite: boolean): Promise<void> {
+  return invokeHistory<void>("set_recent_server_favorite", { targetId, favorite });
 }
 
 /**

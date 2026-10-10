@@ -742,6 +742,17 @@ pub fn get_recent_servers(
     Ok(entries)
 }
 
+/// Saves a local favorite for an opaque Recent Servers target id.
+#[tauri::command]
+pub fn set_recent_server_favorite(
+    app: AppHandle,
+    target_id: String,
+    favorite: bool,
+) -> Result<(), CommandError> {
+    let (store, _) = history_query(&app, None)?;
+    store.set_server_favorite(&target_id, favorite).map_err(|_| CommandError::new("gameplay_history_unavailable", "The server favorite could not be saved. History may have changed, or the 100-favorite limit was reached."))
+}
+
 /// One requested Recent Servers enrichment entry: an opaque recent-target id
 /// exactly as `get_recent_servers` returned it. The frontend never supplies
 /// an address; endpoints are resolved natively from history.

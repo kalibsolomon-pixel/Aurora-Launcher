@@ -85,6 +85,7 @@ pub fn run() {
             application::get_daily_playtime,
             application::get_recent_worlds,
             application::get_recent_servers,
+            application::set_recent_server_favorite,
             application::refresh_recent_server_status,
             application::quick_play_history,
             application::set_home_widgets,
