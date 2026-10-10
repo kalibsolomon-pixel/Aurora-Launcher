@@ -1,6 +1,23 @@
 # Aurora Launcher — pre-release UI corrections
 
-## Executive verdict: BLOCKED
+## Owner acceptance update — October 10, 2026
+
+The owner manually reviewed the latest prototype, including scrolling, reports
+that everything seems fine, and explicitly requested release. This resolves the
+subjective R1 scrolling review gate for final application source
+`db078f20d8d2eaa0c632b276e68c63179872acde` and evidence commit
+`0e9eb4f473f61a99ccb256f3a0a6c38e051a26f9`. The owner selected Launcher 1.4.2
+for the next controlled release.
+
+This acceptance does not replicate the previously reported severe symptom or
+validate physical frame-presentation/GPU measurements that were not captured.
+The historical diagnostic findings and limits below remain unchanged. The
+previous hold-publication recommendation is superseded only for subjective R1
+acceptance and release initiation; signed-installer acceptance, exact-source
+verification and separately protected publication/authority gates remain required.
+See `RELEASE_1_4_2_ACCEPTANCE.md` for current release status.
+
+## Historical executive verdict before owner review: BLOCKED
 
 R2 and R3 are implemented and locally verified. R1 isolates a real backdrop
 compositing cost and removes per-result filters, but the owner's severe scrolling
