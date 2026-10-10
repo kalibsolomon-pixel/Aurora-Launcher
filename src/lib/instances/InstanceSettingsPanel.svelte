@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { launcher } from "$lib/launcher/store.svelte";
   import { configurationRequiresInstall, draftIsDirty } from "$lib/launcher/instanceStatus";
   import { deleteInstance, type InstanceConfiguration, type InstanceSummary } from "$lib/backend";
@@ -6,6 +7,7 @@
   let confirmation = $state("");
   let deletionError = $state("");
   let deleting = $state(false);
+  let includeSnapshots = $state(false);
   let deleteDialog: HTMLDialogElement;
   let deleteTrigger: HTMLButtonElement;
   async function removeInstance() {
@@ -23,7 +25,8 @@
   // and unsaved edits survive tab switches, other instances, and leaving the
   // workspace. Dirty state is derived, never tracked.
   $effect(() => {
-    launcher.openDetail(instance.id);
+    const id = instance.id;
+    untrack(() => launcher.openDetail(id));
   });
 
   const draft = $derived(launcher.draftFor(instance.id));
@@ -34,7 +37,7 @@
 
   function onDraftChange(): void {
     if (draft && draft.loader.kind !== "vanilla" && draft.minecraftVersion.trim() !== "") {
-      void launcher.loadLoaderVersions(draft.minecraftVersion);
+      void launcher.loadLoaderVersions(draft.minecraftVersion, draft.loader.kind);
     }
   }
 
@@ -49,13 +52,6 @@
     const value = (event.currentTarget as HTMLSelectElement).value;
     draft.loader.policy =
       value === "" ? { type: "automatic" } : { type: "pinned", version: value };
-    onDraftChange();
-  }
-
-  function onLoaderVersionChange(event: Event): void {
-    if (!draft || !("policy" in draft.loader)) return;
-    const value = (event.currentTarget as HTMLSelectElement).value;
-    draft.loader.policy = { type: "pinned", version: value };
     onDraftChange();
   }
 
@@ -107,7 +103,7 @@
         type="button"
         class="btn btn-quiet"
         onclick={() => {
-          launcher.renaming = { id: instance.id, name: instance.displayName };
+          launcher.beginRename(instance.id);
         }}
         disabled={launcher.detailBusy !== null}
       >
@@ -129,38 +125,6 @@
         void launcher.runSaveConfiguration(instance.id);
       }}
     >
-      {#if launcher.renaming?.id === instance.id}
-        <div class="field-grid">
-          <label class="field">
-            <span class="field-label">New name</span>
-            <input
-              type="text"
-              bind:value={launcher.renaming.name}
-              required
-              maxlength="80"
-            />
-          </label>
-          <div class="form-actions">
-            <button
-              type="button"
-              class="btn"
-              onclick={() => void launcher.runRename()}
-              disabled={launcher.detailBusy !== null}
-            >
-              Save name
-            </button>
-            <button
-              type="button"
-              class="btn btn-quiet"
-              onclick={() => (launcher.renaming = null)}
-              disabled={launcher.detailBusy !== null}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      {/if}
-
       <div class="settings-grid">
       <section class="settings-section"><h4 class="detail-section-title">General</h4>
       <div class="field-grid">
@@ -169,12 +133,12 @@
           <select
             bind:value={draft.minecraftVersion}
             onchange={onDraftChange}
-            onfocus={() => launcher.loadMinecraftVersions(false)}
-            onclick={() => launcher.loadMinecraftVersions(false)}
+            onfocus={() => launcher.loadMinecraftVersions(includeSnapshots)}
           >
             {#if launcher.minecraftVersions === null}
               <option value={draft.minecraftVersion}>{draft.minecraftVersion}</option>
             {:else}
+              {#if !launcher.minecraftVersions.some(version => version.id === draft.minecraftVersion)}<option value={draft.minecraftVersion}>{draft.minecraftVersion} (saved)</option>{/if}
               {#each launcher.minecraftVersions as version (version.id)}
                 <option value={version.id}>{version.id}</option>
               {/each}
@@ -182,20 +146,27 @@
           </select>
           <span class="field-hint">Changing this requires installing new content.</span>
         </label>
+        <label class="check-field"><input type="checkbox" bind:checked={includeSnapshots} onchange={() => launcher.loadMinecraftVersions(includeSnapshots)} /><span>Include snapshots</span></label>
         <label class="field">
           <span class="field-label">Mod loader</span>
-          <select value={draft.loader.kind} disabled>
+          <select value={draft.loader.kind} onchange={event => {
+            const kind = event.currentTarget.value as "vanilla" | "fabric" | "neoForge";
+            draft.loader = kind === "vanilla" ? { kind } : { kind, policy: { type: "automatic" } };
+            onDraftChange();
+          }} disabled={draft.auroraEnabled}>
             {#each launcher.launcherState?.platformCapabilities ?? [] as capability (capability.kind)}
               {#if capability.canInstall}<option value={capability.kind}>{capability.kind === "fabric" ? "Fabric" : capability.kind === "neoForge" ? "NeoForge" : capability.kind}</option>{/if}
             {/each}
           </select>
+          <span class="field-hint">{draft.auroraEnabled ? "The original Aurora association requires Fabric. Manage Aurora content in Mods." : "Changing the platform requires installing new content."}</span>
         </label>
         {#if draft.loader.kind !== "vanilla"}
         <label class="field">
-          <span class="field-label">Fabric Loader version</span>
+          <span class="field-label">{draft.loader.kind === "neoForge" ? "NeoForge" : "Fabric Loader"} version</span>
           {#if "policy" in draft.loader && draft.loader.policy.type === "automatic"}
             <select value="" onchange={setLoaderPolicy}>
-              <option value="">Release version</option>
+              <option value="">{draft.auroraEnabled ? "Aurora release version" : "Automatic compatible version"}</option>
+              {#if loaderVersionValue(draft) && !(launcher.loaderVersions ?? []).some(loader => loader.version === loaderVersionValue(draft))}<option value={loaderVersionValue(draft)}>{loaderVersionValue(draft)} (saved)</option>{/if}
               {#each launcher.loaderVersions ?? [] as loader (loader.version)}
                 <option value={loader.version}>
                   {loader.version}{loader.stable ? "" : " (unstable)"}
@@ -203,11 +174,12 @@
               {/each}
             </select>
             <span class="field-hint">
-              {draft.auroraEnabled ? "Uses the exact loader version required by the Aurora release." : "Resolves the newest stable compatible Fabric Loader when installed."}
+              {draft.auroraEnabled ? "Uses the exact loader version required by the Aurora release." : "Resolves a compatible loader when installed; the installed version stays pinned until then."}
             </span>
           {:else}
-            <select value={loaderVersionValue(draft)} onchange={onLoaderVersionChange}>
-              <option value="">Release version</option>
+            <select value={loaderVersionValue(draft)} onchange={setLoaderPolicy}>
+              <option value="">{draft.auroraEnabled ? "Aurora release version" : "Automatic compatible version"}</option>
+              {#if loaderVersionValue(draft) && !(launcher.loaderVersions ?? []).some(loader => loader.version === loaderVersionValue(draft))}<option value={loaderVersionValue(draft)}>{loaderVersionValue(draft)} (saved)</option>{/if}
               {#each launcher.loaderVersions ?? [] as loader (loader.version)}
                 <option value={loader.version}>
                   {loader.version}{loader.stable ? "" : " (unstable)"}
@@ -221,18 +193,18 @@
       </section><section class="settings-section"><h4 class="detail-section-title">Performance</h4>
       <div class="field-grid">
         <label class="field">
-          <span class="field-label">Memory (MB)</span>
+          <span class="field-label">Memory (MiB)</span>
           <input
             type="number"
             min="512"
             max="32768"
-            step="256"
+            step="1"
             bind:value={draft.memoryMib}
             onchange={onDraftChange}
             required
           />
           <span class="field-hint">
-            The memory allocated to the game, between 512 and 32768 MB.
+            The memory allocated to the game, between 512 and 32768 MiB.
           </span>
         </label>
       </div>
@@ -308,6 +280,8 @@
       </div>
 
       </section></div>
+      {#if launcher.loaderVersionsError}<p class="inline-message inline-message-error" role="alert">{launcher.loaderVersionsError.message}</p>{/if}
+      {#if launcher.minecraftVersionsError}<p class="inline-message inline-message-error" role="alert">{launcher.minecraftVersionsError.message}</p>{/if}
       {#if launcher.detailError}
         <p class="inline-message inline-message-error group-row" role="alert">
           {launcher.detailError.message}

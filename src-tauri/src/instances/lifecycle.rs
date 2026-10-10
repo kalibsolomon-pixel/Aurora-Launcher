@@ -854,6 +854,21 @@ pub fn update_instance_configuration(
     instance_id: &InstanceId,
     configuration: InstanceConfiguration,
 ) -> Result<InstanceRecord, InstanceError> {
+    update_instance_configuration_checked(
+        registry_path,
+        endpoints,
+        instance_id,
+        configuration,
+        None,
+    )
+}
+pub fn update_instance_configuration_checked(
+    registry_path: &Path,
+    endpoints: &InstanceEndpoints,
+    instance_id: &InstanceId,
+    configuration: InstanceConfiguration,
+    expected: Option<&InstanceConfiguration>,
+) -> Result<InstanceRecord, InstanceError> {
     configuration.validate()?;
     require_executable_configuration(&configuration)?;
     if configuration.aurora_enabled() {
@@ -878,6 +893,13 @@ pub fn update_instance_configuration(
         return Err(InstanceError::ReleaseInvalid(
             "Changing Aurora requires an approved content transition preview.".into(),
         ));
+    }
+    if expected.is_some_and(|value| value != record.configuration()) {
+        return Err(InstanceError::NotReady {
+            instance_id: instance_id.to_string(),
+            reason: "The saved configuration changed. Refresh and review it before saving again."
+                .into(),
+        });
     }
     record.set_configuration(configuration);
     let updated = record.clone();
@@ -1358,6 +1380,14 @@ pub fn rename_instance(
     instance_id: &InstanceId,
     new_display_name: &str,
 ) -> Result<InstanceRecord, InstanceError> {
+    rename_instance_checked(registry_path, instance_id, new_display_name, None)
+}
+pub fn rename_instance_checked(
+    registry_path: &Path,
+    instance_id: &InstanceId,
+    new_display_name: &str,
+    expected_name: Option<&str>,
+) -> Result<InstanceRecord, InstanceError> {
     let _guard = registry_lock();
     let mut registry = InstanceRegistry::load(registry_path)?;
     let record = registry
@@ -1365,6 +1395,14 @@ pub fn rename_instance(
         .ok_or_else(|| InstanceError::NotFound {
             instance_id: instance_id.to_string(),
         })?;
+    if expected_name.is_some_and(|name| name != record.display_name()) {
+        return Err(InstanceError::NotReady {
+            instance_id: instance_id.to_string(),
+            reason:
+                "The instance name changed. Close and reopen Rename to review its current name."
+                    .into(),
+        });
+    }
     record
         .set_display_name(new_display_name)
         .map_err(InstanceError::NameInvalid)?;
@@ -3290,6 +3328,116 @@ pub(crate) mod tests {
                 .display_name(),
             "Renamed âœ¨"
         );
+    }
+
+    #[tokio::test]
+    async fn checked_edits_reject_stale_drafts_and_preserve_registry_on_failure() {
+        let world = SyntheticWorld::new("l2-checked-edits");
+        let record = world.create("Original").await.unwrap();
+        let preparing =
+            crate::launch::boundary::LaunchSnapshot::capture(&world.managed, record.id()).unwrap();
+        let renamed = rename_instance_checked(
+            &world.registry_path(),
+            record.id(),
+            "Unicode 雪",
+            Some("Original"),
+        )
+        .unwrap();
+        assert_eq!(renamed.id(), record.id());
+        assert!(matches!(
+            preparing.with_validated::<(), crate::launch::boundary::BoundaryError>(
+                &world.managed,
+                |_| panic!("renamed preparation must not spawn")
+            ),
+            Err(crate::launch::boundary::BoundaryError::Stale)
+        ));
+        // Cosmetic edits are allowed during Starting/Running and cannot alter
+        // the exact child's supervised state or move its instance directory.
+        for status in [
+            crate::launch::state::LaunchProcessStatus::Starting,
+            crate::launch::state::LaunchProcessStatus::Running,
+        ] {
+            crate::launch::process::with_test_state(record.id().as_str(), status, || {
+                rename_instance_checked(
+                    &world.registry_path(),
+                    record.id(),
+                    "During play",
+                    Some("Unicode 雪"),
+                )
+                .unwrap();
+                assert_eq!(
+                    crate::launch::process::snapshot(record.id().as_str()).status,
+                    status
+                );
+                rename_instance_checked(
+                    &world.registry_path(),
+                    record.id(),
+                    "Unicode 雪",
+                    Some("During play"),
+                )
+                .unwrap();
+            });
+        }
+        let bytes = std::fs::read(world.registry_path()).unwrap();
+        assert!(
+            rename_instance_checked(
+                &world.registry_path(),
+                record.id(),
+                "Lost update",
+                Some("Original")
+            )
+            .is_err()
+        );
+        for bad in ["", " ", "bad\nname", &"a".repeat(81), &"雪".repeat(27)] {
+            assert!(
+                rename_instance_checked(
+                    &world.registry_path(),
+                    record.id(),
+                    bad,
+                    Some("Unicode 雪")
+                )
+                .is_err()
+            );
+            assert_eq!(std::fs::read(world.registry_path()).unwrap(), bytes);
+        }
+        rename_instance_checked(
+            &world.registry_path(),
+            record.id(),
+            &"a".repeat(80),
+            Some("Unicode 雪"),
+        )
+        .unwrap();
+        let mut changed = record.configuration().clone();
+        changed.set_memory_mib(4097);
+        update_instance_configuration_checked(
+            &world.registry_path(),
+            &world.endpoints(),
+            record.id(),
+            changed.clone(),
+            Some(record.configuration()),
+        )
+        .unwrap();
+        let saved = std::fs::read(world.registry_path()).unwrap();
+        assert!(
+            update_instance_configuration_checked(
+                &world.registry_path(),
+                &world.endpoints(),
+                record.id(),
+                record.configuration().clone(),
+                Some(record.configuration())
+            )
+            .is_err()
+        );
+        assert_eq!(std::fs::read(world.registry_path()).unwrap(), saved);
+        assert_eq!(
+            world
+                .load_registry()
+                .find(record.id())
+                .unwrap()
+                .configuration(),
+            &changed
+        );
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
     }
 
     #[tokio::test]

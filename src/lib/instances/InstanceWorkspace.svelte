@@ -8,6 +8,7 @@
   import InstanceModsPanel from "$lib/instances/InstanceModsPanel.svelte";
   import InstancePacksPanel from "$lib/instances/InstancePacksPanel.svelte";
   import InstanceSettingsPanel from "$lib/instances/InstanceSettingsPanel.svelte";
+  import InstanceRenameDialog from "$lib/instances/InstanceRenameDialog.svelte";
   import type { InstanceTab } from "$lib/launcher/navigation";
 
   let { instanceId, tab }: { instanceId: string; tab: InstanceTab } = $props();
@@ -161,6 +162,7 @@
         </p>
       </div>
       <div class="page-header-actions">
+        <button type="button" class="btn" onclick={() => launcher.beginRename(instance.id)} disabled={launcher.renameBusy}>Rename</button>
         <button
           type="button"
           class="btn"
@@ -224,6 +226,7 @@
     </div>
   {/if}
 </div>
+<InstanceRenameDialog />
 
 <style>
   .page { max-width: 1500px; width: 100%; margin-inline: auto; }

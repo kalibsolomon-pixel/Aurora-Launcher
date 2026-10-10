@@ -2180,6 +2180,7 @@ pub async fn retry_instance_install(
 pub struct RenameInstanceRequest {
     instance_id: String,
     new_display_name: String,
+    expected_display_name: String,
 }
 
 /// Renames an instance's display name. Metadata only â€” identifiers and
@@ -2192,10 +2193,11 @@ pub fn rename_instance(
     let managed_paths = managed_paths(&app)?;
     let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
 
-    let record = crate::instances::lifecycle::rename_instance(
+    let record = crate::instances::lifecycle::rename_instance_checked(
         &managed_paths.instance_registry_file(),
         &instance,
         request.new_display_name.trim(),
+        Some(&request.expected_display_name),
     )?;
 
     Ok(InstanceSummary::from_record(&record))
@@ -2207,6 +2209,7 @@ pub fn rename_instance(
 pub struct UpdateInstanceConfigurationRequest {
     instance_id: String,
     configuration: InstanceConfigurationDto,
+    expected_configuration: InstanceConfigurationDto,
 }
 
 /// Atomically persists a new desired configuration for one ready instance.
@@ -2225,12 +2228,14 @@ pub fn update_instance_configuration(
     let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
         .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
     let configuration = request.configuration.into_configuration()?;
+    let expected = request.expected_configuration.into_configuration()?;
 
-    let record = crate::instances::lifecycle::update_instance_configuration(
+    let record = crate::instances::lifecycle::update_instance_configuration_checked(
         &managed_paths.instance_registry_file(),
         &endpoints,
         &instance,
         configuration,
+        Some(&expected),
     )
     .map_err(|error| match error {
         crate::instances::lifecycle::InstanceError::ConfigurationInvalid(reason) => {

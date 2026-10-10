@@ -112,7 +112,10 @@ class LauncherStore {
   loaderVersions = $state<FabricLoaderVersion[] | null>(null);
   loaderVersionsBusy = $state(false);
   loaderVersionsError = $state<LauncherBackendError | null>(null);
-  renaming = $state<{ id: string; name: string } | null>(null);
+  loaderVersionsKey = $state("");
+  renaming = $state<{ id: string; name: string; original: string } | null>(null);
+  renameBusy = $state(false);
+  renameError = $state<LauncherBackendError | null>(null);
   instanceBusy = $state<string | null>(null);
   instanceValidations = $state<Record<string, InstanceValidationDto>>({});
   instanceError = $state<LauncherBackendError | null>(null);
@@ -123,6 +126,7 @@ class LauncherStore {
   // opening another instance or leaving the workspace never discards unsaved
   // edits silently.
   detailDrafts = $state<Record<string, InstanceConfiguration>>({});
+  detailBases = $state<Record<string, InstanceConfiguration>>({});
   detailBusy = $state<string | null>(null);
   detailError = $state<LauncherBackendError | null>(null);
   detailInstallBusy = $state<string | null>(null);
@@ -460,31 +464,35 @@ class LauncherStore {
     }
   }
 
-  async loadLoaderVersions(minecraftVersion: string): Promise<void> {
-    if (minecraftVersion.trim() === "" || this.createPlatform === "vanilla") {
+  async loadLoaderVersions(minecraftVersion: string, platform: InstanceConfiguration["loader"]["kind"] = this.createPlatform): Promise<void> {
+    const key = `${platform}:${minecraftVersion.trim()}`;
+    this.loaderVersionsKey = key;
+    if (minecraftVersion.trim() === "" || platform === "vanilla") {
       this.loaderVersions = null;
       return;
     }
     this.loaderVersionsBusy = true;
     this.loaderVersionsError = null;
     try {
-      this.loaderVersions =
-        this.createPlatform === "neoForge"
+      const versions =
+        platform === "neoForge"
           ? (await listNeoforgeVersions(minecraftVersion.trim())).map((entry) => ({
               version: entry.version,
               stable: entry.stable,
             }))
           : await listFabricLoaderVersions(minecraftVersion.trim());
+      if (this.loaderVersionsKey === key) this.loaderVersions = versions;
     } catch (cause: unknown) {
+      if (this.loaderVersionsKey !== key) return;
       this.loaderVersions = null;
       this.loaderVersionsError = backendError(
         cause,
-        this.createPlatform === "neoForge"
+        platform === "neoForge"
           ? "The NeoForge versions could not be loaded."
           : "The Fabric Loader versions could not be loaded.",
       );
     } finally {
-      this.loaderVersionsBusy = false;
+      if (this.loaderVersionsKey === key) this.loaderVersionsBusy = false;
     }
   }
 
@@ -526,10 +534,11 @@ class LauncherStore {
     if (!instance) return;
     if (this.detailDrafts[id] === undefined) {
       this.detailDrafts[id] = $state.snapshot(instance.configuration);
+      this.detailBases[id] = $state.snapshot(instance.configuration);
     }
     this.detailError = null;
-    if (this.loaderVersions === null) {
-      void this.loadLoaderVersions(instance.configuration.minecraftVersion);
+    if (this.loaderVersionsKey !== `${instance.configuration.loader.kind}:${instance.configuration.minecraftVersion}`) {
+      void this.loadLoaderVersions(instance.configuration.minecraftVersion, instance.configuration.loader.kind);
     }
   }
 
@@ -546,6 +555,7 @@ class LauncherStore {
       return;
     }
     this.detailDrafts[id] = $state.snapshot(instance.configuration);
+    this.detailBases[id] = $state.snapshot(instance.configuration);
   }
 
   /** Saves one instance's whole proposed configuration atomically. */
@@ -555,14 +565,17 @@ class LauncherStore {
     this.detailBusy = id;
     this.detailError = null;
     try {
-      await updateInstanceConfiguration(id, draft);
-      await this.refreshState();
+      const expected = this.detailBases[id];
+      if (!expected) throw new Error("Reopen the instance settings before saving.");
+      const updated = await updateInstanceConfiguration(id, $state.snapshot(draft), expected);
+      if (this.launcherState) this.launcherState.instances = this.launcherState.instances.map(entry => entry.id === updated.id ? updated : entry);
       void this.refreshPlayReadiness();
       // Reflect the persisted draft back from Rust-owned state.
-      const updated = this.launcherState?.instances.find((entry) => entry.id === id);
-      if (updated) this.detailDrafts[id] = $state.snapshot(updated.configuration);
+      this.detailDrafts[id] = $state.snapshot(updated.configuration);
+      this.detailBases[id] = $state.snapshot(updated.configuration);
     } catch (cause: unknown) {
       this.detailError = backendError(cause, "The configuration could not be saved.");
+      await this.refreshState();
     } finally {
       this.detailBusy = null;
     }
@@ -580,7 +593,7 @@ class LauncherStore {
       await this.refreshState();
       void this.refreshPlayReadiness();
       const updated = this.launcherState?.instances.find((entry) => entry.id === id);
-      if (updated) this.detailDrafts[id] = $state.snapshot(updated.configuration);
+      if (updated) { this.detailDrafts[id] = $state.snapshot(updated.configuration); this.detailBases[id] = $state.snapshot(updated.configuration); }
     } catch (cause: unknown) {
       this.detailError = backendError(cause, "The new configuration could not be installed.");
       await this.refreshState();
@@ -745,19 +758,28 @@ class LauncherStore {
     }
   }
 
+  beginRename(id: string): void {
+    const instance = this.launcherState?.instances.find(entry => entry.id === id);
+    if (!instance || this.renameBusy) return;
+    this.renameError = null;
+    this.renaming = { id, name: instance.displayName, original: instance.displayName };
+  }
+
   async runRename(): Promise<void> {
-    if (!this.renaming) return;
-    this.instanceBusy = this.renaming.id;
-    this.instanceError = null;
+    if (!this.renaming || this.renameBusy) return;
+    const request = $state.snapshot(this.renaming);
+    this.renameBusy = true;
+    this.renameError = null;
     try {
-      await renameInstance(this.renaming.id, this.renaming.name.trim());
+      const renamed = await renameInstance(request.id, request.name.trim(), request.original);
+      if (this.launcherState) this.launcherState.instances = this.launcherState.instances.map(entry => entry.id === renamed.id ? renamed : entry);
       this.renaming = null;
-      await this.refreshState();
       void this.refreshPlayReadiness();
     } catch (cause: unknown) {
-      this.instanceError = backendError(cause, "The rename failed.");
+      this.renameError = backendError(cause, "The rename failed.");
+      await this.refreshState();
     } finally {
-      this.instanceBusy = null;
+      this.renameBusy = false;
     }
   }
 

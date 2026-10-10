@@ -662,15 +662,17 @@ export async function createInstance(
 export interface UpdateInstanceConfigurationRequest {
   instanceId: string;
   configuration: InstanceConfiguration;
+  expectedConfiguration: InstanceConfiguration;
 }
 
 export async function updateInstanceConfiguration(
   instanceId: string,
   configuration: InstanceConfiguration,
+  expectedConfiguration: InstanceConfiguration,
 ): Promise<InstanceSummary> {
   try {
     return await invoke<InstanceSummary>("update_instance_configuration", {
-      request: { instanceId, configuration },
+      request: { instanceId, configuration, expectedConfiguration },
     });
   } catch (error: unknown) {
     if (isBackendCommandError(error)) {
@@ -789,10 +791,11 @@ export async function retryInstanceInstall(instanceId: string): Promise<Instance
 export async function renameInstance(
   instanceId: string,
   newDisplayName: string,
+  expectedDisplayName: string,
 ): Promise<InstanceSummary> {
   try {
     return await invoke<InstanceSummary>("rename_instance", {
-      request: { instanceId, newDisplayName },
+      request: { instanceId, newDisplayName, expectedDisplayName },
     });
   } catch (error: unknown) {
     if (isBackendCommandError(error)) {
