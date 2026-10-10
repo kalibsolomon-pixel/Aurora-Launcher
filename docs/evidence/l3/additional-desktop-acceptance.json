@@ -1,0 +1,10 @@
+{
+  "kind": "actual desktop with synthetic accounts; native disposable local library and layout",
+  "accountSelectorSwitchesBothWays": true,
+  "priorAccountCapesHidden": true,
+  "invalidPngRejected": true,
+  "oversizedPngRejected": true,
+  "libraryCountUnchanged": 12,
+  "widgetSizeOrderVisibilitySavedNatively": true,
+  "pageErrors": []
+}

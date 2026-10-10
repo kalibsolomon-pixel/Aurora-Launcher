@@ -1,0 +1,124 @@
+{
+  "source": "f02ec9ae93b242e3b1ecc2090dcfa7aa3a4d198b",
+  "frontend": {
+    "typecheckErrors": 0,
+    "typecheckWarnings": 0,
+    "testsPassed": 265,
+    "testsFailed": 0,
+    "productionBuild": "passed"
+  },
+  "native": {
+    "format": "passed",
+    "allTargetsCheck": "passed",
+    "unitTestsPassed": 854,
+    "iconIntegrationTestsPassed": 6,
+    "intentionallyIgnored": 29,
+    "testsFailed": 0,
+    "optimizedBuild": "passed",
+    "isolatedBundledDesktopBoot": "passed"
+  },
+  "visual": {
+    "cssViewports": [
+      [
+        1600,
+        1030
+      ],
+      [
+        1120,
+        760
+      ],
+      [
+        860,
+        800
+      ],
+      [
+        720,
+        520
+      ]
+    ],
+    "layoutChecks": "passed",
+    "l1RegressionGroupsPassed": 4,
+    "shellRegressionGroupsPassed": 5,
+    "actualDesktopInspected": true,
+    "physicalNarrowWindow": true
+  },
+  "integration": {
+    "localNativePersistence": "passed",
+    "nativeWidgetPersistence": "passed",
+    "syntheticRemoteResponses": "passed",
+    "liveAuthenticatedMutation": "not attempted"
+  },
+  "preservation": {
+    "originalCounts": {
+      "tracked": 716,
+      "untracked": 15144,
+      "ignored": 175,
+      "owner": 27271
+    },
+    "originalFilesMissing": 0,
+    "protectedOrOwnerFilesChanged": 0,
+    "trackedChangesReviewedAndScoped": true,
+    "criticalFiles": [
+      {
+        "path": "AGENTS.md",
+        "sha256": "e9e1656365c9ff2768c83892450479aabd21ce4f54afa5efd0ccc7dea7c3a330",
+        "unchanged": true
+      },
+      {
+        "path": "README.md",
+        "sha256": "a874b67ddc4bcc823950ca655027424740fd3a9bb4e2d036bd4de0f1cf05a0af",
+        "unchanged": true
+      },
+      {
+        "path": "package.json",
+        "sha256": "b71f7e0a65c19ca92b668ebe28f0f3b15a2b04a6cb0802c385fffcea7cea22b9",
+        "unchanged": true
+      },
+      {
+        "path": "package-lock.json",
+        "sha256": "b86f0aae61579fc922821869b351bf65ed7493411e9cf4330c9eb3b2a22f8443",
+        "unchanged": true
+      },
+      {
+        "path": "src-tauri/Cargo.toml",
+        "sha256": "b36fe2d1f91c3dfd39f405585faa0df2d28f952f6fb7d45314ddc341a525fc04",
+        "unchanged": true
+      },
+      {
+        "path": "src-tauri/Cargo.lock",
+        "sha256": "5dac665780e45ee4da1a5fe27234a1cc6edb9884ce32be89f364d31d42956a09",
+        "unchanged": true
+      },
+      {
+        "path": "src-tauri/tauri.conf.json",
+        "sha256": "1d5f54e271e73fc25cd10eabd1b8bc58b50bd3c102896b3b320106c8e0ce37bf",
+        "unchanged": true
+      },
+      {
+        "path": "src-tauri/build.rs",
+        "sha256": "4ae2333b11623039cc115e29b696e7ff5cdfcd5b7d628280ddf48fa733e6418d",
+        "unchanged": true
+      },
+      {
+        "path": "src-tauri/capabilities/default.json",
+        "sha256": "78d59d5d6313a81477f5d8311b2f13f48d4635c86d447e2dfc0688a6e17a2df3",
+        "unchanged": true
+      },
+      {
+        "path": "LAUNCHER_REFINEMENT_L1.md",
+        "sha256": "d693a16c1e666e6c24a71001faa47f029f7d5eebfd32a7c5b91bcf7125e03f33",
+        "unchanged": true
+      },
+      {
+        "path": "LAUNCHER_REFINEMENT_L2.md",
+        "sha256": "a09fd6f5120d6ad345c38fb1987b5e8bdd8943ed9cdba884f8c4e9cfab5f69fa",
+        "unchanged": true
+      }
+    ]
+  },
+  "publication": {
+    "pushed": false,
+    "published": false,
+    "installedLauncherReplaced": false
+  }
+}

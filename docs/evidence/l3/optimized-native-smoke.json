@@ -1,0 +1,16 @@
+{
+  "kind": "optimized native executable, bundled production frontend and actual native commands; isolated application identifier; synthetic local skins only",
+  "version": "1.4.1",
+  "bundledFrontend": true,
+  "fixtureAccountBridge": false,
+  "accounts": 0,
+  "presets": 12,
+  "offlineLocalPreview": true,
+  "applyDisabled": true,
+  "geometry": {
+    "canvasContained": true,
+    "controlsBelow": true,
+    "oneAccountSelector": true
+  },
+  "pageErrors": []
+}

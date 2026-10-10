@@ -1,0 +1,26 @@
+{
+  "kind": "real Tauri WebView2 desktop; native disposable local library; synthetic accounts and all remote mutations",
+  "passed": [
+    "native library import",
+    "duplicate import",
+    "rename",
+    "favorite",
+    "search",
+    "favorite filter",
+    "cancel deletion",
+    "confirmed deletion",
+    "pointer drag",
+    "keyboard rotation",
+    "front/back/reset",
+    "fixture apply and profile refresh",
+    "cape preview without mutation",
+    "fixture cape equip and disable",
+    "widget navigation",
+    "no capes",
+    "empty no-account library",
+    "offline browsing",
+    "failed remote mutation"
+  ],
+  "pageErrors": [],
+  "nativePresetCount": 12
+}

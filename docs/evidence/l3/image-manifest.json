@@ -1,0 +1,146 @@
+[
+  {
+    "path": "01-02-home-widgets-before.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "4d65b0d7f61398dd13eb1168c9ff117e1d9e79c8324394a3ef1f012737dee846"
+  },
+  {
+    "path": "03-skin-library.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "de84f9d6d515f317e8c0106359ac1677e9f0878313a816345f8a5f9f573ec518"
+  },
+  {
+    "path": "04-cape-inventory.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "008ef673faf7a7e6583d003b9a9eff863d46b211cfa77fe05cca692301e165b4"
+  },
+  {
+    "path": "05-empty-library.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "5f60e199dbeb061825c09031463c1ec05fc4fd0599494d4a82c5821db0236909"
+  },
+  {
+    "path": "06-no-capes.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "4bf2b3aa440dd5d1e0cafa023efdb077a4094734913009183c0bf70233f9ddf4"
+  },
+  {
+    "path": "07-player-front.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "944db133addb22bdbd9ad7228faa98670953a7ea8e8d7a1057e166a6a6e0eadb"
+  },
+  {
+    "path": "08-player-back.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "4bfc510723f6810976be2dcbb530a20d0e3182d121103a074168e308eb370b8b"
+  },
+  {
+    "path": "09-import-dialog.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "3cbcc44f925c249fd2ecbad5a53d4362743690a24406dcf1791a1261b9ddf3d7"
+  },
+  {
+    "path": "10-skin-detail-rename.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "b683725183d26ec48333fe4e5e661b850853352cc1005d28f1c049ed1d33c763"
+  },
+  {
+    "path": "11-cape-selection.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "0d7d405e992f9abd14bd9025bfa9c9fc01289a9bf769d2f70f874eaefbb7b96c"
+  },
+  {
+    "path": "12-home-widgets.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "42a2ba625bf99a36dc2dde8ad3100fb89e9ebc78cb43cd05130da5325f593d65"
+  },
+  {
+    "path": "13-narrow-layout.png",
+    "pixels": [
+      1065,
+      1288
+    ],
+    "sha256": "7c1dc578996508bc259f61e3b85bb79e2b9129a5f02ac21e633c8ec532c651cb"
+  },
+  {
+    "path": "13b-narrow-preview-actions.png",
+    "pixels": [
+      1065,
+      1288
+    ],
+    "sha256": "622094f64176384ba19fde6a27ebb91093acf31c8ae0b0fe6161b9c8f6c98e70"
+  },
+  {
+    "path": "14-sidebar-destination.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "7ee1cee23c67282dd8353f4d5e07a7e8e132dae8cc5cdec8bf507f71366ea0ab"
+  },
+  {
+    "path": "15-offline-library.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "f94d13c9770587f91b064032fe979b9e3aea8a765ded812e14a6f49995742bbc"
+  },
+  {
+    "path": "16-cape-failure.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "fc5a5826c0bf6e350b14213dd9631ab8e5871ec3acf2b43b8a2c1c6fe39bc43e"
+  },
+  {
+    "path": "17-switched-account.png",
+    "pixels": [
+      1065,
+      1288
+    ],
+    "sha256": "c65391ac43473e3f4a08328cbc24b1aef844edd14857727d7801796897dd2602"
+  },
+  {
+    "path": "18-optimized-native-smoke.png",
+    "pixels": [
+      2000,
+      1288
+    ],
+    "sha256": "5ddf3634f6e804bbafa4ef6901ddc278a761530c73dc5b66659769bf33b03f11"
+  }
+]
