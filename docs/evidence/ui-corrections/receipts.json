@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-10",
+  "applicationSource": "5afbe22e7d52bcdd8559357928881ab8e93271b4",
+  "frontend": {
+    "passed": 265,
+    "suites": 16,
+    "failed": 0,
+    "skipped": 0
+  },
+  "rust": {
+    "libraryPassed": 854,
+    "integrationPassed": 6,
+    "failed": 0,
+    "ignoredNotClaimedPassed": 29
+  },
+  "checks": {
+    "typecheck": "passed",
+    "rustFormat": "passed",
+    "rustAllTargetsCheck": "passed",
+    "frontendBuild": "passed",
+    "isolatedOptimizedUnbundledBuild": "passed",
+    "optimizedActualBoot": "passed",
+    "nativeUiCorrections": "passed",
+    "existingL1Visual": "passed",
+    "existingL3Visual": "passed",
+    "existingCorrectionVisual": "passed",
+    "nativeCaptureReproduction": "passed"
+  },
+  "preservation": {
+    "trackedChecked": 753,
+    "preExistingUntrackedChecked": 15144,
+    "protectedIgnoredChecked": 175,
+    "ownerFilesChecked": 27273,
+    "missing": 0,
+    "protectedChanged": 0,
+    "scopedTrackedChanged": [
+      "src/lib/instances/InstanceModsPanel.svelte",
+      "src/lib/pages/InstancesPage.svelte",
+      "src/lib/shell/Icon.svelte",
+      "src/lib/shell/phase-f.css"
+    ]
+  },
+  "logSha256": {
+    "frontend-final.log": "07e51899365ccacf3df47ec96796db7ccf001e717ef34a6483fa0f647694bdb4",
+    "check-final.log": "15a4e9f0b63bcc30101b2fe2705ac7c4c1d9584e4b87ff96aac835268267d17b",
+    "rust-fmt-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "rust-check-final.log": "1af0e07a1628fb350ef8404723dd1478812f9d0027e7cc4afecc72afe2466baa",
+    "rust-tests-final.log": "8d33ee43a4aa72d9abfd87270646c280a7ef8c86cd2c484eb0b41b8b39d11006",
+    "build-final.log": "a48f49f9259d8e2cf69f8528f151d355f4599f7fe35030d17aeac3ac836d7f81",
+    "native-build-final.log": "ab3712e4b44ce5ea2d75c55aa950f151704af3db05b3c222db0005a93fd7925a",
+    "ui-final.log": "d2647e84c5992d3fbef04c5628f35c734229fe8e0387203d2d88ba0ad01d71c8",
+    "l1-final.log": "5c0162aab8166336f8033585a2bdcc328f021501158ca9851d134a917c42817b",
+    "l3-final.log": "61e7b1309ae70ab949d96b032be700f017394709874aeca27a0f878412a8ea59",
+    "correction-final.log": "1f4f5739db7f4f0d59128d243da2a8a49a39a160cc5829a2dfb6324c1ca13dab",
+    "capture-validation.log": "4219317304f5658850caa1265359f623900b0ff0a50ff9b5dd4e2e922e32a3a9"
+  },
+  "nativeExecutableSha256": "d13ee3f2981ddf38b85f625b85629192cb06b71d550b5bed5e7635cf9339eb91",
+  "verdict": "BLOCKED",
+  "reason": "Owner severe scrolling symptom not reproduced or proven resolved"
+}

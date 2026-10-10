@@ -1,0 +1,16 @@
+{
+  "identifier": "com.aurora.launcher.ui-corrections-optimized-review",
+  "version": "1.4.1",
+  "backend": "ready",
+  "managedRootIsIsolated": true,
+  "instanceCount": 0,
+  "selectedInstance": null,
+  "origin": "http://tauri.localhost",
+  "viewport": [
+    1600,
+    1030
+  ],
+  "dpr": 1.25,
+  "pageErrors": [],
+  "webviewVersion": "154.0.4258.62"
+}

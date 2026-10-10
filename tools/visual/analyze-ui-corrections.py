@@ -34,7 +34,7 @@ for trial in trials:
                     "longTasks": trial["longTasks"], "domMutations": trial["mutations"], "domNodes": trial["nodes"],
                     "loadedImages": trial["images"], "viewport": trial["viewport"], "devicePixelRatio": trial["dpr"],
                     "rendererMetrics": trial["metrics"], "videoState": trial["video"]})
-output = {"method": "3 interleaved trials per variant/surface; 60 wheel inputs, 100 illustrated entries; rAF is callback timing, DrawAndSwap is CPU submission work, frame-swap latency excludes final screen presentation", "trials": results}
+output = {"method": "3 repeated trials per variant/surface, interleaved when multiple variants; 60 wheel inputs, 100 illustrated entries; rAF is callback timing, DrawAndSwap is CPU submission work, frame-swap latency excludes final screen presentation", "trials": results}
 (root / (sys.argv[3] if len(sys.argv)>3 else 'summary.json')).write_text(json.dumps(output, indent=2))
 for surface in dict.fromkeys(r["surface"] for r in results):
     for variant in dict.fromkeys(r["variant"] for r in results):

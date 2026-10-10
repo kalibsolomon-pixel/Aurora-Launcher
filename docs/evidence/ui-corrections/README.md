@@ -22,3 +22,26 @@ and WebView2's loopback debugging port. `profile-ui-corrections.mjs` uses
 and `AURORA_PLAYWRIGHT_MODULE`. Analyze with
 `python tools/visual/analyze-ui-corrections.py <evidence-directory> <trials.json>`.
 The scripts neither acquire product artifacts nor invoke content mutations.
+
+`historical.json` is the safe archive comparison from `8df387b` before L1.
+`final.json` checks all five views after the complete visual changes; geometry
+changed, so use `r1.json` for the controlled blur attribution. `artwork-cache.json`
+separates real native cold acquisition from cache reuse in a disposable root.
+The latter uses 20 public projects behind 100 synthetic rows, not an owner inventory.
+It is an opt-in live diagnostic, not a deterministic Internet-dependent unit test.
+Run `profile-artwork-cache.mjs` only with `UI_MANAGED_ROOT` matching the freshly
+created diagnostic root of the isolated debug app; it refuses a populated cache
+and never deletes one. `UI_EVIDENCE_DIR` must already exist.
+
+`ui-corrections.test.mjs` covers warning accessibility, advisory versus blocking
+feedback, stable scrolling/artwork, bright-underlay contrast, reduced transparency,
+720×520/900×930/1600×1000 layouts, and the standalone modpack ancestor.
+Set `UI_CDP_URL` for native window resizing or omit it for headless Chromium.
+Existing L1/L3 and correction harnesses provide the broader regression coverage.
+
+`before/` and `after/` contain 14 matching actual WebView2 captures per revision,
+with viewport receipts. The before DOM was captured before R2/R3; only the R1
+content declarations were temporarily restored to the exact initial declarations.
+`capture-ui-corrections.mjs` reproduces the current-source views using an explicit
+`UI_CAPTURE_DIR`; capture a baseline from its own source revision, not CSS alone.
+All 28 images were visually inspected, including full-size warning/narrow views.

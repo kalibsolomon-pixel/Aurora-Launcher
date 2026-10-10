@@ -1,0 +1,305 @@
+[
+  {
+    "trace": "trace-mod-baseline-0.json",
+    "events": {
+      "LocalFrameView::RunStyleAndLayoutLifecyclePhases": {
+        "count": 393,
+        "durationCpuMs": 0.8
+      },
+      "PrePaint": {
+        "count": 393,
+        "durationCpuMs": 2.81
+      },
+      "LocalFrameView::RunPrePaintLifecyclePhase": {
+        "count": 393,
+        "durationCpuMs": 1.849
+      },
+      "LocalFrameView::RunPaintLifecyclePhase": {
+        "count": 274,
+        "durationCpuMs": 47.642
+      },
+      "FlingController::ObserveAndMaybeConsumeGestureEvent": {
+        "count": 180,
+        "durationCpuMs": 0.172
+      },
+      "SkiaOutputSurfaceImplOnGpu::FinishPaintRenderPass": {
+        "count": 267,
+        "durationCpuMs": 67.244
+      },
+      "D3DVideoDecoder::ReceivePictureBufferFromClient": {
+        "count": 57,
+        "durationCpuMs": 0.159
+      },
+      "D3DVideoDecoder::DoDecode": {
+        "count": 169,
+        "durationCpuMs": 6.094
+      },
+      "RasterDecoderImpl::DoBeginRasterCHROMIUM": {
+        "count": 36,
+        "durationCpuMs": 0.576
+      },
+      "RasterDecoderImpl::DoRasterCHROMIUM": {
+        "count": 36,
+        "durationCpuMs": 4.468
+      },
+      "RasterDecoderImpl::DoRasterCHROMIUM::Deserializing": {
+        "count": 36,
+        "durationCpuMs": 4.405
+      },
+      "RasterDecoderImpl::DoEndRasterCHROMIUM": {
+        "count": 36,
+        "durationCpuMs": 8.361
+      },
+      "RasterDecoderImpl::DoEndRasterCHROMIUM::Flush": {
+        "count": 36,
+        "durationCpuMs": 8.213
+      },
+      "EdgeD3D11VdaHybridVideoDecoderWrapper::Decode": {
+        "count": 56,
+        "durationCpuMs": 0.089
+      },
+      "D3DVideoDecoder::Decode": {
+        "count": 56,
+        "durationCpuMs": 0.036
+      },
+      "D3DVideoDecoder::OutputResult": {
+        "count": 56,
+        "durationCpuMs": 0.888
+      },
+      "Paint": {
+        "count": 10,
+        "durationCpuMs": 11.71
+      },
+      "PaintController::commitNewDisplayItems": {
+        "count": 5,
+        "durationCpuMs": 0.011
+      },
+      "GpuImageDecodeTaskImpl::RunOnWorkerThread": {
+        "count": 16,
+        "durationCpuMs": 1.117
+      },
+      "GpuImageDecodeCache::DecodeImage": {
+        "count": 16,
+        "durationCpuMs": 0.972
+      },
+      "ImageFrameGenerator::decode": {
+        "count": 16,
+        "durationCpuMs": 0.603
+      },
+      "GpuImageDecodeCache::UploadImage": {
+        "count": 16,
+        "durationCpuMs": 0.075
+      },
+      "AnimationFrame::StyleAndLayout": {
+        "count": 548,
+        "durationCpuMs": 0.0
+      },
+      "MojoDecoderBufferWriter::Write": {
+        "count": 112,
+        "durationCpuMs": 0.0
+      }
+    }
+  },
+  {
+    "trace": "trace-mod-no-list-blur-0.json",
+    "events": {
+      "LocalFrameView::RunStyleAndLayoutLifecyclePhases": {
+        "count": 338,
+        "durationCpuMs": 0.826
+      },
+      "PrePaint": {
+        "count": 338,
+        "durationCpuMs": 2.684
+      },
+      "LocalFrameView::RunPrePaintLifecyclePhase": {
+        "count": 338,
+        "durationCpuMs": 1.835
+      },
+      "LocalFrameView::RunPaintLifecyclePhase": {
+        "count": 277,
+        "durationCpuMs": 46.249
+      },
+      "SkiaOutputSurfaceImplOnGpu::FinishPaintRenderPass": {
+        "count": 266,
+        "durationCpuMs": 29.741
+      },
+      "D3DVideoDecoder::ReceivePictureBufferFromClient": {
+        "count": 58,
+        "durationCpuMs": 0.074
+      },
+      "D3DVideoDecoder::DoDecode": {
+        "count": 170,
+        "durationCpuMs": 4.889
+      },
+      "FlingController::ObserveAndMaybeConsumeGestureEvent": {
+        "count": 180,
+        "durationCpuMs": 0.181
+      },
+      "RasterDecoderImpl::DoBeginRasterCHROMIUM": {
+        "count": 240,
+        "durationCpuMs": 0.672
+      },
+      "RasterDecoderImpl::DoRasterCHROMIUM": {
+        "count": 240,
+        "durationCpuMs": 54.536
+      },
+      "RasterDecoderImpl::DoRasterCHROMIUM::Deserializing": {
+        "count": 240,
+        "durationCpuMs": 54.076
+      },
+      "RasterDecoderImpl::DoEndRasterCHROMIUM": {
+        "count": 240,
+        "durationCpuMs": 64.926
+      },
+      "RasterDecoderImpl::DoEndRasterCHROMIUM::Flush": {
+        "count": 240,
+        "durationCpuMs": 64.102
+      },
+      "EdgeD3D11VdaHybridVideoDecoderWrapper::Decode": {
+        "count": 56,
+        "durationCpuMs": 0.088
+      },
+      "D3DVideoDecoder::Decode": {
+        "count": 56,
+        "durationCpuMs": 0.033
+      },
+      "D3DVideoDecoder::OutputResult": {
+        "count": 56,
+        "durationCpuMs": 0.838
+      },
+      "Paint": {
+        "count": 10,
+        "durationCpuMs": 10.814
+      },
+      "PaintController::commitNewDisplayItems": {
+        "count": 5,
+        "durationCpuMs": 0.013
+      },
+      "GpuImageDecodeTaskImpl::RunOnWorkerThread": {
+        "count": 16,
+        "durationCpuMs": 1.272
+      },
+      "GpuImageDecodeCache::DecodeImage": {
+        "count": 16,
+        "durationCpuMs": 1.135
+      },
+      "ImageFrameGenerator::decode": {
+        "count": 16,
+        "durationCpuMs": 0.538
+      },
+      "GpuImageDecodeCache::UploadImage": {
+        "count": 16,
+        "durationCpuMs": 0.065
+      },
+      "AnimationFrame::StyleAndLayout": {
+        "count": 554,
+        "durationCpuMs": 0.0
+      },
+      "MojoDecoderBufferWriter::Write": {
+        "count": 112,
+        "durationCpuMs": 0.0
+      }
+    }
+  },
+  {
+    "trace": "trace-mod-final-0.json",
+    "events": {
+      "D3DVideoDecoder::ReceivePictureBufferFromClient": {
+        "count": 58,
+        "durationCpuMs": 0.065
+      },
+      "D3DVideoDecoder::DoDecode": {
+        "count": 170,
+        "durationCpuMs": 5.232
+      },
+      "LocalFrameView::RunStyleAndLayoutLifecyclePhases": {
+        "count": 337,
+        "durationCpuMs": 0.674
+      },
+      "PrePaint": {
+        "count": 337,
+        "durationCpuMs": 2.52
+      },
+      "LocalFrameView::RunPrePaintLifecyclePhase": {
+        "count": 337,
+        "durationCpuMs": 1.775
+      },
+      "LocalFrameView::RunPaintLifecyclePhase": {
+        "count": 276,
+        "durationCpuMs": 44.326
+      },
+      "FlingController::ObserveAndMaybeConsumeGestureEvent": {
+        "count": 180,
+        "durationCpuMs": 0.185
+      },
+      "SkiaOutputSurfaceImplOnGpu::FinishPaintRenderPass": {
+        "count": 266,
+        "durationCpuMs": 24.992
+      },
+      "RasterDecoderImpl::DoBeginRasterCHROMIUM": {
+        "count": 240,
+        "durationCpuMs": 0.685
+      },
+      "RasterDecoderImpl::DoRasterCHROMIUM": {
+        "count": 240,
+        "durationCpuMs": 58.768
+      },
+      "RasterDecoderImpl::DoRasterCHROMIUM::Deserializing": {
+        "count": 240,
+        "durationCpuMs": 58.325
+      },
+      "RasterDecoderImpl::DoEndRasterCHROMIUM": {
+        "count": 240,
+        "durationCpuMs": 55.071
+      },
+      "RasterDecoderImpl::DoEndRasterCHROMIUM::Flush": {
+        "count": 240,
+        "durationCpuMs": 54.251
+      },
+      "EdgeD3D11VdaHybridVideoDecoderWrapper::Decode": {
+        "count": 56,
+        "durationCpuMs": 0.103
+      },
+      "D3DVideoDecoder::Decode": {
+        "count": 56,
+        "durationCpuMs": 0.033
+      },
+      "D3DVideoDecoder::OutputResult": {
+        "count": 56,
+        "durationCpuMs": 0.902
+      },
+      "Paint": {
+        "count": 10,
+        "durationCpuMs": 10.723
+      },
+      "PaintController::commitNewDisplayItems": {
+        "count": 5,
+        "durationCpuMs": 0.011
+      },
+      "GpuImageDecodeTaskImpl::RunOnWorkerThread": {
+        "count": 14,
+        "durationCpuMs": 1.058
+      },
+      "GpuImageDecodeCache::DecodeImage": {
+        "count": 14,
+        "durationCpuMs": 0.933
+      },
+      "ImageFrameGenerator::decode": {
+        "count": 14,
+        "durationCpuMs": 0.369
+      },
+      "GpuImageDecodeCache::UploadImage": {
+        "count": 14,
+        "durationCpuMs": 0.04
+      },
+      "AnimationFrame::StyleAndLayout": {
+        "count": 552,
+        "durationCpuMs": 0.0
+      },
+      "MojoDecoderBufferWriter::Write": {
+        "count": 112,
+        "durationCpuMs": 0.0
+      }
+    }
+  }
+]

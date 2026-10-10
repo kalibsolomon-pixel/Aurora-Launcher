@@ -1,0 +1,142 @@
+[
+  {
+    "name": "01-installed-top",
+    "viewport": [
+      1600,
+      1000
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  },
+  {
+    "name": "02-installed-middle",
+    "viewport": [
+      1600,
+      1000
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 2200
+  },
+  {
+    "name": "03-warning",
+    "viewport": [
+      1600,
+      1000
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  },
+  {
+    "name": "04-multiple-warnings",
+    "viewport": [
+      1600,
+      1000
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  },
+  {
+    "name": "05-browse-mods",
+    "viewport": [
+      1600,
+      1000
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  },
+  {
+    "name": "06-browse-resourcepacks",
+    "viewport": [
+      1600,
+      1000
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  },
+  {
+    "name": "07-browse-shaders",
+    "viewport": [
+      1600,
+      1000
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  },
+  {
+    "name": "08-browse-modpacks",
+    "viewport": [
+      1600,
+      1000
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  },
+  {
+    "name": "09-navigation-bright",
+    "viewport": [
+      1600,
+      1000
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  },
+  {
+    "name": "10-navigation-dark",
+    "viewport": [
+      1600,
+      1000
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  },
+  {
+    "name": "11-installed-narrow",
+    "viewport": [
+      900,
+      931
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  },
+  {
+    "name": "12-browse-narrow",
+    "viewport": [
+      900,
+      931
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  },
+  {
+    "name": "13-settings",
+    "viewport": [
+      1600,
+      1000
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  },
+  {
+    "name": "14-cosmetics",
+    "viewport": [
+      1600,
+      1000
+    ],
+    "dpr": 1.25,
+    "overflow": false,
+    "scrollTop": 0
+  }
+]
