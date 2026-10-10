@@ -43,6 +43,7 @@ describe("global navigation", () => {
     assert.deepEqual(production, [
       "home",
       "instances",
+      "cosmetics",
       "settings",
     ]);
     assert.ok(!production.includes("developer"));
@@ -51,6 +52,7 @@ describe("global navigation", () => {
     assert.deepEqual(development, [
       "home",
       "instances",
+      "cosmetics",
       "settings",
       "developer",
     ]);

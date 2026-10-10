@@ -1,11 +1,11 @@
-import type { HeadAvatar } from "../backend";
+import type { CapePreview, HeadAvatar } from "../backend";
 
 type Point = [number, number, number];
-export type SkinFace = { points: Point[]; uv: [number, number, number, number]; mirror: boolean; shade: number };
+export type SkinFace = { points: Point[]; uv: [number, number, number, number]; mirror: boolean; shade: number; texture?: CapePreview };
 export type PlayerModel = { pixels: number[]; height: number; faces: SkinFace[]; fallback: boolean };
 
 /** Static textured cuboids, in Minecraft pixel units. No network, WebGL or animation. */
-export function playerModel(avatar: HeadAvatar | null | undefined): PlayerModel {
+export function playerModel(avatar: HeadAvatar | null | undefined, cape?: CapePreview | null): PlayerModel {
   const valid = !!avatar && [32, 64].includes(avatar.skinHeight) && ["classic", "slim"].includes(avatar.model) &&
     avatar.skinRgba?.length === 64 * avatar.skinHeight * 4 && avatar.skinRgba.every(n => Number.isInteger(n) && n >= 0 && n <= 255);
   const pixels = valid ? avatar.skinRgba : defaultSkin();
@@ -44,6 +44,13 @@ export function playerModel(avatar: HeadAvatar | null | undefined): PlayerModel 
     box(4,12,4,[-2,4,0],0,32,-8,0,false,.25);
     box(4,12,4,[2,4,0],0,48,8,0,false,.25);
   }
+  if (valid && cape && [[64,32],[64,64],[128,64]].some(([w,h]) => cape.width===w && cape.height===h) && cape.rgba.length===cape.width*cape.height*4 && cape.rgba.every(n=>Number.isInteger(n)&&n>=0&&n<=255)) {
+    const start = faces.length;
+    // The (12,1) outer face points behind the player; (1,1) is inward.
+    box(10,16,1,[0,-8,3],0,0,12);
+    const scale = cape.width / 64;
+    for (const face of faces.slice(start)) { face.texture = cape; face.uv = face.uv.map(n=>n*scale) as SkinFace['uv']; }
+  }
   return { pixels, height, faces, fallback: !valid };
 }
 
@@ -81,20 +88,21 @@ export function arrowYawDelta(arrow: "left" | "right"): number {
 }
 
 /** Painter's-order rasterization of visible faces; nearest texels preserve skin detail. */
-export function renderPlayer(context: CanvasRenderingContext2D, model: PlayerModel, yaw = PLAYER_DEFAULT_YAW): void {
-  const width = PLAYER_RENDER_WIDTH, height = PLAYER_RENDER_HEIGHT;
+export function renderPlayer(context: CanvasRenderingContext2D, model: PlayerModel, yaw = PLAYER_DEFAULT_YAW, width = PLAYER_RENDER_WIDTH, height = PLAYER_RENDER_HEIGHT): void {
   const image = context.createImageData(width,height);
   const tilt = .10;
   function project([x,y,z]: Point) {
     const px=x*Math.cos(yaw)+z*Math.sin(yaw), pz=-x*Math.sin(yaw)+z*Math.cos(yaw);
     const py=y*Math.cos(tilt)-pz*Math.sin(tilt), depth=y*Math.sin(tilt)+pz*Math.cos(tilt);
-    const scale=20/(1+depth/120);
+    const scale=(height/40)/(1+depth/120);
     return { x:width/2+px*scale,y:height/2+py*scale,z:depth };
   }
   const visible = model.faces.map(face=>({face,p:face.points.map(project)})).filter(({p})=>
     (p[1].x-p[0].x)*(p[2].y-p[0].y)-(p[1].y-p[0].y)*(p[2].x-p[0].x)>0);
   visible.sort((a,b)=>b.p.reduce((s,p)=>s+p.z,0)-a.p.reduce((s,p)=>s+p.z,0));
   for(const {face,p} of visible) {
+    const pixels = face.texture?.rgba ?? model.pixels;
+    const textureWidth = face.texture?.width ?? 64;
     const [u,v,w,h]=face.uv;
     const uv = [[0,0],[1,0],[1,1],[0,1]];
     for(const indices of [[0,1,2],[0,2,3]]) {
@@ -110,11 +118,11 @@ export function renderPlayer(context: CanvasRenderingContext2D, model: PlayerMod
         let tx=l*uv[indices[0]][0]+m*uv[indices[1]][0]+n*uv[indices[2]][0];
         if(face.mirror) tx=1-tx;
         const ty=l*uv[indices[0]][1]+m*uv[indices[1]][1]+n*uv[indices[2]][1];
-        const source=((v+Math.min(h-1,Math.floor(ty*h)))*64+u+Math.min(w-1,Math.floor(tx*w)))*4;
-        const alpha=model.pixels[source+3]/255;
+        const source=((v+Math.min(h-1,Math.floor(ty*h)))*textureWidth+u+Math.min(w-1,Math.floor(tx*w)))*4;
+        const alpha=pixels[source+3]/255;
         if(!alpha) continue;
         const dest=(y*width+x)*4, back=image.data[dest+3]/255, out=alpha+back*(1-alpha);
-        for(let channel=0;channel<3;channel++) image.data[dest+channel]=(Math.min(255,model.pixels[source+channel]*face.shade)*alpha+image.data[dest+channel]*back*(1-alpha))/out;
+        for(let channel=0;channel<3;channel++) image.data[dest+channel]=(Math.min(255,pixels[source+channel]*face.shade)*alpha+image.data[dest+channel]*back*(1-alpha))/out;
         image.data[dest+3]=out*255;
       }
     }

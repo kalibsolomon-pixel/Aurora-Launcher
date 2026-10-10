@@ -16,6 +16,7 @@
 export const GLOBAL_PAGES = [
   "home",
   "instances",
+  "cosmetics",
   "settings",
   "developer",
 ] as const;
@@ -55,6 +56,7 @@ export function globalDestinations(development: boolean): GlobalDestination[] {
   const labels: Record<GlobalPage, string> = {
     home: "Home",
     instances: "Instances",
+    cosmetics: "Skins & Capes",
     settings: "Settings",
     developer: "Developer",
   };

@@ -24,6 +24,12 @@ class NavigationStore {
 
   openUpdates(): void { this.settingsCategory = "Updates"; this.goTo("settings"); }
 
+  openCosmetics(tab: "skins" | "capes" = "skins"): void {
+    this.cosmeticsTab = tab;
+    this.goTo("cosmetics");
+  }
+  cosmeticsTab = $state<"skins" | "capes">("skins");
+
   openInstance(instanceId: string, tab?: InstanceTab): void {
     this.state = openInstance(this.state, instanceId, tab);
   }

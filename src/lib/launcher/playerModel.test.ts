@@ -14,6 +14,18 @@ it("authoritative slim geometry changes arm widths without changing torso or leg
   assert.equal(playerModel(avatar()).faces[18].uv[2],4);
   assert.equal(playerModel(avatar("slim")).faces[30].uv[2],4);
 });
+it('cape geometry uses separate bounded pixels and correct outward UVs without changing skin faces',()=>{
+  const cape={width:64,height:32,rgba:Array(64*32*4).fill(255)};
+  const skin=playerModel(avatar()), model=playerModel(avatar(),cape);
+  assert.equal(model.faces.length,skin.faces.length+6);
+  assert.deepEqual(model.faces[73].uv,[12,1,10,16]);
+  assert.equal(model.faces[73].texture,cape);
+  assert.ok(model.faces.slice(72).every(face=>face.points.every(point=>point[2]>2)));
+  assert.equal(playerModel(avatar(),{...cape,rgba:[1]}).faces.length,72);
+  const image={data:new Uint8ClampedArray(140*200*4)};
+  const context={createImageData:(w:number,h:number)=>{assert.equal(w,140);assert.equal(h,200);return image;},putImageData:()=>{}} as any;
+  renderPlayer(context,model,Math.PI,140,200);assert.ok(image.data.some(n=>n>0));
+});
 it("legacy models mirror limbs and omit nonexistent outer body layers", () => {
   const model=playerModel(avatar("slim",32));
   assert.equal(model.faces.length,42); assert.equal(model.faces[24].mirror,true);

@@ -8,6 +8,7 @@
   import HomePage from "$lib/pages/HomePage.svelte";
   import InstancesPage from "$lib/pages/InstancesPage.svelte";
   import SettingsPage from "$lib/pages/SettingsPage.svelte";
+  import CosmeticsPage from "$lib/pages/CosmeticsPage.svelte";
   import DeveloperPage from "$lib/pages/DeveloperPage.svelte";
   import InstanceWorkspace from "$lib/instances/InstanceWorkspace.svelte";
 
@@ -50,6 +51,8 @@
     <InstancesPage />
   {:else if state.page === "settings"}
     <SettingsPage />
+  {:else if state.page === "cosmetics"}
+    <CosmeticsPage />
   {:else if state.page === "developer" && developerDestination}
     <DeveloperPage />
   {/if}
