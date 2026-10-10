@@ -694,6 +694,7 @@ struct WireProfile {
 }
 #[derive(Deserialize, Serialize)]
 struct WireSkin {
+    id: Option<String>,
     state: String,
     variant: String,
     url: Option<String>,
@@ -844,6 +845,23 @@ pub async fn fetch(account_id: &str, token: &SecretString) -> Result<CosmeticsSt
     fetch_from(PROFILE_URL, account_id, token).await
 }
 async fn fetch_from(url: &str, account_id: &str, token: &SecretString) -> Result<CosmeticsState> {
+    Ok(fetch_profile_from(url, account_id, token).await?.0)
+}
+fn active_skin_id(profile: &WireProfile) -> Option<String> {
+    let id = profile
+        .skins
+        .iter()
+        .find(|skin| skin.state == "ACTIVE")?
+        .id
+        .as_ref()?;
+    (!id.is_empty() && id.len() <= 80 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+        .then(|| id.clone())
+}
+async fn fetch_profile_from(
+    url: &str,
+    account_id: &str,
+    token: &SecretString,
+) -> Result<(CosmeticsState, Option<String>)> {
     AccountId::validate(account_id).map_err(|_| {
         error(
             "cosmetics_account_invalid",
@@ -857,6 +875,7 @@ async fn fetch_from(url: &str, account_id: &str, token: &SecretString) -> Result
             "Minecraft Services returned an invalid profile.",
         )
     })?;
+    let active_id = active_skin_id(&profile);
     let preview_sources: Vec<_> = profile
         .capes
         .iter()
@@ -901,7 +920,7 @@ async fn fetch_from(url: &str, account_id: &str, token: &SecretString) -> Result
             cape.preview = preview;
         }
     }
-    Ok(state)
+    Ok((state, active_id))
 }
 async fn fetch_cape_preview(url: url::Url) -> Option<CapePreview> {
     let mut response = client().get(url).send().await.ok()?;
@@ -980,7 +999,7 @@ async fn apply_skin_to(
     let mut body = format!("--{boundary}\r\nContent-Disposition: form-data; name=\"variant\"\r\n\r\n{}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"skin.png\"\r\nContent-Type: image/png\r\n\r\n", model.service()).into_bytes();
     body.extend_from_slice(bytes);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
-    request(
+    let response = request(
         client()
             .post(skin_url)
             .bearer_auth(token.expose())
@@ -1001,8 +1020,19 @@ async fn apply_skin_to(
             failure
         }
     })?;
-    let state = fetch_from(profile_url, account_id, token).await?;
-    if state.current_skin_model != Some(model) {
+    // Match the identity returned by the upload with a separate authoritative
+    // GET. Matching only the model could confirm an unchanged same-model skin.
+    let uploaded: Option<WireProfile> = serde_json::from_slice(&response).ok();
+    let expected_id = uploaded.as_ref().and_then(active_skin_id);
+    let upload_matches = uploaded.is_some_and(|profile| {
+        normalize(profile, account_id).is_ok_and(|state| state.current_skin_model == Some(model))
+    });
+    let (state, current_id) = fetch_profile_from(profile_url, account_id, token).await?;
+    if !upload_matches
+        || expected_id.is_none()
+        || expected_id != current_id
+        || state.current_skin_model != Some(model)
+    {
         return Err(error(
             "cosmetics_refresh_failed",
             "The skin request succeeded, but the updated profile could not be confirmed yet.",
@@ -1397,7 +1427,7 @@ mod tests {
     }
     const ACCOUNT: &str = "986dec87b7ec47ff89ff033fdb95c4b5";
     fn profile(active: bool, model: &str) -> Vec<u8> {
-        serde_json::json!({"id": ACCOUNT, "skins":[{"state":"ACTIVE","variant":model}], "capes":[{"id":"owned-cape","state":if active {"ACTIVE"} else {"INACTIVE"},"alias":"Founder"}]}).to_string().into_bytes()
+        serde_json::json!({"id": ACCOUNT, "skins":[{"id":"fixture-skin","state":"ACTIVE","variant":model}], "capes":[{"id":"owned-cape","state":if active {"ACTIVE"} else {"INACTIVE"},"alias":"Founder"}]}).to_string().into_bytes()
     }
     #[tokio::test]
     async fn skin_upload_is_multipart_and_refreshes_profile() {
@@ -1415,7 +1445,7 @@ mod tests {
                     );
                     assert!(request.body.windows(8).any(|w| w == b"\x89PNG\r\n\x1a\n"));
                     sent.store(true, Ordering::SeqCst);
-                    TestResponse::ok(&[])
+                    TestResponse::ok(&profile(false, "SLIM"))
                 }
                 ("GET", "/minecraft/profile") => TestResponse::ok(&profile(
                     false,
@@ -1441,6 +1471,53 @@ mod tests {
         .unwrap();
         assert!(uploaded.load(Ordering::SeqCst));
         assert_eq!(state.current_skin_model, Some(SkinModel::Slim));
+    }
+    #[tokio::test]
+    async fn successful_upload_requires_matching_fresh_identity_and_profile() {
+        let token = SecretString::new("FIXTURE-SECRET-TOKEN");
+        for mode in ["stale", "unavailable", "expired", "empty-upload"] {
+            let server =
+                TestServer::spawn(Arc::new(move |request| match request.method.as_str() {
+                    "POST" => {
+                        if mode == "empty-upload" {
+                            TestResponse::ok(&[])
+                        } else {
+                            TestResponse::ok(&profile(false, "CLASSIC"))
+                        }
+                    }
+                    "GET" if mode == "unavailable" => TestResponse::status(503),
+                    "GET" if mode == "expired" => TestResponse::status(401),
+                    "GET" => {
+                        let mut body: serde_json::Value =
+                            serde_json::from_slice(&profile(false, "CLASSIC")).unwrap();
+                        if mode == "stale" {
+                            body["skins"][0]["id"] = "previous-same-model-skin".into();
+                        }
+                        TestResponse::ok(&serde_json::to_vec(&body).unwrap())
+                    }
+                    _ => TestResponse::status(404),
+                }));
+            let failure = apply_skin_to(
+                &format!("{}/minecraft/profile", server.base_url()),
+                &format!("{}/minecraft/profile/skins", server.base_url()),
+                ACCOUNT,
+                &token,
+                &fixture(64, 64),
+                SkinModel::Classic,
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(
+                failure.code,
+                match mode {
+                    "unavailable" => "cosmetics_service_unavailable",
+                    "expired" => "cosmetics_authentication_required",
+                    _ => "cosmetics_refresh_failed",
+                }
+            );
+            assert_eq!(server.request_count(), 2);
+            assert!(!failure.message.contains("FIXTURE-SECRET-TOKEN"));
+        }
     }
     #[tokio::test]
     async fn cape_selection_checks_owned_set_and_disable_refreshes() {
