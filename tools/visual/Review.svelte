@@ -1,6 +1,6 @@
 <script lang="ts">
   import '../../src/app.css';
-  import { setContext } from 'svelte';
+  import { onMount, setContext } from 'svelte';
   import { setReviewInvoke, isTauri, nativeInvoke } from './review-core';
   import AppShell from '$lib/shell/AppShell.svelte';
   import Home from '$lib/pages/HomePage.svelte';
@@ -15,6 +15,7 @@
   import packageMetadata from '../../package.json';
   const id = 'a'.repeat(32), accountId = 'c'.repeat(32);
   const review = new URLSearchParams(location.search);
+  onMount(() => { if (review.has('l2') && isTauri()) void launcher.refreshState(); });
   // Phase H update-review fixtures: real provider records and a typed
   // availability report for the Content workspace Updates card.
   const phaseH = review.has('updates');
@@ -86,6 +87,13 @@
   // Only this standalone review server aliases the native invoke boundary.
   setReviewInvoke(async (command:string,args:any) => {
     try {
+    // L2 desktop acceptance uses real native persistence in an externally
+    // configured disposable application root. This review entry never ships.
+    if (review.has('l2') && isTauri() && ['get_recent_servers', 'set_recent_server_favorite', 'rename_instance', 'update_instance_configuration', 'get_launcher_state', 'quick_play_history'].includes(command)) {
+      const result = await nativeInvoke(command, args);
+      if (command === 'get_launcher_state') launcher.launcherState = result as any;
+      return result;
+    }
     if (command === 'list_minecraft_versions') return [{id:'1.21.11',versionType:'release'}];
     if (command === 'list_fabric_loader_versions') return [{version:'0.19.5',stable:true}];
     if (command === 'get_instance_content_context') return {instanceId:id,minecraftVersion:'1.21.11',loader:'fabric',loaderVersion:'0.19.5',auroraVersion:'2.1.5',environment:'client',modrinthAvailable:true,modsLoadable:true};

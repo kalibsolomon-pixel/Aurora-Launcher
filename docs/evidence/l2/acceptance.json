@@ -1,0 +1,214 @@
+{
+  "date": "2026-10-09",
+  "verdict": "COMPLETE",
+  "startingSource": "f7cbd54a8e8481e35f1babe0ec0653cf1a624e2c",
+  "endingImplementationSource": "e6293148ce82e9d86c52d2a4239f857ed4b3026e",
+  "environment": "Isolated Tauri/WebView2 native review shell; fixture account/readiness/content presentation; native history, favorites, rename, configuration and older quick-join commands",
+  "viewports": {
+    "wide": {
+      "css": [
+        1600,
+        1030
+      ],
+      "png": [
+        2000,
+        1288
+      ]
+    },
+    "narrow": {
+      "css": [
+        900,
+        930
+      ],
+      "png": [
+        1125,
+        1163
+      ]
+    },
+    "productionBoot": {
+      "css": [
+        1120,
+        790
+      ],
+      "png": [
+        1400,
+        988
+      ]
+    }
+  },
+  "frontend": {
+    "typeErrors": 0,
+    "typeWarnings": 0,
+    "testsPassed": 257,
+    "testsFailed": 0,
+    "testsSkipped": 0
+  },
+  "rust": {
+    "format": "PASS",
+    "allTargetCheck": "PASS",
+    "libraryPassed": 850,
+    "libraryFailed": 0,
+    "libraryIgnoredNotExecuted": 29,
+    "integrationPassed": 6
+  },
+  "build": {
+    "frontend": "PASS",
+    "optimizedNative": "PASS",
+    "bundlingSigningPublishing": "NOT REQUESTED OR EXECUTED",
+    "isolatedProductionBoot": "PASS"
+  },
+  "desktopFunctional": [
+    {
+      "name": "Rename prefill and focus",
+      "passed": true
+    },
+    {
+      "name": "Escape cancels",
+      "passed": true
+    },
+    {
+      "name": "Enter saves Unicode name natively",
+      "passed": true
+    },
+    {
+      "name": "Native configuration save",
+      "passed": true,
+      "memoryMib": 4097,
+      "window": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    {
+      "name": "Twenty rows remain bounded",
+      "passed": true,
+      "height": 246,
+      "content": 1075,
+      "overflow": false
+    },
+    {
+      "name": "Keyboard scroll",
+      "passed": true,
+      "scrollTop": 215.1999969482422
+    },
+    {
+      "name": "Favorite saves natively",
+      "passed": true
+    },
+    {
+      "name": "Older quick join revalidated natively",
+      "passed": true,
+      "message": "The exact pinned launch metadata could not be resolved."
+    },
+    {
+      "name": "Registry and migrated history persisted",
+      "passed": true
+    }
+  ],
+  "restart": {
+    "passed": true,
+    "name": "Aurora Workshop 雪",
+    "configuration": {
+      "minecraftVersion": "1.21.11",
+      "auroraEnabled": true,
+      "loader": {
+        "kind": "fabric",
+        "policy": {
+          "type": "pinned",
+          "version": "0.19.5"
+        }
+      },
+      "memoryMib": 4097,
+      "additionalJvmArguments": "-Dlabel=\"two words\"",
+      "window": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    "servers": 20,
+    "favorites": 1
+  },
+  "duplicateNames": {
+    "passed": true,
+    "sameNameCount": 2,
+    "stableIdentity": true,
+    "staleRefused": true,
+    "restored": true
+  },
+  "preservation": {
+    "baselineCounts": {
+      "tracked": 698,
+      "untracked": 15144,
+      "ignored": 175,
+      "owner": 27271
+    },
+    "missingCount": 0,
+    "unexpectedChangedCount": 0,
+    "ownerDataModified": false,
+    "installedProductionReplaced": false
+  },
+  "limitations": [
+    "No real Minecraft multiplayer launch or private server connections.",
+    "Starting/Running rename acceptance uses native test process states.",
+    "Twenty-nine ignored Rust tests were not executed.",
+    "No cross-process coordination or schema-2 downgrade migration."
+  ],
+  "screenshots": [
+    {
+      "file": "before-home-three-wide.png",
+      "sha256": "7c21860f1762bda28145019bbf51eb379032b1d2b9a3bf1b176bdf9c7c6f5381"
+    },
+    {
+      "file": "before-settings-wide.png",
+      "sha256": "802a635502323ef11894ff721c6860de9efc7e0fb84cf123bb11345adc8708c3"
+    },
+    {
+      "file": "home-three-wide.png",
+      "sha256": "7eb64b80ce0cd7bc600e4c923b3a451b23db75fdde1ba47d380838128eec916e"
+    },
+    {
+      "file": "home-twenty-wide.png",
+      "sha256": "d1e86fdfee6a18b9113a878772e15a9f22115b3274c77d519be897eb9c6870a7"
+    },
+    {
+      "file": "home-twenty-scrolled-wide.png",
+      "sha256": "b9549ff3f45c2a93aaf94c13bad312359897f0da1b20825ee6a6d2536e7e134e"
+    },
+    {
+      "file": "home-favorites-wide.png",
+      "sha256": "829d9c4acd0f9f0e0c110536edf79223eddb2ce930d82655ec4d2fb63ad70c28"
+    },
+    {
+      "file": "overview-wide.png",
+      "sha256": "7398a01cca58acee0fd4c3a30ca0c55b3733f0925ec9ec4dcaf10eb40642979b"
+    },
+    {
+      "file": "settings-wide.png",
+      "sha256": "4524b1c86afcc63bcbeb21bb08654bb9215a046a8d339cc159d5150409c77a15"
+    },
+    {
+      "file": "rename-dialog-wide.png",
+      "sha256": "5636bff54a8864a44b427063bafc7f26ed5c4bb8c228529123a95bf447cd3990"
+    },
+    {
+      "file": "settings-renamed-wide.png",
+      "sha256": "1406442550e8622c145cc3f6ca802a0fe3055b4734ee80255cef036280b35787"
+    },
+    {
+      "file": "home-narrow.png",
+      "sha256": "f7280edc04cb39b6d95e484d4521211ef607bbd87381f065de71365ce1f51e58"
+    },
+    {
+      "file": "settings-narrow.png",
+      "sha256": "3e2131b2fd0bc1eced473194af94d7a1682964ddc96213a77bc114a972547385"
+    },
+    {
+      "file": "settings-narrow-lower.png",
+      "sha256": "86c73460902e1f9bb54d99deaf01f090f4fa18d4876d4f45995d2b08210d35dd"
+    },
+    {
+      "file": "production-boot.png",
+      "sha256": "686949025922964ce73252a64bde431387890fb11c5b97cefabd2a7f3a8f783f"
+    }
+  ]
+}
