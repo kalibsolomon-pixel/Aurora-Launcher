@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { seed } from './ui-corrections-fixture.mjs';
+const { chromium } = await import(process.env.AURORA_PLAYWRIGHT_MODULE || 'playwright');
+const browser = process.env.UI_CDP_URL ? await chromium.connectOverCDP(process.env.UI_CDP_URL) : await chromium.launch({headless:true});
+const page = process.env.UI_CDP_URL ? browser.contexts()[0].pages()[0] : await browser.newPage({viewport:{width:1600,height:1000}});
+const errors=[];page.on('pageerror',e=>errors.push(e.message));
+try {
+  await seed(page,'installed');
+  assert.equal(await page.locator('.mod-row').count(),100);
+  assert.equal(await page.locator('.mod-warning').count(),0);
+  const single=page.getByRole('button',{name:'Metadata warnings for More Culling',exact:true});
+  const row=page.locator('.mod-row').filter({has:single});
+  const placement=await row.evaluate(e=>{const v=e.querySelector('.mod-version').getBoundingClientRect(),b=e.querySelector('.tooltip-trigger').getBoundingClientRect();return {gap:b.left-v.right,dy:Math.abs((b.top+b.bottom-v.top-v.bottom)/2)};});
+  assert.ok(placement.gap>=0&&placement.gap<=4&&placement.dy<2);
+  const heights=await page.locator('.mod-row').evaluateAll(es=>es.slice(0,8).map(e=>e.getBoundingClientRect().height));
+  assert.ok(Math.max(...heights)-Math.min(...heights)<=1);
+  await single.focus();
+  const tooltip=page.getByRole('tooltip');await tooltip.waitFor({state:'visible'});
+  assert.equal(await tooltip.locator('li').count(),1);
+  assert.match(await tooltip.innerText(),/Requires Sodium/);
+  assert.equal(await single.getAttribute('aria-describedby'),await tooltip.getAttribute('id'));
+  await page.keyboard.press('Escape');await tooltip.waitFor({state:'hidden'});assert.ok(await single.evaluate(e=>document.activeElement===e));
+  await single.click();await tooltip.waitFor({state:'visible'});await single.click();await tooltip.waitFor({state:'hidden'});
+  const multiple=page.getByRole('button',{name:'Metadata warnings for Reese’s Sodium Options',exact:true});
+  await multiple.hover();await tooltip.waitFor({state:'visible'});assert.equal(await tooltip.locator('li').count(),2);assert.match(await tooltip.innerText(),/long metadata explanation/);
+  let box=await tooltip.boundingBox();const viewport=await page.evaluate(()=>({width:innerWidth,height:innerHeight}));assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<=viewport.width&&box.y+box.height<=viewport.height);
+  await page.keyboard.press('Escape');
+  await page.getByRole('searchbox',{name:'Search mods'}).fill('Reese');assert.equal(await page.locator('.mod-row').count(),1);
+  await multiple.focus();await tooltip.waitFor({state:'visible'});assert.equal(await tooltip.locator('li').count(),2);await page.keyboard.press('Escape');
+  await page.getByRole('combobox',{name:'Sort mods'}).selectOption('warnings');
+  assert.equal(await page.getByRole('button',{name:'Metadata warnings for Reese’s Sodium Options',exact:true}).count(),1);
+  await page.getByRole('searchbox',{name:'Search mods'}).fill('');
+  const before=await page.evaluate(()=>window.uiRequests.resolve_project_artwork??0);
+  await page.locator('main.content').evaluate(e=>e.scrollTop=2200);await page.waitForTimeout(200);
+  const scrollBefore=await page.locator('main.content').evaluate(e=>e.scrollTop);
+  await page.evaluate(()=>document.documentElement.style.setProperty('--color-accent','#5bd0e0'));
+  assert.equal(await page.locator('main.content').evaluate(e=>e.scrollTop),scrollBefore);
+  await page.locator('main.content').evaluate(e=>e.scrollTop=0);
+  assert.equal(await page.evaluate(()=>window.uiRequests.resolve_project_artwork??0),before);
+  await page.getByRole('switch',{name:'Disable More Culling',exact:true}).click();
+  await page.getByRole('alert').filter({hasText:'required by another enabled mod'}).waitFor();
+  assert.equal(await page.getByRole('switch',{name:'Disable More Culling',exact:true}).getAttribute('aria-checked'),'true');
+  assert.equal(await page.getByRole('tooltip').count(),0);
+  console.log('PASS 100 installed rows, single/grouped/long warnings, placement/density, keyboard/click/hover/Escape, filtering/sorting and artwork/scroll preservation');
+  for(const kind of ['mod','resourcePack','shaderPack','modpack']){
+    await seed(page,kind);assert.equal(await page.locator('.browse-row').count(),100);
+    assert.ok(await page.locator('.browse-row').evaluateAll(es=>es.every(e=>getComputedStyle(e).backdropFilter==='none')));
+    const requests=await page.evaluate(()=>window.uiRequests.resolve_project_artwork??0);
+    await page.locator('main.content').evaluate(e=>e.scrollTop=3000);await page.waitForTimeout(100);await page.locator('main.content').evaluate(e=>e.scrollTop=0);
+    assert.equal(await page.evaluate(()=>window.uiRequests.resolve_project_artwork??0),requests);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  }
+  assert.deepEqual(errors,[]);console.log('PASS four 100-result browser views, no list blur, artwork reuse, no overflow or page errors');
+} finally {await browser.close();}

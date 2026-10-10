@@ -19,6 +19,7 @@
     right: 'm10 5 7 7-7 7',
     grip: 'M8 5h.01 M16 5h.01 M8 12h.01 M16 12h.01 M8 19h.01 M16 19h.01',
     check: 'm5 12 4 4L19 6',
+    warning: 'M12 3 2 21h20Z M12 9v5 M12 17h.01',
     chevron: 'm6 9 6 6 6-6',
     mod: 'm12 3 9 5v8l-9 5-9-5V8Z M3 8l9 5 9-5 M12 13v8 M7.5 5.5l9 5',
     resourcePack: 'M4 4h16v16H4Z m0 12 5-5 4 4 3-3 4 4 M8 8h.01',

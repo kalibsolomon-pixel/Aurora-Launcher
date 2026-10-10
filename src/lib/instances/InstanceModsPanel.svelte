@@ -19,6 +19,7 @@
   import ContentRecognition from "./ContentRecognition.svelte";
   import ContentUpdates from "./ContentUpdates.svelte";
   import Icon from "$lib/shell/Icon.svelte";
+  import Tooltip from "$lib/shell/Tooltip.svelte";
   import AuroraTransitionPanel from "./AuroraTransitionPanel.svelte";
 
   let { instance }: { instance: InstanceSummary } = $props();
@@ -282,7 +283,19 @@
                 <div class="mod-title-line">
                   <h4>{entry.displayName}</h4>
                   {#if entry.metadata?.version}
-                    <span class="mod-version">{entry.metadata.version}</span>
+                    <span class="mod-version-line"><span class="mod-version">{entry.metadata.version}</span>
+                      {#if entry.warnings.length}
+                        <Tooltip label={`Metadata warnings for ${entry.displayName}`} icon="warning" tone="warning">
+                          <strong>Metadata warnings</strong>
+                          <ul class="metadata-warning-list">{#each entry.warnings as warning}<li>{warning.message}</li>{/each}</ul>
+                        </Tooltip>
+                      {/if}
+                    </span>
+                  {:else if entry.warnings.length}
+                    <Tooltip label={`Metadata warnings for ${entry.displayName}`} icon="warning" tone="warning">
+                      <strong>Metadata warnings</strong>
+                      <ul class="metadata-warning-list">{#each entry.warnings as warning}<li>{warning.message}</li>{/each}</ul>
+                    </Tooltip>
                   {/if}
                 </div>
                 <p class="mod-meta">
@@ -291,15 +304,6 @@
                     · By {entry.metadata.authors.slice(0, 2).join(", ")}{entry.metadata.authors.length > 2 ? "…" : ""}
                   {/if}
                 </p>
-                {#if entry.warnings.length}
-                  <p class="mod-warning">
-                    <span aria-hidden="true">⚠</span>
-                    {entry.warnings[0]?.message}
-                    {#if entry.warnings.length > 1}
-                      <span> (+{entry.warnings.length - 1} more)</span>
-                    {/if}
-                  </p>
-                {/if}
               </div>
             </div>
 
@@ -464,12 +468,15 @@
   .mod-row-disabled .mod-identity { opacity: 0.7; }
   .mod-row-main { display: flex; gap: var(--space-3); min-width: 0; }
   .mod-identity { min-width: 0; }
-  .mod-title-line { gap: var(--space-2); min-width: 0; }
-  .mod-title-line h4 { margin: 0; overflow: hidden; color: var(--color-text); font-size: var(--text-body); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .mod-title-line { gap: 0 var(--space-2); min-width: 0; flex-wrap: wrap; }
+  .mod-title-line h4 { margin: 0; overflow-wrap: anywhere; color: var(--color-text); font-size: var(--text-body); font-weight: 600; }
+  .mod-version-line { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
   .mod-version { color: var(--color-text-muted); font-size: var(--text-metadata); }
-  .mod-meta, .mod-warning { margin: 2px 0 0; }
+  .mod-version { overflow-wrap: anywhere; }
+  .metadata-warning-list { margin: var(--space-2) 0 0; padding-left: var(--space-4); }
+  .metadata-warning-list li + li { margin-top: var(--space-2); }
+  .mod-meta { margin: 2px 0 0; }
   .mod-meta { color: var(--color-text-secondary); font-size: var(--text-secondary); }
-  .mod-warning { color: var(--color-warning); font-size: var(--text-metadata); line-height: 1.4; }
   .mod-row-actions { align-self: start; justify-content: flex-end; gap: var(--space-2); }
   .mod-state, .protected-marker { color: var(--color-text-secondary); font-size: var(--text-metadata); font-weight: 500; white-space: nowrap; }
   .row-update-badge { padding: 1px var(--space-2); border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent); font-size: var(--text-metadata); font-weight: 600; white-space: nowrap; }
