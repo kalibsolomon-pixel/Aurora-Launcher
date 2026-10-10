@@ -52,6 +52,13 @@ try {
     await page.locator('.browse-row').first().waitFor();
     await page.waitForFunction(() => [...document.querySelectorAll('.browse-row img')].filter(i => i.complete && i.naturalWidth > 0).length === 3);
     assert.equal(await page.locator('.browse-row').count(), 4);
+    if (kind !== 'modpack') {
+      const install = page.getByRole('button', { name: 'Install newest eligible version of Valid artwork', exact: true });
+      assert.equal(await install.locator('svg[aria-hidden="true"]').count(), 1);
+      assert.equal(await install.locator('svg').getAttribute('width'), '18');
+      assert.equal((await install.innerText()).includes('↓'), false);
+      assert.match(await install.locator('path').getAttribute('d'), /M5 16v5h14v-5/);
+    }
     assert.equal(await page.evaluate(() => window.l1Artwork.RETRY001), 2);
     assert.equal(await page.evaluate(() => window.l1Artwork.NONE0001), 1);
     const categories = page.getByRole('button', { name: /^Categories:/ });

@@ -9,6 +9,7 @@
     developer: 'm8 6-6 6 6 6 m8-12 6 6-6 6 m-3-14-2 16',
     pencil: 'm15 4 5 5 M3 21l5-1L21 7a2 2 0 0 0-5-5L3 15Z',
     plus: 'M12 5v14 M5 12h14',
+    download: 'M12 3v12 m-5-5 5 5 5-5 M5 16v5h14v-5',
     minimize: 'M5 12h14',
     maximize: 'M5 5h14v14H5z',
     restore: 'M8 8h12v12H8z M4 16V4h12',
