@@ -72,7 +72,7 @@
      clip it. One shared active tooltip and explicit dismissal keep hover,
      keyboard and touch behavior consistent. -->
 <div bind:this={popup} id={id} class="f-tooltip content-tooltip" role="tooltip" popover="manual"
-  ontoggle={() => { open = popup.matches(':popover-open'); if (!open) pinned = false; }}
+  ontoggle={(event) => { open = event.currentTarget.matches(':popover-open'); if (!open) pinned = false; }}
   onpointerenter={() => clearTimeout(closeTimer)} onpointerleave={leave}>
   {@render children()}
 </div>

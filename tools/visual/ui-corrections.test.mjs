@@ -78,6 +78,11 @@ try {
   assert.ok(await page.locator('.workspace-page').evaluate(e=>{const s=getComputedStyle(e);return s.backgroundImage==='none'&&s.backdropFilter==='none'&&s.backgroundColor.startsWith('rgb(');}));
   await media.send('Emulation.setEmulatedMedia',{features:[]});await media.detach();
   console.log('PASS reduced transparency uses an opaque unfiltered workspace backing');
+  await multiple.click();await tooltip.waitFor({state:'visible'});
+  await page.getByRole('tab',{name:'Settings',exact:true}).click();
+  await tooltip.waitFor({state:'hidden'});await page.waitForTimeout(100);
+  assert.deepEqual(errors,[]);
+  console.log('PASS navigating with a pinned warning unmounts without a delayed toggle error');
   await page.goto('http://127.0.0.1:1422/?page=instances&background=borealis');
   await page.getByRole('button',{name:'Browse Modpacks',exact:true}).click();
   await page.locator('.browse-row').first().waitFor();
