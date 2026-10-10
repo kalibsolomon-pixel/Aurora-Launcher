@@ -6,6 +6,8 @@
   import Home from '$lib/pages/HomePage.svelte';
   import Settings from '$lib/pages/SettingsPage.svelte';
   import Instances from '$lib/pages/InstancesPage.svelte';
+  import Cosmetics from '$lib/pages/CosmeticsPage.svelte';
+  import { fixtureSkin, fixtureCape } from './l3-fixtures';
   import InstanceWorkspace from '$lib/instances/InstanceWorkspace.svelte';
   import { launcher } from '$lib/launcher/store.svelte';
   import { navigation } from '$lib/launcher/navigation.svelte';
@@ -15,6 +17,10 @@
   import packageMetadata from '../../package.json';
   const id = 'a'.repeat(32), accountId = 'c'.repeat(32);
   const review = new URLSearchParams(location.search);
+  const l3 = review.has('l3'), nativeLibrary = l3 && review.has('native-library') && isTauri();
+  let l3Presets = Array.from({length:review.has('empty-library')?0:12},(_,i)=>({id:`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`,name:['Aurora Frost','Amethyst','Trailblazer','Woodland','Oceanic','Dusk','Alpine','Starlight','Ember','Moss','Moonstone','Daybreak'][i],model:i%2?'slim':'classic',sha256:fixtureSkin(i).sha256,importedAt:100+i,favorite:i===0||i===3}));
+  const l3Profiles = Object.fromEntries(['c'.repeat(32),'d'.repeat(32)].map((id,i)=>[id,{accountId:id,currentSkinModel:i?'slim':'classic',hasCurrentSkin:true,currentSkin:fixtureSkin(i),capes: i || review.has('no-capes') ? [] : [0,1,2].map(n=>({id:`owned-${n}`,name:['Boreal','Foundry','Daybreak'][n],selected:n===0,preview:fixtureCape(n)}))}]));
+  const seededProfiles = new Set<string>();
   onMount(() => { if (review.has('l2') && isTauri()) void launcher.refreshState(); });
   // Phase H update-review fixtures: real provider records and a typed
   // availability report for the Content workspace Updates card.
@@ -47,6 +53,7 @@
   const seededInstances = instanceRoster.slice(0, instanceCount);
   const fixtureLayout = { widgets: [{id:'recent-worlds',enabled:true,size:'small'}, {id:'playtime',enabled:true,size:'small'}, {id:'content-summary',enabled:false,size:'small'}, {id:'instance-details',enabled:false,size:'small'}] };
   if (review.has('servers')) fixtureLayout.widgets = [{id:'recent-servers',enabled:true,size:'small'}, {id:'playtime',enabled:true,size:'small'}];
+  if (l3) fixtureLayout.widgets = [{id:'skin-manager',enabled:true,size:'small'},{id:'cape-selector',enabled:true,size:'small'}];
   setContext('borealis-review', { ...(review.has('time') ? {time: Math.max(0, Number(review.get('time')) || 0)} : {}), reducedMotion: review.has('reduced') });
   const restored = sessionStorage.getItem('phase-f-review');
   const saved = restored ? JSON.parse(restored) : null;
@@ -55,6 +62,10 @@
     { kind: 'fabric', canCreate: true, canInstall: true, canValidate: true, canLaunch: true, auroraSupported: true },
   ] } as any;
   launcher.accountsState = { selectedAccountId: accountId, accounts: [account, {...account, accountId:'d'.repeat(32), minecraftName:'SecondPlayer'}] } as any;
+  if (l3) {
+    const count=Number(review.get('accounts')??2); launcher.accountsState.accounts=launcher.accountsState.accounts.slice(0,count); launcher.accountsState.selectedAccountId=count?accountId:null;
+    for(const [id,profile] of Object.entries(l3Profiles)) launcher.accountAvatars[id]=profile.currentSkin;
+  }
   launcher.status = { launcherVersion: packageMetadata.version } as any;
   launcher.playReadiness = { instanceId: id, accountId, ready: true, blockers: [], processStatus:'stopped' } as any;
   const modEntry = (name: string, i: number, prov: any = null) => ({ entryId: String(i), displayName: name, fileName: prov ? prov.fileName : name.toLowerCase().replaceAll(' ', '-') + '.jar', enabled: i !== 3, fileType: i === 3 ? 'disabledJar' : 'enabledJar', sizeBytes: 1245000, modifiedUnixMillis: null, ownership: prov ? 'providerManaged' : (i === 0 ? 'auroraManaged' : 'userManaged'), sha256: null, provenance: prov, metadata: { id: name.toLowerCase(), version: prov ? prov.displayVersion : '1.0.0', authors: ['Visual review'] }, warnings: [], canToggle: i !== 0, canRemove: i !== 0, actionBlockedReason: null });
@@ -83,10 +94,45 @@
   if (review.get('page') === 'settings') navigation.goTo('settings');
   if (review.get('category') === 'General' || review.get('category') === 'Discord & privacy') navigation.settingsCategory = review.get('category') as 'General' | 'Discord & privacy';
   if (review.get('page') === 'instances') navigation.goTo('instances');
+  if (l3 && review.get('page') === 'cosmetics') navigation.goTo('cosmetics');
+  if (l3 && review.get('cosmetic-tab') === 'capes') navigation.cosmeticsTab='capes';
   if (review.has('tab')) navigation.openInstance(id, review.get('tab') as any);
   // Only this standalone review server aliases the native invoke boundary.
   setReviewInvoke(async (command:string,args:any) => {
     try {
+    if (l3) {
+      const localCommands=['list_skin_presets','import_skin_preset','update_skin_preset','set_skin_favorite','skin_preset_thumbnail','skin_preset_preview','remove_skin_preset'];
+      if(nativeLibrary && localCommands.includes(command)) return await nativeInvoke(command,args);
+      if(command==='list_skin_presets')return l3Presets;
+      if(command==='get_account_avatar')return l3Profiles[args.request.accountId]?.currentSkin??null;
+      if(command==='get_cosmetics') {
+        if(review.has('offline'))throw {code:'cosmetics_service_unavailable',message:'Fixture: Minecraft Services is offline.'};
+        if(review.has('expired'))throw {code:'cosmetics_authentication_required',message:'Fixture: the Minecraft session expired. Sign in again through Accounts.'};
+        if(nativeLibrary && !seededProfiles.has(args.request.accountId)) {
+          const entries=await nativeInvoke<any[]>('list_skin_presets');
+          const first=entries.find(p=>p.model===l3Profiles[args.request.accountId]?.currentSkinModel);
+          if(first)l3Profiles[args.request.accountId].currentSkin=await nativeInvoke('skin_preset_preview',{request:{presetId:first.id}});
+          seededProfiles.add(args.request.accountId);
+        }
+        return l3Profiles[args.request.accountId];
+      }
+      const entry=l3Presets.find(p=>p.id===args?.request?.presetId), index=entry?l3Presets.indexOf(entry):0;
+      if(command==='skin_preset_preview')return {...fixtureSkin(index),model:entry?.model??'classic'};
+      if(command==='skin_preset_thumbnail')return {rgba:fixtureSkin(index).rgba};
+      if(command==='update_skin_preset') {if(entry)Object.assign(entry,args.request.changes);return l3Presets;}
+      if(command==='set_skin_favorite') {if(entry)entry.favorite=args.request.favorite;return l3Presets;}
+      if(command==='remove_skin_preset') {l3Presets=l3Presets.filter(p=>p.id!==args.request.presetId);return;}
+      if(command==='apply_skin_preset'||command==='select_cape'||command==='disable_cape') {
+        if(review.has('mutation-failure'))throw {code:'cosmetics_service_rejected',message:'Fixture: the cosmetic change was rejected.'};
+        const profile=l3Profiles[args.request.accountId];
+        if(command==='apply_skin_preset') {profile.currentSkin=nativeLibrary?await nativeInvoke('skin_preset_preview',{request:{presetId:args.request.presetId}}):{...fixtureSkin(index),model:args.request.model};profile.currentSkinModel=args.request.model as any;}
+        else {
+          if(command==='select_cape'&&!profile.capes.some(c=>c.id===args.request.capeId))throw {code:'cape_not_owned',message:'Fixture: this account does not own that cape.'};
+          profile.capes=profile.capes.map(c=>({...c,selected:command==='select_cape'&&c.id===args.request.capeId}));
+        }
+        return structuredClone(profile);
+      }
+    }
     // L2 desktop acceptance uses real native persistence in an externally
     // configured disposable application root. This review entry never ships.
     if (review.has('l2') && isTauri() && ['get_recent_servers', 'set_recent_server_favorite', 'rename_instance', 'update_instance_configuration', 'get_launcher_state', 'quick_play_history'].includes(command)) {
@@ -114,6 +160,9 @@
     if (command === 'get_desktop_integration') return { supported:true, manageable:false, desktopShortcut:{state:'present'}, startMenuShortcut:{state:'present'} };
     // Native-boundary fixtures only: a valid static PNG, a rejected null, or a
     // deliberately malformed DTO to exercise the renderer's last-resort fallback.
+    if (command === 'resolve_project_artwork') return review.has('validated-artwork')
+      ? {source:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAN0lEQVR4nO3QQREAMAgDQYpC5CC2XspUBZ+Ngcvs6bovFpebcQcIECBAgAABAgQIECBAgACBLzCTbALj8Oz2OgAAAABJRU5ErkJggg==',status:'available',retryAfterMs:null}
+      : {source:null,status:'unavailable',retryAfterMs:null};
     if (command === 'get_modrinth_project_artwork') return review.has('validated-artwork')
       ? 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAN0lEQVR4nO3QQREAMAgDQYpC5CC2XspUBZ+Ngcvs6bovFpebcQcIECBAgAABAgQIECBAgACBLzCTbALj8Oz2OgAAAABJRU5ErkJggg=='
       : review.has('broken-artwork') ? 'data:image/png;base64,AAAA' : null;
@@ -228,8 +277,9 @@
   {#if navigation.state.kind === 'instance'}<InstanceWorkspace instanceId={navigation.state.instanceId} tab={navigation.state.tab} />
   {:else if navigation.state.kind === 'global' && navigation.state.page === 'settings'}<Settings />
   {:else if navigation.state.kind === 'global' && navigation.state.page === 'instances'}<Instances />
+  {:else if navigation.state.kind === 'global' && navigation.state.page === 'cosmetics'}<Cosmetics />
 
   {:else}<Home />{/if}
 </AppShell>
-<div class="review-label">PHASE F · VISUAL FIXTURES</div>
+<div class="review-label">{l3 ? `L3 · FIXTURE ACCOUNTS · ${nativeLibrary?'NATIVE LOCAL LIBRARY':'VISUAL FIXTURES'}` : 'PHASE F · VISUAL FIXTURES'}</div>
 <style>.review-label { position:fixed; top:12px; left:50%; transform:translateX(-50%); pointer-events:none; color:#b2bdc9; font:9px system-ui; letter-spacing:.15em; z-index:45; }</style>
