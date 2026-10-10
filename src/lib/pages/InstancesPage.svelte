@@ -105,7 +105,7 @@
     </div>
   </header>
 
-  <section class="group" aria-label="Modrinth modpacks">
+  <section class="group modpack-group" aria-label="Modrinth modpacks">
     <div class="group-heading">
       <div><h3 class="group-title">Modrinth modpacks</h3><p class="group-subtitle">Choose a published pack version to create its own Fabric instance.</p></div>
       <button type="button" class="btn" aria-expanded={browsingPacks} onclick={() => browsingPacks = !browsingPacks}>{browsingPacks ? "Close Modpacks" : "Browse Modpacks"}</button>
