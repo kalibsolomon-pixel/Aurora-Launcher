@@ -111,7 +111,9 @@
       <button type="button" class="btn" aria-expanded={browsingPacks} onclick={() => browsingPacks = !browsingPacks}>{browsingPacks ? "Close Modpacks" : "Browse Modpacks"}</button>
     </div>
     {#if browsingPacks}
+      <div class="modpack-browser">
       <ModrinthBrowse instanceId="" instanceName="" minecraftVersion="" kind="mod" installedProjectIds={[]} dependencyOnlyProjectIds={[]} onInstalled={async () => {}} standalonePackBrowse />
+      </div>
     {/if}
   </section>
 
@@ -410,6 +412,7 @@
 </div>
 
 <style>
+  .modpack-browser { padding: 0 24px 24px; }
   .instances-page { --instance-panel-gap: var(--space-5); max-width: 1500px; width: 100%; margin-inline: auto; display: grid; gap: var(--instance-panel-gap); }
   .instances-page > .page-header, .instances-page > .group { margin: 0; }
   .instances-composition { display: grid; gap: var(--instance-panel-gap); align-items: start; }

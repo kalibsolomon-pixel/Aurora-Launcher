@@ -19,6 +19,7 @@
   } from "$lib/backend";
   import InstallConflicts from "./InstallConflicts.svelte";
   import InstalledArtwork from './InstalledArtwork.svelte';
+  import Icon from '$lib/shell/Icon.svelte';
 
   let {
     instanceId, instanceName, minecraftVersion, loaderLabel = "Fabric", kind, installedProjectIds, dependencyOnlyProjectIds, onInstalled, standalonePackBrowse = false,
@@ -374,15 +375,18 @@
 
   <div class="browse-filters">
     <div class="category-filter">
+      <span class="field-label">Categories</span>
       <button
         type="button"
-        class="btn btn-quiet"
+        class="filter-input"
         bind:this={categoryTrigger}
+        aria-label={`Categories: ${categories.length ? `${categories.length} selected` : "All categories"}`}
         aria-haspopup="true"
         aria-expanded={categoryPickerOpen}
         onclick={() => { categoryPickerOpen = !categoryPickerOpen; if (categoryPickerOpen) void loadCategories(); }}
       >
-        Categories{categories.length ? ` (${categories.length})` : ""} ▾
+        <span>{categories.length ? `${categories.length} selected` : "All categories"}</span>
+        <Icon name="chevron" size={16} />
       </button>
       {#if categoryPickerOpen}
         <div class="category-popover" role="dialog" aria-label="Category filter">
@@ -409,11 +413,14 @@
     </div>
     <label class="sort-control">
       <span class="field-label">Sort</span>
-      <select bind:value={sort} onchange={() => void search(0, "")} aria-label="Sort results">
+      <span class="select-wrap">
+      <select class="filter-input" bind:value={sort} onchange={() => void search()} aria-label="Sort results">
         {#each BROWSE_SORTS as option (option)}
           <option value={option}>{browseSortLabel(option)}</option>
         {/each}
       </select>
+      <span class="filter-chevron"><Icon name="chevron" size={16} /></span>
+      </span>
     </label>
     {#if categories.length || sort !== "relevance" || query.trim()}
       <button type="button" class="btn btn-quiet" onclick={clearFilters}>Clear filters</button>
@@ -551,7 +558,7 @@
 </section>
 
 <style>
-  .browse { min-width: 0; }
+  .browse { min-width: 0; container-type: inline-size; }
   .browse-heading, .browse-search, .browse-row, .preview-actions, .browse-filters { display: flex; gap: var(--space-3); align-items: center; }
   .browse-heading { justify-content: space-between; margin-bottom: var(--space-3); }
   .browse-heading .group-subtitle { max-width: 50ch; }
@@ -565,10 +572,16 @@
      `.browse input` selector also matched the category checkboxes and blew
      each one up into a full-width padded box, tearing the picker apart. */
   .browse input[type="search"], .browse select { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; }
-  .browse-filters { flex-wrap: wrap; margin-bottom: var(--space-2); }
-  .sort-control { display: grid; gap: var(--space-1); width: 168px; }
-  .filter-context { margin-left: auto; white-space: nowrap; }
+  .browse-filters { flex-wrap: wrap; align-items: end; gap: var(--space-3); margin-bottom: var(--space-4); }
+  .sort-control, .category-filter { display: grid; gap: var(--space-1); width: 180px; max-width: 100%; }
+  .filter-context { margin-left: auto; padding-bottom: var(--space-2); overflow-wrap: anywhere; }
   .category-filter { position: relative; }
+  .browse .filter-input { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); width: 100%; height: 40px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; font-size: var(--text-body); cursor: pointer; }
+  .browse .filter-input:hover { border-color: var(--color-text-muted); background: var(--color-surface-hover); }
+  .browse .filter-input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  .select-wrap { position: relative; display: block; }
+  .browse select.filter-input { appearance: none; padding-right: 36px; }
+  .filter-chevron { position: absolute; right: var(--space-3); top: 0; height: 40px; display: flex; align-items: center; pointer-events: none; }
   /* Vertical scrolling only: rows wrap internally, so no horizontal
      scrollbar can appear in normal use. */
   .category-popover { position: absolute; z-index: 3; top: calc(100% + var(--space-2)); left: 0; width: 300px; max-width: calc(100vw - 48px); max-height: 320px; overflow-y: auto; overflow-x: hidden; padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-surface-raised); box-shadow: var(--shadow-group); }
@@ -584,10 +597,10 @@
   .category-chip { padding: 2px var(--space-2); border: none; border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent); font-size: var(--text-metadata); cursor: pointer; }
   .browse-status { display: flex; align-items: center; gap: var(--space-2); }
   .browse-loading { min-height: 96px; }
-  .browse-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-  .browse-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-surface-edge); border-radius: var(--radius-md); background: var(--f-panel); }
-  .browse-glyph { display: grid; place-items: center; width: 44px; height: 44px; flex: none; }
-  .browse-actions { display: flex; align-items: center; gap: var(--space-2); flex: none; }
+  .browse-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+  .browse-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: start; gap: var(--space-2) var(--space-3); padding: var(--space-4); border: 1px solid var(--color-surface-edge); border-radius: var(--radius-md); background: var(--f-panel); }
+  .browse-glyph { display: grid; place-items: center; width: 44px; height: 44px; grid-row: 1 / 3; }
+  .browse-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); grid-column: 2; align-self: end; }
   .install-action { display: flex; align-items: center; justify-content: center; gap: var(--space-1); min-width: 34px; min-height: 32px; font-size: 19px; line-height: 1; }
   .action-state { font-size: var(--text-metadata); }
   .browse-only-badge { padding: 4px var(--space-2); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text-muted); font-size: var(--text-metadata); white-space: nowrap; }
@@ -595,6 +608,9 @@
   .browse-notice.exiting { opacity: 0; }
   .browse-copy { min-width: 0; flex: 1; }
   .browse-copy h4, .project h4, .preview h4 { margin: 0; }
+  .browse-copy h4 { line-height: 1.35; overflow-wrap: anywhere; }
+  .browse-copy { overflow-wrap: anywhere; }
+  .browse-copy p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; line-height: 1.4; }
   .browse-copy p, .project p { margin: 2px 0; font-size: var(--text-metadata); color: var(--color-text-secondary); }
   .browse-note { color: var(--color-text-secondary); font-size: var(--text-metadata); }
   .project, .preview { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--color-surface-edge); border-radius: var(--radius-lg); background: var(--f-panel); }
@@ -605,7 +621,8 @@
   .pack-optional label { display: block; }
   .preview li { margin: var(--space-1) 0; }
   .more { margin-top: var(--space-3); }
-  @media (max-width: 760px) { .browse-heading, .browse-row { align-items: flex-start; } .browse-heading { flex-wrap: wrap; } .filter-context { margin-left: 0; } }
-  @media (max-width: 1150px) { .browse-list { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 760px) { .browse-heading { align-items: flex-start; flex-wrap: wrap; } .filter-context { margin-left: 0; } }
+  @container (max-width: 900px) { .browse-list { grid-template-columns: minmax(0, 1fr); } }
+  @container (max-width: 440px) { .sort-control, .category-filter { width: calc((100% - var(--space-3)) / 2); min-width: 140px; } .filter-context { margin-left: 0; width: 100%; padding-bottom: 0; } .browse-row { padding: var(--space-3); } }
   @media (prefers-reduced-motion: reduce) { .browse-notice { transition: none; } }
 </style>
