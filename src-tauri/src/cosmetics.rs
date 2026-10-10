@@ -19,7 +19,7 @@ use crate::{
 };
 
 const MAX_PNG: usize = 128 * 1024;
-const MAX_PRESETS: usize = 64;
+const MAX_PRESETS: usize = 256;
 const MAX_RESPONSE: usize = 256 * 1024;
 const PROFILE_URL: &str = "https://api.minecraftservices.com/minecraft/profile";
 const SKIN_URL: &str = "https://api.minecraftservices.com/minecraft/profile/skins";
@@ -48,6 +48,8 @@ pub struct SkinPreset {
     pub model: SkinModel,
     pub imported_at: u64,
     pub sha256: String,
+    #[serde(default)]
+    pub favorite: bool,
 }
 
 /// Import result: an exact (bytes, model) duplicate reports the existing
@@ -68,7 +70,7 @@ struct PresetDocument {
 impl Default for PresetDocument {
     fn default() -> Self {
         Self {
-            schema_version: 1,
+            schema_version: 2,
             presets: Vec::new(),
         }
     }
@@ -96,6 +98,7 @@ pub struct CosmeticsState {
     pub account_id: String,
     pub current_skin_model: Option<SkinModel>,
     pub has_current_skin: bool,
+    pub current_skin: Option<crate::auth::avatar::HeadAvatar>,
     pub capes: Vec<Cape>,
 }
 
@@ -140,7 +143,7 @@ fn png_path(paths: &ManagedPaths, id: &str) -> Result<std::path::PathBuf> {
     Ok(root(paths).join(format!("{id}.png")))
 }
 fn validate_document(document: &PresetDocument) -> Result<()> {
-    if document.schema_version != 1 {
+    if document.schema_version != 2 {
         return Err(error(
             "skin_presets_schema_unsupported",
             "Skin preset metadata uses a newer schema; it was left unchanged.",
@@ -155,6 +158,7 @@ fn validate_document(document: &PresetDocument) -> Result<()> {
             || !ids.insert(&preset.id)
             || preset.name.trim().is_empty()
             || preset.name.len() > 80
+            || preset.name.chars().any(char::is_control)
             || preset.sha256.len() != 64
             || !preset.sha256.bytes().all(|b| b.is_ascii_hexdigit())
         {
@@ -171,17 +175,83 @@ fn png_path_dummy(id: &str) -> Result<()> {
     }
 }
 fn read_document(paths: &ManagedPaths) -> Result<PresetDocument> {
-    let bytes = match std::fs::read(metadata_path(paths)) {
+    let bytes = match read_managed(paths, &metadata_path(paths), 256 * 1024) {
         Ok(bytes) => bytes,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(PresetDocument::default()),
+        Err(e) if e.code == "skin_file_missing" => return Ok(PresetDocument::default()),
         Err(_) => return Err(storage_error()),
     };
-    if bytes.len() > 32 * 1024 {
+    let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| malformed())?;
+    let version = value["schemaVersion"].as_u64().ok_or_else(malformed)?;
+    if !matches!(version, 1 | 2) {
+        return Err(error(
+            "skin_presets_schema_unsupported",
+            "Skin preset metadata uses a newer schema; it was left unchanged.",
+        ));
+    }
+    // Only the exact old shape migrates; reads preserve the original bytes.
+    let rows = value["presets"].as_array().ok_or_else(malformed)?;
+    if rows.iter().any(|row| {
+        if version == 1 {
+            row.get("favorite").is_some()
+        } else {
+            !row["favorite"].is_boolean()
+        }
+    }) {
         return Err(malformed());
     }
-    let document: PresetDocument = serde_json::from_slice(&bytes).map_err(|_| malformed())?;
+    let mut document: PresetDocument = serde_json::from_value(value).map_err(|_| malformed())?;
+    document.schema_version = 2;
     validate_document(&document)?;
     Ok(document)
+}
+/// The store's fixed path must never be redirected through links or junctions.
+/// Checks are process-local; external concurrent filesystem writers are out of scope.
+fn contained(paths: &ManagedPaths, path: &Path) -> Result<()> {
+    if !path.starts_with(paths.data_root()) {
+        return Err(storage_error());
+    }
+    let mut current = Some(path);
+    while let Some(candidate) = current {
+        if let Ok(meta) = std::fs::symlink_metadata(candidate) {
+            #[cfg(windows)]
+            {
+                use std::os::windows::fs::MetadataExt;
+                if meta.file_attributes() & 0x400 != 0 {
+                    return Err(storage_error());
+                }
+            }
+            if meta.file_type().is_symlink() {
+                return Err(storage_error());
+            }
+        }
+        if candidate == paths.data_root() {
+            break;
+        }
+        current = candidate.parent();
+    }
+    Ok(())
+}
+fn read_managed(paths: &ManagedPaths, path: &Path, limit: u64) -> Result<Vec<u8>> {
+    use std::io::Read;
+    contained(paths, path)?;
+    let file = std::fs::File::open(path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            error("skin_file_missing", "The saved skin file is missing.")
+        } else {
+            storage_error()
+        }
+    })?;
+    if !file.metadata().map_err(|_| storage_error())?.is_file() {
+        return Err(storage_error());
+    }
+    let mut bytes = Vec::new();
+    file.take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| storage_error())?;
+    if bytes.len() as u64 > limit {
+        return Err(malformed());
+    }
+    Ok(bytes)
 }
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = path.parent().ok_or_else(storage_error)?;
@@ -204,6 +274,7 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     result
 }
 fn save_document(paths: &ManagedPaths, document: &PresetDocument) -> Result<()> {
+    contained(paths, &metadata_path(paths))?;
     validate_document(document)?;
     let bytes = serde_json::to_vec_pretty(document).map_err(|_| storage_error())?;
     write_atomic(&metadata_path(paths), &bytes)
@@ -320,6 +391,7 @@ pub fn import_preset(
     bytes: &[u8],
 ) -> Result<ImportOutcome> {
     validate_png(bytes)?;
+    validate_model(bytes, model)?;
     let name = name.trim();
     if name.is_empty() || name.len() > 80 || name.chars().any(char::is_control) {
         return Err(error(
@@ -329,12 +401,6 @@ pub fn import_preset(
     }
     let _guard = lock().lock().map_err(|_| storage_error())?;
     let mut document = read_document(paths)?;
-    if document.presets.len() >= MAX_PRESETS {
-        return Err(error(
-            "skin_preset_limit",
-            "The 64 saved skin limit has been reached.",
-        ));
-    }
     let content_digest = digest(bytes);
     // Content-hash deduplication: identical bytes under the same model keep
     // the existing entry. The same bytes under the other model stay an
@@ -344,10 +410,25 @@ pub fn import_preset(
         .iter()
         .find(|preset| preset.sha256 == content_digest && preset.model == model)
     {
+        // Revalidate a duplicate too; an absent/damaged object is never a success.
+        let bytes = read_managed(paths, &png_path(paths, &existing.id)?, MAX_PNG as u64)?;
+        validate_png(&bytes)?;
+        if digest(&bytes) != existing.sha256 {
+            return Err(error(
+                "skin_preset_damaged",
+                "The saved skin image has changed; it was left untouched.",
+            ));
+        }
         return Ok(ImportOutcome {
             preset: existing.clone(),
             duplicate: true,
         });
+    }
+    if document.presets.len() >= MAX_PRESETS {
+        return Err(error(
+            "skin_preset_limit",
+            "The 256 saved skin limit has been reached.",
+        ));
     }
     let preset = SkinPreset {
         id: Uuid::new_v4().to_string(),
@@ -358,12 +439,28 @@ pub fn import_preset(
             .unwrap_or_default()
             .as_secs(),
         sha256: content_digest,
+        favorite: false,
     };
     let path = png_path(paths, &preset.id)?;
+    contained(paths, &path)?;
     if path.exists() {
         return Err(storage_error());
     }
-    write_atomic(&path, bytes)?;
+    // Different model records can share immutable local bytes without another copy.
+    // Each read still rehashes; a modified shared object cannot authorize upload.
+    if let Some(other) = document.presets.iter().find(|p| p.sha256 == preset.sha256) {
+        let source = png_path(paths, &other.id)?;
+        let stored = read_managed(paths, &source, MAX_PNG as u64)?;
+        if digest(&stored) != other.sha256 {
+            return Err(error(
+                "skin_preset_damaged",
+                "The saved skin image has changed; it was left untouched.",
+            ));
+        }
+        std::fs::hard_link(source, &path).map_err(|_| storage_error())?;
+    } else {
+        write_atomic(&path, bytes)?;
+    }
     document.presets.push(preset.clone());
     if let Err(e) = save_document(paths, &document) {
         let _ = std::fs::remove_file(&path);
@@ -386,7 +483,7 @@ pub fn remove_preset(paths: &ManagedPaths, id: &str) -> Result<()> {
             "That saved skin preset is unavailable.",
         ))?;
     let path = png_path(paths, id)?;
-    let bytes = std::fs::read(&path).map_err(|_| storage_error())?;
+    let bytes = read_managed(paths, &path, MAX_PNG as u64)?;
     if digest(&bytes) != document.presets[index].sha256 {
         return Err(error(
             "skin_preset_damaged",
@@ -408,7 +505,7 @@ pub fn preset_for_upload(paths: &ManagedPaths, id: &str) -> Result<(SkinPreset, 
             "skin_preset_missing",
             "That saved skin preset is unavailable.",
         ))?;
-    let bytes = std::fs::read(png_path(paths, id)?).map_err(|_| {
+    let bytes = read_managed(paths, &png_path(paths, id)?, MAX_PNG as u64).map_err(|_| {
         error(
             "skin_preset_missing",
             "That saved skin image is unavailable.",
@@ -453,10 +550,29 @@ pub fn update_preset(
         preset.name = name.to_owned();
     }
     if let Some(model) = model {
+        let bytes = read_managed(paths, &png_path(paths, id)?, MAX_PNG as u64)?;
+        validate_png(&bytes)?;
+        if digest(&bytes) != preset.sha256 {
+            return Err(error(
+                "skin_preset_damaged",
+                "The saved skin image has changed; it was left untouched.",
+            ));
+        }
+        validate_model(&bytes, model)?;
         preset.model = model;
     }
     save_document(paths, &document)?;
     Ok(document.presets)
+}
+
+fn validate_model(bytes: &[u8], model: SkinModel) -> Result<()> {
+    if model == SkinModel::Slim && bytes.get(20..24) == Some(32u32.to_be_bytes().as_slice()) {
+        return Err(error(
+            "skin_model_invalid",
+            "Legacy 64×32 skins use the Classic model. Choose Classic to import this skin.",
+        ));
+    }
+    Ok(())
 }
 
 /// The saved skin's 8×8 head with hat composited — a cheap, static thumbnail
@@ -464,6 +580,31 @@ pub fn update_preset(
 pub fn preset_thumbnail(paths: &ManagedPaths, id: &str) -> Result<Option<[u8; 256]>> {
     let (_, bytes) = preset_for_upload(paths, id)?;
     Ok(decode_head_thumbnail(&bytes))
+}
+
+pub fn set_favorite(paths: &ManagedPaths, id: &str, favorite: bool) -> Result<Vec<SkinPreset>> {
+    let _guard = lock().lock().map_err(|_| storage_error())?;
+    let mut document = read_document(paths)?;
+    let preset = document
+        .presets
+        .iter_mut()
+        .find(|p| p.id == id)
+        .ok_or(error(
+            "skin_preset_missing",
+            "That saved skin preset is unavailable.",
+        ))?;
+    preset.favorite = favorite;
+    save_document(paths, &document)?;
+    Ok(document.presets)
+}
+
+/// Full pixels use the existing account decoder and legacy normalization.
+pub fn preset_preview(paths: &ManagedPaths, id: &str) -> Result<crate::auth::avatar::HeadAvatar> {
+    let (preset, bytes) = preset_for_upload(paths, id)?;
+    crate::auth::avatar::decode(&bytes, preset.model.service()).ok_or(error(
+        "skin_png_malformed",
+        "The saved skin could not be decoded.",
+    ))
 }
 
 fn decode_head_thumbnail(bytes: &[u8]) -> Option<[u8; 256]> {
@@ -551,10 +692,11 @@ struct WireProfile {
     #[serde(default)]
     capes: Vec<WireCape>,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct WireSkin {
     state: String,
     variant: String,
+    url: Option<String>,
 }
 #[derive(Deserialize)]
 struct WireCape {
@@ -609,6 +751,7 @@ fn normalize(profile: WireProfile, account_id: &str) -> Result<CosmeticsState> {
         account_id: account_id.into(),
         current_skin_model,
         has_current_skin: current.is_some(),
+        current_skin: None,
         capes,
     })
 }
@@ -725,8 +868,24 @@ async fn fetch_from(url: &str, account_id: &str, token: &SecretString) -> Result
             ))
         })
         .collect();
+    let current_texture = crate::auth::avatar::SkinTexture::from_profile_skins(
+        &serde_json::to_value(&profile.skins).unwrap_or_default(),
+    );
     let mut state = normalize(profile, account_id)?;
-    let previews = join_all(preview_sources.into_iter().map(|(id, url)| async move {
+    let skin_future = async {
+        if let Some(texture) = current_texture {
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                crate::auth::avatar::head(&texture, true),
+            )
+            .await
+            .ok()
+            .flatten()
+        } else {
+            None
+        }
+    };
+    let previews_future = join_all(preview_sources.into_iter().map(|(id, url)| async move {
         (
             id,
             tokio::time::timeout(Duration::from_secs(5), fetch_cape_preview(url))
@@ -734,8 +893,9 @@ async fn fetch_from(url: &str, account_id: &str, token: &SecretString) -> Result
                 .ok()
                 .flatten(),
         )
-    }))
-    .await;
+    }));
+    let (previews, skin) = tokio::join!(previews_future, skin_future);
+    state.current_skin = skin;
     for (id, preview) in previews {
         if let Some(cape) = state.capes.iter_mut().find(|cape| cape.id == id) {
             cape.preview = preview;
@@ -959,6 +1119,87 @@ mod tests {
         .unwrap()
     }
     #[test]
+    fn schema_one_migrates_without_read_time_writes_and_favorites_survive_reopen() {
+        let paths = paths();
+        let first = import_preset(&paths, "Legacy", SkinModel::Classic, &fixture(64, 64)).unwrap();
+        let mut legacy = serde_json::to_value(read_document(&paths).unwrap()).unwrap();
+        legacy["schemaVersion"] = 1.into();
+        legacy["presets"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("favorite");
+        let bytes = serde_json::to_vec(&legacy).unwrap();
+        std::fs::write(metadata_path(&paths), &bytes).unwrap();
+        assert!(!list_presets(&paths).unwrap()[0].favorite);
+        assert_eq!(std::fs::read(metadata_path(&paths)).unwrap(), bytes);
+        set_favorite(&paths, &first.preset.id, true).unwrap();
+        let reopened = ManagedPaths::from_app_local_data_dir(paths.data_root().to_owned()).unwrap();
+        let saved = list_presets(&reopened).unwrap();
+        assert!(saved[0].favorite);
+        assert_eq!(saved[0].id, first.preset.id);
+        assert_eq!(
+            preset_for_upload(&reopened, &saved[0].id).unwrap().1,
+            fixture(64, 64)
+        );
+        let mut mixed = legacy.clone();
+        mixed["presets"][0]["favorite"] = true.into();
+        let bad = serde_json::to_vec(&mixed).unwrap();
+        std::fs::write(metadata_path(&paths), &bad).unwrap();
+        assert!(set_favorite(&paths, &first.preset.id, false).is_err());
+        assert_eq!(std::fs::read(metadata_path(&paths)).unwrap(), bad);
+        std::fs::remove_dir_all(paths.data_root()).unwrap();
+    }
+    #[test]
+    fn library_exceeds_old_capacity_and_duplicate_reuse_requires_valid_bytes() {
+        let paths = paths();
+        for i in 0..80 {
+            let mut pixels = vec![128; 64 * 64 * 4];
+            pixels[0] = i;
+            let mut bytes = Vec::new();
+            let mut encoder = png::Encoder::new(&mut bytes, 64, 64);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            encoder
+                .write_header()
+                .unwrap()
+                .write_image_data(&pixels)
+                .unwrap();
+            import_preset(&paths, &format!("Skin {i}"), SkinModel::Classic, &bytes).unwrap();
+        }
+        assert_eq!(list_presets(&paths).unwrap().len(), 80);
+        let saved = import_preset(&paths, "Legacy", SkinModel::Classic, &fixture(64, 32)).unwrap();
+        assert_eq!(
+            preset_preview(&paths, &saved.preset.id)
+                .unwrap()
+                .skin_height,
+            32
+        );
+        assert_eq!(
+            import_preset(&paths, "Wrong model", SkinModel::Slim, &fixture(64, 32))
+                .unwrap_err()
+                .code,
+            "skin_model_invalid"
+        );
+        std::fs::write(png_path(&paths, &saved.preset.id).unwrap(), b"damaged").unwrap();
+        assert!(import_preset(&paths, "Duplicate", SkinModel::Classic, &fixture(64, 32)).is_err());
+        assert!(remove_preset(&paths, &saved.preset.id).is_err());
+        assert_eq!(list_presets(&paths).unwrap().len(), 81);
+        std::fs::remove_dir_all(paths.data_root()).unwrap();
+    }
+    #[test]
+    fn full_preview_preserves_alpha_and_refuses_missing_or_changed_assets() {
+        let paths = paths();
+        let skin = import_preset(&paths, "Slim", SkinModel::Slim, &fixture(64, 64)).unwrap();
+        let preview = preset_preview(&paths, &skin.preset.id).unwrap();
+        assert_eq!(preview.model, "slim");
+        assert_eq!(preview.skin_rgba.len(), 64 * 64 * 4);
+        assert_eq!(preview.skin_rgba[3], 128);
+        std::fs::remove_file(png_path(&paths, &skin.preset.id).unwrap()).unwrap();
+        assert!(preset_preview(&paths, &skin.preset.id).is_err());
+        assert_eq!(list_presets(&paths).unwrap().len(), 1);
+        std::fs::remove_dir_all(paths.data_root()).unwrap();
+    }
+    #[test]
     fn png_validation_is_bounded_and_rejects_malformed_images() {
         assert!(validate_png(&fixture(64, 64)).is_ok());
         assert!(validate_png(&fixture(64, 32)).is_ok());
@@ -1120,7 +1361,7 @@ mod tests {
             "skin_presets_malformed"
         );
         assert_eq!(std::fs::read(metadata_path(&paths)).unwrap(), bad);
-        let future = br#"{"schemaVersion":2,"presets":[]}"#;
+        let future = br#"{"schemaVersion":999,"presets":[]}"#;
         std::fs::write(metadata_path(&paths), future).unwrap();
         assert_eq!(
             list_presets(&paths).unwrap_err().code,

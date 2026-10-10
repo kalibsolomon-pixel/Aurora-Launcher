@@ -1811,12 +1811,12 @@ export async function getCachedAccountAvatars(): Promise<CachedAccountAvatar[]> 
 }
 
 export type SkinModel = "classic" | "slim";
-export interface SkinPreset { id: string; name: string; model: SkinModel; importedAt: number; sha256: string }
+export interface SkinPreset { id: string; name: string; model: SkinModel; importedAt: number; sha256: string; favorite: boolean }
 export interface SkinPresetImport { preset: SkinPreset; duplicate: boolean }
 export interface SkinPresetThumbnail { rgba: number[] }
 export interface CapePreview { width: number; height: number; rgba: number[] }
 export interface OwnedCape { id: string; name: string; selected: boolean; preview?: CapePreview }
-export interface CosmeticsState { accountId: string; currentSkinModel: SkinModel | null; hasCurrentSkin: boolean; capes: OwnedCape[] }
+export interface CosmeticsState { accountId: string; currentSkinModel: SkinModel | null; hasCurrentSkin: boolean; currentSkin: HeadAvatar | null; capes: OwnedCape[] }
 function cosmeticsCommand<T>(name: string, request?: object): Promise<T> {
   return invoke<T>(name, request === undefined ? undefined : { request }).catch((cause: unknown) => {
     if (isBackendCommandError(cause)) throw new LauncherBackendError(cause.code, cause.message);
@@ -1825,6 +1825,8 @@ function cosmeticsCommand<T>(name: string, request?: object): Promise<T> {
 }
 export const getCosmetics = (accountId: string): Promise<CosmeticsState> => cosmeticsCommand("get_cosmetics", { accountId });
 export const listSkinPresets = (): Promise<SkinPreset[]> => cosmeticsCommand("list_skin_presets");
+export const setSkinFavorite = (presetId: string, favorite: boolean): Promise<SkinPreset[]> => cosmeticsCommand("set_skin_favorite", { presetId, favorite });
+export const skinPresetPreview = (presetId: string): Promise<HeadAvatar> => cosmeticsCommand("skin_preset_preview", { presetId });
 export const importSkinPreset = (name: string, model: SkinModel, bytes: number[]): Promise<SkinPresetImport> => cosmeticsCommand("import_skin_preset", { name, model, bytes });
 export const updateSkinPreset = (presetId: string, changes: { name?: string; model?: SkinModel }): Promise<SkinPreset[]> => cosmeticsCommand("update_skin_preset", { presetId, changes });
 export const skinPresetThumbnail = (presetId: string): Promise<SkinPresetThumbnail | null> => cosmeticsCommand("skin_preset_thumbnail", { presetId });

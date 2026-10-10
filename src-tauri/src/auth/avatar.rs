@@ -302,7 +302,7 @@ async fn fetch(client: &reqwest::Client, url: &Url, model: &str) -> Option<HeadA
     decode(&body, model)
 }
 
-fn decode(bytes: &[u8], model: &str) -> Option<HeadAvatar> {
+pub(crate) fn decode(bytes: &[u8], model: &str) -> Option<HeadAvatar> {
     if !matches!(model, "classic" | "slim")
         || bytes.len() > MAX_BYTES
         || !bytes.starts_with(b"\x89PNG\r\n\x1a\n")

@@ -4988,6 +4988,28 @@ pub fn list_skin_presets(
 ) -> Result<Vec<crate::cosmetics::SkinPreset>, CommandError> {
     crate::cosmetics::list_presets(&managed_paths(&app)?).map_err(cosmetic_error)
 }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SkinFavoriteRequest {
+    preset_id: String,
+    favorite: bool,
+}
+#[tauri::command]
+pub fn set_skin_favorite(
+    app: AppHandle,
+    request: SkinFavoriteRequest,
+) -> Result<Vec<crate::cosmetics::SkinPreset>, CommandError> {
+    crate::cosmetics::set_favorite(&managed_paths(&app)?, &request.preset_id, request.favorite)
+        .map_err(cosmetic_error)
+}
+#[tauri::command]
+pub fn skin_preset_preview(
+    app: AppHandle,
+    request: PresetIdRequest,
+) -> Result<crate::auth::avatar::HeadAvatar, CommandError> {
+    crate::cosmetics::preset_preview(&managed_paths(&app)?, &request.preset_id)
+        .map_err(cosmetic_error)
+}
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkinPresetImportDto {
