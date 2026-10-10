@@ -21,6 +21,7 @@ export async function seed(page, surface, base='http://127.0.0.1:1422/', options
       }
       if(command==='list_instance_mods')return launcher.modInventories[id];
       if(command==='set_instance_mod_enabled')throw {code:'mod_dependency_required',message:'Fixture: this mod is required by another enabled mod. Review the dependency before disabling it.'};
+      if(command==='quick_install_modrinth')throw {code:'provider_network_error',message:'Synthetic unavailable response; no acquisition or installation.'};
       if(command==='browse_modrinth'){const offset=args.request.offset??0;return {offset,totalHits:100,hits:Array.from({length:20},(_,j)=>{const i=offset+j;return {projectId:'UI'+String(i).padStart(6,'0'),title:'Aurora Review Project '+String(i).padStart(3,'0'),summary:'Deterministic illustrated content for comparable scrolling performance. Mod artwork is present in every row.',author:'Visual fixture',downloads:1000+i,categories:['optimization'],projectType:args.request.contentType};})};}
       return previous(command,args);
     });

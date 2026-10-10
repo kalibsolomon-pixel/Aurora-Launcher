@@ -10,6 +10,7 @@ async function trial(surface,variant,run){
   await seed(page, surface, process.env.UI_BASE_URL);
   if(variant==='baseline')await page.addStyleTag({content:'.f-pilot .mod-list,.f-pilot .packs-list,.f-pilot .browse-row,.f-pilot .project,.f-pilot .preview{background:var(--f-panel)!important;backdrop-filter:var(--f-blur)!important}'});
   if(variant==='no-list-blur')await page.addStyleTag({content:'.f-pilot .mod-list,.f-pilot .packs-list,.f-pilot .browse-row,.f-pilot .project,.f-pilot .preview{backdrop-filter:none!important}'});
+  if(variant==='previous-backing')await page.addStyleTag({content:'.f-pilot.workspace-page,.f-pilot .modpack-group{background:var(--f-content-panel)!important;backdrop-filter:none!important}.f-pilot.workspace-page{box-shadow:none!important}.f-pilot.workspace-page::before,.f-pilot .modpack-group::before{content:none!important}'});
   if(variant==='still')await page.evaluate(()=>document.querySelector('video')?.pause());
   await page.locator('main.content').evaluate(e=>e.scrollTop=600);
   await page.waitForTimeout(300);

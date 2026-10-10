@@ -33,5 +33,6 @@ try{
   await resize(900,930);await seed(page,'installed');await shot('11-installed-narrow');await seed(page,'mod');await shot('12-browse-narrow');
   await resize(1600,1000);await page.goto('http://127.0.0.1:1422/?tab=settings&background=borealis');await page.locator('.workspace-tab-active').waitFor();await shot('13-settings');
   await page.goto('http://127.0.0.1:1422/?l3&page=cosmetics&background=borealis');await page.locator('.cosmetics-page').waitFor();await page.waitForTimeout(800);await shot('14-cosmetics');
-  await writeFile(path.join(out,'captures.json'),JSON.stringify(records,null,2));console.log('Captured 14 actual native WebView2 views');
+  await page.goto('http://127.0.0.1:1422/?page=instances&background=borealis');await page.getByRole('button',{name:'Browse Modpacks',exact:true}).click();await page.locator('.browse-row').first().waitFor();await shot('15-standalone-glass-match');
+  await writeFile(path.join(out,'captures.json'),JSON.stringify(records,null,2));console.log('Captured 15 actual native WebView2 views');
 }finally{await browser.close();}
