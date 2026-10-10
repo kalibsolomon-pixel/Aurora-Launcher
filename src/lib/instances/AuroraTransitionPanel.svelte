@@ -21,6 +21,7 @@
         ...(launcher.detailDrafts[instance.id] ?? updated.configuration),
         auroraEnabled: updated.configuration.auroraEnabled,
       };
+      launcher.detailBases[instance.id] = structuredClone(updated.configuration);
       preview = null;
       await launcher.runLoadMods(instance.id);
       await launcher.refreshPlayReadiness();

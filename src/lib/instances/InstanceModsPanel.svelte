@@ -19,6 +19,7 @@
   import ContentRecognition from "./ContentRecognition.svelte";
   import ContentUpdates from "./ContentUpdates.svelte";
   import Icon from "$lib/shell/Icon.svelte";
+  import AuroraTransitionPanel from "./AuroraTransitionPanel.svelte";
 
   let { instance }: { instance: InstanceSummary } = $props();
   let query = $state("");
@@ -422,6 +423,12 @@
       <span>Inspecting local mod files…</span>
     </div>
   {/if}
+  {/if}
+  {#if view === "installed"}
+    <details class="aurora-association"><summary>Aurora installation association</summary>
+      <p class="field-hint">Enable or disable the current Aurora mod in the list above. Changing the original installation association uses a reviewed content transition.</p>
+      <AuroraTransitionPanel {instance} />
+    </details>
   {/if}
 </section>
 

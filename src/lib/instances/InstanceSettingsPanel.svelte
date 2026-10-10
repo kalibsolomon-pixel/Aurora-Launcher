@@ -16,7 +16,6 @@
     catch (reason) { deletionError = reason instanceof Error ? reason.message : "Deletion did not complete."; }
     finally { deleting = false; }
   }
-  import AuroraTransitionPanel from "./AuroraTransitionPanel.svelte";
   import AuroraUpdatePanel from "./AuroraUpdatePanel.svelte";
 
   let { instance }: { instance: InstanceSummary } = $props();
@@ -87,7 +86,7 @@
   the sidebar's Settings destination.
 -->
 <div class="instance-settings-composition">
-<div class="settings-main"><AuroraTransitionPanel {instance} />
+<div class="settings-main">
 <AuroraUpdatePanel {instance} />
 <section class="group" aria-labelledby="instance-settings-title">
   <div class="group-heading">
@@ -336,14 +335,6 @@
 
 </div>
 <aside class="settings-tools">
-  <section class="group"><div class="group-heading"><h3 class="group-title">Content</h3></div>
-    <div class="group-form"><p>Aurora Client: {instance.auroraContentState ?? (instance.aurora ? "Not detected" : "Not configured")}.</p>
-    <p class="field-hint">The original release pin records installation intent. Mods shows the current files and their enabled state.</p>
-    <div class="tool-actions"><button class="btn" type="button" onclick={() => navigation.openInstance(instance.id, "mods")}>Manage mods</button>
-    <button class="btn" type="button" onclick={() => navigation.openInstance(instance.id, "resourcePacks")}>Resource packs</button>
-    <button class="btn" type="button" onclick={() => navigation.openInstance(instance.id, "shaders")}>Shaders</button>
-    <button class="btn btn-quiet" type="button" onclick={() => launcher.runOpenModsFolder(instance.id)}>Open mods folder</button></div></div>
-  </section>
   <section class="group"><div class="group-heading"><h3 class="group-title">Maintenance</h3></div>
     <div class="group-form tool-actions"><button class="btn" type="button" onclick={() => launcher.runValidate(instance.id)}>Validate instance</button>
     <button class="btn" type="button" onclick={() => launcher.runRuntimeStatus(instance.id)}>Check managed Java</button>
