@@ -125,16 +125,34 @@ views.
 `maven.neoforged.net` release listing (bare versions; Minecraft mapping
 derived from the leading components and cross-checked against each
 installer's own `install_profile.json`), SHA-1 sidecar digests, and the
-installer-embedded `install_profile.json`/`version.json` DTOs. The
-installer jar is a verified SHA-1-store acquisition read as a metadata
-document — Aurora never runs the NeoForge installer. Client-side
-processors execute as narrowly modeled build steps (`neoforge::processors`):
-argument-vector-only substitution from the normalized plan, exact managed
-Java diagnostic executable, empty environment, bounded scratch/staging
-roots, before/after tree snapshots that record generated outputs and reject
-destruction, nonzero exit/timeout/missing-output failures, and honest
-`ArtifactTrust::LocallyGenerated` observations for generated artifacts
-(never official verifications). NeoForge publishes no loader Java floor;
+installer-embedded `install_profile.json`/`version.json` DTOs — including
+processor `outputs` expectations, which are preserved and verified rather
+than discarded. The installer jar is a verified SHA-1-store acquisition
+read as a metadata document — Aurora never runs the NeoForge installer.
+Client-side processors execute as narrowly modeled build steps
+(`neoforge::processors`): argument-vector-only substitution from the
+normalized plan, exact managed Java diagnostic executable, empty
+environment, and bounded scratch/staging roots. Since the F1 hardening
+pass, every tool subprocess runs through the shared supervised runner
+(`install::processors`): stdout and stderr are drained concurrently under
+a live per-stream retention cap with recorded truncation; a wall-clock
+timeout and cooperative cancellation terminate the whole process tree
+(a Windows Job Object with kill-on-close, a Linux process group) with a
+bounded shutdown grace; diagnostics are character-safe bounded tails. The
+shared verified store is never an argument or write surface of a tool
+process — tools see a private, SHA-1-re-verified copy of the installer.
+Every processor input (client jar, tool jars, classpath) is hashed before
+and after execution; the staging snapshot records size and link status,
+so destruction, in-place modification, and symlink/reparse outputs fail
+the pass; generated outputs are stream-hashed under a hard size bound and
+recorded as honest `ArtifactTrust::LocallyGenerated` observations (never
+official verifications); published output expectations verify against
+their official SHA-1. Each installation also writes a schema-1
+transaction receipt inside staging at every stage transition; the next
+attempt classifies interrupted receipts (and reports unknown evidence)
+before the derived-path staging disposal, so a crashed transaction is
+explained and deterministically rebuilt rather than mistaken for a
+completed installation. NeoForge publishes no loader Java floor;
 Mojang's requirement stays authoritative (26.x -> `java-runtime-epsilon`,
 major 25), and the managed runtime is ensured before game installation
 because processors need it at install time.
