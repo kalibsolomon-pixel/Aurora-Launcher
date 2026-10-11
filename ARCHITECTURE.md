@@ -108,16 +108,28 @@ details: `PHASE_K_NEOFORGE.md`.
 
 ### Loader-generic composed plan
 
-`GameInstallPlan` (still in `fabric::plan`, the historical home) carries
-`loader: Option<LoaderPlan>` with `Fabric(FabricPlan)` and
-`NeoForge(NeoForgePlan)` variants. Composed views (ordered library set with
+Since F3 the shared composition types — `GameInstallPlan`, `LoaderPlan`,
+`GameLibrary`, `GameJavaRequirement`, `CompositionError`, and the merge
+policy — live in the loader-neutral `game::plan` boundary;
+`fabric::plan` reexports them under their historical paths, and each
+family composer (Fabric's floor-raising derivation, NeoForge's
+floor-less Mojang-authoritative one) stays in its own adapter. The plan
+carries `loader: Option<LoaderPlan>` with `Fabric(FabricPlan)` and
+`NeoForge(NeoForgePlan)` variants; there is deliberately no fallback
+variant. Composed views (ordered library set with
 `LibraryProvenance::NeoForge`, effective Java requirement, final main
 class) stay loader-generic; per-loader plans stay independently meaningful
 boundaries. `effective_jvm_arguments()` / `effective_game_arguments()`
 return Mojang's groups followed by the loader's unconditional groups —
 NeoForge is the first loader contributing launch arguments; Fabric/Vanilla
 behavior is unchanged. `LaunchPlan::from_game_plan` consumes the effective
-views.
+views. Loader selection is exhaustive at every dispatch point: plan
+resolution, pack transitions, and the executable-configuration gate match
+every `PlatformPin`/`LoaderKind` variant with explicit refusals for
+represented-but-unimplemented families, and compatibility evaluation
+errors on families with no evaluator instead of applying Fabric
+predicates; those families' desired configurations stay persistable
+(shape-validated only) so existing records never become unloadable.
 
 ### NeoForge resolution and the bounded processor model
 
