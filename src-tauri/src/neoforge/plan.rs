@@ -20,7 +20,9 @@ use std::fmt;
 
 use url::Url;
 
-use crate::fabric::plan::{GameInstallPlan, GameJavaRequirement, GameLibrary, merge_library_sets};
+use crate::game::plan::{
+    CompositionError, GameInstallPlan, GameJavaRequirement, GameLibrary, merge_library_sets,
+};
 use crate::integrity::Sha1Digest;
 use crate::minecraft::metadata::MinecraftVersionId;
 use crate::minecraft::plan::MinecraftInstallPlan;
@@ -470,18 +472,19 @@ fn parse_data_value(
 /// Composes a vanilla Minecraft plan and a NeoForge plan into the complete
 /// game install plan.
 ///
-/// Composition mirrors the Fabric boundary: the two plans stay
+/// Composition mirrors the shared boundary: the two plans stay
 /// independently meaningful, the library merge rejects identity conflicts,
 /// Mojang's Java requirement stays authoritative (NeoForge publishes no
 /// loader Java floor of its own), and the loader's entry point wins.
 pub fn compose_neoforge_game_plan(
     minecraft: MinecraftInstallPlan,
     neoforge: NeoForgePlan,
-) -> Result<GameInstallPlan, crate::fabric::plan::CompositionError> {
+) -> Result<GameInstallPlan, CompositionError> {
     if minecraft.minecraft_version() != neoforge.minecraft_version() {
-        return Err(crate::fabric::plan::CompositionError::VersionMismatch {
+        return Err(CompositionError::VersionMismatch {
             minecraft_version: minecraft.minecraft_version().to_owned(),
-            fabric_version: format!("neoforge {}", neoforge.neoforge_version),
+            loader_version: neoforge.neoforge_version.clone(),
+            loader_family: "NeoForge",
         });
     }
 
@@ -502,7 +505,7 @@ pub fn compose_neoforge_game_plan(
     let main_class = neoforge.main_class().to_owned();
     Ok(GameInstallPlan::from_composed_parts(
         minecraft,
-        crate::fabric::plan::LoaderPlan::NeoForge(neoforge),
+        crate::game::plan::LoaderPlan::NeoForge(neoforge),
         libraries,
         java,
         main_class,

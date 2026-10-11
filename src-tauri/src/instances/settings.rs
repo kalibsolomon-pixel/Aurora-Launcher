@@ -127,6 +127,23 @@ impl fmt::Display for LoaderKind {
     }
 }
 
+/// Validates a pinned loader version against one family's identifier rules
+/// (shape and whitespace policy are family-independent).
+fn validate_pinned_version(
+    policy: &LoaderPolicy,
+    is_valid_identifier: impl Fn(&str) -> bool,
+) -> Result<(), InvalidInstanceConfiguration> {
+    if let LoaderPolicy::Pinned { version } = policy {
+        if version.trim() != version || version.is_empty() {
+            return Err(InvalidInstanceConfiguration::LoaderVersionInvalid);
+        }
+        if !is_valid_identifier(version) {
+            return Err(InvalidInstanceConfiguration::LoaderVersionInvalid);
+        }
+    }
+    Ok(())
+}
+
 /// How the concrete loader version is chosen when content is installed.
 ///
 /// `Automatic` resolves the newest *stable* loader the official Fabric Meta
@@ -288,19 +305,30 @@ impl InstanceConfiguration {
         if self.aurora_enabled && self.loader.kind() != LoaderKind::Fabric {
             return Err(InvalidInstanceConfiguration::UnsupportedLoaderKind);
         }
-        if let LoaderPolicy::Pinned { version } = self.loader.policy() {
-            if version.trim() != version || version.is_empty() {
-                return Err(InvalidInstanceConfiguration::LoaderVersionInvalid);
+        // Pinned-version shape validation, exhaustive per family. Implemented
+        // families use their own identifier rules. Represented-but-
+        // unimplemented families (Forge, Quilt) keep the generic version
+        // shape only: their configurations must stay persistable and
+        // loadable — the executable gate in the lifecycle is what refuses
+        // them, and their adapters will own real identifier rules when
+        // implemented.
+        match &self.loader {
+            LoaderConfiguration::Vanilla {} => {}
+            LoaderConfiguration::Fabric { policy } => {
+                validate_pinned_version(policy, |version| {
+                    crate::fabric::metadata::LoaderVersionId::new(version).is_ok()
+                })?;
             }
-            match self.loader.kind() {
-                LoaderKind::NeoForge => {
-                    crate::neoforge::metadata::NeoForgeVersionId::new(version)
-                        .map_err(|_| InvalidInstanceConfiguration::LoaderVersionInvalid)?;
-                }
-                _ => {
-                    crate::fabric::metadata::LoaderVersionId::new(version)
-                        .map_err(|_| InvalidInstanceConfiguration::LoaderVersionInvalid)?;
-                }
+            LoaderConfiguration::NeoForge { policy } => {
+                validate_pinned_version(policy, |version| {
+                    crate::neoforge::metadata::NeoForgeVersionId::new(version).is_ok()
+                })?;
+            }
+            LoaderConfiguration::Forge { policy } | LoaderConfiguration::Quilt { policy } => {
+                validate_pinned_version(policy, |version| {
+                    crate::fabric::metadata::LoaderVersionId::new(version).is_ok()
+                        || crate::neoforge::metadata::NeoForgeVersionId::new(version).is_ok()
+                })?;
             }
         }
         validate_memory_mib(self.memory_mib)?;
@@ -682,6 +710,58 @@ impl std::error::Error for InvalidJvmArguments {}
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unimplemented_family_configurations_stay_persistable_but_are_marked_unsupported() {
+        // The persistence contract: a represented-but-unimplemented family
+        // keeps a loadable desired configuration (shape-validated version
+        // only), while Aurora remains Fabric-exclusive. The executable
+        // gate in the lifecycle — not configuration validation — refuses
+        // these families.
+        for loader in [
+            LoaderConfiguration::Forge {
+                policy: LoaderPolicy::Automatic {},
+            },
+            LoaderConfiguration::Forge {
+                policy: LoaderPolicy::Pinned {
+                    version: "47.4.26".to_owned(),
+                },
+            },
+            LoaderConfiguration::Quilt {
+                policy: LoaderPolicy::Pinned {
+                    version: "0.31.0-beta.4".to_owned(),
+                },
+            },
+        ] {
+            let mut configuration =
+                InstanceConfiguration::from_parts("26.2", loader, 2048, "", None);
+            configuration.aurora_enabled = false;
+            assert!(
+                configuration.validate().is_ok(),
+                "the configuration stays persistable for forward compatibility"
+            );
+            let serialized = serde_json::to_string(&configuration).unwrap();
+            assert_eq!(
+                serde_json::from_str::<InstanceConfiguration>(&serialized).unwrap(),
+                configuration
+            );
+        }
+        // Aurora still refuses every non-Fabric family explicitly.
+        let mut configuration = InstanceConfiguration::from_parts(
+            "26.2",
+            LoaderConfiguration::Forge {
+                policy: LoaderPolicy::Automatic {},
+            },
+            2048,
+            "",
+            None,
+        );
+        configuration.aurora_enabled = true;
+        assert!(matches!(
+            configuration.validate(),
+            Err(InvalidInstanceConfiguration::UnsupportedLoaderKind)
+        ));
+    }
+
     use super::*;
 
     #[test]

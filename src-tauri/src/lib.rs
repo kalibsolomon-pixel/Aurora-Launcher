@@ -14,6 +14,7 @@ pub mod discord;
 pub mod distribution;
 pub mod downloads;
 pub mod fabric;
+pub mod game;
 pub mod gameplay_history;
 pub mod home_widgets;
 pub mod install;

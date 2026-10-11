@@ -156,6 +156,9 @@ impl InstanceEndpoints {
 /// Resolve the composed game plan for an Aurora-free installed configuration.
 /// Pack updates use this to stage a Minecraft/loader transition for an
 /// existing instance through the ordinary verified installation pipeline.
+/// Pack transitions are deliberately scoped to Vanilla and Fabric today:
+/// every other family fails explicitly rather than falling through the
+/// Fabric resolver.
 pub(crate) async fn resolve_packed_game_plan(
     endpoints: &InstanceEndpoints,
     installed: &super::platform::InstalledConfiguration,
@@ -163,35 +166,47 @@ pub(crate) async fn resolve_packed_game_plan(
     let game_version =
         crate::minecraft::metadata::MinecraftVersionId::new(&installed.minecraft_version)
             .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-    if installed.platform == (super::platform::PlatformPin::Vanilla {}) {
-        let minecraft = crate::minecraft::resolve_install_plan(
-            &endpoints.minecraft,
-            &game_version,
-            PlatformProfile::current().map_err(InstanceError::Platform)?,
-            endpoints.install.download_options(),
-        )
-        .await
-        .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-        return Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft));
+    match &installed.platform {
+        super::platform::PlatformPin::Vanilla {} => {
+            let minecraft = crate::minecraft::resolve_install_plan(
+                &endpoints.minecraft,
+                &game_version,
+                PlatformProfile::current().map_err(InstanceError::Platform)?,
+                endpoints.install.download_options(),
+            )
+            .await
+            .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+            Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft))
+        }
+        super::platform::PlatformPin::Fabric { .. } => {
+            let loader_version = crate::fabric::metadata::LoaderVersionId::new(
+                installed
+                    .platform
+                    .require_fabric()
+                    .map_err(InstanceError::ReleaseInvalid)?,
+            )
+            .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+            let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
+            crate::fabric::resolve_game_plan(
+                &endpoints.minecraft,
+                &endpoints.fabric,
+                &game_version,
+                &loader_version,
+                platform,
+                endpoints.install.download_options(),
+            )
+            .await
+            .map_err(InstanceError::from)
+        }
+        unsupported @ (super::platform::PlatformPin::NeoForge { .. }
+        | super::platform::PlatformPin::Forge { .. }
+        | super::platform::PlatformPin::Quilt { .. }) => {
+            Err(InstanceError::ReleaseInvalid(format!(
+                "pack transitions do not support {} installations in this build",
+                unsupported.kind()
+            )))
+        }
     }
-    let loader_version = crate::fabric::metadata::LoaderVersionId::new(
-        installed
-            .platform
-            .require_fabric()
-            .map_err(InstanceError::ReleaseInvalid)?,
-    )
-    .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-    let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
-    crate::fabric::resolve_game_plan(
-        &endpoints.minecraft,
-        &endpoints.fabric,
-        &game_version,
-        &loader_version,
-        platform,
-        endpoints.install.download_options(),
-    )
-    .await
-    .map_err(InstanceError::from)
 }
 
 /// A typed instance-creation request.
@@ -563,17 +578,17 @@ pub async fn retry_instance_install(
 fn require_executable_configuration(
     configuration: &InstanceConfiguration,
 ) -> Result<(), InstanceError> {
-    if !matches!(
-        configuration.loader().kind(),
-        super::settings::LoaderKind::Fabric
-            | super::settings::LoaderKind::Vanilla
-            | super::settings::LoaderKind::NeoForge
-    ) {
-        return Err(InstanceError::ReleaseInvalid(
-            "this platform has no installation/launch implementation in this build".into(),
-        ));
+    // Exhaustive over the loader vocabulary: implemented kinds pass, every
+    // other kind names itself in the refusal. A new family must extend this
+    // match (and its adapter) rather than slipping through a fallback.
+    match configuration.loader().kind() {
+        super::settings::LoaderKind::Vanilla
+        | super::settings::LoaderKind::Fabric
+        | super::settings::LoaderKind::NeoForge => Ok(()),
+        unimplemented => Err(InstanceError::ReleaseInvalid(format!(
+            "{unimplemented} has no installation/launch implementation in this build"
+        ))),
     }
-    Ok(())
 }
 
 /// Resolve the exact installed configuration for an independent (Aurora-free)
@@ -1165,57 +1180,71 @@ pub(crate) async fn resolve_record_game_plan(
         let game_version =
             crate::minecraft::metadata::MinecraftVersionId::new(&installed.minecraft_version)
                 .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-        if installed.platform == (super::platform::PlatformPin::Vanilla {}) {
-            let minecraft = crate::minecraft::resolve_install_plan(
-                &endpoints.minecraft,
-                &game_version,
-                PlatformProfile::current().map_err(InstanceError::Platform)?,
-                endpoints.install.download_options(),
-            )
-            .await
-            .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-            return Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft));
-        }
-        if let super::platform::PlatformPin::NeoForge { version } = &installed.platform {
-            let loader_version = crate::neoforge::metadata::NeoForgeVersionId::new(version)
+        // Exhaustive family dispatch: every known pin resolves through its
+        // own adapter, and represented-but-unimplemented families fail
+        // explicitly. No family ever falls through another's resolver.
+        match &installed.platform {
+            super::platform::PlatformPin::Vanilla {} => {
+                let minecraft = crate::minecraft::resolve_install_plan(
+                    &endpoints.minecraft,
+                    &game_version,
+                    PlatformProfile::current().map_err(InstanceError::Platform)?,
+                    endpoints.install.download_options(),
+                )
+                .await
                 .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-            let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
-            return crate::neoforge::resolve_neoforge_game_plan(
-                managed,
-                &endpoints.minecraft,
-                endpoints.neoforge(),
-                &game_version,
-                &loader_version,
-                platform,
-                endpoints.install.download_options(),
-            )
-            .await
-            .map_err(InstanceError::NeoForgeResolution);
+                Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft))
+            }
+            super::platform::PlatformPin::Fabric { .. } => {
+                let loader_version = crate::fabric::metadata::LoaderVersionId::new(
+                    installed
+                        .platform
+                        .require_fabric()
+                        .map_err(InstanceError::ReleaseInvalid)?,
+                )
+                .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+                let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
+                let plan = crate::fabric::resolve_game_plan(
+                    &endpoints.minecraft,
+                    &endpoints.fabric,
+                    &game_version,
+                    &loader_version,
+                    platform,
+                    endpoints.install.download_options(),
+                )
+                .await?;
+                if let Some(release) = release {
+                    validate_release_java_major(
+                        release.java().major_version(),
+                        plan.java().major_version(),
+                    )?;
+                }
+                Ok(plan)
+            }
+            super::platform::PlatformPin::NeoForge { version } => {
+                let loader_version = crate::neoforge::metadata::NeoForgeVersionId::new(version)
+                    .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+                let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
+                crate::neoforge::resolve_neoforge_game_plan(
+                    managed,
+                    &endpoints.minecraft,
+                    endpoints.neoforge(),
+                    &game_version,
+                    &loader_version,
+                    platform,
+                    endpoints.install.download_options(),
+                )
+                .await
+                .map_err(InstanceError::NeoForgeResolution)
+            }
+            unsupported @ (super::platform::PlatformPin::Forge { .. }
+            | super::platform::PlatformPin::Quilt { .. }) => {
+                Err(InstanceError::ReleaseInvalid(format!(
+                    "{} installation and launch are not implemented in this build",
+                    unsupported.kind()
+                )))
+            }
         }
-        let loader_version = crate::fabric::metadata::LoaderVersionId::new(
-            installed
-                .platform
-                .require_fabric()
-                .map_err(InstanceError::ReleaseInvalid)?,
-        )
-        .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-        let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
-        let plan = crate::fabric::resolve_game_plan(
-            &endpoints.minecraft,
-            &endpoints.fabric,
-            &game_version,
-            &loader_version,
-            platform,
-            endpoints.install.download_options(),
-        )
-        .await?;
-        if let Some(release) = release {
-            validate_release_java_major(
-                release.java().major_version(),
-                plan.java().major_version(),
-            )?;
-        }
-        Ok(plan)
     })
     .await
 }
@@ -5108,5 +5137,79 @@ pub(crate) mod tests {
             .is_err()
         );
         assert_eq!(std::fs::read(world.registry_path()).unwrap(), before);
+    }
+
+    #[tokio::test]
+    async fn represented_but_unimplemented_platforms_fail_plan_resolution_explicitly() {
+        let world = SyntheticWorld::new("unimplemented-platform-resolution");
+        let endpoints = world.endpoints();
+        for platform in [
+            super::super::platform::PlatformPin::Forge {
+                version: "47.4.26".to_owned(),
+            },
+            super::super::platform::PlatformPin::Quilt {
+                version: "0.31.0-beta.4".to_owned(),
+            },
+        ] {
+            let record = InstanceRecord::from_installed(
+                InstanceId::new(uuid::Uuid::new_v4().simple().to_string()).unwrap(),
+                "Represented Only",
+                InstanceState::Ready,
+                super::super::platform::InstalledConfiguration {
+                    minecraft_version: "26.2".to_owned(),
+                    platform: platform.clone(),
+                    aurora: None,
+                },
+                InstanceConfiguration::for_minecraft_version("26.2"),
+            )
+            .unwrap();
+            let error = resolve_record_game_plan(&world.managed, &endpoints, &record, None)
+                .await
+                .expect_err("an unimplemented family must fail resolution explicitly");
+            let message = error.to_string();
+            assert!(
+                message.contains(platform.kind()),
+                "the refusal must name the family: {message}"
+            );
+            assert!(
+                !message.contains("Fabric plan"),
+                "no family may fail under another family's vocabulary: {message}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn pack_plan_resolution_is_scoped_to_vanilla_and_fabric() {
+        let world = SyntheticWorld::new("pack-resolution-scope");
+        let endpoints = world.endpoints();
+        for platform in [
+            super::super::platform::PlatformPin::NeoForge {
+                version: "26.2.0.88".to_owned(),
+            },
+            super::super::platform::PlatformPin::Forge {
+                version: "47.4.26".to_owned(),
+            },
+            super::super::platform::PlatformPin::Quilt {
+                version: "0.31.0-beta.4".to_owned(),
+            },
+        ] {
+            let installed = super::super::platform::InstalledConfiguration {
+                minecraft_version: "26.2".to_owned(),
+                platform: platform.clone(),
+                aurora: None,
+            };
+            let error = resolve_packed_game_plan(&endpoints, &installed)
+                .await
+                .expect_err("pack transitions must refuse non-Vanilla/Fabric families");
+            let message = error.to_string();
+            assert!(
+                message.contains(platform.kind()),
+                "the refusal must name the family: {message}"
+            );
+            assert!(
+                message.contains("pack"),
+                "the refusal must name the pack scope: {message}"
+            );
+        }
     }
 }
