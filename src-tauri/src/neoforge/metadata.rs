@@ -446,14 +446,28 @@ pub struct ProfileDataValue {
     pub server: String,
 }
 
-/// One processor definition: a tool jar, its classpath, and its argument
-/// vector, optionally restricted to installation sides.
+/// One processor definition: a tool jar, its classpath, its argument
+/// vector, optionally restricted to installation sides, and any output
+/// expectations the installer publishes for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfileProcessor {
     pub sides: Option<Vec<String>>,
     pub jar: String,
     pub classpath: Vec<String>,
     pub args: Vec<String>,
+    /// Published output expectations: the data token naming the artifact
+    /// the processor must produce, and its official SHA-1. Absent in
+    /// profiles whose generations publish none — never fabricated.
+    pub outputs: Vec<ProfileProcessorOutput>,
+}
+
+/// One published output expectation of a processor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileProcessorOutput {
+    /// The data token (without braces) whose resolved artifact is expected.
+    pub token: String,
+    /// The official SHA-1 of the expected artifact bytes.
+    pub sha1: Sha1Digest,
 }
 
 impl ProfileProcessor {
@@ -584,11 +598,38 @@ impl InstallProfileDocument {
                         });
                     }
                 }
+                let outputs = processor
+                    .outputs
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(token, digest)| {
+                        let token = token.trim_matches(|c| c == '{' || c == '}').to_owned();
+                        if token.is_empty()
+                            || token.contains(['{', '}', '[', ']', '\0'])
+                            || token.len() > 256
+                        {
+                            return Err(NeoForgeMetadataError::Malformed {
+                                reason: format!(
+                                    "a NeoForge processor output expectation has a malformed token '{token}'"
+                                ),
+                            });
+                        }
+                        let sha1 = Sha1Digest::parse(&digest).map_err(|_| {
+                            NeoForgeMetadataError::Malformed {
+                                reason: format!(
+                                    "a NeoForge processor output expectation for '{token}' is not a valid SHA-1"
+                                ),
+                            }
+                        })?;
+                        Ok(ProfileProcessorOutput { token, sha1 })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
                 Ok(ProfileProcessor {
                     sides: processor.sides,
                     jar: processor.jar,
                     classpath: processor.classpath,
                     args: processor.args,
+                    outputs,
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -698,6 +739,10 @@ struct RawProcessor {
     #[serde(default)]
     classpath: Vec<String>,
     args: Vec<String>,
+    /// Upstream output expectations, keyed by data token (with or without
+    /// the surrounding braces) and valued with an official SHA-1.
+    #[serde(default)]
+    outputs: Option<BTreeMap<String, String>>,
 }
 
 #[derive(serde::Deserialize)]

@@ -98,12 +98,32 @@ pub enum NeoForgeDataValue {
 }
 
 /// One client-side processor step, normalized to Aurora's execution model:
-/// an exact tool jar, its classpath, and a literal argument vector.
+/// an exact tool jar, its classpath, a literal argument vector, and any
+/// output expectations the installer publishes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NeoForgeProcessorStep {
     jar: NeoForgeCoordinate,
     classpath: Vec<NeoForgeCoordinate>,
     args: Vec<String>,
+    outputs: Vec<ProcessorOutputRule>,
+}
+
+/// One published output expectation: the data token naming the artifact
+/// the processor must produce and its official SHA-1.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessorOutputRule {
+    token: String,
+    sha1: Sha1Digest,
+}
+
+impl ProcessorOutputRule {
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+
+    pub fn sha1(&self) -> &Sha1Digest {
+        &self.sha1
+    }
 }
 
 impl NeoForgeProcessorStep {
@@ -117,6 +137,10 @@ impl NeoForgeProcessorStep {
 
     pub fn args(&self) -> &[String] {
         &self.args
+    }
+
+    pub fn outputs(&self) -> &[ProcessorOutputRule] {
+        &self.outputs
     }
 }
 
@@ -231,10 +255,25 @@ impl NeoForgePlan {
                         NeoForgeCoordinate::parse(entry).map_err(NeoForgePlanError::Coordinate)?,
                     );
                 }
+                let mut outputs = Vec::with_capacity(processor.outputs.len());
+                for output in &processor.outputs {
+                    if !profile.data.contains_key(&output.token) {
+                        return Err(NeoForgePlanError::Output {
+                            token: output.token.clone(),
+                            reason: "the published output expectation names a token the profile does not define"
+                                .to_owned(),
+                        });
+                    }
+                    outputs.push(ProcessorOutputRule {
+                        token: output.token.clone(),
+                        sha1: output.sha1,
+                    });
+                }
                 Ok(NeoForgeProcessorStep {
                     jar,
                     classpath,
                     args: processor.args.clone(),
+                    outputs,
                 })
             })
             .collect::<Result<Vec<_>, NeoForgePlanError>>()?;
@@ -333,6 +372,8 @@ pub enum NeoForgePlanError {
     Coordinate(InvalidNeoForgeCoordinate),
     /// A data-token value could not be normalized.
     Data { token: String, reason: String },
+    /// A published processor output expectation is unresolvable.
+    Output { token: String, reason: String },
 }
 
 impl fmt::Display for NeoForgePlanError {
@@ -346,6 +387,12 @@ impl fmt::Display for NeoForgePlanError {
             Self::Coordinate(error) => write!(formatter, "{error}"),
             Self::Data { token, reason } => {
                 write!(formatter, "the data token '{token}' is unusable: {reason}")
+            }
+            Self::Output { token, reason } => {
+                write!(
+                    formatter,
+                    "the processor output expectation '{token}' is unusable: {reason}"
+                )
             }
         }
     }

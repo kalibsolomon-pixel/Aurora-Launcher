@@ -48,6 +48,8 @@
 
 pub mod assets;
 pub mod natives;
+pub mod processors;
+pub mod receipt;
 pub mod state;
 
 use futures_util::future::join_all;
@@ -105,6 +107,11 @@ pub struct InstallContext {
     /// processors. Required by NeoForge plans; `None` for Vanilla and
     /// Fabric, whose installations execute no build steps.
     processor_java: Option<PathBuf>,
+    /// The per-step wall-clock bound for installer processors.
+    processor_timeout: std::time::Duration,
+    /// Cooperative cancellation for installer processors. The default
+    /// never fires; wiring a live signal is a caller decision.
+    processor_cancel: processors::CancelSignal,
 }
 
 impl InstallContext {
@@ -116,6 +123,8 @@ impl InstallContext {
             asset_endpoints: AssetObjectEndpoints::official(),
             small_artifact_concurrency: SMALL_ARTIFACT_CONCURRENCY,
             processor_java: None,
+            processor_timeout: processors::SupervisorLimits::default().timeout,
+            processor_cancel: processors::CancelSignal::default(),
         }
     }
 
@@ -130,12 +139,26 @@ impl InstallContext {
             asset_endpoints,
             small_artifact_concurrency: SMALL_ARTIFACT_CONCURRENCY,
             processor_java: None,
+            processor_timeout: processors::SupervisorLimits::default().timeout,
+            processor_cancel: processors::CancelSignal::default(),
         }
     }
 
     /// Sets the managed Java executable used for installer processors.
     pub fn with_processor_java(mut self, executable: PathBuf) -> Self {
         self.processor_java = Some(executable);
+        self
+    }
+
+    /// Overrides the per-step processor timeout (tests use short values).
+    pub fn with_processor_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.processor_timeout = timeout;
+        self
+    }
+
+    /// Attaches cooperative processor cancellation.
+    pub fn with_processor_cancel(mut self, cancel: processors::CancelSignal) -> Self {
+        self.processor_cancel = cancel;
         self
     }
 
@@ -201,6 +224,12 @@ pub struct InstallFaults {
     pub fail_before_commit: bool,
     /// Fail partway through materialization, after the first staged copy.
     pub fail_during_materialization: bool,
+    /// Fail after the processing receipt is written but before any
+    /// processor runs (crash-before-processing window).
+    pub fail_after_processing_receipt: bool,
+    /// Fail after the previous game tree is reserved in staging but before
+    /// the new tree is promoted (crash-between-renames window).
+    pub fail_between_renames: bool,
 }
 
 /// The result of a committed installation.
@@ -266,10 +295,62 @@ pub async fn install_game(
     let staging_game = staging_directory.join("game");
 
     let replacing = decide_replacement(&game_directory)?;
+    let minecraft = plan.minecraft();
+
+    // An existing receipt names an interrupted Aurora transaction (or is
+    // honestly unknown evidence); staging disposal below stays governed by
+    // the derived-path proof either way.
+    match receipt::classify_existing(&staging_directory) {
+        receipt::Disposition::NoReceipt => {}
+        receipt::Disposition::Interrupted {
+            transaction_id,
+            instance_id,
+            last_stage,
+        } => {
+            eprintln!(
+                "[aurora-launcher] recovering interrupted installation transaction {transaction_id} for instance {instance_id}, last completed stage '{last_stage}'; disposing its staging"
+            );
+        }
+        receipt::Disposition::Unknown { reason } => {
+            eprintln!(
+                "[aurora-launcher] found unknown staging receipt evidence at {} ({reason}); disposing staging after the derived-path proof",
+                staging_directory.display()
+            );
+        }
+    }
 
     prepare_staging(&instance_root, &staging_directory, &staging_game)?;
 
-    let minecraft = plan.minecraft();
+    // The durable transaction receipt: written before any long work, at
+    // every stage transition, and before each promotion rename. Its
+    // presence after a crash distinguishes an interrupted Aurora
+    // transaction from any other staging content.
+    let installation_id = format!(
+        "install-{}-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|since| since.as_millis())
+            .unwrap_or_default(),
+        std::process::id()
+    );
+    let platform_kind = serde_json::to_value(plan.platform())
+        .ok()
+        .and_then(|value| {
+            value
+                .get("kind")
+                .and_then(|kind| kind.as_str())
+                .map(str::to_owned)
+        })
+        .unwrap_or_else(|| "unknown".to_owned());
+    let mut transaction_receipt = receipt::TransactionReceipt::begin(
+        &staging_directory,
+        installation_id.clone(),
+        instance.as_str().to_owned(),
+        platform_kind,
+        minecraft.minecraft_version().to_owned(),
+    )
+    .map_err(InstallError::Storage)?;
+
     let cache = ArtifactCache::new(managed.clone());
 
     // ---- Acquisition: everything flows through the verified stores first.
@@ -480,6 +561,9 @@ pub async fn install_game(
         }
     }
     let assets_finished = Instant::now();
+    transaction_receipt
+        .record(receipt::Stage::Acquired)
+        .map_err(InstallError::Storage)?;
 
     // ---- Materialization: verified cache objects are copied into staging.
     let total_files = files.len() as u32;
@@ -564,19 +648,36 @@ pub async fn install_game(
                     "the NeoForge plan requires the managed Java runtime, which was not provided"
                         .to_owned(),
             })?;
-            let processor_context = crate::neoforge::processors::ProcessorContext {
-                staging_game: staging_game.clone(),
-                scratch_directory: staging_directory.join("processor-inputs"),
-                installer_path: installer_path
+            let processor_context = crate::neoforge::processors::ProcessorContext::new(
+                staging_game.clone(),
+                staging_directory.join("processor-inputs"),
+                installer_path
                     .clone()
                     .expect("a NeoForge plan acquired its installer above"),
-                java_executable: java_executable.to_path_buf(),
-                client_jar: staging_game.join(format!(
+                *neoforge.installer().sha1(),
+                java_executable.to_path_buf(),
+                staging_game.join(format!(
                     "versions/{}/client.jar",
                     minecraft.minecraft_version()
                 )),
-                minecraft_version: minecraft.minecraft_version().to_owned(),
-            };
+                minecraft.minecraft_version().to_owned(),
+            )
+            .with_timeout(context.processor_timeout)
+            .with_cancel(context.processor_cancel.clone());
+            transaction_receipt
+                .record_processing(
+                    neoforge
+                        .processors()
+                        .iter()
+                        .map(|step| step.jar().as_maven_string())
+                        .collect(),
+                )
+                .map_err(InstallError::Storage)?;
+            if faults.fail_after_processing_receipt {
+                return Err(InstallError::Processing {
+                    reason: "deterministic fault injected after the processing receipt".to_owned(),
+                });
+            }
             let outcome = run_client_processors(neoforge, &processor_context, &mut |item| {
                 report(InstallPhase::Processing, 0, 0, Some(item.to_owned()));
             })
@@ -584,6 +685,19 @@ pub async fn install_game(
             .map_err(|error| InstallError::Processing {
                 reason: error.to_string(),
             })?;
+            transaction_receipt
+                .record_processed(
+                    outcome
+                        .generated
+                        .iter()
+                        .map(|artifact| receipt::GeneratedObservation {
+                            relative: artifact.relative.clone(),
+                            observed_sha256: artifact.observed_sha256.clone(),
+                            size_bytes: artifact.size_bytes,
+                        })
+                        .collect(),
+                )
+                .map_err(InstallError::Storage)?;
             for artifact in outcome.generated {
                 let staged = staging_game.join(artifact.relative.split('/').collect::<PathBuf>());
                 files.push(PlannedFile {
@@ -603,20 +717,18 @@ pub async fn install_game(
     let _ = processing_finished;
 
     // ---- Staged validation: every file re-verified before completion.
+    transaction_receipt
+        .record(receipt::Stage::Verifying)
+        .map_err(InstallError::Storage)?;
     report(InstallPhase::Validating, 0, total_files, None);
     let installed_files =
         validate_staged_files(&staging_game, &files, &extraction_relative).await?;
     let staged_validation_finished = Instant::now();
+    transaction_receipt
+        .record(receipt::Stage::Verified)
+        .map_err(InstallError::Storage)?;
 
     // ---- Completion record, written last inside staging.
-    let installation_id = format!(
-        "install-{}-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|since| since.as_millis())
-            .unwrap_or_default(),
-        std::process::id()
-    );
     let installed_at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|since| since.as_secs())
@@ -651,6 +763,8 @@ pub async fn install_game(
         &staging_directory,
         &staging_game,
         replacing,
+        &mut transaction_receipt,
+        faults,
     )?;
 
     if std::env::var_os("AURORA_INSTALL_DIAGNOSTICS").is_some() {
@@ -914,14 +1028,17 @@ fn prove_staging_path(instance_root: &Path, staging_directory: &Path) -> Result<
 /// proven-managed existing `game` is moved into staging first, the new tree
 /// is renamed into place, and staging (now holding the old tree) is removed.
 /// If the process dies between the two renames the instance has *no* game
-/// directory — visibly incomplete, never a mixture — and the next attempt
-/// rebuilds from scratch.
+/// directory — visibly incomplete, never a mixture — and the receipt
+/// durably records the `replacing` stage so the next attempt explains the
+/// recovery instead of guessing at the tree it disposes.
 fn promote_staged_game(
     instance_root: &Path,
     game_directory: &Path,
     staging_directory: &Path,
     staging_game: &Path,
     replacing: bool,
+    transaction_receipt: &mut receipt::TransactionReceipt,
+    faults: InstallFaults,
 ) -> Result<(), InstallError> {
     std::fs::create_dir_all(instance_root).map_err(|error| InstallError::Commit {
         context: "creating the instance directory".to_owned(),
@@ -929,11 +1046,26 @@ fn promote_staged_game(
     })?;
 
     if replacing {
+        transaction_receipt
+            .record_replacement_reserved()
+            .map_err(InstallError::Storage)?;
         let retired = staging_directory.join(REPLACED_GAME_DIR_NAME);
         std::fs::rename(game_directory, &retired).map_err(|error| InstallError::Commit {
             context: "moving the previous installation aside".to_owned(),
             source: error,
         })?;
+        if faults.fail_between_renames {
+            // Deterministic crash-window simulation: the previous tree is
+            // reserved, the new tree is not yet promoted, and the receipt
+            // says exactly that.
+            return Err(InstallError::Commit {
+                context: "deterministic fault injected between the replacement renames".to_owned(),
+                source: std::io::Error::other("injected between-renames failure"),
+            });
+        }
+        transaction_receipt
+            .record(receipt::Stage::Committing)
+            .map_err(InstallError::Storage)?;
         if let Err(error) = std::fs::rename(staging_game, game_directory) {
             // Put the proven-managed previous installation back before
             // failing; the instance must not lose its game because the new
@@ -954,11 +1086,15 @@ fn promote_staged_game(
             );
         }
     } else {
+        transaction_receipt
+            .record(receipt::Stage::Committing)
+            .map_err(InstallError::Storage)?;
         std::fs::rename(staging_game, game_directory).map_err(|error| InstallError::Commit {
             context: "promoting the staged installation".to_owned(),
             source: error,
         })?;
-        // Staging is now an empty husk; keep the instance tidy.
+        // Staging is now an empty husk; keep the instance tidy (the
+        // committed manifest, not the receipt, is the completion marker).
         let _ = std::fs::remove_dir_all(staging_directory);
     }
 
@@ -1641,6 +1777,8 @@ mod tests {
     fn test_context(server_base: &str) -> InstallContext {
         InstallContext {
             processor_java: None,
+            processor_timeout: processors::SupervisorLimits::default().timeout,
+            processor_cancel: processors::CancelSignal::default(),
             download_options: crate::downloads::DownloadOptions {
                 connect_timeout: Duration::from_secs(5),
                 idle_read_timeout: Duration::from_secs(5),
@@ -3079,5 +3217,305 @@ mod tests {
                 .is_file()
         );
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn an_interrupted_installation_writes_a_recovery_receipt() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("receipt-interrupted");
+        env.plant_user_data();
+
+        let error = install(
+            &env,
+            &fixture,
+            &plan,
+            InstallFaults {
+                fail_during_materialization: true,
+                ..InstallFaults::default()
+            },
+        )
+        .await
+        .expect_err("the injected fault must interrupt the installation");
+
+        assert!(matches!(error, InstallError::Materialization { .. }));
+        // The staging tree carries a schema-1 receipt whose last stage is
+        // 'acquired': an interrupted Aurora transaction, never mistakable
+        // for a completed installation.
+        match receipt::classify_existing(&env.staging()) {
+            receipt::Disposition::Interrupted { last_stage, .. } => {
+                assert_eq!(last_stage, "acquired");
+            }
+            other => panic!("unexpected receipt disposition: {other:?}"),
+        }
+        assert!(!env.game().exists());
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::NotInstalled => {}
+            ValidationOutcome::Installed(_) => panic!("nothing may validate as installed"),
+        }
+
+        // The next attempt recovers deterministically: it detects the
+        // interrupted transaction, disposes staging after the path proof,
+        // rebuilds, and leaves no receipt behind.
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("the retry completes");
+        assert!(!env.staging().exists());
+        assert!(
+            !env.staging().join(receipt::RECEIPT_FILE_NAME).exists(),
+            "a committed installation leaves no receipt"
+        );
+        env.assert_user_data_intact();
+    }
+
+    #[tokio::test]
+    async fn a_crash_after_verification_is_recorded_and_retryable() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("receipt-verified-crash");
+        env.plant_user_data();
+
+        let error = install(
+            &env,
+            &fixture,
+            &plan,
+            InstallFaults {
+                fail_before_commit: true,
+                ..InstallFaults::default()
+            },
+        )
+        .await
+        .expect_err("the injected pre-commit fault must fail");
+
+        assert!(matches!(error, InstallError::Commit { .. }));
+        match receipt::classify_existing(&env.staging()) {
+            receipt::Disposition::Interrupted { last_stage, .. } => {
+                assert_eq!(last_stage, "verified");
+            }
+            other => panic!("unexpected receipt disposition: {other:?}"),
+        }
+        assert!(!env.game().exists(), "no incomplete tree was promoted");
+
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("the retry completes");
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the retried installation must validate"),
+        }
+        env.assert_user_data_intact();
+    }
+
+    #[tokio::test]
+    async fn a_crash_after_the_processing_receipt_leaves_interrupted_evidence() {
+        let Some((_tool, java)) = crate::neoforge::processors::test_tools::tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let (fixture, plan) = synthetic_neoforge_game(Some("write"));
+        let context = test_context(fixture.server.base_url()).with_processor_java(java);
+
+        let (managed, root) = neoforge_managed_root("receipt-processing-crash");
+        let instance = InstanceId::new("55555555-5555-4555-8555-555555555555").unwrap();
+        let staging = managed
+            .instance_paths(&instance)
+            .root()
+            .join(STAGING_DIR_NAME);
+        let error = install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_| {},
+            InstallFaults {
+                fail_after_processing_receipt: true,
+                ..InstallFaults::default()
+            },
+        )
+        .await
+        .expect_err("the injected processing fault must fail");
+
+        assert!(matches!(error, InstallError::Processing { .. }), "{error}");
+        match receipt::classify_existing(&staging) {
+            receipt::Disposition::Interrupted {
+                last_stage,
+                transaction_id,
+                ..
+            } => {
+                assert_eq!(last_stage, "processing");
+                assert!(!transaction_id.is_empty());
+            }
+            other => panic!("unexpected receipt disposition: {other:?}"),
+        }
+        assert!(
+            !managed
+                .instance_paths(&instance)
+                .game()
+                .join(INSTALLED_GAME_FILE_NAME)
+                .exists()
+        );
+
+        // Retry runs the processors for real and commits.
+        install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_| {},
+            InstallFaults::default(),
+        )
+        .await
+        .expect("the retry completes");
+        match validate_installed_game(&managed, &instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the retried installation must validate"),
+        }
+        assert!(!staging.exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn a_crash_between_renames_leaves_recovery_evidence_and_rebuilds() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("receipt-between-renames");
+        env.plant_user_data();
+
+        // A first, successful installation becomes the replacement target.
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("the first installation completes");
+
+        let error = install(
+            &env,
+            &fixture,
+            &plan,
+            InstallFaults {
+                fail_between_renames: true,
+                ..InstallFaults::default()
+            },
+        )
+        .await
+        .expect_err("the injected between-renames fault must fail");
+
+        assert!(matches!(error, InstallError::Commit { .. }));
+        // The crash window: no game directory exists, the retired tree and
+        // the receipt wait in staging, and the receipt names 'replacing'.
+        assert!(!env.game().exists());
+        match receipt::classify_existing(&env.staging()) {
+            receipt::Disposition::Interrupted { last_stage, .. } => {
+                assert_eq!(last_stage, "replacing");
+            }
+            other => panic!("unexpected receipt disposition: {other:?}"),
+        }
+        assert!(env.staging().join(REPLACED_GAME_DIR_NAME).is_dir());
+
+        // The next attempt recovers by rebuilding from verified caches; no
+        // mixture of old and new trees can be observed, and user data was
+        // never touched.
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("the retry completes");
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the rebuilt installation must validate"),
+        }
+        assert!(!env.staging().exists());
+        env.assert_user_data_intact();
+    }
+
+    #[tokio::test]
+    async fn a_corrupt_receipt_is_reported_and_staging_is_rebuilt_safely() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("receipt-corrupt");
+        env.plant_user_data();
+        // Pre-plant a corrupt receipt as the crash evidence of a previous
+        // attempt; the next attempt must classify it as unknown evidence
+        // and still recover through the derived-path staging proof.
+        receipt::write_test_receipt(&env.staging(), "{ definitely not json");
+        assert!(matches!(
+            receipt::classify_existing(&env.staging()),
+            receipt::Disposition::Unknown { .. }
+        ));
+
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("the unknown receipt cannot wedge the install");
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the installation must commit"),
+        }
+        assert!(!env.staging().exists());
+        env.assert_user_data_intact();
+    }
+
+    #[tokio::test]
+    async fn an_unknown_schema_receipt_is_not_interpreted() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("receipt-future-schema");
+        env.plant_user_data();
+        receipt::write_test_receipt(
+            &env.staging(),
+            r#"{"schemaVersion": 2, "transactionId": "t", "instanceId": "i", "stages": []}"#,
+        );
+        assert!(matches!(
+            receipt::classify_existing(&env.staging()),
+            receipt::Disposition::Unknown { .. }
+        ));
+
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("an unknown receipt is reported, never obeyed");
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the installation must commit"),
+        }
+        assert!(!env.staging().exists());
+        env.assert_user_data_intact();
+    }
+
+    #[tokio::test]
+    async fn repeated_recovery_invocations_settle_identically() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("receipt-repeated");
+        env.plant_user_data();
+
+        // Two interrupted attempts in a row, then recovery: classification
+        // is idempotent and disposal never wedges.
+        for _ in 0..2 {
+            let error = install(
+                &env,
+                &fixture,
+                &plan,
+                InstallFaults {
+                    fail_during_materialization: true,
+                    ..InstallFaults::default()
+                },
+            )
+            .await
+            .expect_err("the injected fault interrupts");
+            assert!(matches!(error, InstallError::Materialization { .. }));
+            assert!(matches!(
+                receipt::classify_existing(&env.staging()),
+                receipt::Disposition::Interrupted { .. }
+            ));
+        }
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("the final attempt recovers");
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the recovered installation must validate"),
+        }
+        env.assert_user_data_intact();
     }
 }

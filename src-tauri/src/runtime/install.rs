@@ -716,8 +716,11 @@ async fn run_process(
     arguments: &[&str],
     timeout: Duration,
 ) -> Result<Output, String> {
+    use crate::install::processors::{
+        CancelSignal, SupervisedExit, SupervisorLimits, run_supervised,
+    };
     let mut command = tokio::process::Command::new(executable);
-    command.args(arguments).kill_on_drop(true).env_clear();
+    command.args(arguments).env_clear();
     #[cfg(windows)]
     for key in ["SYSTEMROOT", "WINDIR", "TEMP", "TMP"] {
         if let Some(value) = std::env::var_os(key) {
@@ -726,15 +729,28 @@ async fn run_process(
     }
     #[cfg(unix)]
     command.env("LANG", "C").env("LC_ALL", "C");
-    tokio::time::timeout(timeout, command.output())
-        .await
-        .map_err(|_| {
-            format!(
-                "managed Java diagnostic exceeded the {} second timeout",
-                timeout.as_secs_f64()
-            )
-        })?
-        .map_err(|error| format!("managed Java diagnostic could not start: {error}"))
+    let limits = SupervisorLimits {
+        timeout,
+        ..SupervisorLimits::default()
+    };
+    let run = run_supervised(command, &limits, &CancelSignal::default()).await;
+    match &run.exit {
+        SupervisedExit::SpawnFailed(error) => {
+            Err(format!("managed Java diagnostic could not start: {error}"))
+        }
+        SupervisedExit::TimedOut => Err(format!(
+            "managed Java diagnostic exceeded the {} second timeout",
+            timeout.as_secs_f64()
+        )),
+        SupervisedExit::Cancelled => {
+            Err("managed Java diagnostic was cancelled before completion".to_owned())
+        }
+        SupervisedExit::Exited(status) => Ok(Output {
+            status: *status,
+            stdout: run.stdout.retained_tail,
+            stderr: run.stderr.retained_tail,
+        }),
+    }
 }
 
 fn parse_reported_java_major(output: &str) -> Option<u32> {
