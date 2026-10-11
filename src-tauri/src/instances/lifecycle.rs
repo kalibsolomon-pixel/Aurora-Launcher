@@ -40,6 +40,7 @@ use crate::aurora::{
 use crate::config::{self, ConfigError, LauncherConfig};
 use crate::distribution::{ManifestError, ReleaseChannel, ReleaseManifest};
 use crate::fabric::metadata::FabricMetaEndpoints;
+use crate::forge::metadata::ForgeMavenEndpoints;
 use crate::install::{
     InstallContext, InstallError, InstallProgress, ValidationOutcome as GameValidationOutcome,
     ValidationStatus as GameValidationStatus, install_game as execute_game_install,
@@ -72,6 +73,7 @@ pub struct InstanceEndpoints {
     minecraft: MetadataEndpoints,
     fabric: FabricMetaEndpoints,
     neoforge: NeoForgeMavenEndpoints,
+    forge: ForgeMavenEndpoints,
     runtime: RuntimeMetadataEndpoints,
     install: InstallContext,
 }
@@ -84,6 +86,7 @@ impl InstanceEndpoints {
             minecraft: MetadataEndpoints::official(),
             fabric: FabricMetaEndpoints::official(),
             neoforge: NeoForgeMavenEndpoints::official(),
+            forge: ForgeMavenEndpoints::official(),
             runtime: RuntimeMetadataEndpoints::official(),
             install: InstallContext::official(),
         })
@@ -97,6 +100,7 @@ impl InstanceEndpoints {
             minecraft: MetadataEndpoints::official(),
             fabric: FabricMetaEndpoints::official(),
             neoforge: NeoForgeMavenEndpoints::official(),
+            forge: ForgeMavenEndpoints::official(),
             runtime: RuntimeMetadataEndpoints::official(),
             install: InstallContext::official(),
         })
@@ -110,6 +114,7 @@ impl InstanceEndpoints {
             minecraft: MetadataEndpoints::official(),
             fabric: FabricMetaEndpoints::official(),
             neoforge: NeoForgeMavenEndpoints::official(),
+            forge: ForgeMavenEndpoints::official(),
             runtime: RuntimeMetadataEndpoints::official(),
             install: InstallContext::official(),
         })
@@ -121,6 +126,7 @@ impl InstanceEndpoints {
         minecraft: MetadataEndpoints,
         fabric: FabricMetaEndpoints,
         neoforge: NeoForgeMavenEndpoints,
+        forge: ForgeMavenEndpoints,
         runtime: RuntimeMetadataEndpoints,
         install: InstallContext,
     ) -> Self {
@@ -129,6 +135,7 @@ impl InstanceEndpoints {
             minecraft,
             fabric,
             neoforge,
+            forge,
             runtime,
             install,
         }
@@ -136,6 +143,11 @@ impl InstanceEndpoints {
 
     pub fn neoforge(&self) -> &NeoForgeMavenEndpoints {
         &self.neoforge
+    }
+
+    /// The pinned official Forge endpoints of this environment.
+    pub fn forge(&self) -> &ForgeMavenEndpoints {
+        &self.forge
     }
 
     pub fn runtime(&self) -> &RuntimeMetadataEndpoints {
@@ -584,7 +596,8 @@ fn require_executable_configuration(
     match configuration.loader().kind() {
         super::settings::LoaderKind::Vanilla
         | super::settings::LoaderKind::Fabric
-        | super::settings::LoaderKind::NeoForge => Ok(()),
+        | super::settings::LoaderKind::NeoForge
+        | super::settings::LoaderKind::Forge => Ok(()),
         unimplemented => Err(InstanceError::ReleaseInvalid(format!(
             "{unimplemented} has no installation/launch implementation in this build"
         ))),
@@ -679,6 +692,47 @@ async fn resolve_installed_configuration(
         return Ok(super::platform::InstalledConfiguration {
             minecraft_version: configuration.minecraft_version().into(),
             platform: super::platform::PlatformPin::NeoForge {
+                version: version.into(),
+            },
+            aurora: None,
+        });
+    }
+    if configuration.loader().kind() == super::settings::LoaderKind::Forge {
+        if configuration.aurora_enabled() {
+            return Err(InstanceError::ReleaseInvalid(
+                "the Aurora client requires Fabric Loader".into(),
+            ));
+        }
+        configuration.validate()?;
+        let game =
+            crate::minecraft::metadata::MinecraftVersionId::new(configuration.minecraft_version())
+                .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+        let listing = crate::forge::metadata::fetch_forge_versions(
+            endpoints.forge(),
+            endpoints.install.download_options(),
+        )
+        .await
+        .map_err(InstanceError::ForgeMetadata)?;
+        let entries = listing.for_minecraft(&game);
+        let candidates: Vec<_> = entries
+            .iter()
+            .map(|entry| LoaderCandidate {
+                version: entry.version().as_str().to_owned(),
+                stable: entry.stable(),
+            })
+            .collect();
+        let version = configuration
+            .loader()
+            .policy()
+            .resolve(&candidates)
+            .ok_or_else(|| InstanceError::LoaderResolution {
+                game: game.to_string(),
+                reason: "the requested Forge policy has no compatible version for this Minecraft version"
+                    .into(),
+            })?;
+        return Ok(super::platform::InstalledConfiguration {
+            minecraft_version: configuration.minecraft_version().into(),
+            platform: super::platform::PlatformPin::Forge {
                 version: version.into(),
             },
             aurora: None,
@@ -1237,8 +1291,23 @@ pub(crate) async fn resolve_record_game_plan(
                 .await
                 .map_err(InstanceError::NeoForgeResolution)
             }
-            unsupported @ (super::platform::PlatformPin::Forge { .. }
-            | super::platform::PlatformPin::Quilt { .. }) => {
+            super::platform::PlatformPin::Forge { version } => {
+                let loader_version = crate::forge::metadata::ForgeVersionId::new(version)
+                    .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+                let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
+                crate::forge::resolve_forge_game_plan(
+                    managed,
+                    &endpoints.minecraft,
+                    endpoints.forge(),
+                    &game_version,
+                    &loader_version,
+                    platform,
+                    endpoints.install.download_options(),
+                )
+                .await
+                .map_err(InstanceError::ForgeResolution)
+            }
+            unsupported @ super::platform::PlatformPin::Quilt { .. } => {
                 Err(InstanceError::ReleaseInvalid(format!(
                     "{} installation and launch are not implemented in this build",
                     unsupported.kind()
@@ -1891,6 +1960,10 @@ pub enum InstanceError {
     /// A NeoForge metadata document failed to fetch or parse while
     /// selecting a loader version.
     NeoForgeMetadata(crate::neoforge::metadata::NeoForgeMetadataError),
+    /// Official Forge discovery metadata was unusable.
+    ForgeMetadata(crate::forge::metadata::ForgeMetadataError),
+    /// The Forge half of a game plan could not be resolved.
+    ForgeResolution(crate::forge::ForgeGameResolutionError),
     /// A Minecraft + NeoForge plan failed to resolve.
     NeoForgeResolution(crate::neoforge::NeoForgeGameResolutionError),
     GameInstall(InstallError),
@@ -1957,6 +2030,8 @@ impl fmt::Display for InstanceError {
             Self::GameResolution(error) => write!(formatter, "{error}"),
             Self::FabricMetadata(error) => write!(formatter, "{error}"),
             Self::NeoForgeMetadata(error) => write!(formatter, "{error}"),
+            Self::ForgeMetadata(error) => write!(formatter, "{error}"),
+            Self::ForgeResolution(error) => write!(formatter, "{error}"),
             Self::NeoForgeResolution(error) => write!(formatter, "{error}"),
 
             Self::GameInstall(error) => write!(formatter, "{error}"),
@@ -2525,6 +2600,11 @@ pub(crate) mod tests {
                 crate::neoforge::metadata::NeoForgeMavenEndpoints::loopback_for_testing(
                     self.server.base_url(),
                 ),
+                crate::forge::metadata::ForgeMavenEndpoints::loopback_for_testing(
+                    &format!("{}/forge-maven/", self.server.base_url()),
+                    &format!("{}/forge-promotions.json", self.server.base_url()),
+                )
+                .unwrap(),
                 crate::runtime::metadata::RuntimeMetadataEndpoints::loopback_for_testing(
                     self.server.base_url(),
                 ),
@@ -5143,14 +5223,11 @@ pub(crate) mod tests {
     async fn represented_but_unimplemented_platforms_fail_plan_resolution_explicitly() {
         let world = SyntheticWorld::new("unimplemented-platform-resolution");
         let endpoints = world.endpoints();
-        for platform in [
-            super::super::platform::PlatformPin::Forge {
-                version: "47.4.26".to_owned(),
-            },
-            super::super::platform::PlatformPin::Quilt {
-                version: "0.31.0-beta.4".to_owned(),
-            },
-        ] {
+        // Forge is implemented since F1B; the deliberately unimplemented
+        // representation is Quilt.
+        for platform in [super::super::platform::PlatformPin::Quilt {
+            version: "0.31.0-beta.4".to_owned(),
+        }] {
             let record = InstanceRecord::from_installed(
                 InstanceId::new(uuid::Uuid::new_v4().simple().to_string()).unwrap(),
                 "Represented Only",
@@ -5176,6 +5253,28 @@ pub(crate) mod tests {
                 "no family may fail under another family's vocabulary: {message}"
             );
         }
+        let invalid_forge = super::super::platform::PlatformPin::Forge {
+            version: "47.4.26".to_owned(),
+        };
+        let record = InstanceRecord::from_installed(
+            InstanceId::new(uuid::Uuid::new_v4().simple().to_string()).unwrap(),
+            "Invalid Forge Pin",
+            InstanceState::Ready,
+            super::super::platform::InstalledConfiguration {
+                minecraft_version: "1.21.11".to_owned(),
+                platform: invalid_forge,
+                aurora: None,
+            },
+            InstanceConfiguration::for_minecraft_version("1.21.11"),
+        )
+        .unwrap();
+        let error = resolve_record_game_plan(&world.managed, &endpoints, &record, None)
+            .await
+            .expect_err("a Forge pin that is not a combined id fails resolution");
+        assert!(
+            error.to_string().contains("Forge version"),
+            "the refusal names the Forge identity rule: {error}"
+        );
     }
 
     #[tokio::test]

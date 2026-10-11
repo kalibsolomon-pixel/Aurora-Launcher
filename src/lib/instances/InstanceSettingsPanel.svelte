@@ -149,19 +149,19 @@
         <label class="field">
           <span class="field-label">Mod loader</span>
           <select value={draft.loader.kind} onchange={event => {
-            const kind = event.currentTarget.value as "vanilla" | "fabric" | "neoForge";
+            const kind = event.currentTarget.value as "vanilla" | "fabric" | "neoForge" | "forge";
             draft.loader = kind === "vanilla" ? { kind } : { kind, policy: { type: "automatic" } };
             onDraftChange();
           }} disabled={draft.auroraEnabled}>
             {#each launcher.launcherState?.platformCapabilities ?? [] as capability (capability.kind)}
-              {#if capability.canInstall}<option value={capability.kind}>{capability.kind === "fabric" ? "Fabric" : capability.kind === "neoForge" ? "NeoForge" : capability.kind}</option>{/if}
+              {#if capability.canInstall}<option value={capability.kind}>{capability.kind === "fabric" ? "Fabric" : capability.kind === "neoForge" ? "NeoForge" : capability.kind === "forge" ? "Forge" : capability.kind}</option>{/if}
             {/each}
           </select>
           <span class="field-hint">{draft.auroraEnabled ? "The original Aurora association requires Fabric. Manage Aurora content in Mods." : "Changing the platform requires installing new content."}</span>
         </label>
         {#if draft.loader.kind !== "vanilla"}
         <label class="field">
-          <span class="field-label">{draft.loader.kind === "neoForge" ? "NeoForge" : "Fabric Loader"} version</span>
+          <span class="field-label">{draft.loader.kind === "neoForge" ? "NeoForge" : draft.loader.kind === "forge" ? "Forge" : "Fabric Loader"} version</span>
           {#if "policy" in draft.loader && draft.loader.policy.type === "automatic"}
             <select value="" onchange={setLoaderPolicy}>
               <option value="">{draft.auroraEnabled ? "Aurora release version" : "Automatic compatible version"}</option>

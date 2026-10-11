@@ -324,7 +324,12 @@ impl InstanceConfiguration {
                     crate::neoforge::metadata::NeoForgeVersionId::new(version).is_ok()
                 })?;
             }
-            LoaderConfiguration::Forge { policy } | LoaderConfiguration::Quilt { policy } => {
+            LoaderConfiguration::Forge { policy } => {
+                validate_pinned_version(policy, |version| {
+                    crate::forge::metadata::ForgeVersionId::new(version).is_ok()
+                })?;
+            }
+            LoaderConfiguration::Quilt { policy } => {
                 validate_pinned_version(policy, |version| {
                     crate::fabric::metadata::LoaderVersionId::new(version).is_ok()
                         || crate::neoforge::metadata::NeoForgeVersionId::new(version).is_ok()
@@ -717,14 +722,11 @@ mod tests {
         // only), while Aurora remains Fabric-exclusive. The executable
         // gate in the lifecycle — not configuration validation — refuses
         // these families.
+        // Quilt stays shape-persistable; Forge is implemented since F1B
+        // and validates against the real combined identifier rules.
         for loader in [
-            LoaderConfiguration::Forge {
+            LoaderConfiguration::Quilt {
                 policy: LoaderPolicy::Automatic {},
-            },
-            LoaderConfiguration::Forge {
-                policy: LoaderPolicy::Pinned {
-                    version: "47.4.26".to_owned(),
-                },
             },
             LoaderConfiguration::Quilt {
                 policy: LoaderPolicy::Pinned {
@@ -745,6 +747,29 @@ mod tests {
                 configuration
             );
         }
+        let mut forge = InstanceConfiguration::from_parts(
+            "1.21.11",
+            LoaderConfiguration::Forge {
+                policy: LoaderPolicy::Pinned {
+                    version: "1.21.11-61.2.0".to_owned(),
+                },
+            },
+            2048,
+            "",
+            None,
+        );
+        forge.aurora_enabled = false;
+        assert!(forge.validate().is_ok());
+        let mut wrong_shape = forge.clone();
+        wrong_shape.loader = LoaderConfiguration::Forge {
+            policy: LoaderPolicy::Pinned {
+                version: "61.2.0".to_owned(),
+            },
+        };
+        assert!(matches!(
+            wrong_shape.validate(),
+            Err(InvalidInstanceConfiguration::LoaderVersionInvalid)
+        ));
         // Aurora still refuses every non-Fabric family explicitly.
         let mut configuration = InstanceConfiguration::from_parts(
             "26.2",

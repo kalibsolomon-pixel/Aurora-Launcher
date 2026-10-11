@@ -16,6 +16,9 @@ pub(crate) fn satisfies_for_family(
     match loader_family {
         "fabric" => fabric_satisfies(version, requirement),
         "neoForge" => neoforge_satisfies(version, requirement),
+        // Forge's mods.toml declares loader dependencies with the same
+        // Maven-range grammar NeoForge uses.
+        "forge" => neoforge_satisfies(version, requirement),
         _ => Err("this loader family has no compatibility evaluator in this build"),
     }
 }
@@ -181,6 +184,7 @@ pub fn validate(
             let builtin = match relation.mod_id.as_str() {
                 "minecraft" => Some(minecraft.to_owned()),
                 "fabricloader" if loader_family == "fabric" => Some(loader.to_owned()),
+                "forge" if loader_family == "forge" => Some(loader.to_owned()),
                 "neoforge" | "forge" if loader_family == "neoForge" => Some(loader.to_owned()),
                 "java" => {
                     if java_major.is_none() {
@@ -244,6 +248,7 @@ pub fn validate(
             let builtin = match relation.mod_id.as_str() {
                 "minecraft" => Some(minecraft.to_owned()),
                 "fabricloader" if loader_family == "fabric" => Some(loader.to_owned()),
+                "forge" if loader_family == "forge" => Some(loader.to_owned()),
                 "neoforge" | "forge" if loader_family == "neoForge" => Some(loader.to_owned()),
                 "java" => {
                     if java_major.is_none() {

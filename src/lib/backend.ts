@@ -770,6 +770,15 @@ export async function listNeoforgeVersions(minecraftVersion: string): Promise<Ne
   return invoke("list_neoforge_versions", { minecraftVersion });
 }
 
+export interface ForgeVersion {
+  version: string;
+  stable: boolean;
+}
+
+export async function listForgeVersions(minecraftVersion: string): Promise<ForgeVersion[]> {
+  return invoke("list_forge_versions", { minecraftVersion });
+}
+
 
 export async function retryInstanceInstall(instanceId: string): Promise<InstanceSummary> {
   try {

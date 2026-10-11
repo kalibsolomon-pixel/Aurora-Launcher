@@ -107,6 +107,7 @@ pub enum GameLibrary {
     Minecraft(PlannedLibrary),
     Fabric(crate::fabric::plan::FabricLibrary),
     NeoForge(crate::neoforge::plan::NeoForgeLibrary),
+    Forge(crate::forge::plan::ForgeLibrary),
 }
 
 /// Which metadata source contributed a composed library.
@@ -115,6 +116,7 @@ pub enum LibraryProvenance {
     Mojang,
     Fabric,
     NeoForge,
+    Forge,
 }
 
 /// The loader half of a composed plan. The container is loader-generic on
@@ -127,6 +129,7 @@ pub enum LibraryProvenance {
 pub enum LoaderPlan {
     Fabric(crate::fabric::plan::FabricPlan),
     NeoForge(crate::neoforge::plan::NeoForgePlan),
+    Forge(crate::forge::plan::ForgePlan),
 }
 
 impl LoaderPlan {
@@ -135,6 +138,7 @@ impl LoaderPlan {
         match self {
             Self::Fabric(plan) => plan.loader_version(),
             Self::NeoForge(plan) => plan.neoforge_version(),
+            Self::Forge(plan) => plan.forge_version(),
         }
     }
 }
@@ -145,6 +149,7 @@ impl GameLibrary {
             Self::Minecraft(_) => LibraryProvenance::Mojang,
             Self::Fabric(_) => LibraryProvenance::Fabric,
             Self::NeoForge(_) => LibraryProvenance::NeoForge,
+            Self::Forge(_) => LibraryProvenance::Forge,
         }
     }
 
@@ -154,6 +159,7 @@ impl GameLibrary {
             Self::Minecraft(library) => library.coordinate().as_maven_string(),
             Self::Fabric(library) => library.coordinate().as_maven_string(),
             Self::NeoForge(library) => library.coordinate().as_maven_string(),
+            Self::Forge(library) => library.coordinate().as_maven_string(),
         }
     }
 
@@ -163,6 +169,7 @@ impl GameLibrary {
             Self::Minecraft(library) => library.path().to_owned(),
             Self::Fabric(library) => library.path(),
             Self::NeoForge(library) => library.path().to_owned(),
+            Self::Forge(library) => library.path().to_owned(),
         }
     }
 
@@ -179,6 +186,7 @@ impl GameLibrary {
             }
             Self::Fabric(_) => true,
             Self::NeoForge(library) => library.is_classpath_entry(),
+            Self::Forge(library) => library.is_classpath_entry(),
         }
     }
 }
@@ -227,6 +235,14 @@ impl GameInstallPlan {
         }
     }
 
+    /// The Forge half, when the contribution is Forge.
+    pub fn forge_loader(&self) -> Option<&crate::forge::plan::ForgePlan> {
+        match &self.loader {
+            Some(LoaderPlan::Forge(plan)) => Some(plan),
+            _ => None,
+        }
+    }
+
     /// The installed platform identity this plan produces: Vanilla with no
     /// loader, otherwise the exact family and version of the contribution.
     pub fn platform(&self) -> crate::instances::platform::PlatformPin {
@@ -236,6 +252,9 @@ impl GameInstallPlan {
             },
             Some(LoaderPlan::NeoForge(plan)) => crate::instances::platform::PlatformPin::NeoForge {
                 version: plan.neoforge_version().to_owned(),
+            },
+            Some(LoaderPlan::Forge(plan)) => crate::instances::platform::PlatformPin::Forge {
+                version: plan.forge_version().to_owned(),
             },
             None => crate::instances::platform::PlatformPin::Vanilla {},
         }
@@ -302,6 +321,13 @@ impl GameInstallPlan {
             .count()
     }
 
+    pub fn forge_library_count(&self) -> usize {
+        self.libraries
+            .iter()
+            .filter(|library| library.provenance() == LibraryProvenance::Forge)
+            .count()
+    }
+
     /// The effective JVM arguments in deterministic order: Mojang's planned
     /// arguments, then the loader's contributions appended (NeoForge is the
     /// first loader that contributes JVM arguments; Fabric contributes
@@ -309,13 +335,16 @@ impl GameInstallPlan {
     /// carry no rule conditions.
     pub fn effective_jvm_arguments(&self) -> Vec<crate::minecraft::plan::LaunchArgument> {
         let mut arguments = self.minecraft.launch().jvm_arguments().to_vec();
-        if let Some(LoaderPlan::NeoForge(plan)) = &self.loader {
-            if !plan.jvm_arguments().is_empty() {
-                arguments.push(crate::minecraft::plan::LaunchArgument {
-                    features: Vec::new(),
-                    values: plan.jvm_arguments().to_vec(),
-                });
-            }
+        let loader_jvm: Option<&[String]> = match &self.loader {
+            Some(LoaderPlan::NeoForge(plan)) => Some(plan.jvm_arguments()),
+            Some(LoaderPlan::Forge(plan)) => Some(plan.jvm_arguments()),
+            Some(LoaderPlan::Fabric(_)) | None => None,
+        };
+        if let Some(values) = loader_jvm.filter(|values| !values.is_empty()) {
+            arguments.push(crate::minecraft::plan::LaunchArgument {
+                features: Vec::new(),
+                values: values.to_vec(),
+            });
         }
         arguments
     }
@@ -324,13 +353,16 @@ impl GameInstallPlan {
     /// the loader's appended.
     pub fn effective_game_arguments(&self) -> Vec<crate::minecraft::plan::LaunchArgument> {
         let mut arguments = self.minecraft.launch().game_arguments().to_vec();
-        if let Some(LoaderPlan::NeoForge(plan)) = &self.loader {
-            if !plan.game_arguments().is_empty() {
-                arguments.push(crate::minecraft::plan::LaunchArgument {
-                    features: Vec::new(),
-                    values: plan.game_arguments().to_vec(),
-                });
-            }
+        let loader_game: Option<&[String]> = match &self.loader {
+            Some(LoaderPlan::NeoForge(plan)) => Some(plan.game_arguments()),
+            Some(LoaderPlan::Forge(plan)) => Some(plan.game_arguments()),
+            Some(LoaderPlan::Fabric(_)) | None => None,
+        };
+        if let Some(values) = loader_game.filter(|values| !values.is_empty()) {
+            arguments.push(crate::minecraft::plan::LaunchArgument {
+                features: Vec::new(),
+                values: values.to_vec(),
+            });
         }
         arguments
     }
@@ -427,6 +459,14 @@ fn neoforge_identity(
     )
 }
 
+fn forge_identity(coordinate: &crate::forge::plan::ForgeCoordinate) -> LibraryIdentity<'_> {
+    (
+        coordinate.group(),
+        coordinate.artifact(),
+        coordinate.classifier(),
+    )
+}
+
 /// Merges Mojang's libraries (document order) with a loader's libraries
 /// (contribution order): exact duplicates collapse to the earlier (Mojang)
 /// entry, and a same identity at a different version is a hard conflict.
@@ -453,6 +493,10 @@ pub(crate) fn merge_library_sets(
                 ),
                 GameLibrary::NeoForge(entry) => (
                     neoforge_identity(entry.coordinate()),
+                    entry.coordinate().version(),
+                ),
+                GameLibrary::Forge(entry) => (
+                    forge_identity(entry.coordinate()),
                     entry.coordinate().version(),
                 ),
             };
@@ -487,6 +531,10 @@ pub(crate) fn merge_library_sets(
             ),
             GameLibrary::NeoForge(entry) => (
                 neoforge_identity(entry.coordinate()),
+                entry.coordinate().version().to_owned(),
+            ),
+            GameLibrary::Forge(entry) => (
+                forge_identity(entry.coordinate()),
                 entry.coordinate().version().to_owned(),
             ),
         };

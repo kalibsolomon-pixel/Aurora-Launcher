@@ -14,6 +14,7 @@ pub mod discord;
 pub mod distribution;
 pub mod downloads;
 pub mod fabric;
+pub mod forge;
 pub mod game;
 pub mod gameplay_history;
 pub mod home_widgets;
@@ -117,6 +118,7 @@ pub fn run() {
             application::list_minecraft_versions,
             application::list_fabric_loader_versions,
             application::list_neoforge_versions,
+            application::list_forge_versions,
             application::select_instance,
             application::open_instance_folder,
             application::get_instance_mods,

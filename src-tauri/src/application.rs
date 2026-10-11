@@ -1758,6 +1758,8 @@ impl From<InstanceError> for CommandError {
                     InstanceError::LoaderResolution { .. } => "fabric_loader_not_found",
                     InstanceError::NeoForgeMetadata(_) => "neoforge_metadata_unavailable",
                     InstanceError::NeoForgeResolution(_) => "neoforge_resolution_failed",
+                    InstanceError::ForgeMetadata(_) => "forge_metadata_unavailable",
+                    InstanceError::ForgeResolution(_) => "forge_resolution_failed",
                     InstanceError::Platform(_) => "minecraft_platform_unsupported",
                     InstanceError::GameInstallState(_) => "installation_state_invalid",
                     InstanceError::ValidationFailed { .. } => "instance_consistency_failure",
@@ -4371,6 +4373,42 @@ pub async fn list_neoforge_versions(
 pub struct NeoForgeVersionDto {
     pub version: String,
     pub stable: bool,
+}
+
+/// One Forge version available for a Minecraft version: the full combined
+/// upstream identity (`<minecraft>-<build>`), stable exactly when the
+/// official promotions document names that build as the recommended one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForgeVersionDto {
+    pub version: String,
+    pub stable: bool,
+}
+
+/// Lists every Forge version this launcher can install for one exact
+/// Minecraft version, newest build first.
+#[tauri::command]
+pub async fn list_forge_versions(
+    minecraft_version: String,
+) -> Result<Vec<ForgeVersionDto>, CommandError> {
+    let version = MinecraftVersionId::new(minecraft_version.trim())?;
+    let listing = crate::forge::metadata::fetch_forge_versions(
+        &crate::forge::metadata::ForgeMavenEndpoints::official(),
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|error| -> CommandError {
+        crate::instances::lifecycle::InstanceError::ForgeMetadata(error).into()
+    })?;
+
+    Ok(listing
+        .for_minecraft(&version)
+        .into_iter()
+        .map(|entry| ForgeVersionDto {
+            version: entry.version().as_str().to_owned(),
+            stable: entry.stable(),
+        })
+        .collect())
 }
 
 impl From<crate::neoforge::metadata::NeoForgeMetadataError> for CommandError {

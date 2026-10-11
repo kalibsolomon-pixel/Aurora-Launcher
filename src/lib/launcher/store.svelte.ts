@@ -19,6 +19,7 @@ import {
   installInstanceConfiguration,
   listAuroraReleases,
   listFabricLoaderVersions,
+  listForgeVersions,
   listNeoforgeVersions,
   listMinecraftVersions,
   openInstanceFolder,
@@ -96,7 +97,7 @@ class LauncherStore {
   // Instance management. All state comes from Rust.
   createDisplayName = $state("");
   createMinecraftVersion = $state("");
-  createPlatform = $state<"vanilla" | "fabric" | "neoForge">("fabric");
+  createPlatform = $state<"vanilla" | "fabric" | "neoForge" | "forge">("fabric");
   createAuroraEnabled = $state(false);
   createAuroraPreference = $state<boolean | null>(null);
   createLoaderPolicy = $state<{ type: "automatic" | "pinned"; version?: string }>({
@@ -480,7 +481,12 @@ class LauncherStore {
               version: entry.version,
               stable: entry.stable,
             }))
-          : await listFabricLoaderVersions(minecraftVersion.trim());
+          : platform === "forge"
+            ? (await listForgeVersions(minecraftVersion.trim())).map((entry) => ({
+                version: entry.version,
+                stable: entry.stable,
+              }))
+            : await listFabricLoaderVersions(minecraftVersion.trim());
       if (this.loaderVersionsKey === key) this.loaderVersions = versions;
     } catch (cause: unknown) {
       if (this.loaderVersionsKey !== key) return;
@@ -489,7 +495,9 @@ class LauncherStore {
         cause,
         platform === "neoForge"
           ? "The NeoForge versions could not be loaded."
-          : "The Fabric Loader versions could not be loaded.",
+          : platform === "forge"
+            ? "The Forge versions could not be loaded."
+            : "The Fabric Loader versions could not be loaded.",
       );
     } finally {
       if (this.loaderVersionsKey === key) this.loaderVersionsBusy = false;
@@ -510,7 +518,9 @@ class LauncherStore {
             ? {kind: "vanilla"}
             : this.createPlatform === "neoForge"
               ? {kind: "neoForge", policy: this.createLoaderPolicy}
-              : {kind: "fabric", policy: this.createLoaderPolicy},
+              : this.createPlatform === "forge"
+                ? {kind: "forge", policy: this.createLoaderPolicy}
+                : {kind: "fabric", policy: this.createLoaderPolicy},
         auroraEnabled: this.createAuroraEnabled,
       });
       this.createDisplayName = "";

@@ -445,7 +445,19 @@ pub async fn install_game(
     // Preserve classpath order even when independent acquisitions complete
     // out of order. A failed batch is fully settled before returning, so no
     // download task is abandoned with an open untrusted staging file.
-    for batch in plan.libraries().chunks(context.small_artifact_concurrency) {
+    for batch in plan
+        .libraries()
+        .iter()
+        .filter(|library| match library {
+            // The generated patched client has no upstream URL; the
+            // processor chain materializes and verifies it later in this
+            // installation.
+            GameLibrary::Forge(entry) => entry.artifact().is_downloadable(),
+            _ => true,
+        })
+        .collect::<Vec<_>>()
+        .chunks(context.small_artifact_concurrency)
+    {
         let acquired = join_all(
             batch
                 .iter()
@@ -523,6 +535,56 @@ pub async fn install_game(
             );
         }
         installer_path = Some(installer.path);
+    }
+
+    // ---- Forge-specific artifacts: the verified installer (kept for
+    // the processor pass, never an installed file) and the
+    // installer-tool libraries processors run from. The generated
+    // patched client is not acquired here — the processor chain
+    // produces and digest-verifies it.
+    let mut forge_installer_path: Option<PathBuf> = None;
+    if let Some(forge) = plan.forge_loader() {
+        let source = Sha1ArtifactSource::https_or_loopback(
+            forge
+                .installer()
+                .url()
+                .expect("the Forge installer always carries its repository URL")
+                .as_str(),
+            &forge.installer().sha1().as_hex(),
+            forge.installer().size_bytes(),
+        )
+        .map_err(|error| InstallError::InvalidSource(error.to_string()))?;
+        let installer = cache
+            .acquire_sha1(&source, context.download_options())
+            .await
+            .map_err(InstallError::Acquisition)?;
+        completed += 1;
+        report(
+            InstallPhase::Acquiring,
+            completed,
+            total_items,
+            Some(format!("forge {}", forge.forge_version())),
+        );
+
+        for library in forge.installer_libraries() {
+            let artifact = acquire_forge_library(&cache, library, context).await?;
+            completed += 1;
+            files.push(PlannedFile {
+                source: artifact.path.clone(),
+                relative: format!("libraries/{}", library.path()),
+                trust: artifact.trust(),
+                size_bytes: artifact.bytes,
+                role: InstalledFileRole::Library,
+                origin: artifact.origin,
+            });
+            report(
+                InstallPhase::Acquiring,
+                completed,
+                total_items,
+                Some(library.coordinate().as_maven_string()),
+            );
+        }
+        forge_installer_path = Some(installer.path);
     }
 
     // Asset objects, deduplicated by hash.
@@ -706,6 +768,95 @@ pub async fn install_game(
                     trust: ArtifactTrust::LocallyGenerated {
                         observed_sha256: artifact.observed_sha256,
                     },
+                    size_bytes: artifact.size_bytes,
+                    role: InstalledFileRole::Library,
+                    origin: ArtifactOrigin::CacheHit,
+                });
+            }
+        }
+    }
+    if let Some(forge) = plan.forge_loader() {
+        if forge.requires_install_time_java() {
+            let java_executable =
+                context
+                    .processor_java
+                    .as_deref()
+                    .ok_or(InstallError::Processing {
+                    reason:
+                        "the Forge plan requires the managed Java runtime, which was not provided"
+                            .to_owned(),
+                })?;
+            let processor_context = crate::forge::processors::ProcessorContext::new(
+                staging_game.clone(),
+                staging_directory.join("processor-inputs"),
+                forge_installer_path
+                    .clone()
+                    .expect("a Forge plan acquired its installer above"),
+                *forge.installer().sha1(),
+                java_executable.to_path_buf(),
+                staging_game.join(format!(
+                    "versions/{}/client.jar",
+                    minecraft.minecraft_version()
+                )),
+                minecraft.minecraft_version().to_owned(),
+            )
+            .with_timeout(context.processor_timeout)
+            .with_cancel(context.processor_cancel.clone());
+            transaction_receipt
+                .record_processing(
+                    forge
+                        .processors()
+                        .iter()
+                        .map(|step| step.jar().as_maven_string())
+                        .collect(),
+                )
+                .map_err(InstallError::Storage)?;
+            if faults.fail_after_processing_receipt {
+                return Err(InstallError::Processing {
+                    reason: "deterministic fault injected after the processing receipt".to_owned(),
+                });
+            }
+            let outcome = crate::forge::processors::run_client_processors(
+                forge,
+                &processor_context,
+                &mut |item| {
+                    report(InstallPhase::Processing, 0, 0, Some(item.to_owned()));
+                },
+            )
+            .await
+            .map_err(|error| InstallError::Processing {
+                reason: error.to_string(),
+            })?;
+            transaction_receipt
+                .record_processed(
+                    outcome
+                        .generated
+                        .iter()
+                        .map(|artifact| receipt::GeneratedObservation {
+                            relative: artifact.relative.clone(),
+                            observed_sha256: artifact.observed_sha256.clone(),
+                            size_bytes: artifact.size_bytes,
+                        })
+                        .collect(),
+                )
+                .map_err(InstallError::Storage)?;
+            for artifact in outcome.generated {
+                let staged = staging_game.join(artifact.relative.split('/').collect::<PathBuf>());
+                // An output that matched its published SHA-1 keeps the
+                // stronger, honest upstream expectation (the digest was
+                // known in trusted metadata before the step ran and the
+                // generated bytes verified against it); every other
+                // generated file is a locally generated observation.
+                let trust = match outcome.published_sha1.get(&artifact.relative) {
+                    Some(sha1) => ArtifactTrust::verified_sha1(sha1),
+                    None => ArtifactTrust::LocallyGenerated {
+                        observed_sha256: artifact.observed_sha256,
+                    },
+                };
+                files.push(PlannedFile {
+                    source: staged,
+                    relative: artifact.relative.clone(),
+                    trust,
                     size_bytes: artifact.size_bytes,
                     role: InstalledFileRole::Library,
                     origin: ArtifactOrigin::CacheHit,
@@ -951,11 +1102,25 @@ fn acquisition_total(plan: &GameInstallPlan, objects: &UnknownObjects) -> u32 {
     if plan.minecraft().logging().is_some() {
         total += 1;
     }
-    total += plan.libraries().len() as u32;
+    let downloadable = plan
+        .libraries()
+        .iter()
+        .filter(|library| match library {
+            // The processor-generated patched client is not an
+            // acquisition: the processor chain produces it.
+            GameLibrary::Forge(entry) => entry.artifact().is_downloadable(),
+            _ => true,
+        })
+        .count();
+    total += downloadable as u32;
     if let Some(neoforge) = plan.neoforge_loader() {
         // The installer jar itself plus the universal artifact and the
         // installer-tool libraries.
         total += 2 + neoforge.installer_libraries().len() as u32;
+    }
+    if let Some(forge) = plan.forge_loader() {
+        // The installer jar itself plus the installer-tool libraries.
+        total += 1 + forge.installer_libraries().len() as u32;
     }
     if let UnknownObjects::Known(count) = objects {
         total += *count as u32;
@@ -1188,6 +1353,16 @@ async fn acquire_library(
                 artifact.origin,
             ))
         }
+        GameLibrary::Forge(entry) => {
+            let artifact = acquire_forge_library(cache, entry, context).await?;
+            Ok((
+                artifact.path.clone(),
+                artifact.trust(),
+                artifact.bytes,
+                InstalledFileRole::Library,
+                artifact.origin,
+            ))
+        }
         GameLibrary::Fabric(entry) => {
             let artifact = entry.artifact();
             if let Some(sha256) = artifact.sha256() {
@@ -1234,6 +1409,30 @@ async fn acquire_neoforge_library(
     context: &InstallContext,
 ) -> Result<VerifiedSha1Artifact, InstallError> {
     acquire_neoforge_artifact(cache, library.artifact(), context).await
+}
+
+/// Acquires one SHA-1-verified Forge library. Only downloadable artifacts
+/// reach this boundary: the generated patched client is filtered out
+/// before acquisition and produced by the processor chain.
+async fn acquire_forge_library(
+    cache: &ArtifactCache,
+    library: &crate::forge::plan::ForgeLibrary,
+    context: &InstallContext,
+) -> Result<VerifiedSha1Artifact, InstallError> {
+    let artifact = library.artifact();
+    let url = artifact
+        .url()
+        .expect("downloadable Forge libraries carry their repository URL");
+    let source = Sha1ArtifactSource::https_or_loopback(
+        url.as_str(),
+        &artifact.sha1().as_hex(),
+        artifact.size_bytes(),
+    )
+    .map_err(|error| InstallError::InvalidSource(error.to_string()))?;
+    cache
+        .acquire_sha1(&source, context.download_options())
+        .await
+        .map_err(InstallError::Acquisition)
 }
 
 /// Acquires one SHA-1-verified NeoForge artifact (library, universal, or
@@ -3115,6 +3314,458 @@ mod tests {
                 );
             }
             ValidationOutcome::NotInstalled => panic!("the installation must still exist"),
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Builds a synthetic-but-faithful Forge world over the loopback
+    /// fixture: the real official document shapes (side-mapped data,
+    /// brace-wrapped output expectations, the URL-less generated client
+    /// library) with tool jars served from the fixture server. The
+    /// processor chain uses the real JDK and the shared synthetic Java
+    /// tool; each step consumes the previous step's output as its input,
+    /// and every output carries its published SHA-1.
+    fn synthetic_forge_game() -> (Fixture, GameInstallPlan) {
+        synthetic_forge_game_with_chain_mode("write")
+    }
+
+    /// `chain_mode` selects the synthetic tool's behavior for the client
+    /// chain steps ("write" or "fail").
+    fn synthetic_forge_game_with_chain_mode(chain_mode: &str) -> (Fixture, GameInstallPlan) {
+        let Some((tool, _java)) = crate::neoforge::processors::test_tools::tool_and_java() else {
+            panic!("this synthetic world requires the compiled processor tool");
+        };
+        let tool_bytes = std::fs::read(&tool).unwrap();
+        let tool_sha1 = sha1_hex(&tool_bytes);
+        let tool_path =
+            "net/minecraftforge/installertools/1.4.3/installertools-1.4.3.jar".to_owned();
+
+        // The synthetic tool writes fixed bytes for every output; every
+        // published digest is the digest of those exact bytes.
+        let chain_output = b"patched client artifact bytes".to_vec();
+        let chain_sha1 = sha1_hex(&chain_output);
+
+        let client = b"synthetic client jar bytes".to_vec();
+        let logging = b"<Configuration status=\"WARN\"></Configuration>".to_vec();
+        let mojang_library = b"synthetic mojang library jar".to_vec();
+        let native_archive = native_zip_bytes();
+        let universal = b"synthetic forge universal jar".to_vec();
+        let bootstrap = b"synthetic bootstraplauncher jar".to_vec();
+
+        let asset_a = b"tiny png bytes a".to_vec();
+        let asset_b = b"tiny png bytes b".to_vec();
+        let asset_a_hash = sha1_hex(&asset_a);
+        let asset_b_hash = sha1_hex(&asset_b);
+        let asset_index_body = format!(
+            r#"{{"objects": {{
+                "icons/icon_16x16.png": {{"hash": "{asset_a_hash}", "size": {}}},
+                "minecraft/sounds/click.ogg": {{"hash": "{asset_b_hash}", "size": {}}}
+            }}}}"#,
+            asset_a.len(),
+            asset_b.len(),
+        )
+        .into_bytes();
+
+        let mut bodies: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        bodies.insert("/mojang/client.jar".to_owned(), client.clone());
+        bodies.insert(
+            "/mojang/logging/client-1.21.2.xml".to_owned(),
+            logging.clone(),
+        );
+        bodies.insert(
+            "/mojang/libraries/com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar".to_owned(),
+            mojang_library.clone(),
+        );
+        bodies.insert(
+            "/mojang/libraries/org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-natives-windows.jar".to_owned(),
+            native_archive.clone(),
+        );
+        bodies.insert(
+            "/mojang/asset-index/32.json".to_owned(),
+            asset_index_body.clone(),
+        );
+        bodies.insert(
+            format!("/assets/{}/{}", &asset_a_hash[..2], asset_a_hash),
+            asset_a.clone(),
+        );
+        bodies.insert(
+            format!("/assets/{}/{}", &asset_b_hash[..2], asset_b_hash),
+            asset_b.clone(),
+        );
+        bodies.insert(format!("/forge-maven/{tool_path}"), tool_bytes.clone());
+        bodies.insert(
+            "/forge-maven/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar"
+                .to_owned(),
+            universal.clone(),
+        );
+        bodies.insert(
+            "/forge-maven/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar".to_owned(),
+            bootstrap.clone(),
+        );
+
+        let broken = Arc::new(Mutex::new(HashSet::new()));
+        // The installer documents embed the server base, and the installer
+        // bytes embed the documents: serve from a shared mutable body map
+        // so the installer can be published once the base is known.
+        let shared_bodies = Arc::new(Mutex::new(bodies.clone()));
+        let bodies_for_handler = Arc::clone(&shared_bodies);
+        let broken_for_handler = Arc::clone(&broken);
+        let server = TestServer::spawn(Arc::new(move |request| {
+            if broken_for_handler.lock().unwrap().contains(&request.path) {
+                return TestResponse::status(404);
+            }
+            match bodies_for_handler.lock().unwrap().get(&request.path) {
+                Some(body) => TestResponse::ok(body),
+                None => TestResponse::status(404),
+            }
+        }));
+        let base = server.base_url().to_owned();
+
+        // The version document (Mojang half) for Minecraft 1.21.11.
+        let version_document_json = format!(
+            r#"{{
+                "id": "1.21.11",
+                "type": "release",
+                "mainClass": "net.minecraft.client.main.Main",
+                "javaVersion": {{ "component": "java-runtime-delta", "majorVersion": 21 }},
+                "assetIndex": {{
+                    "id": "32",
+                    "sha1": "{}",
+                    "size": {},
+                    "totalSize": 999999,
+                    "url": "{base}/mojang/asset-index/32.json"
+                }},
+                "downloads": {{
+                    "client": {{
+                        "sha1": "{}",
+                        "size": {},
+                        "url": "{base}/mojang/client.jar"
+                    }}
+                }},
+                "logging": {{
+                    "client": {{
+                        "argument": "-Dlog4j.configurationFile=${{path}}",
+                        "file": {{
+                            "id": "client-1.21.2.xml",
+                            "sha1": "{}",
+                            "size": {},
+                            "url": "{base}/mojang/logging/client-1.21.2.xml"
+                        }},
+                        "type": "log4j2-xml"
+                    }}
+                }},
+                "libraries": [
+                    {{
+                        "downloads": {{ "artifact": {{
+                            "path": "com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar",
+                            "sha1": "{}",
+                            "size": {},
+                            "url": "{base}/mojang/libraries/com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar"
+                        }} }},
+                        "name": "com.mojang:brigadier:1.0.18"
+                    }},
+                    {{
+                        "downloads": {{ "artifact": {{
+                            "path": "org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-natives-windows.jar",
+                            "sha1": "{}",
+                            "size": {},
+                            "url": "{base}/mojang/libraries/org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-natives-windows.jar"
+                        }} }},
+                        "name": "org.lwjgl:lwjgl:3.4.1:natives-windows"
+                    }}
+                ],
+                "arguments": {{
+                    "game": ["--username", "${{auth_player_name}}"],
+                    "jvm": ["-Djava.library.path=${{natives_directory}}"]
+                }}
+            }}"#,
+            sha1_hex(&asset_index_body),
+            asset_index_body.len(),
+            sha1_hex(&client),
+            client.len(),
+            sha1_hex(&logging),
+            logging.len(),
+            sha1_hex(&mojang_library),
+            mojang_library.len(),
+            sha1_hex(&native_archive),
+            native_archive.len(),
+        );
+        let document = VersionDocument::from_json(&version_document_json).unwrap();
+        let minecraft =
+            plan_version_document(&document, PlatformProfile::current().unwrap()).unwrap();
+
+        // The install profile (Forge half), faithful to the real document:
+        // side-mapped data, brace-wrapped output keys, URL-less generated
+        // client, and a three-step client chain whose inputs chain from
+        // the previous step's outputs.
+        let tool_coordinate = "net.minecraftforge:installertools:1.4.3";
+        let profile = format!(
+            r#"{{
+              "spec": 1, "profile": "forge", "version": "1.21.11-forge-61.2.0",
+              "minecraft": "1.21.11", "json": "/version.json",
+              "data": {{
+                "MOJMAPS": {{"client": "[net.minecraft:client:1.21.11:mappings@tsrg]", "server": "[net.minecraft:server:1.21.11:mappings@tsrg]"}},
+                "MOJMAPS_SHA": {{"client": "'{chain_sha1}'", "server": "'{chain_sha1}'"}},
+                "MC_OFF": {{"client": "[net.minecraft:client:1.21.11:official]", "server": "[net.minecraft:server:1.21.11:official]"}},
+                "MC_OFF_SHA": {{"client": "'{chain_sha1}'", "server": "'{chain_sha1}'"}},
+                "BINPATCH": {{"client": "/data/client.lzma", "server": "/data/server.lzma"}},
+                "PATCHED": {{"client": "[net.minecraftforge:forge:1.21.11-61.2.0:client]", "server": "[net.minecraftforge:forge:1.21.11-61.2.0:server]"}},
+                "PATCHED_SHA": {{"client": "'{chain_sha1}'", "server": "'{chain_sha1}'"}}
+              }},
+              "processors": [
+                {{"jar": "{tool_coordinate}", "classpath": ["{tool_coordinate}"], "args": ["--mode", "{chain_mode}", "--output", "{{MOJMAPS}}"], "outputs": {{"{{MOJMAPS}}": "{{MOJMAPS_SHA}}"}}}},
+                {{"sides": ["client"], "jar": "{tool_coordinate}", "classpath": ["{tool_coordinate}"], "args": ["--mode", "{chain_mode}", "--input", "{{MOJMAPS}}", "--output", "{{MC_OFF}}"], "outputs": {{"{{MC_OFF}}": "{{MC_OFF_SHA}}"}}}},
+                {{"sides": ["server"], "jar": "{tool_coordinate}", "classpath": [], "args": ["--mode", "write"], "outputs": {{}}}},
+                {{"jar": "{tool_coordinate}", "classpath": ["{tool_coordinate}"], "args": ["--mode", "{chain_mode}", "--input", "{{MC_OFF}}", "--output", "{{PATCHED}}", "--extra", "{{BINPATCH}}"], "outputs": {{"{{PATCHED}}": "{{PATCHED_SHA}}"}}}}
+              ],
+              "libraries": [
+                {{"name": "{tool_coordinate}", "downloads": {{"artifact": {{"path": "{tool_path}", "url": "{base}/forge-maven/{tool_path}", "sha1": "{tool_sha1}", "size": {tool_len}}}}}}}
+              ]
+            }}"#,
+            tool_len = tool_bytes.len(),
+        );
+        // The version profile (launch metadata) with the generated client.
+        let version = format!(
+            r#"{{
+              "id": "1.21.11-forge-61.2.0", "inheritsFrom": "1.21.11",
+              "mainClass": "net.minecraftforge.bootstrap.ForgeBootstrap",
+              "logging": {{}},
+              "arguments": {{"jvm": ["-Djava.net.preferIPv6Addresses=system"], "game": ["--launchTarget", "forge_client"]}},
+              "libraries": [
+                {{"name": "net.minecraftforge:forge:1.21.11-61.2.0:universal", "downloads": {{"artifact": {{"path": "net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar", "url": "{base}/forge-maven/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar", "sha1": "{}", "size": {}}}}}}},
+                {{"name": "net.minecraftforge:forge:1.21.11-61.2.0:client", "downloads": {{"artifact": {{"path": "net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-client.jar", "url": "", "sha1": "{chain_sha1}", "size": {}}}}}}},
+                {{"name": "cpw.mods:bootstraplauncher:2.0.2", "downloads": {{"artifact": {{"path": "cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar", "url": "{base}/forge-maven/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar", "sha1": "{}", "size": {}}}}}}}
+              ]
+            }}"#,
+            sha1_hex(&universal),
+            universal.len(),
+            chain_output.len(),
+            sha1_hex(&bootstrap),
+            bootstrap.len(),
+        );
+
+        // The synthetic installer jar embeds both documents plus the
+        // binpatch entry, and is itself served with a sidecar digest.
+        let installer = {
+            use std::io::Write as _;
+            let mut cursor = std::io::Cursor::new(Vec::new());
+            {
+                let mut writer = zip::ZipWriter::new(&mut cursor);
+                for (name, bytes) in [
+                    ("install_profile.json", profile.into_bytes()),
+                    ("version.json", version.into_bytes()),
+                    ("data/client.lzma", b"synthetic binpatch bundle".to_vec()),
+                ] {
+                    writer
+                        .start_file(name, zip::write::SimpleFileOptions::default())
+                        .unwrap();
+                    writer.write_all(&bytes).unwrap();
+                }
+                writer.finish().unwrap();
+            }
+            cursor.into_inner()
+        };
+        let installer_url_path = "/forge-maven/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-installer.jar";
+        shared_bodies
+            .lock()
+            .unwrap()
+            .insert(installer_url_path.to_owned(), installer.clone());
+        shared_bodies.lock().unwrap().insert(
+            format!("{installer_url_path}.sha1"),
+            sha1_hex(&installer).into_bytes(),
+        );
+
+        let (profile, version) = {
+            let document_bytes = &installer;
+            let _ = document_bytes;
+            let mut cursor = std::io::Cursor::new(&installer);
+            let mut archive = zip::ZipArchive::new(&mut cursor).unwrap();
+            let mut read_entry = |name: &str| -> String {
+                use std::io::Read as _;
+                let mut entry = archive.by_name(name).unwrap();
+                let mut text = String::new();
+                entry.read_to_string(&mut text).unwrap();
+                text
+            };
+            (
+                read_entry("install_profile.json"),
+                read_entry("version.json"),
+            )
+        };
+        let forge = crate::forge::plan::ForgePlan::from_documents(
+            &crate::forge::metadata::InstallProfileDocument::from_json(&profile).unwrap(),
+            &crate::forge::metadata::VersionProfileDocument::from_json(&version).unwrap(),
+            &crate::minecraft::metadata::MinecraftVersionId::new("1.21.11").unwrap(),
+            &crate::forge::metadata::ForgeVersionId::new("1.21.11-61.2.0").unwrap(),
+            &crate::forge::metadata::ForgeMavenEndpoints::loopback_for_testing(
+                &format!("{base}/forge-maven/"),
+                &format!("{base}/forge-promotions.json"),
+            )
+            .unwrap(),
+            crate::integrity::Sha1Digest::parse(&sha1_hex(&installer)).unwrap(),
+        )
+        .unwrap();
+        let plan = crate::forge::plan::compose_forge_game_plan(minecraft, forge).unwrap();
+        let bodies = shared_bodies.lock().unwrap().clone();
+        let fixture = Fixture {
+            server,
+            bodies,
+            broken,
+        };
+        (fixture, plan)
+    }
+
+    #[tokio::test]
+    async fn a_forge_install_runs_the_client_chain_and_verifies_published_outputs() {
+        let Some((_tool, java)) = crate::neoforge::processors::test_tools::tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let (fixture, plan) = synthetic_forge_game();
+        let forge = plan.forge_loader().unwrap();
+        // Server-only step dropped; the client chain is three steps whose
+        // inputs chain from earlier outputs.
+        assert_eq!(forge.processors().len(), 3);
+        let context = test_context(fixture.server.base_url()).with_processor_java(java);
+
+        let root = std::env::temp_dir()
+            .join("aurora-forge-install-tests")
+            .join(std::process::id().to_string())
+            .join("chain");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let managed = crate::paths::ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let instance = InstanceId::new("66666666-6666-4666-8666-666666666666").unwrap();
+        let installed = install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_| {},
+            InstallFaults::default(),
+        )
+        .await
+        .unwrap();
+
+        // The patched client is recorded as upstream-verified: its
+        // published SHA-1 was known before the chain ran and the
+        // generated bytes verified against it.
+        let patched_relative =
+            "net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-client.jar";
+        let file = installed
+            .manifest()
+            .files()
+            .iter()
+            .find(|file| file.path() == format!("libraries/{patched_relative}"))
+            .expect("the generated patched client is recorded");
+        assert!(
+            matches!(
+                file.trust(),
+                crate::integrity::ArtifactTrust::ExpectedDigestVerified { .. }
+            ),
+            "the patched client keeps its published upstream expectation: {:?}",
+            file.trust()
+        );
+
+        // Forge publishes SHA-1s for every chain output, so the chained
+        // intermediates (mappings, official rename) are upstream-digest-
+        // verified too — never mere local observations.
+        for relative in [
+            "net/minecraft/client/1.21.11/client-1.21.11-mappings.tsrg",
+            "net/minecraft/client/1.21.11/client-1.21.11-official.jar",
+        ] {
+            let file = installed
+                .manifest()
+                .files()
+                .iter()
+                .find(|file| file.path() == format!("libraries/{relative}"))
+                .unwrap_or_else(|| panic!("chained intermediate {relative} is recorded"));
+            assert!(
+                matches!(
+                    file.trust(),
+                    crate::integrity::ArtifactTrust::ExpectedDigestVerified { .. }
+                ),
+                "the chained intermediate keeps its published expectation: {:?}",
+                file.trust()
+            );
+        }
+
+        // The whole installation validates read-only.
+        match validate_installed_game(&managed, &instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the installation must validate"),
+        }
+        assert!(
+            !managed
+                .instance_paths(&instance)
+                .root()
+                .join(STAGING_DIR_NAME)
+                .exists()
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn a_forge_chain_failure_never_commits_and_recovers_by_retry() {
+        let Some((_tool, java)) = crate::neoforge::processors::test_tools::tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let (fixture, plan) = synthetic_forge_game_with_chain_mode("fail");
+        let context = test_context(fixture.server.base_url()).with_processor_java(java.clone());
+
+        let root = std::env::temp_dir()
+            .join("aurora-forge-install-tests")
+            .join(std::process::id().to_string())
+            .join("chain-failure");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let managed = crate::paths::ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let instance = InstanceId::new("77777777-7777-4777-8777-777777777777").unwrap();
+
+        // A chain whose second step fails (nonzero exit) never commits;
+        // the third step never runs against partial output.
+        let _ = fixture;
+        let error = install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_| {},
+            InstallFaults::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(error, InstallError::Processing { .. }), "{error}");
+        assert!(
+            !managed
+                .instance_paths(&instance)
+                .game()
+                .join(INSTALLED_GAME_FILE_NAME)
+                .exists(),
+            "no complete-looking installation may exist"
+        );
+
+        // A retry against an unbroken fixture commits.
+        let (fixture, plan) = synthetic_forge_game();
+        let context = test_context(fixture.server.base_url()).with_processor_java(java.clone());
+        install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_| {},
+            InstallFaults::default(),
+        )
+        .await
+        .expect("the honest retry completes");
+        match validate_installed_game(&managed, &instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the retried installation must validate"),
         }
         let _ = std::fs::remove_dir_all(&root);
     }

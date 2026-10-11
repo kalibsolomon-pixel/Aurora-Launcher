@@ -238,6 +238,9 @@ impl InstalledGameManifest {
             (2, Some(crate::instances::platform::PlatformPin::NeoForge { version }), None) => {
                 !version.trim().is_empty()
             }
+            (2, Some(crate::instances::platform::PlatformPin::Forge { version }), None) => {
+                !version.trim().is_empty()
+            }
             _ => false,
         };
         if manifest.minecraft_version.trim().is_empty()

@@ -17,13 +17,21 @@
   let compatibility = $state<AuroraCompatibility | null>(null);
   let compatibilityError = $state("");
   const platformLabel = (kind: string): string =>
-    kind === "vanilla" ? "Vanilla" : kind === "neoForge" ? "NeoForge" : "Fabric";
+    kind === "vanilla"
+      ? "Vanilla"
+      : kind === "neoForge"
+        ? "NeoForge"
+        : kind === "forge"
+          ? "Forge"
+          : "Fabric";
   const loader = $derived<InstanceLoader>(
     launcher.createPlatform === "vanilla"
       ? {kind: "vanilla"}
       : launcher.createPlatform === "neoForge"
         ? {kind: "neoForge", policy: launcher.createLoaderPolicy}
-        : {kind: "fabric", policy: launcher.createLoaderPolicy},
+        : launcher.createPlatform === "forge"
+          ? {kind: "forge", policy: launcher.createLoaderPolicy}
+          : {kind: "fabric", policy: launcher.createLoaderPolicy},
   );
   $effect(() => {
     const version = launcher.createMinecraftVersion;
@@ -183,7 +191,7 @@
         </label>
         {#if launcher.createPlatform !== "vanilla"}
         <label class="field">
-          <span class="field-label">{launcher.createPlatform === "neoForge" ? "NeoForge version" : "Fabric Loader version"}</span>
+          <span class="field-label">{platformLabel(launcher.createPlatform)} version</span>
           <select
             value={launcher.createLoaderPolicy.type === "automatic" ? "" : "pinned"}
             onchange={(event) => {
@@ -203,7 +211,7 @@
             }}
           >
               <option value="">Newest stable compatible version</option>
-              <option value="pinned">{launcher.createPlatform === "neoForge" ? "NeoForge" : "Fabric"} — choose version</option>
+              <option value="pinned">{platformLabel(launcher.createPlatform)} — choose version</option>
           </select>
           {#if launcher.createLoaderPolicy.type === "pinned"}
             <select

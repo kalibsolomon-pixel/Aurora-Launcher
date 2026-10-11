@@ -1480,7 +1480,7 @@ mod tests {
         for platform in [
             platform::PlatformPin::Vanilla {},
             platform::PlatformPin::Forge {
-                version: "1".into(),
+                version: "1.21.11-61.2.0".into(),
             },
             platform::PlatformPin::NeoForge {
                 version: "1".into(),
@@ -1497,10 +1497,14 @@ mod tests {
                 platform::PlatformPin::NeoForge { .. } => settings::LoaderKind::NeoForge,
                 _ => settings::LoaderKind::Quilt,
             };
+            let pinned_version = match platform {
+                platform::PlatformPin::Forge { .. } => "1.21.11-61.2.0",
+                _ => "1",
+            };
             configuration.set_loader(settings::LoaderConfiguration::from_parts(
                 kind,
                 settings::LoaderPolicy::Pinned {
-                    version: "1".into(),
+                    version: pinned_version.into(),
                 },
             ));
             let installed = platform::InstalledConfiguration {
