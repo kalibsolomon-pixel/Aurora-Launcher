@@ -109,3 +109,54 @@ Pending implementation, deterministic fault matrix, independent-process tests,
 native forced-termination acceptance, regression/builds and performance evidence.
 No broad schema migration, additional loader/provider, UI redesign, production
 installation, owner-data fault injection, push or publication is authorized.
+
+## Implemented C–F checkpoint
+
+The journal writer, replacement, recovery and readiness gate ship together: a
+writer-only intermediate version would make a promoted manifest falsely Ready,
+so those dependent invariants form one reviewable commit. Durable schema 1 is
+separate from installed-game schema 2. Legacy game schema 1 remains readable.
+F1A receipts remain schema 1; their new Replacing stage does not falsely claim
+that the protected backup is the legacy staging-relative `replaced-game`.
+Legacy receipts are bounded and classified safely; they never supply paths.
+
+Game operation states: Prepared -> Replacing -> Promoting -> Promoted -> Committed.
+Recovery states: Restoring -> Restored, or Abandoned when preparation stopped
+before replacement. Each operation has a fresh opaque UUID. The active journal
+is outside staging and terminal copies live in `.install-history/<UUID>/journal.json`.
+The previous game is retained in `previous-game`; a superseded uncommitted
+candidate is retained in `rejected-game`. No backup deletion/GC is implemented.
+This deliberately spends disk space to avoid deleting the only recoverable tree.
+
+Parsing is strict and bounded (journal16KiB, installed manifest16MiB, legacy
+receipt4MiB); unknown fields/schema and mismatched IDs fail. Manifest SHA-256
+and sorted complete-tree SHA-256 observations bind identity and content. These
+are recovery consistency evidence, not invented upstream artifact digests.
+Production artifacts still use the existing honest SHA-1/SHA-256/observed trust.
+
+Recovery precedes game mutation and startup Ready presentation. Same-target
+kernel ownership covers replay. Valid old evidence wins until Committed; after
+Committed the new manifest identity remains authority and ordinary deep file
+validation determines health. Unknown/missing/conflicting evidence never causes
+a tree wipe. Replaying Restoring tolerates a crash before quarantine, after
+quarantine and after the old directory is restored. The final validation/Ready
+write and final validation/spawn hold the game lock. Validation itself remains
+read-only and download-free, acquiring only an existing rendezvous file.
+
+Ordinary lifecycle installs hold `.instance-operation.lock` across their full
+operation. Restoring a game does not invent a rollback of desired configuration,
+optional Aurora content or a registry pin already persisted as Installing: those
+facts must still agree before Ready. Fresh pack component rollback retains its
+Installing record and game/journal instead of erasing recovery authority.
+
+Cancellation is checked before acquisition and between settled bounded batches,
+copies, native archives and validation batches. An active download settles under
+its existing transport bounds; cancellation does not promise immediate I/O abort.
+F1A supervises processor trees as before. Synchronous replacement/replay has no
+cancellation await between transitions. Forced termination relies on persisted
+state and kernel lock release, not Rust destructors.
+
+Automated checkpoints: 78 selected installation/runtime/receipt/supervision and
+fault tests passed,5 ignored;81 lifecycle/registry tests passed before the extra
+snapshot-merge regression. A full library checkpoint passed936/0/30 ignored.
+Final full-suite/native/performance results are recorded below when completed.

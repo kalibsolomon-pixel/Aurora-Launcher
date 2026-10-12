@@ -414,8 +414,10 @@ pub fn load_installed_state(
     game_dir: &Path,
 ) -> Result<Option<InstalledGameManifest>, InstalledStateError> {
     let path = game_dir.join(INSTALLED_GAME_FILE_NAME);
-    let text = match std::fs::read_to_string(&path) {
-        Ok(text) => text,
+    super::coordination::require_regular_or_missing(&path).map_err(InstalledStateError::Io)?;
+    use std::io::Read;
+    let file = match std::fs::File::open(&path) {
+        Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {
             return Err(InstalledStateError::Io(std::io::Error::other(
@@ -424,6 +426,15 @@ pub fn load_installed_state(
         }
         Err(error) => return Err(InstalledStateError::Io(error)),
     };
+    let mut text = String::new();
+    file.take(16 * 1024 * 1024 + 1)
+        .read_to_string(&mut text)
+        .map_err(InstalledStateError::Io)?;
+    if text.len() > 16 * 1024 * 1024 {
+        return Err(InstalledStateError::Malformed {
+            reason: "the installed-state manifest exceeds its 16 MiB parsing bound".into(),
+        });
+    }
 
     InstalledGameManifest::from_json(&text).map(Some)
 }

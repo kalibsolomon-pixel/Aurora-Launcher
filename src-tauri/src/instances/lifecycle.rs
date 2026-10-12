@@ -44,7 +44,6 @@ use crate::forge::metadata::ForgeMavenEndpoints;
 use crate::install::{
     InstallContext, InstallError, InstallProgress, ValidationOutcome as GameValidationOutcome,
     ValidationStatus as GameValidationStatus, install_game as execute_game_install,
-    validate_installed_game as validate_game_install,
 };
 use crate::instances::settings::{
     InstanceConfiguration, InvalidInstanceConfiguration, LoaderCandidate, LoaderPolicy,
@@ -366,6 +365,8 @@ pub async fn create_instance(
         request.configuration,
     )?;
 
+    let _operation = lock_instance_operation(managed, record.id())?;
+
     {
         let _guard = registry_lock();
         let mut registry = InstanceRegistry::load(registry_path)?;
@@ -427,6 +428,7 @@ pub async fn begin_pack_instance(
         request.configuration,
     )?;
     record.set_pack(pack_identity)?;
+    let _operation = lock_instance_operation(managed, record.id())?;
     {
         let _guard = registry_lock();
         let mut registry = InstanceRegistry::load(registry_path)?;
@@ -454,6 +456,8 @@ pub fn complete_pack_instance(
     config_path: &Path,
     instance: &InstanceId,
 ) -> Result<InstanceRecord, InstanceError> {
+    let _operation = lock_instance_operation(managed, instance)?;
+    let _game_guard = crate::install::lock_game_target(managed, instance)?;
     let pack = crate::pack_state::InstalledPack::load(managed, instance)
         .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?
         .ok_or_else(|| InstanceError::ReleaseInvalid("pack installed state is missing".into()))?;
@@ -473,7 +477,7 @@ pub fn complete_pack_instance(
                 reason: "pack creation is no longer in the installing state".into(),
             });
         }
-        let validation = validate_instance(managed, &registry, instance)?;
+        let validation = validate_instance_under_game_lock(managed, &registry, instance)?;
         if !validation.problems.is_empty() {
             return Err(InstanceError::ValidationFailed {
                 instance_id: instance.to_string(),
@@ -497,32 +501,6 @@ pub fn complete_pack_instance(
     Ok(record)
 }
 
-/// Remove only the Installing registration of a newly created pack after its
-/// exact transaction-owned files have been cleaned up. Never removes files.
-pub(crate) fn abandon_pack_instance(
-    registry_path: &Path,
-    instance: &InstanceId,
-) -> Result<(), InstanceError> {
-    let _guard = registry_lock();
-    let mut registry = InstanceRegistry::load(registry_path)?;
-    let record = registry
-        .find(instance)
-        .ok_or_else(|| InstanceError::NotFound {
-            instance_id: instance.to_string(),
-        })?;
-    if record.state() != InstanceState::Installing || record.pack().is_none() {
-        return Err(InstanceError::NotReady {
-            instance_id: instance.to_string(),
-            reason: "only a pending pack registration can be abandoned".into(),
-        });
-    }
-    registry
-        .instances_mut()
-        .retain(|record| record.id() != instance);
-    registry.save(registry_path)?;
-    Ok(())
-}
-
 /// Retries the installation of an instance whose creation did not finish.
 ///
 /// The record must be in the `installing` state. Re-running reuses the
@@ -538,6 +516,8 @@ pub async fn retry_instance_install(
     progress: &mut (dyn FnMut(InstanceProgress) + Send),
     faults: InstanceFaults,
 ) -> Result<InstanceRecord, InstanceError> {
+    let _operation = lock_instance_operation(managed, instance_id)?;
+    crate::install::recover_installation(managed, instance_id)?;
     let record = {
         let _guard = registry_lock();
         let registry = InstanceRegistry::load(registry_path)?;
@@ -995,6 +975,8 @@ pub async fn install_instance_configuration(
     progress: &mut (dyn FnMut(InstanceProgress) + Send),
     faults: InstanceFaults,
 ) -> Result<InstanceRecord, InstanceError> {
+    let _operation = lock_instance_operation(managed, instance_id)?;
+    crate::install::recover_installation(managed, instance_id)?;
     let configuration = {
         let _guard = registry_lock();
         let registry = InstanceRegistry::load(registry_path)?;
@@ -1171,8 +1153,9 @@ async fn install_instance_components(
     }
 
     progress(report(InstancePhase::Validating, None));
+    let _game_guard = crate::install::lock_game_target(managed, record.id())?;
     let registry = InstanceRegistry::load(registry_path)?;
-    let validation = validate_instance(managed, &registry, record.id())?;
+    let validation = validate_instance_under_game_lock(managed, &registry, record.id())?;
     // The record is deliberately still `installing` at this point, so the
     // gate is component completeness: a non-empty problem list is the only
     // thing that can fail creation here. (An installing record with a fully
@@ -1200,6 +1183,11 @@ async fn install_instance_components(
         let _guard = registry_lock();
         let mut registry = InstanceRegistry::load(registry_path)?;
         if let Some(stored) = registry.find_mut(record.id()) {
+            if stored != record {
+                return Err(InstanceError::ReleaseInvalid(
+                    "the instance changed while installing; refresh and retry before Ready".into(),
+                ));
+            }
             stored.set_state(InstanceState::Ready);
         }
         registry.save(registry_path)?;
@@ -1550,7 +1538,7 @@ fn select_instance_if_unselected(
 }
 
 fn load_config(config_path: &Path) -> Result<LauncherConfig, InstanceError> {
-    Ok(crate::config::load(config_path)?.unwrap_or_default())
+    Ok(crate::config::load_or_initialize(config_path)?.into_config())
 }
 
 /// Allocates a fresh, registry-unique instance identifier whose instance
@@ -1577,6 +1565,15 @@ fn allocate_instance_id(
 /// Aurora artifact's bytes, and cross-component version consistency. No
 /// downloads, no repairs, no mutation.
 pub fn validate_instance(
+    managed: &ManagedPaths,
+    registry: &InstanceRegistry,
+    instance_id: &InstanceId,
+) -> Result<InstanceValidation, InstanceError> {
+    let _game_guard = crate::install::read_game_target(managed, instance_id)?;
+    validate_instance_under_game_lock(managed, registry, instance_id)
+}
+
+pub(crate) fn validate_instance_under_game_lock(
     managed: &ManagedPaths,
     registry: &InstanceRegistry,
     instance_id: &InstanceId,
@@ -1620,7 +1617,18 @@ pub fn validate_instance(
     }
     // Game installation.
     let game_root = managed.instance_paths(record.id()).game().to_path_buf();
-    let game_manifest = match validate_game_install(managed, record.id())? {
+    let game_outcome =
+        match crate::install::validate_installed_game_under_lock(managed, record.id()) {
+            Err(InstallError::RecoveryRequired { reason }) => {
+                problems.push(InstanceProblem {
+                    component: "recovery",
+                    reason,
+                });
+                GameValidationOutcome::NotInstalled
+            }
+            other => other?,
+        };
+    let game_manifest = match game_outcome {
         GameValidationOutcome::Installed(validation) => match validation.status {
             GameValidationStatus::Valid => Some(
                 crate::install::state::load_installed_state(&game_root)
@@ -1911,6 +1919,23 @@ pub fn validate_instance(
 /// The process-wide registry mutation lock: registry read-modify-write
 /// windows are serialized so concurrent operations cannot lose updates.
 /// Long installations run outside it.
+pub(crate) fn lock_instance_operation(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<crate::install::coordination::TargetLock, InstallError> {
+    crate::install::coordination::TargetLock::acquire(
+        managed.data_root(),
+        managed.instance_paths(instance).root(),
+        ".instance-operation.lock",
+    )
+    .map_err(|error| match error {
+        crate::install::coordination::LockError::Busy => InstallError::AlreadyInProgress {
+            instance_id: instance.to_string(),
+        },
+        crate::install::coordination::LockError::Io(error) => InstallError::Storage(error),
+    })
+}
+
 pub(crate) fn registry_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     let lock = LOCK.get_or_init(|| Mutex::new(()));
@@ -3142,14 +3167,17 @@ pub(crate) mod tests {
         .await
         .unwrap_err();
         assert_eq!(error.code, "pack_component_install_failed");
-        // The transaction is retired wholesale: no registry record, no
-        // instance tree, nothing half-ready, no selection, and unrelated
-        // owner state untouched.
-        assert_eq!(world.load_registry().instances().len(), 0);
-        let leftovers = std::fs::read_dir(world.managed.instances_dir())
-            .map(|list| list.count())
-            .unwrap_or(0);
-        assert_eq!(leftovers, 0);
+        // F3R preserves the game and recovery evidence under an explicit
+        // unavailable pack record. A corrected request gets a new identity.
+        let retained = world.load_registry();
+        assert_eq!(retained.instances().len(), 1);
+        let failed = &retained.instances()[0];
+        assert_eq!(failed.state(), InstanceState::Installing);
+        assert_eq!(
+            world.validate(failed.id()).status,
+            InstanceStatus::Installing
+        );
+        assert!(world.managed.instance_paths(failed.id()).game().is_dir());
         assert!(world.load_config().selected_instance_id().is_none());
         assert_eq!(std::fs::read(&unrelated).unwrap(), b"owner state");
         let after_rollback = cache_files(&world.managed.cache_dir());

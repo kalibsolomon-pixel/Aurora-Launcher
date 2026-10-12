@@ -563,6 +563,26 @@ pub fn get_launcher_state(app: AppHandle) -> Result<LauncherState, CommandError>
     let mut state = LauncherState::from_parts(loaded.into_config(), registry)?;
     for summary in &mut state.instances {
         let id = crate::instances::InstanceId::new(summary.id.clone())?;
+        let recovery = (|| -> Result<(), crate::install::InstallError> {
+            let paths = managed_paths.instance_paths(&id);
+            if std::fs::symlink_metadata(paths.root()).is_ok() {
+                crate::install::coordination::checked_directory(
+                    managed_paths.data_root(),
+                    paths.root(),
+                )
+                .map_err(crate::install::InstallError::Storage)?;
+            }
+            if crate::install::journal::needs_recovery(paths.root(), &id)? {
+                crate::install::recover_installation(&managed_paths, &id)?;
+            }
+            crate::install::journal::readiness_gate(paths.root(), &id)
+        })();
+        if let Err(error) = recovery {
+            // Stored Ready is only a presentation hint. Keep this target
+            // unavailable without suppressing unrelated instances at startup.
+            summary.state = "installing".into();
+            eprintln!("[aurora-install] target={id} recovery-unavailable: {error}");
+        }
         summary.aurora_content_state = crate::instance_mods::bootstrap_status(&managed_paths, &id)?
             .or_else(|| summary.aurora.as_ref().map(|_| "missing".into()));
     }
@@ -1500,6 +1520,8 @@ impl From<InstallError> for CommandError {
             other => {
                 let code = match &other {
                     InstallError::AlreadyInProgress { .. } => "installation_already_in_progress",
+                    InstallError::RecoveryRequired { .. } => "installation_recovery_required",
+                    InstallError::Cancelled => "installation_cancelled",
                     InstallError::TargetConflict { .. } => "installation_target_conflict",
                     InstallError::State(_) => "installation_state_invalid",
                     InstallError::AssetIndexInvalid { .. } => "minecraft_asset_index_invalid",

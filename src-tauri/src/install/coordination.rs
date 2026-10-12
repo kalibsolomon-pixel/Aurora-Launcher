@@ -26,11 +26,36 @@ pub(crate) struct TargetLock {
 
 impl TargetLock {
     pub(crate) fn acquire(root: &Path, parent: &Path, name: &str) -> Result<Self, LockError> {
-        let parent = ensure_directory(root, parent)?;
+        Self::open(root, parent, name, true)
+    }
+
+    /// Read-only callers never materialize a directory or rendezvous file.
+    pub(crate) fn existing(
+        root: &Path,
+        parent: &Path,
+        name: &str,
+    ) -> Result<Option<Self>, LockError> {
+        match Self::open(root, parent, name, false) {
+            Ok(guard) => Ok(Some(guard)),
+            Err(LockError::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
+    fn open(root: &Path, parent: &Path, name: &str, create: bool) -> Result<Self, LockError> {
+        let parent = if create {
+            ensure_directory(root, parent)?
+        } else {
+            checked_directory(root, parent)?
+        };
         let path = parent.join(name);
         require_regular_or_missing(&path)?;
         let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true).truncate(false);
+        options
+            .read(true)
+            .write(true)
+            .create(create)
+            .truncate(false);
         // Keeping the file open must also prevent deletion/replacement of the
         // rendezvous object on Windows. Do not use FILE_SHARE_DELETE.
         #[cfg(windows)]
@@ -64,10 +89,6 @@ impl TargetLock {
             Err(std::fs::TryLockError::WouldBlock) => Err(LockError::Busy),
             Err(std::fs::TryLockError::Error(error)) => Err(LockError::Io(error)),
         }
-    }
-
-    pub(crate) fn parent(&self) -> &Path {
-        &self.parent
     }
 
     pub(crate) fn recheck(&self, root: &Path, parent: &Path) -> io::Result<()> {
@@ -251,6 +272,44 @@ mod tests {
         assert!(TargetLock::acquire(&root, &root.join("target/../escape"), ".lock").is_err());
         drop(guard);
         drop(TargetLock::acquire(&root, &root.join("target"), ".lock").unwrap());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_case_and_junction_aliases_contend_but_redirected_descendants_are_rejected() {
+        use std::os::windows::process::CommandExt;
+        let root =
+            std::env::temp_dir().join(format!("aurora-f3r-junction-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("physical")).unwrap();
+        std::fs::create_dir(root.join("external")).unwrap();
+        std::fs::write(root.join("external/sentinel"), b"owner").unwrap();
+        let status = Command::new("powershell.exe").creation_flags(0x08000000)
+            .env("F3R_JUNCTION_ROOT", &root)
+            .args(["-NoProfile", "-NonInteractive", "-Command", "New-Item -ItemType Junction -Path ($env:F3R_JUNCTION_ROOT + '\\alias') -Target ($env:F3R_JUNCTION_ROOT + '\\physical') | Out-Null; New-Item -ItemType Junction -Path ($env:F3R_JUNCTION_ROOT + '\\physical\\redirected') -Target ($env:F3R_JUNCTION_ROOT + '\\external') | Out-Null"])
+            .status().unwrap();
+        assert!(status.success());
+        let physical = root.join("physical");
+        let held = TargetLock::acquire(&physical, &physical.join("target"), ".lock").unwrap();
+        for alias in [
+            root.join("alias"),
+            PathBuf::from(physical.to_string_lossy().to_lowercase()),
+        ] {
+            assert!(matches!(
+                TargetLock::acquire(&alias, &alias.join("target"), ".lock"),
+                Err(LockError::Busy)
+            ));
+        }
+        assert!(TargetLock::acquire(&physical, &physical.join("redirected"), ".lock").is_err());
+        assert_eq!(
+            std::fs::read(root.join("external/sentinel")).unwrap(),
+            b"owner"
+        );
+        drop(held);
+        // Remove only the two positively-created junction names before the
+        // unique disposable root. Neither operation traverses their targets.
+        std::fs::remove_dir(root.join("alias")).unwrap();
+        std::fs::remove_dir(physical.join("redirected")).unwrap();
         std::fs::remove_dir_all(root).unwrap();
     }
 }

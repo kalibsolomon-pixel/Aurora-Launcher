@@ -1,7 +1,9 @@
 //! Final, network-free launch validation serialized with C2 mutation commit.
 use crate::aurora::AuroraInstalledState;
 use crate::install::state::InstalledGameManifest;
-use crate::instances::lifecycle::{InstanceStatus, registry_lock, validate_instance};
+use crate::instances::lifecycle::{
+    InstanceStatus, registry_lock, validate_instance_under_game_lock,
+};
 use crate::instances::{InstanceId, InstanceRecord, InstanceRegistry};
 use crate::paths::ManagedPaths;
 
@@ -72,6 +74,12 @@ impl LaunchSnapshot {
         spawn: impl FnOnce(&InstalledGameManifest) -> Result<T, E>,
     ) -> Result<T, E> {
         let id = self.record.id();
+        let _operation = crate::instances::lifecycle::lock_instance_operation(managed, id)
+            .map_err(|_| E::from(BoundaryError::Busy))?;
+        // This guard covers the final deep checks and synchronous spawn. An
+        // independent launcher cannot replace game files between those steps.
+        let _game_guard = crate::install::lock_game_target(managed, id)
+            .map_err(|_| E::from(BoundaryError::Busy))?;
         let acquisition = crate::performance::scope(crate::performance::Event::FinalContentLock);
         crate::instance_content::with_instance_lock(id, || {
             drop(acquisition);
@@ -85,7 +93,7 @@ impl LaunchSnapshot {
                 }
                 let registry = InstanceRegistry::load(&managed.instance_registry_file())
                     .map_err(|_| BoundaryError::Invalid)?;
-                let validation = validate_instance(managed, &registry, id)
+                let validation = validate_instance_under_game_lock(managed, &registry, id)
                     .map_err(|_| BoundaryError::Invalid)?;
                 if validation.status != InstanceStatus::Ready {
                     return Err(BoundaryError::Invalid.into());

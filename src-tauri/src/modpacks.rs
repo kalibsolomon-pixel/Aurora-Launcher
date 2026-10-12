@@ -740,28 +740,9 @@ fn rollback_pack_install(
                 && validation.minecraft_version == record.configuration().minecraft_version() => {}
         _ => return rollback_failure(),
     }
-    if std::fs::remove_dir_all(paths.game()).is_err() {
-        return rollback_failure();
-    }
-    for directory in [
-        paths.mods(),
-        paths.resourcepacks(),
-        paths.shaderpacks(),
-        paths.config(),
-    ] {
-        let _ = std::fs::remove_dir(directory);
-    }
-    if std::fs::remove_dir(root).is_err() {
-        return rollback_failure();
-    }
-    if crate::instances::lifecycle::abandon_pack_instance(
-        &managed.instance_registry_file(),
-        record.id(),
-    )
-    .is_err()
-    {
-        return rollback_failure();
-    }
+    // F3R retains the proven game, journal, lock rendezvous, and explicit
+    // Installing record. Erasing the instance root would erase durable
+    // recovery authority and could unlink a live rendezvous file.
     original
 }
 

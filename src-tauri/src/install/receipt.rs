@@ -87,7 +87,19 @@ pub enum Disposition {
 /// Reads and classifies an existing receipt without mutating anything.
 pub fn classify_existing(staging_directory: &Path) -> Disposition {
     let path = staging_directory.join(RECEIPT_FILE_NAME);
-    let bytes = match std::fs::read(&path) {
+    use std::io::Read;
+    let bounded = || -> io::Result<Vec<u8>> {
+        super::coordination::require_regular_or_missing(&path)?;
+        let mut bytes = Vec::new();
+        std::fs::File::open(&path)?
+            .take(4 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > 4 * 1024 * 1024 {
+            return Err(io::Error::other("receipt exceeds its parsing bound"));
+        }
+        Ok(bytes)
+    };
+    let bytes = match bounded() {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Disposition::NoReceipt,
         Err(error) => {
@@ -227,6 +239,12 @@ impl TransactionReceipt {
     /// staging and awaits either promotion or disposal.
     pub fn record_replacement_reserved(&mut self) -> io::Result<()> {
         self.replacement_reserved = true;
+        self.record(Stage::Replacing)
+    }
+
+    /// F3R backup placement is authoritative in the separate operation
+    /// journal. Do not emit the legacy staging-relative retiredGame claim.
+    pub fn record_replacing(&mut self) -> io::Result<()> {
         self.record(Stage::Replacing)
     }
 

@@ -28,9 +28,9 @@
 //! complete tree — including the manifest that marks completion — is built
 //! under `.install-staging/` and becomes visible through one directory
 //! rename. An interrupted installation therefore always leaves the instance
-//! either without a game directory or with its previous complete one; a
-//! staging directory is never mistaken for an installed game, and the next
-//! attempt removes it (after proving it is the fixed, derived staging path).
+//! recoverable through its durable operation journal; a
+//! staging directory is never mistaken for an installed game. A durable
+//! journal protects the previous tree outside staging and controls recovery.
 //!
 //! ## User-data boundary
 //!
@@ -44,10 +44,11 @@
 //!
 //! One installation may run per instance at a time; a second attempt fails
 //! immediately with `installation_already_in_progress`. There is no global
-//! queue and no cross-process locking.
+//! queue; kernel file locks coordinate independent launcher processes.
 
 pub mod assets;
 pub(crate) mod coordination;
+pub mod journal;
 pub mod natives;
 pub mod processors;
 pub mod receipt;
@@ -219,6 +220,10 @@ pub struct InstallProgress {
 /// passes the default (no injected failures).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct InstallFaults {
+    /// Stop at one durable transition, leaving on-disk evidence for replay.
+    pub stop_at: Option<journal::TransactionPoint>,
+    /// Rust-only observer used by opt-in native process-kill acceptance.
+    pub transition_observer: Option<fn(journal::TransactionPoint)>,
     /// Fail immediately before the staged tree is promoted, after the
     /// manifest is written into staging.
     pub fail_before_commit: bool,
@@ -280,14 +285,42 @@ pub async fn install_game(
     progress: &mut (dyn FnMut(InstallProgress) + Send),
     faults: InstallFaults,
 ) -> Result<InstalledGame, InstallError> {
+    check_cancel(context)?;
     let started = Instant::now();
     let instance_paths = managed.instance_paths(instance);
     let instance_root = instance_paths.root().to_path_buf();
     let _guard = lock_game_target(managed, instance)?;
+    if std::env::var_os("AURORA_INSTALL_DIAGNOSTICS").is_some() {
+        eprintln!(
+            "[aurora-install] target={instance} lock_acquire_us={}",
+            started.elapsed().as_micros()
+        );
+    }
     let game_directory = instance_paths.game().to_path_buf();
     let staging_directory = instance_root.join(STAGING_DIR_NAME);
     let staging_game = staging_directory.join("game");
 
+    let recovery = journal::recover_locked(&instance_root, instance, InstallFaults::default())?;
+    if recovery != journal::RecoveryOutcome::None {
+        eprintln!("[aurora-install] target={instance} recovery={recovery:?}");
+        progress(InstallProgress {
+            phase: InstallPhase::Validating,
+            completed_items: 0,
+            total_items: 0,
+            current_item: Some(
+                match recovery {
+                    journal::RecoveryOutcome::PreviousRestored => {
+                        "Previous installation restored; preparing the requested retry"
+                    }
+                    journal::RecoveryOutcome::Completed => {
+                        "Previous installation operation completed; preparing the requested retry"
+                    }
+                    _ => "Interrupted installation recovered; preparing the requested retry",
+                }
+                .into(),
+            ),
+        });
+    }
     let replacing = decide_replacement(&game_directory)?;
     let minecraft = plan.minecraft();
 
@@ -313,20 +346,15 @@ pub async fn install_game(
         }
     }
 
+    let mut durable_operation = journal::Journal::begin(&instance_root, instance)?;
+    journal::checkpoint(faults, journal::TransactionPoint::Prepared)?;
     prepare_staging(&instance_root, &staging_directory, &staging_game)?;
 
     // The durable transaction receipt: written before any long work, at
     // every stage transition, and before each promotion rename. Its
     // presence after a crash distinguishes an interrupted Aurora
     // transaction from any other staging content.
-    let installation_id = format!(
-        "install-{}-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|since| since.as_millis())
-            .unwrap_or_default(),
-        std::process::id()
-    );
+    let installation_id = durable_operation.transaction_id().to_owned();
     let platform_kind = serde_json::to_value(plan.platform())
         .ok()
         .and_then(|value| {
@@ -366,6 +394,7 @@ pub async fn install_game(
     );
 
     let index_artifact = acquire_mojang(&cache, index_requirement.artifact(), context).await?;
+    check_cancel(context)?;
     let index_document = parse_verified_asset_index(&index_artifact, index_requirement)?;
     let objects = assets::plan_asset_objects(&index_document).map_err(|error| {
         InstallError::AssetInvalid {
@@ -387,6 +416,7 @@ pub async fn install_game(
         Some(format!("{} client", minecraft.minecraft_version())),
     );
     let client = acquire_mojang(&cache, minecraft.client(), context).await?;
+    check_cancel(context)?;
     let client_finished = Instant::now();
     completed += 1;
     files.push(PlannedFile {
@@ -400,6 +430,7 @@ pub async fn install_game(
 
     // Logging configuration, when the version requires one.
     if let Some(logging) = minecraft.logging() {
+        check_cancel(context)?;
         report(
             InstallPhase::Acquiring,
             completed,
@@ -452,12 +483,14 @@ pub async fn install_game(
         .collect::<Vec<_>>()
         .chunks(context.small_artifact_concurrency)
     {
+        check_cancel(context)?;
         let acquired = join_all(
             batch
                 .iter()
                 .map(|library| async { acquire_library(&cache, library, context).await }),
         )
         .await;
+        check_cancel(context)?;
         for (library, result) in batch.iter().zip(acquired) {
             let (source, trust, size, role, origin) = result?;
             completed += 1;
@@ -511,6 +544,7 @@ pub async fn install_game(
         );
 
         for library in neoforge.installer_libraries() {
+            check_cancel(context)?;
             let artifact = acquire_neoforge_library(&cache, library, context).await?;
             completed += 1;
             files.push(PlannedFile {
@@ -561,6 +595,7 @@ pub async fn install_game(
         );
 
         for library in forge.installer_libraries() {
+            check_cancel(context)?;
             let artifact = acquire_forge_library(&cache, library, context).await?;
             completed += 1;
             files.push(PlannedFile {
@@ -583,6 +618,7 @@ pub async fn install_game(
 
     // Asset objects, deduplicated by hash.
     for batch in objects.chunks(context.small_artifact_concurrency) {
+        check_cancel(context)?;
         let acquired = join_all(batch.iter().map(|object| async {
             let hex = object.sha1().as_hex();
             let source = Sha1ArtifactSource::https_or_loopback(
@@ -597,6 +633,7 @@ pub async fn install_game(
                 .map_err(InstallError::Acquisition)
         }))
         .await;
+        check_cancel(context)?;
         for (object, result) in batch.iter().zip(acquired) {
             let artifact = result?;
             completed += 1;
@@ -617,6 +654,7 @@ pub async fn install_game(
         }
     }
     let assets_finished = Instant::now();
+    check_cancel(context)?;
     transaction_receipt
         .record(receipt::Stage::Acquired)
         .map_err(InstallError::Storage)?;
@@ -624,6 +662,7 @@ pub async fn install_game(
     // ---- Materialization: verified cache objects are copied into staging.
     let total_files = files.len() as u32;
     for (index, file) in files.iter().enumerate() {
+        check_cancel(context)?;
         report(
             InstallPhase::Materializing,
             index as u32,
@@ -641,6 +680,7 @@ pub async fn install_game(
         }
     }
     let materialization_finished = Instant::now();
+    check_cancel(context)?;
 
     // ---- Native extraction from the verified native archives. Modern
     // Minecraft documents append a subdirectory to their own
@@ -662,6 +702,7 @@ pub async fn install_game(
         })
         .collect();
     for (index, library) in native_libraries.iter().enumerate() {
+        check_cancel(context)?;
         report(
             InstallPhase::ExtractingNatives,
             index as u32,
@@ -866,8 +907,13 @@ pub async fn install_game(
         .record(receipt::Stage::Verifying)
         .map_err(InstallError::Storage)?;
     report(InstallPhase::Validating, 0, total_files, None);
-    let installed_files =
-        validate_staged_files(&staging_game, &files, &extraction_relative).await?;
+    let installed_files = validate_staged_files(
+        &staging_game,
+        &files,
+        &extraction_relative,
+        &context.processor_cancel,
+    )
+    .await?;
     let staged_validation_finished = Instant::now();
     transaction_receipt
         .record(receipt::Stage::Verified)
@@ -902,15 +948,22 @@ pub async fn install_game(
 
     // ---- Commit: promote the staged tree with one rename.
     report(InstallPhase::Committing, 0, 1, None);
-    promote_staged_game(
-        &instance_root,
-        &game_directory,
-        &staging_directory,
-        &staging_game,
-        replacing,
-        &mut transaction_receipt,
-        faults,
-    )?;
+    if context.processor_cancel.is_cancelled() {
+        return Err(InstallError::Cancelled);
+    }
+    _guard
+        .recheck(managed.data_root(), &instance_root)
+        .map_err(InstallError::Storage)?;
+    if replacing {
+        transaction_receipt
+            .record_replacing()
+            .map_err(InstallError::Storage)?;
+    } else {
+        transaction_receipt
+            .record(receipt::Stage::Committing)
+            .map_err(InstallError::Storage)?;
+    }
+    durable_operation.promote(&instance_root, faults)?;
 
     if std::env::var_os("AURORA_INSTALL_DIAGNOSTICS").is_some() {
         let hits = files
@@ -1009,10 +1062,63 @@ pub fn validate_installed_game(
     managed: &ManagedPaths,
     instance: &InstanceId,
 ) -> Result<ValidationOutcome, InstallError> {
+    let _guard = read_game_target(managed, instance)?;
+    validate_installed_game_under_lock(managed, instance)
+}
+
+pub(crate) fn validate_installed_game_under_lock(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<ValidationOutcome, InstallError> {
     let _performance = crate::performance::scope(crate::performance::Event::GameIntegrity);
     let game_directory = managed.instance_paths(instance).game().to_path_buf();
+    let instance_root = managed.instance_paths(instance).root().to_path_buf();
+    if instance_root.exists() {
+        coordination::checked_directory(managed.data_root(), &instance_root)
+            .map_err(InstallError::Storage)?;
+    }
+    journal::readiness_gate(&instance_root, instance)?;
+    validate_game_directory(&game_directory)
+}
+
+/// Network-free restoration under the same kernel lock as game installation.
+pub fn recover_installation(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<journal::RecoveryOutcome, InstallError> {
+    recover_installation_with_faults(managed, instance, InstallFaults::default())
+}
+
+/// Rust-only fault harness; ordinary callers use `recover_installation`.
+pub fn recover_installation_with_faults(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    faults: InstallFaults,
+) -> Result<journal::RecoveryOutcome, InstallError> {
+    let paths = managed.instance_paths(instance);
+    if !paths.root().exists() {
+        return Ok(journal::RecoveryOutcome::None);
+    }
+    let guard = lock_game_target(managed, instance)?;
+    guard
+        .recheck(managed.data_root(), paths.root())
+        .map_err(InstallError::Storage)?;
+    let result = journal::recover_locked(paths.root(), instance, faults)?;
+    if result != journal::RecoveryOutcome::None {
+        eprintln!("[aurora-install] target={instance} recovery={result:?}");
+    }
+    Ok(result)
+}
+
+pub(crate) fn validate_game_directory(
+    game_directory: &Path,
+) -> Result<ValidationOutcome, InstallError> {
     if !game_directory.is_dir() {
         return Ok(ValidationOutcome::NotInstalled);
+    }
+    let metadata = std::fs::symlink_metadata(game_directory).map_err(InstallError::Storage)?;
+    if coordination::redirected(&metadata) {
+        return Err(InstallError::Storage(coordination::unsafe_path()));
     }
 
     let Some(manifest) = load_installed_state(&game_directory).map_err(InstallError::State)? else {
@@ -1033,6 +1139,10 @@ pub fn validate_installed_game(
     }
 
     let natives_directory = game_directory.join(manifest.natives().directory());
+    if natives_directory.exists() {
+        coordination::checked_directory(game_directory, &natives_directory)
+            .map_err(InstallError::Storage)?;
+    }
     let natives_ok = natives_directory.is_dir()
         && std::fs::read_dir(&natives_directory)
             .map(|entries| entries.filter_map(Result::ok).count() > 0)
@@ -1064,6 +1174,14 @@ pub fn validate_installed_game(
 /// Re-verifies one installed file against its recorded trust and size.
 fn verify_managed_file(game_root: &Path, file: &InstalledFile) -> Result<u64, String> {
     let path = game_root.join(file.path());
+    let parent = path
+        .parent()
+        .ok_or_else(|| "installed file has no parent".to_owned())?;
+    coordination::checked_directory(game_root, parent).map_err(|error| error.to_string())?;
+    let metadata = std::fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+    if !metadata.is_file() || coordination::redirected(&metadata) {
+        return Err("installed file is not a contained regular file".to_owned());
+    }
     match file.trust() {
         ArtifactTrust::ExpectedDigestVerified { algorithm, digest } => match algorithm {
             DigestAlgorithm::Sha256 => {
@@ -1160,9 +1278,7 @@ fn prepare_staging(
 ) -> Result<(), InstallError> {
     prove_staging_path(instance_root, staging_directory)?;
 
-    if staging_directory.exists() {
-        std::fs::remove_dir_all(staging_directory).map_err(InstallError::Storage)?;
-    }
+    journal::cleanup_staging(instance_root)?;
     std::fs::create_dir_all(staging_game).map_err(InstallError::Storage)?;
     Ok(())
 }
@@ -1178,85 +1294,6 @@ fn prove_staging_path(instance_root: &Path, staging_directory: &Path) -> Result<
             staging_directory.display()
         ))));
     }
-    Ok(())
-}
-
-/// Promotes the staged game tree onto the final location.
-///
-/// Fresh install: one rename of `staging/game` onto `game`. Replacement: the
-/// proven-managed existing `game` is moved into staging first, the new tree
-/// is renamed into place, and staging (now holding the old tree) is removed.
-/// If the process dies between the two renames the instance has *no* game
-/// directory — visibly incomplete, never a mixture — and the receipt
-/// durably records the `replacing` stage so the next attempt explains the
-/// recovery instead of guessing at the tree it disposes.
-fn promote_staged_game(
-    instance_root: &Path,
-    game_directory: &Path,
-    staging_directory: &Path,
-    staging_game: &Path,
-    replacing: bool,
-    transaction_receipt: &mut receipt::TransactionReceipt,
-    faults: InstallFaults,
-) -> Result<(), InstallError> {
-    std::fs::create_dir_all(instance_root).map_err(|error| InstallError::Commit {
-        context: "creating the instance directory".to_owned(),
-        source: error,
-    })?;
-
-    if replacing {
-        transaction_receipt
-            .record_replacement_reserved()
-            .map_err(InstallError::Storage)?;
-        let retired = staging_directory.join(REPLACED_GAME_DIR_NAME);
-        std::fs::rename(game_directory, &retired).map_err(|error| InstallError::Commit {
-            context: "moving the previous installation aside".to_owned(),
-            source: error,
-        })?;
-        if faults.fail_between_renames {
-            // Deterministic crash-window simulation: the previous tree is
-            // reserved, the new tree is not yet promoted, and the receipt
-            // says exactly that.
-            return Err(InstallError::Commit {
-                context: "deterministic fault injected between the replacement renames".to_owned(),
-                source: std::io::Error::other("injected between-renames failure"),
-            });
-        }
-        transaction_receipt
-            .record(receipt::Stage::Committing)
-            .map_err(InstallError::Storage)?;
-        if let Err(error) = std::fs::rename(staging_game, game_directory) {
-            // Put the proven-managed previous installation back before
-            // failing; the instance must not lose its game because the new
-            // promotion could not complete.
-            let _ = std::fs::rename(&retired, game_directory);
-            return Err(InstallError::Commit {
-                context: "promoting the staged installation".to_owned(),
-                source: error,
-            });
-        }
-        prove_staging_path(instance_root, staging_directory)?;
-        // The installation is already committed at this point; a cleanup
-        // failure is reported but must not fail the committed install.
-        if let Err(error) = std::fs::remove_dir_all(staging_directory) {
-            eprintln!(
-                "[aurora-launcher] committed installation but could not remove the retired previous tree at {}: {error}",
-                staging_directory.display()
-            );
-        }
-    } else {
-        transaction_receipt
-            .record(receipt::Stage::Committing)
-            .map_err(InstallError::Storage)?;
-        std::fs::rename(staging_game, game_directory).map_err(|error| InstallError::Commit {
-            context: "promoting the staged installation".to_owned(),
-            source: error,
-        })?;
-        // Staging is now an empty husk; keep the instance tidy (the
-        // committed manifest, not the receipt, is the completion marker).
-        let _ = std::fs::remove_dir_all(staging_directory);
-    }
-
     Ok(())
 }
 
@@ -1510,10 +1547,14 @@ async fn validate_staged_files(
     staging_game: &Path,
     files: &[PlannedFile],
     natives_relative: &str,
+    cancel: &processors::CancelSignal,
 ) -> Result<Vec<InstalledFile>, InstallError> {
     let mut installed = Vec::with_capacity(files.len());
     let root = Arc::new(staging_game.to_path_buf());
     for batch in files.chunks(STAGED_VALIDATION_CONCURRENCY) {
+        if cancel.is_cancelled() {
+            return Err(InstallError::Cancelled);
+        }
         let tasks = batch.iter().map(|file| {
             let root = Arc::clone(&root);
             let record = InstalledFile::new(
@@ -1536,6 +1577,9 @@ async fn validate_staged_files(
                 reason: format!("a staged verification worker failed: {error}"),
             })??;
             installed.push(record);
+        }
+        if cancel.is_cancelled() {
+            return Err(InstallError::Cancelled);
         }
     }
 
@@ -1572,8 +1616,15 @@ fn validated_index_file_stem(requirement: &AssetIndexRequirement) -> Result<Stri
     Ok(id.to_owned())
 }
 
-/// The per-instance installation exclusion: one shared async mutex per
-/// instance id, held for the duration of an installation.
+fn check_cancel(context: &InstallContext) -> Result<(), InstallError> {
+    if context.processor_cancel.is_cancelled() {
+        Err(InstallError::Cancelled)
+    } else {
+        Ok(())
+    }
+}
+
+/// Kernel-owned per-target exclusion, held through publication or recovery.
 pub(crate) fn lock_game_target(
     managed: &ManagedPaths,
     instance: &InstanceId,
@@ -1583,28 +1634,59 @@ pub(crate) fn lock_game_target(
         managed.instance_paths(instance).root(),
         ".game-install.lock",
     )
-    .map_err(|error| match error {
+    .map_err(|error| game_lock_error(error, instance))
+}
+
+pub(crate) fn read_game_target(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<Option<coordination::TargetLock>, InstallError> {
+    coordination::TargetLock::existing(
+        managed.data_root(),
+        managed.instance_paths(instance).root(),
+        ".game-install.lock",
+    )
+    .map_err(|error| game_lock_error(error, instance))
+}
+
+fn game_lock_error(error: coordination::LockError, instance: &InstanceId) -> InstallError {
+    match error {
         coordination::LockError::Busy => InstallError::AlreadyInProgress {
             instance_id: instance.to_string(),
         },
         coordination::LockError::Io(error) => InstallError::Storage(error),
-    })
+    }
 }
 
 /// A failed installation. Every variant fails closed: the instance never
 /// ends up with a complete-looking installation it did not earn.
 #[derive(Debug)]
 pub enum InstallError {
+    /// Unresolved or conflicting durable evidence must be preserved.
+    RecoveryRequired {
+        reason: String,
+    },
+    Cancelled,
     /// Another installation is already running for this instance.
-    AlreadyInProgress { instance_id: String },
+    AlreadyInProgress {
+        instance_id: String,
+    },
     /// Existing state at the target cannot be replaced safely.
-    TargetConflict { path: String, reason: String },
+    TargetConflict {
+        path: String,
+        reason: String,
+    },
     /// The persisted installed state is malformed or unsupported.
     State(InstalledStateError),
     /// The verified asset-index document is unusable.
-    AssetIndexInvalid { reason: String },
+    AssetIndexInvalid {
+        reason: String,
+    },
     /// One asset-object entry is unusable.
-    AssetInvalid { name: String, reason: String },
+    AssetInvalid {
+        name: String,
+        reason: String,
+    },
     /// An artifact acquisition failed (transport, integrity, or cache).
     Acquisition(AcquisitionError),
     /// Plan-supplied artifact metadata could not become a valid source.
@@ -1617,9 +1699,14 @@ pub enum InstallError {
     /// Native extraction failed (unsafe, conflicting, or unreadable).
     Native(NativeExtractionError),
     /// A bounded installer-processor step failed.
-    Processing { reason: String },
+    Processing {
+        reason: String,
+    },
     /// Staged content failed validation before commit.
-    Validation { path: String, reason: String },
+    Validation {
+        path: String,
+        reason: String,
+    },
     /// The staged installation could not be committed.
     Commit {
         context: String,
@@ -1632,6 +1719,12 @@ pub enum InstallError {
 impl fmt::Display for InstallError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::RecoveryRequired { reason } => write!(
+                formatter,
+                "installation recovery requires attention: {reason}"
+            ),
+            Self::Cancelled => formatter
+                .write_str("installation cancelled before commit; previous installation preserved"),
             Self::AlreadyInProgress { instance_id } => write!(
                 formatter,
                 "an installation is already in progress for instance '{instance_id}'"
@@ -2456,6 +2549,52 @@ mod tests {
             validate_installed_game(&env.managed, &env.instance).unwrap(),
             ValidationOutcome::NotInstalled
         );
+    }
+
+    #[tokio::test]
+    async fn cancellation_at_acquisition_copy_and_validation_preserves_the_previous_game() {
+        for phase in [
+            InstallPhase::Acquiring,
+            InstallPhase::Materializing,
+            InstallPhase::Validating,
+        ] {
+            let (fixture, plan) = synthetic_game();
+            let env = TestEnv::new(&format!("f3r-cancel-{}", phase.as_str()));
+            env.plant_user_data();
+            install(&env, &fixture, &plan, Default::default())
+                .await
+                .unwrap();
+            let before = std::fs::read(env.game().join(INSTALLED_GAME_FILE_NAME)).unwrap();
+            let (cancel, signal) = processors::cancellation_channel();
+            let context = test_context(fixture.server.base_url()).with_processor_cancel(signal);
+            let error = install_game(
+                &env.managed,
+                &env.instance,
+                &plan,
+                &context,
+                &mut |event| {
+                    if event.phase == phase {
+                        cancel.cancel();
+                    }
+                },
+                Default::default(),
+            )
+            .await
+            .unwrap_err();
+            assert!(
+                matches!(error, InstallError::Cancelled),
+                "{phase:?}: {error}"
+            );
+            assert_eq!(
+                std::fs::read(env.game().join(INSTALLED_GAME_FILE_NAME)).unwrap(),
+                before
+            );
+            recover_installation(&env.managed, &env.instance).unwrap();
+            assert!(
+                matches!(validate_installed_game(&env.managed, &env.instance).unwrap(), ValidationOutcome::Installed(validation) if validation.status == ValidationStatus::Valid)
+            );
+            env.assert_user_data_intact();
+        }
     }
 
     #[tokio::test]
@@ -3898,10 +4037,13 @@ mod tests {
             other => panic!("unexpected receipt disposition: {other:?}"),
         }
         assert!(!env.game().exists());
-        match validate_installed_game(&env.managed, &env.instance).unwrap() {
-            ValidationOutcome::NotInstalled => {}
-            ValidationOutcome::Installed(_) => panic!("nothing may validate as installed"),
-        }
+        assert!(
+            matches!(
+                validate_installed_game(&env.managed, &env.instance),
+                Err(InstallError::RecoveryRequired { .. })
+            ),
+            "interrupted authority must block readiness"
+        );
 
         // The next attempt recovers deterministically: it detects the
         // interrupted transaction, disposes staging after the path proof,
@@ -4049,7 +4191,7 @@ mod tests {
         .await
         .expect_err("the injected between-renames fault must fail");
 
-        assert!(matches!(error, InstallError::Commit { .. }));
+        assert!(matches!(error, InstallError::RecoveryRequired { .. }));
         // The crash window: no game directory exists, the retired tree and
         // the receipt wait in staging, and the receipt names 'replacing'.
         assert!(!env.game().exists());
@@ -4059,7 +4201,22 @@ mod tests {
             }
             other => panic!("unexpected receipt disposition: {other:?}"),
         }
-        assert!(env.staging().join(REPLACED_GAME_DIR_NAME).is_dir());
+        let journal = journal::Journal::load(
+            env.managed.instance_paths(&env.instance).root(),
+            &env.instance,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            env.managed
+                .instance_paths(&env.instance)
+                .root()
+                .join(journal::HISTORY_DIR)
+                .join(journal.transaction_id())
+                .join("previous-game")
+                .is_dir()
+        );
+        assert!(!env.staging().join(REPLACED_GAME_DIR_NAME).exists());
 
         // The next attempt recovers by rebuilding from verified caches; no
         // mixture of old and new trees can be observed, and user data was
