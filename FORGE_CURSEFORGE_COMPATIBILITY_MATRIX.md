@@ -41,6 +41,9 @@ Java below is the **official base-game** requirement, subject to separately prov
 | Forge 1.16.5-36.0.0 | 1.16.5 | legacy / 8 | Spec0, ModLauncher, four client mapping/patch processors | No Aurora host acceptance | **Unsupported** | Current base/native and Forge adapter unavailable; not “same as 1.12” |
 | Forge 1.18.2-40.3.12 | 1.18.2 | beta / 17 | Spec1, BootstrapLauncher/module arguments, six client processors | No Aurora host acceptance | **Unsupported** | Base native-classifier work plus mapping adapter required |
 | Forge 1.20.1-47.4.26 | 1.20.1 | gamma / 17 | Spec1 six-client-step mapping/rename/patch pipeline; module-path BootstrapLauncher | W64 proposed first host | **Supported by upstream, not yet implemented** | Official artifact/hash/profile inspected; F1C target, current base shape suitable |
+| Forge 1.20.1-47.4.10 | 1.20.1 | gamma / 17 | Spec1 six client steps, BootstrapLauncher / forgeclient | W64 native install, deep Ready and real Java17 validated | **Research required** | F1C implemented and offered exact recommended pin; authenticated menu/world/exit acceptance pending owner |
+| Forge 1.20.4-49.2.0 | 1.20.4 | gamma / 17 | Spec1 five client steps, ForgeBootstrap / forge_client | W64 native install, deep Ready and real Java17 validated | **Research required** | F1C implemented and offered exact recommended pin; authenticated menu/world/exit acceptance pending owner |
+| Forge 1.21.11-61.2.0 | 1.21.11 | delta / 21 | Spec1 three client steps, ForgeBootstrap / forge_client | W64 | **Verified in Aurora** | F1B owner-reported authenticated gameplay/normal exit/Ready; F1C repeated native install/deep validation, not another gameplay run |
 | Forge 1.21.1-52.1.16 | 1.21.1 | delta / 21 | Spec1 ForgeBootstrap, three client processors | W64 proposed first host | **Supported by upstream, not yet implemented** | Different bootstrap/pipeline from 1.20.1; separate fixture/acceptance required |
 | Forge 26.2-65.1.3 | 26.2 | epsilon / 25 | Spec1 ForgeBootstrap/forge_client, one client patch processor | W64 proposed first host | **Supported by upstream, not yet implemented** | F1B research pin; Forge is represented but absent from executable catalog |
 | NeoForge 21.1.1 | 1.21.1 | delta / 21 | Spec1 six-client-step mapping chain, BootstrapLauncher | W64 proposed first host | **Supported by upstream, not yet implemented** | Official profile inspected; current NeoForge discovery/execution deliberately gates it out |
@@ -71,6 +74,7 @@ Source: current [official Mojang runtime index](https://piston-meta.mojang.com/v
 | --- | --- | --- |
 | W64 managed Java21 for cited 1.21.11 instances and Java25 for NeoForge26.2 | **Verified in Aurora** | Prior C2/Phase K validation/launch evidence, not all game/runtime versions |
 | W64 Java8/16/17 general managed plan | **Research required** | Parser/feed can represent these; exact runtime/game acceptance must be performed; old base shapes may block game before runtime selection |
+| W64 exact gamma Java17 runtime for F1C Forge1.20.1/1.20.4 | **Research required** | F1C acquired and verified exact manifest/files plus bounded real java-version diagnostic; both Ready. Full authenticated game acceptance pending; no beta/gamma substitution |
 | WA64, W32, L64/L32, M64/MA64 exact runtime installation | **Research required** | Explicit mapping and feed availability are necessary, not full native acceptance; Windows links and Unix mode/link rules also apply |
 | Linux/macOS full authenticated launcher lifecycle | **Unsupported** | OS-backed credential store deliberately unavailable today; no plaintext fallback |
 | LA64 runtime resolution | **Unsupported** | No current explicit Mojang platform mapping; no fallback to x64 |
@@ -121,5 +125,26 @@ Installer hashes, generation observations and official Maven URL conventions are
 | `PHASE_I_ACCEPTANCE.md`, `PHASE_J_ACCEPTANCE.md` | Exact reviewed Fabric Modrinth pack installation/update/reconciliation paths, including separately disclosed fixture-derived UI states | Minecraft launch was explicitly not run; no proof of CF packs, generic exports, every pack or every crash/power-loss condition |
 | `CLIENT_3_0_0_PRODUCTION_CORRECTION.md` | Current3.0.0 artifact identity, isolated Ready creation/runtime reuse and shipped bridge interoperability | Full authenticated3.0.0 game/menu playthrough; that report explicitly records native boot limitation |
 | `RELEASE_1_4_2_ACCEPTANCE.md` plus live F0 GitHub checks | Current source/release identities; actual public1.4.2 publication and authority advancement | A new F0 installed self-update test or compatibility acceptance for unrelated loaders |
+| `FORGE_F1B_MODERN_FORGE.md`, owner acceptance 2026-10-12 | Exact Forge1.21.11/61.2.0 authenticated launch, gameplay, normal exit and Ready reported by owner | Agent-independent gameplay observation or other Forge generations |
+| `FORGE_F1C_COMPATIBILITY_EXPANSION.md` | Exact1.20.1/47.4.10 and1.20.4/49.2.0 native installation, verified outputs, Java17, deep Ready, launch assembly, interruption/retry; five existing-loader deep-validation regressions | Authenticated1.20.x gameplay, other hosts, arbitrary Forge builds, mods or historical generations |
+
+## 6. F1C exact support gates (2026-10-12)
+
+Discovery is broader than installation eligibility. Normal choices are the
+three reviewed pins below. The four status labels above remain unchanged:
+the two new rows stay Research required until owner gameplay acceptance.
+The historical F0 47.4.26 example is not the selected F1C pin and is not offered.
+
+| Exact pin | Discoverable | Recognized profile | Offered/installable | Deep Ready | Authenticated gameplay |
+| --- | --- | --- | --- | --- | --- |
+| 1.20.1-47.4.10 | Yes, official recommended | Yes, spec1 | Yes | Yes, W64 | Pending owner |
+| 1.20.4-49.2.0 | Yes, official recommended | Yes, spec1 | Yes | Yes, W64 | Pending owner |
+| 1.21.11-61.2.0 | Yes | Yes, spec1 | Yes | Yes, repeated in F1C | Owner-confirmed in F1B |
+| Other discovered Forge builds | Upstream-dependent | Not an acceptance claim | No | Not claimed | Not claimed |
+
+Tier2 inspected pins 1.19.2-43.5.0,1.18.2-40.3.0,1.16.5-36.2.34 and
+1.12.2-14.23.5.2859 are research artifacts only. The first two have six-step
+spec1 BootstrapLauncher chains; the latter two use distinct spec0 generations.
+Historical native/argument normalization remains deliberately unavailable.
 
 To promote a game/loader row: record exact build/game/loader/component/manifest/host, verify installed state and trust, perform a real native authenticated launch and normal supervised exit, restart/revalidate, inspect relevant mod/native/pack behavior and preserve user sentinels. A separately verified component/workflow row proves only that named operation, never an unperformed game launch. Attach evidence and note scope. Failed, skipped, synthetic-session or component-only results stay clearly bounded. Only explicitly accepted rows should be advertised as verified support.

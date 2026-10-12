@@ -100,7 +100,44 @@ Aurora has **one public production release stream**, with two independent Rust e
 
 **One action and cadence.** Settings shows installed versions and one primary `Check For Updates` -> `Checking…` -> disabled `None Available` for 5 seconds or `Update`. Reset is a local cleared-on-destruction timer with no network. One Update performs Client first, then Launcher sequentially, with truthful real progress and Check/Update Failed — Retry errors. Client failure stops Launcher; Client success survives Launcher failure and retry only handles the remaining domain. Changed offers require fresh review. The controller shares duplicate actions; native aggregate checks and transactions exclude overlap. One silent bounded startup check per process supplies an unobtrusive Home notice only for real offers; there is no polling or automatic installation. Instance workspace View Updates opens the same canonical area. Release notes remain secondary escaped plain text. Availability never authorizes or blocks Play.
 
-## Phase F1B modern Forge support (current)
+## Phase F1C Forge 1.20.x compatibility (current)
+
+Normal Forge choices are limited to reviewed exact pins: Minecraft 1.20.1 /
+Forge 47.4.10, Minecraft 1.20.4 / Forge 49.2.0, and the F1B Minecraft
+1.21.11 / Forge 61.2.0. Official discovery remains broader than install
+eligibility; neither list order nor a new recommended promotion enables an
+unreviewed build. There are no silent substitutions or automatic upgrades.
+F1C is PARTIAL pending owner authenticated gameplay for both new pins;
+both passed isolated Windows x64 installation, deep Ready validation,
+managed Java17 validation and native-file launch assembly. See
+`FORGE_F1C_COMPATIBILITY_EXPANSION.md` for exact evidence and limitations.
+
+Forge remains `LoaderPlan::Forge` through F3 composition and F1A supervision.
+Spec-1 normalization now models whole processor argument literals, data
+tokens and Maven artifact inputs explicitly. Unknown nested mandatory
+fields, unresolved fragments and unsupported launch generations fail.
+The 1.20.1 chain has six client steps including jar splitting; 1.20.4 has
+five. Inline MCP ZIP inputs are validated managed paths, and tool-only
+libraries remain separate from game launch libraries. Published data hash
+expectations are retained even when an individual processor omits its
+outputs map. Mojang's normalized client-mappings SHA-1 supplies the missing
+expectation for 1.20.1's raw mapping downloader. Outputs are verified before
+dependent steps; intermediates without a publisher hash stay locally
+generated observations. Every resolved input is checked for modification.
+
+Both new games require Mojang `java-runtime-gamma` / Java17 for game and
+processors; system/custom Java is not introduced. The 1.20.1
+BootstrapLauncher / `forgeclient` module-path arguments stay distinct from
+1.20.4 ForgeBootstrap / `forge_client`. The managed vanilla `client.jar`
+basename is included in the older bootstrap ignore list while remaining
+last in the deterministic classpath. Native instance-root user content,
+credentials, existing loader behavior and schemas (registry5/game2/receipt1)
+remain unchanged. Archive reads are bounded and extraction refuses links,
+traversal and overwrites; Windows reparse ancestors fail before tool spawn.
+Processor supervision is not an operating-system sandbox. Tier2 generations
+remain deliberately unavailable; F3R durability work remains separate.
+
+## Phase F1B modern Forge support (completed checkpoint)
 
 Forge is a first-class loader family through the same normalized
 architecture (details: FORGE_F1B_MODERN_FORGE.md). `forge::metadata`
@@ -117,9 +154,10 @@ step's published outputs verify against Forge's own SHA-1 before the
 next step runs, and matched outputs are recorded as upstream-verified
 expectations rather than local observations. The patched client launch
 library intentionally has no upstream URL — it exists only as the
-chain's digest-verified generated output. Supported scope: the modern
-ForgeBootstrap generation (verified on 1.21.11 + 61.2.0); older
-mapping-pipeline and LaunchWrapper generations are rejected explicitly.
+chain's digest-verified generated output. The F1B checkpoint supported the
+modern ForgeBootstrap generation (verified on 1.21.11 + 61.2.0); F1C above
+adds only the reviewed 1.20.x mapping pipelines. LaunchWrapper and all
+unreviewed older combinations remain rejected explicitly.
 The owner subsequently confirmed authenticated Forge launch, working gameplay,
 normal exit and return to Ready with no further issues (2026-10-12). F1B is
 COMPLETE; this gameplay evidence is owner-reported, not independently observed
