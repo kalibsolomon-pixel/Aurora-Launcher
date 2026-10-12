@@ -4402,7 +4402,7 @@ pub async fn list_forge_versions(
     })?;
 
     Ok(listing
-        .for_minecraft(&version)
+        .installable_for_minecraft(&version)
         .into_iter()
         .map(|entry| ForgeVersionDto {
             version: entry.version().as_str().to_owned(),

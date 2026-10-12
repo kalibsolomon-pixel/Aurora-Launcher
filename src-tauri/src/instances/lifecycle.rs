@@ -713,7 +713,7 @@ async fn resolve_installed_configuration(
         )
         .await
         .map_err(InstanceError::ForgeMetadata)?;
-        let entries = listing.for_minecraft(&game);
+        let entries = listing.installable_for_minecraft(&game);
         let candidates: Vec<_> = entries
             .iter()
             .map(|entry| LoaderCandidate {
@@ -5314,6 +5314,293 @@ pub(crate) mod tests {
                 message.contains("pack"),
                 "the refusal must name the pack scope: {message}"
             );
+        }
+    }
+    /// Explicit live acceptance; never runs in the deterministic suite and
+    /// retains its freshly created isolated root for owner gameplay testing.
+    #[tokio::test]
+    #[ignore = "F1C real official installs in an isolated, retained temp root"]
+    async fn forge_f1c_native_acceptance() {
+        use super::super::settings::LoaderConfiguration;
+        use std::time::Instant;
+        let root = match std::env::var_os("F1C_ACCEPTANCE_ROOT") {
+            Some(value) => {
+                let path = std::path::PathBuf::from(value);
+                assert_eq!(path.parent(), Some(std::env::temp_dir().as_path()));
+                assert!(
+                    path.file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .starts_with("aurora-f1c-acceptance-")
+                );
+                assert!(path.join("f1c-owned-root").is_file());
+                path
+            }
+            None => {
+                let path = std::env::temp_dir()
+                    .join(format!("aurora-f1c-acceptance-{}", uuid::Uuid::new_v4()));
+                std::fs::create_dir(&path).unwrap();
+                std::fs::write(
+                    path.join("f1c-owned-root"),
+                    b"F1C isolated native acceptance",
+                )
+                .unwrap();
+                path
+            }
+        };
+        println!("F1C_ROOT={}", root.display());
+        let managed = ManagedPaths::from_app_local_data_dir(root.join("managed")).unwrap();
+        let endpoints = InstanceEndpoints::creation().unwrap();
+        let registry_path = managed.instance_registry_file();
+        let config_path = managed.config_file();
+        let cases = [
+            (
+                "1.20.1",
+                LoaderConfiguration::Forge {
+                    policy: LoaderPolicy::Pinned {
+                        version: "1.20.1-47.4.10".into(),
+                    },
+                },
+                false,
+            ),
+            (
+                "1.20.4",
+                LoaderConfiguration::Forge {
+                    policy: LoaderPolicy::Pinned {
+                        version: "1.20.4-49.2.0".into(),
+                    },
+                },
+                false,
+            ),
+            (
+                "1.21.11",
+                LoaderConfiguration::Forge {
+                    policy: LoaderPolicy::Pinned {
+                        version: "1.21.11-61.2.0".into(),
+                    },
+                },
+                false,
+            ),
+            ("1.21.11", LoaderConfiguration::Vanilla {}, false),
+            (
+                "1.21.11",
+                LoaderConfiguration::Fabric {
+                    policy: LoaderPolicy::Pinned {
+                        version: "0.19.5".into(),
+                    },
+                },
+                false,
+            ),
+            (
+                "26.2",
+                LoaderConfiguration::NeoForge {
+                    policy: LoaderPolicy::Pinned {
+                        version: "26.2.0.88".into(),
+                    },
+                },
+                false,
+            ),
+            (
+                "1.21.11",
+                LoaderConfiguration::Fabric {
+                    policy: LoaderPolicy::Pinned {
+                        version: "0.19.5".into(),
+                    },
+                },
+                true,
+            ),
+        ];
+        for (mc, loader, aurora) in cases {
+            let name = format!(
+                "F1C {mc} {}{}",
+                loader.kind().as_str(),
+                if aurora { " Aurora" } else { "" }
+            );
+            let started = Instant::now();
+            let mut last = String::new();
+            let mut progress = |event: InstanceProgress| {
+                let phase = match event.game {
+                    Some(ref game) if game.phase == crate::install::InstallPhase::Processing => {
+                        format!("processing {:?}", game.current_item)
+                    }
+                    Some(ref game) => game.phase.as_str().to_owned(),
+                    None => event.phase.as_str().to_owned(),
+                };
+                if phase != last {
+                    println!("F1C {name} {}ms {phase}", started.elapsed().as_millis());
+                    last = phase;
+                }
+            };
+            let existing = InstanceRegistry::load(&registry_path)
+                .unwrap()
+                .instances()
+                .iter()
+                .find(|r| r.display_name() == name)
+                .cloned();
+            let record = if let Some(record) = existing {
+                if record.state() != InstanceState::Ready {
+                    retry_instance_install(
+                        &managed,
+                        &registry_path,
+                        &config_path,
+                        &endpoints,
+                        record.id(),
+                        &mut progress,
+                        InstanceFaults::default(),
+                    )
+                    .await
+                    .unwrap();
+                }
+                record
+            } else {
+                let mut config = InstanceConfiguration::for_minecraft_version(mc);
+                config.set_loader(loader);
+                config.set_aurora_enabled(aurora);
+                create_instance(
+                    &managed,
+                    &registry_path,
+                    &config_path,
+                    &endpoints,
+                    CreateInstanceRequest::new(&name, config),
+                    &mut progress,
+                    InstanceFaults::default(),
+                )
+                .await
+                .unwrap()
+            };
+            println!(
+                "F1C {name} install_ms={} id={}",
+                started.elapsed().as_millis(),
+                record.id()
+            );
+            let validation = validate_instance(
+                &managed,
+                &InstanceRegistry::load(&registry_path).unwrap(),
+                record.id(),
+            )
+            .unwrap();
+            assert_eq!(
+                validation.status,
+                InstanceStatus::Ready,
+                "{:?}",
+                validation.problems
+            );
+            if mc == "1.20.1" || mc == "1.20.4" {
+                let plan =
+                    resolve_instance_game_plan(&managed, &registry_path, &endpoints, record.id())
+                        .await
+                        .unwrap();
+                assert_eq!(plan.java().major_version(), 17);
+                assert_eq!(plan.java().component(), "java-runtime-gamma");
+                let runtime = validate_instance_runtime(
+                    &managed,
+                    &registry_path,
+                    &endpoints,
+                    &RuntimeMetadataEndpoints::official(),
+                    record.id(),
+                    true,
+                )
+                .await
+                .unwrap();
+                assert_eq!(
+                    runtime.status,
+                    crate::runtime::RuntimeValidationStatus::Ready
+                );
+                println!("F1C {name} Java17 validated");
+                let launch_started = Instant::now();
+                let installed_runtime = ensure_instance_runtime(
+                    &managed,
+                    &registry_path,
+                    &endpoints,
+                    &RuntimeMetadataEndpoints::official(),
+                    record.id(),
+                    &mut |_| {},
+                )
+                .await
+                .unwrap();
+                assert!(installed_runtime.reused());
+                let manifest = crate::install::state::load_installed_state(
+                    &managed.instance_paths(record.id()).game(),
+                )
+                .unwrap()
+                .unwrap();
+                // Assembly only: a fixture session never authorizes/spawns
+                // Minecraft and never enters production authentication state.
+                let session = crate::auth::MinecraftSession::new(
+                    "986dec87b7ec47ff89ff033fdb95c4b5",
+                    crate::auth::MinecraftProfile::new(
+                        "986dec87b7ec47ff89ff033fdb95c4b5",
+                        "FixtureUser",
+                    ),
+                    crate::auth::credentials::SecretString::new("F1C-ASSEMBLY-FIXTURE"),
+                    std::time::Duration::from_secs(3600),
+                );
+                let launch_plan = crate::launch::resolve::LaunchPlan::from_game_plan(
+                    &plan,
+                    PlatformProfile::current().unwrap(),
+                );
+                let spec = crate::launch::resolve::resolve_launch_spec(
+                    &managed,
+                    record.id(),
+                    &launch_plan,
+                    &manifest,
+                    installed_runtime.launch_executable(),
+                    &session,
+                    &crate::minecraft::rules::FeatureProfile::none(),
+                    &crate::launch::resolve::LaunchOptions::default(),
+                )
+                .unwrap();
+                assert_eq!(spec.main_class(), plan.main_class());
+                assert_eq!(
+                    spec.java_executable(),
+                    installed_runtime.launch_executable()
+                );
+                assert!(!format!("{spec:?}").contains("F1C-ASSEMBLY-FIXTURE"));
+                println!(
+                    "F1C {name} native-file launch assembly_ms={} runtime_reused=true (not gameplay)",
+                    launch_started.elapsed().as_millis()
+                );
+                let sentinel = managed
+                    .instance_paths(record.id())
+                    .root()
+                    .join("f1c-user-content.txt");
+                std::fs::write(&sentinel, b"preserve user content").unwrap();
+                let warm = Instant::now();
+                let mut warm_progress = |event: InstanceProgress| {
+                    if let Some(game) = event.game {
+                        if game.phase == crate::install::InstallPhase::Processing {
+                            println!("F1C {name} warm-processing {:?}", game.current_item);
+                        }
+                    }
+                };
+                install_instance_configuration(
+                    &managed,
+                    &registry_path,
+                    &config_path,
+                    &endpoints,
+                    record.id(),
+                    &mut warm_progress,
+                    InstanceFaults::default(),
+                )
+                .await
+                .unwrap();
+                assert_eq!(std::fs::read(sentinel).unwrap(), b"preserve user content");
+                println!(
+                    "F1C {name} warm_reinstall_ms={}",
+                    warm.elapsed().as_millis()
+                );
+                assert_eq!(
+                    validate_instance(
+                        &managed,
+                        &InstanceRegistry::load(&registry_path).unwrap(),
+                        record.id()
+                    )
+                    .unwrap()
+                    .status,
+                    InstanceStatus::Ready
+                );
+            }
+            println!("F1C {name} deep-validated Ready");
         }
     }
 }
