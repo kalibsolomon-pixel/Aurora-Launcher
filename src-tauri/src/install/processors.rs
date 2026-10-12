@@ -133,7 +133,10 @@ impl CaptureSlot {
             let drop_from_tail = overflow.min(self.capture.retained_tail.len());
             self.capture.retained_tail.drain(..drop_from_tail);
         }
-        self.capture.retained_tail.extend_from_slice(chunk);
+        // A single pipe read can exceed the entire retention budget.
+        self.capture
+            .retained_tail
+            .extend_from_slice(&chunk[chunk.len().saturating_sub(cap)..]);
     }
 }
 
@@ -463,6 +466,10 @@ mod tests {
         assert!(slot.capture.truncated);
         assert_eq!(slot.capture.total_bytes, 16);
         assert!(slot.capture.retained_tail.len() <= cap);
+        slot.push(b"0123456789abcdefghijklmnopqrstuvwxyz", cap);
+        assert_eq!(slot.capture.retained_tail, b"qrstuvwxyz");
+        slot.push(b"zero", 0);
+        assert!(slot.capture.retained_tail.is_empty());
     }
 
     #[test]
