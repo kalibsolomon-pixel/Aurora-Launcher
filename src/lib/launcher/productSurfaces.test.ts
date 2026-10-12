@@ -10,6 +10,7 @@ let launcher: any;
 let navigation: any;
 let render: any;
 let Home: any;
+let InstanceDetails: any;
 let Accounts: any;
 let Identity: any;
 let Dialog: any;
@@ -43,6 +44,7 @@ before(async () => {
   ({ navigation } = await server.ssrLoadModule("/src/lib/launcher/navigation.svelte.ts"));
   ({ render } = await server.ssrLoadModule("svelte/server"));
   Home = (await server.ssrLoadModule("/src/lib/pages/HomePage.svelte")).default;
+  InstanceDetails = (await server.ssrLoadModule("/src/lib/launcher/widgets/InstanceDetailsWidget.svelte")).default;
   Accounts = (await server.ssrLoadModule("/src/lib/pages/AccountsPage.svelte")).default;
   ({ accountManager } = await server.ssrLoadModule("/src/lib/launcher/accountManager.svelte.ts"));
   Dialog = (await server.ssrLoadModule("/src/lib/shell/AccountDialog.svelte")).default;
@@ -130,6 +132,13 @@ it("Home renders Fabric without Aurora as a complete installed configuration", (
   reset(instance({ kind: "fabric", version: "0.19.5" }));
   assert.match(html(Home), /Minecraft 1\.21\.11 · Fabric 0\.19\.5 · Aurora Off/);
   assert.doesNotMatch(html(Home), /Aurora missing|Aurora required/);
+});
+it("Instance Details preserves the installed Forge identity for both F1C pins", () => {
+  for (const version of ["1.20.1-47.4.10", "1.20.4-49.2.0"]) {
+    const view = html(InstanceDetails, { instance: instance({ kind: "forge", version }) });
+    assert.ok(view.includes(`Forge ${version}`));
+    assert.doesNotMatch(view, /Fabric/);
+  }
 });
 it("Home renders Fabric and optional Aurora separately", () => {
   reset(instance({ kind: "fabric", version: "0.19.5" }, { version: "2.1.2", channel: "stable" }));
