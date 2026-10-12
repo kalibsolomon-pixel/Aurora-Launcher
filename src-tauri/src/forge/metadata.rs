@@ -891,6 +891,8 @@ impl VersionProfileDocument {
         #[allow(dead_code)]
         struct Document {
             id: String,
+            #[serde(default, rename = "_comment")]
+            comment: Option<serde_json::Value>,
             #[serde(rename = "inheritsFrom")]
             inherits_from: String,
             #[serde(rename = "mainClass")]
@@ -1247,6 +1249,7 @@ mod tests {
     /// patched-client library).
     fn real_version_61_2_0() -> String {
         r#"{
+          "_comment": ["abridged for tests"],
           "id": "1.21.11-forge-61.2.0",
           "inheritsFrom": "1.21.11",
           "mainClass": "net.minecraftforge.bootstrap.ForgeBootstrap",

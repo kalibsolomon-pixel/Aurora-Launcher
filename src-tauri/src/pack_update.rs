@@ -3505,6 +3505,11 @@ mod tests {
                     "{base}/v2/"
                 )),
                 crate::neoforge::metadata::NeoForgeMavenEndpoints::loopback_for_testing(&base),
+                crate::forge::metadata::ForgeMavenEndpoints::loopback_for_testing(
+                    &format!("{base}/forge-maven/"),
+                    &format!("{base}/forge-promotions.json"),
+                )
+                .unwrap(),
                 crate::runtime::metadata::RuntimeMetadataEndpoints::loopback_for_testing(&base),
                 crate::install::InstallContext::loopback_for_testing(
                     crate::downloads::DownloadOptions {

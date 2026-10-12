@@ -1090,36 +1090,40 @@ async fn install_instance_components(
     let plan = resolve_record_game_plan(managed, endpoints, record, release.as_ref()).await?;
     let metadata_finished = std::time::Instant::now();
 
-    // A NeoForge plan executes bounded installer processors during game
-    // installation, so the managed Java runtime is resolved and ensured
-    // first — the same runtime pipeline launch later revalidates.
+    // A NeoForge or Forge plan executes bounded installer processors
+    // during game installation, so the managed Java runtime is resolved
+    // and ensured first — the same runtime pipeline launch later
+    // revalidates.
     let mut install_context = endpoints.install.clone();
-    if let Some(neoforge) = plan.neoforge_loader() {
-        if neoforge.requires_install_time_java() {
-            let runtime_platform =
-                RuntimePlatform::current().map_err(RuntimeMetadataError::Plan)?;
-            let runtime_plan = crate::runtime::metadata::resolve_runtime_plan(
-                managed,
-                endpoints.runtime(),
-                plan.java().component(),
-                plan.java().major_version(),
-                runtime_platform,
-                endpoints.install.download_options(),
-            )
-            .await
-            .map_err(InstanceError::RuntimeMetadata)?;
-            let installed_runtime = crate::runtime::install::ensure_runtime(
-                managed,
-                &runtime_plan,
-                endpoints.install.download_options(),
-                false,
-                &mut |_| {},
-            )
-            .await
-            .map_err(InstanceError::RuntimeInstall)?;
-            install_context = install_context
-                .with_processor_java(installed_runtime.diagnostic_executable().to_path_buf());
-        }
+    let processors_need_java = plan
+        .neoforge_loader()
+        .is_some_and(crate::neoforge::plan::NeoForgePlan::requires_install_time_java)
+        || plan
+            .forge_loader()
+            .is_some_and(crate::forge::plan::ForgePlan::requires_install_time_java);
+    if processors_need_java {
+        let runtime_platform = RuntimePlatform::current().map_err(RuntimeMetadataError::Plan)?;
+        let runtime_plan = crate::runtime::metadata::resolve_runtime_plan(
+            managed,
+            endpoints.runtime(),
+            plan.java().component(),
+            plan.java().major_version(),
+            runtime_platform,
+            endpoints.install.download_options(),
+        )
+        .await
+        .map_err(InstanceError::RuntimeMetadata)?;
+        let installed_runtime = crate::runtime::install::ensure_runtime(
+            managed,
+            &runtime_plan,
+            endpoints.install.download_options(),
+            false,
+            &mut |_| {},
+        )
+        .await
+        .map_err(InstanceError::RuntimeInstall)?;
+        install_context = install_context
+            .with_processor_java(installed_runtime.diagnostic_executable().to_path_buf());
     }
 
     progress(report(InstancePhase::InstallingGame, None));
@@ -1598,6 +1602,7 @@ pub fn validate_instance(
         super::platform::PlatformPin::Fabric { .. }
             | super::platform::PlatformPin::Vanilla {}
             | super::platform::PlatformPin::NeoForge { .. }
+            | super::platform::PlatformPin::Forge { .. }
     ) {
         problems.push(InstanceProblem {
             component: "platform",
