@@ -1,0 +1,74 @@
+{
+  "baseline": {
+    "aggregateLines": [
+      "[aurora-runtime] reused=true total_ms=1701 validated_files=403 verified_bytes=91160397",
+      "[aurora-install] total_ms=114128 asset_index_ms=16337 client_ms=132 logging_ms=1 libraries_ms=2055 asset_objects_ms=16644 materialization_ms=2076 natives_ms=106 staged_validation_ms=30123 installed_state_ms=23 commit_ms=46626 files=3915 assets=3788 cache_hits=3915 downloads=0 downloaded_bytes=0 limit=16",
+      "[aurora-instance] total_ms=121458 release_resolution_ms=0 metadata_and_planning_ms=523 game_ms=115874 aurora_and_fabric_api_ms=0 final_validation_ms=5056 ready_commit_ms=3"
+    ],
+    "firstInstallComponents": [
+      "[aurora-journal] transaction=eab45d8cd4684cc2a8c591322276a300 stage=Prepared write_us=1659",
+      "[aurora-journal] transaction=eab45d8cd4684cc2a8c591322276a300 stage=Replacing write_us=1326",
+      "[aurora-journal] transaction=eab45d8cd4684cc2a8c591322276a300 stage=Promoting write_us=1434",
+      "[aurora-journal] transaction=eab45d8cd4684cc2a8c591322276a300 stage=Promoted write_us=1376",
+      "[aurora-journal] transaction=eab45d8cd4684cc2a8c591322276a300 stage=Committed write_us=1701"
+    ]
+  },
+  "profile2": {
+    "aggregateLines": [
+      "[aurora-runtime] reused=true total_ms=489 validated_files=403 verified_bytes=91160397",
+      "[aurora-install] total_ms=98894 asset_index_ms=15533 client_ms=132 logging_ms=0 libraries_ms=433 asset_objects_ms=4095 materialization_ms=2131 natives_ms=104 staged_validation_ms=28764 installed_state_ms=24 commit_ms=47674 files=3915 assets=3788 cache_hits=3915 downloads=0 downloaded_bytes=0 limit=16",
+      "[aurora-instance] total_ms=104769 release_resolution_ms=0 metadata_and_planning_ms=279 game_ms=99434 aurora_and_fabric_api_ms=0 final_validation_ms=5050 ready_commit_ms=3"
+    ],
+    "firstInstallComponents": [
+      "[aurora-durability] phase=archive elapsed_us=2044 files=1 bytes=0",
+      "[aurora-durability] phase=cleanup_bookkeeping elapsed_us=21 files=0 bytes=0",
+      "[aurora-durability] phase=archive elapsed_us=2176 files=1 bytes=0",
+      "[aurora-durability] phase=cleanup_bookkeeping elapsed_us=26 files=0 bytes=0",
+      "[aurora-durability] phase=tree_enumeration elapsed_us=86525 files=3936 bytes=0",
+      "[aurora-durability] phase=manifest_parse elapsed_us=18385 files=1 bytes=0",
+      "[aurora-durability] phase=manifest_deep_validation elapsed_us=4925558 files=3936 bytes=0",
+      "[aurora-durability] phase=tree_sha256 elapsed_us=10328666 files=3936 bytes=835886854",
+      "[aurora-journal] transaction=7d1601ceb7464ed9a720ab062f216238 stage=Prepared write_us=1743",
+      "[aurora-durability] phase=cleanup_bookkeeping elapsed_us=14 files=0 bytes=0",
+      "[aurora-durability] phase=installed_state_write elapsed_us=24091 files=1 bytes=1179514",
+      "[aurora-durability] phase=tree_enumeration elapsed_us=89996 files=3936 bytes=0",
+      "[aurora-durability] phase=manifest_parse elapsed_us=19170 files=1 bytes=0",
+      "[aurora-durability] phase=manifest_deep_validation elapsed_us=5147569 files=3936 bytes=0",
+      "[aurora-durability] phase=tree_sha256 elapsed_us=10597904 files=3936 bytes=835886854",
+      "[aurora-durability] phase=tree_enumeration elapsed_us=90922 files=3936 bytes=0",
+      "[aurora-durability] phase=manifest_parse elapsed_us=25282 files=1 bytes=0",
+      "[aurora-durability] phase=manifest_deep_validation elapsed_us=5138067 files=3936 bytes=0",
+      "[aurora-durability] phase=tree_sha256 elapsed_us=10514832 files=3936 bytes=835886854",
+      "[aurora-durability] phase=staging_synchronization elapsed_us=468413 files=0 bytes=0",
+      "[aurora-journal] transaction=7d1601ceb7464ed9a720ab062f216238 stage=Replacing write_us=933",
+      "[aurora-durability] phase=rename_checks elapsed_us=85502 files=0 bytes=0",
+      "[aurora-durability] phase=backup_rename elapsed_us=3554 files=0 bytes=0",
+      "[aurora-journal] transaction=7d1601ceb7464ed9a720ab062f216238 stage=Promoting write_us=1479",
+      "[aurora-durability] phase=rename_checks elapsed_us=86067 files=0 bytes=0",
+      "[aurora-durability] phase=promotion_or_restore_rename elapsed_us=3524 files=0 bytes=0",
+      "[aurora-journal] transaction=7d1601ceb7464ed9a720ab062f216238 stage=Promoted write_us=1106",
+      "[aurora-durability] phase=tree_enumeration elapsed_us=93675 files=3936 bytes=0",
+      "[aurora-durability] phase=manifest_parse elapsed_us=18387 files=1 bytes=0",
+      "[aurora-durability] phase=manifest_deep_validation elapsed_us=4904552 files=3936 bytes=0",
+      "[aurora-durability] phase=tree_sha256 elapsed_us=10327874 files=3936 bytes=835886854",
+      "[aurora-durability] phase=post_promotion_verification elapsed_us=15359866 files=0 bytes=0",
+      "[aurora-journal] transaction=7d1601ceb7464ed9a720ab062f216238 stage=Committed write_us=2223",
+      "[aurora-durability] phase=archive elapsed_us=1491 files=1 bytes=0",
+      "[aurora-durability] phase=cleanup_bookkeeping elapsed_us=1690 files=0 bytes=0"
+    ]
+  },
+  "baseline2": {
+    "aggregateLines": [
+      "[aurora-runtime] reused=true total_ms=491 validated_files=403 verified_bytes=91160397",
+      "[aurora-install] total_ms=97288 asset_index_ms=15727 client_ms=122 logging_ms=0 libraries_ms=375 asset_objects_ms=3742 materialization_ms=2106 natives_ms=110 staged_validation_ms=28339 installed_state_ms=23 commit_ms=46739 files=3915 assets=3788 cache_hits=3915 downloads=0 downloaded_bytes=0 limit=16",
+      "[aurora-instance] total_ms=103265 release_resolution_ms=0 metadata_and_planning_ms=296 game_ms=97828 aurora_and_fabric_api_ms=0 final_validation_ms=5136 ready_commit_ms=4"
+    ],
+    "firstInstallComponents": [
+      "[aurora-journal] transaction=c1feaa1715d04168b3f91960823d5d1f stage=Prepared write_us=1803",
+      "[aurora-journal] transaction=c1feaa1715d04168b3f91960823d5d1f stage=Replacing write_us=1157",
+      "[aurora-journal] transaction=c1feaa1715d04168b3f91960823d5d1f stage=Promoting write_us=1702",
+      "[aurora-journal] transaction=c1feaa1715d04168b3f91960823d5d1f stage=Promoted write_us=1652",
+      "[aurora-journal] transaction=c1feaa1715d04168b3f91960823d5d1f stage=Committed write_us=1904"
+    ]
+  }
+}

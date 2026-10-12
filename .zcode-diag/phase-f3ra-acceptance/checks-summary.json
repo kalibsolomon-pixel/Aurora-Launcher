@@ -1,0 +1,62 @@
+{
+  "frontendTypeCheck": {
+    "outcome": "zero errors / warnings",
+    "rawLog": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\closing-ui-check.log",
+    "bytes": 423,
+    "sha256": "192661e306e9e9cbee82883595609e80a96c5765218de4aec3279e349eefc128"
+  },
+  "frontendTests": {
+    "outcome": "270 passed; zero failures",
+    "rawLog": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\closing-ui-tests.log",
+    "bytes": 24237,
+    "sha256": "1dab313bf127d507e720c11d538508dc7a613e766e21074575f19c1323e422ac"
+  },
+  "frontendProductionBuild": {
+    "outcome": "passed",
+    "rawLog": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\closing-ui-build.log",
+    "bytes": 4652,
+    "sha256": "d65418444b8884f63c0d32773aa99cfd90c35efb8afb8b65f45bf0ca96025119"
+  },
+  "rustFormat": {
+    "outcome": "passed",
+    "rawLog": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\completed-rust-fmt.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "rustAllTargetsCheck": {
+    "outcome": "passed",
+    "rawLog": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\completed-rust-check.log",
+    "bytes": 1535,
+    "sha256": "c1ea354188d6a49af2c5132e01dea0a0ba7f45e7374b6cab960e96a4806f082c"
+  },
+  "rustReleaseSuite": {
+    "outcome": "942 unit + 6 integration passed; 30 ignored",
+    "rawLog": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\completed-release-tests.log",
+    "bytes": 93979,
+    "sha256": "6ff76abc8279bb123e3296898dab57bde68d91b931ca87db66ec2b57e0a0de12"
+  },
+  "rustDebugFeatureSuite": {
+    "outcome": "943 passed; 30 ignored",
+    "rawLog": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\completed-feature-tests.log",
+    "bytes": 89630,
+    "sha256": "95dfb30407b5dbd185f1fc54c80ae2163b984e63815bd08b92ab6e696a59d884"
+  },
+  "nativeProductionBuild": {
+    "outcome": "passed; 4m43s",
+    "rawLog": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\completed-production-build.log",
+    "bytes": 5917,
+    "sha256": "ee144b03129dbfefe22e16516116081594e3ba6b34f1a09417fd269699b53419"
+  },
+  "finalDebugDesktopBuild": {
+    "outcome": "passed; 21.21s",
+    "rawLog": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\desktop-completed-build.log",
+    "bytes": 401,
+    "sha256": "34f7ffd8bead22a44613b955b15fa809a2009b03ec36824256a071c2ac6a5ecb"
+  },
+  "sevenLoaderDeepValidation": {
+    "outcome": "all seven Ready; no problems",
+    "rawLog": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\closing-seven-quiet.log",
+    "bytes": 716,
+    "sha256": "220b4fce07e33704050293b2ab21a8271ce6873af296516269eaf12c9f95a58b"
+  }
+}

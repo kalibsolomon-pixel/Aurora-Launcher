@@ -404,3 +404,36 @@ Acceptance helpers: `examples/f3r_acceptance.rs`, `examples/f3r_acceptance_drive
 `examples/f3r_processor_kill.py`. Documentation: this file, `ARCHITECTURE.md` and
 `.zcode-diag/phase-f3r-durable/EVIDENCE.md`. The exact name-status diff is retained
 locally; no pre-existing tracked file was deleted or renamed.
+
+## F3R-A acceptance addendum — 2026-10-12
+
+This addendum preserves the historical F3R findings above. The follow-up is
+documented in [FORGE_F3R_ACCEPTANCE.md](FORGE_F3R_ACCEPTANCE.md), with a new
+curated index at `.zcode-diag/phase-f3ra-acceptance/EVIDENCE.md` and retained raw
+evidence in newly marked `aurora-f3ra-*` temporary roots.
+
+Actual Windows Tauri processes exercised same-target contention, independent
+targets, externally killed replacement checkpoints, three consecutive recovery
+kills, and a retained-handle observation of real Forge Java termination after
+parent death. The UI now distinguishes busy, interrupted, previous restored,
+completed and manual-repair recovery, suppresses stale Ready during preparation
+and focus checks, and rejects obsolete state responses. Native recovery runs off
+the UI thread and observes lifecycle ownership in the installer's existing lock
+order. Debug checkpoint observation is restricted to marked temporary roots and
+excluded from release builds. Integrity checks and commit ordering are unchanged.
+
+The quiet warm A–B–A Forge 1.20.4 series measured 114.128 / 98.894 / 97.288 seconds
+for the installer. First-run asset-cache variance prevents a general speedup
+claim. Detailed measurements identify repeated deep validation and whole-tree
+hashing as the main cost; durable journal writes and actual renames are
+milliseconds. No verification/sync reduction was implemented. The new report
+proposes a separately tested single-pass validation/hash experiment and an
+explicit, locked, ownership-proven retention workflow; it does not implement GC.
+
+The overall verdict remains **PARTIAL** because no Linux installation, VM or
+authorized remote was available. Linux locking, filesystem/directory-sync,
+SIGKILL processor termination and desktop results remain unexecuted. Windows
+NTFS process-death evidence is not universal power-loss or cross-filesystem
+durability. F1C authenticated gameplay remains separately pending. Production
+Launcher 1.4.2, owner/auth state, original fixtures and existing diagnostics were
+preserved; there was no push, publication or production replacement.

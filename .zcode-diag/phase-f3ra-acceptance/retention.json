@@ -1,0 +1,67 @@
+{
+  "trees": [
+    {
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "tree": ".install-history\\1c352cb07af145fe81e1587c64033c6f\\rejected-game",
+      "files": 3768,
+      "bytes": 825978339
+    },
+    {
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "tree": ".install-history\\22726d094e964b00bc10c7b65cb033ba\\rejected-game",
+      "files": 3768,
+      "bytes": 825978339
+    },
+    {
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "tree": ".install-history\\4ba62538025d47cdad94625a63cf8785\\previous-game",
+      "files": 3768,
+      "bytes": 825978334
+    },
+    {
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "tree": ".install-history\\a768d49abdbf4ed0b00ca1a4d3323a2d\\rejected-game",
+      "files": 3768,
+      "bytes": 825978339
+    },
+    {
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "tree": ".install-history\\b3f62b0c270946dd88ebe5c794ec5794\\previous-game",
+      "files": 3768,
+      "bytes": 825978339
+    },
+    {
+      "instanceId": "8a1042662b8d4db5b166e82b1f8e15f5",
+      "tree": ".install-history\\7d1601ceb7464ed9a720ab062f216238\\previous-game",
+      "files": 3936,
+      "bytes": 835886854
+    },
+    {
+      "instanceId": "8a1042662b8d4db5b166e82b1f8e15f5",
+      "tree": ".install-history\\80e55df516b54aa8b7087a1cd4a93d70\\previous-game",
+      "files": 3936,
+      "bytes": 835886854
+    },
+    {
+      "instanceId": "8a1042662b8d4db5b166e82b1f8e15f5",
+      "tree": ".install-history\\c1feaa1715d04168b3f91960823d5d1f\\previous-game",
+      "files": 3936,
+      "bytes": 835886854
+    },
+    {
+      "instanceId": "8a1042662b8d4db5b166e82b1f8e15f5",
+      "tree": ".install-history\\df1cce497dba4948a819bf1c60dcb1b6\\previous-game",
+      "files": 3936,
+      "bytes": 835886854
+    },
+    {
+      "instanceId": "8a1042662b8d4db5b166e82b1f8e15f5",
+      "tree": ".install-history\\eab45d8cd4684cc2a8c591322276a300\\previous-game",
+      "files": 3936,
+      "bytes": 835886849
+    }
+  ],
+  "treeCount": 10,
+  "files": 38520,
+  "bytes": 8309325955
+}

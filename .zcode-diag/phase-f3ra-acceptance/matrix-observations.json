@@ -1,0 +1,1352 @@
+{
+  "actualCheckpointKills": [
+    {
+      "label": "A2-owner",
+      "start": {
+        "action": "start",
+        "label": "A2-owner",
+        "pid": 25372,
+        "exe": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\desktop-A2-owner.exe",
+        "point": "Prepared",
+        "sha256": "2681a19eeebcf546e3c9758b81e89fb967499de639bed0e0d810540fc77e0b52",
+        "observedAtUnix": 1791802366.7472723
+      },
+      "kill": {
+        "action": "kill",
+        "label": "A2-owner",
+        "pid": 25372,
+        "exit": 1,
+        "observedAtUnix": 1791802684.5065203
+      },
+      "checkpoint": {
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "pid": 25372,
+        "point": "Prepared"
+      },
+      "secondsFromCheckpointToKill": 185.45452070236206
+    },
+    {
+      "label": "B-AfterBackup",
+      "start": {
+        "action": "start",
+        "label": "B-AfterBackup",
+        "pid": 26236,
+        "exe": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\desktop-B-AfterBackup.exe",
+        "point": "AfterBackup",
+        "sha256": "2681a19eeebcf546e3c9758b81e89fb967499de639bed0e0d810540fc77e0b52",
+        "observedAtUnix": 1791802723.4964652
+      },
+      "kill": {
+        "action": "kill",
+        "label": "B-AfterBackup",
+        "pid": 26236,
+        "exit": 1,
+        "observedAtUnix": 1791802964.93065
+      },
+      "checkpoint": {
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "pid": 26236,
+        "point": "AfterBackup"
+      },
+      "secondsFromCheckpointToKill": 24.41301393508911
+    },
+    {
+      "label": "B2-AfterPromotion",
+      "start": {
+        "action": "start",
+        "label": "B2-AfterPromotion",
+        "pid": 2572,
+        "exe": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\desktop-B2-AfterPromotion.exe",
+        "point": "AfterPromotion",
+        "sha256": "cb56d5e28e8f3e2627418f4d2fa1851cf3c519a88d6a51e386eaf4f197e34b53",
+        "observedAtUnix": 1791803628.042973
+      },
+      "kill": {
+        "action": "kill",
+        "label": "B2-AfterPromotion",
+        "pid": 2572,
+        "exit": 1,
+        "observedAtUnix": 1791803807.5944638
+      },
+      "checkpoint": {
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "pid": 2572,
+        "point": "AfterPromotion"
+      },
+      "secondsFromCheckpointToKill": 12.90753984451294
+    },
+    {
+      "label": "C-Restoring",
+      "start": {
+        "action": "start",
+        "label": "C-Restoring",
+        "pid": 5224,
+        "exe": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\desktop-C-Restoring.exe",
+        "point": "Restoring",
+        "sha256": "cb56d5e28e8f3e2627418f4d2fa1851cf3c519a88d6a51e386eaf4f197e34b53",
+        "observedAtUnix": 1791803809.0412567
+      },
+      "kill": {
+        "action": "kill",
+        "label": "C-Restoring",
+        "pid": 5224,
+        "exit": 1,
+        "observedAtUnix": 1791803864.1420517
+      },
+      "checkpoint": {
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "pid": 5224,
+        "point": "Restoring"
+      },
+      "secondsFromCheckpointToKill": 21.53691530227661
+    },
+    {
+      "label": "C-AfterQuarantine",
+      "start": {
+        "action": "start",
+        "label": "C-AfterQuarantine",
+        "pid": 22820,
+        "exe": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\desktop-C-AfterQuarantine.exe",
+        "point": "AfterQuarantine",
+        "sha256": "cb56d5e28e8f3e2627418f4d2fa1851cf3c519a88d6a51e386eaf4f197e34b53",
+        "observedAtUnix": 1791803865.5768716
+      },
+      "kill": {
+        "action": "kill",
+        "label": "C-AfterQuarantine",
+        "pid": 22820,
+        "exit": 1,
+        "observedAtUnix": 1791803922.3610194
+      },
+      "checkpoint": {
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "pid": 22820,
+        "point": "AfterQuarantine"
+      },
+      "secondsFromCheckpointToKill": 21.310932159423828
+    },
+    {
+      "label": "C-AfterRestore",
+      "start": {
+        "action": "start",
+        "label": "C-AfterRestore",
+        "pid": 11280,
+        "exe": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\desktop-C-AfterRestore.exe",
+        "point": "AfterRestore",
+        "sha256": "cb56d5e28e8f3e2627418f4d2fa1851cf3c519a88d6a51e386eaf4f197e34b53",
+        "observedAtUnix": 1791803923.9880786
+      },
+      "kill": {
+        "action": "kill",
+        "label": "C-AfterRestore",
+        "pid": 11280,
+        "exit": 1,
+        "observedAtUnix": 1791803955.8891642
+      },
+      "checkpoint": {
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "pid": 11280,
+        "point": "AfterRestore"
+      },
+      "secondsFromCheckpointToKill": 14.120734691619873
+    },
+    {
+      "label": "B-BeforeCommit",
+      "start": {
+        "action": "start",
+        "label": "B-BeforeCommit",
+        "pid": 27904,
+        "exe": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\desktop-B-BeforeCommit.exe",
+        "point": "BeforeCommit",
+        "sha256": "cb56d5e28e8f3e2627418f4d2fa1851cf3c519a88d6a51e386eaf4f197e34b53",
+        "observedAtUnix": 1791803957.3252933
+      },
+      "kill": {
+        "action": "kill",
+        "label": "B-BeforeCommit",
+        "pid": 27904,
+        "exit": 1,
+        "observedAtUnix": 1791804314.5772114
+      },
+      "checkpoint": {
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "pid": 27904,
+        "point": "BeforeCommit"
+      },
+      "secondsFromCheckpointToKill": 137.58009791374207
+    },
+    {
+      "label": "B-AfterCommit",
+      "start": {
+        "action": "start",
+        "label": "B-AfterCommit",
+        "pid": 19372,
+        "exe": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3ra-D2\\desktop-B-AfterCommit.exe",
+        "point": "AfterCommit",
+        "sha256": "cb56d5e28e8f3e2627418f4d2fa1851cf3c519a88d6a51e386eaf4f197e34b53",
+        "observedAtUnix": 1791804317.1384704
+      },
+      "kill": {
+        "action": "kill",
+        "label": "B-AfterCommit",
+        "pid": 19372,
+        "exit": 1,
+        "observedAtUnix": 1791804551.9304214
+      },
+      "checkpoint": {
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "pid": 19372,
+        "point": "AfterCommit"
+      },
+      "secondsFromCheckpointToKill": 28.037202835083008
+    }
+  ],
+  "snapshots": [
+    {
+      "case": "A-owner",
+      "rawFile": "snapshot-015.json",
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "4c1f2dc5e82449ac8d58e6fca201eaea",
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "stage": "prepared",
+        "previous": {
+          "installationId": "install-1791788666616-27580",
+          "manifestSha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "treeSha256": "149040bcf1cf0642ab79be3c7bc7667536186dbe4ad67b69421823b39f7b21ba",
+          "valid": true
+        },
+        "candidate": null
+      },
+      "manifests": {
+        "game\\installed-game.json": {
+          "sha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "installationId": "install-1791788666616-27580"
+        }
+      },
+      "receiptLastStage": null,
+      "processors": null
+    },
+    {
+      "case": "A-independent-target",
+      "rawFile": "snapshot-016.json",
+      "instanceId": "8a1042662b8d4db5b166e82b1f8e15f5",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "80e55df516b54aa8b7087a1cd4a93d70",
+        "instanceId": "8a1042662b8d4db5b166e82b1f8e15f5",
+        "stage": "prepared",
+        "previous": {
+          "installationId": "c1feaa1715d04168b3f91960823d5d1f",
+          "manifestSha256": "11313c2bf4924866de1ae539ce4446d172efaf903a08524ecfe6019fd9af945b",
+          "treeSha256": "3d87dc470e2f634dc66fad454b4a951ef21e3384b4d7e984085e5c1b5c008037",
+          "valid": true
+        },
+        "candidate": null
+      },
+      "manifests": {
+        "game\\installed-game.json": {
+          "sha256": "11313c2bf4924866de1ae539ce4446d172efaf903a08524ecfe6019fd9af945b",
+          "installationId": "c1feaa1715d04168b3f91960823d5d1f"
+        },
+        ".install-history\\7d1601ceb7464ed9a720ab062f216238\\previous-game\\installed-game.json": {
+          "sha256": "213257f477977f3f5633d7a5b7420513940695ccde3d5584e0217b33a732affc",
+          "installationId": "eab45d8cd4684cc2a8c591322276a300"
+        },
+        ".install-history\\c1feaa1715d04168b3f91960823d5d1f\\previous-game\\installed-game.json": {
+          "sha256": "b3565e9ae85a4663bc08e903fdf2711c1d135a326451a3332416b427dc2a1671",
+          "installationId": "7d1601ceb7464ed9a720ab062f216238"
+        },
+        ".install-history\\eab45d8cd4684cc2a8c591322276a300\\previous-game\\installed-game.json": {
+          "sha256": "6a8b2dc0de1a353af8908d433b39491d308f961688a182d14427072fe498baa4",
+          "installationId": "install-1791788730519-27580"
+        },
+        ".install-staging\\game\\installed-game.json": {
+          "sha256": "684097e5ebbb7ea7d470a5ce9387d07d1cec50bdd615fcd92629382efd642a4f",
+          "installationId": "80e55df516b54aa8b7087a1cd4a93d70"
+        }
+      },
+      "receiptLastStage": {
+        "stage": "replacing",
+        "unixMillis": 1791802652798
+      },
+      "processors": {
+        "completed": true,
+        "generated": [
+          {
+            "observedSha256": "6af033f54be4ca740150deee05bf405da4747fc8e77eaa39a4a5a85a333fb1fd",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.4-20231207.112700/mcp_config-1.20.4-20231207.112700-mappings-merged.tsrg",
+            "sizeBytes": 4844850
+          },
+          {
+            "observedSha256": "6c5f6ec8d42415dd476af05963f5d81e57e183233494d620655000e38e3c0b28",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.4-20231207.112700/mcp_config-1.20.4-20231207.112700-mappings.tsrg",
+            "sizeBytes": 6011226
+          },
+          {
+            "observedSha256": "0655649b218701c8e9a40a9590bd1783bca8ff2f058af326b64e5574046c54e5",
+            "relative": "libraries/net/minecraft/client/1.20.4-20231207.112700/client-1.20.4-20231207.112700-mappings.tsrg",
+            "sizeBytes": 6200723
+          },
+          {
+            "observedSha256": "73f9a892ef8dd39a32d3b7b5402292f1130a5c8d9d0ee9aa3f98e5fe816e8d08",
+            "relative": "libraries/net/minecraft/client/1.20.4-20231207.112700/client-1.20.4-20231207.112700-srg.jar",
+            "sizeBytes": 26138797
+          },
+          {
+            "observedSha256": "75a08ea54445b467ae39c62087d9dfabdaee3273fb2892b8bdd4a7e2e1c449d9",
+            "relative": "libraries/net/minecraftforge/forge/1.20.4-49.2.0/forge-1.20.4-49.2.0-client.jar",
+            "sizeBytes": 26348916
+          }
+        ],
+        "tools": [
+          "net.minecraftforge:installertools:1.4.0",
+          "net.minecraftforge:installertools:1.4.0",
+          "net.minecraftforge:installertools:1.4.0",
+          "net.minecraftforge:ForgeAutoRenamingTool:1.0.6",
+          "net.minecraftforge:binarypatcher:1.2.0"
+        ]
+      }
+    },
+    {
+      "case": "D-processor-kill",
+      "rawFile": "snapshot-022.json",
+      "instanceId": "8a1042662b8d4db5b166e82b1f8e15f5",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "c6da8adfb7fd421cb7288a24f8a95b5b",
+        "instanceId": "8a1042662b8d4db5b166e82b1f8e15f5",
+        "stage": "prepared",
+        "previous": {
+          "installationId": "80e55df516b54aa8b7087a1cd4a93d70",
+          "manifestSha256": "684097e5ebbb7ea7d470a5ce9387d07d1cec50bdd615fcd92629382efd642a4f",
+          "treeSha256": "6cfc600a815b01f9f54a3b3a4a8fa454bcfa922c6e3b4f93c407d72f8377508a",
+          "valid": true
+        },
+        "candidate": null
+      },
+      "manifests": {
+        "game\\installed-game.json": {
+          "sha256": "684097e5ebbb7ea7d470a5ce9387d07d1cec50bdd615fcd92629382efd642a4f",
+          "installationId": "80e55df516b54aa8b7087a1cd4a93d70"
+        },
+        ".install-history\\7d1601ceb7464ed9a720ab062f216238\\previous-game\\installed-game.json": {
+          "sha256": "213257f477977f3f5633d7a5b7420513940695ccde3d5584e0217b33a732affc",
+          "installationId": "eab45d8cd4684cc2a8c591322276a300"
+        },
+        ".install-history\\80e55df516b54aa8b7087a1cd4a93d70\\previous-game\\installed-game.json": {
+          "sha256": "11313c2bf4924866de1ae539ce4446d172efaf903a08524ecfe6019fd9af945b",
+          "installationId": "c1feaa1715d04168b3f91960823d5d1f"
+        },
+        ".install-history\\c1feaa1715d04168b3f91960823d5d1f\\previous-game\\installed-game.json": {
+          "sha256": "b3565e9ae85a4663bc08e903fdf2711c1d135a326451a3332416b427dc2a1671",
+          "installationId": "7d1601ceb7464ed9a720ab062f216238"
+        },
+        ".install-history\\eab45d8cd4684cc2a8c591322276a300\\previous-game\\installed-game.json": {
+          "sha256": "6a8b2dc0de1a353af8908d433b39491d308f961688a182d14427072fe498baa4",
+          "installationId": "install-1791788730519-27580"
+        }
+      },
+      "receiptLastStage": {
+        "stage": "processing",
+        "unixMillis": 1791802801329
+      },
+      "processors": {
+        "completed": false,
+        "generated": [],
+        "tools": [
+          "net.minecraftforge:installertools:1.4.0",
+          "net.minecraftforge:installertools:1.4.0",
+          "net.minecraftforge:installertools:1.4.0",
+          "net.minecraftforge:ForgeAutoRenamingTool:1.0.6",
+          "net.minecraftforge:binarypatcher:1.2.0"
+        ]
+      }
+    },
+    {
+      "case": "B-AfterBackup",
+      "rawFile": "snapshot-024.json",
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "c17949c4ddf0490084e5f6148c129350",
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "stage": "replacing",
+        "previous": {
+          "installationId": "install-1791788666616-27580",
+          "manifestSha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "treeSha256": "149040bcf1cf0642ab79be3c7bc7667536186dbe4ad67b69421823b39f7b21ba",
+          "valid": true
+        },
+        "candidate": {
+          "installationId": "c17949c4ddf0490084e5f6148c129350",
+          "manifestSha256": "c17ad9893b64b44cd1caef9e8b9220cf476ea0e2f54045ba26e4869a9af2823e",
+          "treeSha256": "30261b326fa141a3198f2c77fddaf05899c170cc3d479d3b5cc2cc7ab73d7947",
+          "valid": true
+        }
+      },
+      "manifests": {
+        ".install-history\\c17949c4ddf0490084e5f6148c129350\\previous-game\\installed-game.json": {
+          "sha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "installationId": "install-1791788666616-27580"
+        },
+        ".install-staging\\game\\installed-game.json": {
+          "sha256": "c17ad9893b64b44cd1caef9e8b9220cf476ea0e2f54045ba26e4869a9af2823e",
+          "installationId": "c17949c4ddf0490084e5f6148c129350"
+        }
+      },
+      "receiptLastStage": {
+        "stage": "replacing",
+        "unixMillis": 1791802905922
+      },
+      "processors": {
+        "completed": true,
+        "generated": [
+          {
+            "observedSha256": "43660881d0a5fff41cbde7a818726a8c950c39b1380b65cbc3b2d3290963bff1",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings-merged.txt",
+            "sizeBytes": 4558114
+          },
+          {
+            "observedSha256": "19ae000175bfb58e5b26406c31a0e501bfb40000b078fee2f00ea60a8c7ed453",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 5653149
+          },
+          {
+            "observedSha256": "f43d1ac034a8907edab190a17501fd4ca2b0af107d4231da364eeca8ab5ee317",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar",
+            "sizeBytes": 10436626
+          },
+          {
+            "observedSha256": "175a681c6d296cb4ab2448ee8b4bf5725351cf81e51e68f79fdb6d95bd97e349",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "67bfc33ef0c7103f002d6ac134f8eddd3d67e2ce45d266e83816d1a2e2c9b01d",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 8001795
+          },
+          {
+            "observedSha256": "b554e0780b332f4269b4f05586b19987a62cb3bd7917a8ef9c4c0bc92b642a8e",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar",
+            "sizeBytes": 12592249
+          },
+          {
+            "observedSha256": "8c180790ffaacf9e24113535b7e0f486da8d592971537650a5b1bbe6124bf2cc",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "e2e940fe7ca0a9fba5a5c11ad2cf3e2f7df91bbf51d12af22cdde7af18adc344",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-srg.jar",
+            "sizeBytes": 18842082
+          },
+          {
+            "observedSha256": "839b69b60243ec31a6c53f6ac28d82d8251427a8c8bb946e920129618abdc944",
+            "relative": "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-client.jar",
+            "sizeBytes": 4848366
+          }
+        ],
+        "tools": [
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:jarsplitter:1.1.4",
+          "net.minecraftforge:ForgeAutoRenamingTool:0.1.22:all",
+          "net.minecraftforge:binarypatcher:1.1.1"
+        ]
+      }
+    },
+    {
+      "case": "B-AfterPromotion",
+      "rawFile": "snapshot-032.json",
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "a768d49abdbf4ed0b00ca1a4d3323a2d",
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "stage": "promoting",
+        "previous": {
+          "installationId": "install-1791788666616-27580",
+          "manifestSha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "treeSha256": "149040bcf1cf0642ab79be3c7bc7667536186dbe4ad67b69421823b39f7b21ba",
+          "valid": true
+        },
+        "candidate": {
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d",
+          "manifestSha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "treeSha256": "28d052a3c7e420e5f09e1d4467316ed9fff4b94db76276aaa45afead8b213223",
+          "valid": true
+        }
+      },
+      "manifests": {
+        "game\\installed-game.json": {
+          "sha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d"
+        },
+        ".install-history\\1c352cb07af145fe81e1587c64033c6f\\rejected-game\\installed-game.json": {
+          "sha256": "80dddd0ef5e56aecb3a2c4316a5718d2d2a1f1f3de1f491acc7fddd942db29e5",
+          "installationId": "1c352cb07af145fe81e1587c64033c6f"
+        },
+        ".install-history\\a768d49abdbf4ed0b00ca1a4d3323a2d\\previous-game\\installed-game.json": {
+          "sha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "installationId": "install-1791788666616-27580"
+        }
+      },
+      "receiptLastStage": {
+        "stage": "replacing",
+        "unixMillis": 1791803762659
+      },
+      "processors": {
+        "completed": true,
+        "generated": [
+          {
+            "observedSha256": "43660881d0a5fff41cbde7a818726a8c950c39b1380b65cbc3b2d3290963bff1",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings-merged.txt",
+            "sizeBytes": 4558114
+          },
+          {
+            "observedSha256": "19ae000175bfb58e5b26406c31a0e501bfb40000b078fee2f00ea60a8c7ed453",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 5653149
+          },
+          {
+            "observedSha256": "f43d1ac034a8907edab190a17501fd4ca2b0af107d4231da364eeca8ab5ee317",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar",
+            "sizeBytes": 10436626
+          },
+          {
+            "observedSha256": "175a681c6d296cb4ab2448ee8b4bf5725351cf81e51e68f79fdb6d95bd97e349",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "67bfc33ef0c7103f002d6ac134f8eddd3d67e2ce45d266e83816d1a2e2c9b01d",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 8001795
+          },
+          {
+            "observedSha256": "b554e0780b332f4269b4f05586b19987a62cb3bd7917a8ef9c4c0bc92b642a8e",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar",
+            "sizeBytes": 12592249
+          },
+          {
+            "observedSha256": "8c180790ffaacf9e24113535b7e0f486da8d592971537650a5b1bbe6124bf2cc",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "e2e940fe7ca0a9fba5a5c11ad2cf3e2f7df91bbf51d12af22cdde7af18adc344",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-srg.jar",
+            "sizeBytes": 18842082
+          },
+          {
+            "observedSha256": "839b69b60243ec31a6c53f6ac28d82d8251427a8c8bb946e920129618abdc944",
+            "relative": "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-client.jar",
+            "sizeBytes": 4848366
+          }
+        ],
+        "tools": [
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:jarsplitter:1.1.4",
+          "net.minecraftforge:ForgeAutoRenamingTool:0.1.22:all",
+          "net.minecraftforge:binarypatcher:1.1.1"
+        ]
+      }
+    },
+    {
+      "case": "C-Restoring",
+      "rawFile": "snapshot-035.json",
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "a768d49abdbf4ed0b00ca1a4d3323a2d",
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "stage": "restoring",
+        "previous": {
+          "installationId": "install-1791788666616-27580",
+          "manifestSha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "treeSha256": "149040bcf1cf0642ab79be3c7bc7667536186dbe4ad67b69421823b39f7b21ba",
+          "valid": true
+        },
+        "candidate": {
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d",
+          "manifestSha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "treeSha256": "28d052a3c7e420e5f09e1d4467316ed9fff4b94db76276aaa45afead8b213223",
+          "valid": true
+        }
+      },
+      "manifests": {
+        "game\\installed-game.json": {
+          "sha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d"
+        },
+        ".install-history\\1c352cb07af145fe81e1587c64033c6f\\rejected-game\\installed-game.json": {
+          "sha256": "80dddd0ef5e56aecb3a2c4316a5718d2d2a1f1f3de1f491acc7fddd942db29e5",
+          "installationId": "1c352cb07af145fe81e1587c64033c6f"
+        },
+        ".install-history\\a768d49abdbf4ed0b00ca1a4d3323a2d\\previous-game\\installed-game.json": {
+          "sha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "installationId": "install-1791788666616-27580"
+        }
+      },
+      "receiptLastStage": {
+        "stage": "replacing",
+        "unixMillis": 1791803762659
+      },
+      "processors": {
+        "completed": true,
+        "generated": [
+          {
+            "observedSha256": "43660881d0a5fff41cbde7a818726a8c950c39b1380b65cbc3b2d3290963bff1",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings-merged.txt",
+            "sizeBytes": 4558114
+          },
+          {
+            "observedSha256": "19ae000175bfb58e5b26406c31a0e501bfb40000b078fee2f00ea60a8c7ed453",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 5653149
+          },
+          {
+            "observedSha256": "f43d1ac034a8907edab190a17501fd4ca2b0af107d4231da364eeca8ab5ee317",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar",
+            "sizeBytes": 10436626
+          },
+          {
+            "observedSha256": "175a681c6d296cb4ab2448ee8b4bf5725351cf81e51e68f79fdb6d95bd97e349",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "67bfc33ef0c7103f002d6ac134f8eddd3d67e2ce45d266e83816d1a2e2c9b01d",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 8001795
+          },
+          {
+            "observedSha256": "b554e0780b332f4269b4f05586b19987a62cb3bd7917a8ef9c4c0bc92b642a8e",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar",
+            "sizeBytes": 12592249
+          },
+          {
+            "observedSha256": "8c180790ffaacf9e24113535b7e0f486da8d592971537650a5b1bbe6124bf2cc",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "e2e940fe7ca0a9fba5a5c11ad2cf3e2f7df91bbf51d12af22cdde7af18adc344",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-srg.jar",
+            "sizeBytes": 18842082
+          },
+          {
+            "observedSha256": "839b69b60243ec31a6c53f6ac28d82d8251427a8c8bb946e920129618abdc944",
+            "relative": "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-client.jar",
+            "sizeBytes": 4848366
+          }
+        ],
+        "tools": [
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:jarsplitter:1.1.4",
+          "net.minecraftforge:ForgeAutoRenamingTool:0.1.22:all",
+          "net.minecraftforge:binarypatcher:1.1.1"
+        ]
+      }
+    },
+    {
+      "case": "C-AfterQuarantine",
+      "rawFile": "snapshot-038.json",
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "a768d49abdbf4ed0b00ca1a4d3323a2d",
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "stage": "restoring",
+        "previous": {
+          "installationId": "install-1791788666616-27580",
+          "manifestSha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "treeSha256": "149040bcf1cf0642ab79be3c7bc7667536186dbe4ad67b69421823b39f7b21ba",
+          "valid": true
+        },
+        "candidate": {
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d",
+          "manifestSha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "treeSha256": "28d052a3c7e420e5f09e1d4467316ed9fff4b94db76276aaa45afead8b213223",
+          "valid": true
+        }
+      },
+      "manifests": {
+        ".install-history\\1c352cb07af145fe81e1587c64033c6f\\rejected-game\\installed-game.json": {
+          "sha256": "80dddd0ef5e56aecb3a2c4316a5718d2d2a1f1f3de1f491acc7fddd942db29e5",
+          "installationId": "1c352cb07af145fe81e1587c64033c6f"
+        },
+        ".install-history\\a768d49abdbf4ed0b00ca1a4d3323a2d\\previous-game\\installed-game.json": {
+          "sha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "installationId": "install-1791788666616-27580"
+        },
+        ".install-history\\a768d49abdbf4ed0b00ca1a4d3323a2d\\rejected-game\\installed-game.json": {
+          "sha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d"
+        }
+      },
+      "receiptLastStage": {
+        "stage": "replacing",
+        "unixMillis": 1791803762659
+      },
+      "processors": {
+        "completed": true,
+        "generated": [
+          {
+            "observedSha256": "43660881d0a5fff41cbde7a818726a8c950c39b1380b65cbc3b2d3290963bff1",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings-merged.txt",
+            "sizeBytes": 4558114
+          },
+          {
+            "observedSha256": "19ae000175bfb58e5b26406c31a0e501bfb40000b078fee2f00ea60a8c7ed453",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 5653149
+          },
+          {
+            "observedSha256": "f43d1ac034a8907edab190a17501fd4ca2b0af107d4231da364eeca8ab5ee317",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar",
+            "sizeBytes": 10436626
+          },
+          {
+            "observedSha256": "175a681c6d296cb4ab2448ee8b4bf5725351cf81e51e68f79fdb6d95bd97e349",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "67bfc33ef0c7103f002d6ac134f8eddd3d67e2ce45d266e83816d1a2e2c9b01d",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 8001795
+          },
+          {
+            "observedSha256": "b554e0780b332f4269b4f05586b19987a62cb3bd7917a8ef9c4c0bc92b642a8e",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar",
+            "sizeBytes": 12592249
+          },
+          {
+            "observedSha256": "8c180790ffaacf9e24113535b7e0f486da8d592971537650a5b1bbe6124bf2cc",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "e2e940fe7ca0a9fba5a5c11ad2cf3e2f7df91bbf51d12af22cdde7af18adc344",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-srg.jar",
+            "sizeBytes": 18842082
+          },
+          {
+            "observedSha256": "839b69b60243ec31a6c53f6ac28d82d8251427a8c8bb946e920129618abdc944",
+            "relative": "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-client.jar",
+            "sizeBytes": 4848366
+          }
+        ],
+        "tools": [
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:jarsplitter:1.1.4",
+          "net.minecraftforge:ForgeAutoRenamingTool:0.1.22:all",
+          "net.minecraftforge:binarypatcher:1.1.1"
+        ]
+      }
+    },
+    {
+      "case": "C-AfterRestore",
+      "rawFile": "snapshot-041.json",
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "a768d49abdbf4ed0b00ca1a4d3323a2d",
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "stage": "restoring",
+        "previous": {
+          "installationId": "install-1791788666616-27580",
+          "manifestSha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "treeSha256": "149040bcf1cf0642ab79be3c7bc7667536186dbe4ad67b69421823b39f7b21ba",
+          "valid": true
+        },
+        "candidate": {
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d",
+          "manifestSha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "treeSha256": "28d052a3c7e420e5f09e1d4467316ed9fff4b94db76276aaa45afead8b213223",
+          "valid": true
+        }
+      },
+      "manifests": {
+        "game\\installed-game.json": {
+          "sha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "installationId": "install-1791788666616-27580"
+        },
+        ".install-history\\1c352cb07af145fe81e1587c64033c6f\\rejected-game\\installed-game.json": {
+          "sha256": "80dddd0ef5e56aecb3a2c4316a5718d2d2a1f1f3de1f491acc7fddd942db29e5",
+          "installationId": "1c352cb07af145fe81e1587c64033c6f"
+        },
+        ".install-history\\a768d49abdbf4ed0b00ca1a4d3323a2d\\rejected-game\\installed-game.json": {
+          "sha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d"
+        }
+      },
+      "receiptLastStage": {
+        "stage": "replacing",
+        "unixMillis": 1791803762659
+      },
+      "processors": {
+        "completed": true,
+        "generated": [
+          {
+            "observedSha256": "43660881d0a5fff41cbde7a818726a8c950c39b1380b65cbc3b2d3290963bff1",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings-merged.txt",
+            "sizeBytes": 4558114
+          },
+          {
+            "observedSha256": "19ae000175bfb58e5b26406c31a0e501bfb40000b078fee2f00ea60a8c7ed453",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 5653149
+          },
+          {
+            "observedSha256": "f43d1ac034a8907edab190a17501fd4ca2b0af107d4231da364eeca8ab5ee317",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar",
+            "sizeBytes": 10436626
+          },
+          {
+            "observedSha256": "175a681c6d296cb4ab2448ee8b4bf5725351cf81e51e68f79fdb6d95bd97e349",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "67bfc33ef0c7103f002d6ac134f8eddd3d67e2ce45d266e83816d1a2e2c9b01d",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 8001795
+          },
+          {
+            "observedSha256": "b554e0780b332f4269b4f05586b19987a62cb3bd7917a8ef9c4c0bc92b642a8e",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar",
+            "sizeBytes": 12592249
+          },
+          {
+            "observedSha256": "8c180790ffaacf9e24113535b7e0f486da8d592971537650a5b1bbe6124bf2cc",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "e2e940fe7ca0a9fba5a5c11ad2cf3e2f7df91bbf51d12af22cdde7af18adc344",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-srg.jar",
+            "sizeBytes": 18842082
+          },
+          {
+            "observedSha256": "839b69b60243ec31a6c53f6ac28d82d8251427a8c8bb946e920129618abdc944",
+            "relative": "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-client.jar",
+            "sizeBytes": 4848366
+          }
+        ],
+        "tools": [
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:jarsplitter:1.1.4",
+          "net.minecraftforge:ForgeAutoRenamingTool:0.1.22:all",
+          "net.minecraftforge:binarypatcher:1.1.1"
+        ]
+      }
+    },
+    {
+      "case": "C-Restored",
+      "rawFile": "snapshot-044.json",
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "a768d49abdbf4ed0b00ca1a4d3323a2d",
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "stage": "restored",
+        "previous": {
+          "installationId": "install-1791788666616-27580",
+          "manifestSha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "treeSha256": "149040bcf1cf0642ab79be3c7bc7667536186dbe4ad67b69421823b39f7b21ba",
+          "valid": true
+        },
+        "candidate": {
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d",
+          "manifestSha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "treeSha256": "28d052a3c7e420e5f09e1d4467316ed9fff4b94db76276aaa45afead8b213223",
+          "valid": true
+        }
+      },
+      "manifests": {
+        "game\\installed-game.json": {
+          "sha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "installationId": "install-1791788666616-27580"
+        },
+        ".install-history\\1c352cb07af145fe81e1587c64033c6f\\rejected-game\\installed-game.json": {
+          "sha256": "80dddd0ef5e56aecb3a2c4316a5718d2d2a1f1f3de1f491acc7fddd942db29e5",
+          "installationId": "1c352cb07af145fe81e1587c64033c6f"
+        },
+        ".install-history\\a768d49abdbf4ed0b00ca1a4d3323a2d\\rejected-game\\installed-game.json": {
+          "sha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d"
+        }
+      },
+      "receiptLastStage": {
+        "stage": "replacing",
+        "unixMillis": 1791803762659
+      },
+      "processors": {
+        "completed": true,
+        "generated": [
+          {
+            "observedSha256": "43660881d0a5fff41cbde7a818726a8c950c39b1380b65cbc3b2d3290963bff1",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings-merged.txt",
+            "sizeBytes": 4558114
+          },
+          {
+            "observedSha256": "19ae000175bfb58e5b26406c31a0e501bfb40000b078fee2f00ea60a8c7ed453",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 5653149
+          },
+          {
+            "observedSha256": "f43d1ac034a8907edab190a17501fd4ca2b0af107d4231da364eeca8ab5ee317",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar",
+            "sizeBytes": 10436626
+          },
+          {
+            "observedSha256": "175a681c6d296cb4ab2448ee8b4bf5725351cf81e51e68f79fdb6d95bd97e349",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "67bfc33ef0c7103f002d6ac134f8eddd3d67e2ce45d266e83816d1a2e2c9b01d",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 8001795
+          },
+          {
+            "observedSha256": "b554e0780b332f4269b4f05586b19987a62cb3bd7917a8ef9c4c0bc92b642a8e",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar",
+            "sizeBytes": 12592249
+          },
+          {
+            "observedSha256": "8c180790ffaacf9e24113535b7e0f486da8d592971537650a5b1bbe6124bf2cc",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "e2e940fe7ca0a9fba5a5c11ad2cf3e2f7df91bbf51d12af22cdde7af18adc344",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-srg.jar",
+            "sizeBytes": 18842082
+          },
+          {
+            "observedSha256": "839b69b60243ec31a6c53f6ac28d82d8251427a8c8bb946e920129618abdc944",
+            "relative": "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-client.jar",
+            "sizeBytes": 4848366
+          }
+        ],
+        "tools": [
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:jarsplitter:1.1.4",
+          "net.minecraftforge:ForgeAutoRenamingTool:0.1.22:all",
+          "net.minecraftforge:binarypatcher:1.1.1"
+        ]
+      }
+    },
+    {
+      "case": "B-BeforeCommit",
+      "rawFile": "snapshot-045.json",
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "22726d094e964b00bc10c7b65cb033ba",
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "stage": "promoted",
+        "previous": {
+          "installationId": "install-1791788666616-27580",
+          "manifestSha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "treeSha256": "149040bcf1cf0642ab79be3c7bc7667536186dbe4ad67b69421823b39f7b21ba",
+          "valid": true
+        },
+        "candidate": {
+          "installationId": "22726d094e964b00bc10c7b65cb033ba",
+          "manifestSha256": "4f0753e5a42d852baa8e0c74e24366332575ff0459612653020117ea20efd69c",
+          "treeSha256": "500085792c5aa368734c8b79b9dacd440ef5c106fafc711238e50352c5edab11",
+          "valid": true
+        }
+      },
+      "manifests": {
+        "game\\installed-game.json": {
+          "sha256": "4f0753e5a42d852baa8e0c74e24366332575ff0459612653020117ea20efd69c",
+          "installationId": "22726d094e964b00bc10c7b65cb033ba"
+        },
+        ".install-history\\1c352cb07af145fe81e1587c64033c6f\\rejected-game\\installed-game.json": {
+          "sha256": "80dddd0ef5e56aecb3a2c4316a5718d2d2a1f1f3de1f491acc7fddd942db29e5",
+          "installationId": "1c352cb07af145fe81e1587c64033c6f"
+        },
+        ".install-history\\22726d094e964b00bc10c7b65cb033ba\\previous-game\\installed-game.json": {
+          "sha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "installationId": "install-1791788666616-27580"
+        },
+        ".install-history\\a768d49abdbf4ed0b00ca1a4d3323a2d\\rejected-game\\installed-game.json": {
+          "sha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d"
+        }
+      },
+      "receiptLastStage": {
+        "stage": "replacing",
+        "unixMillis": 1791804127174
+      },
+      "processors": {
+        "completed": true,
+        "generated": [
+          {
+            "observedSha256": "43660881d0a5fff41cbde7a818726a8c950c39b1380b65cbc3b2d3290963bff1",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings-merged.txt",
+            "sizeBytes": 4558114
+          },
+          {
+            "observedSha256": "19ae000175bfb58e5b26406c31a0e501bfb40000b078fee2f00ea60a8c7ed453",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 5653149
+          },
+          {
+            "observedSha256": "f43d1ac034a8907edab190a17501fd4ca2b0af107d4231da364eeca8ab5ee317",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar",
+            "sizeBytes": 10436626
+          },
+          {
+            "observedSha256": "175a681c6d296cb4ab2448ee8b4bf5725351cf81e51e68f79fdb6d95bd97e349",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "67bfc33ef0c7103f002d6ac134f8eddd3d67e2ce45d266e83816d1a2e2c9b01d",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 8001795
+          },
+          {
+            "observedSha256": "b554e0780b332f4269b4f05586b19987a62cb3bd7917a8ef9c4c0bc92b642a8e",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar",
+            "sizeBytes": 12592249
+          },
+          {
+            "observedSha256": "8c180790ffaacf9e24113535b7e0f486da8d592971537650a5b1bbe6124bf2cc",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "e2e940fe7ca0a9fba5a5c11ad2cf3e2f7df91bbf51d12af22cdde7af18adc344",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-srg.jar",
+            "sizeBytes": 18842082
+          },
+          {
+            "observedSha256": "839b69b60243ec31a6c53f6ac28d82d8251427a8c8bb946e920129618abdc944",
+            "relative": "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-client.jar",
+            "sizeBytes": 4848366
+          }
+        ],
+        "tools": [
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:jarsplitter:1.1.4",
+          "net.minecraftforge:ForgeAutoRenamingTool:0.1.22:all",
+          "net.minecraftforge:binarypatcher:1.1.1"
+        ]
+      }
+    },
+    {
+      "case": "B-before-commit-Restored",
+      "rawFile": "snapshot-050.json",
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "22726d094e964b00bc10c7b65cb033ba",
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "stage": "restored",
+        "previous": {
+          "installationId": "install-1791788666616-27580",
+          "manifestSha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "treeSha256": "149040bcf1cf0642ab79be3c7bc7667536186dbe4ad67b69421823b39f7b21ba",
+          "valid": true
+        },
+        "candidate": {
+          "installationId": "22726d094e964b00bc10c7b65cb033ba",
+          "manifestSha256": "4f0753e5a42d852baa8e0c74e24366332575ff0459612653020117ea20efd69c",
+          "treeSha256": "500085792c5aa368734c8b79b9dacd440ef5c106fafc711238e50352c5edab11",
+          "valid": true
+        }
+      },
+      "manifests": {
+        "game\\installed-game.json": {
+          "sha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "installationId": "install-1791788666616-27580"
+        },
+        ".install-history\\1c352cb07af145fe81e1587c64033c6f\\rejected-game\\installed-game.json": {
+          "sha256": "80dddd0ef5e56aecb3a2c4316a5718d2d2a1f1f3de1f491acc7fddd942db29e5",
+          "installationId": "1c352cb07af145fe81e1587c64033c6f"
+        },
+        ".install-history\\22726d094e964b00bc10c7b65cb033ba\\rejected-game\\installed-game.json": {
+          "sha256": "4f0753e5a42d852baa8e0c74e24366332575ff0459612653020117ea20efd69c",
+          "installationId": "22726d094e964b00bc10c7b65cb033ba"
+        },
+        ".install-history\\a768d49abdbf4ed0b00ca1a4d3323a2d\\rejected-game\\installed-game.json": {
+          "sha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d"
+        }
+      },
+      "receiptLastStage": {
+        "stage": "replacing",
+        "unixMillis": 1791804127174
+      },
+      "processors": {
+        "completed": true,
+        "generated": [
+          {
+            "observedSha256": "43660881d0a5fff41cbde7a818726a8c950c39b1380b65cbc3b2d3290963bff1",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings-merged.txt",
+            "sizeBytes": 4558114
+          },
+          {
+            "observedSha256": "19ae000175bfb58e5b26406c31a0e501bfb40000b078fee2f00ea60a8c7ed453",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 5653149
+          },
+          {
+            "observedSha256": "f43d1ac034a8907edab190a17501fd4ca2b0af107d4231da364eeca8ab5ee317",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar",
+            "sizeBytes": 10436626
+          },
+          {
+            "observedSha256": "175a681c6d296cb4ab2448ee8b4bf5725351cf81e51e68f79fdb6d95bd97e349",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "67bfc33ef0c7103f002d6ac134f8eddd3d67e2ce45d266e83816d1a2e2c9b01d",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 8001795
+          },
+          {
+            "observedSha256": "b554e0780b332f4269b4f05586b19987a62cb3bd7917a8ef9c4c0bc92b642a8e",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar",
+            "sizeBytes": 12592249
+          },
+          {
+            "observedSha256": "8c180790ffaacf9e24113535b7e0f486da8d592971537650a5b1bbe6124bf2cc",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "e2e940fe7ca0a9fba5a5c11ad2cf3e2f7df91bbf51d12af22cdde7af18adc344",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-srg.jar",
+            "sizeBytes": 18842082
+          },
+          {
+            "observedSha256": "839b69b60243ec31a6c53f6ac28d82d8251427a8c8bb946e920129618abdc944",
+            "relative": "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-client.jar",
+            "sizeBytes": 4848366
+          }
+        ],
+        "tools": [
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:jarsplitter:1.1.4",
+          "net.minecraftforge:ForgeAutoRenamingTool:0.1.22:all",
+          "net.minecraftforge:binarypatcher:1.1.1"
+        ]
+      }
+    },
+    {
+      "case": "B-AfterCommit",
+      "rawFile": "snapshot-051.json",
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "4ba62538025d47cdad94625a63cf8785",
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "stage": "committed",
+        "previous": {
+          "installationId": "install-1791788666616-27580",
+          "manifestSha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "treeSha256": "149040bcf1cf0642ab79be3c7bc7667536186dbe4ad67b69421823b39f7b21ba",
+          "valid": true
+        },
+        "candidate": {
+          "installationId": "4ba62538025d47cdad94625a63cf8785",
+          "manifestSha256": "db0fe77640b14dff2fb8032efa259c0d4b350ceef5aea4f39e119196c4a403b5",
+          "treeSha256": "995403bf63bfa6948fe2e8f0ce049e70b25600b33e57c7dd7f816545e15e8435",
+          "valid": true
+        }
+      },
+      "manifests": {
+        "game\\installed-game.json": {
+          "sha256": "db0fe77640b14dff2fb8032efa259c0d4b350ceef5aea4f39e119196c4a403b5",
+          "installationId": "4ba62538025d47cdad94625a63cf8785"
+        },
+        ".install-history\\1c352cb07af145fe81e1587c64033c6f\\rejected-game\\installed-game.json": {
+          "sha256": "80dddd0ef5e56aecb3a2c4316a5718d2d2a1f1f3de1f491acc7fddd942db29e5",
+          "installationId": "1c352cb07af145fe81e1587c64033c6f"
+        },
+        ".install-history\\22726d094e964b00bc10c7b65cb033ba\\rejected-game\\installed-game.json": {
+          "sha256": "4f0753e5a42d852baa8e0c74e24366332575ff0459612653020117ea20efd69c",
+          "installationId": "22726d094e964b00bc10c7b65cb033ba"
+        },
+        ".install-history\\4ba62538025d47cdad94625a63cf8785\\previous-game\\installed-game.json": {
+          "sha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "installationId": "install-1791788666616-27580"
+        },
+        ".install-history\\a768d49abdbf4ed0b00ca1a4d3323a2d\\rejected-game\\installed-game.json": {
+          "sha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d"
+        }
+      },
+      "receiptLastStage": {
+        "stage": "replacing",
+        "unixMillis": 1791804476794
+      },
+      "processors": {
+        "completed": true,
+        "generated": [
+          {
+            "observedSha256": "43660881d0a5fff41cbde7a818726a8c950c39b1380b65cbc3b2d3290963bff1",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings-merged.txt",
+            "sizeBytes": 4558114
+          },
+          {
+            "observedSha256": "19ae000175bfb58e5b26406c31a0e501bfb40000b078fee2f00ea60a8c7ed453",
+            "relative": "libraries/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 5653149
+          },
+          {
+            "observedSha256": "f43d1ac034a8907edab190a17501fd4ca2b0af107d4231da364eeca8ab5ee317",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar",
+            "sizeBytes": 10436626
+          },
+          {
+            "observedSha256": "175a681c6d296cb4ab2448ee8b4bf5725351cf81e51e68f79fdb6d95bd97e349",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-extra.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "67bfc33ef0c7103f002d6ac134f8eddd3d67e2ce45d266e83816d1a2e2c9b01d",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-mappings.txt",
+            "sizeBytes": 8001795
+          },
+          {
+            "observedSha256": "b554e0780b332f4269b4f05586b19987a62cb3bd7917a8ef9c4c0bc92b642a8e",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar",
+            "sizeBytes": 12592249
+          },
+          {
+            "observedSha256": "8c180790ffaacf9e24113535b7e0f486da8d592971537650a5b1bbe6124bf2cc",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-slim.jar.cache",
+            "sizeBytes": 141
+          },
+          {
+            "observedSha256": "e2e940fe7ca0a9fba5a5c11ad2cf3e2f7df91bbf51d12af22cdde7af18adc344",
+            "relative": "libraries/net/minecraft/client/1.20.1-20230612.114412/client-1.20.1-20230612.114412-srg.jar",
+            "sizeBytes": 18842082
+          },
+          {
+            "observedSha256": "839b69b60243ec31a6c53f6ac28d82d8251427a8c8bb946e920129618abdc944",
+            "relative": "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-client.jar",
+            "sizeBytes": 4848366
+          }
+        ],
+        "tools": [
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:installertools:1.4.1",
+          "net.minecraftforge:jarsplitter:1.1.4",
+          "net.minecraftforge:ForgeAutoRenamingTool:0.1.22:all",
+          "net.minecraftforge:binarypatcher:1.1.1"
+        ]
+      }
+    },
+    {
+      "case": "B-commit-restarted",
+      "rawFile": "snapshot-054.json",
+      "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+      "registryState": "installing",
+      "journal": {
+        "schemaVersion": 1,
+        "transactionId": "4ba62538025d47cdad94625a63cf8785",
+        "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+        "stage": "committed",
+        "previous": {
+          "installationId": "install-1791788666616-27580",
+          "manifestSha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "treeSha256": "149040bcf1cf0642ab79be3c7bc7667536186dbe4ad67b69421823b39f7b21ba",
+          "valid": true
+        },
+        "candidate": {
+          "installationId": "4ba62538025d47cdad94625a63cf8785",
+          "manifestSha256": "db0fe77640b14dff2fb8032efa259c0d4b350ceef5aea4f39e119196c4a403b5",
+          "treeSha256": "995403bf63bfa6948fe2e8f0ce049e70b25600b33e57c7dd7f816545e15e8435",
+          "valid": true
+        }
+      },
+      "manifests": {
+        "game\\installed-game.json": {
+          "sha256": "db0fe77640b14dff2fb8032efa259c0d4b350ceef5aea4f39e119196c4a403b5",
+          "installationId": "4ba62538025d47cdad94625a63cf8785"
+        },
+        ".install-history\\1c352cb07af145fe81e1587c64033c6f\\rejected-game\\installed-game.json": {
+          "sha256": "80dddd0ef5e56aecb3a2c4316a5718d2d2a1f1f3de1f491acc7fddd942db29e5",
+          "installationId": "1c352cb07af145fe81e1587c64033c6f"
+        },
+        ".install-history\\22726d094e964b00bc10c7b65cb033ba\\rejected-game\\installed-game.json": {
+          "sha256": "4f0753e5a42d852baa8e0c74e24366332575ff0459612653020117ea20efd69c",
+          "installationId": "22726d094e964b00bc10c7b65cb033ba"
+        },
+        ".install-history\\4ba62538025d47cdad94625a63cf8785\\previous-game\\installed-game.json": {
+          "sha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+          "installationId": "install-1791788666616-27580"
+        },
+        ".install-history\\a768d49abdbf4ed0b00ca1a4d3323a2d\\rejected-game\\installed-game.json": {
+          "sha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+          "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d"
+        }
+      },
+      "receiptLastStage": null,
+      "processors": null
+    }
+  ],
+  "processorHandleObservations": [
+    {
+      "action": "processor-active",
+      "label": "profile2",
+      "parentPid": 19348,
+      "javaPid": 6740,
+      "retainedHandle": true,
+      "exitCodeBeforeKill": 259,
+      "observedAtUnix": 1791802810.9117203
+    },
+    {
+      "action": "processor-parent-killed",
+      "label": "profile2",
+      "parentPid": 19348,
+      "javaPid": 6740,
+      "childWaitResult": 0,
+      "childExitCode": 0,
+      "childTerminated": true,
+      "observedAtUnix": 1791802810.9954221
+    }
+  ]
+}

@@ -1,0 +1,198 @@
+Window: "Aurora Launcher F3R-A Acceptance", App: desktop-repeat-2.exe.
+	0 window Aurora Launcher F3R-A Acceptance Secondary Actions: Raise
+		1 pane TAURI_DRAG_RESIZE_WINDOW
+		2 pane
+			3 pane Aurora Launcher
+				4 pane (disabled)
+				5 region Aurora Launcher - Web content
+					6 region
+						7 region
+							8 region
+								9 region
+								10 region
+									11 region
+										12 region
+											13 region
+												14 region
+												15 document Aurora Launcher Value: http://tauri.localhost/ ID: RootWebArea
+													16 group
+														17 header Window controls
+															18 text Aurora Launcher
+															19 button Minimize Description: Minimize
+															20 button Maximize Description: Maximize
+															21 button Close Aurora Launcher Description: Close
+														22 navigation Aurora Launcher
+															23 button Home
+															24 button Instances
+															25 button Skins & Capes
+															26 button Settings
+															27 button Accounts — not signed in
+																28 graphic Default account avatar
+														29 main
+															102 section header
+																103 heading Instances
+																104 text Isolated Minecraft installations Aurora launches from.
+															105 region Modrinth modpacks
+																106 heading Modrinth modpacks
+																107 text Choose a published pack version to create its own Fabric instance.
+																108 button Browse Modpacks
+															109 region Your instances
+																110 heading Your instances ID: list-title
+																111 text 7 instances — open one to manage it; the selected one launches from Home.
+																112 text F1C 1.20.1 forge
+																113 text Minecraft 1.20.1 · Forge 1.20.1-47.4.10
+																115 text Ready
+																116 button Open
+																117 button Select
+																118 button Validate
+																119 text F1C 1.20.4 forge
+																120 text Selected
+																121 text Minecraft 1.20.4 · Forge 1.20.4-49.2.0
+																123 text Ready
+																124 button Open
+																125 button Validate
+																126 text F1C 1.21.11 forge
+																127 text Minecraft 1.21.11 · Forge 1.21.11-61.2.0
+																129 text Ready
+																130 button Open
+																131 button Select
+																132 button Validate
+																133 text F1C 1.21.11 vanilla
+																134 text Minecraft 1.21.11 · Vanilla
+																136 text Ready
+																137 button Open
+																138 button Select
+																139 button Validate
+																140 text F1C 1.21.11 fabric
+																141 text Minecraft 1.21.11 · Fabric 0.19.5
+																143 text Ready
+																144 button Open
+																145 button Select
+																146 button Validate
+																147 text F1C 26.2 neoForge
+																148 text Minecraft 26.2 · NeoForge 26.2.0.88
+																150 text Ready
+																151 button Open
+																152 button Select
+																153 button Validate
+																154 text F1C 1.21.11 fabric Aurora
+																155 text Minecraft 1.21.11 · Fabric 0.19.5
+																157 text Ready
+																158 button Open
+																159 button Select
+																160 button Validate
+																161 text Instances are isolated Minecraft installations with the selected platform and optional Aurora content, validated before they are reported ready. Open an instance to manage its configuration, content and Java runtime. Delete an instance from its Settings after reviewing the data warning.
+															162 region Create instance
+																163 heading Create instance ID: create-title
+																164 text Choose a name, a Minecraft version, and a loader — everything else can be configured later.
+																165 text Name
+																166 edit (settable, string) Name Description: e.g. My Aurora Setup
+																167 text Minecraft version
+																168 combo box (settable, string) Minecraft version Value: 1.21.11
+																169 text Minecraft platform
+																170 combo box (settable, string) Minecraft platform Value: Fabric
+																171 text Fabric version
+																172 combo box (settable, string) Fabric version Value: Newest stable compatible version
+																173 check box (settable, string) Aurora Client
+																174 text Aurora Client
+																175 text Aurora Client 3.0.0 is available for this configuration. Included by default when compatible; you can turn it off. Required Fabric Loader: 0.19.5.
+																176 check box (settable, string) Show snapshot versions
+																177 text Show snapshot versions
+																178 button (disabled) Create instance
+																179 text Production releases are reviewed and bundled with this launcher build. Instances keep their installed versions until you choose an update or configuration change.
+																180 text Development releases are available in this debug build. Serve
+																181 text src-tauri/development
+																182 text on 127.0.0.1:8765 to install those fixtures.
+														91 group ID: svelte-announcer
+								92 region
+						93 region
+						94 region
+		95 title bar (settable, string) Value: Aurora Launcher F3R-A Acceptance
+			96 menu bar System ID: MenuBar
+				101 menu item System
+			98 button Minimize
+			99 button Maximize
+			100 button Close
+
+Document text: ```
+Aurora Launcher
+Minimize
+Maximize
+Close Aurora Launcher
+Home
+Instances
+Skins & Capes
+Settings
+￼
+Not signed in
+Sign in to play Minecraft
+Instances
+Isolated Minecraft installations Aurora launches from.
+Modrinth modpacks
+Choose a published pack version to create its own Fabric instance.
+Browse Modpacks
+Your instances
+7 instances — open one to manage it; the selected one launches from Home.
+F1C 1.20.1 forge
+Minecraft 1.20.1 · Forge 1.20.1-47.4.10
+Ready
+Open
+Select
+Validate
+F1C 1.20.4 forge
+Selected
+Minecraft 1.20.4 · Forge 1.20.4-49.2.0
+Ready
+Open
+Validate
+F1C 1.21.11 forge
+Minecraft 1.21.11 · Forge 1.21.11-61.2.0
+Ready
+Open
+Select
+Validate
+F1C 1.21.11 vanilla
+Minecraft 1.21.11 · Vanilla
+Ready
+Open
+Select
+Validate
+F1C 1.21.11 fabric
+Minecraft 1.21.11 · Fabric 0.19.5
+Ready
+Open
+Select
+Validate
+F1C 26.2 neoForge
+Minecraft 26.2 · NeoForge 26.2.0.88
+Ready
+Open
+Select
+Validate
+F1C 1.21.11 fabric Aurora
+Minecraft 1.21.11 · Fabric 0.19.5
+Ready
+Open
+Select
+Validate
+Instances are isolated Minecraft installations with the selected platform and optional Aurora content, validated before they are reported ready. Open an instance to manage its configuration, content and Java runtime. Delete an instance from its Settings after reviewing the data warning.
+Create instance
+Choose a name, a Minecraft version, and a loader — everything else can be configured later.
+Name
+￼
+Minecraft version
+￼
+Minecraft platform
+￼
+Fabric version
+￼
+￼
+Aurora Client
+Aurora Client 3.0.0 is available for this configuration. Included by default when compatible; you can turn it off. Required Fabric Loader: 0.19.5.
+￼
+Show snapshot versions
+Create instance
+Production releases are reviewed and bundled with this launcher build. Instances keep their installed versions until you choose an update or configuration change.
+Development releases are available in this debug build. Serve src-tauri/development on 127.0.0.1:8765 to install those fixtures.
+￼
+```

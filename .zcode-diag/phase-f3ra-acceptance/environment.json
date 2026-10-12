@@ -1,0 +1,17 @@
+{
+  "host": "Windows-11-10.0.26300-SP0",
+  "python": "3.12.10",
+  "rust": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-pc-windows-msvc\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+  "linux": "wsl --list --verbose: Windows Subsystem for Linux not installed; docker executable unavailable; no Linux remote provided",
+  "protectedPaths": [
+    "C:\\Users\\kalib\\AppData\\Local\\Aurora Launcher\\aurora-launcher.exe",
+    "C:\\Users\\kalib\\AppData\\Local\\com.aurora.launcher\\launcher\\config.json",
+    "C:\\Users\\kalib\\AppData\\Local\\com.aurora.launcher\\launcher\\instances.json",
+    "C:\\Users\\kalib\\AppData\\Local\\com.aurora.launcher\\launcher\\accounts.json"
+  ],
+  "filesystem": "local NTFS C:",
+  "cpu": "Intel Core i7-14700F",
+  "cores": 20,
+  "logicalProcessors": 28,
+  "physicalMemoryBytes": 34104127488
+}

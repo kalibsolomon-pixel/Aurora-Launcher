@@ -1,0 +1,64 @@
+{
+  "verdict": "PASS",
+  "snapshots": [
+    "snapshot-057.json",
+    "snapshot-060.json",
+    "snapshot-063.json",
+    "snapshot-066.json"
+  ],
+  "transactionId": "b3f62b0c270946dd88ebe5c794ec5794",
+  "journal": {
+    "schemaVersion": 1,
+    "transactionId": "b3f62b0c270946dd88ebe5c794ec5794",
+    "instanceId": "83b00dab27374bc7be67b78dc91e6140",
+    "stage": "committed",
+    "previous": {
+      "installationId": "4ba62538025d47cdad94625a63cf8785",
+      "manifestSha256": "db0fe77640b14dff2fb8032efa259c0d4b350ceef5aea4f39e119196c4a403b5",
+      "treeSha256": "995403bf63bfa6948fe2e8f0ce049e70b25600b33e57c7dd7f816545e15e8435",
+      "valid": true
+    },
+    "candidate": {
+      "installationId": "b3f62b0c270946dd88ebe5c794ec5794",
+      "manifestSha256": "0179b684fa1b1024f990580ac472544177a025dc4adaef8df905f2256fe3489f",
+      "treeSha256": "f6133bd60d622691c82f95b9452f5162b4bf3ae958abc8b5ac1f9d541be4e3a8",
+      "valid": true
+    }
+  },
+  "manifests": {
+    "game\\installed-game.json": {
+      "sha256": "0179b684fa1b1024f990580ac472544177a025dc4adaef8df905f2256fe3489f",
+      "installationId": "b3f62b0c270946dd88ebe5c794ec5794"
+    },
+    ".install-history\\1c352cb07af145fe81e1587c64033c6f\\rejected-game\\installed-game.json": {
+      "sha256": "80dddd0ef5e56aecb3a2c4316a5718d2d2a1f1f3de1f491acc7fddd942db29e5",
+      "installationId": "1c352cb07af145fe81e1587c64033c6f"
+    },
+    ".install-history\\22726d094e964b00bc10c7b65cb033ba\\rejected-game\\installed-game.json": {
+      "sha256": "4f0753e5a42d852baa8e0c74e24366332575ff0459612653020117ea20efd69c",
+      "installationId": "22726d094e964b00bc10c7b65cb033ba"
+    },
+    ".install-history\\4ba62538025d47cdad94625a63cf8785\\previous-game\\installed-game.json": {
+      "sha256": "06044ce2f07f1bde73f6b2a7c1b042fb3a1cff47534240ee098060df3ad49f60",
+      "installationId": "install-1791788666616-27580"
+    },
+    ".install-history\\a768d49abdbf4ed0b00ca1a4d3323a2d\\rejected-game\\installed-game.json": {
+      "sha256": "ed1d1d69e80405bf79da5624b89aae5841f886d81c03143c4ccce272e9c6b9bf",
+      "installationId": "a768d49abdbf4ed0b00ca1a4d3323a2d"
+    },
+    ".install-history\\b3f62b0c270946dd88ebe5c794ec5794\\previous-game\\installed-game.json": {
+      "sha256": "db0fe77640b14dff2fb8032efa259c0d4b350ceef5aea4f39e119196c4a403b5",
+      "installationId": "4ba62538025d47cdad94625a63cf8785"
+    }
+  },
+  "recordState": "ready",
+  "unchanged": [
+    "journal",
+    "registryRecord",
+    "allRecordedGameManifestsAndHistoryIdentities"
+  ],
+  "settledDesktopReadyLabels": [
+    "repeat-2",
+    "repeat-3"
+  ]
+}

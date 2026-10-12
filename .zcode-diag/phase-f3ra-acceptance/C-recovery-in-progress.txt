@@ -1,0 +1,125 @@
+Window: "Aurora Launcher F3R-A Acceptance", App: desktop-C-Restoring.exe.
+	0 window Aurora Launcher F3R-A Acceptance Secondary Actions: Raise
+		1 pane TAURI_DRAG_RESIZE_WINDOW
+		2 pane
+			3 pane Aurora Launcher
+				4 pane (disabled)
+				5 region Aurora Launcher - Web content
+					6 region
+						7 region
+							8 region
+								9 region
+								10 region
+									11 region
+										12 region
+											13 region
+												14 region
+												15 document Aurora Launcher Value: http://tauri.localhost/ ID: RootWebArea
+													16 group
+														17 header Window controls
+															18 text Aurora Launcher
+															19 button Minimize Description: Minimize
+															20 button Maximize Description: Maximize
+															21 button Close Aurora Launcher Description: Close
+														22 navigation Aurora Launcher
+															23 button Home
+															24 button Instances
+															25 button Skins & Capes
+															26 button Settings
+															27 button Accounts — not signed in
+																28 graphic Default account avatar
+														29 main
+															30 group Home
+																31 group
+																	32 text Checking saved installation state and recovering interrupted installations…
+																33 region Home widgets
+																	34 status
+																	35 toggle button Edit Home widgets Description: Edit Home widgets
+																	36 status
+																	37 article Instance Details
+																		38 heading Instance Details
+																		39 text Select an instance to see its installed details.
+																	40 article Content Summary
+																		41 heading Content Summary
+																		42 text Select an instance to see its local content.
+																	43 article Playtime
+																		44 heading Playtime
+																		45 group Playtime range
+																			46 toggle button 7D
+																			47 toggle button 30D
+																			48 toggle button All
+																		49 text No playtime recorded yet.
+																	50 article Recent Worlds
+																		51 heading Recent Worlds
+																		52 text No recently played worlds.
+																	53 article Recent Servers
+																		54 heading Recent Servers
+																		55 text No recently played servers.
+																	56 article Skin Library
+																		57 heading Skin Library
+																		58 graphic Default account avatar
+																		59 text Not signed in
+																		60 text Sign in to play Minecraft
+																		61 text Browse your local collection without an account.
+																		62 text No saved skins yet. Import your first skin in the library.
+																		63 button Open Skin Library 0 saved →
+																	64 article Cape Selector
+																		65 heading Cape Selector
+																		66 text Your capes
+																		67 text Connect a Minecraft account
+																		68 button Open Cape Library View & equip →
+														69 group ID: svelte-announcer
+								70 region
+						71 region
+						72 region
+		73 title bar (settable, string) Value: Aurora Launcher F3R-A Acceptance
+			74 menu bar System ID: MenuBar
+				75 menu item System
+			76 button Minimize
+			77 button Maximize
+			78 button Close
+
+Document text: ```
+Aurora Launcher
+Minimize
+Maximize
+Close Aurora Launcher
+Home
+Instances
+Skins & Capes
+Settings
+￼
+Not signed in
+Sign in to play Minecraft
+Checking saved installation state and recovering interrupted installations…
+￼
+Edit Home widgets
+￼
+Instance Details
+Select an instance to see its installed details.
+Content Summary
+Select an instance to see its local content.
+Playtime
+7D
+30D
+All
+No playtime recorded yet.
+Recent Worlds
+No recently played worlds.
+Recent Servers
+No recently played servers.
+Skin Library
+￼
+Not signed in
+Sign in to play Minecraft
+Browse your local collection without an account.
+No saved skins yet. Import your first skin in the library.
+Open Skin Library
+0 saved →
+Cape Selector
+Your capes
+Connect a Minecraft account
+Open Cape Library
+View & equip →
+￼
+```

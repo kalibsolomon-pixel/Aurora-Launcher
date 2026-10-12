@@ -1,0 +1,12 @@
+{
+  "preexistingUntracked": {
+    "checked": 15257,
+    "differences": []
+  },
+  "protectedProduction": {
+    "checked": 4,
+    "differences": []
+  },
+  "trackedMissing": [],
+  "verdict": "PASS"
+}

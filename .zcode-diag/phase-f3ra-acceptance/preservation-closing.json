@@ -1,0 +1,32 @@
+{
+  "preexistingUntracked": {
+    "checked": 15257,
+    "bytes": 2640127634,
+    "differences": []
+  },
+  "sourceFixture": {
+    "checked": 42652,
+    "bytes": 6871635483,
+    "differences": []
+  },
+  "originalF1cFull": {
+    "checked": 42654,
+    "bytes": 6871641577,
+    "differences": []
+  },
+  "copiedInstanceUserFiles": {
+    "checked": 5,
+    "bytes": 5504125,
+    "differences": []
+  },
+  "protectedProduction": {
+    "checked": 4,
+    "bytes": 19665326,
+    "differences": []
+  },
+  "trackedMissing": [],
+  "criticalMissing": [],
+  "deletions": [],
+  "verdict": "PASS",
+  "elapsedSeconds": 243.375
+}
