@@ -299,7 +299,8 @@ mod tests {
     #[test]
     fn failed_registry_commit_retains_entry_and_retry_handles_absent_root() {
         let world = World::new();
-        let temporary = world.managed.launcher_dir().join("instances.json.tmp");
+        let temporary = world.managed.launcher_dir().join(".instances-write.lock");
+        std::fs::remove_file(&temporary).unwrap(); // This disposable fixture owns the rendezvous.
         std::fs::create_dir(&temporary).unwrap();
         assert_eq!(
             delete(&world.managed, &world.id, "Disposable")

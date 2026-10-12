@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Output;
-use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::time::Instant;
 
@@ -155,12 +154,6 @@ async fn ensure_runtime_with_faults(
     faults: RuntimeInstallFaults,
 ) -> Result<InstalledRuntime, RuntimeInstallError> {
     let started = Instant::now();
-    let lock = runtime_installation_lock(&plan.identity());
-    let _guard = lock
-        .try_lock()
-        .map_err(|_| RuntimeInstallError::AlreadyInProgress {
-            identity: plan.identity(),
-        })?;
     let root = plan.installation_dir(managed);
     let _process_guard = crate::install::coordination::TargetLock::acquire(
         managed.data_root(),
@@ -841,18 +834,6 @@ fn materialization(path: &str, error: std::io::Error) -> RuntimeInstallError {
         path: path.to_owned(),
         reason: error.to_string(),
     }
-}
-
-fn runtime_installation_lock(identity: &str) -> Arc<tokio::sync::Mutex<()>> {
-    static LOCKS: OnceLock<std::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> =
-        OnceLock::new();
-    let locks = LOCKS.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
-    locks
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .entry(identity.to_owned())
-        .or_default()
-        .clone()
 }
 
 #[derive(Debug)]
