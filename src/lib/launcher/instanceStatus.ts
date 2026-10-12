@@ -59,6 +59,13 @@ export function instanceContentStatus(
   validation: InstanceValidationDto | undefined,
   installingPhase: string | null,
 ): InstanceStatusDecision {
+  if (instance.recovery) {
+    const { status, message } = instance.recovery;
+    const labels = { checking: "Checking recovery…", busy: "Installation busy", interrupted: "Installation interrupted", previousRestored: "Previous installation restored", completed: "Recovery completed", manualRepair: "Recovery required" };
+    if (status !== "completed" || instance.state !== "ready") {
+      return { tone: status === "manualRepair" ? "status-error" : status === "checking" || status === "busy" ? "status-working" : "status-warning", label: labels[status], detail: message };
+    }
+  }
   if (instance.state === "installing") {
     return {
       tone: "status-working",

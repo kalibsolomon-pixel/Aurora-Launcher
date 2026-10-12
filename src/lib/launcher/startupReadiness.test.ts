@@ -231,3 +231,37 @@ it("a mutation reload invalidates checks started during the reload as well as be
   const fresh = store.refreshPlayReadiness(); readiness[1].resolve(decision()); await fresh;
   assert.equal(store.playReadiness.ready, true);
 });
+
+it("desktop focus hides cached Ready, coalesces checks, and accepts native busy status", async () => {
+  store.launcherState = state();
+  const pending = deferred();
+  (globalThis as any).window.__TAURI_INTERNALS__.invoke = () => pending.promise;
+  const first = store.refreshDesktopState();
+  assert.equal(store.launcherState.instances[0].recovery.status, "checking");
+  assert.equal(store.refreshDesktopState(), first);
+  const result = state();
+  (result.instances[0] as any).recovery = { status: "busy", message: "Another launcher owns installation" };
+  pending.resolve(result); await first;
+  assert.equal(store.launcherState.instances[0].recovery.status, "busy");
+  assert.equal(store.desktopRefresh, null);
+});
+
+it("a failed focus check never leaves an indefinite spinner or cached Ready", async () => {
+  store.launcherState = state();
+  (globalThis as any).window.__TAURI_INTERNALS__.invoke = () => Promise.reject({ code: "unavailable", message: "Cannot read state" });
+  await store.refreshDesktopState();
+  assert.equal(store.launcherState.instances[0].recovery.status, "manualRepair");
+  assert.equal(store.stateError.code, "unavailable");
+  assert.equal(store.desktopRefresh, null);
+});
+
+it("an older state response cannot replace newer native recovery authority", async () => {
+  store.launcherState = state();
+  const old = deferred(), current = deferred(); let count = 0;
+  (globalThis as any).window.__TAURI_INTERNALS__.invoke = () => ++count === 1 ? old.promise : current.promise;
+  const first = store.refreshState(); const second = store.refreshState();
+  const latest = state(); (latest.instances[0] as any).recovery = { status: "manualRepair", message: "Conflicting journal" };
+  current.resolve(latest); await second;
+  old.resolve(state()); await first;
+  assert.equal(store.launcherState.instances[0].recovery.status, "manualRepair");
+});

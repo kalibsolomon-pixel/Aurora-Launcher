@@ -347,7 +347,7 @@ pub async fn install_game(
     }
 
     let mut durable_operation = journal::Journal::begin(&instance_root, instance)?;
-    journal::checkpoint(faults, journal::TransactionPoint::Prepared)?;
+    journal::checkpoint(&instance_root, faults, journal::TransactionPoint::Prepared)?;
     prepare_staging(&instance_root, &staging_directory, &staging_game)?;
 
     // The durable transaction receipt: written before any long work, at
@@ -938,6 +938,18 @@ pub async fn install_game(
         source: error,
     })?;
     let state_finished = Instant::now();
+    if std::env::var_os("AURORA_INSTALL_DIAGNOSTICS").is_some() {
+        eprintln!(
+            "[aurora-durability] phase=installed_state_write elapsed_us={} files=1 bytes={}",
+            state_finished
+                .duration_since(staged_validation_finished)
+                .as_micros(),
+            manifest_path
+                .metadata()
+                .map(|value| value.len())
+                .unwrap_or_default()
+        );
+    }
 
     if faults.fail_before_commit {
         return Err(InstallError::Commit {

@@ -8,6 +8,8 @@ pub mod config;
 pub mod content_recognition;
 pub mod content_updates;
 mod cosmetic_image;
+#[cfg(all(debug_assertions, feature = "f3ra-desktop-acceptance"))]
+mod desktop_acceptance;
 pub use cosmetic_image::run_artwork_decoder_if_requested;
 pub mod cosmetics;
 pub mod discord;
@@ -47,6 +49,8 @@ mod test_support;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(all(debug_assertions, feature = "f3ra-desktop-acceptance"))]
+    desktop_acceptance::authorize().expect("desktop acceptance requires a marked disposable root");
     let initialization = performance::scope(performance::Event::Initialization);
     eprintln!("[aurora-launcher] starting native backend");
 

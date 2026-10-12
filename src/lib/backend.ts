@@ -569,6 +569,7 @@ export interface PlatformCapability {
 }
 
 export interface InstanceSummary {
+  recovery?: { status: "checking" | "busy" | "interrupted" | "previousRestored" | "completed" | "manualRepair"; message: string } | null;
   auroraContentState?: string | null;
   id: string;
   displayName: string;

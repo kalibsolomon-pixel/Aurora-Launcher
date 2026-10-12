@@ -76,6 +76,7 @@
   }
 
   function statusDetail(instance: InstanceSummary): string | null {
+    if (instance.recovery) return instance.recovery.message;
     const validation = launcher.instanceValidations[instance.id];
     if (instance.state === "installing") {
       return launcher.createBusy && launcher.createProgress
@@ -106,6 +107,9 @@
   workspace, so this page never duplicates the Settings editor.
 -->
 <div class="page instances-page f-pilot">
+  {#if launcher.launcherState === null && !launcher.stateError}
+    <p role="status">Checking saved installation state and recovering interrupted installations…</p>
+  {/if}
   <header class="page-header">
     <div>
       <h2 class="page-title">Instances</h2>
@@ -421,6 +425,10 @@
 
 <style>
   .modpack-browser { padding: 0 24px 24px; }
+  /* Recovery badges and retry actions must not squeeze their explanation
+     into a few characters at the desktop's supported narrow widths. */
+  .group-row-main { flex-basis: 240px; }
+  .group-row-actions { max-width: 100%; }
   .instances-page { --instance-panel-gap: var(--space-5); max-width: 1500px; width: 100%; margin-inline: auto; display: grid; gap: var(--instance-panel-gap); }
   .instances-page > .page-header, .instances-page > .group { margin: 0; }
   .instances-composition { display: grid; gap: var(--instance-panel-gap); align-items: start; }

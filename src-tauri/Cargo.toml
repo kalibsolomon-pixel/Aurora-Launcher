@@ -20,6 +20,8 @@ tauri-build = { version = "2", features = [] }
 [features]
 # Explicit research build only; absent from ordinary development/release builds.
 performance-p0-2 = []
+# Opt-in, debug-only real desktop fault acceptance; never enabled by normal builds.
+f3ra-desktop-acceptance = []
 
 [dependencies]
 tauri = { version = "2", features = [] }

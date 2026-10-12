@@ -133,6 +133,8 @@ pub struct InstanceSummary {
     /// `validate_instance` command, which performs the deep (hashing)
     /// validation on demand rather than on every state load.
     state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    recovery: Option<RecoverySummary>,
     aurora: Option<crate::instances::platform::AuroraPin>,
     aurora_content_state: Option<String>,
     minecraft_version: String,
@@ -149,6 +151,7 @@ impl InstanceSummary {
             id: record.id().to_string(),
             display_name: record.display_name().to_owned(),
             state: record.state().as_str().to_owned(),
+            recovery: None,
             aurora: record.installed().aurora.clone(),
             aurora_content_state: None,
             minecraft_version: record.installed().minecraft_version.clone(),
@@ -156,6 +159,35 @@ impl InstanceSummary {
             pack: record.pack().cloned(),
             configuration: InstanceConfigurationDto::from_configuration(record.configuration()),
         }
+    }
+}
+
+/// Non-secret recovery presentation; it grants no installation or launch authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RecoverySummary {
+    status: &'static str,
+    message: &'static str,
+}
+
+fn recovery_summary(status: &'static str) -> RecoverySummary {
+    RecoverySummary {
+        status,
+        message: match status {
+            "busy" => {
+                "Installation or recovery is busy. Wait for the current operation to finish, then retry."
+            }
+            "previousRestored" => {
+                "The previous installation was restored. Retry to finish the saved configuration."
+            }
+            "completed" => "Recovery completed. The committed game content was retained.",
+            "interrupted" => {
+                "An interrupted installation was recovered. Retry to finish the saved configuration."
+            }
+            _ => {
+                "Recovery requires manual inspection. All recovery trees and evidence were preserved."
+            }
+        },
     }
 }
 
@@ -546,9 +578,24 @@ pub fn get_application_status(app: AppHandle) -> Result<ApplicationStatus, Comma
 /// data root; malformed persisted files are reported as structured errors and
 /// left untouched.
 #[tauri::command]
-pub fn get_launcher_state(app: AppHandle) -> Result<LauncherState, CommandError> {
+pub async fn get_launcher_state(app: AppHandle) -> Result<LauncherState, CommandError> {
+    let paths = managed_paths(&app)?;
+    tauri::async_runtime::spawn_blocking(move || load_launcher_state(&paths))
+        .await
+        .map_err(|_| {
+            CommandError::new(
+                "launcher_state_unavailable",
+                "The installation recovery worker did not complete.",
+            )
+        })?
+}
+
+fn load_launcher_state(managed_paths: &ManagedPaths) -> Result<LauncherState, CommandError> {
+    // Startup and focus may overlap state requests. Serialize these readers
+    // so their temporary lifecycle observations never report each other busy.
+    static STATE_LOAD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _state_load = STATE_LOAD.lock().unwrap_or_else(|error| error.into_inner());
     let _performance = crate::performance::scope(crate::performance::Event::UnrelatedIpc);
-    let managed_paths = managed_paths(&app)?;
 
     let loaded = crate::config::load_or_initialize(&managed_paths.config_file())?;
     if let ConfigLoad::Initialized(_) = &loaded {
@@ -563,8 +610,35 @@ pub fn get_launcher_state(app: AppHandle) -> Result<LauncherState, CommandError>
     let mut state = LauncherState::from_parts(loaded.into_config(), registry)?;
     for summary in &mut state.instances {
         let id = crate::instances::InstanceId::new(summary.id.clone())?;
-        let recovery = (|| -> Result<(), crate::install::InstallError> {
+        let recovery = (|| -> Result<Option<&'static str>, crate::install::InstallError> {
             let paths = managed_paths.instance_paths(&id);
+            // Observe lifecycle ownership even before a journal exists. Hold
+            // it through replay, using the installer's lifecycle -> game order.
+            let _operation = crate::install::coordination::TargetLock::existing(
+                managed_paths.data_root(),
+                paths.root(),
+                ".instance-operation.lock",
+            )
+            .map_err(|error| match error {
+                crate::install::coordination::LockError::Busy => InstallError::AlreadyInProgress {
+                    instance_id: id.to_string(),
+                },
+                crate::install::coordination::LockError::Io(error) => InstallError::Storage(error),
+            })?;
+            // An installer may have completed while the initial registry was
+            // loaded; publish the record observed under its ownership lock.
+            let latest =
+                InstanceRegistry::load(&managed_paths.instance_registry_file()).map_err(|_| {
+                    InstallError::RecoveryRequired {
+                        reason: "instance registry could not be reloaded safely".into(),
+                    }
+                })?;
+            let record = latest
+                .find(&id)
+                .ok_or_else(|| InstallError::RecoveryRequired {
+                    reason: "instance registry changed during state loading; refresh".into(),
+                })?;
+            *summary = InstanceSummary::from_record(record);
             if std::fs::symlink_metadata(paths.root()).is_ok() {
                 crate::install::coordination::checked_directory(
                     managed_paths.data_root(),
@@ -572,16 +646,31 @@ pub fn get_launcher_state(app: AppHandle) -> Result<LauncherState, CommandError>
                 )
                 .map_err(crate::install::InstallError::Storage)?;
             }
-            if crate::install::journal::needs_recovery(paths.root(), &id)? {
-                crate::install::recover_installation(&managed_paths, &id)?;
+            let outcome = if crate::install::journal::needs_recovery(paths.root(), &id)? {
+                Some(crate::install::recover_installation(managed_paths, &id)?)
+            } else {
+                None
+            };
+            crate::install::journal::readiness_gate(paths.root(), &id)?;
+            if let Some(crate::install::journal::RecoveryOutcome::Completed) = outcome {
+                return Ok(Some("completed"));
             }
-            crate::install::journal::readiness_gate(paths.root(), &id)
+            crate::install::journal::recovery_status(paths.root(), &id)
         })();
-        if let Err(error) = recovery {
+        if let Err(error) = &recovery {
             // Stored Ready is only a presentation hint. Keep this target
             // unavailable without suppressing unrelated instances at startup.
             summary.state = "installing".into();
+            summary.recovery = Some(recovery_summary(
+                if matches!(error, InstallError::AlreadyInProgress { .. }) {
+                    "busy"
+                } else {
+                    "manualRepair"
+                },
+            ));
             eprintln!("[aurora-install] target={id} recovery-unavailable: {error}");
+        } else if let Ok(Some(status)) = recovery {
+            summary.recovery = Some(recovery_summary(status));
         }
         summary.aurora_content_state = crate::instance_mods::bootstrap_status(&managed_paths, &id)?
             .or_else(|| summary.aurora.as_ref().map(|_| "missing".into()));
@@ -6361,6 +6450,58 @@ pub async fn launcher_update_install(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn state_loading_exposes_recovery_errors_without_trusting_stored_ready() {
+        let root = std::env::temp_dir().join(format!("aurora-f3ra-state-{}", uuid::Uuid::new_v4()));
+        let managed = ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let mut registry = InstanceRegistry::empty();
+        for name in ["recover-target", "unrelated-target"] {
+            registry.instances_mut().push(
+                InstanceRecord::new(
+                    crate::instances::InstanceId::new(name).unwrap(),
+                    name,
+                    crate::instances::InstanceState::Ready,
+                    crate::instances::PinnedRelease::new(
+                        ReleaseChannel::Stable,
+                        "0.3.0",
+                        "26.2",
+                        "0.19.5",
+                    )
+                    .unwrap(),
+                    crate::instances::settings::InstanceConfiguration::for_minecraft_version(
+                        "26.2",
+                    ),
+                )
+                .unwrap(),
+            );
+        }
+        registry.save(&managed.instance_registry_file()).unwrap();
+        let target = managed.instance_paths(registry.instances()[0].id());
+        std::fs::create_dir_all(target.root()).unwrap();
+        let path = target.root().join(crate::install::journal::JOURNAL_FILE);
+        let owner = crate::instances::lifecycle::lock_instance_operation(
+            &managed,
+            registry.instances()[0].id(),
+        )
+        .unwrap();
+        let busy = load_launcher_state(&managed).unwrap();
+        assert_eq!(busy.instances[0].state, "installing");
+        assert_eq!(busy.instances[0].recovery.as_ref().unwrap().status, "busy");
+        drop(owner);
+        std::fs::write(&path, b"malformed evidence").unwrap();
+        let state = load_launcher_state(&managed).unwrap();
+        assert_eq!(state.instances[0].state, "installing");
+        assert_eq!(
+            state.instances[0].recovery.as_ref().unwrap().status,
+            "manualRepair"
+        );
+        assert_eq!(state.instances[1].state, "ready");
+        assert!(state.instances[1].recovery.is_none());
+        assert_eq!(std::fs::read(path).unwrap(), b"malformed evidence");
+        // Unique disposable root created by this test.
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn quick_world_requires_a_real_save_inside_the_owning_instance() {

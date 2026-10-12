@@ -67,7 +67,7 @@
     <section class="group" aria-live="polite">
       <div class="group-row group-row-loading">
         <span class="spinner" aria-hidden="true"></span>
-        <p class="group-row-detail">Loading persisted launcher state…</p>
+        <p class="group-row-detail">Checking saved installation state and recovering interrupted installations…</p>
       </div>
     </section>
   {:else if !instance}

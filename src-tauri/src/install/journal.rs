@@ -15,6 +15,16 @@ pub(crate) const JOURNAL_FILE: &str = ".install-operation.json";
 pub(crate) const HISTORY_DIR: &str = ".install-history";
 const MAX_JOURNAL_BYTES: u64 = 16 * 1024;
 
+/// Opt-in timings only; no change to verification, ordering, or authority.
+fn profile(phase: &str, started: std::time::Instant, files: usize, bytes: u64) {
+    if std::env::var_os("AURORA_INSTALL_DIAGNOSTICS").is_some() {
+        eprintln!(
+            "[aurora-durability] phase={phase} elapsed_us={} files={files} bytes={bytes}",
+            started.elapsed().as_micros()
+        );
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum Stage {
@@ -211,12 +221,15 @@ impl Journal {
     }
 
     fn archive(&self, root: &Path) -> Result<(), InstallError> {
+        let started = std::time::Instant::now();
         ensure_directory(root, &self.operation_dir(root)).map_err(InstallError::Storage)?;
         atomic_write(
             &self.operation_dir(root).join("journal.json"),
             &serde_json::to_vec_pretty(self).map_err(|_| repair("journal serialization failed"))?,
         )
-        .map_err(InstallError::Storage)
+        .map_err(InstallError::Storage)?;
+        profile("archive", started, 1, 0);
+        Ok(())
     }
 
     pub(crate) fn promote(
@@ -242,31 +255,33 @@ impl Journal {
         sync_tree(&staged).map_err(InstallError::Storage)?;
         self.candidate = Some(candidate);
         self.transition(root, Stage::Replacing)?;
-        checkpoint(faults, TransactionPoint::BeforeBackup)?;
+        checkpoint(root, faults, TransactionPoint::BeforeBackup)?;
         if self.previous.is_some() {
             rename_checked(root, &game, &self.backup(root))?;
         }
-        checkpoint(faults, TransactionPoint::AfterBackup)?;
+        checkpoint(root, faults, TransactionPoint::AfterBackup)?;
         if faults.fail_between_renames {
             return Err(repair(
                 "deterministic interruption between replacement renames",
             ));
         }
         self.transition(root, Stage::Promoting)?;
-        checkpoint(faults, TransactionPoint::BeforePromotion)?;
+        checkpoint(root, faults, TransactionPoint::BeforePromotion)?;
         rename_checked(root, &staged, &game)?;
-        checkpoint(faults, TransactionPoint::AfterPromotion)?;
+        checkpoint(root, faults, TransactionPoint::AfterPromotion)?;
         self.transition(root, Stage::Promoted)?;
+        let verification_started = std::time::Instant::now();
         if !matches_evidence(&game, self.candidate.as_ref(), true)? {
             return Err(repair(
                 "promoted installation failed deep verification; previous tree remains recoverable",
             ));
         }
-        checkpoint(faults, TransactionPoint::BeforeCommit)?;
+        profile("post_promotion_verification", verification_started, 0, 0);
+        checkpoint(root, faults, TransactionPoint::BeforeCommit)?;
         self.transition(root, Stage::Committed)?;
-        checkpoint(faults, TransactionPoint::AfterCommit)?;
+        checkpoint(root, faults, TransactionPoint::AfterCommit)?;
         self.archive(root)?;
-        checkpoint(faults, TransactionPoint::BeforeCleanup)?;
+        checkpoint(root, faults, TransactionPoint::BeforeCleanup)?;
         // Deliberate retention: protected backups are never inside disposable
         // staging and are not garbage-collected by install or recovery.
         cleanup_staging(root)?;
@@ -275,9 +290,12 @@ impl Journal {
 }
 
 pub(crate) fn checkpoint(
+    _root: &Path,
     faults: super::InstallFaults,
     point: TransactionPoint,
 ) -> Result<(), InstallError> {
+    #[cfg(all(debug_assertions, feature = "f3ra-desktop-acceptance"))]
+    crate::desktop_acceptance::checkpoint(_root, point)?;
     if let Some(observer) = faults.transition_observer {
         observer(point);
     }
@@ -343,7 +361,7 @@ pub(crate) fn recover_locked(
         && matches_evidence(&journal.backup(root), journal.previous.as_ref(), true)?
     {
         journal.transition(root, Stage::Restoring)?;
-        checkpoint(faults, TransactionPoint::Restoring)?;
+        checkpoint(root, faults, TransactionPoint::Restoring)?;
         if path_exists(&game)? {
             if !same_manifest(&game, journal.candidate.as_ref())? {
                 return Err(repair(
@@ -352,9 +370,9 @@ pub(crate) fn recover_locked(
             }
             rename_checked(root, &game, &journal.rejected(root))?;
         }
-        checkpoint(faults, TransactionPoint::AfterQuarantine)?;
+        checkpoint(root, faults, TransactionPoint::AfterQuarantine)?;
         rename_checked(root, &journal.backup(root), &game)?;
-        checkpoint(faults, TransactionPoint::AfterRestore)?;
+        checkpoint(root, faults, TransactionPoint::AfterRestore)?;
         if !matches_evidence(&game, journal.previous.as_ref(), true)? {
             return Err(repair(
                 "the restored previous installation failed deep validation",
@@ -393,6 +411,22 @@ pub(crate) fn needs_recovery(root: &Path, instance: &InstanceId) -> Result<bool,
     Ok(
         Journal::load(root, instance)?.is_some_and(|journal| !journal.stage.terminal())
             || path_exists(&root.join(super::STAGING_DIR_NAME))?,
+    )
+}
+
+/// Read-only presentation of terminal authority after readiness gating.
+pub(crate) fn recovery_status(
+    root: &Path,
+    instance: &InstanceId,
+) -> Result<Option<&'static str>, InstallError> {
+    Ok(
+        Journal::load(root, instance)?.and_then(|journal| match journal.stage {
+            Stage::Restored => Some("previousRestored"),
+            Stage::Abandoned => Some("interrupted"),
+            // Ordinary completed installs should not be mislabeled as a recovery.
+            Stage::Committed => None,
+            _ => None,
+        }),
     )
 }
 
@@ -571,14 +605,23 @@ fn capture(path: &Path) -> Result<Option<Evidence>, InstallError> {
     if !path_exists(path)? {
         return Ok(None);
     }
+    let started = std::time::Instant::now();
     let files = checked_tree(path).map_err(InstallError::Storage)?;
+    profile("tree_enumeration", started, files.len(), 0);
+    let started = std::time::Instant::now();
     let Some(manifest) = load_installed_state(path).map_err(InstallError::State)? else {
         return Err(repair(
             "a candidate tree exists without a valid installed-state manifest",
         ));
     };
+    profile("manifest_parse", started, 1, 0);
+    let started = std::time::Instant::now();
     let valid = matches!(super::validate_game_directory(path)?,
         ValidationOutcome::Installed(validation) if validation.status == ValidationStatus::Valid);
+    profile("manifest_deep_validation", started, files.len(), 0);
+    let started = std::time::Instant::now();
+    let file_count = files.len();
+    let mut total_bytes = 0;
     let mut tree = Sha256::new();
     let mut buffer = [0u8; 64 * 1024];
     for file_path in files {
@@ -591,12 +634,9 @@ fn capture(path: &Path) -> Result<Option<Evidence>, InstallError> {
         tree.update((relative.len() as u64).to_le_bytes());
         tree.update(relative.as_bytes());
         let mut file = File::open(&file_path).map_err(InstallError::Storage)?;
-        tree.update(
-            file.metadata()
-                .map_err(InstallError::Storage)?
-                .len()
-                .to_le_bytes(),
-        );
+        let size = file.metadata().map_err(InstallError::Storage)?.len();
+        total_bytes += size;
+        tree.update(size.to_le_bytes());
         loop {
             let count = file.read(&mut buffer).map_err(InstallError::Storage)?;
             if count == 0 {
@@ -605,6 +645,7 @@ fn capture(path: &Path) -> Result<Option<Evidence>, InstallError> {
             tree.update(&buffer[..count]);
         }
     }
+    profile("tree_sha256", started, file_count, total_bytes);
     Ok(Some(Evidence {
         installation_id: manifest.installation_id().to_owned(),
         manifest_sha256: digest(&bounded_manifest(path)?),
@@ -614,6 +655,7 @@ fn capture(path: &Path) -> Result<Option<Evidence>, InstallError> {
 }
 
 fn rename_checked(root: &Path, from: &Path, to: &Path) -> Result<(), InstallError> {
+    let started = std::time::Instant::now();
     // No copy fallback: every transaction tree remains on the same managed
     // filesystem. Refuse existing destinations and redirected ancestors.
     for path in [from, to] {
@@ -628,12 +670,28 @@ fn rename_checked(root: &Path, from: &Path, to: &Path) -> Result<(), InstallErro
             "recovery destination is occupied; preserve both trees",
         ));
     }
+    profile("rename_checks", started, 0, 0);
+    let started = std::time::Instant::now();
     std::fs::rename(from, to).map_err(InstallError::Storage)?;
     sync_directory(from.parent().unwrap()).map_err(InstallError::Storage)?;
-    sync_directory(to.parent().unwrap()).map_err(InstallError::Storage)
+    sync_directory(to.parent().unwrap()).map_err(InstallError::Storage)?;
+    profile(
+        if to.file_name().is_some_and(|name| name == "previous-game") {
+            "backup_rename"
+        } else if to.file_name().is_some_and(|name| name == "rejected-game") {
+            "quarantine_rename"
+        } else {
+            "promotion_or_restore_rename"
+        },
+        started,
+        0,
+        0,
+    );
+    Ok(())
 }
 
 pub(crate) fn cleanup_staging(root: &Path) -> Result<(), InstallError> {
+    let started = std::time::Instant::now();
     let staging = root.join(super::STAGING_DIR_NAME);
     if path_exists(&staging)? {
         super::coordination::checked_directory(root, &staging).map_err(InstallError::Storage)?;
@@ -645,10 +703,12 @@ pub(crate) fn cleanup_staging(root: &Path) -> Result<(), InstallError> {
         }
         std::fs::remove_dir_all(&staging).map_err(InstallError::Storage)?;
     }
+    profile("cleanup_bookkeeping", started, 0, 0);
     Ok(())
 }
 
 fn sync_tree(path: &Path) -> io::Result<()> {
+    let started = std::time::Instant::now();
     for file in checked_tree(path)? {
         OpenOptions::new()
             .read(true)
@@ -673,6 +733,7 @@ fn sync_tree(path: &Path) -> io::Result<()> {
             sync_directory(&directory)?;
         }
     }
+    profile("staging_synchronization", started, 0, 0);
     Ok(())
 }
 
@@ -829,6 +890,14 @@ mod tests {
                 "{point:?}"
             );
             world.recover().unwrap();
+            assert_eq!(
+                recovery_status(&world.root, &world.id).unwrap(),
+                if committed {
+                    None
+                } else {
+                    Some("previousRestored")
+                }
+            );
             let settled = std::fs::read(world.root.join(JOURNAL_FILE)).unwrap();
             world.recover().unwrap();
             assert_eq!(

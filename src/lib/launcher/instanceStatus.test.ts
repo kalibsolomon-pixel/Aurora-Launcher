@@ -78,6 +78,16 @@ function runtime(
   };
 }
 
+it("unresolved recovery overrides stored and cached Ready on every content surface", () => {
+  for (const status of ["checking", "busy", "interrupted", "previousRestored", "manualRepair"] as const) {
+    const result = instanceContentStatus(instance({ recovery: { status, message: "Native recovery evidence" } }), validation("ready"), null);
+    assert.notEqual(result.label, "Ready");
+    assert.equal(result.detail, "Native recovery evidence");
+  }
+  assert.equal(instanceContentStatus(instance({ recovery: { status: "completed", message: "Committed content retained" } }), validation("ready"), null).label, "Ready");
+  assert.notEqual(instanceContentStatus(instance({ state: "installing", recovery: { status: "completed", message: "Retry required" } }), validation("ready"), null).label, "Ready");
+});
+
 describe("configuration-versus-pin comparison", () => {
   it("flags a changed Minecraft version on a ready instance", () => {
     const changed = instance({

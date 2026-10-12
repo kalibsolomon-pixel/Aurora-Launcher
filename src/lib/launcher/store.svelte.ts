@@ -208,6 +208,7 @@ class LauncherStore {
   validationError = $state<LauncherBackendError | null>(null);
 
   private initialized = false;
+  private stateSerial = 0;
   private unsubscribers: (() => void)[] = [];
 
   get selectedInstance(): InstanceSummary | null {
@@ -236,6 +237,7 @@ class LauncherStore {
     for (const stop of this.unsubscribers) stop();
     this.unsubscribers = [];
     this.initialized = false;
+    this.stateSerial++;
     // Discard in-flight readiness/runtime responses on disposal.
     this.readinessSerial++;
     this.runtimeSerial++;
@@ -253,12 +255,14 @@ class LauncherStore {
       this.statusError = backendError(cause, "The launcher status could not be loaded.");
     }
 
+    const stateSerial = ++this.stateSerial;
     try {
-      this.launcherState = await getLauncherState();
+      const state = await getLauncherState();
+      if (stateSerial === this.stateSerial) { this.launcherState = state; this.stateError = null; }
       const selected = this.selectedInstance;
       if (selected?.state === "ready") runtimeCheck = this.refreshRuntimeStatus(selected.id);
     } catch (cause: unknown) {
-      this.stateError = backendError(cause, "The launcher state could not be loaded.");
+      if (stateSerial === this.stateSerial) this.stateError = backendError(cause, "The launcher state could not be loaded.");
     }
 
     try {
@@ -361,14 +365,37 @@ class LauncherStore {
     // content change is absent from the summary DTO. Invalidate across the
     // entire reload, so a check started during it cannot survive completion.
     if (readinessMayHaveChanged) this.readinessRevision++;
+    const serial = ++this.stateSerial;
     try {
-      this.launcherState = await getLauncherState();
-    } catch {
+      const state = await getLauncherState();
+      if (serial === this.stateSerial) { this.launcherState = state; this.stateError = null; }
+    } catch (cause: unknown) {
       // State refresh is best-effort after mutations; load errors surface
       // through the dedicated state card.
+      if (serial !== this.stateSerial) return;
+      this.stateError = backendError(cause, "The launcher state could not be loaded.");
+      for (const instance of this.launcherState?.instances ?? []) {
+        instance.recovery = { status: "manualRepair", message: "Saved installation state could not be checked. Focus the launcher again to retry." };
+      }
     } finally {
       if (readinessMayHaveChanged) this.readinessRevision++;
     }
+  }
+
+  private desktopRefresh: Promise<void> | null = null;
+  private markInstallationPending(id: string): void {
+    this.stateSerial++;
+    const instance = this.launcherState?.instances.find(entry => entry.id === id);
+    if (instance) instance.recovery = { status: "busy", message: "Preparing or installing this instance. Readiness will be checked after completion." };
+  }
+  /** Recheck cross-process installation authority when this desktop regains focus. */
+  refreshDesktopState(): Promise<void> {
+    if (!this.launcherState || this.desktopRefresh) return this.desktopRefresh ?? Promise.resolve();
+    for (const instance of this.launcherState.instances) {
+      instance.recovery = { status: "checking", message: "Checking saved installation state and recovering interrupted installations…" };
+    }
+    this.desktopRefresh = this.refreshState().finally(() => { this.desktopRefresh = null; });
+    return this.desktopRefresh;
   }
 
   private readinessInputs(): string {
@@ -598,6 +625,7 @@ class LauncherStore {
     if (this.detailInstallBusy !== null) return;
     this.detailInstallBusy = id;
     this.detailError = null;
+    this.markInstallationPending(id);
     try {
       await installInstanceConfiguration(id);
       await this.refreshState();
@@ -797,6 +825,7 @@ class LauncherStore {
     this.instanceBusy = id;
     this.instanceError = null;
     this.createProgress = null;
+    this.markInstallationPending(id);
     try {
       await retryInstanceInstall(id);
       await this.refreshState();

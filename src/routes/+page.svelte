@@ -31,7 +31,10 @@
     launcher.initialize();
     ipcSeries();
     void updates.initialize();
+    const refreshFocusedState = () => { void launcher.refreshDesktopState(); };
+    window.addEventListener("focus", refreshFocusedState);
     return () => {
+      window.removeEventListener("focus", refreshFocusedState);
       launcher.dispose();
       updates.dispose();
     };
