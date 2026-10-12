@@ -100,6 +100,29 @@ Aurora has **one public production release stream**, with two independent Rust e
 
 **One action and cadence.** Settings shows installed versions and one primary `Check For Updates` -> `Checking…` -> disabled `None Available` for 5 seconds or `Update`. Reset is a local cleared-on-destruction timer with no network. One Update performs Client first, then Launcher sequentially, with truthful real progress and Check/Update Failed — Retry errors. Client failure stops Launcher; Client success survives Launcher failure and retry only handles the remaining domain. Changed offers require fresh review. The controller shares duplicate actions; native aggregate checks and transactions exclude overlap. One silent bounded startup check per process supplies an unobtrusive Home notice only for real offers; there is no polling or automatic installation. Instance workspace View Updates opens the same canonical area. Release notes remain secondary escaped plain text. Availability never authorizes or blocks Play.
 
+## Phase F1B modern Forge support (current)
+
+Forge is a first-class loader family through the same normalized
+architecture (details: FORGE_F1B_MODERN_FORGE.md). `forge::metadata`
+owns discovery over the official MavenForge listing plus the promotions
+document — a build is stable exactly when it is that Minecraft
+version's recommended promotion; list order is never a policy. The
+verified installer (sidecar-SHA-1 store acquisition) is parsed through
+a strict DTO boundary covering the real spec-1 shapes, and
+`forge::plan::ForgePlan` composes through `game::plan` as the Forge
+`LoaderPlan` variant with Mojang's Java requirement authoritative.
+The client processor chain (mappings download, official rename, binary
+patch) executes under the unchanged F1A supervised boundary; each
+step's published outputs verify against Forge's own SHA-1 before the
+next step runs, and matched outputs are recorded as upstream-verified
+expectations rather than local observations. The patched client launch
+library intentionally has no upstream URL — it exists only as the
+chain's digest-verified generated output. Supported scope: the modern
+ForgeBootstrap generation (verified on 1.21.11 + 61.2.0); older
+mapping-pipeline and LaunchWrapper generations are rejected explicitly.
+Authenticated real-game launch acceptance remains owner-gated (the F1B
+verdict is PARTIAL for that reason alone).
+
 ## Phase K NeoForge loader support (current)
 
 NeoForge is a first-class loader of ordinary instances inside the existing
