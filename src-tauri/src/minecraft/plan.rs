@@ -276,6 +276,7 @@ pub struct MinecraftInstallPlan {
     version_type: VersionType,
     java: JavaRequirement,
     client: ArtifactRequirement,
+    client_mappings: Option<ArtifactRequirement>,
     asset_index: AssetIndexRequirement,
     logging: Option<LoggingRequirement>,
     libraries: Vec<PlannedLibrary>,
@@ -302,6 +303,10 @@ impl MinecraftInstallPlan {
 
     pub fn client(&self) -> &ArtifactRequirement {
         &self.client
+    }
+
+    pub fn client_mappings(&self) -> Option<&ArtifactRequirement> {
+        self.client_mappings.as_ref()
     }
 
     pub fn asset_index(&self) -> &AssetIndexRequirement {
@@ -451,6 +456,21 @@ pub fn plan_version_document(
     let natives_subdirectory = derive_natives_subdirectory(&launch)?;
 
     Ok(MinecraftInstallPlan {
+        client_mappings: document
+            .downloads
+            .client_mappings
+            .as_ref()
+            .map(|mapping| {
+                artifact_requirement(
+                    "client mappings",
+                    &mapping.sha1,
+                    mapping.size,
+                    &mapping.url,
+                    None,
+                    None,
+                )
+            })
+            .transpose()?,
         minecraft_version: document.id.clone(),
         version_type: document.kind,
         java: JavaRequirement {

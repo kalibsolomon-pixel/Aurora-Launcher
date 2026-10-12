@@ -319,6 +319,9 @@ pub struct AssetIndexDocument {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct DownloadsDocument {
     pub client: ArtifactDocument,
+    /// Official raw client mappings, consumed by Forge's unsanitized step.
+    #[serde(default)]
+    pub client_mappings: Option<ArtifactDocument>,
 }
 
 /// One downloadable object in Mojang metadata: URL, official SHA-1, and size.

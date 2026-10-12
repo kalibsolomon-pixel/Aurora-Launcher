@@ -56,6 +56,13 @@ pub async fn resolve_forge_plan(
     loader: &ForgeVersionId,
     options: &DownloadOptions,
 ) -> Result<ForgePlan, ForgeResolutionError> {
+    loader.require_reviewed()?;
+    if loader.minecraft_version() != game.as_str() {
+        return Err(ForgeResolutionError::UnknownVersion {
+            minecraft_version: game.as_str().to_owned(),
+            forge_version: loader.to_string(),
+        });
+    }
     let listing = fetch_forge_versions(endpoints, options).await?;
     if listing.find(loader).is_none() {
         return Err(ForgeResolutionError::UnknownVersion {
@@ -188,3 +195,9 @@ impl From<ForgeResolutionError> for ForgeGameResolutionError {
         Self::Forge(error)
     }
 }
+
+#[cfg(test)]
+mod compatibility_tests;
+
+#[cfg(test)]
+mod processor_chain_tests;

@@ -26,7 +26,7 @@
 //! Tools run with the user's own authority: this boundary is bounded and
 //! verifiable supervision, not an operating-system sandbox. One step
 //! legitimately performs its own Mojang download (the mappings fetch);
-//! its output is verified against the digest Forge published before the
+//! its output is verified against the digest Forge or Mojang published before the
 //! step ran, which is the honest extent of that step's verification.
 
 use std::collections::BTreeMap;
@@ -34,7 +34,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::forge::plan::{ForgeDataValue, ForgePlan, ForgeProcessorStep};
+use crate::forge::plan::{ForgeDataValue, ForgePlan, ForgeProcessorArgument, ForgeProcessorStep};
 use crate::install::processors::{
     CancelSignal, SupervisedExit, SupervisorLimits, capture_text, run_supervised, tail_chars,
 };
@@ -453,119 +453,88 @@ fn require_regular_input(path: &Path, root: &Path, relative: &str) -> Result<(),
 struct ResolvedArgument {
     value: String,
     expected_output: Option<String>,
+    input_path: Option<PathBuf>,
 }
 
 /// Substitutes one processor argument into its final literal form,
 /// validating every path it names.
 fn substitute_argument(
     plan: &ForgePlan,
-    argument: &str,
+    argument: &ForgeProcessorArgument,
     context: &ProcessorContext,
     installer_copy: &Path,
 ) -> Result<ResolvedArgument, ProcessorError> {
-    let Some(token) = split_token(argument) else {
-        return Ok(ResolvedArgument {
-            value: argument.to_owned(),
-            expected_output: None,
-        });
+    let plain = |value: String| ResolvedArgument {
+        value,
+        expected_output: None,
+        input_path: None,
     };
-    let resolved = match token.as_str() {
-        "SIDE" => ResolvedArgument {
-            value: "client".to_owned(),
+    let input = |path: PathBuf, root: &Path| -> Result<ResolvedArgument, ProcessorError> {
+        require_regular_input(&path, root, "processor input")?;
+        Ok(ResolvedArgument {
+            value: path.to_string_lossy().into_owned(),
             expected_output: None,
-        },
-        "MINECRAFT_VERSION" => ResolvedArgument {
-            value: context.minecraft_version.clone(),
-            expected_output: None,
-        },
-        "MINECRAFT_JAR" => {
-            require_regular_input(&context.client_jar, &context.staging_game, argument)?;
-            ResolvedArgument {
-                value: context.client_jar.to_string_lossy().into_owned(),
-                expected_output: None,
-            }
+            input_path: Some(path),
+        })
+    };
+    let token = match argument {
+        ForgeProcessorArgument::Literal(value) => return Ok(plain(value.clone())),
+        ForgeProcessorArgument::Artifact(coordinate) => {
+            let path = context
+                .staging_game
+                .join("libraries")
+                .join(coordinate.repository_path());
+            return input(path, &context.staging_game);
         }
-        "INSTALLER" => ResolvedArgument {
-            value: installer_copy.to_string_lossy().into_owned(),
-            expected_output: None,
-        },
-        "ROOT" => ResolvedArgument {
-            value: context.staging_game.to_string_lossy().into_owned(),
-            expected_output: None,
-        },
-        "LIBRARY_DIR" => ResolvedArgument {
-            value: context
+        ForgeProcessorArgument::Token(token) => token,
+    };
+    match token.as_str() {
+        "SIDE" => Ok(plain("client".into())),
+        "MINECRAFT_VERSION" => Ok(plain(context.minecraft_version.clone())),
+        "MINECRAFT_JAR" => input(context.client_jar.clone(), &context.staging_game),
+        "INSTALLER" => input(installer_copy.to_path_buf(), &context.scratch_directory),
+        "ROOT" => Ok(plain(context.staging_game.to_string_lossy().into_owned())),
+        "LIBRARY_DIR" => Ok(plain(
+            context
                 .staging_game
                 .join("libraries")
                 .to_string_lossy()
                 .into_owned(),
-            expected_output: None,
-        },
-        other => {
-            let Some(value) = plan.data().get(other) else {
-                return Err(ProcessorError::Substitution {
-                    argument: argument.to_owned(),
-                    reason: format!("unknown processor token '{{{other}}}'"),
-                });
-            };
-            match value {
-                ForgeDataValue::Literal(literal) => ResolvedArgument {
-                    value: literal.clone(),
-                    expected_output: None,
-                },
-                ForgeDataValue::InstallerFile(name) => {
-                    let entry = name.trim_start_matches('/');
-                    let destination = context
-                        .scratch_directory
-                        .join(entry.replace('/', std::path::MAIN_SEPARATOR_STR));
-                    require_within(&destination, &context.scratch_directory, argument)?;
-                    if !destination.is_file() {
-                        crate::forge::metadata::extract_installer_entry(
-                            installer_copy,
-                            name,
-                            &destination,
-                        )
+        )),
+        other => match plan.data().get(other) {
+            None => Err(ProcessorError::Substitution {
+                argument: format!("{{{other}}}"),
+                reason: "unknown processor token".into(),
+            }),
+            Some(ForgeDataValue::Literal(value)) => Ok(plain(value.clone())),
+            Some(ForgeDataValue::InstallerFile(name)) => {
+                let path = context.scratch_directory.join(name.trim_start_matches('/'));
+                require_within(&path, &context.scratch_directory, name)?;
+                if !path.exists() {
+                    crate::forge::metadata::extract_installer_entry(installer_copy, name, &path)
                         .map_err(|error| ProcessorError::Substitution {
-                            argument: argument.to_owned(),
+                            argument: name.clone(),
                             reason: error.to_string(),
                         })?;
-                    }
-                    ResolvedArgument {
-                        value: destination.to_string_lossy().into_owned(),
-                        expected_output: None,
-                    }
                 }
-                ForgeDataValue::Artifact { coordinate } => {
-                    let relative = format!("libraries/{}", coordinate.repository_path());
-                    let absolute = context
-                        .staging_game
-                        .join(relative.split('/').collect::<PathBuf>());
-                    require_within(&absolute, &context.staging_game, argument)?;
-                    ResolvedArgument {
-                        value: absolute.to_string_lossy().into_owned(),
-                        // A not-yet-existing artifact reference is this
-                        // step's expected output (an earlier step's
-                        // generated product becomes the next step's
-                        // input); the path itself still reaches the tool.
-                        expected_output: (!absolute.is_file()).then_some(relative),
-                    }
+                input(path, &context.scratch_directory)
+            }
+            Some(ForgeDataValue::Artifact { coordinate }) => {
+                let relative = format!("libraries/{}", coordinate.repository_path());
+                let path = context.staging_game.join(&relative);
+                require_within(&path, &context.staging_game, &relative)?;
+                if path.exists() {
+                    input(path, &context.staging_game)
+                } else {
+                    Ok(ResolvedArgument {
+                        value: path.to_string_lossy().into_owned(),
+                        expected_output: Some(relative),
+                        input_path: None,
+                    })
                 }
             }
-        }
-    };
-    Ok(resolved)
-}
-
-/// Splits a whole-argument `{TOKEN}` if the argument is exactly one.
-fn split_token(argument: &str) -> Option<String> {
-    if argument.len() > 2 && argument.starts_with('{') && argument.ends_with('}') {
-        let token = &argument[1..argument.len() - 1];
-        if token.starts_with('{') || token.ends_with('}') || token.is_empty() {
-            return None;
-        }
-        return Some(token.to_owned());
+        },
     }
-    None
 }
 
 /// Executes one processor step under bounded supervision and verifies its
@@ -598,8 +567,25 @@ async fn run_one_processor(
 
     let mut expected_outputs = Vec::new();
     let mut arguments = Vec::with_capacity(step.args().len());
-    for argument in step.args() {
+    let mut consumed_inputs = classpath.clone();
+    for (index, argument) in step.arguments().iter().enumerate() {
         let resolved = substitute_argument(plan, argument, context, installer_copy)?;
+        let previous = index
+            .checked_sub(1)
+            .and_then(|i| step.args().get(i))
+            .map(String::as_str);
+        if matches!(
+            previous,
+            Some("--input" | "--left" | "--right" | "--names" | "--srg" | "--clean" | "--apply")
+        ) && resolved.expected_output.is_some()
+        {
+            return Err(ProcessorError::MissingInput {
+                relative: resolved.expected_output.unwrap(),
+            });
+        }
+        if let Some(path) = resolved.input_path {
+            consumed_inputs.push(path);
+        }
         if let Some(relative) = resolved.expected_output {
             expected_outputs.push(relative);
         }
@@ -636,14 +622,17 @@ async fn run_one_processor(
     // that rewrites its own inputs fails the pass instead of silently
     // poisoning the next step or the staged validation.
     let mut input_digests = BTreeMap::new();
-    for input in &classpath {
+    for input in &consumed_inputs {
         let relative = display_relative(&context.staging_game, input);
         input_digests.insert(
-            relative,
-            stream_sha256(input, "a processor input").map_err(|error| ProcessorError::Io {
-                context: format!("hashing the processor input {input:?}"),
-                source: std::io::Error::other(error.to_string()),
-            })?,
+            input.clone(),
+            (
+                relative,
+                stream_sha256(input, "a processor input").map_err(|error| ProcessorError::Io {
+                    context: format!("hashing the processor input {input:?}"),
+                    source: std::io::Error::other(error.to_string()),
+                })?,
+            ),
         );
     }
 
@@ -678,10 +667,13 @@ async fn run_one_processor(
         }
     }
 
-    for (relative, before) in &input_digests {
-        let absolute = context
-            .staging_game
-            .join(relative.split('/').collect::<PathBuf>());
+    for (absolute, (relative, before)) in &input_digests {
+        let root = if absolute.starts_with(&context.staging_game) {
+            &context.staging_game
+        } else {
+            &context.scratch_directory
+        };
+        require_regular_input(absolute, root, relative)?;
         let after =
             stream_sha256(&absolute, "a processor input").map_err(|error| ProcessorError::Io {
                 context: format!("re-hashing the processor input {relative}"),
@@ -748,6 +740,12 @@ fn require_regular_output(
         return Err(ProcessorError::UnsafeOutput {
             relative: relative.to_owned(),
             reason: "the output is a link, directory, or special file".to_owned(),
+        });
+    }
+    if metadata.len() > MAX_GENERATED_OUTPUT_BYTES {
+        return Err(ProcessorError::UnsafeOutput {
+            relative: relative.into(),
+            reason: "output exceeds the processor size bound".into(),
         });
     }
     if metadata.len() == 0 {
@@ -845,6 +843,29 @@ fn require_within(path: &Path, root: &Path, described: &str) -> Result<(), Proce
             path: described.to_owned(),
         });
     }
+    // Reject links/reparse points in every existing ancestor, including the
+    // root, rather than relying on a lexical starts_with check.
+    let mut cursor = Some(path);
+    while let Some(current) = cursor {
+        if let Ok(metadata) = std::fs::symlink_metadata(current) {
+            #[cfg(windows)]
+            let reparse = {
+                use std::os::windows::fs::MetadataExt;
+                metadata.file_attributes() & 0x400 != 0
+            };
+            #[cfg(not(windows))]
+            let reparse = false;
+            if metadata.file_type().is_symlink() || reparse {
+                return Err(ProcessorError::Escape {
+                    path: described.into(),
+                });
+            }
+        }
+        if current == root {
+            break;
+        }
+        cursor = current.parent();
+    }
     Ok(())
 }
 
@@ -865,15 +886,18 @@ fn snapshot_tree(root: &Path) -> Result<BTreeMap<String, TreeEntry>, ProcessorEr
                 .join(entry.file_name())
                 .to_string_lossy()
                 .replace('\\', "/");
-            if file_type.is_symlink() {
-                out.insert(
-                    relative,
-                    TreeEntry {
-                        size_bytes: 0,
-                        is_link: true,
-                    },
-                );
-                continue;
+            let metadata = std::fs::symlink_metadata(&path)?;
+            #[cfg(windows)]
+            let reparse = {
+                use std::os::windows::fs::MetadataExt;
+                metadata.file_attributes() & 0x400 != 0
+            };
+            #[cfg(not(windows))]
+            let reparse = false;
+            if file_type.is_symlink() || reparse {
+                return Err(std::io::Error::other(format!(
+                    "the staged processor tree contains a link or reparse point: {relative}"
+                )));
             }
             if file_type.is_dir() {
                 let child_prefix = prefix.join(entry.file_name());

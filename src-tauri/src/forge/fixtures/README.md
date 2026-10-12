@@ -41,8 +41,11 @@ generated resources are discovered by the FML loader through exact
 library paths rather than declared as launch libraries. PATCHED_SHA is
 published in data even though binarypatcher has no outputs map; it must
 be retained as an expected digest. Unhashed mapping/rename intermediates
-remain honest local observations. The Mojang download tool verifies its
-official mapping download; this needs source inspection and native evidence.
+remain honest local observations. Source inspection established that the
+1.20.1 Mojang download tool does not verify its download. Composition must
+attach Mojang's official client-mappings SHA-1 and verify the output before
+the next processor runs. 1.20.4 publishes the sanitized mapping expectation
+in its profile. The tools still run with the user's own authority.
 
 The official Installer's PostProcessors resolves whole bracket arguments
 against the library directory and whole brace arguments against data;

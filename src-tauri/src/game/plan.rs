@@ -389,6 +389,10 @@ impl GameInstallPlan {
 /// A failure while composing the vanilla and loader plans.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompositionError {
+    LoaderRequirement {
+        loader_family: &'static str,
+        reason: String,
+    },
     /// The two plans describe different Minecraft versions.
     VersionMismatch {
         minecraft_version: String,
@@ -406,6 +410,13 @@ pub enum CompositionError {
 impl fmt::Display for CompositionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::LoaderRequirement {
+                loader_family,
+                reason,
+            } => write!(
+                formatter,
+                "{loader_family} composition requirement: {reason}"
+            ),
             Self::VersionMismatch {
                 minecraft_version,
                 loader_version,

@@ -260,7 +260,42 @@ pub struct ForgeProcessorStep {
     jar: ForgeCoordinate,
     classpath: Vec<ForgeCoordinate>,
     args: Vec<String>,
+    arguments: Vec<ForgeProcessorArgument>,
     outputs: Vec<ForgeProcessorOutputRule>,
+}
+
+/// Explicit forms accepted by the official whole-argument substitution grammar.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ForgeProcessorArgument {
+    Literal(String),
+    Token(String),
+    Artifact(ForgeCoordinate),
+}
+
+impl ForgeProcessorArgument {
+    fn parse(value: &str) -> Result<Self, ForgePlanError> {
+        if let Some(inner) = value.strip_prefix('[').and_then(|v| v.strip_suffix(']')) {
+            return Ok(Self::Artifact(
+                ForgeCoordinate::parse(inner).map_err(ForgePlanError::Coordinate)?,
+            ));
+        }
+        if let Some(inner) = value.strip_prefix('{').and_then(|v| v.strip_suffix('}')) {
+            if !inner.is_empty()
+                && inner
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+            {
+                return Ok(Self::Token(inner.to_owned()));
+            }
+        }
+        if value.contains(['{', '}', '[', ']', '\0']) {
+            return Err(ForgePlanError::Data {
+                token: value.to_owned(),
+                reason: "unsupported processor argument expression".into(),
+            });
+        }
+        Ok(Self::Literal(value.to_owned()))
+    }
 }
 
 /// One published output expectation: the data token naming the artifact
@@ -292,6 +327,10 @@ impl ForgeProcessorStep {
 
     pub fn args(&self) -> &[String] {
         &self.args
+    }
+
+    pub fn arguments(&self) -> &[ForgeProcessorArgument] {
+        &self.arguments
     }
 
     pub fn outputs(&self) -> &[ForgeProcessorOutputRule] {
@@ -387,6 +426,19 @@ impl ForgePlan {
         endpoints: &ForgeMavenEndpoints,
         installer_sha1: Sha1Digest,
     ) -> Result<Self, ForgePlanError> {
+        loader.require_reviewed()?;
+        if !matches!(
+            version.main_class.as_str(),
+            "net.minecraftforge.bootstrap.ForgeBootstrap"
+                | "cpw.mods.bootstraplauncher.BootstrapLauncher"
+        ) || (version.main_class == "cpw.mods.bootstraplauncher.BootstrapLauncher"
+            && loader.as_str() != "1.20.1-47.4.10")
+        {
+            return Err(ForgePlanError::Data {
+                token: "mainClass".into(),
+                reason: "unsupported Forge installer launch generation".into(),
+            });
+        }
         if profile.minecraft_version != game.as_str() {
             return Err(ForgePlanError::Identity {
                 what: "the install profile addresses a different Minecraft version",
@@ -458,10 +510,26 @@ impl ForgePlan {
                         sha1: output.sha1,
                     });
                 }
+                let arguments = processor.args.iter().map(|arg| ForgeProcessorArgument::parse(arg)).collect::<Result<Vec<_>, _>>()?;
+                // Some 1.20.1 steps omit an outputs map but still publish the
+                // output SHA-1 in data. Preserve it rather than downgrading it.
+                for pair in processor.args.windows(2) {
+                    if matches!(pair[0].as_str(), "--output" | "--slim" | "--extra") {
+                        if let Some(token) = pair[1].strip_prefix('{').and_then(|v| v.strip_suffix('}')) {
+                            if !outputs.iter().any(|rule| rule.token == token) {
+                                if let Some(value) = profile.data.get(&format!("{token}_SHA")) {
+                                    let digest = value.client.strip_prefix('\'').and_then(|v| v.strip_suffix('\'')).ok_or_else(|| ForgePlanError::Output { token: token.into(), reason: "expected a quoted published SHA-1".into() })?;
+                                    outputs.push(ForgeProcessorOutputRule { token: token.into(), sha1: Sha1Digest::parse(digest).map_err(|e| ForgePlanError::Output { token: token.into(), reason: e.to_string() })? });
+                                }
+                            }
+                        }
+                    }
+                }
                 Ok(ForgeProcessorStep {
                     jar,
                     classpath,
                     args: processor.args.clone(),
+                    arguments,
                     outputs,
                 })
             })
@@ -607,7 +675,7 @@ fn library_from_profile(entry: &ProfileLibrary) -> Result<ForgeLibrary, ForgePla
 /// merge and plan assembly to `game::plan`. The inputs are not mutated.
 pub fn compose_forge_game_plan(
     minecraft: MinecraftInstallPlan,
-    forge: ForgePlan,
+    mut forge: ForgePlan,
 ) -> Result<GameInstallPlan, CompositionError> {
     if minecraft.minecraft_version() != forge.minecraft_version() {
         return Err(CompositionError::VersionMismatch {
@@ -615,6 +683,38 @@ pub fn compose_forge_game_plan(
             loader_version: forge.forge_version.clone(),
             loader_family: "Forge",
         });
+    }
+
+    // Unsanitized DOWNLOAD_MOJMAPS copies Mojang's raw file. The older
+    // official tool does not check it; bind the step to Mojang's published
+    // expectation before any dependent processor can consume the result.
+    for step in &mut forge.processors {
+        if step.args.iter().any(|arg| arg == "DOWNLOAD_MOJMAPS")
+            && !step.args.iter().any(|arg| arg == "--sanitize")
+        {
+            let mappings =
+                minecraft
+                    .client_mappings()
+                    .ok_or_else(|| CompositionError::LoaderRequirement {
+                        loader_family: "Forge",
+                        reason: "unsanitized mappings require Mojang's published digest".into(),
+                    })?;
+            step.outputs.push(ForgeProcessorOutputRule {
+                token: "MOJMAPS".into(),
+                sha1: *mappings.sha1(),
+            });
+        }
+    }
+
+    if forge.main_class == "cpw.mods.bootstraplauncher.BootstrapLauncher" {
+        // Aurora's fixed vanilla filename differs from the official launcher's
+        // <version>.jar. Keep that jar last on the classpath, but exclude it
+        // from SecureJarHandler's module discovery just like upstream does.
+        for argument in &mut forge.jvm_arguments {
+            if argument.starts_with("-DignoreList=") {
+                argument.push_str(",client.jar");
+            }
+        }
     }
 
     let loader_libraries: Vec<GameLibrary> = forge

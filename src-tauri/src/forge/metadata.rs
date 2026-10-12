@@ -115,6 +115,27 @@ fn parse_absolute(url: &str) -> Result<Url, ForgeMetadataError> {
 pub struct ForgeVersionId(String);
 
 impl ForgeVersionId {
+    /// Exact, reviewed compatibility set. Discovery is broader than execution.
+    /// Historical synthetic F1B fixtures remain available to unit tests only.
+    pub fn is_reviewed(&self) -> bool {
+        matches!(
+            self.as_str(),
+            "1.20.1-47.4.10" | "1.20.4-49.2.0" | "1.21.11-61.2.0"
+        ) || (cfg!(test) && self.as_str() == "1.21.1-52.1.16")
+    }
+
+    pub fn require_reviewed(&self) -> Result<(), ForgeMetadataError> {
+        if self.is_reviewed() {
+            return Ok(());
+        }
+        Err(ForgeMetadataError::Unsupported {
+            reason: format!(
+                "Forge {} is discoverable but has no reviewed installer compatibility in Aurora",
+                self
+            ),
+        })
+    }
+
     /// Validates and wraps one combined version id.
     pub fn new(value: &str) -> Result<Self, InvalidForgeVersion> {
         let value = value.trim();
@@ -290,6 +311,17 @@ pub struct ForgeVersionList {
 }
 
 impl ForgeVersionList {
+    pub fn installable_for_minecraft(&self, game: &MinecraftVersionId) -> Vec<ForgeVersionEntry> {
+        self.for_minecraft(game)
+            .into_iter()
+            .filter(|entry| {
+                matches!(
+                    entry.version().as_str(),
+                    "1.20.1-47.4.10" | "1.20.4-49.2.0" | "1.21.11-61.2.0"
+                )
+            })
+            .collect()
+    }
     /// Builds the listing from the official Maven metadata XML and the
     /// promotions document. Unattributable version strings are filtered
     /// out (they remain real repository versions, but this launcher
@@ -630,7 +662,7 @@ impl InstallProfileDocument {
             hide_extract: Option<bool>,
             #[serde(default)]
             path: Option<String>,
-            #[serde(default, rename = "_comment")]
+            #[serde(default, rename = "_comment", alias = "_comment_")]
             comment: Option<serde_json::Value>,
             #[serde(default, rename = "serverJarPath")]
             server_jar_path: Option<String>,
@@ -717,6 +749,16 @@ fn normalize_processor(
     processor: RawProcessor,
     data: &BTreeMap<String, ProfileDataValue>,
 ) -> Result<ProfileProcessor, ForgeMetadataError> {
+    if processor.sides.as_ref().is_some_and(|sides| {
+        sides.is_empty()
+            || sides
+                .iter()
+                .any(|side| !matches!(side.as_str(), "client" | "server"))
+    }) {
+        return Err(ForgeMetadataError::Unsupported {
+            reason: "unrecognized Forge processor side".into(),
+        });
+    }
     if processor.jar.trim().is_empty() || processor.args.is_empty() {
         return Err(ForgeMetadataError::Malformed {
             reason: "a Forge processor definition has no jar or arguments".to_owned(),
@@ -793,6 +835,7 @@ fn strip_single_quotes(value: &str) -> Result<&str, ForgeMetadataError> {
 }
 
 #[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RawProcessor {
     #[serde(default)]
     sides: Option<Vec<String>>,
@@ -805,23 +848,27 @@ struct RawProcessor {
 }
 
 #[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RawDataValue {
     client: String,
     server: String,
 }
 
 #[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RawLibrary {
     name: String,
     downloads: RawDownloads,
 }
 
 #[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RawDownloads {
     artifact: RawArtifact,
 }
 
 #[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RawArtifact {
     path: String,
     #[serde(default)]
@@ -891,7 +938,7 @@ impl VersionProfileDocument {
         #[allow(dead_code)]
         struct Document {
             id: String,
-            #[serde(default, rename = "_comment")]
+            #[serde(default, rename = "_comment", alias = "_comment_")]
             comment: Option<serde_json::Value>,
             #[serde(rename = "inheritsFrom")]
             inherits_from: String,
@@ -942,6 +989,7 @@ impl VersionProfileDocument {
 }
 
 #[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RawArguments {
     jvm: Vec<String>,
     game: Vec<String>,
@@ -1002,6 +1050,11 @@ pub fn extract_installer_entry(
         zip::ZipArchive::new(file).map_err(|error| ForgeMetadataError::Malformed {
             reason: format!("the verified Forge installer jar is not a readable archive: {error}"),
         })?;
+    if archive.file_names().filter(|entry| *entry == name).count() != 1 {
+        return Err(ForgeMetadataError::Malformed {
+            reason: "an installer entry is missing or duplicated".into(),
+        });
+    }
     let mut entry = archive
         .by_name(name)
         .map_err(|_| ForgeMetadataError::Malformed {
@@ -1012,20 +1065,39 @@ pub fn extract_installer_entry(
             limit_bytes: MAX_INSTALLER_JAR_BYTES as usize,
         });
     }
+    if entry.is_dir()
+        || entry
+            .unix_mode()
+            .is_some_and(|mode| !matches!(mode & 0o170000, 0 | 0o100000))
+    {
+        return Err(ForgeMetadataError::Malformed {
+            reason: "an installer entry is not a regular file".into(),
+        });
+    }
     if let Some(parent) = destination.parent() {
         std::fs::create_dir_all(parent).map_err(|error| ForgeMetadataError::Malformed {
             reason: format!("the installer entry destination is unusable: {error}"),
         })?;
     }
-    let mut destination_file =
-        std::fs::File::create(destination).map_err(|error| ForgeMetadataError::Malformed {
+    let mut destination_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(destination)
+        .map_err(|error| ForgeMetadataError::Malformed {
             reason: format!("the installer entry could not be staged: {error}"),
         })?;
-    std::io::copy(&mut entry, &mut destination_file).map_err(|error| {
-        ForgeMetadataError::Malformed {
-            reason: format!("the installer entry '{name}' is unreadable: {error}"),
-        }
+    let copied = std::io::copy(
+        &mut std::io::Read::take(&mut entry, MAX_INSTALLER_JAR_BYTES + 1),
+        &mut destination_file,
+    )
+    .map_err(|error| ForgeMetadataError::Malformed {
+        reason: format!("the installer entry '{name}' is unreadable: {error}"),
     })?;
+    if copied > MAX_INSTALLER_JAR_BYTES {
+        return Err(ForgeMetadataError::ResponseTooLarge {
+            limit_bytes: MAX_INSTALLER_JAR_BYTES as usize,
+        });
+    }
     Ok(())
 }
 
@@ -1052,11 +1124,22 @@ fn read_bounded_entry(
             limit_bytes: MAX_INSTALLER_DOCUMENT_BYTES,
         });
     }
+    if entry.is_dir()
+        || entry
+            .unix_mode()
+            .is_some_and(|mode| !matches!(mode & 0o170000, 0 | 0o100000))
+    {
+        return Err(ForgeMetadataError::Malformed {
+            reason: "an installer document is not a regular file".into(),
+        });
+    }
     let mut bytes = Vec::with_capacity(entry.size() as usize);
-    std::io::Read::read_to_end(&mut entry, &mut bytes).map_err(|error| {
-        ForgeMetadataError::Malformed {
-            reason: format!("the '{name}' entry of the installer jar is unreadable: {error}"),
-        }
+    std::io::Read::read_to_end(
+        &mut std::io::Read::take(&mut entry, (MAX_INSTALLER_DOCUMENT_BYTES + 1) as u64),
+        &mut bytes,
+    )
+    .map_err(|error| ForgeMetadataError::Malformed {
+        reason: format!("the '{name}' entry of the installer jar is unreadable: {error}"),
     })?;
     if bytes.len() > MAX_INSTALLER_DOCUMENT_BYTES {
         return Err(ForgeMetadataError::ResponseTooLarge {
