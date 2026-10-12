@@ -153,6 +153,11 @@ fn directory(root: &Path, path: &Path, create: bool) -> io::Result<PathBuf> {
         std::fs::create_dir_all(root)?;
     }
     let canonical_root = std::fs::canonicalize(root)?;
+    #[cfg(unix)]
+    let root_device = {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(&canonical_root)?.dev()
+    };
     let mut current = canonical_root.clone();
     for part in relative.components() {
         current.push(part);
@@ -166,6 +171,13 @@ fn directory(root: &Path, path: &Path, create: bool) -> io::Result<PathBuf> {
         let metadata = std::fs::symlink_metadata(&current)?;
         if !metadata.is_dir() || redirected(&metadata) {
             return Err(unsafe_path());
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            if metadata.dev() != root_device {
+                return Err(unsafe_path());
+            }
         }
     }
     let canonical = std::fs::canonicalize(&current)?;

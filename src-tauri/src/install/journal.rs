@@ -154,6 +154,7 @@ impl Journal {
     }
 
     pub(crate) fn begin(root: &Path, instance: &InstanceId) -> Result<Self, InstallError> {
+        check_derived_directories(root, None)?;
         let previous = capture(&root.join("game"))?;
         let journal = Self {
             schema_version: 1,
@@ -223,6 +224,7 @@ impl Journal {
         root: &Path,
         faults: super::InstallFaults,
     ) -> Result<(), InstallError> {
+        check_derived_directories(root, Some(self))?;
         let game = root.join("game");
         let staged = root.join(super::STAGING_DIR_NAME).join("game");
         if capture(&game)? != self.previous {
@@ -292,9 +294,11 @@ pub(crate) fn recover_locked(
     instance: &InstanceId,
     faults: super::InstallFaults,
 ) -> Result<RecoveryOutcome, InstallError> {
+    check_derived_directories(root, None)?;
     let Some(mut journal) = Journal::load(root, instance)? else {
         return recover_legacy(root, instance);
     };
+    check_derived_directories(root, Some(&journal))?;
     let game = root.join("game");
     if journal.stage == Stage::Committed {
         // A damaged committed tree remains repairable by explicit reinstall,
@@ -499,6 +503,28 @@ fn path_exists(path: &Path) -> Result<bool, InstallError> {
     }
 }
 
+fn check_derived_directories(root: &Path, journal: Option<&Journal>) -> Result<(), InstallError> {
+    let mut directories = vec![
+        root.join("game"),
+        root.join(super::STAGING_DIR_NAME),
+        root.join(HISTORY_DIR),
+    ];
+    if let Some(journal) = journal {
+        directories.extend([
+            journal.operation_dir(root),
+            journal.backup(root),
+            journal.rejected(root),
+        ]);
+    }
+    for directory in directories {
+        if path_exists(&directory)? {
+            super::coordination::checked_directory(root, &directory)
+                .map_err(InstallError::Storage)?;
+        }
+    }
+    Ok(())
+}
+
 fn same_manifest(path: &Path, evidence: Option<&Evidence>) -> Result<bool, InstallError> {
     let Some(evidence) = evidence else {
         return Ok(false);
@@ -651,6 +677,21 @@ fn sync_tree(path: &Path) -> io::Result<()> {
 }
 
 pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    atomic_write_with_checkpoints(path, bytes, |_, _| Ok(()))
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WritePoint {
+    Created,
+    Synced,
+    Replaced,
+}
+
+fn atomic_write_with_checkpoints(
+    path: &Path,
+    bytes: &[u8],
+    mut checkpoint: impl FnMut(WritePoint, &Path) -> io::Result<()>,
+) -> io::Result<()> {
     require_regular_or_missing(path)?;
     let parent = path.parent().ok_or_else(super::coordination::unsafe_path)?;
     let temporary = parent.join(format!(".operation-{}.tmp", uuid::Uuid::new_v4().simple()));
@@ -658,10 +699,13 @@ pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
         .create_new(true)
         .write(true)
         .open(&temporary)?;
+    checkpoint(WritePoint::Created, &temporary)?;
     file.write_all(bytes)?;
     file.sync_all()?;
+    checkpoint(WritePoint::Synced, &temporary)?;
     drop(file);
     std::fs::rename(&temporary, path)?;
+    checkpoint(WritePoint::Replaced, path)?;
     sync_directory(parent)
 }
 
@@ -1005,5 +1049,131 @@ mod tests {
         std::fs::create_dir(world.root.join(JOURNAL_FILE)).unwrap();
         Journal::begin(&world.root, &world.id).unwrap_err();
         assert_eq!(capture(&world.root.join("game")).unwrap(), Some(old));
+    }
+
+    #[test]
+    fn partial_journal_write_sync_and_replace_errors_preserve_atomic_authority() {
+        for kind in [
+            io::ErrorKind::StorageFull,
+            io::ErrorKind::PermissionDenied,
+            io::ErrorKind::CrossesDevices,
+        ] {
+            for point in [
+                WritePoint::Created,
+                WritePoint::Synced,
+                WritePoint::Replaced,
+            ] {
+                let world = World::new();
+                let old = world.old();
+                let mut journal = world.prepare();
+                let path = world.root.join(JOURNAL_FILE);
+                let before = std::fs::read(&path).unwrap();
+                journal.stage = Stage::Abandoned;
+                let after = serde_json::to_vec_pretty(&journal).unwrap();
+                let error = atomic_write_with_checkpoints(&path, &after, |at, temporary| {
+                    if at == point {
+                        if at == WritePoint::Created {
+                            std::fs::write(temporary, b"{")?;
+                        }
+                        return Err(io::Error::new(kind, "deterministic filesystem fault"));
+                    }
+                    Ok(())
+                })
+                .unwrap_err();
+                assert_eq!(error.kind(), kind);
+                assert_eq!(
+                    std::fs::read(&path).unwrap(),
+                    if point == WritePoint::Replaced {
+                        after
+                    } else {
+                        before
+                    }
+                );
+                world.recover().unwrap();
+                world.recover().unwrap();
+                assert_eq!(capture(&world.root.join("game")).unwrap(), Some(old));
+            }
+        }
+    }
+
+    #[test]
+    fn lost_staging_can_restore_old_but_two_damaged_trees_require_manual_repair() {
+        let world = World::new();
+        let old = world.old();
+        let mut journal = world.prepare();
+        journal
+            .promote(&world.root, stop(TransactionPoint::AfterBackup))
+            .unwrap_err();
+        std::fs::rename(
+            world.root.join(super::super::STAGING_DIR_NAME),
+            world.root.join("displaced-staging"),
+        )
+        .unwrap();
+        world.recover().unwrap();
+        assert_eq!(capture(&world.root.join("game")).unwrap(), Some(old));
+        let world = World::new();
+        world.old();
+        let mut journal = world.prepare();
+        journal
+            .promote(&world.root, stop(TransactionPoint::AfterPromotion))
+            .unwrap_err();
+        for tree in [world.root.join("game"), journal.backup(&world.root)] {
+            std::fs::write(tree.join("client.jar"), b"damaged").unwrap();
+        }
+        world.recover().unwrap_err();
+        world.recover().unwrap_err();
+        assert!(world.root.join("game").exists() && journal.backup(&world.root).exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_locked_backup_and_cleanup_failures_leave_recoverable_authority() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let world = World::new();
+        let old = world.old();
+        let mut journal = world.prepare();
+        journal
+            .promote(&world.root, stop(TransactionPoint::AfterBackup))
+            .unwrap_err();
+        let locked_directory = OpenOptions::new()
+            .read(true)
+            .share_mode(1 | 2)
+            .custom_flags(0x02000000)
+            .open(journal.backup(&world.root))
+            .unwrap();
+        assert!(matches!(world.recover(), Err(InstallError::Storage(_))));
+        readiness_gate(&world.root, &world.id).unwrap_err();
+        assert_eq!(
+            capture(&journal.backup(&world.root)).unwrap(),
+            Some(old.clone())
+        );
+        drop(locked_directory);
+        world.recover().unwrap();
+        assert_eq!(capture(&world.root.join("game")).unwrap(), Some(old));
+
+        let world = World::new();
+        let old = world.old();
+        let mut journal = world.prepare();
+        journal
+            .promote(&world.root, stop(TransactionPoint::AfterCommit))
+            .unwrap_err();
+        let staging = world.root.join(super::super::STAGING_DIR_NAME);
+        std::fs::write(staging.join("locked-scratch"), b"scratch").unwrap();
+        let held = OpenOptions::new()
+            .read(true)
+            .share_mode(1 | 2)
+            .open(staging.join("locked-scratch"))
+            .unwrap();
+        assert!(matches!(world.recover(), Err(InstallError::Storage(_))));
+        readiness_gate(&world.root, &world.id).unwrap();
+        assert_eq!(capture(&journal.backup(&world.root)).unwrap(), Some(old));
+        assert_eq!(
+            capture(&world.root.join("game")).unwrap(),
+            journal.candidate
+        );
+        drop(held);
+        world.recover().unwrap();
+        world.recover().unwrap();
+        assert!(!staging.exists());
     }
 }

@@ -1077,6 +1077,10 @@ pub(crate) fn validate_installed_game_under_lock(
         coordination::checked_directory(managed.data_root(), &instance_root)
             .map_err(InstallError::Storage)?;
     }
+    if std::fs::symlink_metadata(&game_directory).is_ok() {
+        coordination::checked_directory(managed.data_root(), &game_directory)
+            .map_err(InstallError::Storage)?;
+    }
     journal::readiness_gate(&instance_root, instance)?;
     validate_game_directory(&game_directory)
 }
