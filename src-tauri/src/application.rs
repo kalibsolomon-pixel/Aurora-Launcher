@@ -646,16 +646,15 @@ fn load_launcher_state(managed_paths: &ManagedPaths) -> Result<LauncherState, Co
                 )
                 .map_err(crate::install::InstallError::Storage)?;
             }
-            let outcome = if crate::install::journal::needs_recovery(paths.root(), &id)? {
-                Some(crate::install::recover_installation(managed_paths, &id)?)
-            } else {
-                None
-            };
-            crate::install::journal::readiness_gate(paths.root(), &id)?;
-            if let Some(crate::install::journal::RecoveryOutcome::Completed) = outcome {
-                return Ok(Some("completed"));
+            if crate::install::journal::needs_recovery(paths.root(), &id)? {
+                crate::install::recover_installation(managed_paths, &id)?;
             }
-            crate::install::journal::recovery_status(paths.root(), &id)
+            crate::install::journal::readiness_gate(paths.root(), &id)?;
+            crate::install::journal::recovery_status(
+                paths.root(),
+                &id,
+                summary.state == "installing",
+            )
         })();
         if let Err(error) = &recovery {
             // Stored Ready is only a presentation hint. Keep this target

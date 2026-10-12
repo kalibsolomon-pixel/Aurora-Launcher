@@ -418,12 +418,16 @@ pub(crate) fn needs_recovery(root: &Path, instance: &InstanceId) -> Result<bool,
 pub(crate) fn recovery_status(
     root: &Path,
     instance: &InstanceId,
+    instance_incomplete: bool,
 ) -> Result<Option<&'static str>, InstallError> {
     Ok(
         Journal::load(root, instance)?.and_then(|journal| match journal.stage {
             Stage::Restored => Some("previousRestored"),
             Stage::Abandoned => Some("interrupted"),
-            // Ordinary completed installs should not be mislabeled as a recovery.
+            // The game commit survives read-only reloads while the enclosing
+            // instance still needs its explicit lifecycle retry. Ordinary
+            // Ready instances should not be mislabeled as a recovery.
+            Stage::Committed if instance_incomplete => Some("completed"),
             Stage::Committed => None,
             _ => None,
         }),
@@ -891,12 +895,20 @@ mod tests {
             );
             world.recover().unwrap();
             assert_eq!(
-                recovery_status(&world.root, &world.id).unwrap(),
+                recovery_status(&world.root, &world.id, false).unwrap(),
                 if committed {
                     None
                 } else {
                     Some("previousRestored")
                 }
+            );
+            assert_eq!(
+                recovery_status(&world.root, &world.id, true).unwrap(),
+                Some(if committed {
+                    "completed"
+                } else {
+                    "previousRestored"
+                })
             );
             let settled = std::fs::read(world.root.join(JOURNAL_FILE)).unwrap();
             world.recover().unwrap();

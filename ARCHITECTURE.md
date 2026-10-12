@@ -65,6 +65,27 @@ registry's attempted pin: an Installing/mismatched instance remains unavailable
 for explicit retry/review. Failed fresh pack component installation retains its
 unavailable record and game/recovery evidence after exact provider-file rollback.
 
+F3R-A state loading observes the lifecycle lock before replay and follows the
+lifecycle -> game ordering. It reloads each registry record under that ownership
+observation. The command runs on a blocking worker rather than the Tauri UI
+thread; process-local state readers serialize so they do not report each other
+busy. An optional recovery DTO distinguishes busy, interrupted, previous restored,
+completed and manual repair. A Committed game in an Installing instance retains
+its completed-recovery explanation across read-only reloads, without granting
+Ready. Initial/focus checks and installation preparation suppress cached Ready;
+coalesced focus requests and response generations prevent stale summaries from
+overwriting newer native authority. There is no background recovery poll.
+
+Opt-in installation diagnostics additionally separate tree enumeration, manifest
+parsing/deep validation, tree hashing, synchronization, journal writes, rename
+checks, actual renames, post-promotion verification and cleanup bookkeeping.
+They do not change verification/order. Debug-only desktop checkpoint observation
+requires an exact marked temporary root and validated target; no production IPC
+crash control exists. Actual Windows Tauri process-death results, measured costs
+and the still-unexecuted Linux gate are in
+[FORGE_F3R_ACCEPTANCE.md](FORGE_F3R_ACCEPTANCE.md). Backup retirement remains a
+proposal; no diagnostic evidence or protected previous tree is pruned.
+
 ## Owner correction source (unreleased)
 
 ### Startup presentation readiness (P1)
