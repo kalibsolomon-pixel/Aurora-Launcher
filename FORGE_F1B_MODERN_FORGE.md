@@ -6,11 +6,12 @@ final state). Local commits: `40109be` (implementation, 19 files,
 +4,445/−53), `a304332` (acceptance-discovered lifecycle fixes), plus the
 closing documentation commit containing this report.
 
-**F1B verdict: PARTIAL** — for exactly one reason: the authenticated
-real-game launch (Minecraft main menu, normal exit, return to Ready) was
-not performed, because it requires the owner's Microsoft browser sign-in
-and no authorized test account was available to this run. Every other
-completion gate is met and verified: a real, officially supported modern
+**F1B verdict: COMPLETE** — the owner subsequently confirmed authenticated
+Forge launch, working Minecraft gameplay, normal exit, return to Ready,
+and no further observed issues. This is owner-reported acceptance supplied
+on 2026-10-12, not gameplay independently observed by the agent or newly
+established by machine logs. The original installation and automated
+evidence below remains separately attributed: a real, officially supported modern
 Forge release installs end-to-end through the official pipeline, its
 processor chain executes under the unchanged F1A boundary with every
 output verified against Forge's own published SHA-1s, the instance
@@ -124,8 +125,8 @@ main class `net.minecraftforge.bootstrap.ForgeBootstrap`,
 `--launchTarget forge_client` game group, classpath from the composed
 library set (patched client included as an ordinary classpath library)
 with the vanilla client last, structured arguments, redaction intact —
-all covered by deterministic tests. Native authenticated launch not
-performed (the PARTIAL reason).
+all covered by deterministic tests. Authenticated launch and gameplay were
+subsequently confirmed by the owner; the agent did not observe that playthrough.
 
 ## 13. Instance lifecycle and UI
 
@@ -172,8 +173,10 @@ screenshots. Real installation of Forge 1.21.11-61.2.0 on Minecraft
 validation passing; published-digest proof in the committed manifest;
 two genuine mid-acceptance failures each left honest retryable state
 (the fixes are commit `a304332`); a cache-warm Vanilla 1.21.11 instance
-in the same root confirms existing loaders natively. Real-game launch
-not performed (owner-gated authentication).
+in the same root confirms existing loaders natively. The original agent run
+did not perform authenticated gameplay. The owner subsequently reported a
+successful authenticated launch, working gameplay, normal exit, return to
+Ready, and no further issues, closing that acceptance gate.
 
 ## 18. Performance
 
@@ -204,12 +207,9 @@ clean except this report (committed with the documentation commit).
 
 ## 21–22. Remaining decisions and next steps
 
-For the owner: (1) authorize an authenticated Forge launch to close the
-PARTIAL gate (or provide a test account for future phases); (2) decide
-whether to broaden the supported generation list (1.20.x mapping-chain
-Forge remains F1C-shaped work: multi-step interleaved pipelines,
-`@txt`/`@zip` data consumers, tool-only library roles) before any
-public support claim; (3) the F0 OS-isolation/trust-policy gate remains
-open as the standing caveat on processor execution. Recommended next:
-the authenticated launch acceptance for Forge + updating the
-compatibility matrix row to Verified, then F1C if 1.20.x demand exists.
+The owner has closed authenticated gameplay acceptance and authorized F1C
+investigation and implementation for Minecraft 1.20.1 and 1.20.4. Older
+generations remain investigation-only. The F0 OS-isolation/trust-policy
+question remains the standing caveat on same-user processor execution.
+Next: bounded F1C expansion with exact official pins, native installation
+evidence and separately attributed gameplay acceptance for each target.

@@ -120,8 +120,10 @@ library intentionally has no upstream URL — it exists only as the
 chain's digest-verified generated output. Supported scope: the modern
 ForgeBootstrap generation (verified on 1.21.11 + 61.2.0); older
 mapping-pipeline and LaunchWrapper generations are rejected explicitly.
-Authenticated real-game launch acceptance remains owner-gated (the F1B
-verdict is PARTIAL for that reason alone).
+The owner subsequently confirmed authenticated Forge launch, working gameplay,
+normal exit and return to Ready with no further issues (2026-10-12). F1B is
+COMPLETE; this gameplay evidence is owner-reported, not independently observed
+by the agent. Original machine-generated installation evidence remains separate.
 
 ## Phase K NeoForge loader support (current)
 
