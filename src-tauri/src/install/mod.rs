@@ -47,16 +47,16 @@
 //! queue and no cross-process locking.
 
 pub mod assets;
+pub(crate) mod coordination;
 pub mod natives;
 pub mod processors;
 pub mod receipt;
 pub mod state;
 
 use futures_util::future::join_all;
-use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::cache::{
@@ -281,15 +281,9 @@ pub async fn install_game(
     faults: InstallFaults,
 ) -> Result<InstalledGame, InstallError> {
     let started = Instant::now();
-    let lock = instance_installation_lock(instance);
-    let _guard = lock
-        .try_lock()
-        .map_err(|_| InstallError::AlreadyInProgress {
-            instance_id: instance.as_str().to_owned(),
-        })?;
-
     let instance_paths = managed.instance_paths(instance);
     let instance_root = instance_paths.root().to_path_buf();
+    let _guard = lock_game_target(managed, instance)?;
     let game_directory = instance_paths.game().to_path_buf();
     let staging_directory = instance_root.join(STAGING_DIR_NAME);
     let staging_game = staging_directory.join("game");
@@ -1580,16 +1574,21 @@ fn validated_index_file_stem(requirement: &AssetIndexRequirement) -> Result<Stri
 
 /// The per-instance installation exclusion: one shared async mutex per
 /// instance id, held for the duration of an installation.
-fn instance_installation_lock(instance: &InstanceId) -> Arc<tokio::sync::Mutex<()>> {
-    static LOCKS: OnceLock<std::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> =
-        OnceLock::new();
-    let registry = LOCKS.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
-
-    let mut guards = registry.lock().expect("the lock registry is not poisoned");
-    guards
-        .entry(instance.as_str().to_owned())
-        .or_default()
-        .clone()
+pub(crate) fn lock_game_target(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<coordination::TargetLock, InstallError> {
+    coordination::TargetLock::acquire(
+        managed.data_root(),
+        managed.instance_paths(instance).root(),
+        ".game-install.lock",
+    )
+    .map_err(|error| match error {
+        coordination::LockError::Busy => InstallError::AlreadyInProgress {
+            instance_id: instance.to_string(),
+        },
+        coordination::LockError::Io(error) => InstallError::Storage(error),
+    })
 }
 
 /// A failed installation. Every variant fails closed: the instance never

@@ -162,6 +162,18 @@ async fn ensure_runtime_with_faults(
             identity: plan.identity(),
         })?;
     let root = plan.installation_dir(managed);
+    let _process_guard = crate::install::coordination::TargetLock::acquire(
+        managed.data_root(),
+        root.parent()
+            .ok_or_else(|| RuntimeInstallError::Plan("runtime has no managed parent".into()))?,
+        &format!(".{}.lock", plan.identity()),
+    )
+    .map_err(|error| match error {
+        crate::install::coordination::LockError::Busy => RuntimeInstallError::AlreadyInProgress {
+            identity: plan.identity(),
+        },
+        crate::install::coordination::LockError::Io(error) => RuntimeInstallError::Storage(error),
+    })?;
 
     let initial = validate_runtime(
         managed,

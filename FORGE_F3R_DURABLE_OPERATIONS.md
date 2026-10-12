@@ -95,6 +95,16 @@ Primary references: [Rust file locking](https://doc.rust-lang.org/std/fs/struct.
 
 ## Acceptance and limitations
 
+F3R-B checkpoint: permanent `.game-install.lock` per physical instance target;
+exact runtime-parent identity lock; bounded 30-second source locks for
+transport-observed first pin publication. Expected-hash stores retain their
+verified rename/race protocol. No dependency or lockfile change. Three lock
+tests passed, including real independent process termination; all 68 selected
+installation/runtime/receipt/supervision tests passed (5 opt-in ignores).
+Baseline Rust library run: 923/0/30 ignored (54.17s). Sequential frontend:
+266/0 (83.812s). Locks release through handle lifetime and async cancellation;
+no stale lock deletion. Durable game restoration is the next checkpoint.
+
 Pending implementation, deterministic fault matrix, independent-process tests,
 native forced-termination acceptance, regression/builds and performance evidence.
 No broad schema migration, additional loader/provider, UI redesign, production
