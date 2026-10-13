@@ -4581,6 +4581,27 @@ pub struct InstanceProblemDto {
     reason: String,
 }
 
+/// Explicit storage maintenance, on a worker and under the existing target locks.
+#[tauri::command]
+pub async fn maintain_installation_backups(
+    app: AppHandle,
+    request: ValidateInstalledGameRequest,
+) -> Result<crate::install::retention::RetentionReport, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::install::retention::maintain(&managed, &instance)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "storage_io_failure",
+            "Backup maintenance could not finish. Existing recovery data remains protected.",
+        )
+    })?
+    .map_err(CommandError::from)
+}
+
 /// Validates one instance completely â€” a read-only, download-free check
 /// covering the game installation, the Aurora installation and artifact
 /// bytes, and cross-component version consistency.

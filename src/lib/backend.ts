@@ -4,6 +4,26 @@ import { startProbe, endProbe } from "./launcher/performance.ts";
 
 export type BackendStatus = "ready";
 
+export type BackupRetentionOutcome = "retainedByPolicy" | "retainedActiveTransaction" | "retainedRecovery" | "retainedManualRepair" | "retainedUnknownOwnership" | "retiredSuccessfully" | "cleanupInterrupted" | "cleanupFailedSafely";
+export interface BackupRetentionReport {
+  entries: { transactionId: string; outcome: BackupRetentionOutcome }[];
+  eligibleBackups: number;
+  protectedBackups: number;
+  retiredBackups: number;
+  verifiedBackupBytesBefore: number;
+  reclaimedBytes: number;
+  verifiedBackupBytesAfter: number;
+  validationMs: number;
+  elapsedMs: number;
+  skipped: BackupRetentionOutcome | null;
+}
+export async function maintainInstallationBackups(instanceId: string): Promise<BackupRetentionReport> {
+  return invoke<BackupRetentionReport>("maintain_installation_backups", { request: { instanceId } }).catch((cause: unknown) => {
+    if (isBackendCommandError(cause)) throw new LauncherBackendError(cause.code, cause.message);
+    throw new LauncherBackendError("backend_unavailable", "Backup maintenance is unavailable. Recovery data remains protected.");
+  });
+}
+
 export interface PlatformInfo {
   os: string;
   architecture: string;

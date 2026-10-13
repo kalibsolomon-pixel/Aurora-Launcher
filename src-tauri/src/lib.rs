@@ -85,6 +85,7 @@ pub fn run() {
             performance::performance_runtime_status,
             performance::performance_play,
             application::get_application_status,
+            application::maintain_installation_backups,
             application::get_launcher_state,
             application::get_home_widgets,
             application::get_playtime_summary,

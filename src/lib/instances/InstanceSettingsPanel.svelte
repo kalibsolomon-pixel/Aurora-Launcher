@@ -4,6 +4,18 @@
   import { configurationRequiresInstall, draftIsDirty } from "$lib/launcher/instanceStatus";
   import { deleteInstance, type InstanceConfiguration, type InstanceSummary } from "$lib/backend";
   import { navigation } from "$lib/launcher/navigation.svelte";
+  import { maintainInstallationBackups } from "$lib/backend";
+  import { backupRetentionMessage } from "./backupRetention";
+  let backupBusy = $state(false);
+  let backupMessage = $state("");
+  let backupTarget = $state("");
+  async function maintainBackups() {
+    const id = instance.id;
+    backupBusy = true; backupTarget = id; backupMessage = "Checking recovery backups…";
+    try { backupMessage = backupRetentionMessage(await maintainInstallationBackups(id)); }
+    catch (reason) { backupMessage = reason instanceof Error ? reason.message : "Backup maintenance could not finish. Recovery data remains protected."; }
+    finally { backupBusy = false; }
+  }
   let confirmation = $state("");
   let deletionError = $state("");
   let deleting = $state(false);
@@ -337,6 +349,11 @@
 <aside class="settings-tools">
   <section class="group"><div class="group-heading"><h3 class="group-title">Maintenance</h3></div>
     <div class="group-form tool-actions"><button class="btn" type="button" onclick={() => launcher.runValidate(instance.id)}>Validate instance</button>
+    <details><summary>Recovery backup storage</summary>
+      <p class="field-hint">Manage older installation backups. The newest backups, the last 30 days, and any uncertain recovery data stay protected. Worlds and mods are unaffected.</p>
+      <button class="btn" type="button" disabled={backupBusy || instance.state !== "ready" || launcher.detailInstallBusy !== null} onclick={() => void maintainBackups()}>{backupBusy ? "Checking backups…" : "Manage recovery backups"}</button>
+      {#if backupTarget === instance.id && backupMessage}<p class="field-hint" role="status">{backupMessage}</p>{/if}
+    </details>
     <button class="btn" type="button" onclick={() => launcher.runRuntimeStatus(instance.id)}>Check managed Java</button>
     <button class="btn" type="button" onclick={() => launcher.runEnsureRuntime(instance.id)}>Install / repair Java</button>
     <details><summary>Reinstall / restore configured content</summary><p class="field-hint">Explicitly reinstalls the saved game configuration and restores its reviewed Aurora Client and Fabric API bootstrap files. Worlds, config and unrelated mods stay untouched. Re-enable disabled bootstrap mods in Mods first; file conflicts require inspection.</p>
