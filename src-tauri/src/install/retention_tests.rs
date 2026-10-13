@@ -118,6 +118,130 @@ fn representative_storage_measurement() {
     );
 }
 
+/// F3R-B1 remaining security gate: REAL Windows file symbolic links inside a
+/// candidate backup — one targeting a sentinel OUTSIDE the managed tree and
+/// one dangling link. Opt-in via `AURORA_F3RB1_SYMLINK_ROOT` (an isolated
+/// marked direct temp child). Creating a file symbolic link requires either
+/// Developer Mode or SeCreateSymbolicLinkPrivilege; when the environment
+/// refuses creation this test FAILS LOUDLY as BLOCKED — a refusal to create
+/// the link is never counted as a passing security assertion. When creation
+/// succeeds, retention must refuse traversal, preserve the sentinel byte-for
+/// byte, delete nothing, and change no authority.
+#[cfg(windows)]
+#[test]
+fn windows_file_symlink_refusal_helper() {
+    use std::os::windows::process::CommandExt;
+    let Some(root) = std::env::var_os("AURORA_F3RB1_SYMLINK_ROOT") else {
+        return;
+    };
+    let root = PathBuf::from(root);
+    assert!(
+        root.is_absolute()
+            && root.parent() == Some(std::env::temp_dir().as_path())
+            && root
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("aurora-f3rb1-symlink-")
+            && !root.exists()
+    );
+    fs::create_dir(&root).unwrap();
+    fs::write(
+        root.join("F3RB1-ISOLATED.txt"),
+        b"F3RB1 isolated file-symlink acceptance\n",
+    )
+    .unwrap();
+    let world = World {
+        root: root.join("world"),
+        id: InstanceId::new("f3rb1-symlink").unwrap(),
+    };
+    fs::create_dir(&world.root).unwrap();
+    fs::write(world.root.join("owner-sentinel"), b"owner").unwrap();
+    let (old, _, _) = world.three();
+    let backup = world.slot(&old).join("previous-game");
+    let sentinel = root.join("sentinel-target.bin");
+    fs::write(&sentinel, b"sentinel-bytes-f3rb1").unwrap();
+    let sentinel_before = fs::read(&sentinel).unwrap();
+    let sentinel_digest = hash(&sentinel_before);
+    let authority_before = fs::read(world.root.join(journal::JOURNAL_FILE)).unwrap();
+    let link = backup.join("redirected-file.txt");
+    let dangling = backup.join("dangling-file.txt");
+    let status = std::process::Command::new("powershell.exe")
+        .creation_flags(0x0800_0000)
+        .env("F3RB1_LINK", &link)
+        .env("F3RB1_DANGLING", &dangling)
+        .env("F3RB1_SENTINEL", &sentinel)
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "New-Item -ItemType SymbolicLink -Path $env:F3RB1_LINK -Target $env:F3RB1_SENTINEL | Out-Null; \
+             New-Item -ItemType SymbolicLink -Path $env:F3RB1_DANGLING -Target ($env:F3RB1_SENTINEL + '.absent') | Out-Null",
+        ])
+        .status()
+        .unwrap();
+    if !status.success() {
+        panic!(
+            "BLOCKED: Windows refused real file symbolic-link creation \
+             (Developer Mode or SeCreateSymbolicLinkPrivilege required)."
+        );
+    }
+    let confirm = |path: &Path| {
+        let meta = fs::symlink_metadata(path).unwrap();
+        assert!(
+            meta.file_type().is_symlink(),
+            "the link must actually exist before the security assertion runs"
+        );
+    };
+    confirm(&link);
+    confirm(&dangling);
+    eprintln!(
+        "[f3rb1-symlink] fixture sentinel_sha256={sentinel_digest} link=real-file-symlink dangling=real"
+    );
+    for attempt in 1..=2 {
+        let result = world.run(u64::MAX);
+        assert_eq!(result.reclaimed_bytes, 0, "attempt {attempt}");
+        assert_eq!(result.retired_backups, 0, "attempt {attempt}");
+        assert!(
+            result
+                .entries
+                .iter()
+                .any(|entry| entry.transaction_id == old
+                    && entry.outcome == Outcome::RetainedUnknownOwnership),
+            "attempt {attempt}: the reparse-point content must be refused, not retired"
+        );
+        assert!(
+            backup.join("client.jar").exists(),
+            "attempt {attempt}: the whole mixed tree must remain preserved"
+        );
+        assert!(fs::symlink_metadata(&link).is_ok());
+        assert!(fs::symlink_metadata(&dangling).is_ok());
+        assert_eq!(fs::read(&sentinel).unwrap(), sentinel_before);
+        assert_eq!(hash(&fs::read(&sentinel).unwrap()), sentinel_digest);
+        assert_eq!(
+            fs::read(world.root.join("owner-sentinel")).unwrap(),
+            b"owner"
+        );
+        assert_eq!(
+            fs::read(world.root.join(journal::JOURNAL_FILE)).unwrap(),
+            authority_before,
+            "attempt {attempt}: retention must not change transaction authority"
+        );
+        eprintln!("[f3rb1-symlink] attempt={attempt} refused=true sentinelUnchanged=true");
+    }
+    assert!(
+        matches!(
+            super::super::validate_game_directory(&world.root.join("game")),
+            Ok(ValidationOutcome::Installed(result)) if result.status == ValidationStatus::Valid
+        ),
+        "the current installation must remain deeply valid"
+    );
+    // Removing a link never touches its target; do this before the
+    // disposable-root cleanup, exactly like the junction test.
+    fs::remove_file(&link).unwrap();
+    fs::remove_file(&dangling).unwrap();
+}
+
 /// Opt-in small storage fixture for the REAL desktop, not a gameplay fixture.
 /// It uses production journal promotion; no owner root or account is accepted.
 #[test]
@@ -692,4 +816,59 @@ fn windows_junction_and_locked_leaf_preserve_owner_data_and_resume() {
     assert_eq!(failed.retired_backups, 0);
     drop(held);
     assert_eq!(world.run(u64::MAX).retired_backups, 1);
+}
+
+/// A reparse point substituted AFTER eligibility was assessed and durable
+/// Deleting intent exists must still refuse every remaining deletion; the
+/// retirement only completes once the tree is exactly the sealed content.
+#[cfg(windows)]
+#[test]
+fn junction_substituted_after_eligibility_refuses_retirement() {
+    use std::os::windows::process::CommandExt;
+    let world = World::new();
+    let (old, _, _) = world.three();
+    let outside = world.root.join("outside");
+    fs::create_dir(&outside).unwrap();
+    fs::write(outside.join("owner"), b"owner").unwrap();
+    let slot = world.slot(&old);
+    // Stop after durable Deleting intent but before any mutation of the tree.
+    maintain_locked(&world.root, &world.id, u64::MAX, |point| {
+        if point == Point::Intent {
+            Err(io::Error::other("interrupted after intent"))
+        } else {
+            Ok(())
+        }
+    });
+    let link = slot.join("previous-game/redirected");
+    let status = std::process::Command::new("powershell.exe")
+        .creation_flags(0x0800_0000)
+        .env("F3RB1_SUBSTITUTION_LINK", &link)
+        .env("F3RB1_SUBSTITUTION_OUTSIDE", &outside)
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "New-Item -ItemType Junction -Path $env:F3RB1_SUBSTITUTION_LINK -Target $env:F3RB1_SUBSTITUTION_OUTSIDE | Out-Null",
+        ])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let refused = world.run(u64::MAX);
+    assert_eq!(refused.reclaimed_bytes, 0);
+    assert_eq!(refused.retired_backups, 0);
+    assert!(
+        refused
+            .entries
+            .iter()
+            .any(|entry| entry.transaction_id == old
+                && matches!(
+                    entry.outcome,
+                    Outcome::CleanupInterrupted | Outcome::CleanupFailedSafely
+                ))
+    );
+    assert_eq!(fs::read(outside.join("owner")).unwrap(), b"owner");
+    assert!(slot.join("previous-game/client.jar").exists());
+    fs::remove_dir(&link).unwrap();
+    assert_eq!(world.run(u64::MAX).retired_backups, 1);
+    assert_eq!(world.run(u64::MAX).retired_backups, 0);
 }
