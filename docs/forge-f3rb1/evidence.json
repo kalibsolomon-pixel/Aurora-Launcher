@@ -1,0 +1,92 @@
+{
+  "formatVersion": 1,
+  "phase": "F3R-B1",
+  "verdict": "PARTIAL",
+  "startingBranch": "codex/client-3-production-authority",
+  "startingHead": "395d5614088ed36481c9823cbc5ef263822b9270",
+  "fileSymlinkGate": {
+    "result": "BLOCKED",
+    "user": "SPXCTER\\kalib",
+    "elevatedAdmin": false,
+    "inAdministratorsGroup": false,
+    "seCreateSymbolicLinkPrivilege": "NOT-HELD",
+    "developerMode": "OFF (AppModelUnlock key absent)",
+    "mechanismsRefused": [
+      "PowerShell 5.1 New-Item -ItemType SymbolicLink: Administrator privilege required for this operation.",
+      "cmd mklink: You do not have sufficient privilege to perform this operation.",
+      "Python os.symlink (ALLOW_UNPRIVILEGED_CREATE): WinError 1314",
+      "pwsh 7: not installed",
+      "WSL: not installed"
+    ],
+    "gateHelper": "install::retention::tests::windows_file_symlink_refusal_helper (inert without AURORA_F3RB1_SYMLINK_ROOT; fails loudly as BLOCKED when creation is refused)",
+    "driver": "docs/forge-f3rb1/run-symlink-gate.ps1 (no security setting changed; isolated marked temp root; sentinel SHA-256 asserted)",
+    "priorSessionCorroboration": "%TEMP%/aurora-f3rb1-457bae31e41e4a5586920589249aade4/symlink-probe.log recorded the same WinError 1314"
+  },
+  "junctionRegression": {
+    "defaultSuiteJunctionTest": "PASS",
+    "junctionSubstitutedAfterEligibility": "PASS (new test junction_substituted_after_eligibility_refuses_retirement)"
+  },
+  "sealingPerformance": {
+    "fixture": {"files": 4616, "bytes": 532420608, "deterministicSeed": true, "exercisesRealSealStaging": true},
+    "baselineQuietHost": {"medianUs": 3311721, "samplesUs": [3287745, 3443315, 3316469, 3311721, 3053503], "medianBaselineNoisyRunUs": 7259007},
+    "decompositionBaseline": {"enumerateUs": [262880, 247056], "hashPassUs": [462454, 474820, 491547], "containmentPassUs": [675573, 673770]},
+    "optimizedQuietHost": {"medianUs": 570515, "samplesUs": [557852, 570515, 580516, 560111, 712581]},
+    "sealSha256IdenticalAcrossAB": "ce847314192e5cc7e38954b31321e01472545ba600a52af977344cbad413dae6",
+    "structuralChange": {"fullContentReadsInsideSealing": "2 -> 1", "bytesHashed": "1064841216 -> 532420608", "perFileAncestorCanonicalization": "2 per file -> 0 (enumeration metadata)", "directoryRootChecks": "per directory -> once"},
+    "realAppCorroboration": {
+      "realVanillaTree": {"files": 4669, "bytes": 570899991},
+      "optimizedSealDebugDesktopUs": 7533078,
+      "f3rbReleaseDesktopBaselineUs": 17941010,
+      "interruptedPriorSessionInstrumentedBaselineDebugPassesUs": [15111037, 15804718]
+    },
+    "equivalenceProof": ["sealing_matches_independent_reference_observation (byte-identical vs independent reference)", "sealing_refuses_unaccounted_staging_content (extra/missing/stale-seal/native-mismatch/completion-mismatch/unknown-dir)"],
+    "decision": "KEEP optimization; retirement/inspect paths untouched and still re-hash independently"
+  },
+  "forgeDiscovery": {
+    "finding": "Forge 1.20.4 plan lists gson-2.10.1.jar twice (byte-identical); seal_staging refuses duplicate manifest paths in BOTH baseline and this rewrite",
+    "f3rbSourceForgeFixtureHadSeal": false,
+    "outcome": "sealUnavailable in 1402us (correct refusal; backup protected); pre-existing, not a regression; planning dedupe recommended as separate phase"
+  },
+  "automatedVerification": {
+    "rustFormatCheck": "PASS",
+    "rustCheckAllTargets": "PASS (5 pre-existing unrelated warnings)",
+    "rustDebugSuite": {"passed": 964, "failed": 0, "ignored": 30, "iconAssetsIntegration": 6},
+    "rustReleaseSuite": {"passed": 964, "failed": 0, "ignored": 30, "iconAssetsIntegration": 6, "sixIntegrationTestsRerunOnFinalSource": true},
+    "installRecoverySubset": {"passed": 103, "failed": 0, "ignored": 5},
+    "frontend": {"svelteCheck": "0 errors 0 warnings", "serialTests": {"passed": 272, "failed": 0, "milliseconds": 87802}, "productionBuild": "PASS"},
+    "nativeProductionNoBundleBuild": "PASS (4m56s)",
+    "excludedAttempts": ["First parallel npm test stalled (F3R-B-documented host issue); its node process tree was stopped — the kill swept node.exe by name (disclosed deviation); serial rerun is the counted result"]
+  },
+  "windowsDesktop": {
+    "exeSha256": "6003adb59dab446eef403d48f9c420d44db75604ed28ffc98efcdbe06a327782",
+    "root": "%TEMP%/aurora-f3ra-F3RB-B1M-2e6bfde9597b4afd834014d6f9ed8dd1",
+    "fixtures": ["F3RB1M forge (copied F3R-B)", "F3RB1M vanilla (copied F3R-B)", "f3rb-storage-b1m (new synthetic)", "f3rb-storage-b1m2 (new synthetic)"],
+    "initialValidation": "all Ready through real app",
+    "A": {"result": "PASS", "instance": "vanilla", "transaction": "5e24c5a4e6c04992a1e00709ca68e796", "sealEntries": 4696, "sealTimeDebugUs": 7533078, "receiptState": "retained", "receiptDigestMatchesSeal": true, "note": "forge variant correctly refused: duplicate plan entry (pre-existing)"},
+    "B": {"result": "PASS (native fault-injection + journal interruption tests in suite; desktop kill not repeated, justified in acceptance doc)"},
+    "C": {"result": "PASS", "killedPid": 19184, "point": "AfterCommit", "transaction": "6684157dae17498998ce61038989e1e7", "ui": "Recovery completed. The committed game content was retained.", "registryAfterRestart": "installing (deliberate)"},
+    "D": {"result": "PASS", "killedPid": 13692, "point": "RetentionFileRemoved", "diskAtDeath": "deleting receipt + retiring-game (one leaf removed)", "resumePid": 22660, "resumedOutcome": "3 retired / 2 protected", "repeat": 0},
+    "E": {"result": "PASS", "sentinelSha256BeforeAndAfter": "0ba3184d8dc173e663929bbb243e7953408263416c393cb787b510424af2415e", "ui": "preserved because ownership or recovery evidence needs inspection", "reclaimedBytes": 0},
+    "F": {"result": "PASS", "ui": "Installation busy - Installation or recovery is busy. Wait for the current operation to finish, then retry."},
+    "G": {"result": "PASS", "repeatMaintenanceRetired": 0, "authorityDocumentsCompared": 36, "authoritySetDigest": "697343c72ac1503f1f5e13462911ac51233d7bf7c60f6125860b02b424effb64", "byteIdenticalAcrossFreshBoots": true}
+  },
+  "crashCheckpoints": {
+    "retentionProcessDeath": "Intent/Renamed/FileRemoved/Empty rerun green in both full suites (final source)",
+    "desktopRetentionKill": "RetentionFileRemoved real kill + resume",
+    "installCommitBoundary": "AfterCommit desktop kill; fail_before_commit fault injection green"
+  },
+  "preservation": {
+    "baselineTrackedFiles": 889,
+    "missingTrackedFiles": 0,
+    "preExistingUntracked": 4,
+    "changedPreExistingUntracked": 0,
+    "worktreesTouched": 0,
+    "production142Untouched": true,
+    "priorSessionRootsPreserved": ["%TEMP%/aurora-f3rb1-457bae31e41e4a5586920589249aade4", "%TEMP%/aurora-f3ra-F3RB-B1-457bae31e41e4a5586920589249aade4", "%TEMP%/aurora-f3ra-F3RB-839b61924e3a4fb1834f0ff3cd9d5813"],
+    "priorSessionBranchPreservedUnmerged": "codex/f3rb1-acceptance @ 4f2ad56 (worktree C:/Users/kalib/.codex/worktrees/f3rb1-acceptance/aurora-launcher)",
+    "retiredDisposables": ["bench-baseline", "bench-baseline2", "bench-optimized", "symlink probe scripts"],
+    "rawDesktopEvidenceRoot": "%TEMP%/aurora-f3ra-F3RB-B1M-2e6bfde9597b4afd834014d6f9ed8dd1",
+    "pushPublishDeploy": false
+  },
+  "deferred": ["Authorized real file-symlink gate execution (§2 proposal)", "Linux acceptance", "Authenticated F1C gameplay", "Forge duplicate-plan-entry dedupe phase", "D1-B3/additional Dev cleanup", "Drive changes", "Client mod and website work", "Release publication", "Production 1.4.2 replacement", "Automatic retention and legacy adoption"]
+}
