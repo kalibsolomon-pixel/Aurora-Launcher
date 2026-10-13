@@ -39,7 +39,7 @@ pub(crate) enum Stage {
 }
 
 impl Stage {
-    fn terminal(self) -> bool {
+    pub(crate) fn terminal(self) -> bool {
         matches!(self, Self::Committed | Self::Restored | Self::Abandoned)
     }
 }
@@ -63,21 +63,21 @@ pub enum TransactionPoint {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct Evidence {
-    installation_id: String,
-    manifest_sha256: String,
-    tree_sha256: String,
-    valid: bool,
+    pub(crate) installation_id: String,
+    pub(crate) manifest_sha256: String,
+    pub(crate) tree_sha256: String,
+    pub(crate) valid: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct Journal {
     schema_version: u32,
-    transaction_id: String,
-    instance_id: InstanceId,
-    stage: Stage,
-    previous: Option<Evidence>,
-    candidate: Option<Evidence>,
+    pub(crate) transaction_id: String,
+    pub(crate) instance_id: InstanceId,
+    pub(crate) stage: Stage,
+    pub(crate) previous: Option<Evidence>,
+    pub(crate) candidate: Option<Evidence>,
 }
 
 fn repair(reason: impl Into<String>) -> InstallError {
@@ -90,14 +90,17 @@ fn digest(bytes: &[u8]) -> String {
     ArtifactDigest::from_sha256(Sha256::digest(bytes).into()).as_hex()
 }
 
-fn safe_uuid(value: &str) -> bool {
+pub(crate) fn safe_uuid(value: &str) -> bool {
     value.len() == 32
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn read_document(path: &Path, instance: &InstanceId) -> Result<Option<Journal>, InstallError> {
+pub(crate) fn read_document(
+    path: &Path,
+    instance: &InstanceId,
+) -> Result<Option<Journal>, InstallError> {
     require_regular_or_missing(path).map_err(InstallError::Storage)?;
     let file = match File::open(path) {
         Ok(file) => file,
@@ -281,6 +284,11 @@ impl Journal {
         self.transition(root, Stage::Committed)?;
         checkpoint(root, faults, TransactionPoint::AfterCommit)?;
         self.archive(root)?;
+        if super::retention::record_completed(root, self).is_err() {
+            eprintln!(
+                "[aurora-retention] outcome=retainedUnknownOwnership reason=receiptUnavailable"
+            );
+        }
         checkpoint(root, faults, TransactionPoint::BeforeCleanup)?;
         // Deliberate retention: protected backups are never inside disposable
         // staging and are not garbage-collected by install or recovery.
@@ -591,7 +599,7 @@ fn bounded_manifest(path: &Path) -> Result<Vec<u8>, InstallError> {
     Ok(bytes)
 }
 
-fn matches_evidence(
+pub(crate) fn matches_evidence(
     path: &Path,
     evidence: Option<&Evidence>,
     require_valid: bool,
@@ -775,11 +783,11 @@ fn atomic_write_with_checkpoints(
 }
 
 #[cfg(unix)]
-fn sync_directory(path: &Path) -> io::Result<()> {
+pub(crate) fn sync_directory(path: &Path) -> io::Result<()> {
     File::open(path)?.sync_all()
 }
 #[cfg(not(unix))]
-fn sync_directory(_path: &Path) -> io::Result<()> {
+pub(crate) fn sync_directory(_path: &Path) -> io::Result<()> {
     Ok(())
 }
 

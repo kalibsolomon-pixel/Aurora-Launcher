@@ -52,6 +52,7 @@ pub mod journal;
 pub mod natives;
 pub mod processors;
 pub mod receipt;
+pub mod retention;
 pub mod state;
 
 use futures_util::future::join_all;
@@ -701,6 +702,7 @@ pub async fn install_game(
                 GameLibrary::Minecraft(entry) if entry.kind() == LibraryKind::NativeArtifact)
         })
         .collect();
+    let mut native_ownership = Vec::new();
     for (index, library) in native_libraries.iter().enumerate() {
         check_cancel(context)?;
         report(
@@ -717,12 +719,16 @@ pub async fn install_game(
             .find(|file| file.relative == format!("libraries/{}", entry.path()))
             .map(|file| file.source.clone())
             .expect("every planned library was acquired and materialized");
-        natives::extract_native_archive(
+        let extracted = natives::extract_native_archive(
             &archive_path,
             &entry.coordinate().as_maven_string(),
             &natives_root,
         )
         .map_err(InstallError::Native)?;
+        native_ownership.extend(extracted.files.into_iter().map(|mut file| {
+            file.path = format!("{extraction_relative}/{}", file.path);
+            file
+        }));
     }
     if native_libraries.is_empty() {
         return Err(InstallError::Validation {
@@ -938,7 +944,20 @@ pub async fn install_game(
         source: error,
     })?;
     let state_finished = Instant::now();
+    // Optional forward-only ownership evidence. Failure protects the backup;
+    // it cannot turn a successful installation into a failure.
+    if retention::seal_staging(&staging_game, &manifest, native_ownership).is_err() {
+        eprintln!("[aurora-retention] outcome=retainedUnknownOwnership reason=sealUnavailable");
+    }
+    let ownership_finished = Instant::now();
     if std::env::var_os("AURORA_INSTALL_DIAGNOSTICS").is_some() {
+        eprintln!(
+            "[aurora-durability] phase=ownership_seal elapsed_us={} files={} bytes=0",
+            ownership_finished
+                .duration_since(state_finished)
+                .as_micros(),
+            manifest.files().len()
+        );
         eprintln!(
             "[aurora-durability] phase=installed_state_write elapsed_us={} files=1 bytes={}",
             state_finished
@@ -1011,7 +1030,9 @@ pub async fn install_game(
             state_finished
                 .duration_since(staged_validation_finished)
                 .as_millis(),
-            Instant::now().duration_since(state_finished).as_millis(),
+            Instant::now()
+                .duration_since(ownership_finished)
+                .as_millis(),
             files.len(),
             objects.len(),
             hits,

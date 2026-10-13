@@ -357,7 +357,7 @@ impl InstalledFile {
 /// A path is valid if it is relative, forward-slashed, traversal-free, and
 /// built from safe filename segments — the same class of path planning
 /// already guarantees, re-checked at the persisted boundary.
-fn validate_relative_game_path(path: &str) -> Result<(), String> {
+pub(crate) fn validate_relative_game_path(path: &str) -> Result<(), String> {
     if path.is_empty() || path.len() > MAX_RELATIVE_PATH_LENGTH {
         return Err("the path must be 1 to 512 characters long".to_owned());
     }

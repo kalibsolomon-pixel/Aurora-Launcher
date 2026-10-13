@@ -40,11 +40,17 @@ pub(crate) fn checkpoint(
     instance_root: &Path,
     point: crate::install::journal::TransactionPoint,
 ) -> Result<(), crate::install::InstallError> {
+    retention_checkpoint(instance_root, &format!("{point:?}"))
+}
+
+pub(crate) fn retention_checkpoint(
+    instance_root: &Path,
+    label: &str,
+) -> Result<(), crate::install::InstallError> {
     let Some(requested) = std::env::var_os("AURORA_F3RA_PAUSE") else {
         return Ok(());
     };
-    let label = format!("{point:?}");
-    if requested != label.as_str() {
+    if requested != label {
         return Ok(());
     }
     let root = authorize().map_err(crate::install::InstallError::Storage)?;
@@ -66,7 +72,7 @@ pub(crate) fn checkpoint(
         bytes,
     )
     .map_err(crate::install::InstallError::Storage)?;
-    eprintln!("[aurora-desktop-acceptance] pid={pid} target={id} point={point:?}");
+    eprintln!("[aurora-desktop-acceptance] pid={pid} target={id} point={label}");
     let started = std::time::Instant::now();
     while !evidence.join(format!("resume-{pid}")).exists() {
         if started.elapsed() > std::time::Duration::from_secs(300) {
