@@ -147,45 +147,150 @@ fn write_json(path: &Path, value: &impl Serialize) -> io::Result<()> {
     journal::atomic_write(path, &bytes)
 }
 
-/// Only installer-supplied outputs grant ownership. Directory enumeration is a
-/// refusal check, never an adoption of files discovered in an existing tree.
+/// Only installer-supplied outputs grant ownership. Sealing is ONE immutable
+/// observation of launcher-private staging: enumerate the staged tree once,
+/// hash each expected file exactly once, and refuse everything unaccounted.
+/// Re-hashing or per-file re-canonicalization inside this single synchronous
+/// call would add no independent evidence — the tree is private staging under
+/// the game lock — while every later consumer (staged validation, promotion
+/// capture, retirement inspection) re-verifies bytes at its own boundary.
 pub(crate) fn seal_staging(
     root: &Path,
     manifest: &InstalledGameManifest,
     natives: Vec<OwnedFile>,
 ) -> io::Result<()> {
-    let mut files = BTreeMap::new();
+    // Expected paths and the exact in-memory observations any on-disk copy
+    // must equal: extraction observations for natives, and the completion
+    // manifest bytes the executor writes last.
+    let mut expected: BTreeMap<String, Option<OwnedFile>> = BTreeMap::new();
     for file in manifest.files() {
-        let item = OwnedFile::read(root, file.path().to_owned())?;
-        if files.insert(item.path.clone(), item).is_some() {
+        safe_relative(file.path())?;
+        if expected.insert(file.path().to_owned(), None).is_some() {
             return Err(unsafe_path());
         }
     }
     for item in natives {
-        if let Some(previous) = files.insert(item.path.clone(), item.clone()) {
-            if previous != item {
-                return Err(unsafe_path());
-            }
-        }
-        if OwnedFile::read(root, item.path.clone())? != item {
+        safe_relative(&item.path)?;
+        let observation = Some(item);
+        let path = observation.as_ref().unwrap().path.clone();
+        let conflicting = match expected.get(&path) {
+            Some(previous @ Some(_)) => *previous != observation,
+            _ => false,
+        };
+        if conflicting {
             return Err(unsafe_path());
         }
+        expected.insert(path, observation);
     }
     // Bind the exact bytes that the installer will write LAST. The ownership
     // seal is auxiliary staging evidence, never a completion marker itself.
-    let item = OwnedFile::observed(
+    // As before, this deliberately supersedes any same-path expectation.
+    let completion = OwnedFile::observed(
         INSTALLED_GAME_FILE_NAME.to_owned(),
         manifest.to_json().as_bytes(),
     );
-    files.insert(item.path.clone(), item);
+    expected.insert(INSTALLED_GAME_FILE_NAME.to_owned(), Some(completion));
+
+    let allowed_dirs: BTreeSet<String> = expected
+        .keys()
+        .flat_map(|path| {
+            path.match_indices('/')
+                .map(|(offset, _)| path[..offset].to_owned())
+        })
+        .collect();
+    checked_directory(root, root)?;
+    // Enumeration never adopts discovered files: every observed path must
+    // already be installer-supplied, and directory metadata comes from the
+    // enumeration itself so no descendant is followed through a redirect.
+    let mut observed: BTreeMap<String, OwnedFile> = BTreeMap::new();
+    let mut pending: Vec<(PathBuf, String, usize)> = vec![(root.to_path_buf(), String::new(), 0)];
+    let mut count = 0usize;
+    while let Some((directory, prefix, depth)) = pending.pop() {
+        if depth > 64 {
+            return Err(unsafe_path());
+        }
+        for entry in fs::read_dir(&directory)? {
+            count += 1;
+            if count > 200_000 {
+                return Err(unsafe_path());
+            }
+            let entry = entry?;
+            let name = entry.file_name().into_string().map_err(|_| unsafe_path())?;
+            let relative = if prefix.is_empty() {
+                name
+            } else {
+                format!("{prefix}/{name}")
+            };
+            safe_relative(&relative)?;
+            let meta = entry.metadata()?;
+            if redirected(&meta) {
+                return Err(unsafe_path());
+            }
+            if meta.is_dir() {
+                if !allowed_dirs.contains(&relative) {
+                    return Err(unsafe_path());
+                }
+                pending.push((entry.path(), relative, depth + 1));
+            } else if meta.is_file() {
+                // A stale seal from an interrupted attempt is never trusted.
+                if relative == SEAL {
+                    return Err(unsafe_path());
+                }
+                let (size, sha256) = observe_bytes(&entry.path())?;
+                let item = OwnedFile {
+                    path: relative.clone(),
+                    size,
+                    sha256,
+                };
+                match expected.get(&relative) {
+                    // On-disk natives/completion bytes must equal the exact
+                    // installer-supplied observation.
+                    Some(Some(wanted)) if *wanted == item => {
+                        observed.insert(relative.clone(), wanted.clone());
+                    }
+                    // Manifest-recorded files adopt this one fresh reading.
+                    Some(None) => {
+                        observed.insert(relative.clone(), item);
+                    }
+                    _ => return Err(unsafe_path()),
+                }
+            } else {
+                return Err(unsafe_path());
+            }
+        }
+    }
+    // Everything the installer claims to have staged must have been present.
+    // The completion manifest is the one entry bound ahead of its write.
+    for path in expected.keys() {
+        if path != INSTALLED_GAME_FILE_NAME && !observed.contains_key(path) {
+            return Err(unsafe_path());
+        }
+    }
+    let completion = expected
+        .get(INSTALLED_GAME_FILE_NAME)
+        .cloned()
+        .flatten()
+        .ok_or_else(unsafe_path)?;
+    observed.insert(INSTALLED_GAME_FILE_NAME.to_owned(), completion);
     let seal = Seal {
         schema_version: 1,
         installation_id: manifest.installation_id().to_owned(),
-        files: files.into_values().collect(),
+        files: observed.into_values().collect(),
     };
     seal.validate()?;
-    inspect(root, &seal, None, true)?;
     write_json(&root.join(SEAL), &seal)
+}
+
+/// Open and hash one already-validated regular file without re-walking its
+/// ancestors; the caller's enumeration supplied the containment evidence.
+fn observe_bytes(path: &Path) -> io::Result<(u64, String)> {
+    let mut file = File::open(path)?;
+    let mut sha = Sha256::new();
+    let size = io::copy(&mut file, &mut sha)?;
+    Ok((
+        size,
+        crate::integrity::ArtifactDigest::from_sha256(sha.finalize().into()).as_hex(),
+    ))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

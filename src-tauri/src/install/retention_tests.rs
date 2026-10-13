@@ -758,6 +758,122 @@ fn path_traversal_aliases_and_corrupted_seals_are_rejected() {
     assert!(seal.validate().is_err());
 }
 
+/// The seal must bind exactly the independently-constructed observations:
+/// one per manifest file, the extraction observations for natives, and the
+/// in-memory completion-manifest bytes — byte-for-byte, in sorted path order.
+#[test]
+fn sealing_matches_independent_reference_observation() {
+    let world = World::new();
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    let game = world.root.join(".install-staging/game");
+    fs::create_dir_all(game.join("natives")).unwrap();
+    fs::write(game.join("client.jar"), b"client").unwrap();
+    fs::write(game.join("natives/native.dll"), b"native").unwrap();
+    let manifest = InstalledGameManifest::for_platform(
+        "1.20.1",
+        PlatformPin::Vanilla {},
+        id.clone(),
+        1,
+        vec![InstalledFile::new(
+            InstalledFileRole::Client,
+            "client.jar".into(),
+            ArtifactTrust::ExpectedDigestVerified {
+                algorithm: DigestAlgorithm::Sha256,
+                digest: hash(b"client"),
+            },
+            6,
+        )],
+        NativesRecord::new("natives".into()),
+    );
+    fs::write(game.join(INSTALLED_GAME_FILE_NAME), manifest.to_json()).unwrap();
+    seal_staging(
+        &game,
+        &manifest,
+        vec![OwnedFile::observed("natives/native.dll".into(), b"native")],
+    )
+    .unwrap();
+    let mut reference = BTreeMap::new();
+    reference.insert(
+        "client.jar".to_owned(),
+        OwnedFile::observed("client.jar".into(), b"client"),
+    );
+    reference.insert(
+        "natives/native.dll".to_owned(),
+        OwnedFile::observed("natives/native.dll".into(), b"native"),
+    );
+    reference.insert(
+        INSTALLED_GAME_FILE_NAME.to_owned(),
+        OwnedFile::observed(
+            INSTALLED_GAME_FILE_NAME.into(),
+            manifest.to_json().as_bytes(),
+        ),
+    );
+    let expected = serde_json::to_vec(&Seal {
+        schema_version: 1,
+        installation_id: id,
+        files: reference.into_values().collect(),
+    })
+    .unwrap();
+    assert_eq!(fs::read(game.join(SEAL)).unwrap(), expected);
+}
+
+/// Sealing refuses everything the installer did not account for, and never
+/// overwrites a stale seal from an interrupted attempt.
+#[test]
+fn sealing_refuses_unaccounted_staging_content() {
+    for kind in [
+        "extraFile",
+        "missingFile",
+        "staleSeal",
+        "nativeMismatch",
+        "completionMismatch",
+        "unknownDir",
+    ] {
+        let world = World::new();
+        let id = uuid::Uuid::new_v4().simple().to_string();
+        let game = world.root.join(".install-staging/game");
+        fs::create_dir_all(game.join("natives")).unwrap();
+        fs::write(game.join("client.jar"), b"client").unwrap();
+        fs::write(game.join("natives/native.dll"), b"native").unwrap();
+        let manifest = InstalledGameManifest::for_platform(
+            "1.20.1",
+            PlatformPin::Vanilla {},
+            id,
+            1,
+            vec![InstalledFile::new(
+                InstalledFileRole::Client,
+                "client.jar".into(),
+                ArtifactTrust::ExpectedDigestVerified {
+                    algorithm: DigestAlgorithm::Sha256,
+                    digest: hash(b"client"),
+                },
+                6,
+            )],
+            NativesRecord::new("natives".into()),
+        );
+        match kind {
+            "extraFile" => fs::write(game.join("extra.txt"), b"x").unwrap(),
+            "missingFile" => fs::remove_file(game.join("client.jar")).unwrap(),
+            "staleSeal" => fs::write(game.join(SEAL), b"{}").unwrap(),
+            "nativeMismatch" => fs::write(game.join("natives/native.dll"), b"tampered").unwrap(),
+            "completionMismatch" => {
+                fs::write(game.join(INSTALLED_GAME_FILE_NAME), b"different").unwrap()
+            }
+            "unknownDir" => fs::create_dir(game.join("owner-empty")).unwrap(),
+            _ => unreachable!(),
+        }
+        let result = seal_staging(
+            &game,
+            &manifest,
+            vec![OwnedFile::observed("natives/native.dll".into(), b"native")],
+        );
+        assert!(result.is_err(), "{kind}");
+        if kind == "staleSeal" {
+            assert_eq!(fs::read(game.join(SEAL)).unwrap(), b"{}");
+        }
+    }
+}
+
 #[test]
 fn locks_cover_same_instance_and_allow_different_instances() {
     let root = std::env::temp_dir().join(format!("aurora-f3rb-locks-{}", uuid::Uuid::new_v4()));
@@ -779,6 +895,252 @@ fn locks_cover_same_instance_and_allow_different_instances() {
     ));
     drop(game);
     fs::remove_dir_all(root).unwrap();
+}
+
+/// Opt-in F3R-B1 ownership-sealing benchmark on a deterministic disposable
+/// fixture sized near the measured warm Vanilla profile (4,669 files /
+/// ~570.9 MB). Exercises the real `seal_staging` code path plus decomposition
+/// replicas (enumeration, repeated raw hash passes, per-file containment).
+/// Accepts only a fresh direct temp child with the aurora-f3rb1- prefix.
+#[test]
+fn ownership_sealing_benchmark_helper() {
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x >> 12;
+            x ^= x << 25;
+            x ^= x >> 27;
+            self.0 = x;
+            x.wrapping_mul(0x2545_F491_4F6C_DD1D)
+        }
+    }
+    fn write_seeded(path: &Path, size: usize, rng: &mut Rng) -> String {
+        use std::io::Write;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        let mut file = io::BufWriter::with_capacity(4 * 1024 * 1024, File::create(path).unwrap());
+        let mut sha = Sha256::new();
+        let mut remaining = size;
+        while remaining > 0 {
+            let take = remaining.min(4 * 1024 * 1024);
+            let mut block = Vec::with_capacity(take);
+            while block.len() < take {
+                let word = rng.next().to_le_bytes();
+                let copy = (take - block.len()).min(word.len());
+                block.extend_from_slice(&word[..copy]);
+            }
+            file.write_all(&block).unwrap();
+            sha.update(&block);
+            remaining -= take;
+        }
+        file.flush().unwrap();
+        drop(file);
+        crate::integrity::ArtifactDigest::from_sha256(sha.finalize().into()).as_hex()
+    }
+    let Some(root) = std::env::var_os("AURORA_F3RB1_SEAL_BENCH") else {
+        return;
+    };
+    let root = PathBuf::from(root);
+    assert!(
+        root.is_absolute()
+            && root.parent() == Some(std::env::temp_dir().as_path())
+            && root
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("aurora-f3rb1-")
+            && !root.exists()
+    );
+    fs::create_dir(&root).unwrap();
+    let started = Instant::now();
+    let mut rng = Rng(0xF3B1_5EED_0000_0001);
+    let mut entries: Vec<(String, usize, InstalledFileRole)> = Vec::new();
+    let mut digests: BTreeMap<String, String> = BTreeMap::new();
+    let stage = |path: String,
+                 size: usize,
+                 role: InstalledFileRole,
+                 rng: &mut Rng,
+                 entries: &mut Vec<(String, usize, InstalledFileRole)>,
+                 digests: &mut BTreeMap<String, String>| {
+        let digest = write_seeded(&root.join(&path), size, rng);
+        entries.push((path.clone(), size, role));
+        digests.insert(path, digest);
+    };
+    stage(
+        "client.jar".into(),
+        26_214_400,
+        InstalledFileRole::Client,
+        &mut rng,
+        &mut entries,
+        &mut digests,
+    );
+    for index in 0..100 {
+        stage(
+            format!("libraries/net/minecraft/mirror-{index}/mirror-{index}.jar"),
+            2_097_152,
+            InstalledFileRole::Library,
+            &mut rng,
+            &mut entries,
+            &mut digests,
+        );
+    }
+    for index in 0..4_500 {
+        stage(
+            format!("libraries/com/aurora/bench/lib-{index:04}/lib-{index:04}.jar"),
+            65_536,
+            InstalledFileRole::Library,
+            &mut rng,
+            &mut entries,
+            &mut digests,
+        );
+    }
+    for name in [
+        "config/log4j2.xml",
+        "asset-index/11.json",
+        "version-range.json",
+    ] {
+        stage(
+            name.into(),
+            2_048,
+            InstalledFileRole::AssetIndex,
+            &mut rng,
+            &mut entries,
+            &mut digests,
+        );
+    }
+    let mut native_ownership = Vec::new();
+    for index in 0..12 {
+        let path = format!("natives/win/x64/native-{index:02}.dll");
+        let digest = write_seeded(&root.join(&path), 131_072, &mut rng);
+        let bytes = fs::read(root.join(&path)).unwrap();
+        assert_eq!(hash(&bytes), digest);
+        native_ownership.push(OwnedFile::observed(path, &bytes));
+    }
+    let total_bytes: u64 =
+        entries.iter().map(|(_, size, _)| *size as u64).sum::<u64>() + 12 * 131_072;
+    let manifest = InstalledGameManifest::for_platform(
+        "1.21.11",
+        PlatformPin::Vanilla {},
+        // Fixed identity so the seal digest is comparable across A/B builds.
+        "fa3b10000000000000000000000000b1".to_owned(),
+        1,
+        entries
+            .into_iter()
+            .map(|(path, size, role)| {
+                InstalledFile::new(
+                    role,
+                    path.clone(),
+                    ArtifactTrust::ExpectedDigestVerified {
+                        algorithm: DigestAlgorithm::Sha256,
+                        digest: digests[&path].clone(),
+                    },
+                    size as u64,
+                )
+            })
+            .collect(),
+        NativesRecord::new("natives".into()),
+    );
+    let generated_ms = started.elapsed().as_millis();
+    let file_count = manifest.files().len() + native_ownership.len();
+
+    // Deterministic file list shared by all decomposition replicas.
+    let mut files: Vec<PathBuf> = Vec::new();
+    let mut pending = vec![root.clone()];
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(&directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    let enumerate = |label: &str| {
+        let started = Instant::now();
+        let mut seen = 0usize;
+        let mut directories = 0usize;
+        let mut pending = vec![root.clone()];
+        while let Some(directory) = pending.pop() {
+            directories += 1;
+            for entry in fs::read_dir(&directory).unwrap() {
+                let path = entry.unwrap().path();
+                let meta = fs::symlink_metadata(&path).unwrap();
+                if redirected(&meta) || (!meta.is_dir() && !meta.is_file()) {
+                    panic!("unexpected fixture entry");
+                }
+                if meta.is_dir() {
+                    pending.push(path);
+                } else {
+                    seen += 1;
+                }
+            }
+        }
+        eprintln!(
+            "[f3rb1-bench] phase={label} elapsed_us={} files={seen} dirs={directories}",
+            started.elapsed().as_micros()
+        );
+        seen
+    };
+    let hash_pass = |label: &str| {
+        let started = Instant::now();
+        let mut bytes = 0u64;
+        for path in &files {
+            let mut file = File::open(path).unwrap();
+            let mut sha = Sha256::new();
+            bytes += io::copy(&mut file, &mut sha).unwrap();
+        }
+        eprintln!(
+            "[f3rb1-bench] phase={label} elapsed_us={} bytes={bytes}",
+            started.elapsed().as_micros()
+        );
+    };
+    let containment_pass = |label: &str| {
+        let started = Instant::now();
+        for path in &files {
+            let parent = path.parent().unwrap();
+            checked_directory(&root, parent).unwrap();
+            let meta = fs::symlink_metadata(path).unwrap();
+            assert!(meta.is_file());
+        }
+        eprintln!(
+            "[f3rb1-bench] phase={label} elapsed_us={} files={}",
+            started.elapsed().as_micros(),
+            files.len()
+        );
+    };
+    // Warm caches once with a full read before any timed measurement.
+    hash_pass("hash_warmup_discarded");
+    enumerate("enumerate_1");
+    enumerate("enumerate_2");
+    hash_pass("hash_pass_1");
+    hash_pass("hash_pass_2");
+    hash_pass("hash_pass_3");
+    containment_pass("containment_pass_1");
+    containment_pass("containment_pass_2");
+
+    let mut seal_samples = Vec::new();
+    let mut seal_digests = BTreeSet::new();
+    for _ in 0..5 {
+        let _ = fs::remove_file(root.join(SEAL));
+        let started = Instant::now();
+        seal_staging(&root, &manifest, native_ownership.clone()).unwrap();
+        seal_samples.push(started.elapsed().as_micros());
+        seal_digests.insert(hash(&fs::read(root.join(SEAL)).unwrap()));
+    }
+    assert_eq!(seal_digests.len(), 1, "sealing must be deterministic");
+    let mut sorted = seal_samples.clone();
+    sorted.sort_unstable();
+    let median = sorted[sorted.len() / 2];
+    eprintln!("[f3rb1-bench] phase=seal_samples elapsed_us={seal_samples:?} median_us={median}");
+    eprintln!(
+        "[f3rb1-bench] phase=summary file_count={file_count} total_bytes={total_bytes} generated_ms={generated_ms} seal_sha256={}",
+        seal_digests.iter().next().unwrap()
+    );
+    // The fixture stays on disk for inspection; the driver owns this root.
 }
 
 #[cfg(windows)]
