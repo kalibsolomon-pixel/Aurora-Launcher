@@ -939,29 +939,30 @@ pub async fn install_game(
         NativesRecord::with_subdirectory(natives_relative, natives_subdirectory),
     );
     let manifest_path = staging_game.join(INSTALLED_GAME_FILE_NAME);
-    std::fs::write(&manifest_path, manifest.to_json()).map_err(|error| InstallError::Commit {
-        context: "writing the installed-state manifest".to_owned(),
-        source: error,
-    })?;
-    let state_finished = Instant::now();
     // Optional forward-only ownership evidence. Failure protects the backup;
     // it cannot turn a successful installation into a failure.
     if retention::seal_staging(&staging_game, &manifest, native_ownership).is_err() {
         eprintln!("[aurora-retention] outcome=retainedUnknownOwnership reason=sealUnavailable");
     }
     let ownership_finished = Instant::now();
+    // The completion manifest remains the final staged file, as before F3R-B.
+    std::fs::write(&manifest_path, manifest.to_json()).map_err(|error| InstallError::Commit {
+        context: "writing the installed-state manifest".to_owned(),
+        source: error,
+    })?;
+    let state_finished = Instant::now();
     if std::env::var_os("AURORA_INSTALL_DIAGNOSTICS").is_some() {
         eprintln!(
             "[aurora-durability] phase=ownership_seal elapsed_us={} files={} bytes=0",
             ownership_finished
-                .duration_since(state_finished)
+                .duration_since(staged_validation_finished)
                 .as_micros(),
             manifest.files().len()
         );
         eprintln!(
             "[aurora-durability] phase=installed_state_write elapsed_us={} files=1 bytes={}",
             state_finished
-                .duration_since(staged_validation_finished)
+                .duration_since(ownership_finished)
                 .as_micros(),
             manifest_path
                 .metadata()
@@ -1028,11 +1029,9 @@ pub async fn install_game(
                 .duration_since(natives_finished)
                 .as_millis(),
             state_finished
-                .duration_since(staged_validation_finished)
-                .as_millis(),
-            Instant::now()
                 .duration_since(ownership_finished)
                 .as_millis(),
+            Instant::now().duration_since(state_finished).as_millis(),
             files.len(),
             objects.len(),
             hits,

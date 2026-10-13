@@ -171,7 +171,12 @@ pub(crate) fn seal_staging(
             return Err(unsafe_path());
         }
     }
-    let item = OwnedFile::read(root, INSTALLED_GAME_FILE_NAME.to_owned())?;
+    // Bind the exact bytes that the installer will write LAST. The ownership
+    // seal is auxiliary staging evidence, never a completion marker itself.
+    let item = OwnedFile::observed(
+        INSTALLED_GAME_FILE_NAME.to_owned(),
+        manifest.to_json().as_bytes(),
+    );
     files.insert(item.path.clone(), item);
     let seal = Seal {
         schema_version: 1,
@@ -179,7 +184,7 @@ pub(crate) fn seal_staging(
         files: files.into_values().collect(),
     };
     seal.validate()?;
-    inspect(root, &seal, None, false)?;
+    inspect(root, &seal, None, true)?;
     write_json(&root.join(SEAL), &seal)
 }
 

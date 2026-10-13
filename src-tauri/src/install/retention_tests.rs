@@ -118,6 +118,83 @@ fn representative_storage_measurement() {
     );
 }
 
+/// Opt-in small storage fixture for the REAL desktop, not a gameplay fixture.
+/// It uses production journal promotion; no owner root or account is accepted.
+#[test]
+fn desktop_storage_fixture_helper() {
+    let Some(root) = std::env::var_os("AURORA_F3RB_DESKTOP_FIXTURE") else {
+        return;
+    };
+    let root = PathBuf::from(root);
+    assert_eq!(
+        root.canonicalize().unwrap().parent(),
+        Some(std::env::temp_dir().canonicalize().unwrap().as_path())
+    );
+    assert!(
+        root.file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("aurora-f3ra-F3RB-")
+    );
+    assert_eq!(
+        fs::read(root.join("F3RA-ISOLATED.txt")).unwrap(),
+        b"F3RA isolated desktop acceptance\n"
+    );
+    let managed = ManagedPaths::from_app_local_data_dir(root.join("managed")).unwrap();
+    let id = InstanceId::new("f3rb-storage-fixture").unwrap();
+    let fixture_root = managed.instance_paths(&id).root().to_path_buf();
+    assert!(!fixture_root.exists());
+    fs::create_dir(&fixture_root).unwrap();
+    fs::write(fixture_root.join("owner-sentinel"), b"owner").unwrap();
+    let world = World {
+        root: fixture_root,
+        id: id.clone(),
+    };
+    let _lifecycle = crate::instances::lifecycle::lock_instance_operation(&managed, &id).unwrap();
+    let _game = super::super::lock_game_target(&managed, &id).unwrap();
+    let payload = vec![42u8; 16 * 1024 * 1024];
+    let mut fresh = Journal::begin(&world.root, &id).unwrap();
+    world.game_payload(
+        &world.root.join(".install-staging/game"),
+        fresh.transaction_id(),
+        &payload,
+    );
+    fresh.promote(&world.root, Default::default()).unwrap();
+    let mut transactions = Vec::new();
+    for time in 1..=5 {
+        let mut journal = Journal::begin(&world.root, &id).unwrap();
+        world.game_payload(
+            &world.root.join(".install-staging/game"),
+            journal.transaction_id(),
+            &payload,
+        );
+        journal.promote(&world.root, Default::default()).unwrap();
+        world.dated(journal.transaction_id(), time);
+        transactions.push(journal.transaction_id().to_owned());
+    }
+    let installed = crate::instances::platform::InstalledConfiguration {
+        minecraft_version: "1.20.1".into(),
+        platform: PlatformPin::Vanilla {},
+        aurora: None,
+    };
+    let configuration = serde_json::from_value(serde_json::json!({"minecraftVersion":"1.20.1","auroraEnabled":false,"loader":{"kind":"vanilla"},"memoryMib":2048,"additionalJvmArguments":"","window":null})).unwrap();
+    let record = crate::instances::InstanceRecord::from_installed(
+        id,
+        "F3RB storage fixture (synthetic)",
+        crate::instances::InstanceState::Ready,
+        installed,
+        configuration,
+    )
+    .unwrap();
+    let mut registry =
+        crate::instances::InstanceRegistry::load(&managed.instance_registry_file()).unwrap();
+    registry.instances_mut().push(record);
+    registry.save(&managed.instance_registry_file()).unwrap();
+    fs::write(root.join("evidence/storage-fixture.json"), serde_json::to_vec(&serde_json::json!({"transactions":transactions,"bytesPerClient":payload.len(),"synthetic":true,"timestampsBackdatedForAcceptance":true})).unwrap()).unwrap();
+    // Acceptance evidence is deliberately retained; ordinary tests use Drop.
+    std::mem::forget(world);
+}
+
 #[test]
 fn retention_process_helper() {
     let Some(root) = std::env::var_os("AURORA_F3RB_CHILD_ROOT") else {
@@ -435,6 +512,34 @@ fn modified_seal_before_replacement_cannot_adopt_owner_files() {
             .iter()
             .any(|entry| entry.transaction_id == replacement
                 && entry.outcome == Outcome::RetainedUnknownOwnership)
+    );
+}
+
+#[test]
+fn ownership_seal_precedes_and_does_not_replace_the_completion_marker() {
+    let world = World::new();
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    let game = world.root.join(".install-staging/game");
+    world.game(&game, &id);
+    let manifest = super::super::state::load_installed_state(&game)
+        .unwrap()
+        .unwrap();
+    fs::remove_file(game.join(SEAL)).unwrap();
+    fs::remove_file(game.join(INSTALLED_GAME_FILE_NAME)).unwrap();
+    seal_staging(
+        &game,
+        &manifest,
+        vec![OwnedFile::observed("natives/native.dll".into(), b"native")],
+    )
+    .unwrap();
+    assert!(game.join(SEAL).exists());
+    assert!(matches!(
+        super::super::validate_game_directory(&game).unwrap(),
+        ValidationOutcome::NotInstalled
+    ));
+    fs::write(game.join(INSTALLED_GAME_FILE_NAME), manifest.to_json()).unwrap();
+    assert!(
+        matches!(super::super::validate_game_directory(&game).unwrap(), ValidationOutcome::Installed(result) if result.status == ValidationStatus::Valid)
     );
 }
 
