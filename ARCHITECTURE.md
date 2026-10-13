@@ -2,6 +2,42 @@
 
 # Aurora Launcher architecture
 
+## Phase F3R-B backup retention (current)
+
+F3R-B supersedes the no-retirement statements in the historical F3R/F3R-A
+sections below. Recovery authority and its state names/schemas are unchanged.
+Instance Settings -> Maintenance -> Recovery backup storage is an explicit
+native worker operation; startup, recovery and successful installation never
+delete history. The default keeps the current journal's backup, the newest
+fully eligible historical backup (all timestamp ties), and a 30-day grace
+period. Legacy/unsealed, uncertain, damaged, rejected and unresolved evidence
+remains protected without a space-pressure override.
+
+Private staging writes a separate schema-1 `.installation-ownership.json`
+before writing the completion manifest last. Its known output inventory comes
+from manifest files and exact native extraction observations, never adoption of
+enumerated history. A successful replacement can write a schema-1 retention
+receipt only when the previous sealed tree still matches its original archived
+Committed candidate. This prevents a later recovery snapshot blessing owner
+additions or an edited seal. Game/registry/journal schemas remain unchanged;
+missing receipts after commit interruption are preserved, never manufactured.
+
+Maintenance takes the existing lifecycle -> game kernel locks, classifies
+pending recovery without replay, and requires full instance Ready validation.
+It validates all history authority before mutation, verifies exact file/empty
+directory allowlists and bytes, persists deletion intent, atomically renames
+within the history slot to `retiring-game`, then removes only verified recorded
+leaves and empty recorded directories. Small journals/receipts survive. Resumed
+intent permits missing leaves but still refuses unknown or modified survivors.
+Failures affect storage diagnostics, never commit, repair or registry readiness.
+No recursive history deletion, destructive delete-all control, startup scan,
+cache/runtime GC, credentials or release behavior is introduced.
+
+Windows local-NTFS process termination is the acceptance model; power loss,
+malicious same-user namespace replacement and other filesystems retain F3R's
+existing limits. Policy, invariants, diagnostics, test and desktop evidence,
+measurements and deferred work: [FORGE_F3R_B_BACKUP_RETENTION.md](FORGE_F3R_B_BACKUP_RETENTION.md).
+
 ## Phase F3R durable game operations (current)
 
 F3R supersedes the historical Phase 5 replacement/concurrency descriptions below.

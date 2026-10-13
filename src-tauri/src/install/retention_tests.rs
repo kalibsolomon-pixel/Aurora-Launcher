@@ -141,7 +141,10 @@ fn desktop_storage_fixture_helper() {
         b"F3RA isolated desktop acceptance\n"
     );
     let managed = ManagedPaths::from_app_local_data_dir(root.join("managed")).unwrap();
-    let id = InstanceId::new("f3rb-storage-fixture").unwrap();
+    let requested_id =
+        std::env::var("AURORA_F3RB_STORAGE_ID").unwrap_or_else(|_| "f3rb-storage-fixture".into());
+    assert!(requested_id.starts_with("f3rb-storage-"));
+    let id = InstanceId::new(requested_id).unwrap();
     let fixture_root = managed.instance_paths(&id).root().to_path_buf();
     assert!(!fixture_root.exists());
     fs::create_dir(&fixture_root).unwrap();
@@ -179,7 +182,7 @@ fn desktop_storage_fixture_helper() {
     };
     let configuration = serde_json::from_value(serde_json::json!({"minecraftVersion":"1.20.1","auroraEnabled":false,"loader":{"kind":"vanilla"},"memoryMib":2048,"additionalJvmArguments":"","window":null})).unwrap();
     let record = crate::instances::InstanceRecord::from_installed(
-        id,
+        id.clone(),
         "F3RB storage fixture (synthetic)",
         crate::instances::InstanceState::Ready,
         installed,
@@ -190,7 +193,12 @@ fn desktop_storage_fixture_helper() {
         crate::instances::InstanceRegistry::load(&managed.instance_registry_file()).unwrap();
     registry.instances_mut().push(record);
     registry.save(&managed.instance_registry_file()).unwrap();
-    fs::write(root.join("evidence/storage-fixture.json"), serde_json::to_vec(&serde_json::json!({"transactions":transactions,"bytesPerClient":payload.len(),"synthetic":true,"timestampsBackdatedForAcceptance":true})).unwrap()).unwrap();
+    let evidence_name = if std::env::var_os("AURORA_F3RB_STORAGE_ID").is_some() {
+        format!("storage-fixture-{id}.json")
+    } else {
+        "storage-fixture.json".into()
+    };
+    fs::write(root.join("evidence").join(evidence_name), serde_json::to_vec(&serde_json::json!({"transactions":transactions,"bytesPerClient":payload.len(),"synthetic":true,"timestampsBackdatedForAcceptance":true})).unwrap()).unwrap();
     // Acceptance evidence is deliberately retained; ordinary tests use Drop.
     std::mem::forget(world);
 }

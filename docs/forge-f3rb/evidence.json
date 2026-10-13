@@ -1,0 +1,84 @@
+{
+  "formatVersion": 1,
+  "phase": "F3R-B",
+  "verdict": "PARTIAL",
+  "remainingAcceptanceGate": "Separate Windows file-symlink creation was refused: Administrator privilege required for this operation. No Windows security setting was changed. Junction refusal passed.",
+  "branch": "codex/client-3-production-authority",
+  "startingHead": "c378af02710de61ee32361022e0aa545425cdbbc",
+  "implementationCommits": ["7c4ed08", "52396c4", "2b516d9", "e27c912"],
+  "platform": "Windows x86_64, local NTFS",
+  "rawEvidenceRoot": "%TEMP%/aurora-f3ra-F3RB-839b61924e3a4fb1834f0ff3cd9d5813/evidence",
+  "finalDesktopExecutableSha256": "92aa6c4f5908ed1282226635a872ef7071b84afc62e19aaaafd64ee4625e2f15",
+  "isolation": {
+    "marker": "F3RA isolated desktop acceptance\n",
+    "realGames": ["Vanilla 1.21.11", "Forge 1.20.4 / 1.20.4-49.2.0"],
+    "storageFixtures": ["f3rb-storage-fixture", "f3rb-storage-final"],
+    "storageFixturesAreSyntheticNotGameplayAcceptance": true,
+    "storageFixtureTimestampsExplicitlyBackdated": true,
+    "signedOut": true,
+    "ownerProductionAndAuthenticationUntouched": true
+  },
+  "policy": {
+    "trigger": "Explicit instance Settings maintenance only",
+    "graceDays": 30,
+    "protectCurrentJournalSlot": true,
+    "protectNewestVerifiedHistoricalBackupAndAllTimestampTies": true,
+    "legacyUnsealedAndUncertainContent": "Preserved without automatic enrollment",
+    "requiresFullReadyValidationAndLifecycleThenGameKernelLocks": true,
+    "deletion": "Durable intent, same-slot atomic rename, verified exact leaves, nonrecursive empty directories",
+    "changesGameCommitOrReadyAuthority": false
+  },
+  "automatedVerification": {
+    "startingJournalBaselinePassed": 11,
+    "finalDefaultRust": {"passed": 959, "failed": 0, "ignored": 30, "seconds": 54.32},
+    "releaseRegressionBeforeManifestLastCorrection": {"unitPassed": 958, "integrationPassed": 6, "failed": 0, "ignored": 30},
+    "installationSubsetAfterManifestLastCorrection": {"passed": 97, "failed": 0, "ignored": 5},
+    "dedicatedManifestLastTestPassed": true,
+    "optionalDesktopFixtureGeneratorActuallyExecuted": true,
+    "frontendSerial": {"passed": 272, "failed": 0, "milliseconds": 118455.7768},
+    "typeCheckErrors": 0,
+    "typeCheckWarnings": 0,
+    "rustFormatAndAllTargetCheckPassed": true,
+    "frontendProductionBuildPassed": true,
+    "finalNativeProductionNoBundleBuildPassed": true,
+    "excludedAttempts": ["Initial missing frontend packages restored with unchanged-lockfile npm ci", "Parallel frontend baseline stalled and its exact marked process tree was stopped; serial final suite passed", "First diagnostic boot lacked the existing required updater configuration merge", "A retry during a focus recovery observation correctly failed busy and was repeated after that observation settled", "One accessibility record named final-repeated-retention-ui.txt captured the wrong test window and is excluded; repetition is proved by the native log"]
+  },
+  "independentNativeProcessDeathTests": [
+    {"point": "Intent", "pid": 20712, "restartPassed": true},
+    {"point": "Renamed", "pid": 8548, "restartPassed": true},
+    {"point": "FileRemoved", "pid": 9360, "restartPassed": true},
+    {"point": "Empty", "pid": 29468, "restartPassed": true}
+  ],
+  "windowsDesktop": {
+    "A": {"result": "PASS", "pid": 5132, "transaction": "37109f4ca50249c6b51aa9b6a88c0c65", "registry": "ready", "manifestSha256": "b6b44d2ad8a02cf43812e9ed150fac4187af57b5d53d8ea402f04611a7e78dc5", "snapshot": "snapshot-043.json"},
+    "B": {"result": "PASS", "killedPid": 27704, "point": "BeforeCommit", "transaction": "71f550b4e0c74741b64eb27e8eb000d1", "snapshot": "snapshot-032.json", "restartPid": 2548, "restoredInstallation": "97827a041550429e92198633e8889c7f", "ui": "Previous installation restored"},
+    "C": {"result": "PASS", "killedPid": 2548, "point": "AfterCommit", "transaction": "a805b34e0862477c8cbe376edd552898", "snapshot": "snapshot-040.json", "restartPid": 5132, "registryAfterRestart": "installing", "ui": "Recovery completed", "candidateManifestSha256": "1ee22ab3f9068e471f45357e4be8ddb161f23998510630ea7b229ab19f1b47b5"},
+    "D": {"result": "PASS", "killedPid": 22136, "point": "RetentionFileRemoved", "restartPid": 26764, "explicitUiResume": true, "retired": 2, "protected": 3, "repeatRetired": 0, "repeatReclaimedBytes": 0},
+    "E": {"result": "PASS", "ownerLikeSentinelSha256BeforeAndAfter": "0548aa6e1aabdb47d5ac5af012bb8e692822ebec5a2c671d095f912a46c3cba7", "entireMixedBackupPreserved": true},
+    "F": {"result": "PASS", "retentionHolderPid": 1956, "competingDesktopPid": 10892, "sameTargetRetry": "installation_already_in_progress", "unrelatedForge": "Ready", "independentVanillaInstallAndStorageMaintenanceProgressedTogether": true},
+    "G": {"result": "PASS", "closingFreshBootPids": [29144, 18684], "readyFixtures": 4, "authorityAndReceiptFilesCompared": 42, "changedAuthorityFiles": 0}
+  },
+  "storageMeasurements": {
+    "unitRepresentativeClientPayloadBytes": 16777216,
+    "unitVerifiedHistoricalBefore": 33556356,
+    "unitVerifiedHistoricalAfter": 16778178,
+    "unitRetired": 1,
+    "unitProtected": 2,
+    "unitValidationMs": 264,
+    "unitDownstreamMs": 3985,
+    "eachDesktopFixture": {"backupTreesBefore": 5, "backupBytesBeforeIncludingOwnerSentinel": 83890924, "backupTreesAfter": 3, "backupBytesAfterIncludingOwnerSentinel": 50334568, "reclaimedBytesAcrossKillAndResume": 33556356},
+    "twoDesktopFixturesTotalReclaimedBytes": 67112712,
+    "firstDesktopResume": {"currentInvocationReclaimedBytes": 16779140, "downstreamMs": 4366, "repeatDownstreamMs": 2208},
+    "finalDesktopResume": {"currentInvocationReclaimedBytes": 16779140, "downstreamMs": 3912, "repeatDownstreamMs": 1902},
+    "ownerStorageReclaimed": false
+  },
+  "finalWarmRealVanillaMeasurement": {"installerMs": 81266, "lifecycleMs": 85961, "finalValidationMs": 4423, "ownershipSealMicroseconds": 17941010, "gameLockAcquireMicroseconds": 478, "cacheHits": 4669, "downloads": 0, "isControlledBaselineComparison": false},
+  "closingReadOnlyValidation": [
+    {"instance": "Forge", "status": "Ready", "problems": [], "elapsedMs": 18543},
+    {"instance": "Vanilla", "status": "Ready", "problems": [], "elapsedMs": 1289},
+    {"instance": "Synthetic storage first", "status": "Ready", "problems": [], "elapsedMs": 11},
+    {"instance": "Synthetic storage final", "status": "Ready", "problems": [], "elapsedMs": 11}
+  ],
+  "preservation": {"baselineTrackedFiles": 883, "missingTrackedFiles": 0, "preExistingUntrackedFileHashes": 4, "changedPreExistingUntrackedHashes": 0, "pushPublishDeploy": false},
+  "deferred": ["Authorized separate Windows file-symlink acceptance", "Linux acceptance", "Authenticated F1C gameplay", "D1-B3/additional Dev cleanup", "Drive backup changes", "Client mod and website work", "Release publication", "Production 1.4.2 replacement", "Automatic retention and legacy adoption", "Sealing performance optimization"]
+}
