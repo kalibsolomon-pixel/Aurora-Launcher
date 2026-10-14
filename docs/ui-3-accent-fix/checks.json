@@ -1,0 +1,34 @@
+[
+  {
+    "name": "typecheck",
+    "command": [
+      "node",
+      "C:/Users/kalib/AppData/Local/Programs/node-v24.21.0/node_modules/npm/bin/npm-cli.js",
+      "run",
+      "check"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "appearance-tests",
+    "command": [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "src/lib/launcher/phaseF.test.ts",
+      "src/lib/launcher/appearanceCustomAccent.test.ts",
+      "src/lib/shell/borealis.test.ts"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "production-build",
+    "command": [
+      "node",
+      "C:/Users/kalib/AppData/Local/Programs/node-v24.21.0/node_modules/npm/bin/npm-cli.js",
+      "run",
+      "build"
+    ],
+    "exit": 0
+  }
+]

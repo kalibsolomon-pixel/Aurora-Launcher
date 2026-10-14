@@ -11,7 +11,7 @@
   --f-shadow: 0 12px 36px rgb(0 0 0 / 16%);
   --f-blur: none;
   --f-content-panel: var(--f-panel);
-  --f-workspace-selection: #5bd0e0;
+  --f-workspace-selection: var(--color-accent);
   --f-dialog-panel: color-mix(in srgb, var(--color-background) 94%, transparent);
   --f-dialog-group: color-mix(in srgb, var(--color-surface) 94%, transparent);
   --f-dialog-dim: rgb(0 0 0 / 52%);

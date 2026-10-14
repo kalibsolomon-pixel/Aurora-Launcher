@@ -1,0 +1,19 @@
+✔ the Custom circle is the color picker: no redundant custom-color row remains (10608.6122ms)
+✔ choosing a color in the picker path applies a custom accent immediately (0.3253ms)
+✔ status colors are not derived from the custom accent (0.1474ms)
+✔ drag ordering only moves visible registered slots and preserves hidden/unknown data (7611.3709ms)
+✔ explicit player rotation changes projection without changing validated skin data (40.5439ms)
+✔ theme, accent and background writes preserve the other dimensions and failed saves preserve state (0.8567ms)
+✔ custom and preset colors apply all seven native palette tokens and survive reload (0.1586ms)
+✔ video speed is bounded independently from motion accessibility policy (0.5313ms)
+✔ video pauses on hidden/blur/reduced motion, preserves rate and releases decoder on unmount (0.5303ms)
+✔ native minimized pauses playback even while WebView2 still reports focused+visible (0.2536ms)
+✔ rejected autoplay shows the still, reports a redacted reason once, and can retry (2.9309ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 19018.7833

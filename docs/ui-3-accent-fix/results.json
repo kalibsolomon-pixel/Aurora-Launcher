@@ -1,0 +1,1093 @@
+{
+  "cases": 84,
+  "results": [
+    {
+      "background": "simple",
+      "surface": "installed-mods",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "simple",
+      "surface": "installed-mods",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "simple",
+      "surface": "installed-mods",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "simple",
+      "surface": "mods",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".browse-kind-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "simple",
+      "surface": "mods",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".browse-kind-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "simple",
+      "surface": "mods",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".browse-kind-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "simple",
+      "surface": "installed-packs",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "simple",
+      "surface": "installed-packs",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "simple",
+      "surface": "installed-packs",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "simple",
+      "surface": "packs",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".browse-kind-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "simple",
+      "surface": "packs",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".browse-kind-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "simple",
+      "surface": "packs",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".browse-kind-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "simple",
+      "surface": "modpacks",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      },
+      "styles": []
+    },
+    {
+      "background": "simple",
+      "surface": "modpacks",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      },
+      "styles": []
+    },
+    {
+      "background": "simple",
+      "surface": "modpacks",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      },
+      "styles": []
+    },
+    {
+      "background": "simple",
+      "surface": "home",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "home",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "home",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "instances",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "instances",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "instances",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "settings",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "settings",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "settings",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "cosmetics",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "cosmetics",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "cosmetics",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-overview",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-overview",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-overview",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-mods",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-mods",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-mods",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-resourcePacks",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-resourcePacks",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-resourcePacks",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-shaders",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-shaders",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-shaders",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-settings",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-settings",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "simple",
+      "surface": "workspace-settings",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "installed-mods",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "borealis",
+      "surface": "installed-mods",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "borealis",
+      "surface": "installed-mods",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "borealis",
+      "surface": "mods",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".browse-kind-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "borealis",
+      "surface": "mods",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".browse-kind-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "borealis",
+      "surface": "mods",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".browse-kind-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "borealis",
+      "surface": "installed-packs",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "borealis",
+      "surface": "installed-packs",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "borealis",
+      "surface": "installed-packs",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "borealis",
+      "surface": "packs",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".browse-kind-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(255, 0, 0) 0px -3px 0px 0px inset",
+          "background": "color(srgb 1 0 0 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "borealis",
+      "surface": "packs",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".browse-kind-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(139, 128, 255) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.545098 0.501961 1 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "borealis",
+      "surface": "packs",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      },
+      "styles": [
+        {
+          "selector": ".workspace-tab-active",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".content-view-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        },
+        {
+          "selector": ".browse-kind-tabs [aria-pressed=\"true\"]",
+          "shadow": "rgb(91, 208, 224) 0px -3px 0px 0px inset",
+          "background": "color(srgb 0.356863 0.815686 0.878431 / 0.12)",
+          "color": "rgb(240, 243, 252)"
+        }
+      ]
+    },
+    {
+      "background": "borealis",
+      "surface": "modpacks",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      },
+      "styles": []
+    },
+    {
+      "background": "borealis",
+      "surface": "modpacks",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      },
+      "styles": []
+    },
+    {
+      "background": "borealis",
+      "surface": "modpacks",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      },
+      "styles": []
+    },
+    {
+      "background": "borealis",
+      "surface": "home",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "home",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "home",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "instances",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "instances",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "instances",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "settings",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "settings",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "settings",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "cosmetics",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "cosmetics",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "cosmetics",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-overview",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-overview",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-overview",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-mods",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-mods",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-mods",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-resourcePacks",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-resourcePacks",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-resourcePacks",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-shaders",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-shaders",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-shaders",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-settings",
+      "accent": {
+        "type": "custom",
+        "hex": "#ff0000"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-settings",
+      "accent": {
+        "type": "preset",
+        "id": "violet"
+      }
+    },
+    {
+      "background": "borealis",
+      "surface": "workspace-settings",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      }
+    }
+  ],
+  "pageErrors": [],
+  "provenance": "Actual components; deterministic browser fixtures; no native or owner-data mutation."
+}

@@ -1,0 +1,11 @@
+{
+  "startingHead": "4b3cab0dd9d8903e032094117a8db09cf3b3b310",
+  "unchangedTracked": 1681,
+  "scopedStyleChanges": [
+    "src/lib/shell/phase-f.css",
+    "src/lib/launcher/widgets/PlaytimeWidget.svelte"
+  ],
+  "protectedFiles": 4,
+  "worktrees": 7,
+  "deletions": 0
+}

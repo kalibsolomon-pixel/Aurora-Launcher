@@ -63,7 +63,8 @@
 <style>
   .range { display: flex; justify-content: flex-end; gap: var(--space-1); margin-bottom: var(--space-3); }
   .range button { font: inherit; font-size: var(--text-metadata); border: 0; border-radius: var(--radius-sm); padding: var(--space-1) var(--space-2); color: var(--color-text-secondary); background: transparent; cursor: pointer; }
-  .range button:hover, .range button.active { color: var(--color-text); background: var(--color-surface-sunken); }
+  .range button:hover { color: var(--color-text); background: var(--color-surface-sunken); }
+  .range button.active { color: var(--color-accent); background: var(--color-accent-soft); }
   button:focus-visible, .day:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   .total { margin: 0; font-size: clamp(1.5rem, 3vw, 2.2rem); font-weight: 650; line-height: 1.1; }
   .note { margin: var(--space-1) 0; color: var(--color-text-secondary); font-size: var(--text-metadata); }
