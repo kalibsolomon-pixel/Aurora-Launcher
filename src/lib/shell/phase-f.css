@@ -166,6 +166,11 @@
 :root[data-background="borealis"] :is(.workspace-page, .modpack-group) :is(.mod-list, .packs-list, .browse-row, .project, .preview) {
   background: rgb(8 17 27 / 12%);
 }
+/* Content rows must also honor the accessibility fallback: the localized
+   Borealis row backing above otherwise overrides the root's opaque tokens. */
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-background="borealis"] :is(.workspace-page, .modpack-group) :is(.mod-list, .packs-list, .browse-row, .project, .preview) { background: var(--color-surface); }
+}
 .f-pilot .workspace-header { gap: var(--space-4); flex-wrap: wrap; }
 .f-pilot .workspace-tabs { border-color: var(--f-edge); }
 .f-pilot .workspace-tabs .workspace-tab-active,
