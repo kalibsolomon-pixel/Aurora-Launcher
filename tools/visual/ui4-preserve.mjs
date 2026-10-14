@@ -1,0 +1,15 @@
+import {readFile,writeFile} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
+const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
+const baseline=JSON.parse(await readFile('docs/ui-4/baseline.json','utf8'));
+const scoped=['ARCHITECTURE.md','src/lib/launcher/playerModel.ts','src/lib/launcher/CosmeticPreview.svelte','src/lib/launcher/navigation.ts','src/lib/pages/CosmeticsPage.svelte','tools/visual/l3.test.mjs'];
+for(const item of [...baseline.tracked,...baseline.protected])if(!scoped.includes(item.path))assert.equal(createHash('sha256').update(await readFile(item.path)).digest('hex'),item.sha256,item.path);
+assert.equal(git('worktree','list','--porcelain').split(/\r?\n\r?\n/).slice(1).join('\n'),baseline.worktrees.split(/\r?\n\r?\n/).slice(1).join('\n'));
+assert.equal(git('branch','--show-current'),baseline.branch);
+assert.equal(git('diff',baseline.head,'--name-only','--diff-filter=DR'),'');
+assert.equal(git('diff','--cached','--name-only','--diff-filter=DR'),'');
+execFileSync('git',['diff',baseline.head,'--check']);
+const result={startingHead:baseline.head,checkedTracked:baseline.tracked.length,unchangedTracked:baseline.tracked.length-scoped.length,scopedExistingFiles:scoped,protectedFiles:baseline.protected.length,worktrees:7,otherWorktreesUnchanged:true,deletions:0,homeAndWidgetsByteIdentical:true,nativeAndReleaseFilesByteIdentical:true};
+await writeFile('docs/ui-4/preservation.json',JSON.stringify(result,null,2));console.log('PASS preservation',JSON.stringify(result));

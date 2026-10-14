@@ -2,6 +2,43 @@
 
 # Aurora Launcher architecture
 
+## UI-4 Player Appearance (current)
+
+The existing instance-independent `cosmetics` destination is labeled **Appearance**.
+It keeps the authoritative bottom-left account manager and existing widget links.
+`CosmeticsPage.svelte` now leads with a full-body character stage; the compact side
+panel owns library controls and explicit account actions. Narrow layouts stack the
+stage above the panel in the shell's existing scroll region. The Home component,
+fixed three-quarter angle, scale, hero crop, widgets and account selection are unchanged.
+
+The existing dependency-free cuboid/software renderer accepts optional outer-layer
+visibility and pitch/zoom parameters. Defaults preserve Home's original pixels.
+Appearance exposes horizontal/vertical drag, keyboard arrows, +/− zoom and Home reset,
+front/back/reset buttons, bounded zoom (0.75–1.15), tilt (−0.35–0.4 radians), classic/slim
+preview geometry and local cape visibility. Legacy skins stay classic. Nearest texel
+sampling preserves artwork; the existing high-resolution canvas compositing smooths
+projected edges without new post-processing or dependencies. Draws coalesce into one
+animation frame on state changes only while intersecting and visible. Observers,
+listeners and pending frames are disposed on unmount; there is no idle animation.
+
+Authoritative profile state and cached fallback textures remain distinguishable.
+A fresh profile without decoded pixels never relabels a cached texture as current.
+Account UUIDs/generation guards own remote identity; an account switch clears cape
+choice and invalidates old requests while retaining the explicitly labeled local
+skin preview/library. Account confirmation dialogs close on selection change.
+Preview geometry/layers/camera remain transient and never replace Home's account skin.
+Restart returns to account appearance, preserving only the existing native library
+and launcher Theme/Background/Accent preferences.
+
+No native DTO, credential, storage schema, service endpoint or permission changes.
+Existing E3/L3 native skin upload and owned cape operations are reused only after
+explicit confirmation naming the account. Native upload identity/model confirmation,
+cape ownership recheck, profile refresh and sanitized failures stay authoritative.
+No new account capability requires approval in this phase. Custom/third-party cape
+upload and new authentication operations remain unsupported. Production mutations
+are not part of acceptance. Audit and verification: `docs/ui-4/APPEARANCE_AUDIT.md`
+and `UI_4_APPEARANCE_ACCEPTANCE.md`.
+
 ## Phase F3R-B backup retention (current)
 
 F3R-B supersedes the no-retirement statements in the historical F3R/F3R-A
