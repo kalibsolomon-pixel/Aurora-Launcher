@@ -9,7 +9,8 @@
   // Native provider identity in, validated Aurora-cached PNG out. Installed
   // callers supply provenance; Browse supplies the native search project id.
   // Artwork resolution never adopts local content or grants managed ownership.
-  let { projectId, fallback, compact = false }: { projectId: string | null; fallback: string; compact?: boolean } = $props();
+  let { projectId, fallback, compact = false, size }: { projectId: string | null; fallback: string; compact?: boolean; size?: number } = $props();
+  const artworkSize = $derived(size ?? (compact ? 34 : 44));
   let url = $state<string | null>(null);
   $effect(() => {
     const project = projectId;
@@ -31,10 +32,9 @@
     return () => { current = false; clearTimeout(timer); };
   });
 </script>
-<div class="installed-artwork" class:compact aria-hidden="true">
-  <Artwork source={url} {fallback} size={compact ? 34 : 44} />
+<div class="installed-artwork" class:compact style:--installed-artwork-size={`${artworkSize}px`} aria-hidden="true">
+  <Artwork source={url} {fallback} size={artworkSize} />
 </div>
 <style>
-  .installed-artwork { width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; }
-  .installed-artwork.compact { width: 34px; height: 34px; flex-basis: 34px; }
+  .installed-artwork { width: var(--installed-artwork-size); height: var(--installed-artwork-size); flex: 0 0 var(--installed-artwork-size); display: grid; place-items: center; }
 </style>

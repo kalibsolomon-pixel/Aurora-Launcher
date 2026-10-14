@@ -357,7 +357,7 @@
 
 <svelte:window onkeydown={onWindowKeydown} />
 
-<section class="browse" class:browse-mods={browseKind === "mod"} aria-label="Browse Modrinth">
+<section class="browse" class:browse-mods={browseKind === "mod"} class:browse-modpacks={browseKind === "modpack"} aria-label="Browse Modrinth">
   <div class="browse-heading">
     <div>
       <h3 class="group-title">Discover {browseKindLabel(browseKind)}</h3>
@@ -456,6 +456,7 @@
   {/if}
   {#if busy && busy !== "install"}<p class="browse-status" class:browse-loading={busy === "search" && !page} role="status"><span class="spinner" aria-hidden="true"></span> {busy === "search" ? "Loading Modrinth projects…" : busy === "details" ? "Loading versions…" : "Resolving dependencies…"}</p>{/if}
   {#if busy === "install"}<p class="browse-status" role="status"><span class="spinner" aria-hidden="true"></span> {browseKind === "modpack" ? packPhaseLabel : "Downloading and verifying content…"}</p>{/if}
+  {#if quickBusyProjectId}<p class="browse-status" role="status"><span class="spinner" aria-hidden="true"></span> Installing {page?.hits.find(hit => hit.projectId === quickBusyProjectId)?.title ?? "content"} into {instanceName}…</p>{/if}
 
   {#if project}
     <div class="project">
@@ -493,7 +494,7 @@
         {#each page.hits as hit (hit.projectId)}
           <article class="browse-row">
             <div class="browse-glyph" aria-hidden="true">
-              <InstalledArtwork projectId={hit.projectId} fallback={browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"} />
+              <InstalledArtwork projectId={hit.projectId} size={browseKind === "modpack" ? 104 : 44} fallback={browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"} />
             </div>
             <div class="browse-copy">
               <h4>{hit.title}</h4>
@@ -509,7 +510,7 @@
               {:else}
                 <span class="browse-only-badge">New instance</span>
               {/if}
-              <button type="button" class="btn btn-quiet" aria-label={`Details for ${hit.title}`} disabled={busy !== null || quickBusyProjectId !== null} onclick={() => openProject(hit.projectId)}>Details</button>
+              <button type="button" class="btn" class:btn-quiet={browseKind !== "modpack"} aria-label={browseKind === "modpack" ? `Review ${hit.title} pack` : `Details for ${hit.title}`} disabled={busy !== null || quickBusyProjectId !== null} onclick={() => openProject(hit.projectId)}>{browseKind === "modpack" ? "Review pack" : "Details"}</button>
             </div>
           </article>
         {/each}
@@ -679,6 +680,16 @@
   .browse-mods .browse-meta { color: var(--color-text-secondary); }
   .browse-mods .browse-actions .btn { min-height: 40px; }
   .browse-mods > .browse-status { padding: var(--space-4); border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); background: var(--f-content-panel); color: var(--color-text-secondary); }
+  /* The provider supplies square project icons, not pack banners. Enlarge
+     the same cached icon in a stable frame; never crop or fetch extra art. */
+  .browse-modpacks .browse-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
+  .browse-modpacks .browse-row { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto; gap: var(--space-3); padding: var(--space-3); }
+  .browse-modpacks .browse-glyph { grid-row: auto; width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: var(--f-radius-control); background: var(--color-surface-sunken); }
+  .browse-modpacks .browse-copy h4 { font-size: var(--text-body); }
+  .browse-modpacks .browse-copy p { margin-block: var(--space-2); -webkit-line-clamp: 2; line-clamp: 2; font-size: var(--text-secondary); }
+  .browse-modpacks .browse-meta { color: var(--color-text-secondary); }
+  .browse-modpacks .browse-actions { grid-column: 1; justify-content: space-between; }
+  .browse-modpacks .browse-actions .btn { min-height: 40px; }
   @container (min-width: 561px) {
     .browse-mods .browse-row { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; }
     .browse-mods .browse-glyph { grid-row: 1; }
