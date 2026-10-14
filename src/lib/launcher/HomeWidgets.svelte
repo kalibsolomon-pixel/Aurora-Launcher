@@ -81,7 +81,7 @@
   .widgets-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
   .widgets-heading.editing { position: sticky; top: 0; z-index: 5; padding: 8px 12px; border: 1px solid var(--f-edge); border-radius: 14px; background: var(--color-surface); }
   .edit-status { margin: 0; font-size: var(--text-section); color: var(--color-text-secondary); font-weight: 600; }
-  .widget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: start; }
+  .widget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
   .widget { min-width: 0; margin: 0; padding: var(--space-5); min-height: 156px; }
   .widget:only-child { grid-column: 1 / -1; }
   .widget-wide { grid-column: span 2; }
