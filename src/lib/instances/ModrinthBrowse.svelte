@@ -231,7 +231,7 @@
   }
 
   async function quickInstall(projectId: string, title: string): Promise<void> {
-    if (!installable || quickBusyProjectId || (installedProjectIds.includes(projectId) && !dependencyOnlyProjectIds.includes(projectId))) return;
+    if (!installable || busy !== null || quickBusyProjectId || (installedProjectIds.includes(projectId) && !dependencyOnlyProjectIds.includes(projectId))) return;
     const targetInstanceId = instanceId;
     const targetKind = installContentType();
     quickBusyProjectId = projectId;
@@ -299,7 +299,7 @@
   }
 
   async function confirmPack(): Promise<void> {
-    if (!packPreview || optionalChanged) return;
+    if (!packPreview || optionalChanged || busy !== null) return;
     const selected = packPreview;
     busy = "install";
     error = null;
@@ -331,7 +331,7 @@
   } as Record<string, string>)[packPhase] ?? "Installing modpack…");
 
   async function confirmInstall(): Promise<void> {
-    if (!project || !preview) return;
+    if (!project || !preview || busy !== null) return;
     const targetInstanceId = instanceId;
     const targetKind = installContentType();
     busy = "install";
@@ -375,13 +375,13 @@
   {/if}
 
   <form class="browse-search" onsubmit={(event) => { event.preventDefault(); void search(); }}>
-    <label>
-      <span class="field-label">Find {browseKindNoun(browseKind)}</span>
+    <div class="search-control">
+      <label class="field-label" for="browse-search-input">Find {browseKindNoun(browseKind)}</label>
       <span class="search-field">
-        <input type="search" bind:this={searchInput} bind:value={query} oninput={(event) => { if (!event.currentTarget.value.trim()) void search(0, ""); }} maxlength="160" placeholder={`Search ${browseKindNoun(browseKind)} on Modrinth`} />
+        <input id="browse-search-input" type="search" bind:this={searchInput} bind:value={query} oninput={(event) => { if (!event.currentTarget.value.trim()) void search(0, ""); }} maxlength="160" placeholder={`Search ${browseKindNoun(browseKind)} on Modrinth`} />
         {#if query}<button type="button" class="clear-search" aria-label="Clear search" onclick={clearSearch}>×</button>{/if}
       </span>
-    </label>
+    </div>
     <button type="submit" class="btn" disabled={busy !== null}>{busy === "search" ? "Searching…" : "Search"}</button>
   </form>
 
@@ -503,13 +503,13 @@
             </div>
             <div class="browse-actions">
               {#if installable}
-                <button type="button" class="btn btn-quiet install-action" title={blockedProjects[hit.projectId]?.message ?? (installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : `Install newest eligible version of ${hit.title}`)} aria-label={blockedProjects[hit.projectId] ? `${hit.title} installation blocked; review Details` : dependencyOnlyProjectIds.includes(hit.projectId) ? `Keep ${hit.title} installed directly` : installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : quickBusyProjectId === hit.projectId ? `Installing ${hit.title}` : `Install newest eligible version of ${hit.title}`} disabled={quickBusyProjectId !== null || !!blockedProjects[hit.projectId] || (installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId))} onclick={() => quickInstall(hit.projectId, hit.title)}>
-                  {#if quickBusyProjectId === hit.projectId}<span class="spinner" aria-hidden="true"></span><span class="action-state">Installing…</span>{:else if installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Installed</span>{:else if blockedProjects[hit.projectId]}<span class="action-state">Blocked</span>{:else if dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Keep</span>{:else}<Icon name="download" size={18} />{/if}
+                <button type="button" class="btn install-action" title={blockedProjects[hit.projectId]?.message ?? (installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : `Install newest eligible version of ${hit.title}`)} aria-label={blockedProjects[hit.projectId] ? `${hit.title} installation blocked; review Details` : quickBusyProjectId === hit.projectId ? `Installing ${hit.title}` : dependencyOnlyProjectIds.includes(hit.projectId) ? `Keep ${hit.title} installed directly` : installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : `Install newest eligible version of ${hit.title}`} disabled={busy !== null || quickBusyProjectId !== null || !!blockedProjects[hit.projectId] || (installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId))} onclick={() => quickInstall(hit.projectId, hit.title)}>
+                  {#if quickBusyProjectId === hit.projectId}<span class="spinner" aria-hidden="true"></span><span class="action-state">Installing…</span>{:else if installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Installed</span>{:else if blockedProjects[hit.projectId]}<span class="action-state">Blocked</span>{:else if dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Keep</span>{:else}<Icon name="download" size={18} /><span class="action-state">Install</span>{/if}
                 </button>
               {:else}
                 <span class="browse-only-badge">New instance</span>
               {/if}
-              <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => openProject(hit.projectId)}>Details</button>
+              <button type="button" class="btn btn-quiet" aria-label={`Details for ${hit.title}`} disabled={busy !== null || quickBusyProjectId !== null} onclick={() => openProject(hit.projectId)}>Details</button>
             </div>
           </article>
         {/each}
@@ -591,7 +591,7 @@
   .search-field input::-webkit-search-cancel-button { appearance: none; }
   .clear-search { position: absolute; right: 0; top: 0; bottom: 0; width: 40px; border: none; border-radius: var(--f-radius-control); background: transparent; color: var(--color-text-secondary); font: inherit; cursor: pointer; }
   .clear-search:hover { color: var(--color-text); background: var(--color-surface-hover); }
-  .browse-search label { min-width: 0; }
+  .search-control { min-width: 0; }
   .browse-search input, .browse-search > .btn { min-height: 40px; border-radius: var(--f-radius-control); }
   .browse-search > .btn { flex: none; }
   .result-count { margin: 0 0 var(--space-3); font-size: var(--text-metadata); color: var(--color-text-secondary); overflow-wrap: anywhere; }
@@ -604,7 +604,7 @@
   .browse-kind-tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; }
   .browse-kind-tabs [aria-pressed="true"] { color: var(--color-text); background: var(--color-surface-raised); }
   .browse-search { align-items: end; margin-bottom: var(--space-3); }
-  .browse-search label, .version-choice { display: grid; gap: var(--space-1); flex: 1; }
+  .search-control, .version-choice { display: grid; gap: var(--space-1); flex: 1; }
   /* Text-field styling is scoped to the search input specifically: a bare
      `.browse input` selector also matched the category checkboxes and blew
      each one up into a full-width padded box, tearing the picker apart. */
@@ -658,7 +658,7 @@
   .pack-optional label { display: block; }
   .preview li { margin: var(--space-1) 0; }
   .more { margin-top: var(--space-3); }
-  /* UI-1 is a Mods pilot. Other content types keep their existing treatments. */
+  /* Mods prioritize scanning: a single compact list with aligned actions. */
   .browse-mods .browse-heading { align-items: flex-start; }
   .browse-mods .browse-heading > div { flex: 1 1 24em; min-width: 0; }
   .browse-mods .browse-heading .group-subtitle { max-width: 72ch; color: var(--color-text-secondary); }
@@ -669,15 +669,17 @@
   .browse-mods .filter-input { height: auto; }
   .browse-mods .sort-control, .browse-mods .category-filter { width: max(180px, 12em); }
   .browse-mods .filter-chevron { bottom: 0; height: auto; }
-  .browse-mods .browse-search label { min-width: 0; }
   .browse-mods .browse-search .btn { flex: none; }
-  .browse-mods .browse-list { gap: var(--space-2); }
-  .browse-mods .browse-row { padding: var(--space-3); }
+  .browse-mods .browse-list { grid-template-columns: minmax(0, 1fr); gap: 0; border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); }
+  .browse-mods .browse-row { padding: var(--space-3); border: none; border-bottom: 1px solid var(--f-edge); border-radius: 0; }
+  .browse-mods .browse-row:first-child { border-radius: var(--f-radius-control) var(--f-radius-control) 0 0; }
+  .browse-mods .browse-row:last-child { border-bottom: none; border-radius: 0 0 var(--f-radius-control) var(--f-radius-control); }
   .browse-mods .browse-copy h4 { font-size: var(--text-body); font-weight: 600; }
-  .browse-mods .browse-copy p { margin-block: var(--space-1); font-size: var(--text-secondary); }
+  .browse-mods .browse-copy p { margin-block: var(--space-1); font-size: var(--text-secondary); -webkit-line-clamp: 2; line-clamp: 2; }
+  .browse-mods .browse-meta { color: var(--color-text-secondary); }
   .browse-mods .browse-actions .btn { min-height: 40px; }
   .browse-mods > .browse-status { padding: var(--space-4); border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); background: var(--f-content-panel); color: var(--color-text-secondary); }
-  @container (min-width: 561px) and (max-width: 900px) {
+  @container (min-width: 561px) {
     .browse-mods .browse-row { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; }
     .browse-mods .browse-glyph { grid-row: 1; }
     .browse-mods .browse-actions { grid-column: 3; grid-row: 1; align-self: center; }
