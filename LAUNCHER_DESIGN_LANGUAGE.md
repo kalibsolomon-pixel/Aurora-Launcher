@@ -2,6 +2,8 @@
 
 > **Phase F pilot:** [PHASE_F_DESIGN.md](PHASE_F_DESIGN.md) supersedes this document's shell, Home and launcher Settings composition only. These surfaces now use a 40 px Windows title bar, icon rail, large logo/Play hero, direct widget editor and independent Theme/Background/Accent choices. Default window size is 1120×760, minimum 720×520. Remaining interiors keep the system below until owner visual approval; this pilot is not approval for a launcher-wide restyle.
 
+> **UI-1 refinement:** [UI_1_NAVIGATION_DESIGN_PILOT.md](UI_1_NAVIGATION_DESIGN_PILOT.md) records the compact 96px rail, Home spacing/metadata refinement and Mods-only browse controls/results pilot. Borealis materials, accents, navigation destinations and all native behavior remain unchanged. Browser fixture acceptance is ready for owner visual review; this does not authorize a wider rollout or a release.
+
 This document is the desktop launcher's visual and interaction source of truth. It is
 concise enough to implement against and concrete enough that a future screen does not
 invent a new visual language. It synthesizes three inputs:

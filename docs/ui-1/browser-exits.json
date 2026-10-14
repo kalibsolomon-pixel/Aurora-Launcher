@@ -1,0 +1,18 @@
+[
+  {
+    "command": "node tools/visual/l1.test.mjs",
+    "exit": 0
+  },
+  {
+    "command": "node tools/visual/l3.test.mjs",
+    "exit": 0
+  },
+  {
+    "command": "node tools/visual/ui-corrections.test.mjs",
+    "exit": 0
+  },
+  {
+    "command": "node tools/visual/ui1.test.mjs",
+    "exit": 0
+  }
+]

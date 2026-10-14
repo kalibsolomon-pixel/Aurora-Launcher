@@ -1,0 +1,803 @@
+{
+  "provenance": "Headless Chromium browser preview; actual Svelte components, synthetic DTOs; 100% CSS scaling, DPR 1; reduced motion, bundled Borealis still; browser outer chrome excluded",
+  "errors": [],
+  "records": [
+    {
+      "surface": "home",
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 900,
+        "right": 96,
+        "bottom": 900
+      },
+      "account": {
+        "x": 8,
+        "y": 777.8125,
+        "width": 80,
+        "height": 108.1875,
+        "right": 88,
+        "bottom": 886
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 1344,
+        "height": 900,
+        "right": 1440,
+        "bottom": 900
+      },
+      "home": {
+        "x": 153.59375,
+        "y": 24,
+        "width": 1213.8125,
+        "height": 686,
+        "right": 1367.40625,
+        "bottom": 710
+      },
+      "play": {
+        "x": 170.59375,
+        "y": 410.5,
+        "width": 564.90625,
+        "height": 78,
+        "right": 735.5,
+        "bottom": 488.5
+      },
+      "instance": {
+        "x": 153.59375,
+        "y": 393.5,
+        "width": 598.90625,
+        "height": 243,
+        "right": 752.5,
+        "bottom": 636.5
+      },
+      "player": {
+        "x": 768.5,
+        "y": 32,
+        "width": 598.90625,
+        "height": 662,
+        "right": 1367.40625,
+        "bottom": 694
+      },
+      "widgets": {
+        "x": 153.59375,
+        "y": 726,
+        "width": 1213.8125,
+        "height": 343.828125,
+        "right": 1367.40625,
+        "bottom": 1069.828125
+      },
+      "workspace": null,
+      "search": null,
+      "searchButton": null,
+      "category": null,
+      "firstResult": null,
+      "resultColumns": null,
+      "filters": null,
+      "metadataSize": null
+    },
+    {
+      "surface": "mods",
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 900,
+        "right": 96,
+        "bottom": 900
+      },
+      "account": {
+        "x": 8,
+        "y": 777.8125,
+        "width": 80,
+        "height": 108.1875,
+        "right": 88,
+        "bottom": 886
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 1344,
+        "height": 900,
+        "right": 1440,
+        "bottom": 900
+      },
+      "home": null,
+      "play": null,
+      "instance": null,
+      "player": null,
+      "widgets": null,
+      "workspace": {
+        "x": 153.59375,
+        "y": 24,
+        "width": 1213.8125,
+        "height": 2094.125,
+        "right": 1367.40625,
+        "bottom": 2118.125
+      },
+      "search": {
+        "x": 178.59375,
+        "y": 418,
+        "width": 1074.4375,
+        "height": 40,
+        "right": 1253.03125,
+        "bottom": 458
+      },
+      "searchButton": {
+        "x": 1265.03125,
+        "y": 418,
+        "width": 77.375,
+        "height": 40,
+        "right": 1342.40625,
+        "bottom": 458
+      },
+      "category": null,
+      "firstResult": {
+        "x": 178.59375,
+        "y": 547,
+        "width": 577.90625,
+        "height": 140.46875,
+        "right": 756.5,
+        "bottom": 687.46875
+      },
+      "resultColumns": "577.906px 577.906px",
+      "filters": {
+        "x": 178.59375,
+        "y": 470,
+        "width": 1163.8125,
+        "height": 61,
+        "right": 1342.40625,
+        "bottom": 531
+      },
+      "metadataSize": "12.8px"
+    },
+    {
+      "surface": "home",
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 800,
+        "right": 96,
+        "bottom": 800
+      },
+      "account": {
+        "x": 8,
+        "y": 677.8125,
+        "width": 80,
+        "height": 108.1875,
+        "right": 88,
+        "bottom": 786
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 1184,
+        "height": 800,
+        "right": 1280,
+        "bottom": 800
+      },
+      "home": {
+        "x": 147.1875,
+        "y": 24,
+        "width": 1066.625,
+        "height": 592,
+        "right": 1213.8125,
+        "bottom": 616
+      },
+      "play": {
+        "x": 164.1875,
+        "y": 363.5,
+        "width": 491.3125,
+        "height": 78,
+        "right": 655.5,
+        "bottom": 441.5
+      },
+      "instance": {
+        "x": 147.1875,
+        "y": 346.5,
+        "width": 525.3125,
+        "height": 243,
+        "right": 672.5,
+        "bottom": 589.5
+      },
+      "player": {
+        "x": 688.5,
+        "y": 32,
+        "width": 525.3125,
+        "height": 568,
+        "right": 1213.8125,
+        "bottom": 600
+      },
+      "widgets": {
+        "x": 147.1875,
+        "y": 632,
+        "width": 1066.625,
+        "height": 343.828125,
+        "right": 1213.8125,
+        "bottom": 975.828125
+      },
+      "workspace": null,
+      "search": null,
+      "searchButton": null,
+      "category": null,
+      "firstResult": null,
+      "resultColumns": null,
+      "filters": null,
+      "metadataSize": null
+    },
+    {
+      "surface": "mods",
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 800,
+        "right": 96,
+        "bottom": 800
+      },
+      "account": {
+        "x": 8,
+        "y": 677.8125,
+        "width": 80,
+        "height": 108.1875,
+        "right": 88,
+        "bottom": 786
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 1184,
+        "height": 800,
+        "right": 1280,
+        "bottom": 800
+      },
+      "home": null,
+      "play": null,
+      "instance": null,
+      "player": null,
+      "widgets": null,
+      "workspace": {
+        "x": 147.1875,
+        "y": 24,
+        "width": 1066.625,
+        "height": 2094.125,
+        "right": 1213.8125,
+        "bottom": 2118.125
+      },
+      "search": {
+        "x": 172.1875,
+        "y": 418,
+        "width": 927.25,
+        "height": 40,
+        "right": 1099.4375,
+        "bottom": 458
+      },
+      "searchButton": {
+        "x": 1111.4375,
+        "y": 418,
+        "width": 77.375,
+        "height": 40,
+        "right": 1188.8125,
+        "bottom": 458
+      },
+      "category": null,
+      "firstResult": {
+        "x": 172.1875,
+        "y": 547,
+        "width": 504.3125,
+        "height": 140.46875,
+        "right": 676.5,
+        "bottom": 687.46875
+      },
+      "resultColumns": "504.312px 504.312px",
+      "filters": {
+        "x": 172.1875,
+        "y": 470,
+        "width": 1016.625,
+        "height": 61,
+        "right": 1188.8125,
+        "bottom": 531
+      },
+      "metadataSize": "12.8px"
+    },
+    {
+      "surface": "home",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 768,
+        "right": 96,
+        "bottom": 768
+      },
+      "account": {
+        "x": 8,
+        "y": 645.8125,
+        "width": 80,
+        "height": 108.1875,
+        "right": 88,
+        "bottom": 754
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 928,
+        "height": 768,
+        "right": 1024,
+        "bottom": 768
+      },
+      "home": {
+        "x": 136.953125,
+        "y": 24,
+        "width": 831.09375,
+        "height": 560,
+        "right": 968.046875,
+        "bottom": 584
+      },
+      "play": {
+        "x": 153.953125,
+        "y": 320.125,
+        "width": 373.546875,
+        "height": 78,
+        "right": 527.5,
+        "bottom": 398.125
+      },
+      "instance": {
+        "x": 136.953125,
+        "y": 303.125,
+        "width": 407.546875,
+        "height": 243,
+        "right": 544.5,
+        "bottom": 546.125
+      },
+      "player": {
+        "x": 560.5,
+        "y": 32,
+        "width": 407.546875,
+        "height": 536,
+        "right": 968.046875,
+        "bottom": 568
+      },
+      "widgets": {
+        "x": 136.953125,
+        "y": 600,
+        "width": 831.09375,
+        "height": 343.828125,
+        "right": 968.046875,
+        "bottom": 943.828125
+      },
+      "workspace": null,
+      "search": null,
+      "searchButton": null,
+      "category": null,
+      "firstResult": null,
+      "resultColumns": null,
+      "filters": null,
+      "metadataSize": null
+    },
+    {
+      "surface": "mods",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 768,
+        "right": 96,
+        "bottom": 768
+      },
+      "account": {
+        "x": 8,
+        "y": 645.8125,
+        "width": 80,
+        "height": 108.1875,
+        "right": 88,
+        "bottom": 754
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 928,
+        "height": 768,
+        "right": 1024,
+        "bottom": 768
+      },
+      "home": null,
+      "play": null,
+      "instance": null,
+      "player": null,
+      "widgets": null,
+      "workspace": {
+        "x": 136.953125,
+        "y": 24,
+        "width": 831.09375,
+        "height": 2599.375,
+        "right": 968.046875,
+        "bottom": 2623.375
+      },
+      "search": {
+        "x": 161.953125,
+        "y": 418,
+        "width": 691.71875,
+        "height": 40,
+        "right": 853.671875,
+        "bottom": 458
+      },
+      "searchButton": {
+        "x": 865.671875,
+        "y": 418,
+        "width": 77.375,
+        "height": 40,
+        "right": 943.046875,
+        "bottom": 458
+      },
+      "category": null,
+      "firstResult": {
+        "x": 161.953125,
+        "y": 547,
+        "width": 781.09375,
+        "height": 92.46875,
+        "right": 943.046875,
+        "bottom": 639.46875
+      },
+      "resultColumns": "781.094px",
+      "filters": {
+        "x": 161.953125,
+        "y": 470,
+        "width": 781.09375,
+        "height": 61,
+        "right": 943.046875,
+        "bottom": 531
+      },
+      "metadataSize": "12.8px"
+    },
+    {
+      "surface": "home",
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 520,
+        "right": 96,
+        "bottom": 520
+      },
+      "account": {
+        "x": 6,
+        "y": 409.8125,
+        "width": 84,
+        "height": 100.1875,
+        "right": 90,
+        "bottom": 510
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 624,
+        "height": 520,
+        "right": 720,
+        "bottom": 520
+      },
+      "home": {
+        "x": 116,
+        "y": 16,
+        "width": 569,
+        "height": 429,
+        "right": 685,
+        "bottom": 445
+      },
+      "play": {
+        "x": 133,
+        "y": 213,
+        "width": 535,
+        "height": 68,
+        "right": 668,
+        "bottom": 281
+      },
+      "instance": {
+        "x": 116,
+        "y": 196,
+        "width": 569,
+        "height": 233,
+        "right": 685,
+        "bottom": 429
+      },
+      "player": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "widgets": {
+        "x": 116,
+        "y": 461,
+        "width": 569,
+        "height": 545.828125,
+        "right": 685,
+        "bottom": 1006.828125
+      },
+      "workspace": null,
+      "search": null,
+      "searchButton": null,
+      "category": null,
+      "firstResult": null,
+      "resultColumns": null,
+      "filters": null,
+      "metadataSize": null
+    },
+    {
+      "surface": "mods",
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 520,
+        "right": 96,
+        "bottom": 520
+      },
+      "account": {
+        "x": 6,
+        "y": 409.8125,
+        "width": 84,
+        "height": 100.1875,
+        "right": 90,
+        "bottom": 510
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 624,
+        "height": 520,
+        "right": 720,
+        "bottom": 520
+      },
+      "home": null,
+      "play": null,
+      "instance": null,
+      "player": null,
+      "widgets": null,
+      "workspace": {
+        "x": 116,
+        "y": 16,
+        "width": 569,
+        "height": 3616.8125,
+        "right": 685,
+        "bottom": 3632.8125
+      },
+      "search": {
+        "x": 133,
+        "y": 456,
+        "width": 445.625,
+        "height": 40,
+        "right": 578.625,
+        "bottom": 496
+      },
+      "searchButton": {
+        "x": 590.625,
+        "y": 456,
+        "width": 77.375,
+        "height": 40,
+        "right": 668,
+        "bottom": 496
+      },
+      "category": null,
+      "firstResult": {
+        "x": 133,
+        "y": 585,
+        "width": 535,
+        "height": 140.46875,
+        "right": 668,
+        "bottom": 725.46875
+      },
+      "resultColumns": "535px",
+      "filters": {
+        "x": 133,
+        "y": 508,
+        "width": 535,
+        "height": 61,
+        "right": 668,
+        "bottom": 569
+      },
+      "metadataSize": "12.8px"
+    },
+    {
+      "surface": "settings",
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 800,
+        "right": 96,
+        "bottom": 800
+      },
+      "account": {
+        "x": 8,
+        "y": 677.8125,
+        "width": 80,
+        "height": 108.1875,
+        "right": 88,
+        "bottom": 786
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 1184,
+        "height": 800,
+        "right": 1280,
+        "bottom": 800
+      },
+      "home": null,
+      "play": null,
+      "instance": null,
+      "player": null,
+      "widgets": null,
+      "workspace": null,
+      "search": null,
+      "searchButton": null,
+      "category": null,
+      "firstResult": null,
+      "resultColumns": null,
+      "filters": null,
+      "metadataSize": null
+    },
+    {
+      "surface": "instances",
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 800,
+        "right": 96,
+        "bottom": 800
+      },
+      "account": {
+        "x": 8,
+        "y": 677.8125,
+        "width": 80,
+        "height": 108.1875,
+        "right": 88,
+        "bottom": 786
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 1184,
+        "height": 800,
+        "right": 1280,
+        "bottom": 800
+      },
+      "home": null,
+      "play": null,
+      "instance": null,
+      "player": null,
+      "widgets": null,
+      "workspace": null,
+      "search": null,
+      "searchButton": null,
+      "category": null,
+      "firstResult": null,
+      "resultColumns": null,
+      "filters": null,
+      "metadataSize": null
+    },
+    {
+      "surface": "cosmetics",
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 800,
+        "right": 96,
+        "bottom": 800
+      },
+      "account": {
+        "x": 8,
+        "y": 677.8125,
+        "width": 80,
+        "height": 108.1875,
+        "right": 88,
+        "bottom": 786
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 1184,
+        "height": 800,
+        "right": 1280,
+        "bottom": 800
+      },
+      "home": null,
+      "play": null,
+      "instance": null,
+      "player": null,
+      "widgets": null,
+      "workspace": null,
+      "search": null,
+      "searchButton": null,
+      "category": null,
+      "firstResult": null,
+      "resultColumns": null,
+      "filters": null,
+      "metadataSize": null
+    }
+  ]
+}

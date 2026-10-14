@@ -1,0 +1,102 @@
+{
+  "worktrees": [
+    "worktree C:/Dev/aurora-launcher",
+    "HEAD d5a707ddcc323ea2f7401e31b5d654254f422fe5",
+    "branch refs/heads/codex/client-3-production-authority",
+    "",
+    "worktree C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/corrected-source",
+    "HEAD 420f54c0ad48ec9aa70320786a77d678b51864f1",
+    "detached",
+    "",
+    "worktree C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/fix-source",
+    "HEAD e4c25cb7dc02e00ca433c7df5b759cef62730d48",
+    "branch refs/heads/codex/native-boot-updater-config",
+    "",
+    "worktree C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/old-source",
+    "HEAD 4575a0e3f1c28da6cfe072948fe91b60eeaf608f",
+    "detached",
+    "",
+    "worktree C:/Users/kalib/.codex/worktrees/f3rb1-acceptance/aurora-launcher",
+    "HEAD 4f2ad561fe12e38523aade0265017a1c364751d1",
+    "branch refs/heads/codex/f3rb1-acceptance",
+    "",
+    "worktree C:/Users/kalib/.codex/worktrees/installed-artwork-reliability/aurora-launcher",
+    "HEAD f50a3b3bece2d0664eb2e09a33b62825dcd6612d",
+    "branch refs/heads/codex/installed-artwork-reliability",
+    "",
+    "worktree C:/Users/kalib/.codex/worktrees/performance-p0-2-build/aurora-launcher",
+    "HEAD 6cbabd38bc1c5268b9f6c80034f18da3a26f1e21",
+    "detached",
+    ""
+  ],
+  "worktreeCount": 7,
+  "applicationHead": "d5a707ddcc323ea2f7401e31b5d654254f422fe5",
+  "hashChecks": [
+    {
+      "unchanged": true,
+      "sha256": "5E6199883ECE4CB38308D080AAF9D45612594ACF0ADE0660BAEB95AEA1200F16",
+      "path": ".zcode-icon-diag.py"
+    },
+    {
+      "unchanged": true,
+      "sha256": "E7577714C5582301E11449A27731439051A29D035C4D2373595FB6C5042BCC3E",
+      "path": ".zcodeignore"
+    },
+    {
+      "unchanged": true,
+      "sha256": "AD1790BFF169F56025E6DA2BC6F75B9434A046D478643F50BA0D68CBB25B5250",
+      "path": "UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt"
+    },
+    {
+      "unchanged": true,
+      "sha256": "76DC3497A710FAF67FC16A0ECB3AAEBE19C652BFBC266CC85C9C3480EC0E2CE3",
+      "path": "docs/performance-p0-2/__pycache__/analyze.cpython-312.pyc"
+    },
+    {
+      "unchanged": true,
+      "sha256": "E9E1656365C9FF2768C83892450479AABD21CE4F54AFA5EFD0CCC7DEA7C3A330",
+      "path": "AGENTS.md"
+    },
+    {
+      "unchanged": true,
+      "sha256": "98711D9009400CDF2492FF76667BFB5AB266A7BBB91261B64EF7943ABA48712A",
+      "path": "ARCHITECTURE.md"
+    },
+    {
+      "unchanged": true,
+      "sha256": "A874B67DDC4BCC823950CA655027424740FD3A9BB4E2D036BD4DE0F1CF05A0AF",
+      "path": "README.md"
+    },
+    {
+      "unchanged": true,
+      "sha256": "711B12CCF522E4D2061A88A6AE27C2F9D495A15E4D9FB2FAA0DAAA5BDDE245D5",
+      "path": "package.json"
+    },
+    {
+      "unchanged": true,
+      "sha256": "5B5C6C0B6D2C90D47764389E67CF4BF8506B175376857846CF17012969149F79",
+      "path": "package-lock.json"
+    },
+    {
+      "unchanged": true,
+      "sha256": "55BFB88ED2ACCD651B05EB98496B0F815D7D2A631C376558596CFD3C655EF085",
+      "path": "src-tauri/Cargo.toml"
+    },
+    {
+      "unchanged": true,
+      "sha256": "EB5F5F54334DE99A2C9976F37AE12C10194ECE953ED15F1609A28B014299078C",
+      "path": "src-tauri/Cargo.lock"
+    },
+    {
+      "unchanged": true,
+      "sha256": "2199EDD6A1C0E3B4866E794C91A2ABF584243BC269C0E4C6DC564948D6965BB8",
+      "path": "src-tauri/tauri.conf.json"
+    }
+  ],
+  "branch": "codex/client-3-production-authority",
+  "originalTrackedCount": 901,
+  "trackedDeletionsOrRenames": [],
+  "otherWorktreeIdentityUnchanged": true,
+  "missingOriginalTracked": [],
+  "stoppedOwnedReviewServer": 25452
+}
