@@ -98,11 +98,14 @@
     <section class="group f-surface instance-card" aria-label="Selected instance" aria-live="polite">
       <div class="launch-card">
         <div class="launch-main">
-        <button type="button" class="btn btn-primary play-hero" onclick={() => launcher.runPlay(instance.id)} disabled={launch.disabled}>{launch.playLabel}</button>
-        <div class="instance-heading">
+        <div class="instance-heading" title={instance.displayName}>
           <InstanceSwitcher compact />
-          <p class="instance-versions">{installedConfigurationLabel(instance)}</p>
           <span class="status-badge {launch.tone}">{launch.label}</span>
+        </div>
+        <button type="button" class="btn btn-primary play-hero" onclick={() => launcher.runPlay(instance.id)} disabled={launch.disabled}>{launch.playLabel}</button>
+        <div class="instance-footer">
+          <p class="instance-versions">{installedConfigurationLabel(instance)}</p>
+          <button type="button" class="btn btn-quiet manage-instance" onclick={() => navigation.openInstance(instance.id, "settings")}>Manage instance</button>
         </div>
         </div>
       </div>
@@ -141,12 +144,15 @@
   .home-launch-column { display: flex; flex-direction: column; align-items: center; gap: var(--space-5); min-width: 0; }
   .hero-logo { width: clamp(200px, 22vw, 280px); height: auto; }
   .instance-card { width: 100%; max-width: none; min-width: 0; overflow: visible; margin: 0; position: relative; z-index: 2; }
-  .launch-main { padding: var(--space-4); display: grid; gap: var(--space-3); min-width: 0; }
-  .play-hero { width: 100%; min-height: 78px; font-size: 30px; font-weight: 700; letter-spacing: -.03em; border-radius: 15px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 16%), 0 5px 16px rgb(0 0 0 / 15%); }
-  .instance-heading { min-width: 0; padding: var(--space-1) var(--space-2) var(--space-2); text-align: center; }
-  .instance-heading :global(.picker-trigger) { font-size: 16px; margin: 0; }
+  .launch-main { padding: var(--space-5); display: grid; gap: var(--space-4); min-width: 0; }
+  .play-hero { width: 100%; min-height: 78px; font-size: 1.875rem; font-weight: 700; letter-spacing: -.03em; border-radius: var(--f-radius-control); box-shadow: inset 0 1px 0 rgb(255 255 255 / 16%), 0 5px 16px rgb(0 0 0 / 15%); }
+  .instance-heading { min-width: 0; display: grid; justify-items: start; gap: var(--space-3); }
+  .instance-heading :global(.instance-switcher) { width: 100%; }
+  .instance-heading :global(.picker-trigger) { font-size: 1.125rem; margin: 0; }
   .instance-heading :global(.picker-menu) { text-align: left; }
-  .instance-versions { margin: var(--space-2) 0; color: var(--color-text-secondary); font-size: var(--text-metadata); overflow-wrap: anywhere; }
+  .instance-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2) var(--space-3); min-width: 0; }
+  .instance-versions { flex: 1 1 220px; margin: 0; color: var(--color-text-secondary); font-size: var(--text-metadata); overflow-wrap: anywhere; }
+  .manage-instance { font-size: var(--text-metadata); padding: var(--space-2); margin-inline: calc(-1 * var(--space-2)); }
   @media (min-width: 1500px) { .home-composition { min-height: 660px; } }
   @media (max-width: 900px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 16px; } .hero-logo { width: 168px; } .home-launch-column { gap: 12px; } .instance-card { max-width: none; } .play-hero { min-height: 68px; font-size: 28px; } }
 </style>
