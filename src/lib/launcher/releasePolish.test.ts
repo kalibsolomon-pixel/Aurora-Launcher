@@ -75,10 +75,12 @@ it("failed save retains the prior layout with an actionable error", async () => 
   reset(); (globalThis as any).window = { __TAURI_INTERNALS__: { invoke: async () => { throw { code: "config_malformed", message: "Repair config manually." }; } } };
   await homeWidgets.enable("instance-details", false); assert.equal(homeWidgets.layout.widgets[0].enabled, true); assert.match(homeWidgets.error, /Repair config/);
 });
-it("Home editor is deliberate, keyboard usable and responsive spans clamp on narrow screens", () => {
+it("Home editor keeps deliberate edit mode and keyboard size/order controls", () => {
   const source = readFileSync(new URL("./HomeWidgets.svelte", import.meta.url), "utf8");
   assert.match(source, /aria-pressed=\{editing\}/); assert.match(source, /\{#if editing\}/);
-  assert.match(source, /Move .* earlier/); assert.match(source, /<select aria-label/); assert.match(source, /max-width: 900px/);
+  assert.match(source, /Move .* earlier/); assert.match(source, /<select aria-label/);
+  // Responsive spans are exercised on rendered cards in ui2.test.mjs;
+  // a source-text assertion for the former viewport breakpoint cannot prove containment.
 });
 it("Discord describes automatic connection and shows native status without maintenance controls", () => {
   reset(); assert.match(html(DiscordSettings), /Rich Presence is off/);
