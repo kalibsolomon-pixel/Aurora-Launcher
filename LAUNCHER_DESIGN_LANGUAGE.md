@@ -1,5 +1,11 @@
 # Aurora Launcher design language
 
+> **UI-3 Discover and Library:** [UI_3_DISCOVER_LIBRARY_ACCEPTANCE.md](UI_3_DISCOVER_LIBRARY_ACCEPTANCE.md)
+> records the shared Discover controls, compact Mods list, artwork-led modpack
+> grid, medium resource-pack cards and consistent instance-local Installed rows.
+> Existing native/provider operations and the navigation hierarchy remain intact.
+> Browser and isolated native acceptance are complete; owner visual review remains.
+
 > **UI-2B Home pilot:** [UI_2B_BOREALIS_HOME_UNIFICATION.md](UI_2B_BOREALIS_HOME_UNIFICATION.md)
 > records the shared instance/player hero, localized Borealis contrast, aligned
 > widget materials and subtle rail boundary. Native medium/minimum size acceptance

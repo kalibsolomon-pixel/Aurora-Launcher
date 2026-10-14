@@ -1,0 +1,4 @@
+[aurora-launcher] starting native backend
+[aurora-launcher] backend ready; managed data root: C:\Users\kalib\AppData\Local\Temp\aurora-ui3-20983361-de01-4aa4-9956-f71fe952ddee\managed
+[aurora-launcher] planned Minecraft 1.21.11 + Fabric Loader 0.19.5: 75 vanilla + 8 Fabric = 83 libraries, Java 21, main class net.fabricmc.loader.impl.launch.knot.KnotClient
+[aurora-install] target=1234567890abcdef1234567890abcdef recovery-unavailable: an installation is already in progress for instance '1234567890abcdef1234567890abcdef'

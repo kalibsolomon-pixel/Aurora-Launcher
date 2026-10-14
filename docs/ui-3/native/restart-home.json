@@ -1,0 +1,29 @@
+{
+  "provenance": "Compiled Tauri frontend, actual Rust commands, isolated native data; read-only CDP screenshot/measurement",
+  "url": "http://tauri.localhost/",
+  "viewport": [
+    1120,
+    790
+  ],
+  "dpr": 1.25,
+  "scale": 1.25,
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "background": "borealis",
+  "accent": "cyan",
+  "browse": null,
+  "firstResult": null,
+  "results": 0,
+  "libraryRows": 0,
+  "search": null,
+  "filters": null,
+  "account": {
+    "x": 8,
+    "y": 656.6000366210938,
+    "width": 79.20000457763672,
+    "height": 119.80000305175781,
+    "right": 87.20000457763672,
+    "bottom": 776.4000396728516
+  },
+  "text": "UI-3 isolated Fabric fixture\n\nMinecraft 1.21.11\nFabric 0.19.5\n\nLaunch\nUI-3 isolated Fabric fixture\n\nSign in to preview your Minecraft skin.\n\nHome widgets\nInstance Details\nMinecraft\n1.21.11\nPlatform\nFabric 0.19.5\nAurora Client\nNot configured\nContent Summary\n0\nEnabled mods\n0\nDisabled mods\n0\nResource packs\n0\nShader packs\n\nLocal inventory · pack counts do not imply activation.\n\nPlaytime\n7D\n30D\nAll\n\nNo playtime recorded yet.\n\nRecent Worlds\n\nNo recently played worlds.\n\nRecent Servers\n\nNo recently played servers.\n\nSkin Library\n?\nNot signed in\nSign in to play Minecraft\n\nBrowse your local collection without an account.\n\nNo saved skins yet. Import your first skin in the library.\n\nOpen Skin Library\n0 saved →\nCape Selector\n×\nYour capes\n\nConnect a Minecraft account\n\nOpen Cape Library\nView & equip →"
+}

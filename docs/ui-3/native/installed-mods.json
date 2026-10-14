@@ -1,0 +1,29 @@
+{
+  "provenance": "Compiled Tauri frontend, actual Rust commands, isolated native data; read-only CDP screenshot/measurement",
+  "url": "http://tauri.localhost/",
+  "viewport": [
+    1016,
+    768
+  ],
+  "dpr": 1.25,
+  "scale": 1.25,
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "background": "borealis",
+  "accent": "violet",
+  "browse": null,
+  "firstResult": null,
+  "results": 0,
+  "libraryRows": 0,
+  "search": null,
+  "filters": null,
+  "account": {
+    "x": 8,
+    "y": 634.2000122070312,
+    "width": 79.20000457763672,
+    "height": 119.80000305175781,
+    "right": 87.20000457763672,
+    "bottom": 754.0000152587891
+  },
+  "text": "Instances\n›\nUI-3 isolated Fabric fixture\nReady\n\nMinecraft 1.21.11 · Fabric 0.19.5 · Aurora Off\n\nRename\nOpen folder\nPlay\nOverview\nMods\nResource Packs\nShaders\nSettings\nInstalled\nBrowse Modrinth\nInstalled Mods\n\nFiles for UI-3 isolated Fabric fixture. Browse compatible mods on Modrinth.\n\nRefresh\nOpen mods folder\nRecognize local files\n\nCheck Modrinth for newer versions of managed mods. Aurora never checks in the background.\n\nCheck for updates\nSearch mods\nShow\nAll\nEnabled\nDisabled\nWarnings\nSort\nName\nEnabled first\nWarnings first\n\n0 of 0 mod entries\n\nNo local mods found\n\nThis instance's mods directory is empty.\n\nOpen mods folder\nAurora installation association"
+}

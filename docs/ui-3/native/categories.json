@@ -1,0 +1,57 @@
+{
+  "provenance": "Compiled Tauri frontend, actual Rust commands, isolated native data; read-only CDP screenshot/measurement",
+  "url": "http://tauri.localhost/",
+  "viewport": [
+    1016,
+    768
+  ],
+  "dpr": 1.25,
+  "scale": 1.25,
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "background": "borealis",
+  "accent": "violet",
+  "browse": {
+    "x": 161.4375,
+    "y": 313.3999938964844,
+    "width": 773.9249877929688,
+    "height": 2331.237548828125,
+    "right": 935.3624877929688,
+    "bottom": 2644.6375427246094
+  },
+  "firstResult": {
+    "x": 162.2375030517578,
+    "y": 615,
+    "width": 772.3250122070312,
+    "height": 109.51250457763672,
+    "right": 934.5625152587891,
+    "bottom": 724.5125045776367
+  },
+  "results": 20,
+  "libraryRows": 0,
+  "search": {
+    "x": 161.4375,
+    "y": 456.6000061035156,
+    "width": 684.9625244140625,
+    "height": 40,
+    "right": 846.4000244140625,
+    "bottom": 496.6000061035156
+  },
+  "filters": {
+    "x": 161.4375,
+    "y": 508.6000061035156,
+    "width": 773.9249877929688,
+    "height": 60.79999923706055,
+    "right": 935.3624877929688,
+    "bottom": 569.4000053405762
+  },
+  "account": {
+    "x": 8,
+    "y": 634.2000122070312,
+    "width": 79.20000457763672,
+    "height": 119.80000305175781,
+    "right": 87.20000457763672,
+    "bottom": 754.0000152587891
+  },
+  "text": "Instances\n›\nUI-3 isolated Fabric fixture\nReady\n\nMinecraft 1.21.11 · Fabric 0.19.5 · Aurora Off\n\nRename\nOpen folder\nPlay\nOverview\nMods\nResource Packs\nShaders\nSettings\nInstalled\nBrowse Modrinth\nDiscover Mods\n\nInstall into UI-3 isolated Fabric fixture. Compatibility and required dependencies are checked before installation.\n\nSource: Modrinth\nMods\nModpacks\nResource Packs\nShaders\nFind mods\n×\nSearch\nCategories\nAll categories\nAdventure\nChallenging\nCombat\nCursed\nDecoration\nEconomy\nEquipment\nFood\nGame Mechanics\nKitchen Sink\nLibrary\nLightweight\nMagic\nManagement\nMinigame\nMobs\nMultiplayer\nOptimization\nQuests\nSocial\nStorage\nTechnology\nTransportation\nUtility\nWorldgen\nSort\nRelevance\nMost downloaded\nNewest\nRecently updated\nClear filters\nMinecraft 1.21.11 · Fabric\n\n20 of 43 mods matching “Sodium”\n\nSodium\n\nA high-performance rendering engine replacement for Minecraft, which greatly improves frame rates and reduces micro-stutter.\n\nBy jellysquid3 · 244,408,674 downloads · Fabric · Neoforge · Optimization\nInstall\nDetails\nSodium Extra\n\nA Sodium addon that adds features that shouldn't be in Sodium.\n\nBy FlashyReese · 102,767,498 downloads · Cursed · Fabric · Neoforge\nInstall\nDetails\nReese's Sodium Options\n\nAlternative Options Menu for Sodium\n\nBy FlashyReese · 85,692,787 downloads · Fabric · Neoforge · Quilt\nInstall\nDetails\nSodium Shadowy Path Blocks (SSPB)\n\nReintroduces vanilla-like smooth lighting to non-full blocks (e.g. dirt paths and how they have dark shading when directly next to a full block) when using Sodium.\n\nBy Rynnavinx · 24,442,151 downloads · Decoration · Fabric · Neoforge\nInstall\nDetails\n(Sodium) Chloride\n\nGives Sodium additional Performance and Quality features for a tasteful experience\n\nBy SrRapero720 · 18,767,059 downloads · Fabric · Forge · Neoforge\nInstall\nDetails\nSodium Core Shader Support\n\nEnables resourcepacks to be able to replace sodium's shaders, similar to resourcepacks being able to replace vanilla's core shaders.\n\nBy linusdev · 1,073,987 downloads · Fabric · Game Mechanics · Neoforge\nInstall\nDetails\nSodium Extra Information\n\nA Sodium Extra addon that adds more in-game information.\n\nBy anvian · 726,299 downloads · Cursed · Fabric · Neoforge\nInstall\nDetails\nSodium Fullbright\n\nChanges the maximum brightness option in Sodium from 100% to 1000%\n\nBy luaq · 594,567 downloads · Fabric · Game Mechanics · Utility\nInstall\nDetails\n钠-汉化模组（Sodium Chinese Localization Mod）\n\nA project can translate you sodium mod into Chinese\n\nBy LoongLy · 421,098 downloads · Fabric · Forge · Neoforge\nInstall\nDetails\nSodium/Embeddium Device Check 钠/铷-设备检测\n\nA minecraft mod can check you hardware and software\n\nBy LoongLy · 89,704 downloads · Fabric · Forge · Neoforge\nInstall\nDetails\nEnchanted's Sodium Options\n\nChanges Sodium's video settings screen to match the style of vanilla screens better\n\nBy enchanted-games · 69,157 downloads · Fabric · Management · Neoforge\nInstall\nDetails\nSodium Leaf Culling Unofficial\n\nAn unofficial port of SodiumLeafCulling by Txni\n\nBy pepe_yu · 39,153 downloads · Fabric · Forge · Neoforge\nInstall\nDetails\nSodium FPS Cap Fix\n\nAdds an FPS cap textbox and removes Minecraft's 260 FPS ceiling. Works with or without Sodium.\n\nBy Riqqqque · 32,843 downloads · Fabric · Management · Neoforge\nInstall\nDetails\nSneaky Sodium\n\nJust hides away the Sodium video settings, because I like a vanilla feel of the game.\n\nBy ananasem · 26,007 downloads · Fabric · Utility\nInstall\nDetails\nXander's Sodium Options: Continued\n\nReplaces the Sodium options GUI with Vanilla-style alternatives.\n\nBy soradotwav · 21,822 downloads · Fabric · Management · Neoforge\nInstall\nDetails\nSodium LOD Fixer\n\nFixes Sodium for LOD rendering mods like Distant Horizons, Voxy, Nvidium or Bobby\n\nBy LimeGlass · 15,465 downloads · Fabric\nInstall\nDetails\nSodium Relief\n\nReduces inventory tooltip & hover stutter for smoother GUIs — a lightweight client-side optimization mod and Sodium companion. Caches tooltip layouts & text-width measurements. No FPS cost, no gameplay changes.\n\nBy Erotoro · 10,483 downloads · Fabric · Optimization · Utility\nInstall\nDetails\nExtra Sodium Fog Fix\n\nRestores Minecraft’s vanilla fog behavior to prevent unfair visibility advantages caused by other mods like Sodium Extra.\n\nBy Padej_ · 6,619 downloads · Fabric · Game Mechanics · Utility\nInstall\nDetails\nSodium FPS Step Fix\n\nLets you set Sodium's FPS limit to any exact value instead of being locked to steps of 10\n\nBy AlCapone11 · 4,050 downloads · Fabric · Neoforge\nInstall\nDetails\nSodium Blur\n\nThis mod adds a smooth motion blur effect to camera movement, ajustable from Sodium's video settings menu.\n\nBy WyKaxee · 2,815 downloads · Fabric · Game Mechanics\nInstall\nDetails\nLoad more"
+}

@@ -1,0 +1,10 @@
+{
+  "originalTracked": 1464,
+  "protectedFiles": 4,
+  "priorEvidence": 539,
+  "worktrees": 7,
+  "deletions": 0,
+  "head": "3b415355d3bb85b8271d8c556d3e7001732627d4",
+  "status": "M LAUNCHER_DESIGN_LANGUAGE.md\n M tools/visual/ui3-preserve.mjs\n?? .zcode-icon-diag.py\n?? .zcodeignore\n?? UI_3_DISCOVER_LIBRARY_ACCEPTANCE.md\n?? UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt\n?? docs/performance-p0-2/__pycache__/\n?? docs/ui-3/REVIEW_GUIDE.md\n?? docs/ui-3/after/\n?? docs/ui-3/before/\n?? docs/ui-3/changed-files.txt\n?? docs/ui-3/checks/\n?? docs/ui-3/commits.txt\n?? docs/ui-3/functional.json\n?? docs/ui-3/geometry-comparison.json\n?? docs/ui-3/installed-mods-comparison.png\n?? docs/ui-3/installed-packs-comparison.png\n?? docs/ui-3/modpacks-comparison.png\n?? docs/ui-3/mods-comparison.png\n?? docs/ui-3/native/\n?? docs/ui-3/packs-comparison.png\n?? docs/ui-3/pilot/\n?? docs/ui-3/preservation.json\n?? docs/ui-3/regression/\n?? docs/ui-3/states-comparison.png\n?? docs/ui-3/states/",
+  "changes": "M\tLAUNCHER_DESIGN_LANGUAGE.md\nA\tdocs/ui-3/AUDIT_AND_PROPOSAL.md\nA\tdocs/ui-3/baseline.json\nA\tsrc/lib/instances/ContentViewSwitch.svelte\nM\tsrc/lib/instances/InstalledArtwork.svelte\nM\tsrc/lib/instances/InstanceModsPanel.svelte\nM\tsrc/lib/instances/InstancePacksPanel.svelte\nM\tsrc/lib/instances/ModrinthBrowse.svelte\nM\tsrc/lib/shell/phase-f.css\nM\ttools/visual/l1.test.mjs\nM\ttools/visual/ui1.test.mjs\nA\ttools/visual/ui3-before.mjs\nA\ttools/visual/ui3-capture.mjs\nA\ttools/visual/ui3-fixture.mjs\nA\ttools/visual/ui3-inspect.mjs\nA\ttools/visual/ui3-native-capture.mjs\nA\ttools/visual/ui3-native-install.mjs\nA\ttools/visual/ui3-native.ps1\nA\ttools/visual/ui3-pilot.mjs\nA\ttools/visual/ui3-preserve.mjs\nA\ttools/visual/ui3-review.py\nA\ttools/visual/ui3-run.mjs\nA\ttools/visual/ui3.test.mjs"
+}

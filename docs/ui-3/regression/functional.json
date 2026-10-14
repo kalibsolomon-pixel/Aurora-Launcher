@@ -1,0 +1,13 @@
+{
+  "cases": 6,
+  "results": [
+    "Instance identity, honest metadata and management through Instances",
+    "Player stays distinct from instance and hero contains both controls",
+    "Home contrast foundation is scoped and adds no backdrop-filter stack",
+    "Reduced transparency uses opaque theme surfaces and reduced motion keeps still image",
+    "200% text keeps heading, action, selector and error separated at minimum width",
+    "Missing skin and signed-out fallback explain the empty preview without a generic model"
+  ],
+  "errors": [],
+  "provenance": "Synthetic local browser fixtures; no native or owner data"
+}

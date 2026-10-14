@@ -26,6 +26,8 @@ if (process.argv[2] === 'baseline') {
   assert.equal(git('diff', b.head, '--name-only', '--diff-filter=D'), '');
   assert.equal(git('diff', '--cached', '--name-only', '--diff-filter=D'), '');
   const result = {originalTracked: b.tracked.length, protectedFiles: b.protected.length, priorEvidence: b.evidence.length, worktrees: 7, deletions: 0, head: git('rev-parse', 'HEAD'), status: git('status', '--short'), changes: git('diff', b.head, '--name-status')};
-  await writeFile(`${out}/preservation.json`, JSON.stringify(result, null, 2));
-  console.log('PASS preservation', JSON.stringify(result));
+  if (process.argv[2] !== '--check-only') await writeFile(`${out}/preservation.json`, JSON.stringify(result, null, 2));
+  console.log('PASS preservation', JSON.stringify(process.argv[2] === '--check-only'
+    ? {originalTracked: result.originalTracked, protectedFiles: result.protectedFiles, priorEvidence: result.priorEvidence, worktrees: result.worktrees, deletions: result.deletions, head: result.head}
+    : result));
 }

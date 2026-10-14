@@ -1,0 +1,57 @@
+{
+  "provenance": "Compiled Tauri frontend, actual Rust commands, isolated native data; read-only CDP screenshot/measurement",
+  "url": "http://tauri.localhost/",
+  "viewport": [
+    2048,
+    1152
+  ],
+  "dpr": 1.25,
+  "scale": 1.25,
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "background": "borealis",
+  "accent": "violet",
+  "browse": {
+    "x": 339.20001220703125,
+    "y": 313.3999938964844,
+    "width": 1450.4000244140625,
+    "height": 1907.4625244140625,
+    "right": 1789.6000366210938,
+    "bottom": 2220.862518310547
+  },
+  "firstResult": {
+    "x": 339.20001220703125,
+    "y": 614.2000122070312,
+    "width": 719.2000122070312,
+    "height": 139.27500915527344,
+    "right": 1058.4000244140625,
+    "bottom": 753.4750213623047
+  },
+  "results": 20,
+  "libraryRows": 0,
+  "search": {
+    "x": 339.20001220703125,
+    "y": 456.6000061035156,
+    "width": 1361.4375,
+    "height": 40,
+    "right": 1700.6375122070312,
+    "bottom": 496.6000061035156
+  },
+  "filters": {
+    "x": 339.20001220703125,
+    "y": 508.6000061035156,
+    "width": 1450.4000244140625,
+    "height": 60.79999923706055,
+    "right": 1789.6000366210938,
+    "bottom": 569.4000053405762
+  },
+  "account": {
+    "x": 8,
+    "y": 1018.2000122070312,
+    "width": 79.20000457763672,
+    "height": 119.80000305175781,
+    "right": 87.20000457763672,
+    "bottom": 1138.000015258789
+  },
+  "text": "Instances\n›\nUI-3 isolated Fabric fixture\nReady\n\nMinecraft 1.21.11 · Fabric 0.19.5 · Aurora Off\n\nRename\nOpen folder\nPlay\nOverview\nMods\nResource Packs\nShaders\nSettings\nInstalled\nBrowse Modrinth\nDiscover Resource Packs\n\nInstall into UI-3 isolated Fabric fixture. Compatibility and required dependencies are checked before installation.\n\nSource: Modrinth\nMods\nModpacks\nResource Packs\nShaders\nFind resource packs\nSearch\nCategories\nAll categories\nSort\nRelevance\nMost downloaded\nNewest\nRecently updated\nMinecraft 1.21.11\n\n20 of 17,667 resource packs\n\nFresh Animations\n\nMake your game like the trailers! Dynamic animated entities to freshen your Minecraft experience.\n\nBy FreshLX · 49,932,690 downloads · Entities · Minecraft · Tweaks\nInstall\nDetails\nTranslations for Sodium\n\nUnofficial translations for the Sodium Minecraft mod\n\nBy robotkoer · 22,484,407 downloads · Locale · Minecraft · Modded\nInstall\nDetails\nMotschen's Better Leaves\n\nImproves the appearance of leaves with high mod compatibility and performance!\n\nBy Motschen · 21,087,179 downloads · Minecraft · Models · Realistic\nInstall\nDetails\nChat Reporting Helper\n\nAn educational tool that explains chat reporting in a simple and neutral way.\n\nBy robotkoer · 17,525,537 downloads · Locale · Minecraft · Simplistic\nInstall\nDetails\nLow On Fire\n\nLow fire on your screen! Vanilla Friendly\n\nBy Haikis · 16,734,550 downloads · 16x · Minecraft · Tweaks\nInstall\nDetails\nFast Better Grass\n\nMakes grass and related blocks use the top texture on the sides. Works with other resource packs!\n\nBy robotkoer · 13,675,266 downloads · Decoration · Minecraft · Models\nInstall\nDetails\nFullbright UB\n\nExperience Fullbright UB in Sodium, Optifine and Vanilla\n\nBy worldresourcepack · 11,886,331 downloads · Core Shaders · Minecraft · Vanilla-like\nInstall\nDetails\nFresh Animations: Extensions\n\nA combination of offical extension packs for Fresh Animations\n\nBy FreshLX · 11,537,966 downloads · Entities · Minecraft · Tweaks\nInstall\nDetails\nDramatic Skys\n\nDramatic Skys is an add on pack that will make the skies in your game HD with realistic clouds and lighting. This pack works with any other resource pack, just simply add it over any other pack on the selection screen!\n\nBy thebaum64 · 11,235,773 downloads · Environment · Minecraft · Realistic\nInstall\nDetails\nNew Glowing Ores\n\nMakes ores glow to make them more visible, and also adds connected outlines to them so you don't miss a single block. Mod support available\n\nBy GridExpert · 8,175,481 downloads · Blocks · Decoration · Minecraft\nInstall\nDetails\n(Bee's) Fancy Crops\n\nMy take on prettier farming, compatible with mods\n\nBy bebebea_loste · 8,062,208 downloads · 16x · Minecraft · Tweaks\nInstall\nDetails\nDefault Dark Mode\n\n🌙 The Dark Mode Resource Pack for Minecraft: Java Edition\n\nBy nebulr · 7,994,241 downloads · Gui · Minecraft · Modded\nInstall\nDetails\nLow Fire\n\nLower your first-person fire to enhance visibility!\n\nBy Oculie · 7,863,153 downloads · Minecraft · Tweaks · Utility\nInstall\nDetails\nBare Bones\n\nMinecraft with the style of the trailers\n\nBy RobotPants · 7,846,898 downloads · 16x · Minecraft · Simplistic\nInstall\nDetails\nFaithful 64x\n\nAn even more detailed experience with quadruple-resolution textures!\n\nBy Faithful-Resource-Pack · 7,544,086 downloads · 64x · Minecraft · Vanilla-like\nInstall\nDetails\nProgrammer Art Fix\n\nA patch for Programmer Art / classic texture\n\nBy THGABS · 7,511,276 downloads · 16x · Minecraft · Vanilla-like\nInstall\nDetails\nMandala's GUI - Dark mode\n\nMandala GUI is an elegant theme, in the style of Mandala Creations. It is specifically made for people who like Dark mode. It only changes the UI of Minecraft, without changing items or blocks.\n\nBy CesarZorak · 7,355,642 downloads · Gui · Items · Minecraft\nInstall\nDetails\nEnchantment Outlines\n\nAdds an outline to all enchantable tools.\n\nBy tixul · 7,276,557 downloads · Equipment · Minecraft · Tweaks\nInstall\nDetails\nSimple Grass Flowers\n\nGives Grass, Podzol, Mycelium, Crimson Nylium, and Warped Nylium vanilla-friendly flowers, clovers, and rocks!\n\nBy 2DWisp · 6,078,289 downloads · Decoration · Environment · Minecraft\nInstall\nDetails\nEnchant Icons\n\nmakes enchantment names have icons and colors for enchanted books and items and colored enchanting\n\nBy CountXD · 5,760,384 downloads · Items · Minecraft · Tweaks\nInstall\nDetails\nLoad more"
+}

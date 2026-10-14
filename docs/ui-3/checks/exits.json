@@ -1,0 +1,590 @@
+{
+  "controls-check": {
+    "command": [
+      "node",
+      "node_modules/svelte-check/bin/svelte-check",
+      "--tsconfig",
+      "./tsconfig.json"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "mods-pilot": {
+    "command": [
+      "node",
+      "tools/visual/ui3-pilot.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "baseline-capture": {
+    "command": [
+      "node",
+      "tools/visual/ui3-before.mjs",
+      "before"
+    ],
+    "exit": 1,
+    "signal": null,
+    "error": null
+  },
+  "mods-check": {
+    "command": [
+      "node",
+      "node_modules/svelte-check/bin/svelte-check",
+      "--tsconfig",
+      "./tsconfig.json"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "modpacks-check": {
+    "command": [
+      "node",
+      "node_modules/svelte-check/bin/svelte-check",
+      "--tsconfig",
+      "./tsconfig.json"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "content-first": {
+    "command": [
+      "node",
+      "tools/visual/ui3.test.mjs"
+    ],
+    "exit": 1,
+    "signal": null,
+    "error": null
+  },
+  "resource-check": {
+    "command": [
+      "node",
+      "node_modules/svelte-check/bin/svelte-check",
+      "--tsconfig",
+      "./tsconfig.json"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "content-second": {
+    "command": [
+      "node",
+      "tools/visual/ui3.test.mjs"
+    ],
+    "exit": 1,
+    "signal": null,
+    "error": null
+  },
+  "library-check": {
+    "command": [
+      "node",
+      "node_modules/svelte-check/bin/svelte-check",
+      "--tsconfig",
+      "./tsconfig.json"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "content-third": {
+    "command": [
+      "node",
+      "tools/visual/ui3.test.mjs"
+    ],
+    "exit": 1,
+    "signal": null,
+    "error": null
+  },
+  "content-fourth": {
+    "command": [
+      "node",
+      "tools/visual/ui3.test.mjs"
+    ],
+    "exit": 1,
+    "signal": null,
+    "error": null
+  },
+  "content-fifth": {
+    "command": [
+      "node",
+      "tools/visual/ui3.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-build": {
+    "command": [
+      "node",
+      "node_modules/@tauri-apps/cli/tauri.js",
+      "build",
+      "--debug",
+      "--no-bundle"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui1-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui2-ui1-regression.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "frontend-tests": {
+    "command": [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-timeout=60000",
+      "src/lib/**/*.test.ts"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui2-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui2.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "final-check": {
+    "command": [
+      "node",
+      "node_modules/svelte-check/bin/svelte-check",
+      "--tsconfig",
+      "./tsconfig.json"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui2b-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui2b.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "content-artwork-regression": {
+    "command": [
+      "node",
+      "tools/visual/l1.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "final-content": {
+    "command": [
+      "node",
+      "tools/visual/ui3.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "final-native-build": {
+    "command": [
+      "node",
+      "node_modules/@tauri-apps/cli/tauri.js",
+      "build",
+      "--debug",
+      "--no-bundle"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui-corrections-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui-corrections.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "cosmetics-regression": {
+    "command": [
+      "node",
+      "tools/visual/l3.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-startup": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "startup"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-fixture-install": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-install.mjs"
+    ],
+    "exit": 1,
+    "signal": null,
+    "error": null
+  },
+  "native-modpacks": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "modpacks"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-medium-attempt": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "medium-attempt"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-fixture-install-retry": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-install.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-medium-frame": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "medium-frame"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-medium-height": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "medium-height"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-ready": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "ready-workspace"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-installed-mods": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "installed-mods"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "matched-before": {
+    "command": [
+      "node",
+      "tools/visual/ui3-before.mjs",
+      "before"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-mods": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "mods"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "matched-after": {
+    "command": [
+      "node",
+      "tools/visual/ui3-capture.mjs",
+      "after"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-mods-search": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "mods-search"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-categories": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "categories"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-filtered": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "filtered-empty"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-minimum": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "minimum"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-minimum-controls": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "minimum-controls"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-minimum-results": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "minimum-results"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "measured-minimum-browser": {
+    "command": [
+      "node",
+      "tools/visual/ui3.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-installed-packs": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "installed-packs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "final-shared-tests": {
+    "command": [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-timeout=60000",
+      "src/lib/shell/borealis.test.ts",
+      "src/lib/launcher/phaseF.test.ts",
+      "src/lib/launcher/releasePolish.test.ts",
+      "src/lib/launcher/productSurfaces.test.ts"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-maximized": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "maximized"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-installed-packs-final": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "installed-packs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-packs": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "resource-packs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "inspect-lines": {
+    "command": [
+      "node",
+      "tools/visual/ui3-inspect.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "inspect-lines-fresh": {
+    "command": [
+      "node",
+      "tools/visual/ui3-inspect.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "fresh-styles-content": {
+    "command": [
+      "node",
+      "tools/visual/ui3.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "fresh-after": {
+    "command": [
+      "node",
+      "tools/visual/ui3-capture.mjs",
+      "after"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-cyan": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "cyan-resource-packs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "fresh-final-content": {
+    "command": [
+      "node",
+      "tools/visual/ui3.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "fresh-ui1": {
+    "command": [
+      "node",
+      "tools/visual/ui2-ui1-regression.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "fresh-content-artwork": {
+    "command": [
+      "node",
+      "tools/visual/l1.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "fresh-large-lists": {
+    "command": [
+      "node",
+      "tools/visual/ui-corrections.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-restart-home": {
+    "command": [
+      "node",
+      "tools/visual/ui3-native-capture.mjs",
+      "restart-home"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "npm-check": {
+    "command": [
+      "powershell",
+      "-NoProfile",
+      "-Command",
+      "npm run check; exit $LASTEXITCODE"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null,
+    "checkExecuted": false,
+    "outcome": "Blocked by PowerShell script policy; wrapper exit 0 is not a passed check. See npm-check-direct."
+  },
+  "npm-check-direct": {
+    "command": [
+      "node",
+      "C:/Users/kalib/AppData/Local/Programs/node-v24.21.0/node_modules/npm/bin/npm-cli.js",
+      "run",
+      "check"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  }
+}

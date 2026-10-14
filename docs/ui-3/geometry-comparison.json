@@ -1,0 +1,162 @@
+{
+  "mods-1440x900": {
+    "beforeColumns": "577.906px 577.906px",
+    "afterColumns": "1161.81px",
+    "beforeFirstRowHeight": 140.46875,
+    "afterFirstRowHeight": 91.46875,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "mods-1280x800": {
+    "beforeColumns": "504.312px 504.312px",
+    "afterColumns": "1014.62px",
+    "beforeFirstRowHeight": 159.5,
+    "afterFirstRowHeight": 91.46875,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "mods-1024x768": {
+    "beforeColumns": "781.094px",
+    "afterColumns": "779.094px",
+    "beforeFirstRowHeight": 92.46875,
+    "afterFirstRowHeight": 91.46875,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "mods-720x520": {
+    "beforeColumns": "535px",
+    "afterColumns": "533px",
+    "beforeFirstRowHeight": 159.5,
+    "afterFirstRowHeight": 158.5,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "modpacks-1440x900": {
+    "beforeColumns": "575.906px 575.906px",
+    "afterColumns": "281.953px 281.953px 281.953px 281.953px",
+    "beforeFirstRowHeight": 159.25,
+    "afterFirstRowHeight": 347.46875,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "modpacks-1280x800": {
+    "beforeColumns": "502.312px 502.312px",
+    "afterColumns": "245.156px 245.156px 245.156px 245.156px",
+    "beforeFirstRowHeight": 159.25,
+    "afterFirstRowHeight": 326.765625,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "modpacks-1024x768": {
+    "beforeColumns": "781.094px",
+    "afterColumns": "252.359px 252.359px 252.359px",
+    "beforeFirstRowHeight": 141.34375,
+    "afterFirstRowHeight": 330.8125,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "modpacks-720x520": {
+    "beforeColumns": "519px",
+    "afterColumns": "253.5px 253.5px",
+    "beforeFirstRowHeight": 159.25,
+    "afterFirstRowHeight": 331.46875,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "packs-1440x900": {
+    "beforeColumns": "575.906px 575.906px",
+    "afterColumns": "575.906px 575.906px",
+    "beforeFirstRowHeight": 141.34375,
+    "afterFirstRowHeight": 159.5,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "packs-1280x800": {
+    "beforeColumns": "502.312px 502.312px",
+    "afterColumns": "502.312px 502.312px",
+    "beforeFirstRowHeight": 159.25,
+    "afterFirstRowHeight": 159.5,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "packs-1024x768": {
+    "beforeColumns": "781.094px",
+    "afterColumns": "384.547px 384.547px",
+    "beforeFirstRowHeight": 141.34375,
+    "afterFirstRowHeight": 179.5,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "packs-720x520": {
+    "beforeColumns": "535px",
+    "afterColumns": "535px",
+    "beforeFirstRowHeight": 159.25,
+    "afterFirstRowHeight": 159.5,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "installed-mods-1440x900": {
+    "beforeColumns": null,
+    "afterColumns": null,
+    "beforeFirstRowHeight": 77,
+    "afterFirstRowHeight": 77,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "installed-mods-1280x800": {
+    "beforeColumns": null,
+    "afterColumns": null,
+    "beforeFirstRowHeight": 100,
+    "afterFirstRowHeight": 100,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "installed-mods-1024x768": {
+    "beforeColumns": null,
+    "afterColumns": null,
+    "beforeFirstRowHeight": 100,
+    "afterFirstRowHeight": 100,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "installed-mods-720x520": {
+    "beforeColumns": null,
+    "afterColumns": null,
+    "beforeFirstRowHeight": 136,
+    "afterFirstRowHeight": 148,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "installed-packs-1440x900": {
+    "beforeColumns": null,
+    "afterColumns": null,
+    "beforeFirstRowHeight": 83,
+    "afterFirstRowHeight": 83,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "installed-packs-1280x800": {
+    "beforeColumns": null,
+    "afterColumns": null,
+    "beforeFirstRowHeight": 83,
+    "afterFirstRowHeight": 83,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "installed-packs-1024x768": {
+    "beforeColumns": null,
+    "afterColumns": null,
+    "beforeFirstRowHeight": 83,
+    "afterFirstRowHeight": 83,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  },
+  "installed-packs-720x520": {
+    "beforeColumns": null,
+    "afterColumns": null,
+    "beforeFirstRowHeight": 121,
+    "afterFirstRowHeight": 131,
+    "beforeOverflow": false,
+    "afterOverflow": false
+  }
+}

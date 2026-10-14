@@ -1,0 +1,29 @@
+{
+  "provenance": "Compiled Tauri frontend, actual Rust commands, isolated native data; read-only CDP screenshot/measurement",
+  "url": "http://tauri.localhost/",
+  "viewport": [
+    1016,
+    768
+  ],
+  "dpr": 1.25,
+  "scale": 1.25,
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "background": "borealis",
+  "accent": "violet",
+  "browse": null,
+  "firstResult": null,
+  "results": 0,
+  "libraryRows": 0,
+  "search": null,
+  "filters": null,
+  "account": {
+    "x": 8,
+    "y": 634.2000122070312,
+    "width": 79.20000457763672,
+    "height": 119.80000305175781,
+    "right": 87.20000457763672,
+    "bottom": 754.0000152587891
+  },
+  "text": "Instances\n›\nUI-3 isolated Fabric fixture\nReady\n\nMinecraft 1.21.11 · Fabric 0.19.5 · Aurora Off\n\nRename\nOpen folder\nPlay\nOverview\nMods\nResource Packs\nShaders\nSettings\nReadiness\nCheck again\nValidate\nGame content\nInstalled and complete.\nReady\nJava runtime\nNot checked\nCheck Java\nAccount\nNot signed in\nSign in\nMinecraft\nNot running\nThe selected instance has not finished installing.\nlaunch_instance_not_ready\nThe required managed Java runtime could not be resolved.\nlaunch_runtime_not_ready\nSelect a Minecraft account before playing.\nlaunch_authentication_required\n\nReadiness is decided by Aurora from validated content, the exact managed Java runtime, and a usable authenticated session — the Play button reflects that decision.\n\nActive configuration\n\nThe saved desired configuration launch uses.\n\nChange in Settings\nMinecraft version\n1.21.11\nPlatform\nFabric 0.19.5\nMemory\n2048 MB\nAdditional JVM arguments\nNone\nWindow size\nDefault\n\nName, memory, JVM arguments, and window changes apply immediately after saving. Minecraft and loader changes take effect through a deliberate install of the new configuration.\n\nInstalled content\n\nThe concrete Minecraft, platform, and distribution identity.\n\nAurora\nNot configured\nMinecraft\n1.21.11\nPlatform\nfabric 0.19.5\n\nInstances pin concrete releases. Updates install only when you choose. Production releases are bundled with the launcher; debug builds also offer development fixtures."
+}

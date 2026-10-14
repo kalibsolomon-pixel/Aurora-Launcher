@@ -1,0 +1,3 @@
+[aurora-launcher] starting native backend
+[aurora-launcher] backend ready; managed data root: C:\Users\kalib\AppData\Local\Temp\aurora-ui3-20983361-de01-4aa4-9956-f71fe952ddee\managed
+[aurora-launcher] backend ready; managed data root: C:\Users\kalib\AppData\Local\Temp\aurora-ui3-20983361-de01-4aa4-9956-f71fe952ddee\managed

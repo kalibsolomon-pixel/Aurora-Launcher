@@ -1,0 +1,8 @@
+npm : File C:\Users\kalib\AppData\Local\Programs\node-v24.21.0\npm.ps1 cannot be loaded because running scripts is
+disabled on this system. For more information, see about_Execution_Policies at
+https:/go.microsoft.com/fwlink/?LinkID=135170.
+At line:1 char:1
++ npm run check; exit $LASTEXITCODE
++ ~~~
+    + CategoryInfo          : SecurityError: (:) [], PSSecurityException
+    + FullyQualifiedErrorId : UnauthorizedAccess

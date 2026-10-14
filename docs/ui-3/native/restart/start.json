@@ -1,0 +1,9 @@
+{
+  "isolatedRoot": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui3-20983361-de01-4aa4-9956-f71fe952ddee",
+  "webview": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui3-20983361-de01-4aa4-9956-f71fe952ddee\\webview",
+  "exe": "C:\\Dev\\aurora-launcher\\src-tauri\\target\\debug\\aurora-launcher.exe",
+  "pid": 23316,
+  "sha256": "B6F05346C78FE305B6B116BF687C18C40F67B0655ADF9D9D2D72B34F2F2E4E37",
+  "nativeData": "Restart of the same isolated root after genuine Fabric installation; no credentials or owner content",
+  "managed": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui3-20983361-de01-4aa4-9956-f71fe952ddee\\managed"
+}

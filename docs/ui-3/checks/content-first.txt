@@ -1,0 +1,25 @@
+PASS Search stays explicit; clear restores focus and respects categories/sort; pagination appends
+PASS Categories retain search/sort, native provider values and keyboard focus
+PASS Installed and dependency states; pending install excludes duplicate requests and announces completion
+PASS Collision/verification failures preserve explicit blocked or retryable feedback
+PASS Modpack artwork grid and exact version/optional-file review remain explicit
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+44 !== 64
+
+    at file:///C:/Dev/aurora-launcher/tools/visual/ui3.test.mjs:90:12
+    at async check (file:///C:/Dev/aurora-launcher/tools/visual/ui3.test.mjs:10:30)
+    at async file:///C:/Dev/aurora-launcher/tools/visual/ui3.test.mjs:87:3 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 44,
+  expected: 64,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.21.0

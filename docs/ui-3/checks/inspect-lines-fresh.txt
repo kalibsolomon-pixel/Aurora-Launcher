@@ -1,0 +1,24 @@
+[
+  {
+    text: 21,
+    height: 17,
+    font: '12.8px',
+    lineHeight: 'normal',
+    display: 'flow-root',
+    webkitLineClamp: '2',
+    lineClamp: undefined,
+    orient: 'vertical',
+    overflow: 'hidden'
+  },
+  {
+    text: 650,
+    height: 34,
+    font: '12.8px',
+    lineHeight: 'normal',
+    display: 'flow-root',
+    webkitLineClamp: '2',
+    lineClamp: undefined,
+    orient: 'vertical',
+    overflow: 'hidden'
+  }
+]

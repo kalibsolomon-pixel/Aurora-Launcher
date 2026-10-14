@@ -1,0 +1,2 @@
+UI-3 source retained at C:\Users\kalib\AppData\Local\Temp\aurora-ui3-source-k2BTv4
+PASS 23 captures (docs/ui-3/before); zero page errors

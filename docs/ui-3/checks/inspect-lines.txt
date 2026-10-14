@@ -1,0 +1,24 @@
+[
+  {
+    text: 21,
+    height: 17,
+    font: '12.8px',
+    lineHeight: 'normal',
+    display: 'block',
+    webkitLineClamp: 'none',
+    lineClamp: undefined,
+    orient: 'horizontal',
+    overflow: 'visible'
+  },
+  {
+    text: 650,
+    height: 102,
+    font: '12.8px',
+    lineHeight: 'normal',
+    display: 'block',
+    webkitLineClamp: 'none',
+    lineClamp: undefined,
+    orient: 'horizontal',
+    overflow: 'visible'
+  }
+]

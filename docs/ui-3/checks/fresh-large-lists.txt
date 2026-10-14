@@ -1,0 +1,6 @@
+PASS 100 installed rows, single/grouped/long warnings, placement/density, keyboard/click/hover/Escape, filtering/sorting and artwork/scroll preservation
+PASS four 100-result browser views, no list blur, artwork reuse, no overflow or page errors
+PASS established glass material, one shared filtered panel, turquoise selection, 720/900/1600px layouts and tooltip edges
+PASS reduced transparency uses an opaque unfiltered workspace backing
+PASS navigating with a pinned warning unmounts without a delayed toggle error
+PASS standalone modpacks match existing instance glass with one shared filter

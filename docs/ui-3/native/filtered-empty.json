@@ -1,0 +1,50 @@
+{
+  "provenance": "Compiled Tauri frontend, actual Rust commands, isolated native data; read-only CDP screenshot/measurement",
+  "url": "http://tauri.localhost/",
+  "viewport": [
+    1016,
+    768
+  ],
+  "dpr": 1.25,
+  "scale": 1.25,
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "background": "borealis",
+  "accent": "violet",
+  "browse": {
+    "x": 161.4375,
+    "y": 313.3999938964844,
+    "width": 773.9249877929688,
+    "height": 454.3999938964844,
+    "right": 935.3624877929688,
+    "bottom": 767.7999877929688
+  },
+  "firstResult": null,
+  "results": 0,
+  "libraryRows": 0,
+  "search": {
+    "x": 161.4375,
+    "y": 456.6000061035156,
+    "width": 684.9625244140625,
+    "height": 40,
+    "right": 846.4000244140625,
+    "bottom": 496.6000061035156
+  },
+  "filters": {
+    "x": 161.4375,
+    "y": 508.6000061035156,
+    "width": 773.9249877929688,
+    "height": 60.79999923706055,
+    "right": 935.3624877929688,
+    "bottom": 569.4000053405762
+  },
+  "account": {
+    "x": 8,
+    "y": 634.2000122070312,
+    "width": 79.20000457763672,
+    "height": 119.80000305175781,
+    "right": 87.20000457763672,
+    "bottom": 754.0000152587891
+  },
+  "text": "Instances\n›\nUI-3 isolated Fabric fixture\nReady\n\nMinecraft 1.21.11 · Fabric 0.19.5 · Aurora Off\n\nRename\nOpen folder\nPlay\nOverview\nMods\nResource Packs\nShaders\nSettings\nInstalled\nBrowse Modrinth\nDiscover Mods\n\nInstall into UI-3 isolated Fabric fixture. Compatibility and required dependencies are checked before installation.\n\nSource: Modrinth\nMods\nModpacks\nResource Packs\nShaders\nFind mods\n×\nSearch\nCategories\n1 selected\nSort\nRelevance\nMost downloaded\nNewest\nRecently updated\nClear filters\nMinecraft 1.21.11 · Fabric\nAdventure ×\n\n0 of 0 mods matching “Sodium”\n\nNo matching results\n\nTry another search or clear your filters.\n\nClear filters"
+}

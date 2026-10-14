@@ -1,0 +1,12 @@
+35ce1ee1d9ede508702c243546c0e9ec2d9370e3 Audit UI-3 content boundaries and preserve the repository baseline
+3740a2a52394dfd8b65043f3d87a62e301902f17 Clarify shared Discover controls, target context, search and feedback
+a4c39ea0e222e846f015cc9cd4feb80f4b32fab6 Present Mods as compact rows with explicit guarded install actions
+e7d1fd98acc19f92c59d5135c1badc2e243b1884 Give modpacks an artwork-led grid and explicit exact-version review
+895f36b8b4073fde385b48c1127896c2b451c63a Distinguish resource-pack browsing with readable medium artwork cards
+b799abfaa2805318a27ce7db1d61704cd24bade2 Align installed content rows, states, controls and cancellation focus
+fd7e48b0a0d00541f059ffa23147fc90ce847a6c Honor reduced transparency on Discover and Library content backings
+3b415355d3bb85b8271d8c556d3e7001732627d4 Verify UI-3 browsing, management, responsive and isolated native behavior
+
+Final documentation/evidence commit contains this file. Resolve its hash with:
+git log -1 --format=%H -- UI_3_DISCOVER_LIBRARY_ACCEPTANCE.md
+No push, merge, tag or release.
