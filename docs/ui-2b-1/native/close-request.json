@@ -1,0 +1,21 @@
+{
+  "pid": 15392,
+  "requestedCss": [
+    1024,
+    768
+  ],
+  "mode": "close",
+  "dpiScale": 1.25,
+  "windowBefore": {
+    "L": 571,
+    "T": 226,
+    "R": 1489,
+    "B": 886
+  },
+  "clientBefore": {
+    "L": 0,
+    "T": 0,
+    "R": 900,
+    "B": 650
+  }
+}

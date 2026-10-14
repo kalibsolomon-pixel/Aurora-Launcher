@@ -1,0 +1,8 @@
+{
+  "sha256": "A154B04817C42BB28604845EB35B291C2873DC7B49E317E6A2C33818C56D0F57",
+  "webview": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui2b1-15962e8e-f9fc-44fa-bb36-b3a0a97ed416\\webview",
+  "pid": 15392,
+  "exe": "C:\\Dev\\aurora-launcher\\src-tauri\\target\\debug\\aurora-launcher.exe",
+  "isolatedRoot": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui2b1-15962e8e-f9fc-44fa-bb36-b3a0a97ed416",
+  "managed": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui2b1-15962e8e-f9fc-44fa-bb36-b3a0a97ed416\\managed"
+}

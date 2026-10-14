@@ -1,0 +1,21 @@
+{
+  "requestedCss": [
+    1024,
+    768
+  ],
+  "windowBefore": {
+    "L": -9,
+    "T": -9,
+    "R": 2569,
+    "B": 1449
+  },
+  "dpiScale": 1.25,
+  "pid": 15392,
+  "mode": "restore",
+  "clientBefore": {
+    "L": 0,
+    "T": 0,
+    "R": 2560,
+    "B": 1440
+  }
+}

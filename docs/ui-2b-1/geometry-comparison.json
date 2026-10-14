@@ -1,0 +1,94 @@
+[
+  {
+    "viewport": [
+      1440,
+      900
+    ],
+    "heroHeight": [
+      436,
+      404
+    ],
+    "firstWidgetY": [
+      540,
+      508
+    ],
+    "scrollExtent": [
+      0,
+      0
+    ],
+    "launch": [
+      320,
+      80
+    ],
+    "overflow": false
+  },
+  {
+    "viewport": [
+      1280,
+      800
+    ],
+    "heroHeight": [
+      403.984375,
+      404
+    ],
+    "firstWidgetY": [
+      507.984375,
+      508
+    ],
+    "scrollExtent": [
+      28,
+      28
+    ],
+    "launch": [
+      320,
+      80
+    ],
+    "overflow": false
+  },
+  {
+    "viewport": [
+      1024,
+      768
+    ],
+    "heroHeight": [
+      392.46875,
+      404
+    ],
+    "firstWidgetY": [
+      496.46875,
+      508
+    ],
+    "scrollExtent": [
+      48,
+      60
+    ],
+    "launch": [
+      320,
+      80
+    ],
+    "overflow": false
+  },
+  {
+    "viewport": [
+      720,
+      520
+    ],
+    "heroHeight": [
+      294.859375,
+      294.859375
+    ],
+    "firstWidgetY": [
+      390.859375,
+      390.859375
+    ],
+    "scrollExtent": [
+      409,
+      409
+    ],
+    "launch": [
+      320,
+      80
+    ],
+    "overflow": false
+  }
+]

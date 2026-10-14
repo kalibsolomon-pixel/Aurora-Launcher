@@ -5,7 +5,7 @@ const {chromium}=await import(process.env.AURORA_PLAYWRIGHT_MODULE || 'playwrigh
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:1280,height:800},reducedMotion:'reduce'});
 const results=[],errors=[];
-const out='docs/ui-2b';
+const out=process.env.AURORA_UI2_OUTPUT || 'docs/ui-2b';
 page.on('pageerror',e=>errors.push(e.message));
 await page.route(/^https?:\/\/(?!127\.0\.0\.1:1422)/,r=>r.abort());
 await mkdir(`${out}/states`,{recursive:true});
@@ -35,7 +35,7 @@ try {
     const g=await homeGeometry(page),hero=g.home;
     for(const rect of [g.instance,g.player]) assert.ok(rect.x>=hero.x&&rect.right<=hero.right&&rect.y>=hero.y&&rect.bottom<=hero.bottom);
     assert.ok(g.widgets.y>hero.bottom);
-    const controls=await page.getByRole('group',{name:'Player view'}).boundingBox();assert.ok(controls.y>=g.canvas.bottom);
+    assert.equal(await page.locator('.player-controls').count(),0);assert.ok(g.canvas.bottom>g.home.bottom,'canvas extends beyond hero crop');
   });
   await check('Home contrast foundation is scoped and adds no backdrop-filter stack',async()=>{
     await homeFixture(page);

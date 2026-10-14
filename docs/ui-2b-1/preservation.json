@@ -1,0 +1,9 @@
+{
+  "baselineTrackedPaths": 1332,
+  "criticalHashes": 8,
+  "protectedHashes": 4,
+  "worktrees": 7,
+  "deletions": 0,
+  "status": "M tools/visual/ui2.test.mjs\n M tools/visual/ui2b.test.mjs\n?? .zcode-icon-diag.py\n?? .zcodeignore\n?? UI_2B_1_CHARACTER_PRESENTATION_ACCEPTANCE.md\n?? UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt\n?? docs/performance-p0-2/__pycache__/\n?? docs/ui-2b-1/\n?? tools/visual/ui2b1-capture.mjs\n?? tools/visual/ui2b1-crop.test.mjs\n?? tools/visual/ui2b1-native-measure.mjs\n?? tools/visual/ui2b1-native.ps1\n?? tools/visual/ui2b1-preserve.mjs\n?? tools/visual/ui2b1-review.py\n?? tools/visual/ui2b1-window.ps1",
+  "nameStatus": "M\tsrc/lib/launcher/PlayerPreview.svelte\nM\tsrc/lib/launcher/playerDirection.test.ts\nM\tsrc/lib/launcher/productSurfaces.test.ts\nM\tsrc/lib/launcher/releasePolish.test.ts\nM\tsrc/lib/pages/HomePage.svelte\nM\ttools/visual/ui2.test.mjs\nM\ttools/visual/ui2b.test.mjs"
+}

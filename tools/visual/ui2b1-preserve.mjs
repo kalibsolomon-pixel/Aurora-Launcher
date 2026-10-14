@@ -1,0 +1,21 @@
+import {readFile, stat, writeFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import assert from 'node:assert/strict';
+const b=JSON.parse(await readFile('docs/ui-2b-1/baseline.json','utf8'));
+const git=(...a)=>execFileSync('git',a,{encoding:'utf8'}).trim();
+assert.equal(git('branch','--show-current'),b.branch);
+const tracked=new Set(git('ls-files').split(/\r?\n/));
+for(const p of b.tracked) {assert.ok(tracked.has(p),`Untracked original: ${p}`);await stat(p);}
+for(const {path,sha256} of [...b.protected,...b.critical]) assert.equal(createHash('sha256').update(await readFile(path)).digest('hex'),sha256,path);
+const identities=s=>s.split(/\r?\n/).filter(l=>/^(worktree |branch |detached)/.test(l));
+assert.deepEqual(identities(git('worktree','list','--porcelain')),identities(b.worktrees));
+const root=git('rev-parse','--show-toplevel');
+const otherWorktrees=s=>s.split(/\r?\n\r?\n/).filter(block=>!block.startsWith(`worktree ${root}\n`));
+assert.deepEqual(otherWorktrees(git('worktree','list','--porcelain')),otherWorktrees(b.worktrees));
+assert.equal(git('diff',b.head,'--name-only','--diff-filter=D'),'');
+assert.equal(git('diff','--name-only','--diff-filter=D'),'');
+assert.equal(git('diff','--cached','--name-only','--diff-filter=D'),'');
+const result={baselineTrackedPaths:b.tracked.length,criticalHashes:b.critical.length,protectedHashes:b.protected.length,worktrees:7,deletions:0,status:git('status','--short'),nameStatus:git('diff',b.head,'--name-status')};
+await writeFile('docs/ui-2b-1/preservation.json',JSON.stringify(result,null,2));
+console.log('PASS preservation: '+JSON.stringify(result));

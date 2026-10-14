@@ -1,0 +1,112 @@
+{
+  "provenance": "Actual Tauri WebView2 client; compiled production frontend; real native commands against a fresh isolated Installing registry; CDP read-only measurement",
+  "url": "http://tauri.localhost/",
+  "viewport": [
+    1024,
+    768
+  ],
+  "dpr": 1.25,
+  "osScale": 1.25,
+  "theme": "aurora-dark",
+  "background": "borealis",
+  "accent": "violet",
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "scrollExtent": 1017,
+  "hero": {
+    "x": 136.9499969482422,
+    "y": 64,
+    "width": 830.9000244140625,
+    "height": 526.4750366210938,
+    "right": 967.8500213623047,
+    "bottom": 590.4750366210938
+  },
+  "instance": {
+    "x": 161.75,
+    "y": 262.875,
+    "width": 320,
+    "height": 80,
+    "right": 481.75,
+    "bottom": 342.875
+  },
+  "launch": {
+    "x": 162.5500030517578,
+    "y": 263.6750183105469,
+    "width": 266.3999938964844,
+    "height": 78.4000015258789,
+    "right": 428.9499969482422,
+    "bottom": 342.0750198364258
+  },
+  "player": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0,
+    "right": 0,
+    "bottom": 0
+  },
+  "canvas": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0,
+    "right": 0,
+    "bottom": 0
+  },
+  "widgets": {
+    "x": 136.9499969482422,
+    "y": 614.4750366210938,
+    "width": 830.9000244140625,
+    "height": 1130.875,
+    "right": 967.8500213623047,
+    "bottom": 1745.3500366210938
+  },
+  "cards": [
+    {
+      "id": "instance-details",
+      "width": 403.45001220703125
+    },
+    {
+      "id": "content-summary",
+      "width": 403.45001220703125
+    },
+    {
+      "id": "playtime",
+      "width": 403.45001220703125
+    },
+    {
+      "id": "recent-worlds",
+      "width": 403.45001220703125
+    },
+    {
+      "id": "recent-servers",
+      "width": 403.45001220703125
+    },
+    {
+      "id": "skin-manager",
+      "width": 830.9000244140625
+    },
+    {
+      "id": "cape-selector",
+      "width": 403.45001220703125
+    }
+  ],
+  "rail": {
+    "x": 0,
+    "y": 40,
+    "width": 96,
+    "height": 728,
+    "right": 96,
+    "bottom": 768
+  },
+  "account": {
+    "x": 8,
+    "y": 646.6000366210938,
+    "width": 79.20000457763672,
+    "height": 107.4000015258789,
+    "right": 87.20000457763672,
+    "bottom": 754.0000381469727
+  },
+  "disabled": true,
+  "blockers": "The selected instance has not finished installing. Technical detailslaunch_instance_not_readyThe required managed Java runtime could not be resolved. Technical detailslaunch_runtime_not_ready  Check again"
+}

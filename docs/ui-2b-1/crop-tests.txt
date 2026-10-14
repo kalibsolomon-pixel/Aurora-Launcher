@@ -1,0 +1,16 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.evaluate: Error: strict mode violation: locator('canvas') resolved to 2 elements:
+    1) <canvas width="8" height="8" aria-hidden="true" class="svelte-1iubbwl"></canvas> aka getByRole('button', { name: 'Accounts — signed in as' })
+    2) <canvas width="560" height="800" aria-hidden="true" class="svelte-180vh4z revealed"></canvas> aka getByRole('img', { name: 'Current Minecraft player skin' }).locator('canvas')
+
+Call log:
+  - waiting for locator('canvas')
+
+    at C:\Dev\aurora-launcher\[eval1]:1:765 {
+  log: [ "  - waiting for locator('canvas')" ]
+}
+
+Node.js v24.21.0

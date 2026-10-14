@@ -50,7 +50,7 @@ try {
       const layout=await page.locator('.launch-control').evaluate(e=>({line:getComputedStyle(e.querySelector('.picker-trigger')).borderLeftWidth,word:getComputedStyle(e.querySelector('.launch-word')).fontWeight,name:getComputedStyle(e.querySelector('.picker-name')).fontWeight}));
       assert.deepEqual(layout,{line:'1px',word:'700',name:'400'});
       assert.equal(g.previewDisplay==='none',width<=800);
-      if(width>800) {assert.ok(g.player.x>=g.instance.right); assert.ok(g.widgets.y>=g.player.bottom); assert.ok(g.canvas.height<=420);}
+      if(width>800) {assert.ok(g.player.x>=g.instance.right); assert.ok(g.widgets.y>=g.player.bottom); assert.ok(g.canvas.height>=480);}
       if(width>=1024) assert.ok(g.cards[0].y<600,'widgets start within desktop view');
       if(width>=1024) {assert.ok(g.cards[1].x>g.cards[0].x);assert.ok(Math.abs(g.cards[1].y-g.cards[0].y)<1);}
       if(width===720) {assert.ok(Math.abs(g.cards[0].width-g.widgets.width)<2);assert.ok(g.cards[1].y>=g.cards[0].bottom);}
@@ -113,8 +113,9 @@ try {
   });
   await check('Player account isolation, manual controls and fallback',async()=>{
     await homeFixture(page);const before=await page.locator('.player-preview canvas').evaluate(c=>c.toDataURL());
-    await page.getByRole('button',{name:'Rotate player left'}).click();const after=await page.locator('.player-preview canvas').evaluate(c=>c.toDataURL());assert.notEqual(before,after);
-    await page.getByRole('button',{name:'Reset player view'}).click();assert.equal(await page.locator('.player-preview canvas').evaluate(c=>c.toDataURL()),before);
+    assert.equal(await page.locator('.player-controls, .reset-view').count(),0);
+    const c=await page.locator('.player-preview canvas').boundingBox();await page.mouse.move(c.x+c.width/2,c.y+100);await page.mouse.down();await page.mouse.move(c.x+c.width/2+60,c.y+130);await page.mouse.up();
+    assert.equal(await page.locator('.player-preview canvas').evaluate(c=>c.toDataURL()),before,'dragging does not change fixed orientation');
     await change('switch');assert.equal(await page.locator('.player-preview canvas').count(),0);
     await homeFixture(page,'missing-skin');assert.equal(await page.locator('.player-preview canvas').count(),0);await contained();
   });
