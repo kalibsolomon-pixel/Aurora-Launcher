@@ -127,14 +127,65 @@ fn representative_storage_measurement() {
 /// the link is never counted as a passing security assertion. When creation
 /// succeeds, retention must refuse traversal, preserve the sentinel byte-for
 /// byte, delete nothing, and change no authority.
+///
+/// Phases via `AURORA_F3RB1_SYMLINK_PHASE`: unset runs both phases in this
+/// one process; `prepare` builds the fixture and creates the real links
+/// (this is the only step that needs the privilege, and may run from an
+/// owner-authorized elevated helper); `verify` re-checks the fixture and
+/// executes the real retention refusal assertions, deliberately UNELEVATED,
+/// in a fresh process — so the accepted evidence proves the ordinary
+/// retention code, not an elevated copy of it.
 #[cfg(windows)]
 #[test]
 fn windows_file_symlink_refusal_helper() {
-    use std::os::windows::process::CommandExt;
     let Some(root) = std::env::var_os("AURORA_F3RB1_SYMLINK_ROOT") else {
         return;
     };
     let root = PathBuf::from(root);
+    match std::env::var("AURORA_F3RB1_SYMLINK_PHASE")
+        .unwrap_or_default()
+        .as_str()
+    {
+        "" => {
+            let (old, sentinel_digest, authority_digest) = symlink_gate_prepare(&root);
+            let world = World {
+                root: root.join("world"),
+                id: InstanceId::new("f3rb1-symlink").unwrap(),
+            };
+            symlink_gate_verify(&root, &world, &old, &sentinel_digest, &authority_digest);
+        }
+        "prepare" => {
+            // Only the facts return; the disposable fixture survives for the
+            // separate, deliberately unelevated verify process.
+            let _ = symlink_gate_prepare(&root);
+        }
+        "verify" => {
+            let manifest: serde_json::Value = serde_json::from_slice(
+                &fs::read(root.join("gate-manifest.json")).expect("run the prepare phase first"),
+            )
+            .unwrap();
+            let world = World {
+                root: root.join("world"),
+                id: InstanceId::new("f3rb1-symlink").unwrap(),
+            };
+            symlink_gate_verify(
+                &root,
+                &world,
+                manifest["slot"].as_str().unwrap(),
+                manifest["sentinelSha256"].as_str().unwrap(),
+                manifest["authoritySha256"].as_str().unwrap(),
+            );
+        }
+        other => panic!("unknown AURORA_F3RB1_SYMLINK_PHASE '{other}'"),
+    }
+}
+
+/// Everything the elevated step is allowed to do: build the disposable
+/// fixture, create the two real links, record the facts, and leave the
+/// fixture in place. No retention decision happens here.
+#[cfg(windows)]
+fn symlink_gate_prepare(root: &Path) -> (String, String, String) {
+    use std::os::windows::process::CommandExt;
     assert!(
         root.is_absolute()
             && root.parent() == Some(std::env::temp_dir().as_path())
@@ -145,7 +196,7 @@ fn windows_file_symlink_refusal_helper() {
                 .starts_with("aurora-f3rb1-symlink-")
             && !root.exists()
     );
-    fs::create_dir(&root).unwrap();
+    fs::create_dir(root).unwrap();
     fs::write(
         root.join("F3RB1-ISOLATED.txt"),
         b"F3RB1 isolated file-symlink acceptance\n",
@@ -161,9 +212,8 @@ fn windows_file_symlink_refusal_helper() {
     let backup = world.slot(&old).join("previous-game");
     let sentinel = root.join("sentinel-target.bin");
     fs::write(&sentinel, b"sentinel-bytes-f3rb1").unwrap();
-    let sentinel_before = fs::read(&sentinel).unwrap();
-    let sentinel_digest = hash(&sentinel_before);
-    let authority_before = fs::read(world.root.join(journal::JOURNAL_FILE)).unwrap();
+    let sentinel_digest = hash(&fs::read(&sentinel).unwrap());
+    let authority_digest = hash(&fs::read(world.root.join(journal::JOURNAL_FILE)).unwrap());
     let link = backup.join("redirected-file.txt");
     let dangling = backup.join("dangling-file.txt");
     let status = std::process::Command::new("powershell.exe")
@@ -186,18 +236,62 @@ fn windows_file_symlink_refusal_helper() {
              (Developer Mode or SeCreateSymbolicLinkPrivilege required)."
         );
     }
-    let confirm = |path: &Path| {
-        let meta = fs::symlink_metadata(path).unwrap();
+    for path in [&link, &dangling] {
         assert!(
-            meta.file_type().is_symlink(),
+            fs::symlink_metadata(path).unwrap().file_type().is_symlink(),
             "the link must actually exist before the security assertion runs"
         );
-    };
-    confirm(&link);
-    confirm(&dangling);
+    }
+    fs::write(
+        root.join("gate-manifest.json"),
+        serde_json::json!({
+            "slot": old,
+            "sentinelSha256": sentinel_digest,
+            "authoritySha256": authority_digest,
+        })
+        .to_string()
+        .as_bytes(),
+    )
+    .unwrap();
     eprintln!(
-        "[f3rb1-symlink] fixture sentinel_sha256={sentinel_digest} link=real-file-symlink dangling=real"
+        "[f3rb1-symlink] phase=prepare slot={old} sentinel_sha256={sentinel_digest} links=real"
     );
+    // Drop would delete the disposable fixture; the verify phase owns it now.
+    std::mem::forget(world);
+    (old, sentinel_digest, authority_digest)
+}
+
+/// The unelevated acceptance step: real retention against the real links,
+/// repeated, with sentinel and authority integrity checked throughout.
+#[cfg(windows)]
+fn symlink_gate_verify(
+    root: &Path,
+    world: &World,
+    old: &str,
+    sentinel_digest: &str,
+    authority_digest: &str,
+) {
+    assert!(
+        root.join("F3RB1-ISOLATED.txt").exists()
+            && root.join("gate-manifest.json").exists()
+            && root.join("sentinel-target.bin").exists(),
+        "the prepared fixture must be intact"
+    );
+    let backup = world.slot(old).join("previous-game");
+    let link = backup.join("redirected-file.txt");
+    let dangling = backup.join("dangling-file.txt");
+    for path in [&link, &dangling] {
+        assert!(
+            fs::symlink_metadata(path).unwrap().file_type().is_symlink(),
+            "the real links must still exist before the security assertion runs"
+        );
+    }
+    let sentinel = root.join("sentinel-target.bin");
+    let sentinel_before = fs::read(&sentinel).unwrap();
+    let authority_before = fs::read(world.root.join(journal::JOURNAL_FILE)).unwrap();
+    assert_eq!(hash(&sentinel_before), sentinel_digest);
+    assert_eq!(hash(&authority_before), authority_digest);
+    eprintln!("[f3rb1-symlink] phase=verify links=real dangling=real");
     for attempt in 1..=2 {
         let result = world.run(u64::MAX);
         assert_eq!(result.reclaimed_bytes, 0, "attempt {attempt}");
