@@ -137,16 +137,16 @@
   .home-page { max-width: 1280px; margin-inline: auto; width: 100%; }
   .aurora-update-notice { margin-bottom: 16px; }
   .notice-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .home-composition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: center; min-height: min(56vh, 660px); padding: 8px 0 28px; }
-  .home-launch-column { display: flex; flex-direction: column; align-items: center; gap: 22px; min-width: 0; }
+  .home-composition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: center; min-height: min(56vh, 660px); padding: var(--space-2) 0 var(--space-4); }
+  .home-launch-column { display: flex; flex-direction: column; align-items: center; gap: var(--space-5); min-width: 0; }
   .hero-logo { width: clamp(200px, 22vw, 280px); height: auto; }
   .instance-card { width: 100%; max-width: none; min-width: 0; overflow: visible; margin: 0; position: relative; z-index: 2; }
-  .launch-main { padding: 12px; display: grid; gap: 10px; min-width: 0; }
+  .launch-main { padding: var(--space-4); display: grid; gap: var(--space-3); min-width: 0; }
   .play-hero { width: 100%; min-height: 78px; font-size: 30px; font-weight: 700; letter-spacing: -.03em; border-radius: 15px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 16%), 0 5px 16px rgb(0 0 0 / 15%); }
-  .instance-heading { min-width: 0; padding: 4px 14px 12px; text-align: center; }
+  .instance-heading { min-width: 0; padding: var(--space-1) var(--space-2) var(--space-2); text-align: center; }
   .instance-heading :global(.picker-trigger) { font-size: 16px; margin: 0; }
   .instance-heading :global(.picker-menu) { text-align: left; }
-  .instance-versions { margin: 10px 0 12px; color: var(--color-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+  .instance-versions { margin: var(--space-2) 0; color: var(--color-text-secondary); font-size: var(--text-metadata); overflow-wrap: anywhere; }
   @media (min-width: 1500px) { .home-composition { min-height: 660px; } }
   @media (max-width: 900px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 16px; } .hero-logo { width: 168px; } .home-launch-column { gap: 12px; } .instance-card { max-width: none; } .play-hero { min-height: 68px; font-size: 28px; } }
 </style>
