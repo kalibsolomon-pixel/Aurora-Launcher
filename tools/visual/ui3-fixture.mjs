@@ -19,6 +19,8 @@ export async function openContentReview(page, surface = 'mods', options = {}) {
     const mods = launcher.modInventories[id];
     mods.entries = mods.entries.map((e, i) => ({...e, entryId:`mod-${i}`,ownership:i < 2 ? 'providerManaged' : 'userManaged',provenance:i < 2 ? life[i].record : null,canToggle:true,canRemove:true,removalBlockedReason:null,metadata:{...e.metadata,name:e.displayName,authors:['Fixture author'],depends:[],recommends:[],suggests:[],conflicts:[],breaks:[],environment:'client'},warnings:[]}));
     mods.entries[0].displayName = 'Sodium'; mods.entries[1].displayName = 'Lithium';
+    mods.entries[0].fileName='sodium.jar'; mods.entries[1].fileName='lithium.jar';
+    mods.entries[0].metadata.id='sodium'; mods.entries[1].metadata.id='lithium';
     mods.entries[2].displayName = 'A long installed mod title — 日本語の冒険と描画オプション '.repeat(2);
     mods.entries[2].metadata.version = '1.0.0+long-local-version';
     mods.entries[6].warnings = [{message:'Fixture metadata warning; review the full requirements before launch.'}];
@@ -29,7 +31,7 @@ export async function openContentReview(page, surface = 'mods', options = {}) {
     const installed = new Set([life[0].record.projectId, life[2].record.projectId]);
     const images = {};
     const hits = Object.fromEntries(Object.entries(names).map(([kind, list]) => [kind,Array.from({length:24},(_,i) => {
-      const projectId = `${kind[0]}U${String(i).padStart(6,'0')}`;
+      const projectId = `${kind === 'modpack' ? 'p' : kind[0]}U${String(i).padStart(6,'0')}`;
       const canvas = document.createElement('canvas'); canvas.width = canvas.height = 128;
       const g = canvas.getContext('2d'); g.fillStyle = ['#386c76','#735889','#51734c','#8d6848'][i % 4]; g.fillRect(0,0,128,128);
       g.fillStyle = '#edf1fb'; g.font = '600 52px system-ui'; g.textAlign='center';g.fillText(list[i % list.length][0],64,82);
@@ -37,11 +39,12 @@ export async function openContentReview(page, surface = 'mods', options = {}) {
       return {projectId, title:i === 9 ? 'A very long content title — 日本語の冒険と探索 '.repeat(4) : list[i % list.length] + (i >= list.length ? ' Plus' : ''), summary:kind === 'modpack' ? 'Explore a carefully assembled collection of worlds, building tools and adventures with friends.' : kind === 'resourcePack' ? 'Refresh the look of your worlds with clear, thoughtfully crafted textures and details.' : 'Improves Minecraft while preserving the familiar look and feel of your worlds.', author:'Fixture author', downloads:1250000 + i*11800, categories:[i % 2 ? 'utility' : 'adventure'],projectType:kind,iconUrl:null};
     })]));
     wrapReviewInvoke(previous => async (command, args) => {
-      window.ui3Requests.push({command,request:structuredClone(args?.request ?? args)});
+      window.ui3Requests.push({command,request:JSON.parse(JSON.stringify(args?.request ?? args ?? null))});
       const r = args?.request ?? {};
       if (command === 'get_provider_lifecycle') return life;
+      if (command === 'get_instance_content') return launcher.contentInventories[`${id}:${r.contentType}`];
       if (command === 'resolve_project_artwork') return {source:images[r.projectId] ?? null,status:images[r.projectId] ? 'available' : 'unavailable',retryAfterMs:null};
-      if (command === 'resolve_installed_artwork') return {projects:{},retryAfterMs:null};
+      if (command === 'get_installed_artwork_identities') return {projects:{},retryAfterMs:null};
       if (command === 'browse_modrinth_tags') return [{name:'adventure',projectType:'mod'},{name:'utility',projectType:'mod'},{name:'adventure',projectType:'modpack'},{name:'utility',projectType:'resourcepack'}];
       if (command === 'browse_modrinth') {
         if (window.ui3Mode === 'loading') await new Promise(resolve => window.ui3Pending = resolve);
@@ -66,18 +69,18 @@ export async function openContentReview(page, surface = 'mods', options = {}) {
         }
         return [rec];
       }
-      if (command === 'get_modrinth_browse_project') {
+      if (command === 'get_modrinth_project') {
         const h = hits[r.contentType].find(h => h.projectId === r.projectId);
         return {projectId:r.projectId,title:h.title,summary:h.summary,license:'MIT',gameVersions:['1.21.11'],loaders:['fabric'],environments:['client'],versions:[{id:'v0000001',name:'Reviewed version',versionNumber:'1.4.2',versionType:'release',datePublished:'2026-01-01T00:00:00Z',environment:'client',loaders:['fabric']}],defaultVersionId:'v0000001',projectType:r.contentType};
       }
       if (command === 'preview_modrinth_pack') return {projectId:r.projectId,versionId:r.versionId,name:'Highland Adventures',packVersion:'1.4.2',minecraftVersion:'1.21.11',fabricLoaderVersion:'0.19.5',recognized:[],unresolved:['mods/example.jar'],optional:['resourcepacks/optional.zip'],excluded:[],overrides:['config/example.json'],fingerprint:'fixture-pack-fingerprint'};
       if (command === 'install_modrinth_pack') throw {code:'provider_network_error',message:'Fixture: pack installation failed safely. Review and retry.'};
-      if (command === 'set_instance_mod_enabled') {const entry=mods.entries.find(e=>e.entryId===r.entryId);entry.enabled=r.enabled;return structuredClone(mods);}
-      if (command === 'set_instance_pack_enabled') {const entry=packs.entries.find(e=>e.entryId===r.entryId);entry.management.active=r.enabled;return structuredClone(packs);}
+      if (command === 'set_instance_mod_enabled') {const entry=mods.entries.find(e=>e.entryId===r.entryId);entry.enabled=r.enabled;return JSON.parse(JSON.stringify(mods));}
+      if (command === 'set_instance_pack_enabled') {const entry=packs.entries.find(e=>e.entryId===r.entryId);entry.management.active=r.enabled;return JSON.parse(JSON.stringify(packs));}
       return previous(command,args);
     });
     window.ui3SetLibrary = state => {
-      if (state === 'empty') {mods.entries=[]; packs.entries=[];}
+      if (state === 'empty') {launcher.modInventories[id].entries=[]; launcher.contentInventories[`${id}:resourcePack`].entries=[];}
       if (state === 'error') launcher.modError = {code:'mod_inventory_unavailable',message:'Fixture inventory unavailable.'};
     };
   });
@@ -93,7 +96,7 @@ export async function openContentReview(page, surface = 'mods', options = {}) {
     },tab);
     if (!surface.startsWith('installed')) await page.getByRole('button',{name:'Browse Modrinth',exact:true}).click();
   }
-  if (!surface.startsWith('installed')) await page.locator('.browse-row').first().waitFor();
+  if (!surface.startsWith('installed')) await page.locator('.browse-row').first().waitFor().catch(async e=>{console.error(surface,await page.locator('body').innerText(),await page.evaluate(()=>window.ui3Requests));throw e;});
   else await page.locator(surface.includes('packs') ? '.pack-row' : '.mod-row').first().waitFor();
   await page.locator('main.content').evaluate(e=>e.scrollTop=0);
   await page.waitForTimeout(200);

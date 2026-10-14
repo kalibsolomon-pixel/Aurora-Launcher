@@ -120,7 +120,7 @@ try {
   await check('Mods empty/loading/error and safe fixture install feedback', async () => {
     const search = page.getByRole('searchbox', {name: 'Find mods', exact: true});
     await search.fill('NoSuchMod'); await search.press('Enter');
-    await page.getByText('No matching projects for this instance.', {exact: true}).waitFor();
+    await page.getByRole('heading', {name: 'No matching results', exact: true}).waitFor();
     await page.screenshot({path: 'docs/ui-1/states/mods-empty.png'});
     await page.evaluate(() => window.ui1Mode = 'loading');
     await search.fill('Lithium'); await search.press('Enter');
