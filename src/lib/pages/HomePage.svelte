@@ -140,9 +140,9 @@
   .home-page { max-width: 1280px; margin-inline: auto; width: 100%; }
   .aurora-update-notice { margin-bottom: 16px; }
   .notice-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .home-composition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: center; min-height: min(56vh, 660px); padding: var(--space-2) 0 var(--space-4); }
+  .home-composition { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: clamp(24px, 4vw, 48px); align-items: center; min-height: min(52vh, 480px); padding: var(--space-4) 0 var(--space-5); }
   .home-launch-column { display: flex; flex-direction: column; align-items: center; gap: var(--space-5); min-width: 0; }
-  .hero-logo { width: clamp(200px, 22vw, 280px); height: auto; }
+  .hero-logo { width: clamp(112px, 11vw, 144px); height: auto; }
   .instance-card { width: 100%; max-width: none; min-width: 0; overflow: visible; margin: 0; position: relative; z-index: 2; }
   .launch-main { padding: var(--space-5); display: grid; gap: var(--space-4); min-width: 0; }
   .play-hero { width: 100%; min-height: 78px; font-size: 1.875rem; font-weight: 700; letter-spacing: -.03em; border-radius: var(--f-radius-control); box-shadow: inset 0 1px 0 rgb(255 255 255 / 16%), 0 5px 16px rgb(0 0 0 / 15%); }
@@ -153,6 +153,6 @@
   .instance-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2) var(--space-3); min-width: 0; }
   .instance-versions { flex: 1 1 220px; margin: 0; color: var(--color-text-secondary); font-size: var(--text-metadata); overflow-wrap: anywhere; }
   .manage-instance { font-size: var(--text-metadata); padding: var(--space-2); margin-inline: calc(-1 * var(--space-2)); }
-  @media (min-width: 1500px) { .home-composition { min-height: 660px; } }
-  @media (max-width: 900px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 16px; } .hero-logo { width: 168px; } .home-launch-column { gap: 12px; } .instance-card { max-width: none; } .play-hero { min-height: 68px; font-size: 28px; } }
+  @media (max-width: 1000px) { .launch-main { padding: var(--space-4); } }
+  @media (max-width: 800px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 var(--space-4); } .hero-logo { width: 96px; } .home-launch-column { gap: var(--space-3); } .play-hero { min-height: 68px; font-size: 1.75rem; } }
 </style>

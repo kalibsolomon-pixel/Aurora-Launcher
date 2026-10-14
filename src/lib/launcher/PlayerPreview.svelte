@@ -28,7 +28,7 @@
     if (context) renderPlayer(context, currentModel, angle);
   });
   onMount(() => {
-    const width = matchMedia('(min-width: 901px)');
+    const width = matchMedia('(min-width: 801px)');
     const update = () => { visible = !document.hidden && width.matches; };
     update(); document.addEventListener('visibilitychange', update); width.addEventListener('change', update);
     return () => { document.removeEventListener('visibilitychange', update); width.removeEventListener('change', update); };
@@ -54,14 +54,14 @@
   {/if}
 </div>
 <style>
-  .player-preview { --player-max-h: min(66vh, 640px, max(280px, calc(100dvh - 300px))); display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 0; position: relative; }
+  .player-preview { --player-max-h: clamp(280px, 44vh, 420px); display: flex; flex-direction: column; align-items: center; gap: var(--space-3); min-width: 0; position: relative; }
   /* The model is bounded so the model plus the control row fits the visible
      window: the approved large scale applies while space allows and yields
      only when the viewport is constrained. The canvas width is derived from
      the same bound, so the raster can never overflow its container into the
      control row. The floor keeps extreme cases scrollable instead of
      collapsing the preview. */
-  .player-model { width: 100%; aspect-ratio: 560 / 800; max-height: var(--player-max-h); display: grid; place-items: center; }
+  .player-model { width: min(100%, calc(var(--player-max-h) * .7)); aspect-ratio: 560 / 800; max-height: var(--player-max-h); display: grid; place-items: center; }
   canvas { display: block; width: min(100%, 480px, calc(var(--player-max-h) * 0.7)); height: auto; opacity: 0; filter: drop-shadow(0 18px 24px rgb(0 0 0 / 28%)); transition: opacity 420ms ease-out; }
   canvas.revealed { opacity: 1; }
   /* Always visible while a player is shown: these are the only view controls,
@@ -71,6 +71,6 @@
   .player-controls .f-icon-button:hover { background: rgb(255 255 255 / 10%); color: var(--color-text); }
   .player-controls .reset-view { border: 0; background: transparent; font: inherit; font-size: 12.5px; font-weight: 550; color: var(--color-text-secondary); padding: 10px 12px; border-radius: 999px; cursor: pointer; transition: background var(--f-fast), color var(--f-fast); }
   .player-controls .reset-view:hover { background: rgb(255 255 255 / 10%); color: var(--color-text); }
-  @media (max-width: 900px) { .player-preview { display: none; } }
+  @media (max-width: 800px) { .player-preview { display: none; } }
   @media (prefers-reduced-motion: reduce) { canvas { transition: none; } }
 </style>
