@@ -97,7 +97,7 @@ it("Home update notice is small, silent when current or offline, and independent
     assert.doesNotMatch(html(Home), /Aurora update available/);
   }
   updates.snapshot = { action: { kind: "available" }, overview: updateOverview(true), context: "" };
-  const view = html(Home); assert.match(view, /Aurora update available/); assert.match(view, />Launch</);
+  const view = html(Home); assert.match(view, /Aurora update available/); assert.match(view, /aria-label="Launch"/);
   assert.doesNotMatch(view, /Later|Release channel|modal.*update/i);
   updates.snapshot = { action: { kind: "idle" }, overview: null, context: "" };
 });
@@ -149,30 +149,30 @@ it("Home selector preserves the optional Aurora identity", () => {
 it("Home native readiness uses an accessible dot and enables Launch", () => {
   reset(); assert.match(html(Home), /readiness-dot[^>]*\bready\b[^>]*aria-label="Ready"/);
   assert.doesNotMatch(html(Home), />Ready</);
-  assert.match(html(Home), /class="btn btn-primary[^>]*>Launch/);
+  assert.match(html(Home), /class="btn btn-primary[^>]*aria-label="Launch"/);
 });
 it("Home Starting disables duplicate Play", () => {
   reset(); launcher.playProcess = { instanceId: id, status: "starting" };
-  assert.match(html(Home), /class="btn btn-primary[^>]*disabled[^>]*>Starting…/);
+  assert.match(html(Home), /class="btn btn-primary[^>]*aria-label="Starting…"[^>]*disabled/);
 });
 it("Home Running disables duplicate Play", () => {
   reset(); launcher.playProcess = { instanceId: id, status: "running" };
-  assert.match(html(Home), /class="btn btn-primary[^>]*disabled[^>]*>Running/);
+  assert.match(html(Home), /class="btn btn-primary[^>]*aria-label="Running"[^>]*disabled/);
 });
 it("Home renders native running readiness after switching back without a matching latest event", () => {
   reset(); launcher.playReadiness.processStatus = "running"; launcher.playReadiness.ready = false;
   launcher.playProcess = { instanceId: secondId, status: "exited" };
-  assert.match(html(Home), /disabled[^>]*>Running/);
+  assert.match(html(Home), /class="btn btn-primary[^>]*aria-label="Running"[^>]*disabled/);
 });
 it("Home blocks Play for native authentication and validation requirements", () => {
   reset(); launcher.playReadiness = readiness(false);
-  assert.match(html(Home), /disabled[^>]*>Launch/); assert.match(html(Home), /Sign in to play Minecraft/);
+  assert.match(html(Home), /class="btn btn-primary[^>]*aria-label="Launch"[^>]*disabled/); assert.match(html(Home), /Sign in to play Minecraft/);
   launcher.playReadiness.blockers = [{ code: "launch_instance_damaged", message: "Repair this instance before playing." }];
   assert.match(html(Home), /Repair this instance/);
 });
 it("Home ignores readiness and process belonging to another instance", () => {
   reset(); launcher.playReadiness.instanceId = secondId; launcher.playProcess = { instanceId: secondId, status: "running" };
-  assert.match(html(Home), /disabled[^>]*>Launch/); assert.doesNotMatch(html(Home), />Running</);
+  assert.match(html(Home), /class="btn btn-primary[^>]*aria-label="Launch"[^>]*disabled/); assert.doesNotMatch(html(Home), />Running</);
 });
 it("Home keeps management in Instances and typed Workspace navigation keeps selection", () => {
   reset(); assert.doesNotMatch(html(Home), /Manage Instance/);
@@ -209,7 +209,7 @@ it("signed-out Home explains native authentication requirements without manageme
   reset(); launcher.accountsState = { accounts: [], selectedAccountId: null };
   launcher.playReadiness = { ...readiness(false), accountId: null, accountName: null };
   const view = html(Home); assert.doesNotMatch(view, /Not signed in|Manage accounts|Minecraft account/); assert.match(view, /Sign in to play Minecraft/);
-  assert.match(view, /disabled[^>]*>Launch/); assert.doesNotMatch(view, /Manage Instance/);
+  assert.match(view, /class="btn btn-primary[^>]*aria-label="Launch"[^>]*disabled/); assert.doesNotMatch(view, /Manage Instance/);
 });
 it("account dialog shows active Minecraft identity and management actions", () => {
   reset(); const view = html(Accounts); assert.match(view, /Active account/); assert.match(view, /PlayerName/);
@@ -237,7 +237,7 @@ it("account switching uses Rust selection without assigning accounts to instance
 it("cosmetic avatar failure leaves the model region empty without disabling native Ready", async () => {
   reset(); (globalThis as any).window = { __TAURI_INTERNALS__: { invoke: async () => { throw new Error("offline"); } } };
   await launcher.refreshAvatar(account.accountId, true);
-  assert.match(html(Home), /Player skin loading/); assert.doesNotMatch(html(Home), /Default Minecraft player/); assert.match(html(Home), /class="btn btn-primary[^>]*>Launch/);
+  assert.match(html(Home), /Player skin loading/); assert.doesNotMatch(html(Home), /Default Minecraft player/); assert.match(html(Home), /class="btn btn-primary[^>]*aria-label="Launch"/);
   assert.equal(launcher.playReadiness.ready, true); assert.equal(launcher.playError, null);
 });
 it("invalid avatar pixels use a fallback and valid pixels produce the head canvas", () => {

@@ -67,9 +67,9 @@ try {
     const picker = page.getByRole('button', {name: 'Select Play instance'});
     await picker.focus(); await page.keyboard.press('ArrowDown');
     await page.getByRole('listbox').waitFor(); await page.keyboard.press('End'); await page.keyboard.press('Enter');
-    await page.waitForFunction(() => document.querySelector('.picker-trigger').textContent.includes('Vanilla'));
+    await page.waitForFunction(() => document.querySelector('.play-hero .picker-name').textContent.includes('Vanilla'));
     await picker.click(); await page.keyboard.press('Home'); await page.keyboard.press('Enter');
-    await page.waitForFunction(() => document.querySelector('.picker-trigger').textContent.includes('Aurora Client'));
+    await page.waitForFunction(() => document.querySelector('.play-hero .picker-name').textContent.includes('Aurora Client'));
     await fixtureState('long-name'); await contained();
     await picker.click(); const menu = await page.getByRole('listbox').boundingBox();
     assert.ok(menu.x >= 0 && menu.x + menu.width <= 1024);

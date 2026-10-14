@@ -94,15 +94,12 @@
     <div class="home-composition">
     <div class="home-launch-column">
     <img class="hero-logo" src="/aurora-icon.png" alt="Aurora" draggable="false" />
-    <section class="group f-surface instance-card" aria-label="Selected instance" aria-live="polite">
-      <div class="launch-card">
-        <div class="launch-main">
-        <div class="instance-heading" title={instance.displayName}>
-          <InstanceSwitcher compact status={{ ready: launch.tone === "status-success", label: launch.label }} />
-        </div>
-        <button type="button" class="btn btn-primary play-hero" onclick={() => launcher.runPlay(instance.id)} disabled={launch.disabled}>{launch.playLabel}</button>
-        </div>
-      </div>
+    <section class="instance-card" aria-label="Selected instance" aria-live="polite">
+      <InstanceSwitcher compact status={{ ready: launch.tone === "status-success", label: launch.label }}
+        launchAction={{ label: launch.playLabel, disabled: launch.disabled, run: () => launcher.runPlay(instance.id) }} />
+    </section>
+    {#if launch.blockers.length || launcher.playError || launch.failure || launch.exitDetail}
+    <section class="group f-surface launch-feedback" aria-label="Launch details" aria-live="polite">
       {#if launch.blockers.length || launcher.playError || launch.failure}
         <div class="group-row">
           <div class="group-row-main">
@@ -120,6 +117,7 @@
       {/if}
       {#if launch.exitDetail}<p class="group-footer">{launch.exitDetail}</p>{/if}
     </section>
+    {/if}
     </div>
     <PlayerPreview />
     </div>
@@ -133,16 +131,10 @@
 <style>
   .home-page { max-width: 1280px; margin-inline: auto; width: 100%; }
   .aurora-update-notice { margin-bottom: 16px; }
-  .home-composition { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: clamp(24px, 4vw, 48px); align-items: center; min-height: min(52vh, 480px); padding: var(--space-4) 0 var(--space-5); }
+  .home-composition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: center; min-height: min(52vh, 480px); padding: var(--space-4) 0 var(--space-5); }
   .home-launch-column { display: flex; flex-direction: column; align-items: center; gap: var(--space-5); min-width: 0; }
   .hero-logo { width: clamp(112px, 11vw, 144px); height: auto; }
-  .instance-card { width: 100%; max-width: none; min-width: 0; overflow: visible; margin: 0; position: relative; z-index: 2; }
-  .launch-main { padding: var(--space-5); display: grid; gap: var(--space-4); min-width: 0; }
-  .play-hero { width: 100%; min-height: 78px; font-size: 1.875rem; font-weight: 700; letter-spacing: -.03em; border-radius: var(--f-radius-control); box-shadow: inset 0 1px 0 rgb(255 255 255 / 16%), 0 5px 16px rgb(0 0 0 / 15%); }
-  .instance-heading { min-width: 0; display: grid; justify-items: start; gap: var(--space-3); }
-  .instance-heading :global(.instance-switcher) { width: 100%; }
-  .instance-heading :global(.picker-trigger) { font-size: 1.125rem; margin: 0; }
-  .instance-heading :global(.picker-menu) { text-align: left; }
-  @media (max-width: 1000px) { .launch-main { padding: var(--space-4); } }
-  @media (max-width: 800px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 var(--space-4); } .hero-logo { width: 96px; } .home-launch-column { gap: var(--space-3); } .play-hero { min-height: 68px; font-size: 1.75rem; } }
+  .instance-card { width: min(100%, 360px); aspect-ratio: 4 / 3; min-width: 0; margin: 0; position: relative; z-index: 2; }
+  .launch-feedback { width: 100%; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+  @media (max-width: 800px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 var(--space-4); } .hero-logo { width: 96px; } .home-launch-column { gap: var(--space-3); } }
 </style>

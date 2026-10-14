@@ -38,19 +38,23 @@ try {
       await page.setViewportSize({width,height}); await homeFixture(page); const g=await contained(); measurements.push(g);
       assert.equal(await page.locator('.instance-card .player-preview').count(),0);
       assert.equal(await page.locator('.instance-card .account-chip').count(),0);
-      const heading=await page.locator('.instance-heading').boundingBox();
-      assert.ok(heading.y+heading.height<=g.play.y+1);
+      assert.ok(Math.abs(g.instance.width/g.instance.height-4/3)<.01,'4:3 control footprint');
+      const arrow=await page.locator('.launch-control .picker-trigger').boundingBox();
+      assert.ok(Math.abs(g.play.right-arrow.x)<2,'separate adjacent launch/dropdown targets');
+      const layout=await page.locator('.launch-control').evaluate(e=>({line:getComputedStyle(e.querySelector('.picker-trigger')).borderLeftWidth,word:getComputedStyle(e.querySelector('.launch-word')).fontWeight,name:getComputedStyle(e.querySelector('.picker-name')).fontWeight}));
+      assert.deepEqual(layout,{line:'1px',word:'700',name:'400'});
       assert.equal(g.previewDisplay==='none',width<=800);
       if(width>800) {assert.ok(g.player.x>=g.instance.right); assert.ok(g.widgets.y>=g.player.bottom); assert.ok(g.canvas.height<=420);}
       if(width>=1024) assert.ok(g.cards[0].y<600,'widgets start within desktop view');
       if(width>=1024) {assert.ok(g.cards[1].x>g.cards[0].x);assert.ok(Math.abs(g.cards[1].y-g.cards[0].y)<1);}
       if(width===720) {assert.ok(Math.abs(g.cards[0].width-g.widgets.width)<2);assert.ok(g.cards[1].y>=g.cards[0].bottom);}
       assert.equal(await page.getByRole('button',{name:'Launch',exact:true}).isEnabled(),true);
-      const dot=page.locator('.picker-trigger .readiness-dot');
+      const dot=page.locator('.launch-control .readiness-dot');
       assert.equal(await dot.getAttribute('aria-label'),'Ready');
       assert.equal(await dot.textContent(),'');
       const nameBox=await page.locator('.picker-name').boundingBox(),dotBox=await dot.boundingBox();
       assert.ok(dotBox.x>=nameBox.x+nameBox.width && dotBox.x+dotBox.width<=g.instance.right);
+      if(width>=900) assert.ok(Math.abs((g.instance.x+g.instance.width/2)-(g.cards[0].x+g.cards[0].width/2))<1,'centered above first small-widget column');
       assert.equal(await page.locator('.instance-card .status-badge, .instance-footer').count(),0);
       await page.screenshot({path:`${out}/home-${width}x${height}.png`});
     });
@@ -59,14 +63,14 @@ try {
   await check('Instance keyboard selection and simplified card',async()=>{
     await homeFixture(page);
     await page.getByRole('button',{name:'Select Play instance'}).focus(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('End'); await page.keyboard.press('Enter');
-    await page.waitForFunction(()=>document.querySelector('.picker-trigger').textContent.includes('Vanilla'));
+    await page.waitForFunction(()=>document.querySelector('.play-hero .picker-name').textContent.includes('Vanilla'));
     assert.equal(await page.locator('.instance-versions, .manage-instance').count(),0);
-    assert.equal(await page.locator('.picker-trigger .readiness-dot').count(),1);
+    assert.equal(await page.locator('.launch-control .readiness-dot').count(),1);
   });
   await check('Play calls existing native command once and shows Running',async()=>{
     await homeFixture(page);
     await page.locator('.play-hero').evaluate(button=>{button.click();button.click();button.click();});
-    await page.waitForFunction(()=>document.querySelector('.play-hero').textContent==='Running');
+    await page.waitForFunction(()=>document.querySelector('.launch-word').textContent==='Running');
     assert.equal(await page.locator('.play-hero').isDisabled(),true);
     const requests=await page.evaluate(()=>window.ui2Requests.filter(r=>r.command==='play_instance'));
     assert.equal(requests.length,1); assert.deepEqual(requests[0].request,{instanceId:'a'.repeat(32),accountId:'c'.repeat(32)});
@@ -82,14 +86,14 @@ try {
   await check('Checking, blocked, unavailable, Starting, Running and failed presentations',async()=>{
     for(const [state,label,disabled] of [['checking','Checking…',true],['blocked','Needs attention',true],['unavailable','Needs attention',true],['starting','Starting…',true],['running','Running',true],['failed','Ready',false]]) {
       await homeFixture(page,state);
-      const dot=page.locator('.picker-trigger .readiness-dot');
+      const dot=page.locator('.launch-control .readiness-dot');
       assert.equal(await dot.getAttribute('aria-label'),label);
       assert.equal(await dot.getAttribute('title'),label);
       assert.equal(await dot.evaluate(e=>e.classList.contains('ready')),['Ready','Running'].includes(label));
       assert.equal(await dot.evaluate(e=>getComputedStyle(e).backgroundColor),await page.evaluate(ready=>{const e=document.createElement('span');e.style.color=`var(--color-${ready?'success':'error'})`;document.body.append(e);const color=getComputedStyle(e).color;e.remove();return color;},['Ready','Running'].includes(label)));
       assert.equal(await page.locator('.play-hero').isDisabled(),disabled);
-      if(state==='failed') assert.match(await page.locator('.instance-card [role=alert]').textContent(),/Synthetic launch failure/);
-      if(state==='blocked') {assert.match(await page.locator('.instance-card').textContent(),/Synthetic sign-in required/);await page.screenshot({path:`${out}/blocked-1280x800.png`}); await page.getByRole('button',{name:'Check again'}).click();}
+      if(state==='failed') assert.match(await page.locator('.launch-feedback [role=alert]').textContent(),/Synthetic launch failure/);
+      if(state==='blocked') {assert.match(await page.locator('.launch-feedback').textContent(),/Synthetic sign-in required/);await page.screenshot({path:`${out}/blocked-1280x800.png`}); await page.getByRole('button',{name:'Check again'}).click();}
     }
     for(const state of ['stale-account','stale-instance']) {await homeFixture(page);await change(state);assert.equal(await page.locator('.play-hero').isDisabled(),true);}
   });
@@ -146,7 +150,7 @@ try {
   await check('Long names, 200% text, focus, reduced motion and live resizing',async()=>{
     for(const width of [1440,1024,900,720]) {
       await page.setViewportSize({width,height:768});await homeFixture(page,'long');await page.addStyleTag({content:'html{font-size:200% !important}'});await contained();
-      await page.getByRole('button',{name:'Select Play instance'}).click();const b=await page.getByRole('listbox').boundingBox();assert.ok(b.x>=0&&b.x+b.width<=width);await page.keyboard.press('Escape');
+      await page.getByRole('button',{name:'Select Play instance'}).click();const b=await page.getByRole('listbox').boundingBox();assert.ok(b.x>=0&&b.x+b.width<=width&&b.y>=0&&b.y+b.height<=768,'dropdown remains within viewport');await page.keyboard.press('Escape');
       await page.getByRole('button',{name:'Launch',exact:true}).focus();assert.equal(await page.locator('.play-hero').evaluate(e=>getComputedStyle(e).outlineStyle),'solid');
       const dot=await page.locator('.readiness-dot').boundingBox(),name=await page.locator('.picker-name').boundingBox();assert.ok(dot.x>=name.x+name.width);
       await page.screenshot({path:`${out}/states/text-200-${width}.png`});
@@ -158,7 +162,7 @@ try {
     await page.setViewportSize({width:1280,height:800});await homeFixture(page,'normal',{background:'simple',theme:'oled'});
     await page.evaluate(()=>{document.documentElement.dataset.accent='cyan';document.documentElement.style.setProperty('--color-accent-strong','#5bd0e0');document.documentElement.style.setProperty('--color-accent-contrast','#101116');});
     await contained();await page.screenshot({path:`${out}/states/oled-cyan.png`});
-    const colors=await page.locator('.play-hero').evaluate(e=>{const s=getComputedStyle(e);return {color:s.color,fill:s.backgroundColor};});
+    const colors=await page.locator('.play-hero').evaluate(e=>{const s=getComputedStyle(e);return {color:s.color,fill:getComputedStyle(e.closest('.launch-control')).backgroundColor};});
     const l=c=>{const v=c.match(/[\d.]+/g).slice(0,3).map(Number).map(x=>{x/=255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4;});return v[0]*.2126+v[1]*.7152+v[2]*.0722;};
     const a=l(colors.color),b=l(colors.fill);assert.ok((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5);
   });
