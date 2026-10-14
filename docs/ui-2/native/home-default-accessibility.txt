@@ -1,0 +1,168 @@
+Window: "Aurora Launcher", App: aurora-launcher.exe.
+	0 window Aurora Launcher Secondary Actions: Raise
+		8 pane TAURI_DRAG_RESIZE_WINDOW
+		1 pane
+			9 pane Aurora Launcher
+				10 pane (disabled)
+				11 region Aurora Launcher - Web content
+					12 region
+						13 region
+							14 region
+								15 region
+								16 region
+									17 region
+										18 region
+											19 region
+												20 region
+												21 document Aurora Launcher Value: http://tauri.localhost/ ID: RootWebArea
+													22 group
+														42 header Window controls
+															43 text Aurora Launcher
+															44 button Minimize Description: Minimize
+															45 button Maximize Description: Maximize
+															46 button Close Aurora Launcher Description: Close
+														23 navigation Aurora Launcher
+															24 button Home
+															25 button Instances
+															26 button Skins & Capes
+															27 button Settings
+															28 button Accounts — not signed in
+																29 graphic Default account avatar
+														30 main
+															123 section header
+																124 heading Settings
+																125 text Make yourself at home.
+															126 navigation Settings categories
+																127 button General
+																128 button Appearance
+																129 button Home
+																130 button Updates
+																131 button Discord & privacy
+															146 region Appearance
+																147 heading Appearance ID: appearance-title
+																148 text Three choices. One atmosphere.
+																149 group Theme
+																	150 text Theme
+																	151 radio button (selectable, settable, string) Aurora Dark
+																	152 text Aurora Dark
+																	153 radio button (selectable, settable, string) Midnight
+																	154 text Midnight
+																	155 radio button (selectable, settable, string) OLED Black
+																	156 text OLED Black
+																157 group Background
+																	158 text Background
+																	159 radio button (selectable, settable, string) Simple
+																	160 text Simple
+																	161 radio button (selectable, settable, string) Aurora Borealis
+																	162 text Aurora Borealis
+																	163 text Borealis adds gentle motion and frosted surfaces. Motion rests when Aurora is inactive and follows your system’s reduced-motion setting.
+																186 text Aurora motion
+																187 text Slow
+																188 slider (settable, float) Aurora motion Value: 50 ID: aurora-motion
+																189 text Fast
+																190 text Follows your system’s reduced-motion setting.
+																164 group Accent
+																	165 text Accent
+																	166 radio button (selectable, settable, string) ✓ Aurora violet
+																	167 text ✓
+																	168 text Aurora violet
+																	169 radio button (selectable, settable, string) Blue
+																	170 text Blue
+																	171 radio button (selectable, settable, string) Cyan
+																	172 text Cyan
+																	173 radio button (selectable, settable, string) Green
+																	174 text Green
+																	175 radio button (selectable, settable, string) Amber
+																	176 text Amber
+																	177 radio button (selectable, settable, string) Rose
+																	178 text Rose
+																	179 radio button (selectable, settable, string) Neutral
+																	180 text Neutral
+																	181 group Choose a custom accent color Description: Choose a custom accent color
+																		182 color picker (settable, string) Custom accent color Value: 54% red 50% green 100% blue
+																		183 text +
+																		184 text Custom
+																	185 text Selection and primary actions follow your accent. Status colors keep their meaning.
+															144 section footer
+																145 text Aurora Launcher · MIT licensed · Independent of Microsoft, Mojang Studios and Fabric. Minecraft requires your own entitled account.
+														38 group ID: svelte-announcer
+								39 region
+						40 region
+						41 region
+		2 title bar (settable, string) Value: Aurora Launcher
+			3 menu bar System ID: MenuBar
+				4 menu item System
+			5 button Minimize
+			6 button Maximize
+			7 button Close
+
+Document text: ```
+Aurora Launcher
+Minimize
+Maximize
+Close Aurora Launcher
+Home
+Instances
+Skins & Capes
+Settings
+￼
+Not signed in
+Sign in to play Minecraft
+￼
+Select Play instance
+Needs attention
+Play
+Minecraft 1.21.11 · Vanilla · Aurora Off
+Manage instance
+The selected instance has not finished installing.
+Technical details
+The required managed Java runtime could not be resolved.
+Technical details
+Select a Minecraft account before playing.
+Technical details
+Check again
+￼
+Home widgets
+Edit Home widgets
+￼
+Instance Details
+Minecraft
+1.21.11
+Platform
+Vanilla
+Aurora Client
+Not configured
+Content Summary
+—
+Enabled mods
+—
+Disabled mods
+—
+Resource packs
+—
+Shader packs
+Local inventory · pack counts do not imply activation.
+Playtime
+7D
+30D
+All
+Loading playtime…
+Recent Worlds
+Loading recent worlds…
+Recent Servers
+Loading recent servers…
+Skin Library
+￼
+Not signed in
+Sign in to play Minecraft
+Browse your local collection without an account.
+No saved skins yet. Import your first skin in the library.
+Open Skin Library
+0 saved →
+Cape Selector
+Your capes
+Connect a Minecraft account
+Open Cape Library
+View & equip →
+￼
+```

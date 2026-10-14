@@ -1,0 +1,1 @@
+PASS preservation: 956 original tracked paths, critical files, four local hashes, seven worktree identities; no deletions

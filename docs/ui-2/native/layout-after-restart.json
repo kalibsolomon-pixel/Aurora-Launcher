@@ -1,0 +1,44 @@
+{
+  "widgets": [
+    {
+      "id": "content-summary",
+      "enabled": true,
+      "size": "small"
+    },
+    {
+      "id": "instance-details",
+      "enabled": true,
+      "size": "wide"
+    },
+    {
+      "id": "session",
+      "enabled": false,
+      "size": "small"
+    },
+    {
+      "id": "playtime",
+      "enabled": true,
+      "size": "small"
+    },
+    {
+      "id": "recent-worlds",
+      "enabled": true,
+      "size": "small"
+    },
+    {
+      "id": "recent-servers",
+      "enabled": true,
+      "size": "small"
+    },
+    {
+      "id": "skin-manager",
+      "enabled": true,
+      "size": "wide"
+    },
+    {
+      "id": "cape-selector",
+      "enabled": true,
+      "size": "small"
+    }
+  ]
+}

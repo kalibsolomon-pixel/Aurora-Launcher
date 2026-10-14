@@ -1,0 +1,5 @@
+PASS layout 1600x1030: contained canvas, separate controls/actions, no horizontal overflow, one account selector, keyboard rotation and dialog focus return
+PASS layout 1120x760: contained canvas, separate controls/actions, no horizontal overflow, one account selector, keyboard rotation and dialog focus return
+PASS layout 860x800: contained canvas, separate controls/actions, no horizontal overflow, one account selector, keyboard rotation and dialog focus return
+PASS layout 720x520: contained canvas, separate controls/actions, no horizontal overflow, one account selector, keyboard rotation and dialog focus return
+PASS fixture cape confirmation, real account-selector interaction, account isolation, widget navigation, restored tab and zero page errors

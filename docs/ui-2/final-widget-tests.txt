@@ -1,0 +1,35 @@
+✔ playtime renders a textual total and seven ordered daily values (8061.3467ms)
+✔ playtime zero state is intentional (0.2447ms)
+✔ recent targets render bounded rows, long labels, owning instance, and missing state (1.109ms)
+✔ server display does not require or render a raw destination (0.6956ms)
+✔ Quick Launch sends only the opaque target, kind, and account to native Play (0.458ms)
+✔ default widgets sit below the unchanged primary card and 3D player (8506.5108ms)
+✔ available session is real, hidden widgets disappear, and all-off retains the edit entry point (2.7581ms)
+✔ unknown and removed widget IDs stay persisted but never render components (0.6562ms)
+✔ size and ordering choices are bounded and preserve hidden/unknown entries (0.2869ms)
+✔ Settings enable/disable, reorder, resize, restart load and reset use typed native persistence (1.5121ms)
+✔ failed save retains the prior layout with an actionable error (0.3422ms)
+✔ Home editor keeps deliberate edit mode and keyboard size/order controls (0.5283ms)
+✔ Discord describes automatic connection and shows native status without maintenance controls (1.5551ms)
+✔ missing application configuration disables connection honestly without hiding privacy choices (0.3711ms)
+✔ Discord preferences and reconnect invoke only native commands and never disturb Play (0.3329ms)
+✔ Discord failure leaves Ready and Play available (0.6013ms)
+✔ mod row preserves artwork and switch, promotes one trash, and excludes duplicate overflow removal (3.6753ms)
+✔ trash reuses native local confirmation and provider fingerprint lifecycle (0.387ms)
+✔ gameplay preferences are separate opt-ins and address control requires server consent (0.27ms)
+✔ enriched server rows render favicon, name, MOTD and status without addresses (8787.94ms)
+✔ rows without a presentation keep history identity and a deliberate server symbol (0.3609ms)
+✔ malformed or remote favicon DTOs render the server fallback without loading a URL (0.5798ms)
+✔ offline presentations retain favicon and MOTD while reporting offline (0.3432ms)
+✔ hostile MOTD text renders as text, never as markup (0.2331ms)
+✔ MOTD lines clamp to one line and long text stays bounded (0.281ms)
+✔ world mode is unchanged by the enrichment surface (0.1791ms)
+✔ presentation data never reaches the Quick Launch authority (0.6664ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 26400.3881

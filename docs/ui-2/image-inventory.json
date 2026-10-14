@@ -1,0 +1,317 @@
+[
+  {
+    "path": "docs/ui-2/accessibility-review.png",
+    "width": 1272,
+    "height": 1542
+  },
+  {
+    "path": "docs/ui-2/home-comparison.png",
+    "width": 1272,
+    "height": 2036
+  },
+  {
+    "path": "docs/ui-2/states-review.png",
+    "width": 1272,
+    "height": 2592
+  },
+  {
+    "path": "docs/ui-2/after/blocked-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/after/dense-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/after/dense-bottom-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/after/empty-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/after/error-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/after/home-1024x768.png",
+    "width": 1024,
+    "height": 768
+  },
+  {
+    "path": "docs/ui-2/after/home-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/after/home-1440x900.png",
+    "width": 1440,
+    "height": 900
+  },
+  {
+    "path": "docs/ui-2/after/home-720x520.png",
+    "width": 720,
+    "height": 520
+  },
+  {
+    "path": "docs/ui-2/after/loading-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/after/long-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/after/missing-skin-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/after/oled-simple-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/after/running-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/after/sparse-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/before/blocked-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/before/dense-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/before/dense-bottom-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/before/empty-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/before/error-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/before/home-1024x768.png",
+    "width": 1024,
+    "height": 768
+  },
+  {
+    "path": "docs/ui-2/before/home-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/before/home-1440x900.png",
+    "width": 1440,
+    "height": 900
+  },
+  {
+    "path": "docs/ui-2/before/home-720x520.png",
+    "width": 720,
+    "height": 520
+  },
+  {
+    "path": "docs/ui-2/before/loading-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/before/long-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/before/missing-skin-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/before/oled-simple-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/before/running-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/before/sparse-1280x800.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/native/default-client.png",
+    "width": 1400,
+    "height": 988
+  },
+  {
+    "path": "docs/ui-2/native/final-default-client.png",
+    "width": 1400,
+    "height": 988
+  },
+  {
+    "path": "docs/ui-2/native/final-default-window.png",
+    "width": 1122,
+    "height": 791
+  },
+  {
+    "path": "docs/ui-2/native/final-maximized-client.png",
+    "width": 2560,
+    "height": 1440
+  },
+  {
+    "path": "docs/ui-2/native/final-maximized-window.png",
+    "width": 2048,
+    "height": 1152
+  },
+  {
+    "path": "docs/ui-2/native/final-minimum-client.png",
+    "width": 883,
+    "height": 640
+  },
+  {
+    "path": "docs/ui-2/native/final-minimum-editor-client.png",
+    "width": 883,
+    "height": 640
+  },
+  {
+    "path": "docs/ui-2/native/final-minimum-editor-window.png",
+    "width": 707,
+    "height": 514
+  },
+  {
+    "path": "docs/ui-2/native/final-minimum-widgets-client.png",
+    "width": 883,
+    "height": 640
+  },
+  {
+    "path": "docs/ui-2/native/final-minimum-widgets-window.png",
+    "width": 707,
+    "height": 514
+  },
+  {
+    "path": "docs/ui-2/native/final-minimum-window.png",
+    "width": 707,
+    "height": 514
+  },
+  {
+    "path": "docs/ui-2/native/final-resized-desktop-client.png",
+    "width": 1583,
+    "height": 1200
+  },
+  {
+    "path": "docs/ui-2/native/final-resized-desktop-window.png",
+    "width": 1267,
+    "height": 962
+  },
+  {
+    "path": "docs/ui-2/native/final-restored-client.png",
+    "width": 2560,
+    "height": 1440
+  },
+  {
+    "path": "docs/ui-2/native/final-small-client.png",
+    "width": 1400,
+    "height": 988
+  },
+  {
+    "path": "docs/ui-2/native/final-small-window.png",
+    "width": 1122,
+    "height": 791
+  },
+  {
+    "path": "docs/ui-2/native/home-default-client.png",
+    "width": 1400,
+    "height": 988
+  },
+  {
+    "path": "docs/ui-2/native/home-default-window.png",
+    "width": 1122,
+    "height": 791
+  },
+  {
+    "path": "docs/ui-2/states/oled-cyan.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/states/play-pressed.png",
+    "width": 1280,
+    "height": 800
+  },
+  {
+    "path": "docs/ui-2/states/text-200-1024.png",
+    "width": 1024,
+    "height": 768
+  },
+  {
+    "path": "docs/ui-2/states/text-200-1440.png",
+    "width": 1440,
+    "height": 768
+  },
+  {
+    "path": "docs/ui-2/states/text-200-720.png",
+    "width": 720,
+    "height": 768
+  },
+  {
+    "path": "docs/ui-2/states/text-200-900.png",
+    "width": 900,
+    "height": 768
+  },
+  {
+    "path": "docs/ui-2/ui1-regression/states/home-long-name-blocked.png",
+    "width": 1024,
+    "height": 768
+  },
+  {
+    "path": "docs/ui-2/ui1-regression/states/home-text-200.png",
+    "width": 720,
+    "height": 768
+  },
+  {
+    "path": "docs/ui-2/ui1-regression/states/mods-empty.png",
+    "width": 1024,
+    "height": 768
+  },
+  {
+    "path": "docs/ui-2/ui1-regression/states/mods-error.png",
+    "width": 1024,
+    "height": 768
+  },
+  {
+    "path": "docs/ui-2/ui1-regression/states/mods-loading.png",
+    "width": 1024,
+    "height": 768
+  },
+  {
+    "path": "docs/ui-2/ui1-regression/states/mods-text-200.png",
+    "width": 720,
+    "height": 768
+  }
+]

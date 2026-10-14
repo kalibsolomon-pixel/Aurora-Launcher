@@ -1,0 +1,22 @@
+[
+  {
+    "sha256": "32FEC33268CFDEACD07442648E0C892577C0D8BF0B43E9F19927A232D9DB4213",
+    "path": "src/lib/pages/HomePage.svelte"
+  },
+  {
+    "sha256": "4648AAFC91B6F0B8E49F423522E4C1E4880671272D2017D481635E3EA0DC43C7",
+    "path": "src/lib/launcher/HomeWidgets.svelte"
+  },
+  {
+    "sha256": "0BD351F36F8CAB2CF7EAA8AA936992BD1C05DE757F5A0C4742C25A9A96EE91FB",
+    "path": "src/lib/launcher/PlayerPreview.svelte"
+  },
+  {
+    "sha256": "17D5963D1FEF52E1B767633B6414D3D7756930A7BACB8FC79EAD8F668344FD6B",
+    "path": "src/lib/launcher/widgets/RecentTargetsWidget.svelte"
+  },
+  {
+    "sha256": "71502853CA460419D47546C322E7F8745A6F03BA23D59A24FAF865EF0D9ED4F3",
+    "path": "src-tauri/target/debug/aurora-launcher.exe"
+  }
+]

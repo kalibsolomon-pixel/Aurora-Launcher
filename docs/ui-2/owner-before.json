@@ -1,0 +1,34 @@
+{
+  "ownerState": [
+    {
+      "path": "C:\\Users\\kalib\\AppData\\Local\\com.aurora.launcher\\launcher\\accounts.json",
+      "sha256": "8DD8794F6002F326F2A6E60F7F37E84E559E34D07F0584F29F9392B55E6D33D0"
+    },
+    {
+      "path": "C:\\Users\\kalib\\AppData\\Local\\com.aurora.launcher\\launcher\\config.json",
+      "sha256": "8BE14704D06596C3FCBF82405337BD1188D921EB1035AC72351EEAB93B49892A"
+    },
+    {
+      "path": "C:\\Users\\kalib\\AppData\\Local\\com.aurora.launcher\\launcher\\gameplay-history.json",
+      "sha256": "671A7AEBEFEDB9FE1892C8800BDCD4BC8375ACFA8DA6A76AA05B176989321564"
+    },
+    {
+      "path": "C:\\Users\\kalib\\AppData\\Local\\com.aurora.launcher\\launcher\\instances.json",
+      "sha256": "AE016B9BDC15AFF06D66E10D66D8A00AD93EA7BFE7DB407E8EBEF7F7D44302F2"
+    },
+    {
+      "path": "C:\\Users\\kalib\\AppData\\Local\\com.aurora.launcher\\launcher\\instances.json.schema5-as-migrated-20261001.bak",
+      "sha256": "CB7DACBB71008C63EBE5981D1F4629727454A13DF31D921CBD5773F270A59230"
+    }
+  ],
+  "production": [
+    {
+      "path": "C:\\Users\\kalib\\AppData\\Local\\Aurora Launcher\\aurora-launcher.exe",
+      "sha256": "711DF646D834588B404C7170DB76B6546B409433AECFD882B026299412D13818"
+    },
+    {
+      "path": "C:\\Users\\kalib\\AppData\\Local\\Aurora Launcher\\uninstall.exe",
+      "sha256": "68B8E675CD7C29B654C6BB519097C1F5B950ADC34EF093E8C585BD8C1799036D"
+    }
+  ]
+}

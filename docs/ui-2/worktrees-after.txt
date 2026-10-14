@@ -1,0 +1,27 @@
+worktree C:/Dev/aurora-launcher
+HEAD cbde9aab967b93e9c14e12a927678703e576b891
+branch refs/heads/codex/client-3-production-authority
+
+worktree C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/corrected-source
+HEAD 420f54c0ad48ec9aa70320786a77d678b51864f1
+detached
+
+worktree C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/fix-source
+HEAD e4c25cb7dc02e00ca433c7df5b759cef62730d48
+branch refs/heads/codex/native-boot-updater-config
+
+worktree C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/old-source
+HEAD 4575a0e3f1c28da6cfe072948fe91b60eeaf608f
+detached
+
+worktree C:/Users/kalib/.codex/worktrees/f3rb1-acceptance/aurora-launcher
+HEAD 4f2ad561fe12e38523aade0265017a1c364751d1
+branch refs/heads/codex/f3rb1-acceptance
+
+worktree C:/Users/kalib/.codex/worktrees/installed-artwork-reliability/aurora-launcher
+HEAD f50a3b3bece2d0664eb2e09a33b62825dcd6612d
+branch refs/heads/codex/installed-artwork-reliability
+
+worktree C:/Users/kalib/.codex/worktrees/performance-p0-2-build/aurora-launcher
+HEAD 6cbabd38bc1c5268b9f6c80034f18da3a26f1e21
+detached

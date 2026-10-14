@@ -1,0 +1,52 @@
+{
+  "provenance": "Actual native Tauri WebView2 client, embedded production frontend, isolated synthetic native registry; CDP read-only geometry",
+  "viewport": [
+    706,
+    512
+  ],
+  "dpr": 1.25,
+  "scaleFactor": 1.25,
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "home": {
+    "x": 116,
+    "y": -416,
+    "width": 540,
+    "height": 586.7999877929688,
+    "right": 656,
+    "bottom": 170.79998779296875
+  },
+  "instance": {
+    "x": 116,
+    "y": -308,
+    "width": 540,
+    "height": 462.8000183105469,
+    "right": 656,
+    "bottom": 154.80001831054688
+  },
+  "play": {
+    "x": 132.8000030517578,
+    "y": -190.8000030517578,
+    "width": 506.3999938964844,
+    "height": 68,
+    "right": 639.1999969482422,
+    "bottom": -122.80000305175781
+  },
+  "preview": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0,
+    "right": 0,
+    "bottom": 0
+  },
+  "widgets": {
+    "x": 116,
+    "y": 186.8000030517578,
+    "width": 540,
+    "height": 1885.2750244140625,
+    "right": 656,
+    "bottom": 2072.0750274658203
+  },
+  "heading": "Editing Home"
+}

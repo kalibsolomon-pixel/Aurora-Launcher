@@ -1,0 +1,52 @@
+{
+  "provenance": "Actual native Tauri WebView2 client, embedded production frontend, isolated synthetic native registry; CDP read-only geometry",
+  "viewport": [
+    1120,
+    790
+  ],
+  "dpr": 1.25,
+  "scaleFactor": 1.25,
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "home": {
+    "x": 140.8000030517578,
+    "y": 64,
+    "width": 904,
+    "height": 696.4000244140625,
+    "right": 1044.8000030517578,
+    "bottom": 760.4000244140625
+  },
+  "instance": {
+    "x": 140.8000030517578,
+    "y": 227.1999969482422,
+    "width": 494.0375061035156,
+    "height": 509.20001220703125,
+    "right": 634.8375091552734,
+    "bottom": 736.4000091552734
+  },
+  "play": {
+    "x": 165.60000610351562,
+    "y": 352.3999938964844,
+    "width": 444.4375,
+    "height": 78,
+    "right": 610.0375061035156,
+    "bottom": 430.3999938964844
+  },
+  "preview": {
+    "x": 679.6375122070312,
+    "y": 234.3125,
+    "width": 365.1625061035156,
+    "height": 347.76251220703125,
+    "right": 1044.8000183105469,
+    "bottom": 582.0750122070312
+  },
+  "widgets": {
+    "x": 140.8000030517578,
+    "y": 776.4000244140625,
+    "width": 904,
+    "height": 1126.875,
+    "right": 1044.8000030517578,
+    "bottom": 1903.2750244140625
+  },
+  "heading": "Home widgets"
+}

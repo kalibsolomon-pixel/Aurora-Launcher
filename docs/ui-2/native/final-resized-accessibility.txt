@@ -1,0 +1,188 @@
+Window: "Aurora Launcher", App: aurora-launcher.exe.
+	0 window Aurora Launcher Secondary Actions: Raise
+		118 pane TAURI_DRAG_RESIZE_WINDOW
+		1 pane
+			9 pane Aurora Launcher
+				10 pane (disabled)
+				11 region Aurora Launcher - Web content
+					12 region
+						13 region
+							14 region
+								15 region
+								16 region
+									17 region
+										18 region
+											19 region
+												20 region
+												21 document Aurora Launcher Value: http://tauri.localhost/ ID: RootWebArea
+													22 group
+														42 header Window controls
+															43 text Aurora Launcher
+															44 button Minimize Description: Minimize
+															45 button Maximize Description: Maximize
+															46 button Close Aurora Launcher Description: Close
+														23 navigation Aurora Launcher
+															24 button Home
+															25 button Instances
+															26 button Skins & Capes
+															27 button Settings
+															28 button Accounts — not signed in
+																29 graphic Default account avatar
+														30 main
+															31 group Home
+																47 graphic Aurora
+																48 region Selected instance
+																	49 group Description: UI-2 Vanilla presentation fixture
+																		50 button Select Play instance
+																		51 text Needs attention
+																	52 button (disabled) Play
+																	53 text Minecraft 1.21.11 · Vanilla · Aurora Off
+																	54 button Manage instance
+																	55 text The selected instance has not finished installing.
+																	56 details
+																		57 disclosure triangle Technical details
+																			58 text Technical details
+																	59 text The required managed Java runtime could not be resolved.
+																	60 details
+																		61 disclosure triangle Technical details
+																			62 text Technical details
+																	63 text Select a Minecraft account before playing.
+																	64 details
+																		65 disclosure triangle Technical details
+																			66 text Technical details
+																	67 button Check again
+																192 graphic Player skin loading
+																34 region Home widgets
+																	35 heading Home widgets
+																	36 toggle button Edit Home widgets Description: Edit Home widgets
+																	37 status
+																	69 article Content Summary
+																		70 heading Content Summary
+																		71 text —
+																		72 text Enabled mods
+																		73 text —
+																		74 text Disabled mods
+																		75 text —
+																		76 text Resource packs
+																		77 text —
+																		78 text Shader packs
+																		79 text Local inventory · pack counts do not imply activation.
+																	80 article Instance Details
+																		81 heading Instance Details
+																		82 list
+																			83 term Minecraft
+																				84 text Minecraft
+																			85 text 1.21.11
+																			86 term Platform
+																				87 text Platform
+																			88 text Vanilla
+																			89 term Aurora Client
+																				90 text Aurora Client
+																			91 text Not configured
+																	92 article Playtime
+																		93 heading Playtime
+																		94 group Playtime range
+																			95 toggle button 7D
+																			96 toggle button 30D
+																			97 toggle button All
+																		98 text No playtime recorded yet.
+																	99 article Recent Worlds
+																		100 heading Recent Worlds
+																		101 text No recently played worlds.
+																	102 article Recent Servers
+																		103 heading Recent Servers
+																		104 text No recently played servers.
+																	105 article Skin Library
+																		106 heading Skin Library
+																		107 graphic Default account avatar
+																		108 text Not signed in
+																		109 text Sign in to play Minecraft
+																		110 text Browse your local collection without an account.
+																		111 text No saved skins yet. Import your first skin in the library.
+																		112 button Open Skin Library 0 saved →
+																	113 article Cape Selector
+																		114 heading Cape Selector
+																		115 text Your capes
+																		116 text Connect a Minecraft account
+																		117 button Open Cape Library View & equip →
+														38 group ID: svelte-announcer
+								39 region
+						40 region
+						41 region
+		2 title bar (settable, string) Value: Aurora Launcher
+			3 menu bar System ID: MenuBar
+				120 menu item System
+			5 button Minimize
+			6 button Maximize
+			7 button Close
+
+Document text: ```
+Aurora Launcher
+Minimize
+Maximize
+Close Aurora Launcher
+Home
+Instances
+Skins & Capes
+Settings
+￼
+Not signed in
+Sign in to play Minecraft
+￼
+Select Play instance
+Needs attention
+Play
+Minecraft 1.21.11 · Vanilla · Aurora Off
+Manage instance
+The selected instance has not finished installing.
+Technical details
+The required managed Java runtime could not be resolved.
+Technical details
+Select a Minecraft account before playing.
+Technical details
+Check again
+￼
+Home widgets
+Edit Home widgets
+￼
+Content Summary
+—
+Enabled mods
+—
+Disabled mods
+—
+Resource packs
+—
+Shader packs
+Local inventory · pack counts do not imply activation.
+Instance Details
+Minecraft
+1.21.11
+Platform
+Vanilla
+Aurora Client
+Not configured
+Playtime
+7D
+30D
+All
+No playtime recorded yet.
+Recent Worlds
+No recently played worlds.
+Recent Servers
+No recently played servers.
+Skin Library
+￼
+Not signed in
+Sign in to play Minecraft
+Browse your local collection without an account.
+No saved skins yet. Import your first skin in the library.
+Open Skin Library
+0 saved →
+Cape Selector
+Your capes
+Connect a Minecraft account
+Open Cape Library
+View & equip →
+￼
+```

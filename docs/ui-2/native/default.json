@@ -1,0 +1,16 @@
+{
+  "provenance": "Actual native Tauri WebView2 client, embedded production frontend, isolated synthetic native registry; CDP read-only geometry",
+  "viewport": [
+    1120,
+    790
+  ],
+  "dpr": 1.25,
+  "scaleFactor": 1.25,
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "home": null,
+  "instance": null,
+  "play": null,
+  "preview": null,
+  "widgets": null
+}

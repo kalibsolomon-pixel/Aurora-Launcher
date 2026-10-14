@@ -1,0 +1,6 @@
+{
+  "ProcessId": 5328,
+  "ParentProcessId": 18380,
+  "Name": "node.exe",
+  "CommandLine": "\"C:\\Users\\kalib\\AppData\\Local\\Programs\\node-v24.21.0\\node.exe\" tools/visual/serve.mjs"
+}

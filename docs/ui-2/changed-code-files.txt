@@ -1,0 +1,13 @@
+M	src/lib/launcher/HomeWidgets.svelte
+M	src/lib/launcher/PlayerPreview.svelte
+M	src/lib/launcher/releasePolish.test.ts
+M	src/lib/launcher/widgets/RecentTargetsWidget.svelte
+M	src/lib/pages/HomePage.svelte
+A	tools/visual/ui2-capture.mjs
+A	tools/visual/ui2-fixture.mjs
+A	tools/visual/ui2-native-measure.mjs
+A	tools/visual/ui2-native.ps1
+A	tools/visual/ui2-preserve.mjs
+A	tools/visual/ui2-review.py
+A	tools/visual/ui2-ui1-regression.mjs
+A	tools/visual/ui2.test.mjs
