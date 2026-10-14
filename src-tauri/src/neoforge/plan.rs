@@ -22,7 +22,7 @@ use url::Url;
 
 use crate::game::plan::{
     CompositionError, GameInstallPlan, GameJavaRequirement, GameLibrary,
-    installer_library_satisfied_by, merge_library_sets, neoforge_identity,
+    installer_library_satisfied_by, merge_library_sets,
 };
 use crate::integrity::Sha1Digest;
 use crate::minecraft::metadata::MinecraftVersionId;
@@ -503,8 +503,7 @@ pub fn compose_neoforge_game_plan(
     for library in std::mem::take(&mut neoforge.installer_libraries) {
         let satisfied = installer_library_satisfied_by(
             &libraries,
-            neoforge_identity(library.coordinate()),
-            library.coordinate().version(),
+            library.path(),
             library.artifact().sha1(),
             &library.coordinate().as_maven_string(),
         )?;
@@ -745,6 +744,92 @@ mod tests {
             crate::minecraft::rules::PlatformProfile::current().unwrap(),
         )
         .unwrap()
+    }
+
+    fn installer_destination_case(kind: &str) {
+        let minecraft = synthetic_minecraft_plan();
+        let baseline = compose_neoforge_game_plan(minecraft.clone(), plan()).unwrap();
+        let source = &minecraft.libraries()[0];
+        let mut profile = profile_document();
+        let coordinate = match kind {
+            "version" => "com.mojang:brigadier:9.9.9",
+            "basename" => "other.group:brigadier:1.0.18",
+            _ => "com.mojang:brigadier:1.0.18",
+        };
+        let path = NeoForgeCoordinate::parse(coordinate)
+            .unwrap()
+            .repository_path("jar");
+        let sha1 = if kind == "conflict" {
+            "0000000000000000000000000000000000000000".to_owned()
+        } else {
+            source.artifact().sha1().as_hex()
+        };
+        let url = format!("https://maven.neoforged.net/releases/{path}");
+        assert_ne!(url, source.artifact().url());
+        profile.libraries.push(ProfileLibrary {
+            name: coordinate.into(),
+            path: path.clone(),
+            url,
+            sha1,
+            size: source.artifact().size_bytes(),
+        });
+        let neoforge = NeoForgePlan::from_documents(
+            &profile,
+            &version_document(),
+            &MinecraftVersionId::new("26.2").unwrap(),
+            &NeoForgeVersionId::new("26.2.0.88").unwrap(),
+            &NeoForgeMavenEndpoints::official(),
+            Sha1Digest::parse("42d3bfead0ba3aa89c7d45ac29115defc9967219").unwrap(),
+            Sha1Digest::parse("42d3bfead0ba3aa89c7d45ac29115defc9967219").unwrap(),
+        )
+        .unwrap();
+        let composed = compose_neoforge_game_plan(minecraft.clone(), neoforge);
+        if kind == "conflict" {
+            assert!(matches!(
+                composed,
+                Err(CompositionError::LibraryConflict { .. })
+            ));
+            return;
+        }
+        let composed = composed.unwrap();
+        assert_eq!(composed.minecraft(), &minecraft);
+        assert_eq!(composed.libraries(), baseline.libraries());
+        assert_eq!(
+            composed.neoforge_loader().unwrap().processors(),
+            baseline.neoforge_loader().unwrap().processors()
+        );
+        let retained = kind != "same";
+        let libraries = composed.neoforge_loader().unwrap().installer_libraries();
+        assert_eq!(
+            libraries.iter().filter(|l| l.path() == path).count(),
+            usize::from(retained)
+        );
+        assert_eq!(
+            libraries.len(),
+            baseline
+                .neoforge_loader()
+                .unwrap()
+                .installer_libraries()
+                .len()
+                + usize::from(retained)
+        );
+    }
+
+    #[test]
+    fn installer_same_destination_different_urls_deduplicates() {
+        installer_destination_case("same");
+    }
+    #[test]
+    fn installer_same_destination_disagreeing_sha1_conflicts() {
+        installer_destination_case("conflict");
+    }
+    #[test]
+    fn installer_distinct_versions_are_retained() {
+        installer_destination_case("version");
+    }
+    #[test]
+    fn installer_shared_basename_is_not_identity() {
+        installer_destination_case("basename");
     }
 
     #[test]

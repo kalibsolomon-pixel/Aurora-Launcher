@@ -568,70 +568,40 @@ pub(crate) fn merge_library_sets(
     Ok(libraries)
 }
 
-/// Whether an installer-tool library is already satisfied by the composed
-/// library set, and therefore must not be planned again as a second copy at
-/// the same managed destination.
-///
-/// Installer documents carry the tool's own dependencies, and those sets can
-/// overlap the composed client set: Forge's 1.20.4 profile ships the same
-/// verified `gson 2.10.1` Mojang's document already satisfies, and its
-/// 1.20.1 profile overlaps on `jopt-simple 5.0.4`. The rule mirrors how one
-/// managed destination may carry exactly one verified artifact:
-///
-/// - a same identity at the same version whose published SHA-1s agree is
-///   the same requirement — the composed entry satisfies it;
-/// - a same identity at the same version whose published SHA-1s disagree is
-///   a corrupt or forked publication claiming one destination — a hard
-///   conflict, never a silent choice;
-/// - a same identity at a different version occupies a different Maven
-///   destination and stays a distinct artifact;
-/// - URL and size are acquisition detail, not identity: the official
-///   documents publish the same bytes from different repositories.
-///
-/// Fabric entries publish SHA-256-or-nothing, so no SHA-1 comparison is
-/// possible; that combination never occurs today (only Forge and NeoForge
-/// carry installer-tool libraries) and such an entry is skipped rather
-/// than guessed about.
+/// Compare validated normalized repository destinations, including extension.
+/// At one destination agreeing official SHA-1 satisfies the installer-tool
+/// requirement; disagreement is a hard conflict. Other destinations remain
+/// separate regardless of basename, version, URL, or digest equality.
+/// This does not change the established launch-library merge policy.
 pub(crate) fn installer_library_satisfied_by(
     merged: &[GameLibrary],
-    identity: LibraryIdentity<'_>,
-    version: &str,
+    destination: &str,
     sha1: &crate::integrity::Sha1Digest,
     conflicting: &str,
 ) -> Result<bool, CompositionError> {
     for planned in merged {
-        let (existing_identity, existing_version, existing_sha1) = match planned {
-            GameLibrary::Minecraft(entry) => (
-                mojang_identity(entry.coordinate()),
-                entry.coordinate().version(),
-                Some(entry.artifact().sha1()),
-            ),
-            GameLibrary::Forge(entry) => (
-                forge_identity(entry.coordinate()),
-                entry.coordinate().version(),
-                Some(entry.artifact().sha1()),
-            ),
-            GameLibrary::NeoForge(entry) => (
-                neoforge_identity(entry.coordinate()),
-                entry.coordinate().version(),
-                Some(entry.artifact().sha1()),
-            ),
-            GameLibrary::Fabric(_) => continue,
-        };
-        if existing_identity != identity {
+        if planned.repository_path() != destination {
             continue;
         }
-        if existing_version != version {
-            return Ok(false); // distinct version: distinct destination
-        }
-        return if existing_sha1 == Some(sha1) {
-            Ok(true)
-        } else {
-            Err(CompositionError::LibraryConflict {
+        let existing_sha1 = match planned {
+            GameLibrary::Minecraft(entry) => entry.artifact().sha1(),
+            GameLibrary::Forge(entry) => entry.artifact().sha1(),
+            GameLibrary::NeoForge(entry) => entry.artifact().sha1(),
+            // No official SHA-1: cannot establish equivalence at this path.
+            GameLibrary::Fabric(_) => {
+                return Err(CompositionError::LibraryConflict {
+                    existing: planned.coordinate_string(),
+                    conflicting: conflicting.to_owned(),
+                });
+            }
+        };
+        if existing_sha1 != sha1 {
+            return Err(CompositionError::LibraryConflict {
                 existing: planned.coordinate_string(),
                 conflicting: conflicting.to_owned(),
-            })
-        };
+            });
+        }
+        return Ok(true);
     }
     Ok(false)
 }
@@ -740,53 +710,34 @@ mod tests {
         assert_eq!(merged.len(), minecraft.libraries().len());
     }
 
-    /// F3R-B2 duplicate-classification rules. URL and size are deliberately
-    /// not inputs: the official documents publish the same verified bytes
-    /// from different repositories, so the published SHA-1 at one managed
-    /// destination is the identity.
     #[test]
-    fn installer_libraries_are_classified_by_verified_identity() {
+    fn installer_libraries_compare_exact_destinations_and_published_sha1() {
         let minecraft = minecraft_plan();
         let merged = merge_library_sets(&minecraft, Vec::new()).unwrap();
-        let brigadier = &minecraft.libraries()[0];
-        let identity = mojang_identity(brigadier.coordinate());
-        let version = brigadier.coordinate().version();
-        let sha1 = brigadier.artifact().sha1();
-
-        // Identical published identity: the composed entry satisfies it.
-        assert!(
-            installer_library_satisfied_by(&merged, identity, version, sha1, "test:gson:1")
-                .unwrap()
-        );
-
-        // Same destination with disagreeing published digests: a hard
-        // conflict naming both requirements, never a silent choice.
+        let library = &merged[0];
+        let destination = library.repository_path();
+        let GameLibrary::Minecraft(entry) = library else {
+            unreachable!()
+        };
+        let sha1 = entry.artifact().sha1();
+        assert!(installer_library_satisfied_by(&merged, &destination, sha1, "same").unwrap());
         let conflicting =
             crate::integrity::Sha1Digest::parse("0000000000000000000000000000000000000000")
                 .unwrap();
-        let error =
-            installer_library_satisfied_by(&merged, identity, version, &conflicting, "test:gson:1")
-                .unwrap_err();
-        assert!(matches!(error, CompositionError::LibraryConflict { .. }));
-
-        // Same identity at a different version: a distinct Maven
-        // destination, a distinct artifact — kept.
-        assert!(
-            !installer_library_satisfied_by(&merged, identity, "9.9.9", sha1, "test:gson:9.9.9")
-                .unwrap()
-        );
-
-        // An unrelated identity is never satisfied by the composed set.
-        assert!(
-            !installer_library_satisfied_by(
-                &merged,
-                ("net.other", "library", None),
-                version,
-                sha1,
-                "net.other:library:1"
-            )
-            .unwrap()
-        );
+        assert!(matches!(
+            installer_library_satisfied_by(&merged, &destination, &conflicting, "conflicting"),
+            Err(CompositionError::LibraryConflict { .. })
+        ));
+        for other in [
+            destination.replace(".jar", ".zip"),
+            format!("unrelated/{destination}"),
+        ] {
+            for digest in [sha1, &conflicting] {
+                assert!(
+                    !installer_library_satisfied_by(&merged, &other, digest, "distinct").unwrap()
+                );
+            }
+        }
     }
 
     #[test]

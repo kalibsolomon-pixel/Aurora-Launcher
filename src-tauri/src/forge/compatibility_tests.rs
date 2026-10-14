@@ -130,6 +130,145 @@ fn game(mc: &str) -> GameInstallPlan {
     compose_forge_game_plan(base, forge(mc)).unwrap()
 }
 
+// Synthetic changes to a parsed official profile; checked-in upstream fixture
+// bytes and their provenance are unchanged. Exercise normalization AND compose.
+fn installer_destination_case(kind: &str) {
+    let mc = "1.20.4";
+    let (pin, digest, profile_json, version_json, mojang_json) = documents(mc);
+    let mojang = crate::minecraft::plan::plan_version_document(
+        &VersionDocument::from_json(mojang_json).unwrap(),
+        platform(),
+    )
+    .unwrap();
+    let baseline = game(mc);
+    let overlap = mojang
+        .libraries()
+        .iter()
+        .find(|l| l.coordinate().as_maven_string() == "com.google.code.gson:gson:2.10.1")
+        .unwrap();
+    let mut profile = InstallProfileDocument::from_json(profile_json).unwrap();
+    profile
+        .libraries
+        .retain(|l| l.name != overlap.coordinate().as_maven_string());
+    let overlap_sha1 = overlap.artifact().sha1().as_hex();
+    let (coordinate, sha1, retained) = match kind {
+        "same-url-different" => (
+            "com.google.code.gson:gson:2.10.1",
+            overlap_sha1.as_str(),
+            false,
+        ),
+        "conflict" => (
+            "com.google.code.gson:gson:2.10.1",
+            "0000000000000000000000000000000000000000",
+            false,
+        ),
+        "zip-different-hash" => (
+            "com.google.code.gson:gson:2.10.1@zip",
+            "0000000000000000000000000000000000000000",
+            true,
+        ),
+        "zip-same-hash" => (
+            "com.google.code.gson:gson:2.10.1@zip",
+            overlap_sha1.as_str(),
+            true,
+        ),
+        "different-version" => (
+            "com.google.code.gson:gson:9.9.9",
+            overlap_sha1.as_str(),
+            true,
+        ),
+        "shared-basename" => ("unrelated.group:gson:2.10.1", overlap_sha1.as_str(), true),
+        _ => unreachable!(),
+    };
+    let path = crate::forge::plan::ForgeCoordinate::parse(coordinate)
+        .unwrap()
+        .repository_path();
+    let url = format!("https://maven.minecraftforge.net/{path}");
+    assert_ne!(url, overlap.artifact().url());
+    profile.libraries.push(metadata::ProfileLibrary {
+        name: coordinate.into(),
+        path: path.clone(),
+        url,
+        sha1: sha1.into(),
+        size: overlap.artifact().size_bytes(),
+    });
+    let forge = ForgePlan::from_documents(
+        &profile,
+        &VersionProfileDocument::from_json(version_json).unwrap(),
+        &MinecraftVersionId::new(mc).unwrap(),
+        &ForgeVersionId::new(pin).unwrap(),
+        &ForgeMavenEndpoints::official(),
+        Sha1Digest::parse(digest).unwrap(),
+    )
+    .unwrap();
+    let composed = compose_forge_game_plan(mojang.clone(), forge);
+    if kind == "conflict" {
+        assert!(matches!(
+            composed,
+            Err(crate::game::plan::CompositionError::LibraryConflict { .. })
+        ));
+        return;
+    }
+    let composed = composed.unwrap();
+    assert_eq!(composed.minecraft(), &mojang);
+    assert_eq!(
+        composed.libraries(),
+        baseline.libraries(),
+        "classpath order and provenance unchanged"
+    );
+    assert_eq!(
+        composed.forge_loader().unwrap().processors(),
+        baseline.forge_loader().unwrap().processors(),
+        "processor inputs unchanged"
+    );
+    let installer = composed.forge_loader().unwrap().installer_libraries();
+    assert_eq!(
+        installer.iter().filter(|l| l.path() == path).count(),
+        usize::from(retained)
+    );
+    assert_eq!(
+        installer.len(),
+        baseline.forge_loader().unwrap().installer_libraries().len() + usize::from(retained)
+    );
+    assert_eq!(
+        composed
+            .libraries()
+            .iter()
+            .filter(|l| l.repository_path() == overlap.path())
+            .count(),
+        1
+    );
+    if kind.starts_with("zip") {
+        assert_ne!(path, overlap.path());
+        assert_eq!(installer.last().unwrap().coordinate().extension(), "zip");
+    }
+}
+
+#[test]
+fn installer_same_destination_same_sha1_different_urls_deduplicates() {
+    installer_destination_case("same-url-different");
+}
+#[test]
+fn installer_same_destination_different_sha1_conflicts() {
+    installer_destination_case("conflict");
+}
+#[test]
+fn installer_different_extensions_different_sha1_retains_both() {
+    installer_destination_case("zip-different-hash");
+}
+#[test]
+fn installer_different_extensions_same_sha1_retains_both() {
+    installer_destination_case("zip-same-hash");
+}
+#[test]
+fn installer_different_versions_retains_both() {
+    installer_destination_case("different-version");
+}
+#[test]
+fn installer_shared_basename_retains_both() {
+    installer_destination_case("shared-basename");
+}
+
 /// F3R-B2: the official installer profile's tool libraries overlap the
 /// composed client set (1.20.4 ships the same verified gson 2.10.1 as
 /// Mojang's document; 1.20.1 overlaps on jopt-simple 5.0.4). Before the

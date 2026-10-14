@@ -35,7 +35,7 @@ use crate::forge::metadata::{
 };
 use crate::game::plan::{
     CompositionError, GameInstallPlan, GameJavaRequirement, GameLibrary, LoaderPlan,
-    forge_identity, installer_library_satisfied_by, merge_library_sets,
+    installer_library_satisfied_by, merge_library_sets,
 };
 use crate::integrity::Sha1Digest;
 use crate::minecraft::metadata::MinecraftVersionId;
@@ -735,8 +735,7 @@ pub fn compose_forge_game_plan(
     for library in std::mem::take(&mut forge.installer_libraries) {
         let satisfied = installer_library_satisfied_by(
             &libraries,
-            forge_identity(library.coordinate()),
-            library.coordinate().version(),
+            library.path(),
             library.artifact().sha1(),
             &library.coordinate().as_maven_string(),
         )?;
