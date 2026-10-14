@@ -20,13 +20,13 @@ async function mutate(action) {
   },action);
 }
 try {
-  await check('Instance identity, honest installed metadata and existing Settings route',async()=>{
+  await check('Instance identity, honest metadata and management through Instances',async()=>{
     await homeFixture(page);
     assert.equal(await page.locator('.instance-heading h1').textContent(),'Aurora Client');
     assert.match(await page.locator('.instance-metadata').textContent(),/Minecraft 1.21.11.*Fabric 0.19.5.*Aurora 2.1.5 · active/s);
     await mutate('forge');assert.match(await page.locator('.instance-metadata').textContent(),/Forge 61.1.0/);
-    await page.getByRole('button',{name:'Instance settings',exact:false}).click();
-    await page.locator('.workspace-page').waitFor();assert.equal(await page.getByRole('tab',{name:'Settings',exact:true}).getAttribute('aria-selected'),'true');
+    assert.equal(await page.locator('.instance-settings').count(),0);
+    await page.locator('.rail-link[aria-label="Instances"]').click();await page.locator('.instances-page').waitFor();
   });
   await check('Player stays distinct from instance and hero contains both controls',async()=>{
     await homeFixture(page);
@@ -59,8 +59,8 @@ try {
   await check('200% text keeps heading, action, selector and error separated at minimum width',async()=>{
     await page.setViewportSize({width:720,height:520});await homeFixture(page,'long');await page.addStyleTag({content:'html{font-size:200% !important}'});
     const g=await homeGeometry(page);assert.equal(g.documentOverflow||g.contentOverflow,false);
-    const heading=await page.locator('.instance-heading').boundingBox(),settings=await page.locator('.instance-settings').boundingBox();
-    assert.ok(heading.y+heading.height<=g.instance.y&&g.instance.bottom<=settings.y);
+    const heading=await page.locator('.instance-heading').boundingBox();
+    assert.ok(heading.y+heading.height<=g.instance.y);
     await page.locator('.play-hero').focus();assert.equal(await page.locator('.play-hero').evaluate(e=>getComputedStyle(e).outlineStyle),'solid');
     await page.screenshot({path:`${out}/states/text-200-minimum.png`});
     await homeFixture(page,'blocked');assert.match(await page.locator('.launch-feedback').textContent(),/Synthetic sign-in required/);

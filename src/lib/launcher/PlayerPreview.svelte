@@ -49,10 +49,10 @@
   .player-preview.has-skin::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 68%); }
   .player-model { width: 100%; display: grid; place-items: center; }
   .has-skin .player-model { position: absolute; top: 0; }
-  canvas { display: block; width: auto; height: clamp(480px, 64vh, 560px); max-width: none; image-rendering: pixelated; opacity: 0; transition: opacity 420ms ease-out; }
+  canvas { display: block; width: auto; height: clamp(512px, 68vh, 592px); max-width: none; image-rendering: auto; opacity: 0; transition: opacity 420ms ease-out; }
   canvas.revealed { opacity: 1; }
   .player-placeholder { max-width: 20ch; margin: 0; text-align: center; font-size: var(--text-metadata); line-height: 1.7; color: var(--color-text-secondary); }
-  @media (min-width: 801px) and (max-width: 1050px) { canvas { height: 480px; } }
+  @media (min-width: 801px) and (max-width: 1050px) { canvas { height: 512px; } }
   @media (max-width: 800px) { .player-preview { display: none; } }
   @media (prefers-reduced-motion: reduce) { canvas { transition: none; } }
 </style>
