@@ -89,6 +89,7 @@
 .aurora-shell .app-frame { grid-template-columns: var(--f-rail-width) minmax(0, 1fr); flex: 1; height: auto; min-height: 0; }
 .aurora-shell .sidebar { padding: 18px var(--space-2) 14px; border: 0; background: transparent; gap: 20px; align-items: center; z-index: 30; }
 .rail-logo { width: 48px; height: 48px; object-fit: contain; flex: none; }
+:root[data-background="borealis"] .aurora-shell .sidebar { background: linear-gradient(180deg, rgb(8 17 27 / 16%), rgb(8 17 27 / 34%)); border-right: 1px solid rgb(222 242 255 / 8%); }
 .rail-navigation { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
 .rail-link { width: 48px; height: 48px; display: grid; place-items: center; position: relative; border: 1px solid transparent; border-radius: var(--f-radius-control); background: transparent; color: var(--color-text-secondary); cursor: pointer; transition: background var(--f-fast), color var(--f-fast); }
 .rail-link:hover { background: rgb(255 255 255 / 6%); color: var(--color-text); }

@@ -77,10 +77,10 @@
   </section>
 
 <style>
-  .home-widgets { margin-top: var(--space-4); container-type: inline-size; }
-  .widgets-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
+  .home-widgets { margin-top: var(--space-5); container-type: inline-size; }
+  .widgets-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); }
   .widgets-heading.editing { position: sticky; top: 0; z-index: 5; padding: 8px 12px; border: 1px solid var(--f-edge); border-radius: 14px; background: var(--color-surface); }
-  .edit-status { margin: 0; font-size: var(--text-section); color: var(--color-text-secondary); font-weight: 600; }
+  .edit-status { margin: 0; font-size: 1rem; color: var(--color-text); font-weight: 600; letter-spacing: -.015em; }
   .widget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
   .widget { min-width: 0; margin: 0; padding: var(--space-5); min-height: 156px; }
   .widget:only-child { grid-column: 1 / -1; }
