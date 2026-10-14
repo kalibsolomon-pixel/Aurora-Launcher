@@ -14,11 +14,23 @@
   const busy = $derived(launcher.instanceBusy !== null || launcher.playBusy || launcher.createBusy);
   let open = $state(false);
   let current = $state(0);
+  let menuAbove = $state(false);
+  let menuMaxHeight = $state<number>();
   let root: HTMLDivElement;
   let trigger: HTMLButtonElement;
   function close(restore = false) { open = false; if (restore) trigger?.focus(); }
+  function positionMenu() {
+    if (!launchAction || !root) return;
+    // Read geometry only on opening/resizing, never on an animation loop.
+    const bounds = root.getBoundingClientRect();
+    const below = window.innerHeight - bounds.bottom - 16;
+    const above = bounds.top - 16;
+    menuAbove = below < 160 && above > below;
+    menuMaxHeight = Math.max(0, Math.min(240, window.innerHeight * .3, menuAbove ? above : below));
+  }
   async function reveal(index = instances.findIndex(instance => instance.id === selectedId)) {
     current = Math.max(0, index); open = true; await tick();
+    positionMenu(); await tick();
     document.getElementById(`${uid}-${current}`)?.focus();
   }
   async function choose(id: string) {
@@ -42,7 +54,7 @@
     }
   }
 </script>
-<svelte:window onpointerdown={(event) => { if (open && !root?.contains(event.target as Node)) close(); }} />
+<svelte:window onpointerdown={(event) => { if (open && !root?.contains(event.target as Node)) close(); }} onresize={() => { if (open) positionMenu(); }} />
 <div class="instance-switcher" class:compact class:launch-control={!!launchAction} bind:this={root}>
   {#if launchAction}
     <button type="button" class="btn btn-primary play-hero" aria-label={launchAction.label}
@@ -59,7 +71,7 @@
     onkeydown={(event) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); void reveal(); } }}>
     {#if !launchAction}<span class="picker-identity"><span class="picker-name">{selected?.displayName ?? "Choose an instance"}</span>{#if status}<span id={`${uid}-status`} class="readiness-dot" class:ready={status.ready} role="img" aria-label={status.label} title={status.label}></span>{/if}</span>{/if}<span class="chevron" class:expanded={open}><Icon name="chevron" size={24} /></span>
   </button>
-  <div id={`${uid}-list`} class="picker-menu" role="listbox" tabindex="-1" aria-label="Play instances" hidden={!open} onkeydown={key}>
+  <div id={`${uid}-list`} class="picker-menu" class:menu-above={menuAbove} style:max-height={menuMaxHeight === undefined ? undefined : `${menuMaxHeight}px`} role="listbox" tabindex="-1" aria-label="Play instances" hidden={!open} onkeydown={key}>
     {#each instances as instance, index (instance.id)}
       <button id={`${uid}-${index}`} type="button" role="option" aria-selected={instance.id === selectedId}
         tabindex={open && current === index ? 0 : -1} class="picker-option" disabled={busy}
@@ -103,5 +115,6 @@
   .launch-control .picker-trigger:hover:not(:disabled), .launch-control .picker-trigger[aria-expanded="true"] { background: rgb(255 255 255 / 10%); }
   .launch-control .chevron { color: inherit; }
   .launch-control .picker-menu { max-height: min(240px, 30dvh); text-align: left; }
+  .launch-control .picker-menu.menu-above { top: auto; bottom: calc(100% + var(--space-2)); }
   @media (prefers-reduced-motion: reduce) { .chevron, .picker-trigger, .picker-option { transition: none; } }
 </style>
