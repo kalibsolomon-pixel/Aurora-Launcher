@@ -140,7 +140,7 @@
 <style>
   .home-page { max-width: 1280px; margin-inline: auto; width: 100%; }
   .aurora-update-notice { margin-bottom: 16px; }
-  .home-composition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: center; padding: var(--space-5); border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-panel); box-shadow: var(--f-shadow); position: relative; }
+  .home-composition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: center; padding: var(--space-5); border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: radial-gradient(ellipse at 85% 45%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 65%), var(--f-panel); box-shadow: var(--f-shadow); position: relative; }
   .home-launch-column { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-5); min-width: 0; padding-block: var(--space-3); }
   .instance-heading { min-width: 0; width: 100%; }
   .instance-eyebrow { margin: 0 0 var(--space-3); font-size: var(--text-metadata); color: var(--color-text-secondary); }
