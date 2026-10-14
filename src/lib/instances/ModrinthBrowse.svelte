@@ -348,7 +348,7 @@
 
 <svelte:window onkeydown={onWindowKeydown} />
 
-<section class="browse" aria-label="Browse Modrinth">
+<section class="browse" class:browse-mods={browseKind === "mod"} aria-label="Browse Modrinth">
   <div class="browse-heading">
     <div>
       <h3 class="group-title">Browse Modrinth</h3>
@@ -621,6 +621,32 @@
   .pack-optional label { display: block; }
   .preview li { margin: var(--space-1) 0; }
   .more { margin-top: var(--space-3); }
+  /* UI-1 is a Mods pilot. Other content types keep their existing treatments. */
+  .browse-mods .browse-heading { align-items: flex-start; }
+  .browse-mods .browse-heading > div { flex: 1 1 24em; min-width: 0; }
+  .browse-mods .browse-heading .group-subtitle { max-width: 72ch; color: var(--color-text-secondary); }
+  .browse-mods .source { color: var(--color-text-secondary); }
+  .browse-mods .browse-search input,
+  .browse-mods .filter-input,
+  .browse-mods .browse-search .btn { min-height: 40px; border-radius: var(--f-radius-control); }
+  .browse-mods .filter-input { height: auto; }
+  .browse-mods .sort-control, .browse-mods .category-filter { width: max(180px, 12em); }
+  .browse-mods .filter-chevron { bottom: 0; height: auto; }
+  .browse-mods .browse-search label { min-width: 0; }
+  .browse-mods .browse-search .btn { flex: none; }
+  .browse-mods .browse-list { gap: var(--space-2); }
+  .browse-mods .browse-row { padding: var(--space-3); }
+  .browse-mods .browse-copy h4 { font-size: var(--text-body); font-weight: 600; }
+  .browse-mods .browse-copy p { margin-block: var(--space-1); font-size: var(--text-secondary); }
+  .browse-mods .browse-actions .btn { min-height: 40px; }
+  .browse-mods > .browse-note,
+  .browse-mods > .browse-status { padding: var(--space-4); border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); background: var(--f-content-panel); color: var(--color-text-secondary); }
+  .browse-mods > .browse-note { min-height: 96px; display: grid; align-content: center; margin: 0; font-size: var(--text-body); }
+  @container (min-width: 561px) and (max-width: 900px) {
+    .browse-mods .browse-row { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; }
+    .browse-mods .browse-glyph { grid-row: 1; }
+    .browse-mods .browse-actions { grid-column: 3; grid-row: 1; align-self: center; }
+  }
   @media (max-width: 760px) { .browse-heading { align-items: flex-start; flex-wrap: wrap; } .filter-context { margin-left: 0; } }
   @container (max-width: 900px) { .browse-list { grid-template-columns: minmax(0, 1fr); } }
   @container (max-width: 440px) { .sort-control, .category-filter { width: calc((100% - var(--space-3)) / 2); min-width: 140px; } .filter-context { margin-left: 0; width: 100%; padding-bottom: 0; } .browse-row { padding: var(--space-3); } }

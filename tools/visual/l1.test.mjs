@@ -50,6 +50,7 @@ try {
       await page.getByRole('group', { name: 'Browse content type' }).getByRole('button', { name: label, exact: true }).click();
     }
     await page.locator('.browse-row').first().waitFor();
+    assert.equal(await page.locator('.browse-mods').count(), kind === 'mod' ? 1 : 0);
     await page.waitForFunction(() => [...document.querySelectorAll('.browse-row img')].filter(i => i.complete && i.naturalWidth > 0).length === 3);
     assert.equal(await page.locator('.browse-row').count(), 4);
     if (kind !== 'modpack') {
@@ -87,7 +88,13 @@ try {
         overflow: el.scrollWidth > el.clientWidth,
         width: el.clientWidth,
         columns: getComputedStyle(el.querySelector('.browse-list')).gridTemplateColumns.split(' ').length,
-        overlaps: [...el.querySelectorAll('.browse-row')].some(row => row.querySelector('.browse-actions').getBoundingClientRect().top < row.querySelector('.browse-copy').getBoundingClientRect().bottom - 1),
+        // UI-1 permits actions beside copy in single-column Mods results.
+        // Fail on intersecting rectangles, whether actions are below or beside.
+        overlaps: [...el.querySelectorAll('.browse-row')].some(row => {
+          const a = row.querySelector('.browse-actions').getBoundingClientRect();
+          const b = row.querySelector('.browse-copy').getBoundingClientRect();
+          return a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+        }),
       }));
       assert.equal(layout.overflow, false); assert.equal(layout.overlaps, false);
       assert.equal(layout.columns, layout.width > 900 ? 2 : 1);
