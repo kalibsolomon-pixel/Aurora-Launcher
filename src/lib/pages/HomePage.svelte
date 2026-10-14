@@ -94,7 +94,6 @@
     <div class="home-composition" aria-label="Launch workspace">
     <div class="home-launch-column">
     <header class="instance-heading">
-      <p class="instance-eyebrow">Selected instance</p>
       <h1 title={instance.displayName}>{instance.displayName}</h1>
       <p class="instance-metadata">
         <span>Minecraft {instance.minecraftVersion}</span>
@@ -144,7 +143,6 @@
   .home-composition:has(.launch-feedback) :global(.player-preview.has-skin) { display: none; }
   .home-launch-column { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-5); min-width: 0; padding-block: var(--space-3); }
   .instance-heading { min-width: 0; width: 100%; }
-  .instance-eyebrow { margin: 0 0 var(--space-3); font-size: var(--text-metadata); color: var(--color-text-secondary); }
   .instance-heading h1 { margin: 0; font-size: 2rem; line-height: 1.2; font-weight: 650; letter-spacing: -.035em; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .instance-metadata { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); margin: var(--space-3) 0 0; color: var(--color-text-secondary); font-size: var(--text-metadata); line-height: 1.6; overflow-wrap: anywhere; }
   .instance-metadata span + span::before { content: '·'; margin-right: var(--space-3); color: var(--color-text-muted); }
