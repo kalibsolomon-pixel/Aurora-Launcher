@@ -54,7 +54,9 @@
   {/if}
 </div>
 <style>
-  .player-preview { --player-max-h: clamp(280px, 44vh, 420px); display: flex; flex-direction: column; align-items: center; gap: var(--space-3); min-width: 0; position: relative; }
+  .player-preview { --player-max-h: clamp(240px, 36vh, 320px); display: flex; flex-direction: column; align-items: center; gap: var(--space-3); min-width: 0; position: relative; isolation: isolate; }
+  .player-preview::before { content: ''; position: absolute; z-index: -1; inset: 0 4% 40px; background: radial-gradient(ellipse at 50% 62%, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 68%); pointer-events: none; }
+  .player-preview::after { content: ''; position: absolute; z-index: -1; width: 48%; height: 24px; bottom: 70px; border-radius: 50%; background: radial-gradient(ellipse, rgb(0 0 0 / 32%), transparent 70%); pointer-events: none; }
   /* The model is bounded so the model plus the control row fits the visible
      window: the approved large scale applies while space allows and yields
      only when the viewport is constrained. The canvas width is derived from
@@ -66,7 +68,7 @@
   canvas.revealed { opacity: 1; }
   /* Always visible while a player is shown: these are the only view controls,
      so they must never hide behind a hover reveal or shrink with the model. */
-  .player-controls { display: flex; align-items: center; gap: 4px; flex: none; padding: 6px 8px; border: 1px solid var(--f-edge); border-radius: 999px; background: var(--f-panel); backdrop-filter: var(--f-blur); box-shadow: var(--shadow-group); }
+  .player-controls { display: flex; align-items: center; gap: 4px; flex: none; padding: 6px 8px; border: 1px solid var(--f-edge); border-radius: 999px; background: rgb(255 255 255 / 3%); }
   .player-controls .f-icon-button { width: 40px; height: 40px; border-color: transparent; border-radius: 999px; background: transparent; }
   .player-controls .f-icon-button:hover { background: rgb(255 255 255 / 10%); color: var(--color-text); }
   .player-controls .reset-view { border: 0; background: transparent; font: inherit; font-size: 12.5px; font-weight: 550; color: var(--color-text-secondary); padding: 10px 12px; border-radius: 999px; cursor: pointer; transition: background var(--f-fast), color var(--f-fast); }
