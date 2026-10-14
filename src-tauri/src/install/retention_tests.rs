@@ -6,6 +6,7 @@ use crate::integrity::{ArtifactTrust, DigestAlgorithm};
 struct World {
     root: PathBuf,
     id: InstanceId,
+    cleanup: bool,
 }
 impl World {
     fn new() -> Self {
@@ -15,6 +16,7 @@ impl World {
         Self {
             root,
             id: InstanceId::new("retention-test").unwrap(),
+            cleanup: true,
         }
     }
     fn game(&self, path: &Path, id: &str) {
@@ -118,222 +120,17 @@ fn representative_storage_measurement() {
     );
 }
 
-/// F3R-B1 remaining security gate: REAL Windows file symbolic links inside a
-/// candidate backup — one targeting a sentinel OUTSIDE the managed tree and
-/// one dangling link. Opt-in via `AURORA_F3RB1_SYMLINK_ROOT` (an isolated
-/// marked direct temp child). Creating a file symbolic link requires either
-/// Developer Mode or SeCreateSymbolicLinkPrivilege; when the environment
-/// refuses creation this test FAILS LOUDLY as BLOCKED — a refusal to create
-/// the link is never counted as a passing security assertion. When creation
-/// succeeds, retention must refuse traversal, preserve the sentinel byte-for
-/// byte, delete nothing, and change no authority.
-///
-/// Phases via `AURORA_F3RB1_SYMLINK_PHASE`: unset runs both phases in this
-/// one process; `prepare` builds the fixture and creates the real links
-/// (this is the only step that needs the privilege, and may run from an
-/// owner-authorized elevated helper); `verify` re-checks the fixture and
-/// executes the real retention refusal assertions, deliberately UNELEVATED,
-/// in a fresh process — so the accepted evidence proves the ordinary
-/// retention code, not an elevated copy of it.
+// Test-only fixture boundary; direct invocation receives the same validation
+// and token checks as the PowerShell driver.
+#[cfg(windows)]
+#[path = "retention_symlink_gate.rs"]
+mod symlink_gate;
+
 #[cfg(windows)]
 #[test]
+#[ignore = "opt-in real Windows symlink acceptance; use run-symlink-gate.ps1"]
 fn windows_file_symlink_refusal_helper() {
-    let Some(root) = std::env::var_os("AURORA_F3RB1_SYMLINK_ROOT") else {
-        return;
-    };
-    let root = PathBuf::from(root);
-    match std::env::var("AURORA_F3RB1_SYMLINK_PHASE")
-        .unwrap_or_default()
-        .as_str()
-    {
-        "" => {
-            let (old, sentinel_digest, authority_digest) = symlink_gate_prepare(&root);
-            let world = World {
-                root: root.join("world"),
-                id: InstanceId::new("f3rb1-symlink").unwrap(),
-            };
-            symlink_gate_verify(&root, &world, &old, &sentinel_digest, &authority_digest);
-        }
-        "prepare" => {
-            // Only the facts return; the disposable fixture survives for the
-            // separate, deliberately unelevated verify process.
-            let _ = symlink_gate_prepare(&root);
-        }
-        "verify" => {
-            let manifest: serde_json::Value = serde_json::from_slice(
-                &fs::read(root.join("gate-manifest.json")).expect("run the prepare phase first"),
-            )
-            .unwrap();
-            let world = World {
-                root: root.join("world"),
-                id: InstanceId::new("f3rb1-symlink").unwrap(),
-            };
-            symlink_gate_verify(
-                &root,
-                &world,
-                manifest["slot"].as_str().unwrap(),
-                manifest["sentinelSha256"].as_str().unwrap(),
-                manifest["authoritySha256"].as_str().unwrap(),
-            );
-        }
-        other => panic!("unknown AURORA_F3RB1_SYMLINK_PHASE '{other}'"),
-    }
-}
-
-/// Everything the elevated step is allowed to do: build the disposable
-/// fixture, create the two real links, record the facts, and leave the
-/// fixture in place. No retention decision happens here.
-#[cfg(windows)]
-fn symlink_gate_prepare(root: &Path) -> (String, String, String) {
-    use std::os::windows::process::CommandExt;
-    assert!(
-        root.is_absolute()
-            && root.parent() == Some(std::env::temp_dir().as_path())
-            && root
-                .file_name()
-                .unwrap()
-                .to_string_lossy()
-                .starts_with("aurora-f3rb1-symlink-")
-            && !root.exists()
-    );
-    fs::create_dir(root).unwrap();
-    fs::write(
-        root.join("F3RB1-ISOLATED.txt"),
-        b"F3RB1 isolated file-symlink acceptance\n",
-    )
-    .unwrap();
-    let world = World {
-        root: root.join("world"),
-        id: InstanceId::new("f3rb1-symlink").unwrap(),
-    };
-    fs::create_dir(&world.root).unwrap();
-    fs::write(world.root.join("owner-sentinel"), b"owner").unwrap();
-    let (old, _, _) = world.three();
-    let backup = world.slot(&old).join("previous-game");
-    let sentinel = root.join("sentinel-target.bin");
-    fs::write(&sentinel, b"sentinel-bytes-f3rb1").unwrap();
-    let sentinel_digest = hash(&fs::read(&sentinel).unwrap());
-    let authority_digest = hash(&fs::read(world.root.join(journal::JOURNAL_FILE)).unwrap());
-    let link = backup.join("redirected-file.txt");
-    let dangling = backup.join("dangling-file.txt");
-    let status = std::process::Command::new("powershell.exe")
-        .creation_flags(0x0800_0000)
-        .env("F3RB1_LINK", &link)
-        .env("F3RB1_DANGLING", &dangling)
-        .env("F3RB1_SENTINEL", &sentinel)
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "New-Item -ItemType SymbolicLink -Path $env:F3RB1_LINK -Target $env:F3RB1_SENTINEL | Out-Null; \
-             New-Item -ItemType SymbolicLink -Path $env:F3RB1_DANGLING -Target ($env:F3RB1_SENTINEL + '.absent') | Out-Null",
-        ])
-        .status()
-        .unwrap();
-    if !status.success() {
-        panic!(
-            "BLOCKED: Windows refused real file symbolic-link creation \
-             (Developer Mode or SeCreateSymbolicLinkPrivilege required)."
-        );
-    }
-    for path in [&link, &dangling] {
-        assert!(
-            fs::symlink_metadata(path).unwrap().file_type().is_symlink(),
-            "the link must actually exist before the security assertion runs"
-        );
-    }
-    fs::write(
-        root.join("gate-manifest.json"),
-        serde_json::json!({
-            "slot": old,
-            "sentinelSha256": sentinel_digest,
-            "authoritySha256": authority_digest,
-        })
-        .to_string()
-        .as_bytes(),
-    )
-    .unwrap();
-    eprintln!(
-        "[f3rb1-symlink] phase=prepare slot={old} sentinel_sha256={sentinel_digest} links=real"
-    );
-    // Drop would delete the disposable fixture; the verify phase owns it now.
-    std::mem::forget(world);
-    (old, sentinel_digest, authority_digest)
-}
-
-/// The unelevated acceptance step: real retention against the real links,
-/// repeated, with sentinel and authority integrity checked throughout.
-#[cfg(windows)]
-fn symlink_gate_verify(
-    root: &Path,
-    world: &World,
-    old: &str,
-    sentinel_digest: &str,
-    authority_digest: &str,
-) {
-    assert!(
-        root.join("F3RB1-ISOLATED.txt").exists()
-            && root.join("gate-manifest.json").exists()
-            && root.join("sentinel-target.bin").exists(),
-        "the prepared fixture must be intact"
-    );
-    let backup = world.slot(old).join("previous-game");
-    let link = backup.join("redirected-file.txt");
-    let dangling = backup.join("dangling-file.txt");
-    for path in [&link, &dangling] {
-        assert!(
-            fs::symlink_metadata(path).unwrap().file_type().is_symlink(),
-            "the real links must still exist before the security assertion runs"
-        );
-    }
-    let sentinel = root.join("sentinel-target.bin");
-    let sentinel_before = fs::read(&sentinel).unwrap();
-    let authority_before = fs::read(world.root.join(journal::JOURNAL_FILE)).unwrap();
-    assert_eq!(hash(&sentinel_before), sentinel_digest);
-    assert_eq!(hash(&authority_before), authority_digest);
-    eprintln!("[f3rb1-symlink] phase=verify links=real dangling=real");
-    for attempt in 1..=2 {
-        let result = world.run(u64::MAX);
-        assert_eq!(result.reclaimed_bytes, 0, "attempt {attempt}");
-        assert_eq!(result.retired_backups, 0, "attempt {attempt}");
-        assert!(
-            result
-                .entries
-                .iter()
-                .any(|entry| entry.transaction_id == old
-                    && entry.outcome == Outcome::RetainedUnknownOwnership),
-            "attempt {attempt}: the reparse-point content must be refused, not retired"
-        );
-        assert!(
-            backup.join("client.jar").exists(),
-            "attempt {attempt}: the whole mixed tree must remain preserved"
-        );
-        assert!(fs::symlink_metadata(&link).is_ok());
-        assert!(fs::symlink_metadata(&dangling).is_ok());
-        assert_eq!(fs::read(&sentinel).unwrap(), sentinel_before);
-        assert_eq!(hash(&fs::read(&sentinel).unwrap()), sentinel_digest);
-        assert_eq!(
-            fs::read(world.root.join("owner-sentinel")).unwrap(),
-            b"owner"
-        );
-        assert_eq!(
-            fs::read(world.root.join(journal::JOURNAL_FILE)).unwrap(),
-            authority_before,
-            "attempt {attempt}: retention must not change transaction authority"
-        );
-        eprintln!("[f3rb1-symlink] attempt={attempt} refused=true sentinelUnchanged=true");
-    }
-    assert!(
-        matches!(
-            super::super::validate_game_directory(&world.root.join("game")),
-            Ok(ValidationOutcome::Installed(result)) if result.status == ValidationStatus::Valid
-        ),
-        "the current installation must remain deeply valid"
-    );
-    // Removing a link never touches its target; do this before the
-    // disposable-root cleanup, exactly like the junction test.
-    fs::remove_file(&link).unwrap();
-    fs::remove_file(&dangling).unwrap();
+    symlink_gate::run_from_environment().unwrap();
 }
 
 /// Opt-in small storage fixture for the REAL desktop, not a gameplay fixture.
@@ -370,6 +167,7 @@ fn desktop_storage_fixture_helper() {
     let world = World {
         root: fixture_root,
         id: id.clone(),
+        cleanup: false,
     };
     let _lifecycle = crate::instances::lifecycle::lock_instance_operation(&managed, &id).unwrap();
     let _game = super::super::lock_game_target(&managed, &id).unwrap();
@@ -524,11 +322,25 @@ fn real_process_termination_during_retirement_releases_locks_and_restarts() {
 }
 impl Drop for World {
     fn drop(&mut self) {
-        assert_eq!(
-            fs::read(self.root.join("owner-sentinel")).unwrap(),
-            b"owner"
+        // Only World::new registers a positively created disposable root.
+        // Caller-supplied gate/desktop worlds never acquire cleanup authority.
+        // Preserve fixtures on assertion failure, including during unwinding.
+        if !self.cleanup || std::thread::panicking() {
+            return;
+        }
+        assert_eq!(self.root.parent(), Some(std::env::temp_dir().as_path()));
+        assert!(
+            self.root
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("aurora-f3rb-")
         );
-        fs::remove_dir_all(&self.root).unwrap(); // exact positively-created disposable root
+        assert!(!redirected(&fs::symlink_metadata(&self.root).unwrap()));
+        let sentinel = self.root.join("owner-sentinel");
+        assert!(!redirected(&fs::symlink_metadata(&sentinel).unwrap()));
+        assert_eq!(fs::read(sentinel).unwrap(), b"owner");
+        fs::remove_dir_all(&self.root).unwrap(); // World::new's exact disposable root
     }
 }
 

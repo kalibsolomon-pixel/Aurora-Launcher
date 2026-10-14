@@ -1,81 +1,87 @@
-# F3R-B1/B2 Windows file-symlink security gate driver.
+# F3R-B2a disposable REAL file-symlink gate. All fixtures are preserved.
+# No elevation or Windows settings change is performed by this script.
 #
-# Runs the real-retention refusal test against REAL file symbolic links
-# placed inside a candidate backup, with a sentinel OUTSIDE the managed
-# tree. The fixture lives only in a fresh, marked, direct child of $env:TEMP.
-#
-# This script changes no Windows security setting, modifies no registry
-# value, requests no elevation itself, and launches no production
-# application. It removes only its own marked temporary root.
-#
-# HOW TO RUN (owner instruction, one-time authorization)
-# -----------------------------------------------------
-# Creating a file symbolic link on Windows needs Developer Mode or
-# SeCreateSymbolicLinkPrivilege. Two supported executions:
-#
-# PREFERRED (link creation elevated, retention verification UNELEVATED):
-#   1. In an elevated PowerShell (the only privileged step):
-#        powershell -ExecutionPolicy Bypass -File docs\forge-f3rb1\run-symlink-gate.ps1 -Phase prepare
-#      This builds the disposable fixture and creates the two real links,
-#      then exits. It runs no retention decision.
-#   2. In an ordinary (unelevated) PowerShell:
-#        powershell -ExecutionPolicy Bypass -File docs\forge-f3rb1\run-symlink-gate.ps1 -Phase verify -Root <printed-root>
-#      This executes the real retention refusal assertions unelevated and is
-#      the result that counts as acceptance evidence.
-#
-# SINGLE-SHOT (everything in one elevated process; simplest, but the
-# retention assertions then also run elevated — recorded as that limitation):
-#   In an elevated PowerShell:
-#     powershell -ExecutionPolicy Bypass -File docs\forge-f3rb1\run-symlink-gate.ps1
-#
-# With Developer Mode enabled, either flow runs completely unelevated.
-#
-# OUTCOME SEMANTICS
-#   PASS    - the real links existed and retention refused the reparse-point
-#             content, preserved the sentinel byte-for-byte, reclaimed
-#             nothing, and changed no authority.
-#   BLOCKED - Windows refused unprivileged file-symlink creation. A creation
-#             refusal is never counted as a passing security assertion.
-
+# OWNER PROCEDURE (elevation awaits separate authorization):
+# prepare invokes Cargo: it may compile/link repository code and run build
+# scripts, initializes and promotes synthetic game fixtures, writes evidence,
+# and creates two real file links. It performs no retention decision.
+#   powershell -NoProfile -ExecutionPolicy Bypass -File docs\forge-f3rb1\run-symlink-gate.ps1 -Phase prepare
+# Then run verify in an ordinary process with the printed root:
+#   powershell -NoProfile -ExecutionPolicy Bypass -File docs\forge-f3rb1\run-symlink-gate.ps1 -Phase verify -Root <printed-root>
+# Review the source/build chain before authorizing privileged prepare. No
+# privileged execution is authorized by the F3R-B2a correction request.
+# Single-shot reports its actual mode; ELEVATED does not close the ordinary
+# process gate. PREPARED and failed link creation never constitute PASS.
 param(
     [ValidateSet("", "prepare", "verify")]
     [string]$Phase = "",
     [string]$Root = ""
 )
-
 $ErrorActionPreference = 'Stop'
 
-$id = [Security.Principal.WindowsIdentity]::GetCurrent()
-Write-Host ("User: " + $id.Name)
-Write-Host ("ElevatedAdmin: " + (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))
-try {
-  $dev = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -ErrorAction Stop).AllowDevelopmentWithoutDevLicense
-  Write-Host ("DeveloperMode: " + $(if ($dev -eq 1) { 'ENABLED' } else { "OFF ($dev)" }))
-} catch { Write-Host "DeveloperMode: OFF (key absent)" }
-$priv = whoami.exe /priv 2>&1 | Select-String 'SeCreateSymbolicLink'
-if ($priv) { Write-Host ("Privilege: " + $priv.Line.Trim()) } else { Write-Host "Privilege: SeCreateSymbolicLink NOT held in this token" }
-
-if ($Phase -eq "" -or $Phase -eq "prepare") {
-    if (-not $Root) { $Root = Join-Path $env:TEMP ("aurora-f3rb1-symlink-" + [guid]::NewGuid().ToString('N')) }
+# Actual process-token elevation, not Administrators group membership.
+Add-Type -TypeDefinition @"
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+public static class AuroraSymlinkToken {
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr token);
+    [DllImport("advapi32.dll", SetLastError=true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+    [DllImport("advapi32.dll", SetLastError=true)] static extern bool GetTokenInformation(IntPtr token, int kind, out int info, int size, out int returned);
+    public static bool Elevated() {
+        IntPtr token;
+        if (!OpenProcessToken(GetCurrentProcess(), 8, out token)) throw new Win32Exception(Marshal.GetLastWin32Error());
+        try {
+            int info, returned;
+            if (!GetTokenInformation(token, 20, out info, 4, out returned)) throw new Win32Exception(Marshal.GetLastWin32Error());
+            if (returned != 4) throw new InvalidOperationException("Unexpected token elevation result");
+            return info != 0;
+        } finally { CloseHandle(token); }
+    }
 }
-if (-not $Root) { throw "-Root is required for the verify phase (use the path printed by prepare)" }
-Write-Host ("Acceptance root: " + $Root)
+"@
+$mode = if ([AuroraSymlinkToken]::Elevated()) { 'ELEVATED' } else { 'UNELEVATED' }
+Write-Host "SYMLINK-GATE DRIVER: mode=$mode phase=$Phase"
+if ($Phase -eq 'verify' -and $mode -eq 'ELEVATED') { throw 'Elevated verify rejected; fixture preserved.' }
+if (-not $Root -and $Phase -ne 'verify') {
+    $Root = Join-Path ([IO.Path]::GetTempPath()) ('aurora-f3rb1-symlink-' + [guid]::NewGuid().ToString('N'))
+}
+if (-not $Root) { throw '-Root is required for verify.' }
+Write-Host "Acceptance root: $Root"
 
+$oldRoot = $env:AURORA_F3RB1_SYMLINK_ROOT
+$oldPhase = $env:AURORA_F3RB1_SYMLINK_PHASE
 $env:AURORA_F3RB1_SYMLINK_ROOT = $Root
-if ($Phase) { $env:AURORA_F3RB1_SYMLINK_PHASE = $Phase } else { Remove-Item env:AURORA_F3RB1_SYMLINK_PHASE -ErrorAction SilentlyContinue }
-
+$env:AURORA_F3RB1_SYMLINK_PHASE = $Phase
+$code = 1
 Push-Location (Join-Path $PSScriptRoot '..\..\src-tauri')
 try {
-  cargo test --release --lib install::retention::tests::windows_file_symlink_refusal_helper -- --exact --nocapture
-  if ($LASTEXITCODE -eq 0) {
-    if ($Phase -eq "verify") { Write-Host 'SYMLINK-GATE: PASS (real links existed; retention refused them UNELEVATED)' }
-    elseif ($Phase -eq "prepare") { Write-Host ('SYMLINK-GATE PREPARED: now run the verify phase unelevated with -Root ' + $Root) }
-    else { Write-Host 'SYMLINK-GATE: PASS (single-shot; retention ran in THIS process privilege level)' }
-  } else {
-    Write-Host 'SYMLINK-GATE: see test output above (BLOCKED means creation was refused; never counted as pass)'
-  }
-  exit $LASTEXITCODE
+    # Rust validates caller roots, marker CONTENTS, strict manifest, slot and
+    # inventory before retention. It independently checks its own token.
+    # No PowerShell cleanup exists, including when Cargo/validation fails.
+    $priorErrorPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue' # Cargo writes test evidence to stderr.
+    $output = @(cargo test --release --lib install::retention::tests::windows_file_symlink_refusal_helper -- --exact --ignored --nocapture 2>&1)
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $priorErrorPreference
+    $output | ForEach-Object { Write-Host $_ }
+    if ($code -eq 0) {
+        $text = $output -join "`n"
+        if ($Phase -eq 'prepare') {
+            if ($text -notmatch '(?m)^SYMLINK-GATE-HELPER: PREPARED links=real root=') { throw 'Cargo succeeded without expected PREPARED evidence.' }
+            Write-Host "SYMLINK-GATE: PREPARED mode=$mode; verify unelevated with -Root $Root"
+        } else {
+            $expected = 'SYMLINK-GATE-HELPER: VERIFIED mode=' + $mode + ' links=real dangling=real attempts=2 reclaimed=0 currentValid=true'
+            if ($text -notmatch ('(?m)^' + [regex]::Escape($expected) + '$')) { throw 'Cargo succeeded without expected real-link verification evidence.' }
+            if ($mode -eq 'UNELEVATED') { Write-Host 'SYMLINK-GATE: PASS mode=UNELEVATED (real assertions executed)' }
+            else { Write-Host 'SYMLINK-GATE: VERIFIED mode=ELEVATED (ordinary-process acceptance remains open)' }
+        }
+    } else { Write-Host 'SYMLINK-GATE: FAILED/BLOCKED; no acceptance claimed. See helper output.' }
 } finally {
-  Pop-Location
-  if ($Phase -ne "prepare") { Remove-Item -Recurse -Force $Root -ErrorAction SilentlyContinue }
+    Pop-Location
+    $env:AURORA_F3RB1_SYMLINK_ROOT = $oldRoot
+    $env:AURORA_F3RB1_SYMLINK_PHASE = $oldPhase
+    Write-Host "Fixture preserved (no automatic deletion): $Root"
 }
+exit $code
