@@ -21,7 +21,8 @@ use std::fmt;
 use url::Url;
 
 use crate::game::plan::{
-    CompositionError, GameInstallPlan, GameJavaRequirement, GameLibrary, merge_library_sets,
+    CompositionError, GameInstallPlan, GameJavaRequirement, GameLibrary,
+    installer_library_satisfied_by, merge_library_sets, neoforge_identity,
 };
 use crate::integrity::Sha1Digest;
 use crate::minecraft::metadata::MinecraftVersionId;
@@ -478,7 +479,7 @@ fn parse_data_value(
 /// loader Java floor of its own), and the loader's entry point wins.
 pub fn compose_neoforge_game_plan(
     minecraft: MinecraftInstallPlan,
-    neoforge: NeoForgePlan,
+    mut neoforge: NeoForgePlan,
 ) -> Result<GameInstallPlan, CompositionError> {
     if minecraft.minecraft_version() != neoforge.minecraft_version() {
         return Err(CompositionError::VersionMismatch {
@@ -495,6 +496,23 @@ pub fn compose_neoforge_game_plan(
         .map(|library| GameLibrary::NeoForge(library))
         .collect();
     let libraries = merge_library_sets(&minecraft, loader_libraries)?;
+
+    // The installer-tool set can overlap the composed client set exactly as
+    // Forge's does; the same one-destination-one-artifact rule applies.
+    let mut retained_installer = Vec::with_capacity(neoforge.installer_libraries.len());
+    for library in std::mem::take(&mut neoforge.installer_libraries) {
+        let satisfied = installer_library_satisfied_by(
+            &libraries,
+            neoforge_identity(library.coordinate()),
+            library.coordinate().version(),
+            library.artifact().sha1(),
+            &library.coordinate().as_maven_string(),
+        )?;
+        if !satisfied {
+            retained_installer.push(library);
+        }
+    }
+    neoforge.installer_libraries = retained_installer;
 
     let minecraft_java = minecraft.java();
     let java = GameJavaRequirement::without_loader_floor(

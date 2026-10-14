@@ -30,6 +30,13 @@ fn documents(
             include_str!("fixtures/1.20.4-49.2.0-version.json"),
             include_str!("fixtures/1.20.4-mojang.json"),
         ),
+        "1.21.11" => (
+            "1.21.11-61.2.0",
+            "ca682f0d537c65e9a112e1e7ab337095d486298f",
+            include_str!("fixtures/1.21.11-61.2.0-install_profile.json"),
+            include_str!("fixtures/1.21.11-61.2.0-version.json"),
+            include_str!("fixtures/1.21.11-mojang.json"),
+        ),
         _ => panic!("unsupported fixture"),
     }
 }
@@ -121,6 +128,149 @@ fn game(mc: &str) -> GameInstallPlan {
     let document = VersionDocument::from_json(documents(mc).4).unwrap();
     let base = crate::minecraft::plan::plan_version_document(&document, platform()).unwrap();
     compose_forge_game_plan(base, forge(mc)).unwrap()
+}
+
+/// F3R-B2: the official installer profile's tool libraries overlap the
+/// composed client set (1.20.4 ships the same verified gson 2.10.1 as
+/// Mojang's document; 1.20.1 overlaps on jopt-simple 5.0.4). Before the
+/// composition fix both sides were planned, materializing one destination
+/// twice and making the installed manifest unsealable. Composition must
+/// leave exactly one verified entry per managed destination, keep the
+/// merged order and provenance, preserve processor inputs, and keep every
+/// genuinely distinct library.
+#[test]
+fn installer_tool_overlaps_compose_to_one_destination_per_artifact() {
+    for (mc, overlap) in [
+        ("1.20.4", Some("com.google.code.gson:gson:2.10.1")),
+        ("1.20.1", Some("net.sf.jopt-simple:jopt-simple:5.0.4")),
+        // The modern installer's tool set no longer overlaps Mojang's:
+        // composition must retain everything.
+        ("1.21.11", None),
+    ] {
+        let forge_plan = forge(mc);
+        let processor_steps = forge_plan.processors().len();
+        let launch_libraries = forge_plan.libraries().len();
+        let installer_entries: Vec<String> = forge_plan
+            .installer_libraries()
+            .iter()
+            .map(|library| library.coordinate().as_maven_string())
+            .collect();
+        let document = VersionDocument::from_json(documents(mc).4).unwrap();
+        let base = crate::minecraft::plan::plan_version_document(&document, platform()).unwrap();
+        let mojang_count = base.libraries().len();
+        let composed = compose_forge_game_plan(base, forge_plan).unwrap();
+        let forge_half = composed.forge_loader().unwrap();
+
+        let merged_overlap: Vec<_> = overlap
+            .map(|overlap| {
+                // The overlapping installer-tool entry is dropped...
+                assert!(
+                    !forge_half
+                        .installer_libraries()
+                        .iter()
+                        .any(|library| library.coordinate().as_maven_string() == overlap),
+                    "{mc}: the overlapping installer entry must not be planned twice"
+                );
+                // ...and the composed set carries the Mojang-published copy once.
+                let entries: Vec<_> = composed
+                    .libraries()
+                    .iter()
+                    .filter(|library| library.coordinate_string() == overlap)
+                    .collect();
+                assert_eq!(entries.len(), 1, "{mc}");
+                assert_eq!(
+                    entries[0].provenance(),
+                    crate::game::plan::LibraryProvenance::Mojang,
+                    "{mc}"
+                );
+                entries
+            })
+            .unwrap_or_default();
+
+        // One destination per artifact across BOTH materialized sets —
+        // the original defect planned the same relative path twice.
+        let mut destinations: Vec<String> = composed
+            .libraries()
+            .iter()
+            .map(|library| library.repository_path())
+            .collect();
+        destinations.extend(
+            forge_half
+                .installer_libraries()
+                .iter()
+                .map(|library| library.path().to_owned()),
+        );
+        let mut unique = destinations.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(
+            unique.len(),
+            destinations.len(),
+            "{mc}: duplicate destinations"
+        );
+
+        // The merge itself follows the shared boundary's established rules
+        // (exact duplicates collapse): Mojang document order first, then
+        // Forge launch libraries, with only genuine additions beyond the
+        // Mojang set. The installer filter never touches this list.
+        assert!(
+            mojang_count <= composed.libraries().len()
+                && composed.libraries().len() <= mojang_count + launch_libraries,
+            "{mc}"
+        );
+        assert_eq!(
+            composed.libraries()[0].provenance(),
+            crate::game::plan::LibraryProvenance::Mojang,
+            "{mc}"
+        );
+        // Every non-overlapping installer entry survives, in order.
+        let retained: Vec<String> = forge_half
+            .installer_libraries()
+            .iter()
+            .map(|library| library.coordinate().as_maven_string())
+            .collect();
+        assert_eq!(
+            retained,
+            installer_entries
+                .iter()
+                .filter(|entry| Some(entry.as_str()) != overlap)
+                .cloned()
+                .collect::<Vec<_>>(),
+            "{mc}: only the overlapping entry may disappear"
+        );
+
+        // Processor inputs survive: the steps are untouched, and the only
+        // destination composition can remove is the overlap's — which the
+        // composed Mojang entry still plans. (Tool jars like installertools
+        // are extracted from the installer archive by the processor runner,
+        // not planned here.)
+        assert_eq!(forge_half.processors().len(), processor_steps, "{mc}");
+        let planned: std::collections::BTreeSet<String> = composed
+            .libraries()
+            .iter()
+            .map(|library| format!("libraries/{}", library.repository_path()))
+            .chain(
+                forge_half
+                    .installer_libraries()
+                    .iter()
+                    .map(|library| format!("libraries/{}", library.path())),
+            )
+            .collect();
+        let overlap_destination = merged_overlap
+            .first()
+            .map(|entry| format!("libraries/{}", entry.repository_path()));
+        for step in forge_half.processors() {
+            for coordinate in std::iter::once(step.jar()).chain(step.classpath()) {
+                let destination = format!("libraries/{}", coordinate.repository_path());
+                if Some(destination.as_str()) == overlap_destination.as_deref() {
+                    assert!(
+                        planned.contains(&destination),
+                        "{mc}: processor input {destination} lost its planned destination"
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[test]

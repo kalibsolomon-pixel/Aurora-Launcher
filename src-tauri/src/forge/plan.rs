@@ -35,7 +35,7 @@ use crate::forge::metadata::{
 };
 use crate::game::plan::{
     CompositionError, GameInstallPlan, GameJavaRequirement, GameLibrary, LoaderPlan,
-    merge_library_sets,
+    forge_identity, installer_library_satisfied_by, merge_library_sets,
 };
 use crate::integrity::Sha1Digest;
 use crate::minecraft::metadata::MinecraftVersionId;
@@ -724,6 +724,27 @@ pub fn compose_forge_game_plan(
         .map(GameLibrary::Forge)
         .collect();
     let libraries = merge_library_sets(&minecraft, loader_libraries)?;
+
+    // The installer-tool set overlaps the composed client set (1.20.4's
+    // gson 2.10.1, 1.20.1's jopt-simple 5.0.4 — byte-identical official
+    // publications). One managed destination carries exactly one verified
+    // artifact: drop installer entries the composed set already satisfies,
+    // refuse entries that claim the same destination with different bytes,
+    // and keep genuinely distinct versions at their own destinations.
+    let mut retained_installer = Vec::with_capacity(forge.installer_libraries.len());
+    for library in std::mem::take(&mut forge.installer_libraries) {
+        let satisfied = installer_library_satisfied_by(
+            &libraries,
+            forge_identity(library.coordinate()),
+            library.coordinate().version(),
+            library.artifact().sha1(),
+            &library.coordinate().as_maven_string(),
+        )?;
+        if !satisfied {
+            retained_installer.push(library);
+        }
+    }
+    forge.installer_libraries = retained_installer;
 
     let minecraft_java = minecraft.java();
     let java = GameJavaRequirement::without_loader_floor(
