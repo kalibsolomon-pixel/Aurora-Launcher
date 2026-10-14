@@ -41,6 +41,7 @@
   // svelte-ignore state_referenced_locally
   let browseKind = $state<BrowseKind>(standalonePackBrowse ? "modpack" : kind);
   let query = $state("");
+  let resultQuery = $state("");
   let categories = $state<string[]>([]);
   let sort = $state<BrowseSort>("relevance");
   let page = $state<ModrinthSearchPage | null>(null);
@@ -61,6 +62,7 @@
   let blockedProjects = $state<Record<string, { message: string; conflict: ProviderConflict | null }>>({});
   let categoryPickerOpen = $state(false);
   let categoryTrigger: HTMLButtonElement | undefined = $state();
+  let searchInput: HTMLInputElement | undefined = $state();
   let allCategories = $state<ProviderCategory[]>([]);
   let categoriesError = $state("");
   let requestSerial = 0;
@@ -126,6 +128,7 @@
       });
       if (serial !== requestSerial) return;
       page = appendBrowsePage(page, result, offset);
+      resultQuery = term;
       nextOffset = result.offset + 20;
       if (offset === 0 && !term.trim() && !categories.length && sort === "relevance") {
         defaultPages.put(instanceId, browseKind, minecraftVersion, result);
@@ -168,6 +171,12 @@
     categories = [];
     sort = "relevance";
     query = "";
+    void search(0, "");
+  }
+
+  function clearSearch(): void {
+    query = "";
+    searchInput?.focus();
     void search(0, "");
   }
 
@@ -351,8 +360,8 @@
 <section class="browse" class:browse-mods={browseKind === "mod"} aria-label="Browse Modrinth">
   <div class="browse-heading">
     <div>
-      <h3 class="group-title">Browse Modrinth</h3>
-      <p class="group-subtitle">{browseKind === "modpack" ? "Choose an exact Fabric pack version. Its declared Minecraft and loader versions determine the new instance." : `Results are filtered for this instance's Minecraft ${minecraftVersion}${browseKind === "mod" ? ` and ${loaderLabel}` : ""}. Compatibility is checked before installation.`}</p>
+      <h3 class="group-title">Discover {browseKindLabel(browseKind)}</h3>
+      <p class="group-subtitle">{browseKind === "modpack" ? "Review an exact Fabric pack version to create a new independent instance." : `Install into ${instanceName}. Compatibility and required dependencies are checked before installation.`}</p>
     </div>
     <span class="source">Source: Modrinth</span>
   </div>
@@ -368,7 +377,10 @@
   <form class="browse-search" onsubmit={(event) => { event.preventDefault(); void search(); }}>
     <label>
       <span class="field-label">Find {browseKindNoun(browseKind)}</span>
-      <input type="search" bind:value={query} oninput={(event) => { if (!event.currentTarget.value.trim()) void search(0, ""); }} maxlength="160" placeholder="Search Modrinth" />
+      <span class="search-field">
+        <input type="search" bind:this={searchInput} bind:value={query} oninput={(event) => { if (!event.currentTarget.value.trim()) void search(0, ""); }} maxlength="160" placeholder={`Search ${browseKindNoun(browseKind)} on Modrinth`} />
+        {#if query}<button type="button" class="clear-search" aria-label="Clear search" onclick={clearSearch}>×</button>{/if}
+      </span>
     </label>
     <button type="submit" class="btn" disabled={busy !== null}>{busy === "search" ? "Searching…" : "Search"}</button>
   </form>
@@ -425,7 +437,7 @@
     {#if categories.length || sort !== "relevance" || query.trim()}
       <button type="button" class="btn btn-quiet" onclick={clearFilters}>Clear filters</button>
     {/if}
-    <span class="filter-context">{browseKind === "modpack" ? "Fabric modpacks · new instance" : `Minecraft ${minecraftVersion}${browseKind === "mod" ? " · Fabric" : ""}`}</span>
+    <span class="filter-context">{browseKind === "modpack" ? "Fabric modpacks · new instance" : `Minecraft ${minecraftVersion}${browseKind === "mod" ? ` · ${loaderLabel}` : ""}`}</span>
   </div>
 
   {#if categories.length}
@@ -437,7 +449,10 @@
   {/if}
 
   {#if error}
-    <p class="inline-message inline-message-error" role="alert">{error.message} <code>{error.code}</code></p>
+    <div class="browse-error" role="alert">
+      <p class="inline-message inline-message-error">{error.message} <code>{error.code}</code></p>
+      {#if !project}<button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => search(page ? nextOffset : 0)}>Retry search</button>{/if}
+    </div>
   {/if}
   {#if busy && busy !== "install"}<p class="browse-status" class:browse-loading={busy === "search" && !page} role="status"><span class="spinner" aria-hidden="true"></span> {busy === "search" ? "Loading Modrinth projects…" : busy === "details" ? "Loading versions…" : "Resolving dependencies…"}</p>{/if}
   {#if busy === "install"}<p class="browse-status" role="status"><span class="spinner" aria-hidden="true"></span> {browseKind === "modpack" ? packPhaseLabel : "Downloading and verifying content…"}</p>{/if}
@@ -468,10 +483,11 @@
           <button type="button" class="btn" disabled={busy !== null || !versionId} onclick={inspectPack}>Review pack installation</button>
         {/if}
       {:else}
-        <p class="browse-note">No Fabric pack version is available.</p>
+        <p class="browse-note">{browseKind === "modpack" ? "No supported Fabric pack version is available." : "No compatible version is available for this instance."}</p>
       {/if}
     </div>
   {:else if page}
+    <p class="result-count" role="status">{page.hits.length.toLocaleString()} of {page.totalHits.toLocaleString()} {browseKindNoun(browseKind)}{resultQuery.trim() ? ` matching “${resultQuery.trim()}”` : ""}</p>
     {#if page.hits.length}
       <div class="browse-list">
         {#each page.hits as hit (hit.projectId)}
@@ -499,10 +515,14 @@
         {/each}
       </div>
     {:else}
-      <p class="browse-note">{page.totalHits > 0 ? "No matching projects on this page." : "No matching projects for this instance."}</p>
+      <div class="browse-empty" role="status">
+        <h4>{page.totalHits > 0 ? "No projects on this page" : query.trim() || categories.length ? "No matching results" : browseKind === "modpack" ? "No Fabric modpacks found" : "No compatible content found"}</h4>
+        <p>{query.trim() || categories.length ? "Try another search or clear your filters." : browseKind === "modpack" ? "Try again later or search for a specific pack." : `No ${browseKindNoun(browseKind)} were found for this instance's current compatibility filters.`}</p>
+        {#if query.trim() || categories.length}<button type="button" class="btn btn-quiet" onclick={clearFilters}>Clear filters</button>{/if}
+      </div>
     {/if}
     {#if nextOffset < page.totalHits}
-      <button type="button" class="btn btn-quiet more" disabled={busy !== null} onclick={() => search(nextOffset)}>Load more</button>
+      <button type="button" class="btn btn-quiet more" disabled={busy !== null} onclick={() => search(nextOffset)}>{busy === "search" ? "Loading…" : "Load more"}</button>
     {/if}
   {/if}
 
@@ -561,9 +581,26 @@
   .browse { min-width: 0; container-type: inline-size; }
   .browse-heading, .browse-search, .browse-row, .preview-actions, .browse-filters { display: flex; gap: var(--space-3); align-items: center; }
   .browse-heading { justify-content: space-between; margin-bottom: var(--space-3); }
-  .browse-heading .group-subtitle { max-width: 50ch; }
+  .browse-heading { align-items: flex-start; }
+  .browse-heading > div { min-width: 0; flex: 1; }
+  .browse-heading .group-subtitle { max-width: 72ch; color: var(--color-text-secondary); }
   .source, .browse-meta, .filter-context { font-size: var(--text-metadata); color: var(--color-text-muted); }
-  .source { white-space: nowrap; }
+  .source { white-space: nowrap; color: var(--color-text-secondary); }
+  .search-field { position: relative; display: flex; min-width: 0; }
+  .search-field input { padding-right: 44px !important; }
+  .search-field input::-webkit-search-cancel-button { appearance: none; }
+  .clear-search { position: absolute; right: 0; top: 0; bottom: 0; width: 40px; border: none; border-radius: var(--f-radius-control); background: transparent; color: var(--color-text-secondary); font: inherit; cursor: pointer; }
+  .clear-search:hover { color: var(--color-text); background: var(--color-surface-hover); }
+  .browse-search label { min-width: 0; }
+  .browse-search input, .browse-search > .btn { min-height: 40px; border-radius: var(--f-radius-control); }
+  .browse-search > .btn { flex: none; }
+  .result-count { margin: 0 0 var(--space-3); font-size: var(--text-metadata); color: var(--color-text-secondary); overflow-wrap: anywhere; }
+  .browse-error { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+  .browse-error p { flex: 1 1 20em; margin: 0; overflow-wrap: anywhere; }
+  .browse-empty { display: grid; justify-items: start; align-content: center; gap: var(--space-2); min-height: 120px; padding: var(--space-4); background: var(--f-content-panel); border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); }
+  .browse-empty h4, .browse-empty p { margin: 0; }
+  .browse-empty h4 { font-size: var(--text-body); }
+  .browse-empty p { font-size: var(--text-secondary); color: var(--color-text-secondary); }
   .browse-kind-tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; }
   .browse-kind-tabs [aria-pressed="true"] { color: var(--color-text); background: var(--color-surface-raised); }
   .browse-search { align-items: end; margin-bottom: var(--space-3); }
@@ -573,15 +610,15 @@
      each one up into a full-width padded box, tearing the picker apart. */
   .browse input[type="search"], .browse select { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; }
   .browse-filters { flex-wrap: wrap; align-items: end; gap: var(--space-3); margin-bottom: var(--space-4); }
-  .sort-control, .category-filter { display: grid; gap: var(--space-1); width: 180px; max-width: 100%; }
+  .sort-control, .category-filter { display: grid; gap: var(--space-1); width: max(180px, 12em); max-width: 100%; }
   .filter-context { margin-left: auto; padding-bottom: var(--space-2); overflow-wrap: anywhere; }
   .category-filter { position: relative; }
-  .browse .filter-input { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); width: 100%; height: 40px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; font-size: var(--text-body); cursor: pointer; }
+  .browse .filter-input { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); width: 100%; min-height: 40px; height: auto; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--f-radius-control); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; font-size: var(--text-body); cursor: pointer; }
   .browse .filter-input:hover { border-color: var(--color-text-muted); background: var(--color-surface-hover); }
   .browse .filter-input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   .select-wrap { position: relative; display: block; }
   .browse select.filter-input { appearance: none; padding-right: 36px; }
-  .filter-chevron { position: absolute; right: var(--space-3); top: 0; height: 40px; display: flex; align-items: center; pointer-events: none; }
+  .filter-chevron { position: absolute; right: var(--space-3); inset-block: 0; display: flex; align-items: center; pointer-events: none; }
   /* Vertical scrolling only: rows wrap internally, so no horizontal
      scrollbar can appear in normal use. */
   .category-popover { position: absolute; z-index: 3; top: calc(100% + var(--space-2)); left: 0; width: 300px; max-width: calc(100vw - 48px); max-height: 320px; overflow-y: auto; overflow-x: hidden; padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-surface-raised); box-shadow: var(--shadow-group); }
@@ -595,7 +632,7 @@
   .category-option span { flex: 1; min-width: 0; line-height: 1.3; overflow-wrap: anywhere; }
   .selected-categories { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); }
   .category-chip { padding: 2px var(--space-2); border: none; border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent); font-size: var(--text-metadata); cursor: pointer; }
-  .browse-status { display: flex; align-items: center; gap: var(--space-2); }
+  .browse-status { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); background: var(--f-content-panel); color: var(--color-text-secondary); overflow-wrap: anywhere; }
   .browse-loading { min-height: 96px; }
   .browse-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
   .browse-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: start; gap: var(--space-2) var(--space-3); padding: var(--space-4); border: 1px solid var(--color-surface-edge); border-radius: var(--radius-md); background: var(--f-panel); }
@@ -639,9 +676,7 @@
   .browse-mods .browse-copy h4 { font-size: var(--text-body); font-weight: 600; }
   .browse-mods .browse-copy p { margin-block: var(--space-1); font-size: var(--text-secondary); }
   .browse-mods .browse-actions .btn { min-height: 40px; }
-  .browse-mods > .browse-note,
   .browse-mods > .browse-status { padding: var(--space-4); border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); background: var(--f-content-panel); color: var(--color-text-secondary); }
-  .browse-mods > .browse-note { min-height: 96px; display: grid; align-content: center; margin: 0; font-size: var(--text-body); }
   @container (min-width: 561px) and (max-width: 900px) {
     .browse-mods .browse-row { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; }
     .browse-mods .browse-glyph { grid-row: 1; }
