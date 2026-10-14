@@ -34,11 +34,13 @@
     return () => { document.removeEventListener('visibilitychange', update); width.removeEventListener('change', update); };
   });
 </script>
-<div class="player-preview">
+<div class="player-preview" class:has-skin={hasSkin}>
   <!-- Passive visual surface: the arrows below are the only manual rotation. -->
   <div class="player-model" role="img" aria-label={hasSkin ? 'Current Minecraft player skin' : 'Player skin loading'}>
     {#if hasSkin}
       <canvas bind:this={canvas} width={PLAYER_RENDER_WIDTH} height={PLAYER_RENDER_HEIGHT} aria-hidden="true" class:revealed></canvas>
+    {:else}
+      <p class="player-placeholder">{launcher.selectedAccount ? 'Your skin will appear here when available.' : 'Sign in to preview your Minecraft skin.'}</p>
     {/if}
   </div>
   {#if hasSkin}
@@ -55,8 +57,9 @@
 </div>
 <style>
   .player-preview { --player-max-h: clamp(240px, 36vh, 320px); display: flex; flex-direction: column; align-items: center; gap: var(--space-3); min-width: 0; position: relative; isolation: isolate; }
-  .player-preview::before { content: ''; position: absolute; z-index: -1; inset: 0 4% 40px; background: radial-gradient(ellipse at 50% 62%, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 68%); pointer-events: none; }
-  .player-preview::after { content: ''; position: absolute; z-index: -1; width: 48%; height: 24px; bottom: 70px; border-radius: 50%; background: radial-gradient(ellipse, rgb(0 0 0 / 32%), transparent 70%); pointer-events: none; }
+  .player-preview.has-skin::before { content: ''; position: absolute; z-index: -1; inset: 0 4% 40px; background: radial-gradient(ellipse at 50% 62%, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 68%); pointer-events: none; }
+  .player-preview.has-skin::after { content: ''; position: absolute; z-index: -1; width: 48%; height: 24px; bottom: 70px; border-radius: 50%; background: radial-gradient(ellipse, rgb(0 0 0 / 32%), transparent 70%); pointer-events: none; }
+  .player-placeholder { max-width: 20ch; margin: 0; text-align: center; font-size: var(--text-metadata); line-height: 1.7; color: var(--color-text-secondary); }
   /* The model is bounded so the model plus the control row fits the visible
      window: the approved large scale applies while space allows and yields
      only when the viewport is constrained. The canvas width is derived from
