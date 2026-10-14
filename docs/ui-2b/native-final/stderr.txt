@@ -1,0 +1,19 @@
+[aurora-launcher] starting native backend
+[aurora-launcher] backend ready; managed data root: C:\Users\kalib\AppData\Local\Temp\aurora-ui2b-ac00285c-ecac-48ac-ba34-396b1811f138\managed
+[aurora-launcher] local mod operation failed (mod_inventory_unavailable): the instance mods directory does not exist
+[aurora-launcher] content operation failed (content_unavailable): content I/O failed: The system cannot find the file specified. (os error 2)
+[aurora-launcher] content operation failed (content_unavailable): content I/O failed: The system cannot find the file specified. (os error 2)
+[aurora-launcher] content operation failed (content_unavailable): content I/O failed: The system cannot find the file specified. (os error 2)
+[aurora-launcher] content operation failed (content_unavailable): content I/O failed: The system cannot find the file specified. (os error 2)
+[aurora-launcher] local mod operation failed (mod_inventory_unavailable): the instance mods directory does not exist
+[aurora-launcher] content operation failed (content_unavailable): content I/O failed: The system cannot find the file specified. (os error 2)
+[aurora-launcher] content operation failed (content_unavailable): content I/O failed: The system cannot find the file specified. (os error 2)
+[aurora-launcher] content operation failed (content_unavailable): content I/O failed: The system cannot find the file specified. (os error 2)
+[aurora-launcher] local mod operation failed (mod_inventory_unavailable): the instance mods directory does not exist
+[aurora-launcher] content operation failed (content_unavailable): content I/O failed: The system cannot find the file specified. (os error 2)
+[aurora-launcher] local mod operation failed (mod_inventory_unavailable): the instance mods directory does not exist
+[aurora-launcher] content operation failed (content_unavailable): content I/O failed: The system cannot find the file specified. (os error 2)
+[aurora-launcher] content operation failed (content_unavailable): content I/O failed: The system cannot find the file specified. (os error 2)
+[aurora-launcher] content operation failed (content_unavailable): content I/O failed: The system cannot find the file specified. (os error 2)
+[aurora-launcher] local mod operation failed (mod_inventory_unavailable): the instance mods directory does not exist
+[aurora-launcher] content operation failed (content_unavailable): content I/O failed: The system cannot find the file specified. (os error 2)

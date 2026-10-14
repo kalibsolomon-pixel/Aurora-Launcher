@@ -1,0 +1,6 @@
+PASS Instance identity, honest installed metadata and existing Settings route
+PASS Player stays distinct from instance and hero contains both controls
+PASS Home contrast foundation is scoped and adds no backdrop-filter stack
+PASS Reduced transparency uses opaque theme surfaces and reduced motion keeps still image
+PASS 200% text keeps heading, action, selector and error separated at minimum width
+PASS 5 UI-2B browser cases; zero page errors

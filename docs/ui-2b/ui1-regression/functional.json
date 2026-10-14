@@ -1,0 +1,19 @@
+{
+  "cases": 11,
+  "results": [
+    "Home/Mods containment and account dialog at 1440x900",
+    "Home/Mods containment and account dialog at 1280x800",
+    "Home/Mods containment and account dialog at 1024x768",
+    "Home/Mods containment and account dialog at 720x520",
+    "Sidebar focus/hover, active marker and Settings navigation",
+    "Instance picker keyboard selection, long names and readiness",
+    "Widget sizing/order persist through reload; history widgets still load",
+    "Mods search, categories, sorting, pagination and installed state",
+    "Mods empty/loading/error and safe fixture install feedback",
+    "125%/200% text scale, long mod titles, filters and minimum-size wrapping",
+    "Reduced motion, readable metadata contrast and no per-result blur"
+  ],
+  "pageErrors": [],
+  "nativeAcceptance": false,
+  "mutationBoundary": "All interactions use synthetic DTOs and session storage; external network blocked"
+}

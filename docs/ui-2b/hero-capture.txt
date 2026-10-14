@@ -1,0 +1,1 @@
+PASS hero: 4 measured captures; zero page errors

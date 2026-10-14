@@ -1,0 +1,94 @@
+[
+  {
+    "viewport": [
+      1440,
+      900
+    ],
+    "heroHeight": [
+      501.96875,
+      436
+    ],
+    "firstWidgetY": [
+      593.96875,
+      540
+    ],
+    "scrollExtent": [
+      14,
+      0
+    ],
+    "launch": [
+      320,
+      80
+    ],
+    "overflow": false
+  },
+  {
+    "viewport": [
+      1280,
+      800
+    ],
+    "heroHeight": [
+      457.984375,
+      403.984375
+    ],
+    "firstWidgetY": [
+      549.984375,
+      507.984375
+    ],
+    "scrollExtent": [
+      70,
+      28
+    ],
+    "launch": [
+      320,
+      80
+    ],
+    "overflow": false
+  },
+  {
+    "viewport": [
+      1024,
+      768
+    ],
+    "heroHeight": [
+      443.890625,
+      392.46875
+    ],
+    "firstWidgetY": [
+      535.890625,
+      496.46875
+    ],
+    "scrollExtent": [
+      88,
+      48
+    ],
+    "launch": [
+      320,
+      80
+    ],
+    "overflow": false
+  },
+  {
+    "viewport": [
+      720,
+      520
+    ],
+    "heroHeight": [
+      96,
+      294.859375
+    ],
+    "firstWidgetY": [
+      180,
+      390.859375
+    ],
+    "scrollExtent": [
+      198,
+      409
+    ],
+    "launch": [
+      320,
+      80
+    ],
+    "overflow": false
+  }
+]

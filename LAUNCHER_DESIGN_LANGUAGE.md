@@ -1,5 +1,10 @@
 # Aurora Launcher design language
 
+> **UI-2B Home pilot:** [UI_2B_BOREALIS_HOME_UNIFICATION.md](UI_2B_BOREALIS_HOME_UNIFICATION.md)
+> records the shared instance/player hero, localized Borealis contrast, aligned
+> widget materials and subtle rail boundary. Native medium/minimum size acceptance
+> remains incomplete; this is pending owner review, not a launcher-wide rollout.
+
 > **Phase F pilot:** [PHASE_F_DESIGN.md](PHASE_F_DESIGN.md) supersedes this document's shell, Home and launcher Settings composition only. These surfaces now use a 40 px Windows title bar, icon rail, large logo/Play hero, direct widget editor and independent Theme/Background/Accent choices. Default window size is 1120×760, minimum 720×520. Remaining interiors keep the system below until owner visual approval; this pilot is not approval for a launcher-wide restyle.
 
 > **UI-1 refinement:** [UI_1_NAVIGATION_DESIGN_PILOT.md](UI_1_NAVIGATION_DESIGN_PILOT.md) records the compact 96px rail, Home spacing/metadata refinement and Mods-only browse controls/results pilot. Borealis materials, accents, navigation destinations and all native behavior remain unchanged. Browser fixture acceptance is ready for owner visual review; this does not authorize a wider rollout or a release.

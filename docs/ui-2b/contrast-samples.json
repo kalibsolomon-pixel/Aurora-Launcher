@@ -1,0 +1,56 @@
+{
+  "scope": "1280x800 reduced-motion browser capture; background pixels adjacent to hero metadata; existing secondary text color; sampled contrast, not a whole-app WCAG audit",
+  "samples": [
+    {
+      "point": [
+        172,
+        174
+      ],
+      "background": [
+        19,
+        37,
+        44
+      ],
+      "foreground": [
+        195,
+        204,
+        217
+      ],
+      "ratio": 9.75
+    },
+    {
+      "point": [
+        292,
+        174
+      ],
+      "background": [
+        18,
+        35,
+        45
+      ],
+      "foreground": [
+        195,
+        204,
+        217
+      ],
+      "ratio": 9.94
+    },
+    {
+      "point": [
+        420,
+        174
+      ],
+      "background": [
+        18,
+        29,
+        42
+      ],
+      "foreground": [
+        195,
+        204,
+        217
+      ],
+      "ratio": 10.49
+    }
+  ]
+}

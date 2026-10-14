@@ -1,0 +1,32 @@
+PASS Hierarchy, external preview and containment 1440x900
+PASS Hierarchy, external preview and containment 1280x800
+PASS Hierarchy, external preview and containment 1024x768
+PASS Hierarchy, external preview and containment 900x700
+PASS Hierarchy, external preview and containment 801x600
+PASS Hierarchy, external preview and containment 720x520
+PASS Instance keyboard selection and simplified card
+PASS Play calls existing native command once and shows Running
+PASS Play focus, hover, pressed and disabled treatments
+PASS Checking, blocked, unavailable, Starting, Running and failed presentations
+PASS Instance management stays available in existing navigation; account entry intact
+PASS Player account isolation, manual controls and fallback
+PASS Sparse, two, all widgets, mixed sizes and DOM order
+PASS Widget size/order/hide and persisted reload; unknown/hidden slots retained
+PASS History valid, empty, unavailable and loading stay distinct
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: dropdown remains within viewport
+    at file:///C:/Dev/aurora-launcher/tools/visual/ui2.test.mjs:161:137
+    at async check (file:///C:/Dev/aurora-launcher/tools/visual/ui2.test.mjs:12:37)
+    at async file:///C:/Dev/aurora-launcher/tools/visual/ui2.test.mjs:158:3 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.21.0

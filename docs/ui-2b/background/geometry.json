@@ -1,0 +1,482 @@
+{
+  "provenance": "Chromium browser fixtures; real components, synthetic DTOs, DPR 1, 100% CSS scale, reduced motion, blocked external requests; no native titlebar",
+  "errors": [],
+  "records": [
+    {
+      "state": "normal",
+      "name": "home-1440x900",
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 900,
+        "right": 96,
+        "bottom": 900
+      },
+      "account": {
+        "x": 8,
+        "y": 777.8125,
+        "width": 80,
+        "height": 108.1875,
+        "right": 88,
+        "bottom": 886
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 1344,
+        "height": 900,
+        "right": 1440,
+        "bottom": 900
+      },
+      "home": {
+        "x": 153.59375,
+        "y": 24,
+        "width": 1213.8125,
+        "height": 436,
+        "right": 1367.40625,
+        "bottom": 460
+      },
+      "play": {
+        "x": 179.59375,
+        "y": 236.421875,
+        "width": 266,
+        "height": 78,
+        "right": 445.59375,
+        "bottom": 314.421875
+      },
+      "instance": {
+        "x": 178.59375,
+        "y": 235.421875,
+        "width": 320,
+        "height": 80,
+        "right": 498.59375,
+        "bottom": 315.421875
+      },
+      "player": {
+        "x": 772.5,
+        "y": 49,
+        "width": 569.90625,
+        "height": 386,
+        "right": 1342.40625,
+        "bottom": 435
+      },
+      "widgets": {
+        "x": 153.59375,
+        "y": 476,
+        "width": 1213.8125,
+        "height": 332,
+        "right": 1367.40625,
+        "bottom": 808
+      },
+      "workspace": null,
+      "search": null,
+      "searchButton": null,
+      "category": null,
+      "firstResult": null,
+      "resultColumns": null,
+      "filters": null,
+      "metadataSize": null,
+      "gridColumns": "594.906px 594.906px",
+      "cards": [
+        {
+          "id": "playtime",
+          "x": 153.59375,
+          "y": 528,
+          "width": 594.90625,
+          "height": 280,
+          "right": 748.5,
+          "bottom": 808
+        },
+        {
+          "id": "recent-servers",
+          "x": 772.5,
+          "y": 528,
+          "width": 594.90625,
+          "height": 280,
+          "right": 1367.40625,
+          "bottom": 808
+        }
+      ],
+      "previewDisplay": "flex",
+      "canvas": {
+        "x": 945.453125,
+        "y": 49,
+        "width": 224,
+        "height": 320,
+        "right": 1169.453125,
+        "bottom": 369
+      },
+      "scrollExtent": 0,
+      "contentMargins": [
+        "57.6px",
+        "57.6px"
+      ],
+      "firstWidgetY": 528
+    },
+    {
+      "state": "normal",
+      "name": "home-1280x800",
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 800,
+        "right": 96,
+        "bottom": 800
+      },
+      "account": {
+        "x": 8,
+        "y": 677.8125,
+        "width": 80,
+        "height": 108.1875,
+        "right": 88,
+        "bottom": 786
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 1184,
+        "height": 800,
+        "right": 1280,
+        "bottom": 800
+      },
+      "home": {
+        "x": 147.1875,
+        "y": 24,
+        "width": 1066.625,
+        "height": 403.984375,
+        "right": 1213.8125,
+        "bottom": 427.984375
+      },
+      "play": {
+        "x": 173.1875,
+        "y": 220.421875,
+        "width": 266,
+        "height": 78,
+        "right": 439.1875,
+        "bottom": 298.421875
+      },
+      "instance": {
+        "x": 172.1875,
+        "y": 219.421875,
+        "width": 320,
+        "height": 80,
+        "right": 492.1875,
+        "bottom": 299.421875
+      },
+      "player": {
+        "x": 692.5,
+        "y": 49,
+        "width": 496.3125,
+        "height": 353.984375,
+        "right": 1188.8125,
+        "bottom": 402.984375
+      },
+      "widgets": {
+        "x": 147.1875,
+        "y": 443.984375,
+        "width": 1066.625,
+        "height": 332,
+        "right": 1213.8125,
+        "bottom": 775.984375
+      },
+      "workspace": null,
+      "search": null,
+      "searchButton": null,
+      "category": null,
+      "firstResult": null,
+      "resultColumns": null,
+      "filters": null,
+      "metadataSize": null,
+      "gridColumns": "521.312px 521.312px",
+      "cards": [
+        {
+          "id": "playtime",
+          "x": 147.1875,
+          "y": 495.984375,
+          "width": 521.3125,
+          "height": 280,
+          "right": 668.5,
+          "bottom": 775.984375
+        },
+        {
+          "id": "recent-servers",
+          "x": 692.5,
+          "y": 495.984375,
+          "width": 521.3125,
+          "height": 280,
+          "right": 1213.8125,
+          "bottom": 775.984375
+        }
+      ],
+      "previewDisplay": "flex",
+      "canvas": {
+        "x": 839.859375,
+        "y": 49,
+        "width": 201.59375,
+        "height": 287.984375,
+        "right": 1041.453125,
+        "bottom": 336.984375
+      },
+      "scrollExtent": 16,
+      "contentMargins": [
+        "51.2px",
+        "51.2px"
+      ],
+      "firstWidgetY": 495.984375
+    },
+    {
+      "state": "normal",
+      "name": "home-1024x768",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 768,
+        "right": 96,
+        "bottom": 768
+      },
+      "account": {
+        "x": 8,
+        "y": 645.8125,
+        "width": 80,
+        "height": 108.1875,
+        "right": 88,
+        "bottom": 754
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 928,
+        "height": 768,
+        "right": 1024,
+        "bottom": 768
+      },
+      "home": {
+        "x": 136.953125,
+        "y": 24,
+        "width": 831.09375,
+        "height": 392.46875,
+        "right": 968.046875,
+        "bottom": 416.46875
+      },
+      "play": {
+        "x": 162.953125,
+        "y": 214.65625,
+        "width": 266,
+        "height": 78,
+        "right": 428.953125,
+        "bottom": 292.65625
+      },
+      "instance": {
+        "x": 161.953125,
+        "y": 213.65625,
+        "width": 320,
+        "height": 80,
+        "right": 481.953125,
+        "bottom": 293.65625
+      },
+      "player": {
+        "x": 564.5,
+        "y": 49,
+        "width": 378.546875,
+        "height": 342.46875,
+        "right": 943.046875,
+        "bottom": 391.46875
+      },
+      "widgets": {
+        "x": 136.953125,
+        "y": 432.46875,
+        "width": 831.09375,
+        "height": 332,
+        "right": 968.046875,
+        "bottom": 764.46875
+      },
+      "workspace": null,
+      "search": null,
+      "searchButton": null,
+      "category": null,
+      "firstResult": null,
+      "resultColumns": null,
+      "filters": null,
+      "metadataSize": null,
+      "gridColumns": "403.547px 403.547px",
+      "cards": [
+        {
+          "id": "playtime",
+          "x": 136.953125,
+          "y": 484.46875,
+          "width": 403.546875,
+          "height": 280,
+          "right": 540.5,
+          "bottom": 764.46875
+        },
+        {
+          "id": "recent-servers",
+          "x": 564.5,
+          "y": 484.46875,
+          "width": 403.546875,
+          "height": 280,
+          "right": 968.046875,
+          "bottom": 764.46875
+        }
+      ],
+      "previewDisplay": "flex",
+      "canvas": {
+        "x": 657,
+        "y": 49,
+        "width": 193.53125,
+        "height": 276.46875,
+        "right": 850.53125,
+        "bottom": 325.46875
+      },
+      "scrollExtent": 36,
+      "contentMargins": [
+        "40.96px",
+        "40.96px"
+      ],
+      "firstWidgetY": 484.46875
+    },
+    {
+      "state": "normal",
+      "name": "home-720x520",
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "rail": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 520,
+        "right": 96,
+        "bottom": 520
+      },
+      "account": {
+        "x": 6,
+        "y": 409.8125,
+        "width": 84,
+        "height": 100.1875,
+        "right": 90,
+        "bottom": 510
+      },
+      "content": {
+        "x": 96,
+        "y": 0,
+        "width": 624,
+        "height": 520,
+        "right": 720,
+        "bottom": 520
+      },
+      "home": {
+        "x": 116,
+        "y": 16,
+        "width": 569,
+        "height": 294.859375,
+        "right": 685,
+        "bottom": 310.859375
+      },
+      "play": {
+        "x": 134,
+        "y": 157.859375,
+        "width": 266,
+        "height": 78,
+        "right": 400,
+        "bottom": 235.859375
+      },
+      "instance": {
+        "x": 133,
+        "y": 156.859375,
+        "width": 320,
+        "height": 80,
+        "right": 453,
+        "bottom": 236.859375
+      },
+      "player": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "widgets": {
+        "x": 116,
+        "y": 326.859375,
+        "width": 569,
+        "height": 562.390625,
+        "right": 685,
+        "bottom": 889.25
+      },
+      "workspace": null,
+      "search": null,
+      "searchButton": null,
+      "category": null,
+      "firstResult": null,
+      "resultColumns": null,
+      "filters": null,
+      "metadataSize": null,
+      "gridColumns": "569px",
+      "cards": [
+        {
+          "id": "playtime",
+          "x": 116,
+          "y": 378.859375,
+          "width": 569,
+          "height": 230.390625,
+          "right": 685,
+          "bottom": 609.25
+        },
+        {
+          "id": "recent-servers",
+          "x": 116,
+          "y": 625.25,
+          "width": 569,
+          "height": 264,
+          "right": 685,
+          "bottom": 889.25
+        }
+      ],
+      "previewDisplay": "none",
+      "canvas": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "scrollExtent": 397,
+      "contentMargins": [
+        "20px",
+        "20px"
+      ],
+      "firstWidgetY": 378.859375
+    }
+  ]
+}

@@ -60,7 +60,9 @@ try {
       assert.equal(await dot.textContent(),'');
       const nameBox=await page.locator('.picker-name').boundingBox(),dotBox=await dot.boundingBox();
       assert.ok(dotBox.x>=nameBox.x+nameBox.width && dotBox.x+dotBox.width<=g.instance.right);
-      if(width>=900) assert.ok(Math.abs((g.instance.x+g.instance.width/2)-(g.cards[0].x+g.cards[0].width/2))<1,'centered above first small-widget column');
+      const hero=await page.locator('.home-composition').evaluate(e=>({x:e.getBoundingClientRect().x,padding:parseFloat(getComputedStyle(e).paddingLeft),border:parseFloat(getComputedStyle(e).borderLeftWidth)}));
+      assert.ok(Math.abs(g.instance.x-hero.x-hero.padding-hero.border)<1,'Launch aligned with hero content');
+      assert.ok(Math.abs(hero.x-g.cards[0].x)<1,'hero and widget foundations share an edge');
       assert.equal(await page.locator('.instance-card .status-badge, .instance-footer').count(),0);
       await page.screenshot({path:`${out}/home-${width}x${height}.png`});
     });

@@ -1,0 +1,21 @@
+PASS Instance identity, honest installed metadata and existing Settings route
+PASS Player stays distinct from instance and hero contains both controls
+PASS Home contrast foundation is scoped and adds no backdrop-filter stack
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.evaluate: Error: strict mode violation: locator('.widget') resolved to 2 elements:
+    1) <article aria-label="Playtime" data-home-widget="playtime" class="group f-surface widget svelte-2vdztw">…</article> aka getByRole('article', { name: 'Playtime' })
+    2) <article aria-label="Recent Servers" data-home-widget="recent-servers" class="group f-surface widget svelte-2vdztw">…</article> aka getByRole('article', { name: 'Recent Servers' })
+
+Call log:
+  - waiting for locator('.widget')
+
+    at C:\Dev\aurora-launcher\tools\visual\ui2b.test.mjs:53:48
+    at async check (C:\Dev\aurora-launcher\tools\visual\ui2b.test.mjs:12:34)
+    at async file:///C:/Dev/aurora-launcher/tools/visual/ui2b.test.mjs:47:3 {
+  log: [ "  - waiting for locator('.widget')" ]
+}
+
+Node.js v24.21.0
