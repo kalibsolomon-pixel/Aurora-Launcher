@@ -5,9 +5,10 @@ const {chromium} = await import(process.env.AURORA_PLAYWRIGHT_MODULE || 'playwri
 const browser = await chromium.launch({headless:true});
 const page = await browser.newPage({reducedMotion:'reduce',deviceScaleFactor:1});
 const results = [], errors = [], measurements = [];
+const out = process.env.AURORA_UI2_OUTPUT || 'docs/ui-2';
 page.on('pageerror',e=>errors.push(e.message));
 await page.route(/^https?:\/\/(?!127\.0\.0\.1:1422)/,r=>r.abort());
-await mkdir('docs/ui-2/states',{recursive:true});
+await mkdir(`${out}/states`,{recursive:true});
 async function check(name, action) {await action(); results.push(name); console.log('PASS '+name);}
 async function change(action) {
   await page.evaluate(async action=>{
@@ -44,16 +45,23 @@ try {
       if(width>=1024) assert.ok(g.cards[0].y<600,'widgets start within desktop view');
       if(width>=1024) {assert.ok(g.cards[1].x>g.cards[0].x);assert.ok(Math.abs(g.cards[1].y-g.cards[0].y)<1);}
       if(width===720) {assert.ok(Math.abs(g.cards[0].width-g.widgets.width)<2);assert.ok(g.cards[1].y>=g.cards[0].bottom);}
-      assert.equal(await page.getByRole('button',{name:'Play',exact:true}).isEnabled(),true);
+      assert.equal(await page.getByRole('button',{name:'Launch',exact:true}).isEnabled(),true);
+      const dot=page.locator('.picker-trigger .readiness-dot');
+      assert.equal(await dot.getAttribute('aria-label'),'Ready');
+      assert.equal(await dot.textContent(),'');
+      const nameBox=await page.locator('.picker-name').boundingBox(),dotBox=await dot.boundingBox();
+      assert.ok(dotBox.x>=nameBox.x+nameBox.width && dotBox.x+dotBox.width<=g.instance.right);
+      assert.equal(await page.locator('.instance-card .status-badge, .instance-footer').count(),0);
+      await page.screenshot({path:`${out}/home-${width}x${height}.png`});
     });
   }
   await page.setViewportSize({width:1280,height:800});
-  await check('Instance keyboard selection and installed loader metadata',async()=>{
+  await check('Instance keyboard selection and simplified card',async()=>{
     await homeFixture(page);
     await page.getByRole('button',{name:'Select Play instance'}).focus(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('End'); await page.keyboard.press('Enter');
     await page.waitForFunction(()=>document.querySelector('.picker-trigger').textContent.includes('Vanilla'));
-    assert.match(await page.locator('.instance-versions').textContent(),/Vanilla/);
-    assert.match(await page.locator('.instance-versions').textContent(),/Aurora Off/);
+    assert.equal(await page.locator('.instance-versions, .manage-instance').count(),0);
+    assert.equal(await page.locator('.picker-trigger .readiness-dot').count(),1);
   });
   await check('Play calls existing native command once and shows Running',async()=>{
     await homeFixture(page);
@@ -68,21 +76,25 @@ try {
     const fill=()=>play.evaluate(e=>getComputedStyle(e).background);
     const resting=await fill();await play.focus();assert.equal(await play.evaluate(e=>getComputedStyle(e).outlineStyle),'solid');
     await play.hover();const hover=await fill();assert.notEqual(hover,resting);
-    await page.mouse.down();assert.notEqual(await fill(),hover);await page.screenshot({path:'docs/ui-2/states/play-pressed.png'});await page.mouse.up();
+    await page.mouse.down();assert.notEqual(await fill(),hover);await page.screenshot({path:`${out}/states/play-pressed.png`});await page.mouse.up();
     await homeFixture(page,'blocked');assert.ok(Number(await page.locator('.play-hero').evaluate(e=>getComputedStyle(e).opacity))<1);
   });
   await check('Checking, blocked, unavailable, Starting, Running and failed presentations',async()=>{
     for(const [state,label,disabled] of [['checking','Checking…',true],['blocked','Needs attention',true],['unavailable','Needs attention',true],['starting','Starting…',true],['running','Running',true],['failed','Ready',false]]) {
-      await homeFixture(page,state); assert.equal(await page.locator('.instance-heading .status-badge').textContent(),label);
+      await homeFixture(page,state);
+      const dot=page.locator('.picker-trigger .readiness-dot');
+      assert.equal(await dot.getAttribute('aria-label'),label);
+      assert.equal(await dot.getAttribute('title'),label);
+      assert.equal(await dot.evaluate(e=>e.classList.contains('ready')),['Ready','Running'].includes(label));
+      assert.equal(await dot.evaluate(e=>getComputedStyle(e).backgroundColor),await page.evaluate(ready=>{const e=document.createElement('span');e.style.color=`var(--color-${ready?'success':'error'})`;document.body.append(e);const color=getComputedStyle(e).color;e.remove();return color;},['Ready','Running'].includes(label)));
       assert.equal(await page.locator('.play-hero').isDisabled(),disabled);
       if(state==='failed') assert.match(await page.locator('.instance-card [role=alert]').textContent(),/Synthetic launch failure/);
-      if(state==='blocked') {assert.match(await page.locator('.instance-card').textContent(),/Synthetic sign-in required/); await page.getByRole('button',{name:'Check again'}).click();}
+      if(state==='blocked') {assert.match(await page.locator('.instance-card').textContent(),/Synthetic sign-in required/);await page.screenshot({path:`${out}/blocked-1280x800.png`}); await page.getByRole('button',{name:'Check again'}).click();}
     }
     for(const state of ['stale-account','stale-instance']) {await homeFixture(page);await change(state);assert.equal(await page.locator('.play-hero').isDisabled(),true);}
   });
-  await check('Manage uses existing selected-instance Settings; shell navigation intact',async()=>{
-    await homeFixture(page);await page.getByRole('button',{name:'Manage instance',exact:true}).click();await page.locator('.instance-settings-composition').waitFor();
-    assert.match(await page.locator('.workspace-page').textContent(),/Aurora Client/);
+  await check('Instance management stays available in existing navigation; account entry intact',async()=>{
+    await homeFixture(page);await page.getByRole('navigation',{name:'Aurora Launcher'}).getByRole('button',{name:'Instances',exact:true}).click();await page.locator('.instances-page').waitFor();
     await page.getByRole('navigation',{name:'Aurora Launcher'}).getByRole('button',{name:'Home',exact:true}).click();await page.locator('.home-page').waitFor();
     await page.locator('.account-chip').click();await page.getByRole('dialog').waitFor();await page.keyboard.press('Escape');
     assert.equal(await page.locator('.account-chip').evaluate(e=>e===document.activeElement),true);
@@ -135,8 +147,9 @@ try {
     for(const width of [1440,1024,900,720]) {
       await page.setViewportSize({width,height:768});await homeFixture(page,'long');await page.addStyleTag({content:'html{font-size:200% !important}'});await contained();
       await page.getByRole('button',{name:'Select Play instance'}).click();const b=await page.getByRole('listbox').boundingBox();assert.ok(b.x>=0&&b.x+b.width<=width);await page.keyboard.press('Escape');
-      await page.getByRole('button',{name:'Manage instance',exact:true}).focus();assert.equal(await page.locator('.manage-instance').evaluate(e=>getComputedStyle(e).outlineStyle),'solid');
-      await page.screenshot({path:`docs/ui-2/states/text-200-${width}.png`});
+      await page.getByRole('button',{name:'Launch',exact:true}).focus();assert.equal(await page.locator('.play-hero').evaluate(e=>getComputedStyle(e).outlineStyle),'solid');
+      const dot=await page.locator('.readiness-dot').boundingBox(),name=await page.locator('.picker-name').boundingBox();assert.ok(dot.x>=name.x+name.width);
+      await page.screenshot({path:`${out}/states/text-200-${width}.png`});
     }
     await homeFixture(page);for(const width of [1280,801,720,1024,1440]) {await page.setViewportSize({width,height:800});await contained();}
     assert.equal(await page.locator('.player-preview canvas').evaluate(e=>getComputedStyle(e).transitionDuration),'0s');
@@ -144,12 +157,12 @@ try {
   await check('OLED Simple and alternate cyan accent preserve surfaces and Play contrast',async()=>{
     await page.setViewportSize({width:1280,height:800});await homeFixture(page,'normal',{background:'simple',theme:'oled'});
     await page.evaluate(()=>{document.documentElement.dataset.accent='cyan';document.documentElement.style.setProperty('--color-accent-strong','#5bd0e0');document.documentElement.style.setProperty('--color-accent-contrast','#101116');});
-    await contained();await page.screenshot({path:'docs/ui-2/states/oled-cyan.png'});
+    await contained();await page.screenshot({path:`${out}/states/oled-cyan.png`});
     const colors=await page.locator('.play-hero').evaluate(e=>{const s=getComputedStyle(e);return {color:s.color,fill:s.backgroundColor};});
     const l=c=>{const v=c.match(/[\d.]+/g).slice(0,3).map(Number).map(x=>{x/=255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4;});return v[0]*.2126+v[1]*.7152+v[2]*.0722;};
     const a=l(colors.color),b=l(colors.fill);assert.ok((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5);
   });
   assert.deepEqual(errors,[]);
-  await writeFile('docs/ui-2/functional.json',JSON.stringify({cases:results.length,results,errors,measurements,provenance:'Browser fixtures; synthetic DTOs and sessionStorage; no game launches or owner data'},null,2));
+  await writeFile(`${out}/functional.json`,JSON.stringify({cases:results.length,results,errors,measurements,provenance:'Browser fixtures; synthetic DTOs and sessionStorage; no game launches or owner data'},null,2));
   console.log(`PASS ${results.length} UI-2 browser cases; zero page errors`);
 } finally {await browser.close();}

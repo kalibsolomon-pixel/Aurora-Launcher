@@ -1,0 +1,18 @@
+PASS Hierarchy, external preview and containment 1440x900
+PASS Hierarchy, external preview and containment 1280x800
+PASS Hierarchy, external preview and containment 1024x768
+PASS Hierarchy, external preview and containment 900x700
+PASS Hierarchy, external preview and containment 801x600
+PASS Hierarchy, external preview and containment 720x520
+PASS Instance keyboard selection and simplified card
+PASS Play calls existing native command once and shows Running
+PASS Play focus, hover, pressed and disabled treatments
+PASS Checking, blocked, unavailable, Starting, Running and failed presentations
+PASS Instance management stays available in existing navigation; account entry intact
+PASS Player account isolation, manual controls and fallback
+PASS Sparse, two, all widgets, mixed sizes and DOM order
+PASS Widget size/order/hide and persisted reload; unknown/hidden slots retained
+PASS History valid, empty, unavailable and loading stay distinct
+PASS Long names, 200% text, focus, reduced motion and live resizing
+PASS OLED Simple and alternate cyan accent preserve surfaces and Play contrast
+PASS 17 UI-2 browser cases; zero page errors

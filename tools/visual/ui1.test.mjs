@@ -34,7 +34,7 @@ try {
       await page.setViewportSize({width, height});
       await openReview(page); await contained();
       assert.equal(await page.locator('.rail-link').count(), 5);
-      assert.equal(await page.getByRole('button', {name: 'Play', exact: true}).isEnabled(), true);
+      assert.equal(await page.getByRole('button', {name: 'Launch', exact: true}).isEnabled(), true);
       await page.locator('.account-chip').click();
       const dialog = page.getByRole('dialog'); await dialog.waitFor();
       const box = await dialog.boundingBox();

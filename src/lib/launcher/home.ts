@@ -14,7 +14,7 @@ export function homeLaunchState(
   const phase = child?.status === "running" || decision?.processStatus === "running" ? "Running"
     : child?.status === "starting" || decision?.processStatus === "starting" || preparing ? "Starting…" : null;
   return {
-    playLabel: phase ?? "Play",
+    playLabel: phase ?? "Launch",
     disabled: !instanceId || !!phase || checking || selecting || !decision?.ready,
     label: phase ?? (checking || selecting ? "Checking…" : decision?.ready ? "Ready" : "Needs attention"),
     tone: phase === "Running" || (!phase && !checking && !selecting && decision?.ready)

@@ -1,5 +1,9 @@
 # Aurora Launcher — UI-2 Home composition acceptance
 
+> Owner-requested card refinement supersedes the card metadata/Manage action and
+> visible Ready badge described below: Home now shows Launch and an inline
+> green/red selector dot. See [refinement acceptance](docs/ui-2/card-refinement/README.md).
+
 ## A. Verdict
 
 **PASS — ready for owner visual review.** Home has an identity-first instance

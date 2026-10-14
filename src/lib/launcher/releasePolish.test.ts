@@ -106,7 +106,7 @@ it("Discord preferences and reconnect invoke only native commands and never dist
 });
 it("Discord failure leaves Ready and Play available", async () => {
   reset(); (globalThis as any).window = { __TAURI_INTERNALS__: { invoke: async () => { throw new Error("Discord unavailable"); } } };
-  await discord.connect(); assert(discord.error); assert.match(html(Home), /class="btn btn-primary[^>]*>Play/);
+  await discord.connect(); assert(discord.error); assert.match(html(Home), /class="btn btn-primary[^>]*>Launch/);
 });
 it("mod row preserves artwork and switch, promotes one trash, and excludes duplicate overflow removal", () => {
   reset(); launcher.modInventories[id].entries = [{ entryId: "entry", fileName: "fixture.jar", displayName: "Fixture", enabled: true, ownership: "userManaged", fileType: "enabledJar", metadata: null, provenance: null, warnings: [], canToggle: true, canRemove: true }];

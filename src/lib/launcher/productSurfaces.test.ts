@@ -97,7 +97,7 @@ it("Home update notice is small, silent when current or offline, and independent
     assert.doesNotMatch(html(Home), /Aurora update available/);
   }
   updates.snapshot = { action: { kind: "available" }, overview: updateOverview(true), context: "" };
-  const view = html(Home); assert.match(view, /Aurora update available/); assert.match(view, />Play</);
+  const view = html(Home); assert.match(view, /Aurora update available/); assert.match(view, />Launch</);
   assert.doesNotMatch(view, /Later|Release channel|modal.*update/i);
   updates.snapshot = { action: { kind: "idle" }, overview: null, context: "" };
 });
@@ -123,14 +123,16 @@ it("Home permits selection when instances exist without a selected target", () =
   reset(); launcher.launcherState.config.selectedInstanceId = null;
   assert.match(html(Home), /No instance selected/); assert.match(html(Home), /Select Play instance/);
 });
-it("Home renders installed Vanilla authority, omitting fake loader identity", () => {
+it("Home selector preserves installed Vanilla identity without card metadata", () => {
   reset(); const view = html(Home);
-  assert.match(view, /Minecraft 1\.21\.11 · Vanilla · Aurora Off/);
+  assert.match(view, /Minecraft 1\.21\.11 · Vanilla/);
+  assert.doesNotMatch(view, /instance-versions|instance-footer|Manage instance/);
   assert.doesNotMatch(view, /different-desired|Loader: None|Fabric/);
 });
-it("Home renders Fabric without Aurora as a complete installed configuration", () => {
+it("Home selector preserves ordinary Fabric without claiming Aurora management", () => {
   reset(instance({ kind: "fabric", version: "0.19.5" }));
-  assert.match(html(Home), /Minecraft 1\.21\.11 · Fabric 0\.19\.5 · Aurora Off/);
+  assert.match(html(Home), /Minecraft 1\.21\.11 · Fabric/);
+  assert.doesNotMatch(html(Home), /Aurora configured|instance-versions/);
   assert.doesNotMatch(html(Home), /Aurora missing|Aurora required/);
 });
 it("Instance Details preserves the installed Forge identity for both F1C pins", () => {
@@ -140,13 +142,14 @@ it("Instance Details preserves the installed Forge identity for both F1C pins", 
     assert.doesNotMatch(view, /Fabric/);
   }
 });
-it("Home renders Fabric and optional Aurora separately", () => {
+it("Home selector preserves the optional Aurora identity", () => {
   reset(instance({ kind: "fabric", version: "0.19.5" }, { version: "2.1.2", channel: "stable" }));
-  assert.match(html(Home), /Fabric 0\.19\.5 · Aurora 2\.1\.2/);
+  assert.match(html(Home), /Minecraft 1\.21\.11 · Fabric · Aurora configured/);
 });
-it("Home Ready enables the primary Play action from native readiness", () => {
-  reset(); assert.match(html(Home), /status-success[^>]*>Ready/);
-  assert.match(html(Home), /class="btn btn-primary[^>]*>Play/);
+it("Home native readiness uses an accessible dot and enables Launch", () => {
+  reset(); assert.match(html(Home), /readiness-dot[^>]*\bready\b[^>]*aria-label="Ready"/);
+  assert.doesNotMatch(html(Home), />Ready</);
+  assert.match(html(Home), /class="btn btn-primary[^>]*>Launch/);
 });
 it("Home Starting disables duplicate Play", () => {
   reset(); launcher.playProcess = { instanceId: id, status: "starting" };
@@ -163,13 +166,13 @@ it("Home renders native running readiness after switching back without a matchin
 });
 it("Home blocks Play for native authentication and validation requirements", () => {
   reset(); launcher.playReadiness = readiness(false);
-  assert.match(html(Home), /disabled[^>]*>Play/); assert.match(html(Home), /Sign in to play Minecraft/);
+  assert.match(html(Home), /disabled[^>]*>Launch/); assert.match(html(Home), /Sign in to play Minecraft/);
   launcher.playReadiness.blockers = [{ code: "launch_instance_damaged", message: "Repair this instance before playing." }];
   assert.match(html(Home), /Repair this instance/);
 });
 it("Home ignores readiness and process belonging to another instance", () => {
   reset(); launcher.playReadiness.instanceId = secondId; launcher.playProcess = { instanceId: secondId, status: "running" };
-  assert.match(html(Home), /disabled[^>]*>Play/); assert.doesNotMatch(html(Home), />Running</);
+  assert.match(html(Home), /disabled[^>]*>Launch/); assert.doesNotMatch(html(Home), />Running</);
 });
 it("Home keeps management in Instances and typed Workspace navigation keeps selection", () => {
   reset(); assert.doesNotMatch(html(Home), /Manage Instance/);
@@ -206,7 +209,7 @@ it("signed-out Home explains native authentication requirements without manageme
   reset(); launcher.accountsState = { accounts: [], selectedAccountId: null };
   launcher.playReadiness = { ...readiness(false), accountId: null, accountName: null };
   const view = html(Home); assert.doesNotMatch(view, /Not signed in|Manage accounts|Minecraft account/); assert.match(view, /Sign in to play Minecraft/);
-  assert.match(view, /disabled[^>]*>Play/); assert.doesNotMatch(view, /Manage Instance/);
+  assert.match(view, /disabled[^>]*>Launch/); assert.doesNotMatch(view, /Manage Instance/);
 });
 it("account dialog shows active Minecraft identity and management actions", () => {
   reset(); const view = html(Accounts); assert.match(view, /Active account/); assert.match(view, /PlayerName/);
@@ -234,7 +237,7 @@ it("account switching uses Rust selection without assigning accounts to instance
 it("cosmetic avatar failure leaves the model region empty without disabling native Ready", async () => {
   reset(); (globalThis as any).window = { __TAURI_INTERNALS__: { invoke: async () => { throw new Error("offline"); } } };
   await launcher.refreshAvatar(account.accountId, true);
-  assert.match(html(Home), /Player skin loading/); assert.doesNotMatch(html(Home), /Default Minecraft player/); assert.match(html(Home), /class="btn btn-primary[^>]*>Play/);
+  assert.match(html(Home), /Player skin loading/); assert.doesNotMatch(html(Home), /Default Minecraft player/); assert.match(html(Home), /class="btn btn-primary[^>]*>Launch/);
   assert.equal(launcher.playReadiness.ready, true); assert.equal(launcher.playError, null);
 });
 it("invalid avatar pixels use a fallback and valid pixels produce the head canvas", () => {
