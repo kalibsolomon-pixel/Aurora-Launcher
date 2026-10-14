@@ -237,7 +237,7 @@ it("account switching uses Rust selection without assigning accounts to instance
 it("cosmetic avatar failure leaves the model region empty without disabling native Ready", async () => {
   reset(); (globalThis as any).window = { __TAURI_INTERNALS__: { invoke: async () => { throw new Error("offline"); } } };
   await launcher.refreshAvatar(account.accountId, true);
-  assert.match(html(Home), /Player skin loading/); assert.doesNotMatch(html(Home), /Default Minecraft player/); assert.match(html(Home), /class="btn btn-primary[^>]*aria-label="Launch"/);
+  assert.match(html(Home), /Player skin unavailable|Sign in to preview your Minecraft skin/); assert.doesNotMatch(html(Home), /Default Minecraft player/); assert.match(html(Home), /class="btn btn-primary[^>]*aria-label="Launch"/);
   assert.equal(launcher.playReadiness.ready, true); assert.equal(launcher.playError, null);
 });
 it("invalid avatar pixels use a fallback and valid pixels produce the head canvas", () => {
@@ -309,7 +309,7 @@ it("Home integrates its picker within the selected-instance card and has no acco
   reset(); const view=html(Home);
   assert.match(view, /aria-label="Selected instance"[\s\S]*Select Play instance/);
   assert.doesNotMatch(view, /Play instance<|Manage accounts|Minecraft account|PlayerName/);
-  assert.match(view, /Player skin loading/);
+  assert.match(view, /Player skin unavailable|Sign in to preview your Minecraft skin/);
   const card=view.slice(view.indexOf('aria-label="Selected instance"'),view.indexOf('</section>',view.indexOf('aria-label="Selected instance"')));
   assert.doesNotMatch(card,/player-preview|<canvas/);
   assert.doesNotMatch(view,/width="560" height="800"/);
