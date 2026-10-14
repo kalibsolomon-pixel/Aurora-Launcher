@@ -1,0 +1,40 @@
+# UI-4 Appearance capability audit
+
+Audit before application edits, 2026-10-14. Branch `codex/client-3-production-authority`, HEAD `f0319f105e188eb0d891bc79663d78f6ee6644e7`. Full tracked/protected hash inventory, seven worktrees, untracked files, process inventory and previous evidence inventory: `baseline.json`. No tracked local edits. Four protected local artifacts are excluded from commits and retained.
+
+## Existing architecture and capability status
+
+| Capability | Evidence / status |
+| --- | --- |
+| Home character | Fully implemented, `PlayerPreview.svelte`, account-UUID-keyed native decoded pixels, canonical yaw −0.42, 560×800 software raster. Fixed scale/crop, no controls; preserve file byte-for-byte. |
+| Reusable geometry/rasterizer | Fully implemented, `playerModel.ts`: textured cuboids, six faces, 3px slim/4px classic arms, mirrored classic legacy limbs, expanded alpha-composited outer layers, static restrained pose, depth-sorted software projection. No WebGL or dependency needed. |
+| Existing workspace | Partially meets UI-4. `CosmeticsPage.svelte` already has skin/cape tabs, search, favorites, rename/model/import/removal dialogs, current skin, account operations. Large library precedes a small yaw-only `CosmeticPreview.svelte`. Extend this existing destination; label Appearance, retain internal `cosmetics` identifier and widget links. |
+| Skin acquisition | Fully implemented in `auth/avatar.rs` and `cosmetics.rs`. Only native authenticated official profile supplies locators. Exact official texture host/path validation, HTTPS upgrade, no redirects, no bearer credentials sent to texture host, bounded streamed PNG decoding. Frontend gets pixels, never URL/token. |
+| Skin caches | Fully implemented: 16 validated textures / 15-minute native memory TTL; bounded versioned per-account persisted avatar snapshots under `cache/avatars/<uuid>.json`. They are offline cosmetic snapshots, not freshly verified appearance/session proof. Workspace profile requests explicitly fetch; saved textures share at most 64 frontend promises keyed by UUID/hash/model. Native rehashes saved files. |
+| Skin library | Fully implemented Rust `cosmetics.rs`: generated UUID filenames, exact original PNG bytes in `launcher/skin-presets/`, atomic synced schema-2 metadata with exact schema-1 migration, 256 entries, 80-byte names, hash/model deduplication, metadata-only rename/model/favorite. Damaged/future metadata preserved. |
+| Import/removal safety | PNG signature, complete chunk structure/CRC, decode, 128 KiB encoded / 1 MiB decoder bound, only 64×64 or legacy 64×32 RGB/RGBA. Legacy slim rejected. No frontend filesystem paths or filenames reach storage. Reads rehash, links/reparse paths refused; removal deletes only validated recorded UUID file. No account/instance changes. |
+| Account/session | Fully implemented native account/session restoration and credential rotation; UUID ownership validation, redacted errors, downstream tokens memory-only. Bottom-left account dialog remains authoritative. Cosmetics serial guards reject out-of-order and A→B→A requests. |
+| Skin upload | Existing verified boundary: `apply_skin_preset` → native managed-byte hash validation → authenticated multipart POST → independent GET matching account, active skin ID, model. No optimistic success. Deterministic native service tests; optional production mutation was never performed (E3 acceptance explicitly records this). Reuse, no new scope/permission/endpoint. |
+| Cape read/select/disable | Existing verified boundary: profile-owned inventory, bounded official decoded textures (64×32, 64×64, 128×64), ownership rechecked before PUT, active ID checked after GET; DELETE confirms absence of active cape. Missing textures do not fabricate artwork. No official upload or third-party cape support. |
+| Cape geometry | Implemented since L3, reusable `playerModel(avatar,cape)` textured 10×16×1 back cuboid. Existing cape thumbnails retain portrait proportions. Add local visibility checkbox; it must never call disable-cape. |
+| Appearance preferences | Launcher Theme/Background/Accent are separate from player appearance. No camera, model override or outer-layer preference currently persisted. Keep UI-4 view controls transient; restart returns to current account view. |
+| Widgets | Existing Skin Manager / Cape Selector summaries open this workspace through `navigation.openCosmetics`. Keep them unchanged. No new widget or Home preview source. |
+
+## Account-operation decision gate
+
+No new authenticated capability is required for the existing skin upload, owned cape selection or No Cape operation. Existing evidence includes `PHASE_E3_DESIGN.md`, `PHASE_E3_ACCEPTANCE.md`, L3 acceptance, native service/profile-confirmation tests and command implementations. These are ecosystem-corroborated service contracts, not a published official service specification or live-production mutation proof. UI-4 will reuse them with explicit named-account confirmation and existing progress/failure/refresh handling. No real mutation or sign-in is authorized for acceptance. New permissions, cape upload, third-party cape integration, or new auth operations remain out of scope and would require an owner-reviewed contract first.
+
+## UI composition and state policy
+
+Primary left stage: full-body character with compact front/back/reset, keyboard arrows for yaw/tilt, +/- zoom, explicit geometry/outer-layer/cape preview controls. Secondary compact right panel: existing skin/cape library, account identity and source/status, import and explicit account actions. On narrow windows stack stage first and controls underneath in the shell's single scrolling region. Borealis tokens, selected accent, glass, reduced transparency and focus remain shared.
+
+Remote account state, last-known account snapshot, selected local preset, selected owned cape, camera, geometry override, layer visibility, library operations and remote operations remain separate. Account switching clears/invalidate remote/cape requests immediately; retain the explicitly labeled local skin preview and library. Confirmation closes on account switch; late results cannot name or overwrite the new account. Camera/model override resets when the actual skin identity/model changes. View controls never persist artwork changes and never reach Home. Fresh profile without a decoded texture must label cached fallback accurately; unknown model stays unknown.
+
+## Risks and verification
+
+- Extend renderer via optional arguments with existing defaults exactly retained. Home pixel fixtures and source hash must match baseline. Avoid expensive post-processing: existing high-resolution nearest-texel raster reduced by canvas compositing already smooths projected edges independently of texture sampling. Measure full-body bounds and draw duration; no idle loop.
+- Keep pitch/zoom finite and clamped; coalesce pointer redraws into animation frames and stop work on hidden/offscreen stage, disposing observer/listener/frame on unmount.
+- Existing library/cache are sufficient; no native changes, migrations or dependencies planned. Exercise malformed/future/link/hash/PNG tests without owner data.
+- Verify type checking, all frontend tests, targeted native cosmetics tests, production frontend + debug executable, UI-1/2/2B/2B.1/3/3.1 browser regressions, stale responses, preview-vs-active, confirmation, import errors, removal/restart, keyboard, 200% text, reduced motion/transparency, all requested sizes and actual native minimum.
+- Native acceptance uses a fresh marked temp managed root and separate WebView profile. Import only synthetic PNGs, retain roots, no account/credential copies or sign-in. Native cape/authoritative-account states cannot be truthfully populated without an isolated account; use clearly labeled deterministic browser fixtures for those states and report the limitation.
+- Preserve all original files outside explicit scoped edits, protected hashes, seven worktrees, prior acceptance evidence, production/release metadata. Local reviewable commits only; no release activity.

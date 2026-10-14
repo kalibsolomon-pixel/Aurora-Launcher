@@ -1,0 +1,11 @@
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
+const hash=async path=>({path,sha256:createHash('sha256').update(await readFile(path)).digest('hex')});
+await mkdir('docs/ui-4',{recursive:true});
+const tracked=git('ls-files').split(/\r?\n/);
+const protectedPaths=['.zcode-icon-diag.py','.zcodeignore','UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt','docs/performance-p0-2/__pycache__/analyze.cpython-312.pyc'];
+const baseline={branch:git('branch','--show-current'),head:git('rev-parse','HEAD'),status:git('status','--short'),history:git('log','-5','--oneline'),worktrees:git('worktree','list','--porcelain'),tracked:await Promise.all(tracked.map(hash)),protected:await Promise.all(protectedPaths.map(hash)),untracked:git('ls-files','--others','--exclude-standard'),processes:execFileSync('pwsh',['-NoProfile','-Command',"Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'aurora|java|node|cargo|msedgewebview' } | Select-Object ProcessId,ParentProcessId,Name,ExecutablePath | ConvertTo-Json -Depth 3"],{encoding:'utf8'}),existingEvidence:tracked.filter(p=>/\.(png|jpg|json|md)$/.test(p)&&(/docs\/ui-/.test(p)||p.includes('ACCEPTANCE')))};
+await writeFile('docs/ui-4/baseline.json',JSON.stringify(baseline,null,2));
+console.log({branch:baseline.branch,head:baseline.head,tracked:tracked.length,protected:baseline.protected.length,worktrees:baseline.worktrees.split(/\r?\n/).filter(s=>s.startsWith('worktree ')).length});
