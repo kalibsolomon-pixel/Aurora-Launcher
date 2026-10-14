@@ -1,0 +1,3707 @@
+{
+  "branch": "codex/client-3-production-authority",
+  "head": "7c76626464a8e0c1c581ddbf976cfb5b6c71e6f3",
+  "status": "?? .zcode-icon-diag.py\n?? .zcodeignore\n?? UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt\n?? docs/performance-p0-2/__pycache__/\n?? docs/ui-3/\n?? tools/visual/ui3-preserve.mjs",
+  "history": "7c76626 Remove the redundant selected instance label from Home\nc1951f7 Simplify Home controls and slightly enlarge the smoothed player preview\nf439bbe Verify fixed character cropping and complete native medium and minimum sizing\ne555c14 Present Home player at a fixed angle with a larger hero-edge crop\n3daad85 Document UI-2B visual comparisons and bounded native acceptance\n2c2587d Keep readiness blockers flat and explain the absent player preview\n0d10048 Keep Home instance selector within the viewport at large text sizes\n4eefea2 Connect Home widgets and rail through restrained spacing and edges",
+  "tracked": [
+    ".github/workflows/launcher-authority-recovery.yml",
+    ".github/workflows/launcher-release-1-4-2-recovery.yml",
+    ".github/workflows/launcher-release.yml",
+    ".gitignore",
+    ".zcode-diag/phase-f1c-compatibility/EVIDENCE.md",
+    ".zcode-diag/phase-f3r-durable/EVIDENCE.md",
+    ".zcode-diag/phase-f3ra-acceptance/A-final-busy.png",
+    ".zcode-diag/phase-f3ra-acceptance/A-final-busy.txt",
+    ".zcode-diag/phase-f3ra-acceptance/B-after-backup-status.png",
+    ".zcode-diag/phase-f3ra-acceptance/B-before-commit-restored.png",
+    ".zcode-diag/phase-f3ra-acceptance/B-before-commit-restored.txt",
+    ".zcode-diag/phase-f3ra-acceptance/B-completion-fixed.png",
+    ".zcode-diag/phase-f3ra-acceptance/B-completion-fixed.txt",
+    ".zcode-diag/phase-f3ra-acceptance/C-recovery-in-progress.png",
+    ".zcode-diag/phase-f3ra-acceptance/C-recovery-in-progress.txt",
+    ".zcode-diag/phase-f3ra-acceptance/C-restored-after-three-kills.png",
+    ".zcode-diag/phase-f3ra-acceptance/C-restored-after-three-kills.txt",
+    ".zcode-diag/phase-f3ra-acceptance/D-final-ready.png",
+    ".zcode-diag/phase-f3ra-acceptance/D-final-ready.txt",
+    ".zcode-diag/phase-f3ra-acceptance/EVIDENCE.md",
+    ".zcode-diag/phase-f3ra-acceptance/changed-files.txt",
+    ".zcode-diag/phase-f3ra-acceptance/checks-summary.json",
+    ".zcode-diag/phase-f3ra-acceptance/environment.json",
+    ".zcode-diag/phase-f3ra-acceptance/final-seven-desktop-ready.png",
+    ".zcode-diag/phase-f3ra-acceptance/final-seven-desktop-ready.txt",
+    ".zcode-diag/phase-f3ra-acceptance/implementation-head.txt",
+    ".zcode-diag/phase-f3ra-acceptance/loader-regression.txt",
+    ".zcode-diag/phase-f3ra-acceptance/manual-final-preservation.json",
+    ".zcode-diag/phase-f3ra-acceptance/manual-final.png",
+    ".zcode-diag/phase-f3ra-acceptance/manual-final.txt",
+    ".zcode-diag/phase-f3ra-acceptance/manual-preservation.json",
+    ".zcode-diag/phase-f3ra-acceptance/manual-repair.png",
+    ".zcode-diag/phase-f3ra-acceptance/manual-repair.txt",
+    ".zcode-diag/phase-f3ra-acceptance/matrix-observations.json",
+    ".zcode-diag/phase-f3ra-acceptance/performance.json",
+    ".zcode-diag/phase-f3ra-acceptance/preservation-closing.json",
+    ".zcode-diag/phase-f3ra-acceptance/preservation-final-recheck.json",
+    ".zcode-diag/phase-f3ra-acceptance/raw-evidence-hashes.json",
+    ".zcode-diag/phase-f3ra-acceptance/repeat-2.txt",
+    ".zcode-diag/phase-f3ra-acceptance/repeat-3.png",
+    ".zcode-diag/phase-f3ra-acceptance/repeat-3.txt",
+    ".zcode-diag/phase-f3ra-acceptance/repeated-recovery.json",
+    ".zcode-diag/phase-f3ra-acceptance/retention.json",
+    ".zcode-diag/phase-k-neoforge/00-create-form.png",
+    ".zcode-diag/phase-k-neoforge/01-loader-selection-neoforge.png",
+    ".zcode-diag/phase-k-neoforge/03-instances-all-ready.png",
+    ".zcode-diag/phase-k-neoforge/04-instance-ready.png",
+    ".zcode-diag/phase-k-neoforge/05-installed-neoforge-mod.png",
+    ".zcode-diag/phase-k-neoforge/09-restart-persistence.png",
+    ".zcode-diag/phase-k-neoforge/10-incompatible-content-rejected.png",
+    ".zcode-diag/phase-k-neoforge/11-launch-auth-blocker.png",
+    ".zcode-diag/phase-k-neoforge/12-authenticated-ready.png",
+    ".zcode-diag/phase-k-neoforge/13-neoforge-running.png",
+    ".zcode-diag/phase-k-neoforge/14-neoforge-main-menu.png",
+    ".zcode-diag/phase-k-neoforge/15-neoforge-normal-exit-ready.png",
+    ".zcode-diag/phase-k-neoforge/16-neoforge-restart-after-launch.png",
+    ".zcode-diag/phase-k-neoforge/17-duplicate-launch-refused.png",
+    ".zcode-diag/phase-k-neoforge/evidence-index.md",
+    ".zcode-diag/phase-k-neoforge/neoforge-version-proof.txt",
+    ".zcode-diag/phase-k-neoforge/probe-boot-log.txt",
+    ".zcode-diag/phase-k-neoforge/probe-boot-screen.png",
+    ".zcode-diag/phase-k-neoforge/research-notes.md",
+    "ACTIVITY_BRIDGE_ACCEPTANCE.md",
+    "AGENTS.md",
+    "ARCHITECTURE.md",
+    "AURORA_CLIENT_2_1_5_ACTIVATION.md",
+    "C2_ACCEPTANCE.md",
+    "CLIENT_3_0_0_PRODUCTION_CORRECTION.md",
+    "COMPATIBILITY_ACCEPTANCE.md",
+    "CORRECTION_SOURCE_REVIEW.md",
+    "DISCORD_SETUP.md",
+    "FINAL_PREPUBLICATION_ACCEPTANCE.md",
+    "FINAL_RELEASE_POLISH_ACCEPTANCE.md",
+    "FORGE_CURSEFORGE_ARCHITECTURE.md",
+    "FORGE_CURSEFORGE_COMPATIBILITY_MATRIX.md",
+    "FORGE_CURSEFORGE_F0_AUDIT.md",
+    "FORGE_CURSEFORGE_ROADMAP.md",
+    "FORGE_F1B_MODERN_FORGE.md",
+    "FORGE_F1C_COMPATIBILITY_EXPANSION.md",
+    "FORGE_F1_PROCESSOR_HARDENING.md",
+    "FORGE_F3R_ACCEPTANCE.md",
+    "FORGE_F3R_B1_SECURITY_PERFORMANCE_ACCEPTANCE.md",
+    "FORGE_F3R_B2A_REVIEW_CORRECTIONS.md",
+    "FORGE_F3R_B2_SECURITY_AND_FORGE_PLAN.md",
+    "FORGE_F3R_B_BACKUP_RETENTION.md",
+    "FORGE_F3R_DURABLE_OPERATIONS.md",
+    "FORGE_F3_SHARED_COMPOSITION.md",
+    "INSTALLED_ARTWORK_RELIABILITY.md",
+    "INSTALL_PERFORMANCE.md",
+    "LAUNCHER_DESIGN_LANGUAGE.md",
+    "LAUNCHER_PRERELEASE_UI_CORRECTIONS.md",
+    "LAUNCHER_REFINEMENT_L1.md",
+    "LAUNCHER_REFINEMENT_L2.md",
+    "LAUNCHER_REFINEMENT_L3.md",
+    "LICENSE",
+    "PERFORMANCE_OPTIMIZATION_P1.md",
+    "PERFORMANCE_RESEARCH_P0.md",
+    "PERFORMANCE_RESEARCH_P0_1.md",
+    "PERFORMANCE_RESEARCH_P0_2.md",
+    "PERFORMANCE_RESEARCH_P2.md",
+    "PERFORMANCE_RESEARCH_P3.md",
+    "PHASE_D_ACCEPTANCE.md",
+    "PHASE_E1_ACCEPTANCE.md",
+    "PHASE_E1_DESIGN.md",
+    "PHASE_E2_ACCEPTANCE.md",
+    "PHASE_E3_ACCEPTANCE.md",
+    "PHASE_E3_DESIGN.md",
+    "PHASE_F_ACCEPTANCE.md",
+    "PHASE_F_CORRECTIONS.md",
+    "PHASE_F_DESIGN.md",
+    "PHASE_H1_SERVER_ENRICHMENT.md",
+    "PHASE_H_CONSOLIDATION.md",
+    "PHASE_H_CONTENT_CONTROLS.md",
+    "PHASE_H_INTERFACE_CORRECTIONS.md",
+    "PHASE_I_ACCEPTANCE.md",
+    "PHASE_I_MODPACKS.md",
+    "PHASE_J_ACCEPTANCE.md",
+    "PHASE_J_MODPACK_UPDATES.md",
+    "PHASE_K_NEOFORGE.md",
+    "PHASE_L_PRODUCTION_UPDATES.md",
+    "PHASE_L_SIMPLIFIED_UPDATES_CORRECTION.md",
+    "README.md",
+    "RELEASE_1_1_0_ACCEPTANCE.md",
+    "RELEASE_1_1_0_NOTES.md",
+    "RELEASE_1_2_0_ACCEPTANCE.md",
+    "RELEASE_1_2_0_NOTES.md",
+    "RELEASE_1_3_0_ACCEPTANCE.md",
+    "RELEASE_1_3_0_NOTES.md",
+    "RELEASE_1_3_1_ACCEPTANCE.md",
+    "RELEASE_1_3_1_NOTES.md",
+    "RELEASE_1_4_0_NOTES.md",
+    "RELEASE_1_4_0_PREPARATION.md",
+    "RELEASE_1_4_1_NOTES.md",
+    "RELEASE_1_4_2_ACCEPTANCE.md",
+    "RELEASE_1_4_2_NOTES.md",
+    "RELEASE_1_4_2_RECOVERY.md",
+    "RELEASING.md",
+    "RR1_A_NATIVE_STARTUP_ACCEPTANCE.md",
+    "UI_1_NAVIGATION_DESIGN_PILOT.md",
+    "UI_2B_1_CHARACTER_PRESENTATION_ACCEPTANCE.md",
+    "UI_2B_BOREALIS_HOME_UNIFICATION.md",
+    "UI_2_HOME_COMPOSITION_ACCEPTANCE.md",
+    "UPDATE_AUTHORITY.md",
+    "docs/evidence/l2/acceptance.json",
+    "docs/evidence/l2/before-home-three-wide.png",
+    "docs/evidence/l2/before-settings-wide.png",
+    "docs/evidence/l2/home-favorites-wide.png",
+    "docs/evidence/l2/home-narrow.png",
+    "docs/evidence/l2/home-three-wide.png",
+    "docs/evidence/l2/home-twenty-scrolled-wide.png",
+    "docs/evidence/l2/home-twenty-wide.png",
+    "docs/evidence/l2/overview-wide.png",
+    "docs/evidence/l2/production-boot.png",
+    "docs/evidence/l2/rename-dialog-wide.png",
+    "docs/evidence/l2/settings-narrow-lower.png",
+    "docs/evidence/l2/settings-narrow.png",
+    "docs/evidence/l2/settings-renamed-wide.png",
+    "docs/evidence/l2/settings-wide.png",
+    "docs/evidence/l3/01-02-home-widgets-before.png",
+    "docs/evidence/l3/03-skin-library.png",
+    "docs/evidence/l3/04-cape-inventory.png",
+    "docs/evidence/l3/05-empty-library.png",
+    "docs/evidence/l3/06-no-capes.png",
+    "docs/evidence/l3/07-player-front.png",
+    "docs/evidence/l3/08-player-back.png",
+    "docs/evidence/l3/09-import-dialog.png",
+    "docs/evidence/l3/10-skin-detail-rename.png",
+    "docs/evidence/l3/11-cape-selection.png",
+    "docs/evidence/l3/12-home-widgets.png",
+    "docs/evidence/l3/13-narrow-layout.png",
+    "docs/evidence/l3/13b-narrow-preview-actions.png",
+    "docs/evidence/l3/14-sidebar-destination.png",
+    "docs/evidence/l3/15-offline-library.png",
+    "docs/evidence/l3/16-cape-failure.png",
+    "docs/evidence/l3/17-switched-account.png",
+    "docs/evidence/l3/18-optimized-native-smoke.png",
+    "docs/evidence/l3/README.md",
+    "docs/evidence/l3/additional-desktop-acceptance.json",
+    "docs/evidence/l3/desktop-acceptance.json",
+    "docs/evidence/l3/expired-session-acceptance.json",
+    "docs/evidence/l3/image-manifest.json",
+    "docs/evidence/l3/optimized-native-smoke.json",
+    "docs/evidence/l3/restart-acceptance.json",
+    "docs/evidence/l3/verification-summary.json",
+    "docs/evidence/l3/widget-restart-acceptance.json",
+    "docs/evidence/ui-corrections/README.md",
+    "docs/evidence/ui-corrections/after/01-installed-top.png",
+    "docs/evidence/ui-corrections/after/02-installed-middle.png",
+    "docs/evidence/ui-corrections/after/03-warning.png",
+    "docs/evidence/ui-corrections/after/04-multiple-warnings.png",
+    "docs/evidence/ui-corrections/after/05-browse-mods.png",
+    "docs/evidence/ui-corrections/after/06-browse-resourcepacks.png",
+    "docs/evidence/ui-corrections/after/07-browse-shaders.png",
+    "docs/evidence/ui-corrections/after/08-browse-modpacks.png",
+    "docs/evidence/ui-corrections/after/09-navigation-bright.png",
+    "docs/evidence/ui-corrections/after/10-navigation-dark.png",
+    "docs/evidence/ui-corrections/after/11-installed-narrow.png",
+    "docs/evidence/ui-corrections/after/12-browse-narrow.png",
+    "docs/evidence/ui-corrections/after/13-settings.png",
+    "docs/evidence/ui-corrections/after/14-cosmetics.png",
+    "docs/evidence/ui-corrections/after/15-standalone-glass-match.png",
+    "docs/evidence/ui-corrections/after/captures.json",
+    "docs/evidence/ui-corrections/artwork-cache.json",
+    "docs/evidence/ui-corrections/before/01-installed-top.png",
+    "docs/evidence/ui-corrections/before/02-installed-middle.png",
+    "docs/evidence/ui-corrections/before/03-warning.png",
+    "docs/evidence/ui-corrections/before/04-multiple-warnings.png",
+    "docs/evidence/ui-corrections/before/05-browse-mods.png",
+    "docs/evidence/ui-corrections/before/06-browse-resourcepacks.png",
+    "docs/evidence/ui-corrections/before/07-browse-shaders.png",
+    "docs/evidence/ui-corrections/before/08-browse-modpacks.png",
+    "docs/evidence/ui-corrections/before/09-navigation-bright.png",
+    "docs/evidence/ui-corrections/before/10-navigation-dark.png",
+    "docs/evidence/ui-corrections/before/11-installed-narrow.png",
+    "docs/evidence/ui-corrections/before/12-browse-narrow.png",
+    "docs/evidence/ui-corrections/before/13-settings.png",
+    "docs/evidence/ui-corrections/before/14-cosmetics.png",
+    "docs/evidence/ui-corrections/before/captures.json",
+    "docs/evidence/ui-corrections/final.json",
+    "docs/evidence/ui-corrections/glass-match.json",
+    "docs/evidence/ui-corrections/historical.json",
+    "docs/evidence/ui-corrections/host-display.json",
+    "docs/evidence/ui-corrections/optimized-smoke.json",
+    "docs/evidence/ui-corrections/optimized-smoke.png",
+    "docs/evidence/ui-corrections/r1.json",
+    "docs/evidence/ui-corrections/receipts.json",
+    "docs/evidence/ui-corrections/render-attribution.json",
+    "docs/forge-f3rb/evidence.json",
+    "docs/forge-f3rb1/evidence.json",
+    "docs/forge-f3rb1/run-symlink-gate.ps1",
+    "docs/forge-f3rb1/test-symlink-driver.ps1",
+    "docs/forge-f3rb2a/evidence.json",
+    "docs/l1/artwork-audit.json",
+    "docs/l1/gif-recovered.png",
+    "docs/l1/modpacks-before.png",
+    "docs/l1/modpacks-final.png",
+    "docs/l1/modpacks-narrow.png",
+    "docs/l1/mods-before.png",
+    "docs/l1/mods-final.png",
+    "docs/l1/no-icon-fallback.png",
+    "docs/l1/production-boot.png",
+    "docs/l1/resourcepacks-before.png",
+    "docs/l1/resourcepacks-final.png",
+    "docs/l1/resourcepacks-warm-narrow.png",
+    "docs/l1/shaders-before.png",
+    "docs/l1/shaders-final.png",
+    "docs/performance-p0-1/.gitattributes",
+    "docs/performance-p0-1/.gitignore",
+    "docs/performance-p0-1/README.md",
+    "docs/performance-p0-1/analyze-as-is.py",
+    "docs/performance-p0-1/evidence/as-is-after-jna-restoration-protection.json",
+    "docs/performance-p0-1/evidence/as-is-before-report-protection.json",
+    "docs/performance-p0-1/evidence/as-is-client-artifact.json",
+    "docs/performance-p0-1/evidence/as-is-document-validation.json",
+    "docs/performance-p0-1/evidence/as-is-environment.json",
+    "docs/performance-p0-1/evidence/as-is-final-protection.json",
+    "docs/performance-p0-1/evidence/as-is-game-observations.jsonl",
+    "docs/performance-p0-1/evidence/as-is-identities.json",
+    "docs/performance-p0-1/evidence/as-is-idle-home.jsonl",
+    "docs/performance-p0-1/evidence/as-is-idle-workspace.jsonl",
+    "docs/performance-p0-1/evidence/as-is-jna-preservation.json",
+    "docs/performance-p0-1/evidence/as-is-process-timings.json",
+    "docs/performance-p0-1/evidence/as-is-summary.json",
+    "docs/performance-p0-1/evidence/as-is-supervised-exits.json",
+    "docs/performance-p0-1/evidence/as-is-ui-observations.jsonl",
+    "docs/performance-p0-1/evidence/preflight.json",
+    "docs/performance-p0-1/evidence/protection-verification.json",
+    "docs/performance-p0-1/evidence/resume-2026-10-09-preflight.json",
+    "docs/performance-p0-1/observe-processes.ps1",
+    "docs/performance-p0-1/preflight.py",
+    "docs/performance-p0-1/snapshot.py",
+    "docs/performance-p0-1/ui-observer-notebook.js",
+    "docs/performance-p0-1/verify-resume.py",
+    "docs/performance-p0-1/verify.py",
+    "docs/performance-p0-2/.gitattributes",
+    "docs/performance-p0-2/.gitignore",
+    "docs/performance-p0-2/README.md",
+    "docs/performance-p0-2/analyze.py",
+    "docs/performance-p0-2/evidence/before-instrumentation-commit-preservation.json",
+    "docs/performance-p0-2/evidence/before-report-commit-preservation.json",
+    "docs/performance-p0-2/evidence/build-environment.json",
+    "docs/performance-p0-2/evidence/client-canonical-provenance.json",
+    "docs/performance-p0-2/evidence/client-entry-differences.json",
+    "docs/performance-p0-2/evidence/client-final-provenance.json",
+    "docs/performance-p0-2/evidence/client-provenance.json",
+    "docs/performance-p0-2/evidence/control-artifact.json",
+    "docs/performance-p0-2/evidence/document-validation.json",
+    "docs/performance-p0-2/evidence/environment.json",
+    "docs/performance-p0-2/evidence/failures.json",
+    "docs/performance-p0-2/evidence/final-report-preservation.json",
+    "docs/performance-p0-2/evidence/ipc-artifact.json",
+    "docs/performance-p0-2/evidence/preflight.json",
+    "docs/performance-p0-2/evidence/profile-artifact.json",
+    "docs/performance-p0-2/evidence/raw-stdio-discard.json",
+    "docs/performance-p0-2/evidence/runtime-provenance.json",
+    "docs/performance-p0-2/evidence/source-build-verification.json",
+    "docs/performance-p0-2/evidence/summary.json",
+    "docs/performance-p0-2/evidence/trace-ipc-01.json",
+    "docs/performance-p0-2/evidence/trace-ipc-02.json",
+    "docs/performance-p0-2/evidence/trace-profile-01.json",
+    "docs/performance-p0-2/evidence/trace-profile-02.json",
+    "docs/performance-p0-2/evidence/trace-profile-03.json",
+    "docs/performance-p0-2/evidence/trace-profile-04.json",
+    "docs/performance-p0-2/evidence/trace-profile-05.json",
+    "docs/performance-p0-2/evidence/trace-profile-06.json",
+    "docs/performance-p0-2/evidence/trace-profile-07.json",
+    "docs/performance-p0-2/evidence/trace-profile-08.json",
+    "docs/performance-p0-2/evidence/trials.json",
+    "docs/performance-p0-2/evidence/verification.json",
+    "docs/performance-p0-2/ui-observer-notebook.js",
+    "docs/performance-p0-2/validate.py",
+    "docs/performance-p0/.gitignore",
+    "docs/performance-p0/README.md",
+    "docs/performance-p0/evidence/jfr-aggregate.json",
+    "docs/performance-p0/evidence/jfr-event-summary.txt",
+    "docs/performance-p0/evidence/jfr-pilot-aggregate.json",
+    "docs/performance-p0/evidence/jfr-pilot-event-summary.txt",
+    "docs/performance-p0/evidence/jfr-start.json",
+    "docs/performance-p0/evidence/native-online.jsonl",
+    "docs/performance-p0/evidence/native-small.jsonl",
+    "docs/performance-p0/evidence/native-typical.jsonl",
+    "docs/performance-p0/evidence/pilot-small.jsonl",
+    "docs/performance-p0/evidence/pilot-typical.jsonl",
+    "docs/performance-p0/evidence/protection-verification.json",
+    "docs/performance-p0/evidence/resources.jsonl",
+    "docs/performance-p0/evidence/runtime-version.json",
+    "docs/performance-p0/evidence/summary.json",
+    "docs/performance-p0/harness/Cargo.lock",
+    "docs/performance-p0/harness/Cargo.toml",
+    "docs/performance-p0/harness/src/main.rs",
+    "docs/performance-p0/prepare-small.py",
+    "docs/performance-p0/record-jfr.py",
+    "docs/performance-p0/sample-resources.ps1",
+    "docs/performance-p0/snapshot.py",
+    "docs/performance-p0/summarize-jfr.py",
+    "docs/performance-p0/summarize.py",
+    "docs/performance-p0/verify-protection.py",
+    "docs/performance-p1/.gitattributes",
+    "docs/performance-p1/.gitignore",
+    "docs/performance-p1/README.md",
+    "docs/performance-p1/analyze.py",
+    "docs/performance-p1/build.py",
+    "docs/performance-p1/evidence/baseline-artifact.json",
+    "docs/performance-p1/evidence/baseline-control-artifact.json",
+    "docs/performance-p1/evidence/baseline-ipc-artifact.json",
+    "docs/performance-p1/evidence/candidate-artifact.json",
+    "docs/performance-p1/evidence/candidate-control-artifact.json",
+    "docs/performance-p1/evidence/candidate-ipc-artifact.json",
+    "docs/performance-p1/evidence/document-validation.json",
+    "docs/performance-p1/evidence/environment.json",
+    "docs/performance-p1/evidence/failures.json",
+    "docs/performance-p1/evidence/pre-correction/baseline-artifact.json",
+    "docs/performance-p1/evidence/pre-correction/baseline-control-artifact.json",
+    "docs/performance-p1/evidence/pre-correction/baseline-ipc-artifact.json",
+    "docs/performance-p1/evidence/pre-correction/candidate-artifact.json",
+    "docs/performance-p1/evidence/pre-correction/candidate-control-artifact.json",
+    "docs/performance-p1/evidence/pre-correction/candidate-ipc-artifact.json",
+    "docs/performance-p1/evidence/pre-correction/summary.json",
+    "docs/performance-p1/evidence/pre-correction/trace-baseline-00.json",
+    "docs/performance-p1/evidence/pre-correction/trace-baseline-01.json",
+    "docs/performance-p1/evidence/pre-correction/trace-baseline-02.json",
+    "docs/performance-p1/evidence/pre-correction/trace-baseline-03.json",
+    "docs/performance-p1/evidence/pre-correction/trace-baseline-04.json",
+    "docs/performance-p1/evidence/pre-correction/trace-baseline-05.json",
+    "docs/performance-p1/evidence/pre-correction/trace-baseline-06.json",
+    "docs/performance-p1/evidence/pre-correction/trace-baseline-07.json",
+    "docs/performance-p1/evidence/pre-correction/trace-baseline-08.json",
+    "docs/performance-p1/evidence/pre-correction/trace-baseline-09.json",
+    "docs/performance-p1/evidence/pre-correction/trace-baseline-10.json",
+    "docs/performance-p1/evidence/pre-correction/trace-baseline-11.json",
+    "docs/performance-p1/evidence/pre-correction/trace-candidate-00.json",
+    "docs/performance-p1/evidence/pre-correction/trace-candidate-01.json",
+    "docs/performance-p1/evidence/pre-correction/trace-candidate-02.json",
+    "docs/performance-p1/evidence/pre-correction/trace-candidate-03.json",
+    "docs/performance-p1/evidence/pre-correction/trace-candidate-04.json",
+    "docs/performance-p1/evidence/pre-correction/trace-candidate-05.json",
+    "docs/performance-p1/evidence/pre-correction/trace-candidate-06.json",
+    "docs/performance-p1/evidence/pre-correction/trace-candidate-07.json",
+    "docs/performance-p1/evidence/pre-correction/trace-candidate-08.json",
+    "docs/performance-p1/evidence/pre-correction/trace-candidate-09.json",
+    "docs/performance-p1/evidence/pre-correction/trace-candidate-10.json",
+    "docs/performance-p1/evidence/preservation.json",
+    "docs/performance-p1/evidence/source-build-verification.json",
+    "docs/performance-p1/evidence/source-identities.json",
+    "docs/performance-p1/evidence/source-snapshot.json",
+    "docs/performance-p1/evidence/summary.json",
+    "docs/performance-p1/evidence/trace-baseline-01.json",
+    "docs/performance-p1/evidence/trace-baseline-02.json",
+    "docs/performance-p1/evidence/trace-baseline-03.json",
+    "docs/performance-p1/evidence/trace-baseline-04.json",
+    "docs/performance-p1/evidence/trace-baseline-05.json",
+    "docs/performance-p1/evidence/trace-baseline-06.json",
+    "docs/performance-p1/evidence/trace-baseline-07.json",
+    "docs/performance-p1/evidence/trace-baseline-08.json",
+    "docs/performance-p1/evidence/trace-baseline-09.json",
+    "docs/performance-p1/evidence/trace-baseline-10.json",
+    "docs/performance-p1/evidence/trace-baseline-11.json",
+    "docs/performance-p1/evidence/trace-baseline-12.json",
+    "docs/performance-p1/evidence/trace-baseline-13.json",
+    "docs/performance-p1/evidence/trace-baseline-14.json",
+    "docs/performance-p1/evidence/trace-baseline-15.json",
+    "docs/performance-p1/evidence/trace-baseline-16.json",
+    "docs/performance-p1/evidence/trace-baseline-17.json",
+    "docs/performance-p1/evidence/trace-baseline-18.json",
+    "docs/performance-p1/evidence/trace-baseline-19.json",
+    "docs/performance-p1/evidence/trace-baseline-20.json",
+    "docs/performance-p1/evidence/trace-baseline-21.json",
+    "docs/performance-p1/evidence/trace-baseline-22.json",
+    "docs/performance-p1/evidence/trace-baseline-23.json",
+    "docs/performance-p1/evidence/trace-baseline-24.json",
+    "docs/performance-p1/evidence/trace-baseline-ipc-01.json",
+    "docs/performance-p1/evidence/trace-baseline-ipc-02.json",
+    "docs/performance-p1/evidence/trace-candidate-00.json",
+    "docs/performance-p1/evidence/trace-candidate-01.json",
+    "docs/performance-p1/evidence/trace-candidate-02.json",
+    "docs/performance-p1/evidence/trace-candidate-03.json",
+    "docs/performance-p1/evidence/trace-candidate-04.json",
+    "docs/performance-p1/evidence/trace-candidate-05.json",
+    "docs/performance-p1/evidence/trace-candidate-06.json",
+    "docs/performance-p1/evidence/trace-candidate-07.json",
+    "docs/performance-p1/evidence/trace-candidate-08.json",
+    "docs/performance-p1/evidence/trace-candidate-09.json",
+    "docs/performance-p1/evidence/trace-candidate-10.json",
+    "docs/performance-p1/evidence/trace-candidate-11.json",
+    "docs/performance-p1/evidence/trace-candidate-12.json",
+    "docs/performance-p1/evidence/trace-candidate-13.json",
+    "docs/performance-p1/evidence/trace-candidate-14.json",
+    "docs/performance-p1/evidence/trace-candidate-15.json",
+    "docs/performance-p1/evidence/trace-candidate-16.json",
+    "docs/performance-p1/evidence/trace-candidate-17.json",
+    "docs/performance-p1/evidence/trace-candidate-18.json",
+    "docs/performance-p1/evidence/trace-candidate-19.json",
+    "docs/performance-p1/evidence/trace-candidate-20.json",
+    "docs/performance-p1/evidence/trace-candidate-21.json",
+    "docs/performance-p1/evidence/trace-candidate-22.json",
+    "docs/performance-p1/evidence/trace-candidate-23.json",
+    "docs/performance-p1/evidence/trace-candidate-24.json",
+    "docs/performance-p1/evidence/trace-candidate-ipc-01.json",
+    "docs/performance-p1/evidence/trace-candidate-ipc-02.json",
+    "docs/performance-p1/evidence/trials.json",
+    "docs/performance-p1/evidence/verification.json",
+    "docs/performance-p1/finalize.py",
+    "docs/performance-p1/preserve.py",
+    "docs/performance-p1/start-trial.ps1",
+    "docs/performance-p1/start-trial.py",
+    "docs/performance-p1/ui-observer-notebook.js",
+    "docs/performance-p1/validate.py",
+    "docs/performance-p2/.gitattributes",
+    "docs/performance-p2/.gitignore",
+    "docs/performance-p2/README.md",
+    "docs/performance-p2/analyze.py",
+    "docs/performance-p2/build.py",
+    "docs/performance-p2/check.py",
+    "docs/performance-p2/evidence/attribution-artifact.json",
+    "docs/performance-p2/evidence/baseline-artifact.json",
+    "docs/performance-p2/evidence/control-artifact.json",
+    "docs/performance-p2/evidence/document-validation.json",
+    "docs/performance-p2/evidence/environment.json",
+    "docs/performance-p2/evidence/failures.json",
+    "docs/performance-p2/evidence/frontend-equivalence.json",
+    "docs/performance-p2/evidence/preflight.json",
+    "docs/performance-p2/evidence/preservation.json",
+    "docs/performance-p2/evidence/source-snapshot.json",
+    "docs/performance-p2/evidence/summary.json",
+    "docs/performance-p2/evidence/trace-attribution-00.json",
+    "docs/performance-p2/evidence/trace-attribution-01.json",
+    "docs/performance-p2/evidence/trace-attribution-02.json",
+    "docs/performance-p2/evidence/trace-attribution-03.json",
+    "docs/performance-p2/evidence/trace-attribution-04.json",
+    "docs/performance-p2/evidence/trace-attribution-05.json",
+    "docs/performance-p2/evidence/trace-attribution-06.json",
+    "docs/performance-p2/evidence/trace-baseline-01.json",
+    "docs/performance-p2/evidence/trace-baseline-02.json",
+    "docs/performance-p2/evidence/trace-baseline-03.json",
+    "docs/performance-p2/evidence/trace-baseline-04.json",
+    "docs/performance-p2/evidence/trace-baseline-05.json",
+    "docs/performance-p2/evidence/trace-baseline-06.json",
+    "docs/performance-p2/evidence/trials.json",
+    "docs/performance-p2/evidence/verification-checks.json",
+    "docs/performance-p2/preserve.py",
+    "docs/performance-p2/start-trial.py",
+    "docs/performance-p2/ui-observer-notebook.js",
+    "docs/performance-p2/validate.py",
+    "docs/performance-p3/.gitignore",
+    "docs/performance-p3/BuildConfig.java",
+    "docs/performance-p3/JnaProbe.java",
+    "docs/performance-p3/Markers.java",
+    "docs/performance-p3/README.md",
+    "docs/performance-p3/ResearchAgent.java",
+    "docs/performance-p3/analyze.py",
+    "docs/performance-p3/audit.py",
+    "docs/performance-p3/build-config-template.json",
+    "docs/performance-p3/build.py",
+    "docs/performance-p3/evidence/agent-tests.json",
+    "docs/performance-p3/evidence/attribution.json",
+    "docs/performance-p3/evidence/commits.json",
+    "docs/performance-p3/evidence/exclusions.json",
+    "docs/performance-p3/evidence/injected-method-provenance.json",
+    "docs/performance-p3/evidence/inputs.json",
+    "docs/performance-p3/evidence/jfr.json",
+    "docs/performance-p3/evidence/jna-isolation.json",
+    "docs/performance-p3/evidence/mapping-provenance.json",
+    "docs/performance-p3/evidence/preservation.json",
+    "docs/performance-p3/evidence/privacy.json",
+    "docs/performance-p3/evidence/reproduction.json",
+    "docs/performance-p3/evidence/research-patch-provenance.json",
+    "docs/performance-p3/evidence/source-patch-hashes.json",
+    "docs/performance-p3/evidence/statistics.json",
+    "docs/performance-p3/evidence/trials.json",
+    "docs/performance-p3/evidence/verification.json",
+    "docs/performance-p3/inventory.py",
+    "docs/performance-p3/isolate.py",
+    "docs/performance-p3/mappings.py",
+    "docs/performance-p3/preflight.py",
+    "docs/performance-p3/prepare.py",
+    "docs/performance-p3/preserve.py",
+    "docs/performance-p3/research_spawn.rs",
+    "docs/performance-p3/start.py",
+    "docs/performance-p3/startup.jfc",
+    "docs/performance-p3/summarize.py",
+    "docs/performance-p3/test_agent.py",
+    "docs/performance-p3/test_analysis.py",
+    "docs/performance-p3/watch.py",
+    "docs/phase-f/accounts.jpg",
+    "docs/phase-f/chrome-restored.jpg",
+    "docs/phase-f/corrections-gpu.json",
+    "docs/phase-f/corrections-home-glass.png",
+    "docs/phase-f/corrections-performance.jsonl",
+    "docs/phase-f/corrections-video.json",
+    "docs/phase-f/home-borealis-maximized.jpg",
+    "docs/phase-f/home-borealis-normal.jpg",
+    "docs/phase-f/home-edit.jpg",
+    "docs/phase-f/home-empty.jpg",
+    "docs/phase-f/home-minimum-native.jpg",
+    "docs/phase-f/home-oled-native.jpg",
+    "docs/phase-f/native-backend-reload.jpg",
+    "docs/phase-f/native-backend-settings.jpg",
+    "docs/phase-f/navigation-focus.jpg",
+    "docs/phase-f/settings-borealis.jpg",
+    "docs/phase-f/settings-oled.jpg",
+    "docs/phase-h-corrections/01-mods-management-reference.png",
+    "docs/phase-h-corrections/02-resourcepacks-managed-collapsed.png",
+    "docs/phase-h-corrections/02b-resourcepacks-local-controls.png",
+    "docs/phase-h-corrections/03-resourcepack-expanded.png",
+    "docs/phase-h-corrections/04-resourcepack-disabled.png",
+    "docs/phase-h-corrections/05-resourcepack-reenabled.png",
+    "docs/phase-h-corrections/06-resourcepack-adopted-local.png",
+    "docs/phase-h-corrections/07-shaders-managed-collapsed.png",
+    "docs/phase-h-corrections/07b-shaders-empty-installed.png",
+    "docs/phase-h-corrections/08-shader-expanded.png",
+    "docs/phase-h-corrections/09-shader-adopted-local.png",
+    "docs/phase-h-corrections/09a-shader-recognition-panel.png",
+    "docs/phase-h-corrections/10-shader-activation-state.png",
+    "docs/phase-h-corrections/11-removal-confirmation-or-result.png",
+    "docs/phase-h-corrections/12-content-final-regression.png",
+    "docs/phase-h-corrections/13-player-default-angle.png",
+    "docs/phase-h-corrections/14-player-left-click.png",
+    "docs/phase-h-corrections/15-player-reset-after-left.png",
+    "docs/phase-h-corrections/16-player-right-click.png",
+    "docs/phase-h-corrections/17-player-reset-after-right.png",
+    "docs/phase-h-corrections/18-player-controls-1280x900.png",
+    "docs/phase-h-corrections/19-player-controls-1000x720.png",
+    "docs/phase-h-corrections/20-player-controls-narrow-supported.png",
+    "docs/phase-h-corrections/25-instances-one-existing-first.png",
+    "docs/phase-h-corrections/25b-real-window-instances-one.png",
+    "docs/phase-h-corrections/26-instances-multiple.png",
+    "docs/phase-h-corrections/27-instances-zero-empty-state.png",
+    "docs/phase-h-corrections/28-instances-narrow-stacked.png",
+    "docs/phase-h-corrections/29-mods-category-picker.png",
+    "docs/phase-h-corrections/30-mods-multi-category-selected.png",
+    "docs/phase-h-corrections/31-resource-packs-category-picker.png",
+    "docs/phase-h-corrections/32-shaders-category-picker.png",
+    "docs/phase-h-corrections/33-modpacks-category-picker.png",
+    "docs/phase-h-corrections/34-category-picker-narrow.png",
+    "docs/phase-h-corrections/35-home-player-controls-large.png",
+    "docs/phase-h-corrections/35b-real-window-home-maximized.png",
+    "docs/phase-h-corrections/36-home-1440x900.png",
+    "docs/phase-h-corrections/36b-real-window-1600x900-rotated.png",
+    "docs/phase-h-corrections/36b-rotate-button-hover-surface.png",
+    "docs/phase-h-corrections/37-home-1280x800.png",
+    "docs/phase-h-corrections/37b-real-window-1280x800.png",
+    "docs/phase-h-corrections/38-home-1100x720.png",
+    "docs/phase-h-corrections/38b-real-window-1100x720.png",
+    "docs/phase-h-corrections/39-home-min-supported-with-player.png",
+    "docs/phase-h-corrections/39b-real-window-920x700-rotated.png",
+    "docs/phase-h-corrections/39c-real-window-920x700-reset.png",
+    "docs/phase-h-corrections/39d-real-window-720x520-minimum.png",
+    "docs/phase-h-corrections/40-home-live-resize-restored.png",
+    "docs/phase-h-corrections/40b-real-window-live-resize-restored-maximized.png",
+    "docs/ui-1/AUDIT_AND_PROPOSAL.md",
+    "docs/ui-1/after/cosmetics-1280x800.png",
+    "docs/ui-1/after/geometry.json",
+    "docs/ui-1/after/home-1024x768.png",
+    "docs/ui-1/after/home-1280x800.png",
+    "docs/ui-1/after/home-1440x900.png",
+    "docs/ui-1/after/home-720x520.png",
+    "docs/ui-1/after/instances-1280x800.png",
+    "docs/ui-1/after/mods-1024x768.png",
+    "docs/ui-1/after/mods-1280x800.png",
+    "docs/ui-1/after/mods-1440x900.png",
+    "docs/ui-1/after/mods-720x520.png",
+    "docs/ui-1/after/settings-1280x800.png",
+    "docs/ui-1/baseline.json",
+    "docs/ui-1/before/cosmetics-1280x800.png",
+    "docs/ui-1/before/geometry.json",
+    "docs/ui-1/before/home-1024x768.png",
+    "docs/ui-1/before/home-1280x800.png",
+    "docs/ui-1/before/home-1440x900.png",
+    "docs/ui-1/before/home-720x520.png",
+    "docs/ui-1/before/instances-1280x800.png",
+    "docs/ui-1/before/mods-1024x768.png",
+    "docs/ui-1/before/mods-1280x800.png",
+    "docs/ui-1/before/mods-1440x900.png",
+    "docs/ui-1/before/mods-720x520.png",
+    "docs/ui-1/before/settings-1280x800.png",
+    "docs/ui-1/browser-exits.json",
+    "docs/ui-1/changed-files.txt",
+    "docs/ui-1/frontend-exits.json",
+    "docs/ui-1/frontend-tests.txt",
+    "docs/ui-1/functional.json",
+    "docs/ui-1/home-comparison.png",
+    "docs/ui-1/l1-browser-tests.txt",
+    "docs/ui-1/l1.test.mjs.txt",
+    "docs/ui-1/l3.test.mjs.txt",
+    "docs/ui-1/mods-comparison.png",
+    "docs/ui-1/other-screens-comparison.png",
+    "docs/ui-1/preservation.json",
+    "docs/ui-1/production-build.txt",
+    "docs/ui-1/stalled-test-processes.json",
+    "docs/ui-1/states-review.png",
+    "docs/ui-1/states/home-long-name-blocked.png",
+    "docs/ui-1/states/home-text-200.png",
+    "docs/ui-1/states/mods-empty.png",
+    "docs/ui-1/states/mods-error.png",
+    "docs/ui-1/states/mods-loading.png",
+    "docs/ui-1/states/mods-text-200.png",
+    "docs/ui-1/type-check.txt",
+    "docs/ui-1/ui-corrections.test.mjs.txt",
+    "docs/ui-1/ui1-browser-tests.txt",
+    "docs/ui-1/ui1.test.mjs.txt",
+    "docs/ui-2/AUDIT_AND_PROPOSAL.md",
+    "docs/ui-2/accessibility-review.png",
+    "docs/ui-2/after/blocked-1280x800.png",
+    "docs/ui-2/after/dense-1280x800.png",
+    "docs/ui-2/after/dense-bottom-1280x800.png",
+    "docs/ui-2/after/empty-1280x800.png",
+    "docs/ui-2/after/error-1280x800.png",
+    "docs/ui-2/after/geometry.json",
+    "docs/ui-2/after/home-1024x768.png",
+    "docs/ui-2/after/home-1280x800.png",
+    "docs/ui-2/after/home-1440x900.png",
+    "docs/ui-2/after/home-720x520.png",
+    "docs/ui-2/after/loading-1280x800.png",
+    "docs/ui-2/after/long-1280x800.png",
+    "docs/ui-2/after/missing-skin-1280x800.png",
+    "docs/ui-2/after/oled-simple-1280x800.png",
+    "docs/ui-2/after/running-1280x800.png",
+    "docs/ui-2/after/sparse-1280x800.png",
+    "docs/ui-2/baseline.json",
+    "docs/ui-2/before/blocked-1280x800.png",
+    "docs/ui-2/before/dense-1280x800.png",
+    "docs/ui-2/before/dense-bottom-1280x800.png",
+    "docs/ui-2/before/empty-1280x800.png",
+    "docs/ui-2/before/error-1280x800.png",
+    "docs/ui-2/before/geometry.json",
+    "docs/ui-2/before/home-1024x768.png",
+    "docs/ui-2/before/home-1280x800.png",
+    "docs/ui-2/before/home-1440x900.png",
+    "docs/ui-2/before/home-720x520.png",
+    "docs/ui-2/before/loading-1280x800.png",
+    "docs/ui-2/before/long-1280x800.png",
+    "docs/ui-2/before/missing-skin-1280x800.png",
+    "docs/ui-2/before/oled-simple-1280x800.png",
+    "docs/ui-2/before/running-1280x800.png",
+    "docs/ui-2/before/sparse-1280x800.png",
+    "docs/ui-2/capture-after.exit",
+    "docs/ui-2/capture-after.txt",
+    "docs/ui-2/card-refinement/README.md",
+    "docs/ui-2/card-refinement/baseline.json",
+    "docs/ui-2/card-refinement/blocked-1280x800.png",
+    "docs/ui-2/card-refinement/frontend-tests-initial.txt",
+    "docs/ui-2/card-refinement/frontend-tests.exit",
+    "docs/ui-2/card-refinement/frontend-tests.txt",
+    "docs/ui-2/card-refinement/functional.json",
+    "docs/ui-2/card-refinement/home-1024x768.png",
+    "docs/ui-2/card-refinement/home-1280x800.png",
+    "docs/ui-2/card-refinement/home-1440x900.png",
+    "docs/ui-2/card-refinement/home-720x520.png",
+    "docs/ui-2/card-refinement/home-801x600.png",
+    "docs/ui-2/card-refinement/home-900x700.png",
+    "docs/ui-2/card-refinement/home-browser-tests-initial.txt",
+    "docs/ui-2/card-refinement/home-browser-tests.exit",
+    "docs/ui-2/card-refinement/home-browser-tests.txt",
+    "docs/ui-2/card-refinement/production-build.exit",
+    "docs/ui-2/card-refinement/production-build.txt",
+    "docs/ui-2/card-refinement/states/oled-cyan.png",
+    "docs/ui-2/card-refinement/states/play-pressed.png",
+    "docs/ui-2/card-refinement/states/text-200-1024.png",
+    "docs/ui-2/card-refinement/states/text-200-1440.png",
+    "docs/ui-2/card-refinement/states/text-200-720.png",
+    "docs/ui-2/card-refinement/states/text-200-900.png",
+    "docs/ui-2/card-refinement/type-check.exit",
+    "docs/ui-2/card-refinement/type-check.txt",
+    "docs/ui-2/card-refinement/ui1-browser-tests.exit",
+    "docs/ui-2/card-refinement/ui1-browser-tests.txt",
+    "docs/ui-2/card-refinement/ui1-regression/functional.json",
+    "docs/ui-2/card-refinement/ui1-regression/states/home-long-name-blocked.png",
+    "docs/ui-2/card-refinement/ui1-regression/states/home-text-200.png",
+    "docs/ui-2/card-refinement/ui1-regression/states/mods-empty.png",
+    "docs/ui-2/card-refinement/ui1-regression/states/mods-error.png",
+    "docs/ui-2/card-refinement/ui1-regression/states/mods-loading.png",
+    "docs/ui-2/card-refinement/ui1-regression/states/mods-text-200.png",
+    "docs/ui-2/changed-code-files.txt",
+    "docs/ui-2/final-widget-tests.exit",
+    "docs/ui-2/final-widget-tests.txt",
+    "docs/ui-2/frontend-tests-interrupted.txt",
+    "docs/ui-2/frontend-tests-obsolete-breakpoint.txt",
+    "docs/ui-2/frontend-tests.exit",
+    "docs/ui-2/frontend-tests.txt",
+    "docs/ui-2/functional.json",
+    "docs/ui-2/home-comparison.png",
+    "docs/ui-2/image-inventory.json",
+    "docs/ui-2/interrupted-test-processes.json",
+    "docs/ui-2/l1-browser-tests.exit",
+    "docs/ui-2/l1-browser-tests.txt",
+    "docs/ui-2/l3-browser-tests.exit",
+    "docs/ui-2/l3-browser-tests.txt",
+    "docs/ui-2/native-build-final.exit",
+    "docs/ui-2/native-build-final.txt",
+    "docs/ui-2/native-build-locked.txt",
+    "docs/ui-2/native-build.exit",
+    "docs/ui-2/native-build.txt",
+    "docs/ui-2/native/041245-exit.json",
+    "docs/ui-2/native/041245-start.json",
+    "docs/ui-2/native/041245-stderr.txt",
+    "docs/ui-2/native/041245-stdout.txt",
+    "docs/ui-2/native/041455-exit.json",
+    "docs/ui-2/native/041455-start.json",
+    "docs/ui-2/native/041455-stderr.txt",
+    "docs/ui-2/native/041455-stdout.txt",
+    "docs/ui-2/native/042308-exit.json",
+    "docs/ui-2/native/042308-start.json",
+    "docs/ui-2/native/042308-stderr.txt",
+    "docs/ui-2/native/042308-stdout.txt",
+    "docs/ui-2/native/default-client.png",
+    "docs/ui-2/native/default.json",
+    "docs/ui-2/native/final-default-client.png",
+    "docs/ui-2/native/final-default-window.png",
+    "docs/ui-2/native/final-default.json",
+    "docs/ui-2/native/final-maximized-client.png",
+    "docs/ui-2/native/final-maximized-window.png",
+    "docs/ui-2/native/final-maximized.json",
+    "docs/ui-2/native/final-minimum-client.png",
+    "docs/ui-2/native/final-minimum-editor-client.png",
+    "docs/ui-2/native/final-minimum-editor-window.png",
+    "docs/ui-2/native/final-minimum-editor.json",
+    "docs/ui-2/native/final-minimum-widgets-client.png",
+    "docs/ui-2/native/final-minimum-widgets-window.png",
+    "docs/ui-2/native/final-minimum-widgets.json",
+    "docs/ui-2/native/final-minimum-window.png",
+    "docs/ui-2/native/final-minimum.json",
+    "docs/ui-2/native/final-resized-accessibility.txt",
+    "docs/ui-2/native/final-resized-desktop-client.png",
+    "docs/ui-2/native/final-resized-desktop-window.png",
+    "docs/ui-2/native/final-resized-desktop.json",
+    "docs/ui-2/native/final-restored-client.png",
+    "docs/ui-2/native/final-restored.json",
+    "docs/ui-2/native/final-small-client.png",
+    "docs/ui-2/native/final-small-window.png",
+    "docs/ui-2/native/final-small.json",
+    "docs/ui-2/native/home-default-accessibility.txt",
+    "docs/ui-2/native/home-default-client.png",
+    "docs/ui-2/native/home-default-window.png",
+    "docs/ui-2/native/home-default.json",
+    "docs/ui-2/native/isolated-root.txt",
+    "docs/ui-2/native/layout-after-restart.json",
+    "docs/ui-2/native/layout-before-restart.json",
+    "docs/ui-2/owner-before.json",
+    "docs/ui-2/owner-preservation.json",
+    "docs/ui-2/preservation.txt",
+    "docs/ui-2/processes-after.json",
+    "docs/ui-2/reference-proportions/README.md",
+    "docs/ui-2/reference-proportions/baseline.json",
+    "docs/ui-2/reference-proportions/blocked-1280x800.png",
+    "docs/ui-2/reference-proportions/browser-exits.json",
+    "docs/ui-2/reference-proportions/browser-tests.txt",
+    "docs/ui-2/reference-proportions/build.txt",
+    "docs/ui-2/reference-proportions/check-exits.json",
+    "docs/ui-2/reference-proportions/frontend-tests.txt",
+    "docs/ui-2/reference-proportions/functional.json",
+    "docs/ui-2/reference-proportions/home-1024x768.png",
+    "docs/ui-2/reference-proportions/home-1280x800.png",
+    "docs/ui-2/reference-proportions/home-1440x900.png",
+    "docs/ui-2/reference-proportions/home-720x520.png",
+    "docs/ui-2/reference-proportions/home-801x600.png",
+    "docs/ui-2/reference-proportions/home-900x700.png",
+    "docs/ui-2/reference-proportions/preservation.json",
+    "docs/ui-2/reference-proportions/states/oled-cyan.png",
+    "docs/ui-2/reference-proportions/states/play-pressed.png",
+    "docs/ui-2/reference-proportions/states/text-200-1024.png",
+    "docs/ui-2/reference-proportions/states/text-200-1440.png",
+    "docs/ui-2/reference-proportions/states/text-200-720.png",
+    "docs/ui-2/reference-proportions/states/text-200-900.png",
+    "docs/ui-2/reference-proportions/type-check.txt",
+    "docs/ui-2/reference-proportions/ui1-regression-tests.txt",
+    "docs/ui-2/reference-proportions/ui1-regression/functional.json",
+    "docs/ui-2/reference-proportions/ui1-regression/states/home-long-name-blocked.png",
+    "docs/ui-2/reference-proportions/ui1-regression/states/home-text-200.png",
+    "docs/ui-2/reference-proportions/ui1-regression/states/mods-empty.png",
+    "docs/ui-2/reference-proportions/ui1-regression/states/mods-error.png",
+    "docs/ui-2/reference-proportions/ui1-regression/states/mods-loading.png",
+    "docs/ui-2/reference-proportions/ui1-regression/states/mods-text-200.png",
+    "docs/ui-2/split-launch/README.md",
+    "docs/ui-2/split-launch/baseline.json",
+    "docs/ui-2/split-launch/blocked-1280x800.png",
+    "docs/ui-2/split-launch/frontend-tests.exit",
+    "docs/ui-2/split-launch/frontend-tests.txt",
+    "docs/ui-2/split-launch/functional.json",
+    "docs/ui-2/split-launch/home-1024x768.png",
+    "docs/ui-2/split-launch/home-1280x800.png",
+    "docs/ui-2/split-launch/home-1440x900.png",
+    "docs/ui-2/split-launch/home-720x520.png",
+    "docs/ui-2/split-launch/home-801x600.png",
+    "docs/ui-2/split-launch/home-900x700.png",
+    "docs/ui-2/split-launch/home-browser-tests.exit",
+    "docs/ui-2/split-launch/home-browser-tests.txt",
+    "docs/ui-2/split-launch/production-build.exit",
+    "docs/ui-2/split-launch/production-build.txt",
+    "docs/ui-2/split-launch/states/oled-cyan.png",
+    "docs/ui-2/split-launch/states/play-pressed.png",
+    "docs/ui-2/split-launch/states/text-200-1024.png",
+    "docs/ui-2/split-launch/states/text-200-1440.png",
+    "docs/ui-2/split-launch/states/text-200-720.png",
+    "docs/ui-2/split-launch/states/text-200-900.png",
+    "docs/ui-2/split-launch/type-check.exit",
+    "docs/ui-2/split-launch/type-check.txt",
+    "docs/ui-2/split-launch/ui1-browser-tests.exit",
+    "docs/ui-2/split-launch/ui1-browser-tests.txt",
+    "docs/ui-2/split-launch/ui1-regression/functional.json",
+    "docs/ui-2/split-launch/ui1-regression/states/home-long-name-blocked.png",
+    "docs/ui-2/split-launch/ui1-regression/states/home-text-200.png",
+    "docs/ui-2/split-launch/ui1-regression/states/mods-empty.png",
+    "docs/ui-2/split-launch/ui1-regression/states/mods-error.png",
+    "docs/ui-2/split-launch/ui1-regression/states/mods-loading.png",
+    "docs/ui-2/split-launch/ui1-regression/states/mods-text-200.png",
+    "docs/ui-2/staged-evidence-files.txt",
+    "docs/ui-2/states-review.png",
+    "docs/ui-2/states/oled-cyan.png",
+    "docs/ui-2/states/play-pressed.png",
+    "docs/ui-2/states/text-200-1024.png",
+    "docs/ui-2/states/text-200-1440.png",
+    "docs/ui-2/states/text-200-720.png",
+    "docs/ui-2/states/text-200-900.png",
+    "docs/ui-2/tested-source-hashes.json",
+    "docs/ui-2/type-check.exit",
+    "docs/ui-2/type-check.txt",
+    "docs/ui-2/ui-corrections-browser-tests.exit",
+    "docs/ui-2/ui-corrections-browser-tests.txt",
+    "docs/ui-2/ui1-browser-tests.exit",
+    "docs/ui-2/ui1-browser-tests.txt",
+    "docs/ui-2/ui1-regression/functional.json",
+    "docs/ui-2/ui1-regression/states/home-long-name-blocked.png",
+    "docs/ui-2/ui1-regression/states/home-text-200.png",
+    "docs/ui-2/ui1-regression/states/mods-empty.png",
+    "docs/ui-2/ui1-regression/states/mods-error.png",
+    "docs/ui-2/ui1-regression/states/mods-loading.png",
+    "docs/ui-2/ui1-regression/states/mods-text-200.png",
+    "docs/ui-2/ui2-browser-tests.exit",
+    "docs/ui-2/ui2-browser-tests.txt",
+    "docs/ui-2/worktrees-after.txt",
+    "docs/ui-2b-1/after-capture.txt",
+    "docs/ui-2b-1/after/blocked-1280x800.png",
+    "docs/ui-2b-1/after/cyan-1280x800.png",
+    "docs/ui-2b-1/after/dense-1280x800.png",
+    "docs/ui-2b-1/after/empty-1280x800.png",
+    "docs/ui-2b-1/after/error-1280x800.png",
+    "docs/ui-2b-1/after/geometry.json",
+    "docs/ui-2b-1/after/home-1024x768.png",
+    "docs/ui-2b-1/after/home-1280x800.png",
+    "docs/ui-2b-1/after/home-1440x900.png",
+    "docs/ui-2b-1/after/home-720x520.png",
+    "docs/ui-2b-1/after/loading-1280x800.png",
+    "docs/ui-2b-1/after/long-1280x800.png",
+    "docs/ui-2b-1/after/missing-skin-1280x800.png",
+    "docs/ui-2b-1/after/oled-simple-1280x800.png",
+    "docs/ui-2b-1/after/running-1280x800.png",
+    "docs/ui-2b-1/after/sparse-1280x800.png",
+    "docs/ui-2b-1/baseline.json",
+    "docs/ui-2b-1/before-capture.txt",
+    "docs/ui-2b-1/before/blocked-1280x800.png",
+    "docs/ui-2b-1/before/cyan-1280x800.png",
+    "docs/ui-2b-1/before/dense-1280x800.png",
+    "docs/ui-2b-1/before/empty-1280x800.png",
+    "docs/ui-2b-1/before/error-1280x800.png",
+    "docs/ui-2b-1/before/geometry.json",
+    "docs/ui-2b-1/before/home-1024x768.png",
+    "docs/ui-2b-1/before/home-1280x800.png",
+    "docs/ui-2b-1/before/home-1440x900.png",
+    "docs/ui-2b-1/before/home-720x520.png",
+    "docs/ui-2b-1/before/loading-1280x800.png",
+    "docs/ui-2b-1/before/long-1280x800.png",
+    "docs/ui-2b-1/before/missing-skin-1280x800.png",
+    "docs/ui-2b-1/before/oled-simple-1280x800.png",
+    "docs/ui-2b-1/before/running-1280x800.png",
+    "docs/ui-2b-1/before/sparse-1280x800.png",
+    "docs/ui-2b-1/blocked-1280x800.png",
+    "docs/ui-2b-1/browser-exits.json",
+    "docs/ui-2b-1/build.txt",
+    "docs/ui-2b-1/changed-files.txt",
+    "docs/ui-2b-1/check-exits.json",
+    "docs/ui-2b-1/crop-final.txt",
+    "docs/ui-2b-1/crop-tests.json",
+    "docs/ui-2b-1/crop-tests.txt",
+    "docs/ui-2b-1/frontend-tests.txt",
+    "docs/ui-2b-1/functional.json",
+    "docs/ui-2b-1/geometry-comparison.json",
+    "docs/ui-2b-1/home-1024x768.png",
+    "docs/ui-2b-1/home-1280x800.png",
+    "docs/ui-2b-1/home-1440x900.png",
+    "docs/ui-2b-1/home-720x520.png",
+    "docs/ui-2b-1/home-801x600.png",
+    "docs/ui-2b-1/home-900x700.png",
+    "docs/ui-2b-1/home-comparison.png",
+    "docs/ui-2b-1/native/close-request.json",
+    "docs/ui-2b-1/native/default-client.png",
+    "docs/ui-2b-1/native/default-measure.txt",
+    "docs/ui-2b-1/native/default.json",
+    "docs/ui-2b-1/native/exit.json",
+    "docs/ui-2b-1/native/maximize-request.json",
+    "docs/ui-2b-1/native/maximized-client.png",
+    "docs/ui-2b-1/native/maximized-measure.txt",
+    "docs/ui-2b-1/native/maximized.json",
+    "docs/ui-2b-1/native/medium-client.png",
+    "docs/ui-2b-1/native/medium-measure.txt",
+    "docs/ui-2b-1/native/medium-request.json",
+    "docs/ui-2b-1/native/medium.json",
+    "docs/ui-2b-1/native/minimum-client.png",
+    "docs/ui-2b-1/native/minimum-measure.txt",
+    "docs/ui-2b-1/native/minimum-request.json",
+    "docs/ui-2b-1/native/minimum.json",
+    "docs/ui-2b-1/native/restore-request.json",
+    "docs/ui-2b-1/native/start.json",
+    "docs/ui-2b-1/native/stderr.txt",
+    "docs/ui-2b-1/native/stdout.txt",
+    "docs/ui-2b-1/preservation-log.txt",
+    "docs/ui-2b-1/preservation.json",
+    "docs/ui-2b-1/preview-polish/README.md",
+    "docs/ui-2b-1/preview-polish/baseline.json",
+    "docs/ui-2b-1/preview-polish/blocked-1280x800.png",
+    "docs/ui-2b-1/preview-polish/borealis-tests.txt",
+    "docs/ui-2b-1/preview-polish/browser-exits.json",
+    "docs/ui-2b-1/preview-polish/build.txt",
+    "docs/ui-2b-1/preview-polish/check-exits.json",
+    "docs/ui-2b-1/preview-polish/check.txt",
+    "docs/ui-2b-1/preview-polish/crop-tests.json",
+    "docs/ui-2b-1/preview-polish/crop-tests.txt",
+    "docs/ui-2b-1/preview-polish/frontend-tests.txt",
+    "docs/ui-2b-1/preview-polish/functional.json",
+    "docs/ui-2b-1/preview-polish/home-1024x768.png",
+    "docs/ui-2b-1/preview-polish/home-1280x800.png",
+    "docs/ui-2b-1/preview-polish/home-1440x900.png",
+    "docs/ui-2b-1/preview-polish/home-720x520.png",
+    "docs/ui-2b-1/preview-polish/home-801x600.png",
+    "docs/ui-2b-1/preview-polish/home-900x700.png",
+    "docs/ui-2b-1/preview-polish/home-tests.txt",
+    "docs/ui-2b-1/preview-polish/preservation.json",
+    "docs/ui-2b-1/preview-polish/states/oled-cyan.png",
+    "docs/ui-2b-1/preview-polish/states/play-pressed.png",
+    "docs/ui-2b-1/preview-polish/states/reduced-transparency.png",
+    "docs/ui-2b-1/preview-polish/states/text-200-1024.png",
+    "docs/ui-2b-1/preview-polish/states/text-200-1440.png",
+    "docs/ui-2b-1/preview-polish/states/text-200-720.png",
+    "docs/ui-2b-1/preview-polish/states/text-200-900.png",
+    "docs/ui-2b-1/preview-polish/states/text-200-minimum.png",
+    "docs/ui-2b-1/states-comparison.png",
+    "docs/ui-2b-1/states/oled-cyan.png",
+    "docs/ui-2b-1/states/play-pressed.png",
+    "docs/ui-2b-1/states/reduced-transparency.png",
+    "docs/ui-2b-1/states/text-200-1024.png",
+    "docs/ui-2b-1/states/text-200-1440.png",
+    "docs/ui-2b-1/states/text-200-720.png",
+    "docs/ui-2b-1/states/text-200-900.png",
+    "docs/ui-2b-1/states/text-200-minimum.png",
+    "docs/ui-2b-1/type-check.txt",
+    "docs/ui-2b-1/ui1-regression/functional.json",
+    "docs/ui-2b-1/ui1-regression/states/home-long-name-blocked.png",
+    "docs/ui-2b-1/ui1-regression/states/home-text-200.png",
+    "docs/ui-2b-1/ui1-regression/states/mods-empty.png",
+    "docs/ui-2b-1/ui1-regression/states/mods-error.png",
+    "docs/ui-2b-1/ui1-regression/states/mods-loading.png",
+    "docs/ui-2b-1/ui1-regression/states/mods-text-200.png",
+    "docs/ui-2b-1/ui1-tests.txt",
+    "docs/ui-2b-1/ui2-tests.txt",
+    "docs/ui-2b-1/ui2b-tests.txt",
+    "docs/ui-2b/AUDIT_AND_PROPOSAL.md",
+    "docs/ui-2b/after-capture-final.txt",
+    "docs/ui-2b/after-capture.exit",
+    "docs/ui-2b/after-capture.txt",
+    "docs/ui-2b/after/blocked-1280x800.png",
+    "docs/ui-2b/after/cyan-1280x800.png",
+    "docs/ui-2b/after/dense-1280x800.png",
+    "docs/ui-2b/after/empty-1280x800.png",
+    "docs/ui-2b/after/error-1280x800.png",
+    "docs/ui-2b/after/geometry.json",
+    "docs/ui-2b/after/home-1024x768.png",
+    "docs/ui-2b/after/home-1280x800.png",
+    "docs/ui-2b/after/home-1440x900.png",
+    "docs/ui-2b/after/home-720x520.png",
+    "docs/ui-2b/after/loading-1280x800.png",
+    "docs/ui-2b/after/long-1280x800.png",
+    "docs/ui-2b/after/missing-skin-1280x800.png",
+    "docs/ui-2b/after/oled-simple-1280x800.png",
+    "docs/ui-2b/after/running-1280x800.png",
+    "docs/ui-2b/after/sparse-1280x800.png",
+    "docs/ui-2b/background-capture.txt",
+    "docs/ui-2b/background/geometry.json",
+    "docs/ui-2b/background/home-1024x768.png",
+    "docs/ui-2b/background/home-1280x800.png",
+    "docs/ui-2b/background/home-1440x900.png",
+    "docs/ui-2b/background/home-720x520.png",
+    "docs/ui-2b/baseline.json",
+    "docs/ui-2b/before-capture.exit",
+    "docs/ui-2b/before-capture.txt",
+    "docs/ui-2b/before/blocked-1280x800.png",
+    "docs/ui-2b/before/cyan-1280x800.png",
+    "docs/ui-2b/before/dense-1280x800.png",
+    "docs/ui-2b/before/empty-1280x800.png",
+    "docs/ui-2b/before/error-1280x800.png",
+    "docs/ui-2b/before/geometry.json",
+    "docs/ui-2b/before/home-1024x768.png",
+    "docs/ui-2b/before/home-1280x800.png",
+    "docs/ui-2b/before/home-1440x900.png",
+    "docs/ui-2b/before/home-720x520.png",
+    "docs/ui-2b/before/loading-1280x800.png",
+    "docs/ui-2b/before/long-1280x800.png",
+    "docs/ui-2b/before/missing-skin-1280x800.png",
+    "docs/ui-2b/before/oled-simple-1280x800.png",
+    "docs/ui-2b/before/running-1280x800.png",
+    "docs/ui-2b/before/sparse-1280x800.png",
+    "docs/ui-2b/blocked-1280x800.png",
+    "docs/ui-2b/browser-exits-final.json",
+    "docs/ui-2b/browser-exits.json",
+    "docs/ui-2b/browser-final-exits.json",
+    "docs/ui-2b/changed-files.txt",
+    "docs/ui-2b/check-exits-final.json",
+    "docs/ui-2b/check-exits.json",
+    "docs/ui-2b/contrast-samples.json",
+    "docs/ui-2b/frontend-final-affected.txt",
+    "docs/ui-2b/frontend-tests.txt",
+    "docs/ui-2b/functional.json",
+    "docs/ui-2b/geometry-comparison.json",
+    "docs/ui-2b/hero-capture.txt",
+    "docs/ui-2b/hero/geometry.json",
+    "docs/ui-2b/hero/home-1024x768.png",
+    "docs/ui-2b/hero/home-1280x800.png",
+    "docs/ui-2b/hero/home-1440x900.png",
+    "docs/ui-2b/hero/home-720x520.png",
+    "docs/ui-2b/home-1024x768.png",
+    "docs/ui-2b/home-1280x800.png",
+    "docs/ui-2b/home-1440x900.png",
+    "docs/ui-2b/home-720x520.png",
+    "docs/ui-2b/home-801x600.png",
+    "docs/ui-2b/home-900x700.png",
+    "docs/ui-2b/home-comparison.png",
+    "docs/ui-2b/native-build-corrected.txt",
+    "docs/ui-2b/native-build-final.txt",
+    "docs/ui-2b/native-build.txt",
+    "docs/ui-2b/native-correction-exits.json",
+    "docs/ui-2b/native-final/cyan-borealis-client.png",
+    "docs/ui-2b/native-final/cyan-borealis-top-client.png",
+    "docs/ui-2b/native-final/cyan-borealis-top.json",
+    "docs/ui-2b/native-final/cyan-borealis-window.jpg",
+    "docs/ui-2b/native-final/cyan-borealis.json",
+    "docs/ui-2b/native-final/default-desktop-client.png",
+    "docs/ui-2b/native-final/default-desktop-window.jpg",
+    "docs/ui-2b/native-final/default-desktop.json",
+    "docs/ui-2b/native-final/exit.json",
+    "docs/ui-2b/native-final/maximized-client.png",
+    "docs/ui-2b/native-final/maximized-window.jpg",
+    "docs/ui-2b/native-final/maximized.json",
+    "docs/ui-2b/native-final/medium-client.png",
+    "docs/ui-2b/native-final/medium.json",
+    "docs/ui-2b/native-final/start.json",
+    "docs/ui-2b/native-final/stderr.txt",
+    "docs/ui-2b/native-final/stdout.txt",
+    "docs/ui-2b/native-final/widget-editor-window.jpg",
+    "docs/ui-2b/native-review.png",
+    "docs/ui-2b/native/exit.json",
+    "docs/ui-2b/native/pilot-startup-window.jpg",
+    "docs/ui-2b/native/start.json",
+    "docs/ui-2b/native/stderr.txt",
+    "docs/ui-2b/native/stdout.txt",
+    "docs/ui-2b/preservation-log.txt",
+    "docs/ui-2b/preservation.json",
+    "docs/ui-2b/process-baseline.json",
+    "docs/ui-2b/states-comparison.png",
+    "docs/ui-2b/states/oled-cyan.png",
+    "docs/ui-2b/states/play-pressed.png",
+    "docs/ui-2b/states/reduced-transparency.png",
+    "docs/ui-2b/states/text-200-1024.png",
+    "docs/ui-2b/states/text-200-1440.png",
+    "docs/ui-2b/states/text-200-720.png",
+    "docs/ui-2b/states/text-200-900.png",
+    "docs/ui-2b/states/text-200-minimum.png",
+    "docs/ui-2b/type-check-final.txt",
+    "docs/ui-2b/type-check-native-correction.txt",
+    "docs/ui-2b/type-check.txt",
+    "docs/ui-2b/ui1-browser-final.txt",
+    "docs/ui-2b/ui1-browser-tests.txt",
+    "docs/ui-2b/ui1-regression/functional.json",
+    "docs/ui-2b/ui1-regression/states/home-long-name-blocked.png",
+    "docs/ui-2b/ui1-regression/states/home-text-200.png",
+    "docs/ui-2b/ui1-regression/states/mods-empty.png",
+    "docs/ui-2b/ui1-regression/states/mods-error.png",
+    "docs/ui-2b/ui1-regression/states/mods-loading.png",
+    "docs/ui-2b/ui1-regression/states/mods-text-200.png",
+    "docs/ui-2b/ui2-browser-final.txt",
+    "docs/ui-2b/ui2-browser-tests-corrected.txt",
+    "docs/ui-2b/ui2-browser-tests.txt",
+    "docs/ui-2b/ui2b-browser-final.txt",
+    "docs/ui-2b/ui2b-browser-tests-corrected.txt",
+    "docs/ui-2b/ui2b-browser-tests-final.exit",
+    "docs/ui-2b/ui2b-browser-tests-final.txt",
+    "docs/ui-2b/ui2b-browser-tests.txt",
+    "package-lock.json",
+    "package.json",
+    "src-tauri/.gitignore",
+    "src-tauri/Cargo.lock",
+    "src-tauri/Cargo.toml",
+    "src-tauri/build.rs",
+    "src-tauri/capabilities/default.json",
+    "src-tauri/development/README.md",
+    "src-tauri/development/aurora-0.3.0-dev.jar",
+    "src-tauri/development/aurora-0.3.1-beta.1-dev.jar",
+    "src-tauri/development/aurora-0.4.0-nightly-dev.jar",
+    "src-tauri/development/aurora-releases.json",
+    "src-tauri/examples/f3r_acceptance.rs",
+    "src-tauri/examples/f3r_acceptance_driver.py",
+    "src-tauri/examples/f3r_processor_kill.py",
+    "src-tauri/examples/f3ra_desktop_driver.py",
+    "src-tauri/examples/f3ra_validate.rs",
+    "src-tauri/icons/128x128.png",
+    "src-tauri/icons/128x128@2x.png",
+    "src-tauri/icons/32x32.png",
+    "src-tauri/icons/Square107x107Logo.png",
+    "src-tauri/icons/Square142x142Logo.png",
+    "src-tauri/icons/Square150x150Logo.png",
+    "src-tauri/icons/Square284x284Logo.png",
+    "src-tauri/icons/Square30x30Logo.png",
+    "src-tauri/icons/Square310x310Logo.png",
+    "src-tauri/icons/Square44x44Logo.png",
+    "src-tauri/icons/Square71x71Logo.png",
+    "src-tauri/icons/Square89x89Logo.png",
+    "src-tauri/icons/StoreLogo.png",
+    "src-tauri/icons/icon.icns",
+    "src-tauri/icons/icon.ico",
+    "src-tauri/icons/icon.png",
+    "src-tauri/installer/shortcuts.nsh",
+    "src-tauri/production/aurora-releases.json",
+    "src-tauri/src/appearance.rs",
+    "src-tauri/src/application.rs",
+    "src-tauri/src/artwork.rs",
+    "src-tauri/src/aurora/mod.rs",
+    "src-tauri/src/auth/accounts.rs",
+    "src-tauri/src/auth/avatar.rs",
+    "src-tauri/src/auth/callback.rs",
+    "src-tauri/src/auth/credentials.rs",
+    "src-tauri/src/auth/flow.rs",
+    "src-tauri/src/auth/metadata.rs",
+    "src-tauri/src/auth/mod.rs",
+    "src-tauri/src/auth/oauth.rs",
+    "src-tauri/src/auth/session.rs",
+    "src-tauri/src/cache.rs",
+    "src-tauri/src/config.rs",
+    "src-tauri/src/content_recognition.rs",
+    "src-tauri/src/content_updates.rs",
+    "src-tauri/src/cosmetic_image.rs",
+    "src-tauri/src/cosmetics.rs",
+    "src-tauri/src/desktop_acceptance.rs",
+    "src-tauri/src/discord.rs",
+    "src-tauri/src/discord/transport.rs",
+    "src-tauri/src/discord/worker.rs",
+    "src-tauri/src/distribution.rs",
+    "src-tauri/src/downloads.rs",
+    "src-tauri/src/fabric/maven.rs",
+    "src-tauri/src/fabric/metadata.rs",
+    "src-tauri/src/fabric/mod.rs",
+    "src-tauri/src/fabric/plan.rs",
+    "src-tauri/src/fabric/versions.rs",
+    "src-tauri/src/forge/compatibility_tests.rs",
+    "src-tauri/src/forge/fixtures/1.20.1-47.4.10-install_profile.json",
+    "src-tauri/src/forge/fixtures/1.20.1-47.4.10-version.json",
+    "src-tauri/src/forge/fixtures/1.20.1-mojang.json",
+    "src-tauri/src/forge/fixtures/1.20.4-49.2.0-install_profile.json",
+    "src-tauri/src/forge/fixtures/1.20.4-49.2.0-version.json",
+    "src-tauri/src/forge/fixtures/1.20.4-mojang.json",
+    "src-tauri/src/forge/fixtures/1.21.11-61.2.0-install_profile.json",
+    "src-tauri/src/forge/fixtures/1.21.11-61.2.0-version.json",
+    "src-tauri/src/forge/fixtures/1.21.11-mojang.json",
+    "src-tauri/src/forge/fixtures/README.md",
+    "src-tauri/src/forge/metadata.rs",
+    "src-tauri/src/forge/mod.rs",
+    "src-tauri/src/forge/plan.rs",
+    "src-tauri/src/forge/processor_chain_tests.rs",
+    "src-tauri/src/forge/processors.rs",
+    "src-tauri/src/game/mod.rs",
+    "src-tauri/src/game/plan.rs",
+    "src-tauri/src/gameplay_history.rs",
+    "src-tauri/src/home_widgets.rs",
+    "src-tauri/src/install/assets.rs",
+    "src-tauri/src/install/coordination.rs",
+    "src-tauri/src/install/journal.rs",
+    "src-tauri/src/install/mod.rs",
+    "src-tauri/src/install/natives.rs",
+    "src-tauri/src/install/processors.rs",
+    "src-tauri/src/install/receipt.rs",
+    "src-tauri/src/install/retention.rs",
+    "src-tauri/src/install/retention_symlink_gate.rs",
+    "src-tauri/src/install/retention_tests.rs",
+    "src-tauri/src/install/state.rs",
+    "src-tauri/src/installed_artwork.rs",
+    "src-tauri/src/instance_content.rs",
+    "src-tauri/src/instance_mods.rs",
+    "src-tauri/src/instances/deletion.rs",
+    "src-tauri/src/instances/fixtures/registry-v3-production.json",
+    "src-tauri/src/instances/lifecycle.rs",
+    "src-tauri/src/instances/mod.rs",
+    "src-tauri/src/instances/platform.rs",
+    "src-tauri/src/instances/settings.rs",
+    "src-tauri/src/instances/transition.rs",
+    "src-tauri/src/integrity.rs",
+    "src-tauri/src/launch/activity_bridge.rs",
+    "src-tauri/src/launch/boundary.rs",
+    "src-tauri/src/launch/diagnostics.rs",
+    "src-tauri/src/launch/mod.rs",
+    "src-tauri/src/launch/process.rs",
+    "src-tauri/src/launch/resolve.rs",
+    "src-tauri/src/launch/state.rs",
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/main.rs",
+    "src-tauri/src/minecraft/metadata.rs",
+    "src-tauri/src/minecraft/mod.rs",
+    "src-tauri/src/minecraft/plan.rs",
+    "src-tauri/src/minecraft/rules.rs",
+    "src-tauri/src/mod_compatibility.rs",
+    "src-tauri/src/modpacks.rs",
+    "src-tauri/src/modrinth.rs",
+    "src-tauri/src/mrpack.rs",
+    "src-tauri/src/neoforge/metadata.rs",
+    "src-tauri/src/neoforge/mod.rs",
+    "src-tauri/src/neoforge/mods.rs",
+    "src-tauri/src/neoforge/plan.rs",
+    "src-tauri/src/neoforge/processors.rs",
+    "src-tauri/src/neoforge/versions.rs",
+    "src-tauri/src/pack_activation.rs",
+    "src-tauri/src/pack_state.rs",
+    "src-tauri/src/pack_update.rs",
+    "src-tauri/src/paths.rs",
+    "src-tauri/src/performance.rs",
+    "src-tauri/src/runtime/install.rs",
+    "src-tauri/src/runtime/metadata.rs",
+    "src-tauri/src/runtime/mod.rs",
+    "src-tauri/src/runtime/plan.rs",
+    "src-tauri/src/runtime/state.rs",
+    "src-tauri/src/server_enrichment/mod.rs",
+    "src-tauri/src/server_enrichment/motd.rs",
+    "src-tauri/src/server_enrichment/protocol.rs",
+    "src-tauri/src/shortcuts.rs",
+    "src-tauri/src/test_support.rs",
+    "src-tauri/src/updates/client.rs",
+    "src-tauri/src/updates/launcher.rs",
+    "src-tauri/src/updates/mod.rs",
+    "src-tauri/src/window_activity.rs",
+    "src-tauri/tauri.conf.json",
+    "src-tauri/tests/fixtures/artwork/README.md",
+    "src-tauri/tests/fixtures/artwork/solid-4096.jpg",
+    "src-tauri/tests/fixtures/artwork/solid-8192.jpg",
+    "src-tauri/tests/icon_assets.rs",
+    "src/app.css",
+    "src/app.html",
+    "src/lib/authMessages.ts",
+    "src/lib/backend.ts",
+    "src/lib/instances/AuroraTransitionPanel.svelte",
+    "src/lib/instances/AuroraUpdatePanel.svelte",
+    "src/lib/instances/ContentRecognition.svelte",
+    "src/lib/instances/ContentUpdates.svelte",
+    "src/lib/instances/InstallConflicts.svelte",
+    "src/lib/instances/InstalledArtwork.svelte",
+    "src/lib/instances/InstanceModsPanel.svelte",
+    "src/lib/instances/InstanceOverviewPanel.svelte",
+    "src/lib/instances/InstancePacksPanel.svelte",
+    "src/lib/instances/InstanceRenameDialog.svelte",
+    "src/lib/instances/InstanceSettingsPanel.svelte",
+    "src/lib/instances/InstanceWorkspace.svelte",
+    "src/lib/instances/ModrinthBrowse.svelte",
+    "src/lib/instances/PackUpdatePanel.svelte",
+    "src/lib/instances/ProviderLifecycleActions.svelte",
+    "src/lib/instances/ReadinessRows.svelte",
+    "src/lib/instances/backupRetention.test.ts",
+    "src/lib/instances/backupRetention.ts",
+    "src/lib/instances/configurationChoices.test.ts",
+    "src/lib/instances/configurationChoices.ts",
+    "src/lib/instances/contentUpdates.test.ts",
+    "src/lib/instances/creationCopy.test.ts",
+    "src/lib/instances/creationCopy.ts",
+    "src/lib/instances/installedArtwork.ts",
+    "src/lib/instances/modrinthBrowse.test.ts",
+    "src/lib/instances/modrinthBrowse.ts",
+    "src/lib/instances/mods.test.ts",
+    "src/lib/instances/mods.ts",
+    "src/lib/instances/packs.test.ts",
+    "src/lib/instances/packs.ts",
+    "src/lib/instances/projectArtwork.test.ts",
+    "src/lib/instances/projectArtwork.ts",
+    "src/lib/launcher/AccountIdentity.svelte",
+    "src/lib/launcher/CosmeticPreview.svelte",
+    "src/lib/launcher/DiscordSettings.svelte",
+    "src/lib/launcher/GeneralSettings.svelte",
+    "src/lib/launcher/HomeWidgetSettings.svelte",
+    "src/lib/launcher/HomeWidgets.svelte",
+    "src/lib/launcher/InstanceSwitcher.svelte",
+    "src/lib/launcher/PlayerPreview.svelte",
+    "src/lib/launcher/SkinSwatch.svelte",
+    "src/lib/launcher/UpdateSettings.svelte",
+    "src/lib/launcher/accountManager.svelte.ts",
+    "src/lib/launcher/appearance.svelte.ts",
+    "src/lib/launcher/appearanceCustomAccent.test.ts",
+    "src/lib/launcher/cosmetics.svelte.ts",
+    "src/lib/launcher/cosmeticsStore.test.ts",
+    "src/lib/launcher/cosmeticsWidgets.test.ts",
+    "src/lib/launcher/desktopIntegration.svelte.ts",
+    "src/lib/launcher/discord.svelte.ts",
+    "src/lib/launcher/generalSettings.test.ts",
+    "src/lib/launcher/historyWidgets.test.ts",
+    "src/lib/launcher/home.ts",
+    "src/lib/launcher/homeHistory.test.ts",
+    "src/lib/launcher/homeHistory.ts",
+    "src/lib/launcher/homeLayout.svelte.ts",
+    "src/lib/launcher/instanceManagement.test.ts",
+    "src/lib/launcher/instanceStatus.test.ts",
+    "src/lib/launcher/instanceStatus.ts",
+    "src/lib/launcher/navigation.svelte.ts",
+    "src/lib/launcher/navigation.test.ts",
+    "src/lib/launcher/navigation.ts",
+    "src/lib/launcher/performance.ts",
+    "src/lib/launcher/phaseF.test.ts",
+    "src/lib/launcher/playerDirection.test.ts",
+    "src/lib/launcher/playerModel.test.ts",
+    "src/lib/launcher/playerModel.ts",
+    "src/lib/launcher/playerPixels.test.ts",
+    "src/lib/launcher/playerPixels.ts",
+    "src/lib/launcher/productSurfaces.test.ts",
+    "src/lib/launcher/releasePolish.test.ts",
+    "src/lib/launcher/serverEnrichmentWidgets.test.ts",
+    "src/lib/launcher/serverPresentation.ts",
+    "src/lib/launcher/skinLibrary.test.ts",
+    "src/lib/launcher/skinLibrary.ts",
+    "src/lib/launcher/skinTextures.ts",
+    "src/lib/launcher/startupReadiness.test.ts",
+    "src/lib/launcher/store.svelte.ts",
+    "src/lib/launcher/updateController.test.ts",
+    "src/lib/launcher/updateController.ts",
+    "src/lib/launcher/updatePresentation.test.ts",
+    "src/lib/launcher/updatePresentation.ts",
+    "src/lib/launcher/updates.svelte.ts",
+    "src/lib/launcher/widgets.ts",
+    "src/lib/launcher/widgets/CapeSelectorWidget.svelte",
+    "src/lib/launcher/widgets/CapeThumbnail.svelte",
+    "src/lib/launcher/widgets/ContentSummaryWidget.svelte",
+    "src/lib/launcher/widgets/InstanceDetailsWidget.svelte",
+    "src/lib/launcher/widgets/PlaytimeWidget.svelte",
+    "src/lib/launcher/widgets/RecentTargetsWidget.svelte",
+    "src/lib/launcher/widgets/SessionWidget.svelte",
+    "src/lib/launcher/widgets/SkinManagerWidget.svelte",
+    "src/lib/launcher/widgets/SkinThumbnail.svelte",
+    "src/lib/pages/AccountsPage.svelte",
+    "src/lib/pages/CosmeticsPage.svelte",
+    "src/lib/pages/DeveloperPage.svelte",
+    "src/lib/pages/HomePage.svelte",
+    "src/lib/pages/InstancesPage.svelte",
+    "src/lib/pages/SettingsPage.svelte",
+    "src/lib/shell/AccountDialog.svelte",
+    "src/lib/shell/AppShell.svelte",
+    "src/lib/shell/Artwork.svelte",
+    "src/lib/shell/Background.svelte",
+    "src/lib/shell/Icon.svelte",
+    "src/lib/shell/TitleBar.svelte",
+    "src/lib/shell/Tooltip.svelte",
+    "src/lib/shell/artwork.test.ts",
+    "src/lib/shell/artwork.ts",
+    "src/lib/shell/borealis.test.ts",
+    "src/lib/shell/borealis.ts",
+    "src/lib/shell/phase-f.css",
+    "src/lib/shell/windowActivity.test.ts",
+    "src/lib/shell/windowActivity.ts",
+    "src/routes/+layout.svelte",
+    "src/routes/+layout.ts",
+    "src/routes/+page.svelte",
+    "static/aurora-app-icon.png",
+    "static/aurora-icon.png",
+    "static/backgrounds/README.md",
+    "static/backgrounds/borealis-loop.mp4",
+    "static/backgrounds/borealis.webp",
+    "static/favicon.png",
+    "svelte.config.js",
+    "tools/generate_external_icon.py",
+    "tools/release/authority-cache.test.mjs",
+    "tools/release/check-collision.mjs",
+    "tools/release/complete-1-4-2-draft.mjs",
+    "tools/release/complete-1-4-2-draft.test.mjs",
+    "tools/release/publish-manifest.mjs",
+    "tools/release/publish.mjs",
+    "tools/release/publish.ps1",
+    "tools/release/release-state.mjs",
+    "tools/release/release-state.test.mjs",
+    "tools/release/updater-release.mjs",
+    "tools/release/updater-release.test.mjs",
+    "tools/release/verify-version.mjs",
+    "tools/release/windows-artifacts.ps1",
+    "tools/visual/README.md",
+    "tools/visual/Review.svelte",
+    "tools/visual/analyze-ui-corrections.py",
+    "tools/visual/benchmark-player.mjs",
+    "tools/visual/capture-ui-corrections.mjs",
+    "tools/visual/correction.test.mjs",
+    "tools/visual/index.html",
+    "tools/visual/l1.test.mjs",
+    "tools/visual/l3-fixtures.ts",
+    "tools/visual/l3.test.mjs",
+    "tools/visual/profile-artwork-cache.mjs",
+    "tools/visual/profile-ui-corrections.mjs",
+    "tools/visual/render-borealis.py",
+    "tools/visual/review-core.ts",
+    "tools/visual/review-event.ts",
+    "tools/visual/review.ts",
+    "tools/visual/serve.mjs",
+    "tools/visual/ui-corrections-fixture.mjs",
+    "tools/visual/ui-corrections.test.mjs",
+    "tools/visual/ui1-capture.mjs",
+    "tools/visual/ui1-fixture.mjs",
+    "tools/visual/ui1.test.mjs",
+    "tools/visual/ui2-capture.mjs",
+    "tools/visual/ui2-fixture.mjs",
+    "tools/visual/ui2-native-measure.mjs",
+    "tools/visual/ui2-native.ps1",
+    "tools/visual/ui2-preserve.mjs",
+    "tools/visual/ui2-review.py",
+    "tools/visual/ui2-ui1-regression.mjs",
+    "tools/visual/ui2.test.mjs",
+    "tools/visual/ui2b-capture.mjs",
+    "tools/visual/ui2b-native-measure.mjs",
+    "tools/visual/ui2b-native.ps1",
+    "tools/visual/ui2b-preserve.mjs",
+    "tools/visual/ui2b-review.py",
+    "tools/visual/ui2b.test.mjs",
+    "tools/visual/ui2b1-capture.mjs",
+    "tools/visual/ui2b1-crop.test.mjs",
+    "tools/visual/ui2b1-native-measure.mjs",
+    "tools/visual/ui2b1-native.ps1",
+    "tools/visual/ui2b1-preserve.mjs",
+    "tools/visual/ui2b1-review.py",
+    "tools/visual/ui2b1-window.ps1",
+    "tsconfig.json",
+    "vite.config.js"
+  ],
+  "worktrees": "worktree C:/Dev/aurora-launcher\nHEAD 7c76626464a8e0c1c581ddbf976cfb5b6c71e6f3\nbranch refs/heads/codex/client-3-production-authority\n\nworktree C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/corrected-source\nHEAD 420f54c0ad48ec9aa70320786a77d678b51864f1\ndetached\n\nworktree C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/fix-source\nHEAD e4c25cb7dc02e00ca433c7df5b759cef62730d48\nbranch refs/heads/codex/native-boot-updater-config\n\nworktree C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/old-source\nHEAD 4575a0e3f1c28da6cfe072948fe91b60eeaf608f\ndetached\n\nworktree C:/Users/kalib/.codex/worktrees/f3rb1-acceptance/aurora-launcher\nHEAD 4f2ad561fe12e38523aade0265017a1c364751d1\nbranch refs/heads/codex/f3rb1-acceptance\n\nworktree C:/Users/kalib/.codex/worktrees/installed-artwork-reliability/aurora-launcher\nHEAD f50a3b3bece2d0664eb2e09a33b62825dcd6612d\nbranch refs/heads/codex/installed-artwork-reliability\n\nworktree C:/Users/kalib/.codex/worktrees/performance-p0-2-build/aurora-launcher\nHEAD 6cbabd38bc1c5268b9f6c80034f18da3a26f1e21\ndetached",
+  "protected": [
+    {
+      "path": ".zcode-icon-diag.py",
+      "sha256": "5e6199883ece4cb38308d080aaf9d45612594acf0ade0660baeb95aea1200f16"
+    },
+    {
+      "path": ".zcodeignore",
+      "sha256": "e7577714c5582301e11449a27731439051a29d035c4d2373595fb6c5042bcc3e"
+    },
+    {
+      "path": "UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt",
+      "sha256": "ad1790bff169f56025e6da2bc6f75b9434a046d478643f50ba0d68cbb25b5250"
+    },
+    {
+      "path": "docs/performance-p0-2/__pycache__/analyze.cpython-312.pyc",
+      "sha256": "76dc3497a710faf67fc16a0ecb3aaebe19c652bfbc266cc85c9c3480ec0e2ce3"
+    }
+  ],
+  "critical": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "e9e1656365c9ff2768c83892450479aabd21ce4f54afa5efd0ccc7dea7c3a330"
+    },
+    {
+      "path": "ARCHITECTURE.md",
+      "sha256": "98711d9009400cdf2492ff76667bfb5ab266a7bbb91261b64ef7943aba48712a"
+    },
+    {
+      "path": "README.md",
+      "sha256": "a874b67ddc4bcc823950ca655027424740fd3a9bb4e2d036bd4de0f1cf05a0af"
+    },
+    {
+      "path": "package.json",
+      "sha256": "711b12ccf522e4d2061a88a6ae27c2f9d495a15e4d9fb2faa0daaa5bdde245d5"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "5b5c6c0b6d2c90d47764389e67cf4bf8506b175376857846cf17012969149f79"
+    },
+    {
+      "path": "svelte.config.js",
+      "sha256": "fadc69dca3da4956622f7450056da248d1d52ea3f119d6a706e06195b07d9a34"
+    },
+    {
+      "path": "vite.config.js",
+      "sha256": "ff64c375899326df8b8dc53b2d036a9fa0ab26bc03dba09775e8e669e1b1419b"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "846533c0c53d0fb4d6208f1a5c2ac94e098ffa1f518e48e519a32c9813c0b58e"
+    },
+    {
+      "path": "src/lib/backend.ts",
+      "sha256": "0697803fd7ac7d32db54f5732dd62124401f7a0d23c8acdb1921d78e941a7189"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "sha256": "55bfb88ed2accd651b05eb98496b0f815d7d2a631c376558596cfd3c655ef085"
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "sha256": "eb5f5f54334de99a2c9976f37ae12c10194ece953ed15f1609a28b014299078c"
+    },
+    {
+      "path": "src-tauri/build.rs",
+      "sha256": "4ae2333b11623039cc115e29b696e7ff5cdfcd5b7d628280ddf48fa733e6418d"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "sha256": "2199edd6a1c0e3b4866e794c91a2abf584243bc269c0e4c6dc564948d6965bb8"
+    },
+    {
+      "path": "src-tauri/capabilities/default.json",
+      "sha256": "78d59d5d6313a81477f5d8311b2f13f48d4635c86d447e2dfc0688a6e17a2df3"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "UI_1_NAVIGATION_DESIGN_PILOT.md",
+      "sha256": "0c47b7627339c4f398bdf45305abdddcadba76e468f8ffc98f4971fa1a4608cb"
+    },
+    {
+      "path": "UI_2B_1_CHARACTER_PRESENTATION_ACCEPTANCE.md",
+      "sha256": "df3fdd59a52ee830c16f6379b237ce73ec4ab404cfd136d454be950e5c3496dd"
+    },
+    {
+      "path": "UI_2B_BOREALIS_HOME_UNIFICATION.md",
+      "sha256": "c1be16ad3aaf2ed87ff90aa2b5a4ac130c96d35e075da827639c671f4d9c583b"
+    },
+    {
+      "path": "UI_2_HOME_COMPOSITION_ACCEPTANCE.md",
+      "sha256": "d36403f3de43544bc693861948318ab3f7fe03aada95f3f315f8af4dc526049f"
+    },
+    {
+      "path": "docs/ui-1/AUDIT_AND_PROPOSAL.md",
+      "sha256": "56738b91fdbdf82cb2996fcbe4efbad32171446eb683e7539e33d68b3f3c4432"
+    },
+    {
+      "path": "docs/ui-1/after/cosmetics-1280x800.png",
+      "sha256": "732c0c08a3713629ad09faa0e842eab4ddb403e52bb4e1825e3e495ba5dd4cf9"
+    },
+    {
+      "path": "docs/ui-1/after/geometry.json",
+      "sha256": "9ef62eb0eb3fdd7e84f11cbf53c2a6e7a2c4c5acd72ce745a8e59818de9ec3de"
+    },
+    {
+      "path": "docs/ui-1/after/home-1024x768.png",
+      "sha256": "2b5d34eded0da00b776d65ab7d71fe4813f17066d840acd76136ca3d29bc8a58"
+    },
+    {
+      "path": "docs/ui-1/after/home-1280x800.png",
+      "sha256": "5dd8c7984c7451a3caec419665d7729ba29763f667a67db8eeb84924b7d565d2"
+    },
+    {
+      "path": "docs/ui-1/after/home-1440x900.png",
+      "sha256": "1e3ac81eca9d3d41af47e0fb74a58cf6270ad9c89ea3feeebbdee28fa83d43d7"
+    },
+    {
+      "path": "docs/ui-1/after/home-720x520.png",
+      "sha256": "d222d0cffbf77f3a16c26d4d3eae998486605568752f2ae5d854e2006da9fb6a"
+    },
+    {
+      "path": "docs/ui-1/after/instances-1280x800.png",
+      "sha256": "d42479b64c8a6b79660e5a1f3d4ce6da30c2cf49d8b0f85844b6dabe666a3293"
+    },
+    {
+      "path": "docs/ui-1/after/mods-1024x768.png",
+      "sha256": "2bbf6b581bd59c2fb47d1c1e9aacd9592e6f0998c41825f8ddaef14ca8689a8c"
+    },
+    {
+      "path": "docs/ui-1/after/mods-1280x800.png",
+      "sha256": "ee015474f7d215c9ceb45e4a7cb71212e55cf10eac189f803377fea60e9d5528"
+    },
+    {
+      "path": "docs/ui-1/after/mods-1440x900.png",
+      "sha256": "24ddc5c50a8aa5ccc9eeddf0f3ec11a6adfa4e3fb5bf97031cbae80874a876c2"
+    },
+    {
+      "path": "docs/ui-1/after/mods-720x520.png",
+      "sha256": "f40c77a24818b3a6703b6bd26c9562547a6dc5109306eaf5a6eb7b58ee01560d"
+    },
+    {
+      "path": "docs/ui-1/after/settings-1280x800.png",
+      "sha256": "c605934dd725473f8e1844420e4b6d00da8cb72ba127858ba6f04acf1a456f2a"
+    },
+    {
+      "path": "docs/ui-1/baseline.json",
+      "sha256": "f828b74b0e46ce97920b30b6f1cbd40b759725e6a14c19a311b9b36f017908c6"
+    },
+    {
+      "path": "docs/ui-1/before/cosmetics-1280x800.png",
+      "sha256": "1e1c382e499f02ee73fb9988df1a1aca8e54dd5ff53e79488a833f9ea9acc5d3"
+    },
+    {
+      "path": "docs/ui-1/before/geometry.json",
+      "sha256": "c65d76be0525c3df17916e4464bf973475538d0853253077bc93dca9ad5b0743"
+    },
+    {
+      "path": "docs/ui-1/before/home-1024x768.png",
+      "sha256": "2aa98340c33eb79e616fb616d8440828e0e308e33bae4668a101190adb1819eb"
+    },
+    {
+      "path": "docs/ui-1/before/home-1280x800.png",
+      "sha256": "01d3467f20285b359d1769b615027e899d2db42978e980dfb96a31d9fff7bd6b"
+    },
+    {
+      "path": "docs/ui-1/before/home-1440x900.png",
+      "sha256": "6f31135b7579801545afd2e7863591a0d126cb759ed99d00b6ce00fe737e735b"
+    },
+    {
+      "path": "docs/ui-1/before/home-720x520.png",
+      "sha256": "c9ec38b539aa67d17f4be856f88c9f5ff528f19391a42be5cd3ce522599c20df"
+    },
+    {
+      "path": "docs/ui-1/before/instances-1280x800.png",
+      "sha256": "cf69df3b8c00579d84f9def96d0145332d7667b8c59b0de2de3e0537d403e149"
+    },
+    {
+      "path": "docs/ui-1/before/mods-1024x768.png",
+      "sha256": "c034b75e6bcd24a7dc4fdaebddfb4abc1b353aa9e304d679bc4ab3a027d3b7fd"
+    },
+    {
+      "path": "docs/ui-1/before/mods-1280x800.png",
+      "sha256": "93d1349df34b6497037015cc13c51c7849dc3c0a828d88d15d2deee6b3a31698"
+    },
+    {
+      "path": "docs/ui-1/before/mods-1440x900.png",
+      "sha256": "d841ab227683c2ee550b8081f0ae241d07cff5e926727aa706c917bd9bcfce3f"
+    },
+    {
+      "path": "docs/ui-1/before/mods-720x520.png",
+      "sha256": "d5c17adcc92f9b37ce9c01d891c98f9f8ae4395b0012495000f8cbc27f227235"
+    },
+    {
+      "path": "docs/ui-1/before/settings-1280x800.png",
+      "sha256": "d6ea934dd0df4c29a63b6aa50d0d71ba4b8e4bbae0fea37a283d44df9a87be68"
+    },
+    {
+      "path": "docs/ui-1/browser-exits.json",
+      "sha256": "36d6a402be41388abc600ca946e2fd44c04e21f79a631affc903a6a22e29047a"
+    },
+    {
+      "path": "docs/ui-1/changed-files.txt",
+      "sha256": "c34a00447b0b8a04ebe186bc89cc630091fc3e110f277bb8f3cb87384e9a62b2"
+    },
+    {
+      "path": "docs/ui-1/frontend-exits.json",
+      "sha256": "a4228a05334d9ef245ea42f9c58c4d8b334ada5e10821f9e5cb7977368ff3c2f"
+    },
+    {
+      "path": "docs/ui-1/frontend-tests.txt",
+      "sha256": "757b8573b85f6b3d2d10f02353a2c7e18607cb52a8eca745c00f026732c48a85"
+    },
+    {
+      "path": "docs/ui-1/functional.json",
+      "sha256": "380516693b5fab8edbf2ecd19003d0cd2c111dcba9437980428d00589a020fa3"
+    },
+    {
+      "path": "docs/ui-1/home-comparison.png",
+      "sha256": "0a7bfe9569acc128d33b32d504c6b682277af38779dfaf5e51602702d0b341b7"
+    },
+    {
+      "path": "docs/ui-1/l1-browser-tests.txt",
+      "sha256": "5c0162aab8166336f8033585a2bdcc328f021501158ca9851d134a917c42817b"
+    },
+    {
+      "path": "docs/ui-1/l1.test.mjs.txt",
+      "sha256": "5c0162aab8166336f8033585a2bdcc328f021501158ca9851d134a917c42817b"
+    },
+    {
+      "path": "docs/ui-1/l3.test.mjs.txt",
+      "sha256": "61e7b1309ae70ab949d96b032be700f017394709874aeca27a0f878412a8ea59"
+    },
+    {
+      "path": "docs/ui-1/mods-comparison.png",
+      "sha256": "469725e99564923327656f12ff4167265a4f0a0b86c1c013842c5cbe9da26d8a"
+    },
+    {
+      "path": "docs/ui-1/other-screens-comparison.png",
+      "sha256": "105eddfd65d30f482f6db08116ae403228b5aaf88fd6109c88e6a7543bf75d14"
+    },
+    {
+      "path": "docs/ui-1/preservation.json",
+      "sha256": "233e6f77abbcf7ca96d5ad06da41d3f2852056d9565b7fd86a5685d36b41a55c"
+    },
+    {
+      "path": "docs/ui-1/production-build.txt",
+      "sha256": "4a5843460e041b47c860f84edaf56785a7e4bb8af41a5f2eb1013a3fa464a7dd"
+    },
+    {
+      "path": "docs/ui-1/stalled-test-processes.json",
+      "sha256": "517fa7f09ba7c2a354dedf80fa138101aa656b54ef09ab61e7c598064838e907"
+    },
+    {
+      "path": "docs/ui-1/states-review.png",
+      "sha256": "7c655479eb8613cd6f85f6ee133b9ca2fd0d4606c32e0b5af200c2ef3ad59906"
+    },
+    {
+      "path": "docs/ui-1/states/home-long-name-blocked.png",
+      "sha256": "b8501e29657614dff92c2caad352f9585761edbc58aef59ddcfeece6a5ae5502"
+    },
+    {
+      "path": "docs/ui-1/states/home-text-200.png",
+      "sha256": "a62ace64063e5fc04c6e2223acc4a8c8e31484d4b87d409d1fba6693d5560d25"
+    },
+    {
+      "path": "docs/ui-1/states/mods-empty.png",
+      "sha256": "52fd57f0b8ef749048a3c5462d2fe5e4a7233d6ce4d2dd4378625df63c70a71a"
+    },
+    {
+      "path": "docs/ui-1/states/mods-error.png",
+      "sha256": "eaca3fd629a418235b58228a77f8937170f45c5939cc56676a1053fa8cfdf094"
+    },
+    {
+      "path": "docs/ui-1/states/mods-loading.png",
+      "sha256": "4f3ea68217f9bfee27ee1698620ce63532763f82c4bfd9c97b9c6a798cac62f7"
+    },
+    {
+      "path": "docs/ui-1/states/mods-text-200.png",
+      "sha256": "ddaa63247b27453d2063ac808dd90bd5d88a2719275bbfec6a386266be54e9b7"
+    },
+    {
+      "path": "docs/ui-1/type-check.txt",
+      "sha256": "192661e306e9e9cbee82883595609e80a96c5765218de4aec3279e349eefc128"
+    },
+    {
+      "path": "docs/ui-1/ui-corrections.test.mjs.txt",
+      "sha256": "6dad15d98fd0bc0797396dffaf0a428f92f5b888f9a155bc955478efcce18ead"
+    },
+    {
+      "path": "docs/ui-1/ui1-browser-tests.txt",
+      "sha256": "b9e5eb4696a63285387882dc281d9899532179c8785df39366d4bd81deb1555e"
+    },
+    {
+      "path": "docs/ui-1/ui1.test.mjs.txt",
+      "sha256": "b9e5eb4696a63285387882dc281d9899532179c8785df39366d4bd81deb1555e"
+    },
+    {
+      "path": "docs/ui-2/AUDIT_AND_PROPOSAL.md",
+      "sha256": "bc2809da2f9006fc9d6734f96220646f57aacb6c2e2bc95cafb359c5ae8fe213"
+    },
+    {
+      "path": "docs/ui-2/accessibility-review.png",
+      "sha256": "87abfdcbcc72c57f5ce0fbc3799fce9f18f071217fb415f5f3bd1be6db6c8473"
+    },
+    {
+      "path": "docs/ui-2/after/blocked-1280x800.png",
+      "sha256": "a4ff085f3744709473ef2b2d0d4e14103fe1d0ad9db5f95e93c4b78593e6d031"
+    },
+    {
+      "path": "docs/ui-2/after/dense-1280x800.png",
+      "sha256": "512b6cd6d241377499459d0d581f5a93d9a73a9036552aef4febcd2f885a3fdd"
+    },
+    {
+      "path": "docs/ui-2/after/dense-bottom-1280x800.png",
+      "sha256": "8dca76ac0e0e01f05624ba1c49f06883d6caf5be22b7a07c234da9c5ba8604a8"
+    },
+    {
+      "path": "docs/ui-2/after/empty-1280x800.png",
+      "sha256": "88d43a6d97a4aa60b525005d3f5605cfa20c2ec184746601e0e1f3042f4f20dd"
+    },
+    {
+      "path": "docs/ui-2/after/error-1280x800.png",
+      "sha256": "b5ec7981baec496744ed0ded8a19e7785e2cece351fdf40c64f2874cb4facd52"
+    },
+    {
+      "path": "docs/ui-2/after/geometry.json",
+      "sha256": "f2d1fd1cb4b010ae0060833c229039f7fc606f6491aa00e086a5d2148b811981"
+    },
+    {
+      "path": "docs/ui-2/after/home-1024x768.png",
+      "sha256": "8174571c9c24675b7dc9ac71b103c7c9b23d6ffaaed136dedd9aafb489d1e34e"
+    },
+    {
+      "path": "docs/ui-2/after/home-1280x800.png",
+      "sha256": "4ac77c88379cd7efd41a5b7933f79f0037ce6c46459efa277fc68879e9cd760c"
+    },
+    {
+      "path": "docs/ui-2/after/home-1440x900.png",
+      "sha256": "c8a961f97dac6917a93ab386628500934b9c663371d3620976ee5587496cb982"
+    },
+    {
+      "path": "docs/ui-2/after/home-720x520.png",
+      "sha256": "5c1209d6d5472206bef4ab9a97a3615878ab42e493cbd30c1538c12576cf859a"
+    },
+    {
+      "path": "docs/ui-2/after/loading-1280x800.png",
+      "sha256": "01ff9a8d9a755b856335504c843cff069d4898f1faa1aa8aad421af344543315"
+    },
+    {
+      "path": "docs/ui-2/after/long-1280x800.png",
+      "sha256": "97a1799b6e9d97350a27f344ec94216221565d7a743fcc4c3299f1f11dda2a26"
+    },
+    {
+      "path": "docs/ui-2/after/missing-skin-1280x800.png",
+      "sha256": "37f6d6d1e4374fd6596c69fabd2f11cf43835b22f583731ae606fa5235cd3c8a"
+    },
+    {
+      "path": "docs/ui-2/after/oled-simple-1280x800.png",
+      "sha256": "9cb4cbaceb1c0802acdd507ad2720e1437233d84f3df0c3a1fef276f754f14ce"
+    },
+    {
+      "path": "docs/ui-2/after/running-1280x800.png",
+      "sha256": "2e4c0b8886e6edf93a37c02f15593108b2e6653e85e775c4e89771e0bca8bd36"
+    },
+    {
+      "path": "docs/ui-2/after/sparse-1280x800.png",
+      "sha256": "c1bab5ff22e7722711ab0396ac074cbc8f8095147997feb23708133dac84d551"
+    },
+    {
+      "path": "docs/ui-2/baseline.json",
+      "sha256": "c83abb7fd2727afbbe63ec6fc94b884c136b3adf1f0513a430526505f30485ed"
+    },
+    {
+      "path": "docs/ui-2/before/blocked-1280x800.png",
+      "sha256": "ffbb77da09f7313cb9a39582687cec9c2c150ee0a5c423ead24f7e54f3987432"
+    },
+    {
+      "path": "docs/ui-2/before/dense-1280x800.png",
+      "sha256": "ab75918bec35d89f3936d0ef529fffed80faa98d08c23673ba349afac4a253a5"
+    },
+    {
+      "path": "docs/ui-2/before/dense-bottom-1280x800.png",
+      "sha256": "d971b0f9cbd971612ddcf3d485b979778c696cb70bc3df0e5f26294e5a29b3ed"
+    },
+    {
+      "path": "docs/ui-2/before/empty-1280x800.png",
+      "sha256": "5bc4f71eb5805ace45aaace58173a002b525de96de475294e6fb430bfa36ae63"
+    },
+    {
+      "path": "docs/ui-2/before/error-1280x800.png",
+      "sha256": "2006effc9ee832796ea1e1e2bd665755271b39f06703d6f96a3c7be349ffb402"
+    },
+    {
+      "path": "docs/ui-2/before/geometry.json",
+      "sha256": "899fe2c91f577beb338ce621c013a5759ef0906c43c36efd0b275f7616b0727c"
+    },
+    {
+      "path": "docs/ui-2/before/home-1024x768.png",
+      "sha256": "57a9425082377de9d8eb3655af896702b65574babef614f28e9cc565bdb822ed"
+    },
+    {
+      "path": "docs/ui-2/before/home-1280x800.png",
+      "sha256": "e69bd2781c4d5eac703765d29cf736ba07051e33a4f9d3706c59bee0ea237423"
+    },
+    {
+      "path": "docs/ui-2/before/home-1440x900.png",
+      "sha256": "e64ec574c9c2cea6076adc003610df9cc3a125e33bdd2c3d9e9628d0dd4514db"
+    },
+    {
+      "path": "docs/ui-2/before/home-720x520.png",
+      "sha256": "df895a8020c9dc04829ebd90985519487dd984a71ccb210ea7c9096b31904c2b"
+    },
+    {
+      "path": "docs/ui-2/before/loading-1280x800.png",
+      "sha256": "2806d3fd3b83cd3b40939cdfd2cc43f648443d453a432a064f372cf568356f67"
+    },
+    {
+      "path": "docs/ui-2/before/long-1280x800.png",
+      "sha256": "4e25369a46420f9e4f9ecba4bc3e720e2d29f888a164b4854d97637735796260"
+    },
+    {
+      "path": "docs/ui-2/before/missing-skin-1280x800.png",
+      "sha256": "47a8fbac26b928e2b034f4fe8ef7d660b9658e457e1120f800b61f7d212137f3"
+    },
+    {
+      "path": "docs/ui-2/before/oled-simple-1280x800.png",
+      "sha256": "5a096994388438d48f4f7cc3191df77934531454036aa41a8070340293458a91"
+    },
+    {
+      "path": "docs/ui-2/before/running-1280x800.png",
+      "sha256": "fdac8ec8267123bc7c40156f4434764263b5573eabb9a5f7fedaacdaea1b259f"
+    },
+    {
+      "path": "docs/ui-2/before/sparse-1280x800.png",
+      "sha256": "accf96f2e31cd0eb4854e9d3288a9649ce57398759940020044fe3842209b3c4"
+    },
+    {
+      "path": "docs/ui-2/capture-after.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/capture-after.txt",
+      "sha256": "1d2d04a901536ba5fc363f068ff2d19dd6edd3983b7f76a5279db49156dde33a"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/README.md",
+      "sha256": "a876d2361f654e13e67a919c9b6cb203a5b44a5ec92830aef8da77fbb22e92cb"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/baseline.json",
+      "sha256": "d7ee6d2a0420f0f8bae0ccf67d40c9f0f083d759fe3c76b110e53e95df879a9c"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/blocked-1280x800.png",
+      "sha256": "ef9807e2b6c5ac5586e44899d067e07d6743bfb884c2edd9b601f4c31270d077"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/frontend-tests-initial.txt",
+      "sha256": "37aaac9981526b2c805b52f777babe137336c7b719a12b4e5a14031f00bfae1b"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/frontend-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/frontend-tests.txt",
+      "sha256": "0cc87e5b8cff2383c4e9ed4d833b7db121725a4d2d0d2a0f0a8b15ad0161844e"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/functional.json",
+      "sha256": "4c977b3276493ca35e4b591da48e98f0d7287e19d6e5e46f6c10ab16e9bcd516"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/home-1024x768.png",
+      "sha256": "29335477f0eb69dd31ad1f35fbfd86e0d54c5cfce02ac5fc1209b8068b2623cb"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/home-1280x800.png",
+      "sha256": "a6ec5197bcb98a0697160c9ce6b036ae0fd923e92eb4678d91beb0916cb73f96"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/home-1440x900.png",
+      "sha256": "cb0d66404364eae7933d3d1ddbaac004fefcc65a680118ebca912da952f4c37d"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/home-720x520.png",
+      "sha256": "552a4bc946cb92e43aa714aea839d880c1c4d79331e4a76cbd57342a1419134f"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/home-801x600.png",
+      "sha256": "e85748116ff12e6a03218ada91bf3acf7e292383f2b07b1d6af09f3a8358ddfc"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/home-900x700.png",
+      "sha256": "0031f06955cc816d12903b3f854ef2238351acae1fbb0cbdc6a0b096fbbf29c6"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/home-browser-tests-initial.txt",
+      "sha256": "a160888efc9ee223a3a8ca0f37bb7aa84097617d66d5b6de0a2c6a1b5bf93dc0"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/home-browser-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/home-browser-tests.txt",
+      "sha256": "fddc9dc04e30c803d0c3122907c6826e2bfa28006b4dc3354d81a9d65f1aafd2"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/production-build.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/production-build.txt",
+      "sha256": "02097bf853fac161b5183848e830e4bf688ec4bf713900283b642e43fda37394"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/states/oled-cyan.png",
+      "sha256": "be503a32613e50410884f370d10baa861a256bb884e20fd9e77d4c3f07458d63"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/states/play-pressed.png",
+      "sha256": "1a68da646f30ed0f55a6ab59b16dbfc488451013c0670a71aadd9a12d8cbb07d"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/states/text-200-1024.png",
+      "sha256": "defb29457f5732855943ba598f77b5a041b9096cd788e98f6ae4fe818b7decf9"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/states/text-200-1440.png",
+      "sha256": "b1caf02744ab8528c9ea060387cb6fa551666b4a45eecd911a59100d72aeb3ce"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/states/text-200-720.png",
+      "sha256": "02c78ea8d57e8352e9321b60251a67bbbf941246e419175f370ee87224f81c38"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/states/text-200-900.png",
+      "sha256": "06e33c29f46e118d87a2a48c730ed799d99f136137611f4b53d69aadbe0fdf66"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/type-check.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/type-check.txt",
+      "sha256": "192661e306e9e9cbee82883595609e80a96c5765218de4aec3279e349eefc128"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/ui1-browser-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/ui1-browser-tests.txt",
+      "sha256": "b9e5eb4696a63285387882dc281d9899532179c8785df39366d4bd81deb1555e"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/ui1-regression/functional.json",
+      "sha256": "380516693b5fab8edbf2ecd19003d0cd2c111dcba9437980428d00589a020fa3"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/ui1-regression/states/home-long-name-blocked.png",
+      "sha256": "07498bbbef67039bda060c3312b0adba7fd5b773e71dd4dea955326700cdc1d4"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/ui1-regression/states/home-text-200.png",
+      "sha256": "76e3a6d57a6c372396876dc4fc4a63b8088f9b9ff774191b6d8ef5014c8daed5"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/ui1-regression/states/mods-empty.png",
+      "sha256": "52fd57f0b8ef749048a3c5462d2fe5e4a7233d6ce4d2dd4378625df63c70a71a"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/ui1-regression/states/mods-error.png",
+      "sha256": "eaca3fd629a418235b58228a77f8937170f45c5939cc56676a1053fa8cfdf094"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/ui1-regression/states/mods-loading.png",
+      "sha256": "4f3ea68217f9bfee27ee1698620ce63532763f82c4bfd9c97b9c6a798cac62f7"
+    },
+    {
+      "path": "docs/ui-2/card-refinement/ui1-regression/states/mods-text-200.png",
+      "sha256": "ddaa63247b27453d2063ac808dd90bd5d88a2719275bbfec6a386266be54e9b7"
+    },
+    {
+      "path": "docs/ui-2/changed-code-files.txt",
+      "sha256": "b287fb8bd9c9ed64989166c4e0a2be8b17e68614408aa4557a1f80d9337901c8"
+    },
+    {
+      "path": "docs/ui-2/final-widget-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/final-widget-tests.txt",
+      "sha256": "5689e074be7a0cf87a17666b4cd30f900da4409911457a1610999e54a0d8060d"
+    },
+    {
+      "path": "docs/ui-2/frontend-tests-interrupted.txt",
+      "sha256": "5c32474edda44b51e4035884233a86e28e2a3d4429dbf1c28256845ca960eff5"
+    },
+    {
+      "path": "docs/ui-2/frontend-tests-obsolete-breakpoint.txt",
+      "sha256": "01bf30dc181d3fd386a0d6778186b3e4160141b5cb7ce4bdd020fa873d56dbd3"
+    },
+    {
+      "path": "docs/ui-2/frontend-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/frontend-tests.txt",
+      "sha256": "7844474fea1b68d795cfcf695575a45c759afb3502c983bd42f77106d1de253a"
+    },
+    {
+      "path": "docs/ui-2/functional.json",
+      "sha256": "009d1d999ccacd6ec41f27d541fa729ac9c147f05b50ea8bca2c5580091fefb2"
+    },
+    {
+      "path": "docs/ui-2/home-comparison.png",
+      "sha256": "db354c6929bfe46d4c259d38a35bf4b38c86f9fdc97a4890960d4dbab1ae9f31"
+    },
+    {
+      "path": "docs/ui-2/image-inventory.json",
+      "sha256": "d5da6a8d29096d387fa3a56e73b8d00480ffd1ae02f60d851fe8c6f26d07388b"
+    },
+    {
+      "path": "docs/ui-2/interrupted-test-processes.json",
+      "sha256": "29ac85ed5dbbaa359510d5b6a43cb1e59838a43249c11f21b0f31fbf2d74b62f"
+    },
+    {
+      "path": "docs/ui-2/l1-browser-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/l1-browser-tests.txt",
+      "sha256": "5c0162aab8166336f8033585a2bdcc328f021501158ca9851d134a917c42817b"
+    },
+    {
+      "path": "docs/ui-2/l3-browser-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/l3-browser-tests.txt",
+      "sha256": "61e7b1309ae70ab949d96b032be700f017394709874aeca27a0f878412a8ea59"
+    },
+    {
+      "path": "docs/ui-2/native-build-final.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/native-build-final.txt",
+      "sha256": "a6a4dd81dca09263c98e073aadf2cdef6ecf25771e1931abfea0adbbd6e46f88"
+    },
+    {
+      "path": "docs/ui-2/native-build-locked.txt",
+      "sha256": "48eacc7aa108d22bd38775d75a27ce40f688a7d5d8c67686639bf1302df848fc"
+    },
+    {
+      "path": "docs/ui-2/native-build.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/native-build.txt",
+      "sha256": "5a4b5faa709b9e6914b972b9ae48b47dbdaa9c5c2167728b779d7926bb2a938a"
+    },
+    {
+      "path": "docs/ui-2/native/041245-exit.json",
+      "sha256": "d17567ffa8a52f7befd2a850cf4053b50120206307239e4b2eebcde933aee4c2"
+    },
+    {
+      "path": "docs/ui-2/native/041245-start.json",
+      "sha256": "e1ba210a84fcac6f409ed117c5cbf5d93b653a9167384c10bbb15ca3d5d88170"
+    },
+    {
+      "path": "docs/ui-2/native/041245-stderr.txt",
+      "sha256": "fc0e65799ab8b6ea9848ce1ea9ba7d39d89e309e6cf9be9d6347c27e32b418fc"
+    },
+    {
+      "path": "docs/ui-2/native/041245-stdout.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/ui-2/native/041455-exit.json",
+      "sha256": "3da073e4cf7ca52ca352469185a7d6dfab64d4c5f806d9ca89c40b3c61a0e2b5"
+    },
+    {
+      "path": "docs/ui-2/native/041455-start.json",
+      "sha256": "850353282eacb6093d138ef7f9c9fc65d780bc26b328e92abe50332aad8745e4"
+    },
+    {
+      "path": "docs/ui-2/native/041455-stderr.txt",
+      "sha256": "515ff04db6281ea417add1c475f12ba24584723e10bc6e925c1e80f9a47f283c"
+    },
+    {
+      "path": "docs/ui-2/native/041455-stdout.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/ui-2/native/042308-exit.json",
+      "sha256": "c72fb86b9fb458d4cbff4ad65ea7105cc4f08f360dc2c00fa8569f85ed7ffa35"
+    },
+    {
+      "path": "docs/ui-2/native/042308-start.json",
+      "sha256": "69fdd83d5d8f3be7b3f5897f25221b25d7ba16b9f894b79811d104aec72f47a2"
+    },
+    {
+      "path": "docs/ui-2/native/042308-stderr.txt",
+      "sha256": "be25b12c0d084c75f7a8a24e417164ebfc22a7e0303b6b08bb5d79f2fc958113"
+    },
+    {
+      "path": "docs/ui-2/native/042308-stdout.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/ui-2/native/default-client.png",
+      "sha256": "bdfac1b14b365a0f4d09807a4ba46f312eb7468809bddf185b3ae0ef7cefb401"
+    },
+    {
+      "path": "docs/ui-2/native/default.json",
+      "sha256": "9d9523be4af3a895ae55088a065c49322480cfd86bf3cb66383d54452e7ad37a"
+    },
+    {
+      "path": "docs/ui-2/native/final-default-client.png",
+      "sha256": "ba988c639698999c710aebe08d1ca6d3de82f77ff72588313f0689940b610e5c"
+    },
+    {
+      "path": "docs/ui-2/native/final-default-window.png",
+      "sha256": "5e4103219f4416058fc58ab61c0b3b0da6c9cf0cd166a6287bde6b346bd8a2bd"
+    },
+    {
+      "path": "docs/ui-2/native/final-default.json",
+      "sha256": "223da1a0c60a8067a45e78969d508185a1bdd6b399be7e25adbeceb8c11da913"
+    },
+    {
+      "path": "docs/ui-2/native/final-maximized-client.png",
+      "sha256": "eedc372367c252b2272ddf235b3cb8236ecdaea3fd76606b93423ee571f935bf"
+    },
+    {
+      "path": "docs/ui-2/native/final-maximized-window.png",
+      "sha256": "c12a64b0052d5906bb1efb645245a57f3b3405b9161716e895cee6daa3cb8472"
+    },
+    {
+      "path": "docs/ui-2/native/final-maximized.json",
+      "sha256": "dd8f146ac20b6558ae7897eb24be588b1f80593958d81cafd2dd49eac0800bd1"
+    },
+    {
+      "path": "docs/ui-2/native/final-minimum-client.png",
+      "sha256": "15a870d5b84220799e3070554bdbfe41b95109ba605d60a8fdb7a87a89f47aef"
+    },
+    {
+      "path": "docs/ui-2/native/final-minimum-editor-client.png",
+      "sha256": "1d48ff09fd60b833debb944c11e610c6f8c30ff47abb21ad07c606ba58b826ce"
+    },
+    {
+      "path": "docs/ui-2/native/final-minimum-editor-window.png",
+      "sha256": "c4469088b08b66ea6afd80289c54794a5d6318b0e2eee6bd44c789537bb3f025"
+    },
+    {
+      "path": "docs/ui-2/native/final-minimum-editor.json",
+      "sha256": "ac8572388e2ea1df7783ed8302800dac14b56ae69ab8408db6fb5344bc2319da"
+    },
+    {
+      "path": "docs/ui-2/native/final-minimum-widgets-client.png",
+      "sha256": "6790e2deb582c1e70464b17a4a26c633b5cedf0177707dcc4d85adef1540c9c1"
+    },
+    {
+      "path": "docs/ui-2/native/final-minimum-widgets-window.png",
+      "sha256": "8f0aca0e7659fc9e7bcb57d9b7c6b33728b01e5c377c3784d26389e729afa733"
+    },
+    {
+      "path": "docs/ui-2/native/final-minimum-widgets.json",
+      "sha256": "1befa8928477827423d22d8adca781223c0e8930c43d5ae4c8a20c45cf2762cd"
+    },
+    {
+      "path": "docs/ui-2/native/final-minimum-window.png",
+      "sha256": "7a86674aae394891eef87faf0d90946a326fbe95be56f5489f60b60d388b252e"
+    },
+    {
+      "path": "docs/ui-2/native/final-minimum.json",
+      "sha256": "1ffd8dc785e44f920fcb9283acbdba31349e031c205b29578c4f2e0f8b8c706c"
+    },
+    {
+      "path": "docs/ui-2/native/final-resized-accessibility.txt",
+      "sha256": "15583021528e6c5e6cc5e431ce9463f2698778c241d4cf44551c3c65a5288b40"
+    },
+    {
+      "path": "docs/ui-2/native/final-resized-desktop-client.png",
+      "sha256": "cfe3dc8f501c071b0fa8a4942d660d254565701f3f26f6eb026d9a681b9b4fa1"
+    },
+    {
+      "path": "docs/ui-2/native/final-resized-desktop-window.png",
+      "sha256": "658b6f6f34307442c9a8c3996975dc7980510791d819267c7526e1a78467e34d"
+    },
+    {
+      "path": "docs/ui-2/native/final-resized-desktop.json",
+      "sha256": "ad90dad0102943a213f73b4e8da8f08889c6999047c298a5f43424fdb8e4cea3"
+    },
+    {
+      "path": "docs/ui-2/native/final-restored-client.png",
+      "sha256": "91a32ce7c600485be2382d0be7ad0fd2363f08d172a2268f6ae0b209832cd88d"
+    },
+    {
+      "path": "docs/ui-2/native/final-restored.json",
+      "sha256": "dd8f146ac20b6558ae7897eb24be588b1f80593958d81cafd2dd49eac0800bd1"
+    },
+    {
+      "path": "docs/ui-2/native/final-small-client.png",
+      "sha256": "f70432d447a75f9aa5ab8b6ef8e837628dfa99f34f8e9349eb57fd1ab873a04e"
+    },
+    {
+      "path": "docs/ui-2/native/final-small-window.png",
+      "sha256": "638294a9e1c57c334eaacb47af4f6d142e6892427e5b5bcb586537333a935403"
+    },
+    {
+      "path": "docs/ui-2/native/final-small.json",
+      "sha256": "7ec05847f39e315df143412c0150e5553c69f5d792bdd9131c09272c2d44dadf"
+    },
+    {
+      "path": "docs/ui-2/native/home-default-accessibility.txt",
+      "sha256": "a566378903affb7cc02b774d751a107150f2266f78181badee1fa8cc1f747bcc"
+    },
+    {
+      "path": "docs/ui-2/native/home-default-client.png",
+      "sha256": "a2c11812fd146f0972cf0164f855f5b20e42b112f29645f9aa4c786588023428"
+    },
+    {
+      "path": "docs/ui-2/native/home-default-window.png",
+      "sha256": "b370636b5bbbc7c26ecaf08ea56499d05bb323b4553e77b316d2da3977a85d10"
+    },
+    {
+      "path": "docs/ui-2/native/home-default.json",
+      "sha256": "b8b6c2c844d7e1e5882fb41edf676937510f079bd1c096f61be0fde9d18a2039"
+    },
+    {
+      "path": "docs/ui-2/native/isolated-root.txt",
+      "sha256": "a01515c2e14ab6bc1d682db6ac275d1df8616db09bcf557b562dc6a0a21216ac"
+    },
+    {
+      "path": "docs/ui-2/native/layout-after-restart.json",
+      "sha256": "4519adbb3ac3a5336d12585caaac2fbddc1ea7bb83dd2b8b5ec4902cb4af07d4"
+    },
+    {
+      "path": "docs/ui-2/native/layout-before-restart.json",
+      "sha256": "4519adbb3ac3a5336d12585caaac2fbddc1ea7bb83dd2b8b5ec4902cb4af07d4"
+    },
+    {
+      "path": "docs/ui-2/owner-before.json",
+      "sha256": "98935e39a32cf2e626e25f1f286fae8987b3785386a435d21820b1d5d9b7fff1"
+    },
+    {
+      "path": "docs/ui-2/owner-preservation.json",
+      "sha256": "85132e532829ceb00f23966cebae21f447762970e4740ee59beaac9c030f07b2"
+    },
+    {
+      "path": "docs/ui-2/preservation.txt",
+      "sha256": "85cc43b824bfa7a24ca336ba15e1bc1c963dba0d7e5a538f13c1b08b8e9167dd"
+    },
+    {
+      "path": "docs/ui-2/processes-after.json",
+      "sha256": "8e65bb26422758e67a4e24547b2c9ac6cb3ca07619f06840e09aeeff9cf740f7"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/README.md",
+      "sha256": "1abf13abc6f272b0094fa79284839c35b2d169a6bdaad6365de4bb765284536a"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/baseline.json",
+      "sha256": "cc164689f0c9f9825cf1d178fb0a370dadf02ce1c6de64b95382126a98e67e2f"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/blocked-1280x800.png",
+      "sha256": "d22b85e8cfd55afc23216829b38145542a1bd4c34d5b9e4cb972e3a9cf3b772f"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/browser-exits.json",
+      "sha256": "96c71c9352331b23ae2a4babefa2b40e19d3cc6904e905d328a9675c22a0c8fe"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/browser-tests.txt",
+      "sha256": "fddc9dc04e30c803d0c3122907c6826e2bfa28006b4dc3354d81a9d65f1aafd2"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/build.txt",
+      "sha256": "f9f7489b25d1d7890e14ec86e7797b24b5e0afc29e5f8c0802c5151a9de84df7"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/check-exits.json",
+      "sha256": "c132cf9be30c7fc3689017b877d6a8449aa35fcaa0abdf8687d7a4fa74e0e56f"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/frontend-tests.txt",
+      "sha256": "3e1b6d9cf8d7b15196792ff02a18bf7bccee1827b71db23b660a35369e07e36f"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/functional.json",
+      "sha256": "4de513c5d4a55abf8fdd9827e197a2cce335d39dcc9e82546e26cffa1d713da8"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/home-1024x768.png",
+      "sha256": "44e83ca9aa307809fce6fbbee9774fd1dc2f36a398c8c7a0362896b3ea015cc7"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/home-1280x800.png",
+      "sha256": "48f7b29ad961eef3c39af9c89f37c5fff0377b2934aa67a794c50ac70ce52e0a"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/home-1440x900.png",
+      "sha256": "b4996ad8f5e21c2cca61621c7225d8ef3e8ab3991afca6c5ed0976c4a857986f"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/home-720x520.png",
+      "sha256": "a7854b1c3ffed1c232c4856655d84e22da6d1043783a56ab1cf0fa3429f24e88"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/home-801x600.png",
+      "sha256": "62b0ae8515cb31ae4b55e5be5dcd13d650557e082dd4ba225837996bec4cf32e"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/home-900x700.png",
+      "sha256": "77a12f2e58598c7cff94dbf77703b1e202285d8e960f40a8c0001b3218a96064"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/preservation.json",
+      "sha256": "23cb3e41e4cd7a297ed3186ec8a7c87eae9d5e5f5b591e107a04bdab4c9baf30"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/states/oled-cyan.png",
+      "sha256": "e4aa7e52b965345157524eed40c7bd0169670873303ba0668b5419d1915ed841"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/states/play-pressed.png",
+      "sha256": "086a30dfef1a82cfbaa824b7ccd3a5f0d474e4aceeaa266f2ae36d2c6232714e"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/states/text-200-1024.png",
+      "sha256": "6c231e96a6cc1aa21ee1c746aa40e51f4b9ecf069fc951bbc2e75a504434af7a"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/states/text-200-1440.png",
+      "sha256": "719c970946f311455a67b8e94b00236b35db45bef9327d169f62f8ed22f7ca72"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/states/text-200-720.png",
+      "sha256": "14d85b0be2e99867ec7ae4ad1541305b8751ea9251f56ddf71c20d61721748ab"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/states/text-200-900.png",
+      "sha256": "a02b5c5d93fed24ca8c4ede64254084fbe14e2edfab778c1aecfc18fcdc2ad8a"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/type-check.txt",
+      "sha256": "192661e306e9e9cbee82883595609e80a96c5765218de4aec3279e349eefc128"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/ui1-regression-tests.txt",
+      "sha256": "b9e5eb4696a63285387882dc281d9899532179c8785df39366d4bd81deb1555e"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/ui1-regression/functional.json",
+      "sha256": "380516693b5fab8edbf2ecd19003d0cd2c111dcba9437980428d00589a020fa3"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/ui1-regression/states/home-long-name-blocked.png",
+      "sha256": "3b2cd27cb0aca65526b6987499bcce149d4cef9bf735cf0306779238ae381229"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/ui1-regression/states/home-text-200.png",
+      "sha256": "4678a44769ca02a24c3a089bf10c2584f4cf465c6061c58b933243d9df6c9a90"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/ui1-regression/states/mods-empty.png",
+      "sha256": "bd774436743bcb79f66059a733239e68a9d67367dacf76e67f4d101f3f7be5f1"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/ui1-regression/states/mods-error.png",
+      "sha256": "9d96033bf2331c95091d44a93db125b520c869cf661cc6af52fc995c934cfb42"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/ui1-regression/states/mods-loading.png",
+      "sha256": "79f1a6747c7c34e4ca2bdf4d943fd7e0cb9027917468cc042d2e97e6ef1613e2"
+    },
+    {
+      "path": "docs/ui-2/reference-proportions/ui1-regression/states/mods-text-200.png",
+      "sha256": "ffd8dc8c8c5e82a0d8942c30fe6ee7a80de59717957352903c47992cda92b4d9"
+    },
+    {
+      "path": "docs/ui-2/split-launch/README.md",
+      "sha256": "96b8a964333c8046645e5e8dd7550cdfa4d1e2b4c47ba2579eee28492579eea9"
+    },
+    {
+      "path": "docs/ui-2/split-launch/baseline.json",
+      "sha256": "7be7c3bf94ae7fe7d1f847b186591fe95475dae2b56aea27559f01d32b50beaa"
+    },
+    {
+      "path": "docs/ui-2/split-launch/blocked-1280x800.png",
+      "sha256": "95bde343e4500738fad8650d9d87e145087066851a5d1daf394cf01c9b9f3ade"
+    },
+    {
+      "path": "docs/ui-2/split-launch/frontend-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/split-launch/frontend-tests.txt",
+      "sha256": "2c2d804cb94c6ebcdc18adbdeb9513d1f760bb2abcc5dc9e8737db234730a2e5"
+    },
+    {
+      "path": "docs/ui-2/split-launch/functional.json",
+      "sha256": "11a397e5c2744be27aaaa328000aee07ac99d2f783ffd424e5c301a25342ea11"
+    },
+    {
+      "path": "docs/ui-2/split-launch/home-1024x768.png",
+      "sha256": "2ab118a78c31b751500ef5c0587ac428cfc009d7f06f3af1029edf6ed60920b5"
+    },
+    {
+      "path": "docs/ui-2/split-launch/home-1280x800.png",
+      "sha256": "014f0414b269193a67caab16bf0aad9b07f479175f15d874b6e465693b5c021f"
+    },
+    {
+      "path": "docs/ui-2/split-launch/home-1440x900.png",
+      "sha256": "4181042a7755ea42170ef2671d2eb5e6f3c36da950c267b6ba76fbd2f28668e2"
+    },
+    {
+      "path": "docs/ui-2/split-launch/home-720x520.png",
+      "sha256": "08dc8e5964887da652ab73e434779ffeba6d3dbf24f2c97235b20eb96f8853cb"
+    },
+    {
+      "path": "docs/ui-2/split-launch/home-801x600.png",
+      "sha256": "d701618faa36bb088ccee99cb4c8edc37ba71b23d40763d53b6d851152ec76da"
+    },
+    {
+      "path": "docs/ui-2/split-launch/home-900x700.png",
+      "sha256": "4aecb296033b13411ed2f8f50bf55a25a6533f01b991ef3d9e69271ef74f7a0f"
+    },
+    {
+      "path": "docs/ui-2/split-launch/home-browser-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/split-launch/home-browser-tests.txt",
+      "sha256": "fddc9dc04e30c803d0c3122907c6826e2bfa28006b4dc3354d81a9d65f1aafd2"
+    },
+    {
+      "path": "docs/ui-2/split-launch/production-build.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/split-launch/production-build.txt",
+      "sha256": "36371fe9130aed4fb8de43272cd1d5b92230b1b83a2d0305c66e7ffacbec431c"
+    },
+    {
+      "path": "docs/ui-2/split-launch/states/oled-cyan.png",
+      "sha256": "1ec314a00c12df796d3e84d35caaa218f66788982285532fc8385216ae3e8e23"
+    },
+    {
+      "path": "docs/ui-2/split-launch/states/play-pressed.png",
+      "sha256": "bfed6e1c6a42b3ee93f7f93c4edfbeba630d0e97be6ed6f99f5864ccfc043fb6"
+    },
+    {
+      "path": "docs/ui-2/split-launch/states/text-200-1024.png",
+      "sha256": "e9ad646e50a0af7139f64c4417dea27ad71253d2752aa001093adc71f9f562d3"
+    },
+    {
+      "path": "docs/ui-2/split-launch/states/text-200-1440.png",
+      "sha256": "8efa61496081626cef6ae3098baf74333fc1ae4fbd1783f3da619241d72b1ba0"
+    },
+    {
+      "path": "docs/ui-2/split-launch/states/text-200-720.png",
+      "sha256": "add839acb035b20121b67f35db4bd1f37935a67a64d20b3dc2b8a7b40085ba4b"
+    },
+    {
+      "path": "docs/ui-2/split-launch/states/text-200-900.png",
+      "sha256": "8f84e21030d20bffea88213682335df2e7f3c089e5e7fdae6874cbbb39b7a7b8"
+    },
+    {
+      "path": "docs/ui-2/split-launch/type-check.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/split-launch/type-check.txt",
+      "sha256": "192661e306e9e9cbee82883595609e80a96c5765218de4aec3279e349eefc128"
+    },
+    {
+      "path": "docs/ui-2/split-launch/ui1-browser-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/split-launch/ui1-browser-tests.txt",
+      "sha256": "b9e5eb4696a63285387882dc281d9899532179c8785df39366d4bd81deb1555e"
+    },
+    {
+      "path": "docs/ui-2/split-launch/ui1-regression/functional.json",
+      "sha256": "380516693b5fab8edbf2ecd19003d0cd2c111dcba9437980428d00589a020fa3"
+    },
+    {
+      "path": "docs/ui-2/split-launch/ui1-regression/states/home-long-name-blocked.png",
+      "sha256": "067221ce5f43659739fc01e0fe31eeba4376055fa275398fc9126ef10e09309b"
+    },
+    {
+      "path": "docs/ui-2/split-launch/ui1-regression/states/home-text-200.png",
+      "sha256": "0811731a251c962712fcaa6566e79acc5f745c978557bbff7f0ad3f90b5e2cd3"
+    },
+    {
+      "path": "docs/ui-2/split-launch/ui1-regression/states/mods-empty.png",
+      "sha256": "52fd57f0b8ef749048a3c5462d2fe5e4a7233d6ce4d2dd4378625df63c70a71a"
+    },
+    {
+      "path": "docs/ui-2/split-launch/ui1-regression/states/mods-error.png",
+      "sha256": "eaca3fd629a418235b58228a77f8937170f45c5939cc56676a1053fa8cfdf094"
+    },
+    {
+      "path": "docs/ui-2/split-launch/ui1-regression/states/mods-loading.png",
+      "sha256": "4f3ea68217f9bfee27ee1698620ce63532763f82c4bfd9c97b9c6a798cac62f7"
+    },
+    {
+      "path": "docs/ui-2/split-launch/ui1-regression/states/mods-text-200.png",
+      "sha256": "ddaa63247b27453d2063ac808dd90bd5d88a2719275bbfec6a386266be54e9b7"
+    },
+    {
+      "path": "docs/ui-2/staged-evidence-files.txt",
+      "sha256": "2598081ac0ca424002b843ddb8db00ba647bd8d51f1d98e77ad0d88e758cbeaa"
+    },
+    {
+      "path": "docs/ui-2/states-review.png",
+      "sha256": "3c947cf06ff550d0c01e594f34cd0125f2c10cdbd62f8c9d425a4c894f375469"
+    },
+    {
+      "path": "docs/ui-2/states/oled-cyan.png",
+      "sha256": "e1c8405fb9ab7fb23de68b041221e1e420b2735287567e0a948190cc33f57da6"
+    },
+    {
+      "path": "docs/ui-2/states/play-pressed.png",
+      "sha256": "76eb7e4fdb9eff2fb4ef003b3702d79ef77dbf71a6afd3c9dd8149070644d34d"
+    },
+    {
+      "path": "docs/ui-2/states/text-200-1024.png",
+      "sha256": "889076cefd2498e16e03fda30959de07f13ea4a2f99f4efbd8e5a38bee158013"
+    },
+    {
+      "path": "docs/ui-2/states/text-200-1440.png",
+      "sha256": "175aa09b02aa6153af0df8c35e29879a079b6933aeb89b247989a2df4c86b0a8"
+    },
+    {
+      "path": "docs/ui-2/states/text-200-720.png",
+      "sha256": "7f170cf1700c73e117ce733c8fd924e20e695a03d01d647ee18772bb81405739"
+    },
+    {
+      "path": "docs/ui-2/states/text-200-900.png",
+      "sha256": "67b4547875dc13c622272fa5b314acc21ca72a797a30873c9e9b493f24697ff7"
+    },
+    {
+      "path": "docs/ui-2/tested-source-hashes.json",
+      "sha256": "2e20e61abd75f6e2967968851bece1b191567e6d4ccd81a0c073206de62d10f3"
+    },
+    {
+      "path": "docs/ui-2/type-check.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/type-check.txt",
+      "sha256": "192661e306e9e9cbee82883595609e80a96c5765218de4aec3279e349eefc128"
+    },
+    {
+      "path": "docs/ui-2/ui-corrections-browser-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/ui-corrections-browser-tests.txt",
+      "sha256": "6dad15d98fd0bc0797396dffaf0a428f92f5b888f9a155bc955478efcce18ead"
+    },
+    {
+      "path": "docs/ui-2/ui1-browser-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/ui1-browser-tests.txt",
+      "sha256": "b9e5eb4696a63285387882dc281d9899532179c8785df39366d4bd81deb1555e"
+    },
+    {
+      "path": "docs/ui-2/ui1-regression/functional.json",
+      "sha256": "380516693b5fab8edbf2ecd19003d0cd2c111dcba9437980428d00589a020fa3"
+    },
+    {
+      "path": "docs/ui-2/ui1-regression/states/home-long-name-blocked.png",
+      "sha256": "1a455a08a1cefb5e125fe26afebaee22aa7e5d26f7aca91c295876d29ae30e19"
+    },
+    {
+      "path": "docs/ui-2/ui1-regression/states/home-text-200.png",
+      "sha256": "5176e1d20cd576de1204712af43573995150503870814efa4e05e1e99d0e9470"
+    },
+    {
+      "path": "docs/ui-2/ui1-regression/states/mods-empty.png",
+      "sha256": "52fd57f0b8ef749048a3c5462d2fe5e4a7233d6ce4d2dd4378625df63c70a71a"
+    },
+    {
+      "path": "docs/ui-2/ui1-regression/states/mods-error.png",
+      "sha256": "eaca3fd629a418235b58228a77f8937170f45c5939cc56676a1053fa8cfdf094"
+    },
+    {
+      "path": "docs/ui-2/ui1-regression/states/mods-loading.png",
+      "sha256": "4f3ea68217f9bfee27ee1698620ce63532763f82c4bfd9c97b9c6a798cac62f7"
+    },
+    {
+      "path": "docs/ui-2/ui1-regression/states/mods-text-200.png",
+      "sha256": "ddaa63247b27453d2063ac808dd90bd5d88a2719275bbfec6a386266be54e9b7"
+    },
+    {
+      "path": "docs/ui-2/ui2-browser-tests.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2/ui2-browser-tests.txt",
+      "sha256": "312c99ceed00f4521e8804071f8edf08a7ea69a0b3aaca71653ffcfb63e01cef"
+    },
+    {
+      "path": "docs/ui-2/worktrees-after.txt",
+      "sha256": "eea655a553558cd0a0e936850523ef8499ec81d09289513deef18993f3bf53af"
+    },
+    {
+      "path": "docs/ui-2b-1/after-capture.txt",
+      "sha256": "3cf97d336648c897819acf11c1e06792ccbcedaee59fc338a0d7724a514b34d4"
+    },
+    {
+      "path": "docs/ui-2b-1/after/blocked-1280x800.png",
+      "sha256": "f60609913e497e79ab0b6b2ad403de057fde96ab6ab4e28b2aa4c5d12da3949c"
+    },
+    {
+      "path": "docs/ui-2b-1/after/cyan-1280x800.png",
+      "sha256": "0b74479fe794f2168471d9fd3d60dcef7f68959560b11908a886a1027552d546"
+    },
+    {
+      "path": "docs/ui-2b-1/after/dense-1280x800.png",
+      "sha256": "2051fec419cb6bdafeed556c8e831bc5501bcb3f1e2a6af9ded8eabff9012e41"
+    },
+    {
+      "path": "docs/ui-2b-1/after/empty-1280x800.png",
+      "sha256": "a60282c0c6f9dc47254feddd3d44a5be765e83f34852d0dc632554defac33115"
+    },
+    {
+      "path": "docs/ui-2b-1/after/error-1280x800.png",
+      "sha256": "21257bfcf40fae0bde211214f06aa852707ad9b1237a1d4c0f4fefa9cd8bb2ae"
+    },
+    {
+      "path": "docs/ui-2b-1/after/geometry.json",
+      "sha256": "fb25fd2cb0b1293f66eccb8cad5e2688ce3160f6a8a9cae07fb625f230f5d0ab"
+    },
+    {
+      "path": "docs/ui-2b-1/after/home-1024x768.png",
+      "sha256": "975a6f6a98336f75f071bfc2334be31277e83d78434db12f322bbef02274b51d"
+    },
+    {
+      "path": "docs/ui-2b-1/after/home-1280x800.png",
+      "sha256": "bdc936c46ce728fbf6bcbacbc38f67f7f82502dc8eaae7d8cdf963a7e4f8127c"
+    },
+    {
+      "path": "docs/ui-2b-1/after/home-1440x900.png",
+      "sha256": "a355cee099bf7ff60580ca434b6e24ace683d1cd1b2623ae5a4b625f7d7bf794"
+    },
+    {
+      "path": "docs/ui-2b-1/after/home-720x520.png",
+      "sha256": "f1e20c8f070e20d59bc471c4e4e347c5f561ebdec6d61cbd4b516612b784c69e"
+    },
+    {
+      "path": "docs/ui-2b-1/after/loading-1280x800.png",
+      "sha256": "435b5f76918810f0c2a437a8868edf064bf9397aae3347d115eeac0095343aec"
+    },
+    {
+      "path": "docs/ui-2b-1/after/long-1280x800.png",
+      "sha256": "bd1da66700a7131b38031edea893d2f778a3aca4273261d71a18173a81101b8a"
+    },
+    {
+      "path": "docs/ui-2b-1/after/missing-skin-1280x800.png",
+      "sha256": "0bf3a41e8758b614868a15a55335e6ba0ba7f7ae618ed3be5b751abc5e485180"
+    },
+    {
+      "path": "docs/ui-2b-1/after/oled-simple-1280x800.png",
+      "sha256": "0af7469aa6bd466ec0fb6eda8b95e1f941e7ec1f7562912fcbf94f421bf0e8f2"
+    },
+    {
+      "path": "docs/ui-2b-1/after/running-1280x800.png",
+      "sha256": "5865dfe7a79692c69902693be15a1f1ef4d2652705dc489925331ed8009eda2c"
+    },
+    {
+      "path": "docs/ui-2b-1/after/sparse-1280x800.png",
+      "sha256": "01860ff233d07e27ad7a7469ad827e7adc18b9c2ec67d897e46aa66fb6a5a55f"
+    },
+    {
+      "path": "docs/ui-2b-1/baseline.json",
+      "sha256": "ce5b540e233ee5e4243eb0099ef56a7b37e351b2eac7c8b4218cd5b8d98ac2bc"
+    },
+    {
+      "path": "docs/ui-2b-1/before-capture.txt",
+      "sha256": "8bb54aacbe31022de01c8b5617af96d3761f91311265bf0297790e82220a176c"
+    },
+    {
+      "path": "docs/ui-2b-1/before/blocked-1280x800.png",
+      "sha256": "63e55eaa8a72c13038050bf43b478ac5a0b68078cf6633a57f7b20fa8d4610cf"
+    },
+    {
+      "path": "docs/ui-2b-1/before/cyan-1280x800.png",
+      "sha256": "9a66adfda5a2fa70ccefa3a3f565aca76deae818491319e5bfda6520c94b6099"
+    },
+    {
+      "path": "docs/ui-2b-1/before/dense-1280x800.png",
+      "sha256": "42d21900285a0dc32a014e1b6c36cea0379b6f2af5409e0b2df589c4cc6bd365"
+    },
+    {
+      "path": "docs/ui-2b-1/before/empty-1280x800.png",
+      "sha256": "d6245a37dbb0d6ac7f842c3eccdad6b32d3de017bd05120a4d7d6c068146ce54"
+    },
+    {
+      "path": "docs/ui-2b-1/before/error-1280x800.png",
+      "sha256": "abaa46ee98ef6455de8afb191025f3e0842ec775f5b2a183da0f68d729a7d1e6"
+    },
+    {
+      "path": "docs/ui-2b-1/before/geometry.json",
+      "sha256": "793ca22f2e96a8e097a193775b70f29fea08524c59c49afee9c37d8c90cb0088"
+    },
+    {
+      "path": "docs/ui-2b-1/before/home-1024x768.png",
+      "sha256": "325b8a1fe8575a1d7dc55d8400395b3998352542198e9019920c9e7cbaaf6f01"
+    },
+    {
+      "path": "docs/ui-2b-1/before/home-1280x800.png",
+      "sha256": "9e15047b0f9ccfb658ba7f4e2d81109c9cecccae7b2eb81d53f75e358a1b37bd"
+    },
+    {
+      "path": "docs/ui-2b-1/before/home-1440x900.png",
+      "sha256": "cf28f08054993882980ac9d639bda97ac520037201ce1ca9b5c149fe619ff3d8"
+    },
+    {
+      "path": "docs/ui-2b-1/before/home-720x520.png",
+      "sha256": "f1e20c8f070e20d59bc471c4e4e347c5f561ebdec6d61cbd4b516612b784c69e"
+    },
+    {
+      "path": "docs/ui-2b-1/before/loading-1280x800.png",
+      "sha256": "1a0938b9756648f8c68b53ed11870a31437ed122a94bee02416b0d2f33b80854"
+    },
+    {
+      "path": "docs/ui-2b-1/before/long-1280x800.png",
+      "sha256": "2fbaff324657def08f0658e7fda00ba4fddc4a7a1fe19bf2bf5f4635e7172530"
+    },
+    {
+      "path": "docs/ui-2b-1/before/missing-skin-1280x800.png",
+      "sha256": "f79aa0972fee74ce8ae278ca44884a1127c370af7be481b617240e64e9cc67a1"
+    },
+    {
+      "path": "docs/ui-2b-1/before/oled-simple-1280x800.png",
+      "sha256": "8f83ca9f767f080f99ab8d50059617dd1b2dfd7521d20c92e78659028ab65984"
+    },
+    {
+      "path": "docs/ui-2b-1/before/running-1280x800.png",
+      "sha256": "a5a7560e46cad4d4cd550ad23d8972165888da8adab688b0c1a388442b6e9925"
+    },
+    {
+      "path": "docs/ui-2b-1/before/sparse-1280x800.png",
+      "sha256": "875ab1286eca67652ce01d9c2e3ee541c827ad569d87500cabdc29af6c246e32"
+    },
+    {
+      "path": "docs/ui-2b-1/blocked-1280x800.png",
+      "sha256": "f60609913e497e79ab0b6b2ad403de057fde96ab6ab4e28b2aa4c5d12da3949c"
+    },
+    {
+      "path": "docs/ui-2b-1/browser-exits.json",
+      "sha256": "62f03e625ca54e40f166b2e474b9db8d7df64c0f54ae0eb81c986f5e794999df"
+    },
+    {
+      "path": "docs/ui-2b-1/build.txt",
+      "sha256": "5ae68af983a163c3b4d1309a240e6eac2f42aefea1a5af615f25e2ecacdc383c"
+    },
+    {
+      "path": "docs/ui-2b-1/changed-files.txt",
+      "sha256": "ab4492adc942df552722e9d5bb37b4ed53b7c384a078b6788cd5c4342ee51cc0"
+    },
+    {
+      "path": "docs/ui-2b-1/check-exits.json",
+      "sha256": "19c0223631fb170d9deb024d94b6e72220d504a7bf1b560882ce1258c9a872e7"
+    },
+    {
+      "path": "docs/ui-2b-1/crop-final.txt",
+      "sha256": "fd6a757400b2f2140b4a45f4bc734a627454aadeec184bea56f0ced88cb1f0db"
+    },
+    {
+      "path": "docs/ui-2b-1/crop-tests.json",
+      "sha256": "119bfcfcefe01a406fc686702992bd1f482c6b509a174e9cdacdc4dad7ce83e0"
+    },
+    {
+      "path": "docs/ui-2b-1/crop-tests.txt",
+      "sha256": "96b6f2c599a7d20dd3262d57dd31cd7924e8848ba6c360a4dbd2ff83461dc213"
+    },
+    {
+      "path": "docs/ui-2b-1/frontend-tests.txt",
+      "sha256": "d860e51db3d7c086fbac1db3114f9d44975175e131b77df0a73410cdc14eb2ce"
+    },
+    {
+      "path": "docs/ui-2b-1/functional.json",
+      "sha256": "4ae839ff80270ec3f8dc9238c0e142b335436cc5184fc0e11f9befe161a60b0b"
+    },
+    {
+      "path": "docs/ui-2b-1/geometry-comparison.json",
+      "sha256": "3acd0bc81116fac0ad81df67bfd5f5b344ff8c78735cd31f047faa74efd29251"
+    },
+    {
+      "path": "docs/ui-2b-1/home-1024x768.png",
+      "sha256": "975a6f6a98336f75f071bfc2334be31277e83d78434db12f322bbef02274b51d"
+    },
+    {
+      "path": "docs/ui-2b-1/home-1280x800.png",
+      "sha256": "bdc936c46ce728fbf6bcbacbc38f67f7f82502dc8eaae7d8cdf963a7e4f8127c"
+    },
+    {
+      "path": "docs/ui-2b-1/home-1440x900.png",
+      "sha256": "a355cee099bf7ff60580ca434b6e24ace683d1cd1b2623ae5a4b625f7d7bf794"
+    },
+    {
+      "path": "docs/ui-2b-1/home-720x520.png",
+      "sha256": "f1e20c8f070e20d59bc471c4e4e347c5f561ebdec6d61cbd4b516612b784c69e"
+    },
+    {
+      "path": "docs/ui-2b-1/home-801x600.png",
+      "sha256": "90189eec77c76bb7a7a39fae26ea6b21f690698b41f7422d2deb7134963e3470"
+    },
+    {
+      "path": "docs/ui-2b-1/home-900x700.png",
+      "sha256": "7c88c7d816752fcc1c04bf31cc7e7605dfde4b7175cb6831ac4f0b60d92ac2b3"
+    },
+    {
+      "path": "docs/ui-2b-1/home-comparison.png",
+      "sha256": "f45a5b81e051a3dead1224f955608901b5778c5769a9fbf4565f753fc696cce2"
+    },
+    {
+      "path": "docs/ui-2b-1/native/close-request.json",
+      "sha256": "e0d0ffeda24b9f05c36f1c44f1c7d3c3e7dac45c523f10ae7d8ea2405044831d"
+    },
+    {
+      "path": "docs/ui-2b-1/native/default-client.png",
+      "sha256": "10e37c1464a7c60ffcf272d3649ac3d16fb217e02be88a73708e5d8d5cc5349f"
+    },
+    {
+      "path": "docs/ui-2b-1/native/default-measure.txt",
+      "sha256": "c4107868b092f870436f3bba48c805df694f34cfee699e6b29ad12afaf65ba09"
+    },
+    {
+      "path": "docs/ui-2b-1/native/default.json",
+      "sha256": "b5cccf600eac9aa9cee6d1e7140d470524647ffd187ea36b246b894d95e9fcc2"
+    },
+    {
+      "path": "docs/ui-2b-1/native/exit.json",
+      "sha256": "efdd4bd8b259122a32f8c107f24489cd92ac2b664b424b4c3888049ba50ddf1e"
+    },
+    {
+      "path": "docs/ui-2b-1/native/maximize-request.json",
+      "sha256": "5ee22ee106aca5c6668a9fbb648d2d8bf161e54e89ce75d437c6ef5977e1f301"
+    },
+    {
+      "path": "docs/ui-2b-1/native/maximized-client.png",
+      "sha256": "6e5562c6a91aa36cc781daccf24f58c6c0ff0e5204eaa23b93dd49bba5e48ca3"
+    },
+    {
+      "path": "docs/ui-2b-1/native/maximized-measure.txt",
+      "sha256": "980b191528d0fd6b56bbd848883e2f5fc5ff4b0c75bafcdeac774864ea5e0547"
+    },
+    {
+      "path": "docs/ui-2b-1/native/maximized.json",
+      "sha256": "bf742c41114ce568857ae888590dd186331ebc1ac54f91cc77e88c13889a84ff"
+    },
+    {
+      "path": "docs/ui-2b-1/native/medium-client.png",
+      "sha256": "3baf7249b5d912678db24a9a2ec1148b5a7f14d2e00c19b85acd593963992f8a"
+    },
+    {
+      "path": "docs/ui-2b-1/native/medium-measure.txt",
+      "sha256": "9b6d7257515b430ffa0907ea019a0101c3678b80cf3fa38d786c2e5f9a13a3cf"
+    },
+    {
+      "path": "docs/ui-2b-1/native/medium-request.json",
+      "sha256": "c031c23021d6ccd14c954a7f5d1de21e1f00a20bd42c1682afe303331e4b7955"
+    },
+    {
+      "path": "docs/ui-2b-1/native/medium.json",
+      "sha256": "9bc02562fb734e118b4e471916c229b83214063222e06a8f48dffef50e57a783"
+    },
+    {
+      "path": "docs/ui-2b-1/native/minimum-client.png",
+      "sha256": "a97bafaef0e726ba91288972450630e182875df5208e5b0dfd78dc00f6ab6162"
+    },
+    {
+      "path": "docs/ui-2b-1/native/minimum-measure.txt",
+      "sha256": "5c802a7f8ec78bb475982f0ec37ec74a43d75876d987d5122fe9fe552f992888"
+    },
+    {
+      "path": "docs/ui-2b-1/native/minimum-request.json",
+      "sha256": "3b28530dbf93df5150753c2b71aa80b0f172da4b70f8bb3782dee22589e98eba"
+    },
+    {
+      "path": "docs/ui-2b-1/native/minimum.json",
+      "sha256": "ac976356fbd2d379f6efbe85dc0dba23128bac31e5c46c463a1b821d1b21390f"
+    },
+    {
+      "path": "docs/ui-2b-1/native/restore-request.json",
+      "sha256": "7f356c7d4077f97893cec6699e695167433a920f3f16c8eb193d9179c8c19fae"
+    },
+    {
+      "path": "docs/ui-2b-1/native/start.json",
+      "sha256": "66c7e0de4a17bae68ec07d0153ede7310355b930cf0af4906982d32c0ea3bb38"
+    },
+    {
+      "path": "docs/ui-2b-1/native/stderr.txt",
+      "sha256": "1c9812746ecf507d662e5cf6b23533e5693f785406db162069fc127aaaf64b28"
+    },
+    {
+      "path": "docs/ui-2b-1/native/stdout.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/ui-2b-1/preservation-log.txt",
+      "sha256": "929a104dfcda79c80a848f860d729401c32a287cac20d138eaae2594c53f7025"
+    },
+    {
+      "path": "docs/ui-2b-1/preservation.json",
+      "sha256": "f4be1532fae0bc190a6e4909bb81e5d05e0be91de453ba1b82de05cb953d8853"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/README.md",
+      "sha256": "57b93a5a3382fed913e5d77fe6061eb5d759d2476abe459d26637ad93396cfa6"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/baseline.json",
+      "sha256": "45f81eccab57fb2eea1234f5ddeeeb085dbb45823a3c4ebfb0ec88fd3f460cc7"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/blocked-1280x800.png",
+      "sha256": "44bea9b56b54d5f21645a11fa057e926e80c5c4c4e7c9a6e074ed64c661e5aeb"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/borealis-tests.txt",
+      "sha256": "a0a8ab5ec93d7e0e9aa318724e7cbd8c857cd8049d3e573cf0d328a7dbdc4ee8"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/browser-exits.json",
+      "sha256": "6e80c821aca4de70fecadf76607847dfea910854ccf3618cf6d1ff2d726a4da8"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/build.txt",
+      "sha256": "cab07cc87e8414578bef31604daf9db384791e49ab1f2ee7a78c44f2deb76063"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/check-exits.json",
+      "sha256": "5123d2c6cb6fa17e7edc4b2b1b57d8fa1c2516060611ca015b943c673805e379"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/check.txt",
+      "sha256": "192661e306e9e9cbee82883595609e80a96c5765218de4aec3279e349eefc128"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/crop-tests.json",
+      "sha256": "b3f00b662a71f5034b7279833e039e5ec61c4598d9ce3a08d891f1b0338c75f8"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/crop-tests.txt",
+      "sha256": "fd6a757400b2f2140b4a45f4bc734a627454aadeec184bea56f0ced88cb1f0db"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/frontend-tests.txt",
+      "sha256": "65e5e1035dfbc23cc73fc1d5ede4d50d469cd7cd639c0b71490ef3063afce874"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/functional.json",
+      "sha256": "549721fe4f9c059398825e503decd3a5a5c11f9cd59f76c0597086ea376a3e35"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/home-1024x768.png",
+      "sha256": "9062b55603032285babdab85b88957f10cddfd5d3dd9bbd36455a0276e2d7d08"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/home-1280x800.png",
+      "sha256": "4b1548afaa5749c1d5f060b12b32b3ed1d4692e5bf6a6509bfa80ca450968638"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/home-1440x900.png",
+      "sha256": "9e3c27e5c8bee98f43d5fb2c0d0957c2e6bb889f9f14142e94133a5c9247c4ee"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/home-720x520.png",
+      "sha256": "82182d6c421a69ad5bd3e287df5da6593dbabb536c30afb0063e94c329007bb8"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/home-801x600.png",
+      "sha256": "16b2ebf61e951db321c71b00ecde973757760ec35eedbac0a3fef9a9e6f97a50"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/home-900x700.png",
+      "sha256": "c73ea4454f12f8fa55a43d1d56ca1bbc9d5c46df7d7706cbbfd2dad171d8aa7d"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/home-tests.txt",
+      "sha256": "fddc9dc04e30c803d0c3122907c6826e2bfa28006b4dc3354d81a9d65f1aafd2"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/preservation.json",
+      "sha256": "0251b9113ea3c6f6e2b0e05350f072e69a3ab05342036772be558ee37d08eea2"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/states/oled-cyan.png",
+      "sha256": "90086e5afb72838df6260cddff5df9a7020f7be122bf041e778d535061c62ca0"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/states/play-pressed.png",
+      "sha256": "540dda546eb21508a1c6e252979b8e0babb6cc3bdb8ab23885512914bd4de186"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/states/reduced-transparency.png",
+      "sha256": "9c4673679316d04dcc702ff980c1ed14fb8d75e7a3515ae3d8c1c74a15863840"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/states/text-200-1024.png",
+      "sha256": "e90c0213fbc2e90a5a761ad13cd97aa0f97e7aaa3bb9456f3e0fcb56bde7585b"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/states/text-200-1440.png",
+      "sha256": "6f46b9fdf570eac9ef256f59d07e6e7ea00075c5bc85e5dc92171e9263ca7681"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/states/text-200-720.png",
+      "sha256": "fcf184de42dd66b3cbc07b746acfa7ec9d3635607bbc3cb5c191480b134eabe3"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/states/text-200-900.png",
+      "sha256": "df29c98a15165eee339818f1482e78f63f188c316b50a72cb6f248b49b1971d5"
+    },
+    {
+      "path": "docs/ui-2b-1/preview-polish/states/text-200-minimum.png",
+      "sha256": "4214740b74403a19f0188055f42f0ac0539b7324345ebaba9b9611f02e48c706"
+    },
+    {
+      "path": "docs/ui-2b-1/states-comparison.png",
+      "sha256": "20055ac7da6419722f158726dd7a8434f57bd18f7ae322b4c4db5bb0614558ea"
+    },
+    {
+      "path": "docs/ui-2b-1/states/oled-cyan.png",
+      "sha256": "020e52754d08abd22e0ef9d2ea9584677590c7f6b1b32332738592a9a3cc472b"
+    },
+    {
+      "path": "docs/ui-2b-1/states/play-pressed.png",
+      "sha256": "dd15e70ef26923e9427898f781a8886618e6ac5c573af6e1076b4857539d2174"
+    },
+    {
+      "path": "docs/ui-2b-1/states/reduced-transparency.png",
+      "sha256": "76354592f9dd542325a7bf999e9571f979d3575adbcf7310e63b0c86bc169fbc"
+    },
+    {
+      "path": "docs/ui-2b-1/states/text-200-1024.png",
+      "sha256": "419c96a31288f3d21145374b5a77d760c20ccee7e95c3983b82f7fe6254800fe"
+    },
+    {
+      "path": "docs/ui-2b-1/states/text-200-1440.png",
+      "sha256": "f4611bab5ff6e0415acb2b5ede3b174c2b81ee68c098ea0079a64457dcda4322"
+    },
+    {
+      "path": "docs/ui-2b-1/states/text-200-720.png",
+      "sha256": "b4be98c2d12d24cb5a5a389fdd5d2233ab423e6e6adb615e74f29275b7d48b4c"
+    },
+    {
+      "path": "docs/ui-2b-1/states/text-200-900.png",
+      "sha256": "29e149ab68895598d15c98ac1386bc35c323c5a5c83237cc80af2f2483e95694"
+    },
+    {
+      "path": "docs/ui-2b-1/states/text-200-minimum.png",
+      "sha256": "02cd124bea8fce4c8c3dd3926a09917195f9517c2970f3ff0b4f567921f9ecc2"
+    },
+    {
+      "path": "docs/ui-2b-1/type-check.txt",
+      "sha256": "192661e306e9e9cbee82883595609e80a96c5765218de4aec3279e349eefc128"
+    },
+    {
+      "path": "docs/ui-2b-1/ui1-regression/functional.json",
+      "sha256": "380516693b5fab8edbf2ecd19003d0cd2c111dcba9437980428d00589a020fa3"
+    },
+    {
+      "path": "docs/ui-2b-1/ui1-regression/states/home-long-name-blocked.png",
+      "sha256": "9f44b8ec552b11ff63e080207aaf2f87fbd4d13cd9c83731b2d900b8fd57af9c"
+    },
+    {
+      "path": "docs/ui-2b-1/ui1-regression/states/home-text-200.png",
+      "sha256": "628e85d5332c31863708ef766311237513c56b603371b6f780fce09a686e4532"
+    },
+    {
+      "path": "docs/ui-2b-1/ui1-regression/states/mods-empty.png",
+      "sha256": "946a5e040b710500ce0f1b2fa05d3702205a9714ffc4810265e8f184d73bfd5f"
+    },
+    {
+      "path": "docs/ui-2b-1/ui1-regression/states/mods-error.png",
+      "sha256": "4ef0038b01d321564a563a807ba0623ddac162bbdf50c4c69f03daf4c5ceb663"
+    },
+    {
+      "path": "docs/ui-2b-1/ui1-regression/states/mods-loading.png",
+      "sha256": "674b8e877cc7dab1020e7ceda5657b2dfdc02b4a9036e9d21bfbc0d9461891d3"
+    },
+    {
+      "path": "docs/ui-2b-1/ui1-regression/states/mods-text-200.png",
+      "sha256": "940e3c848071289b384d9174071e1de9a594fefe54da7a839d6bd54f38c26865"
+    },
+    {
+      "path": "docs/ui-2b-1/ui1-tests.txt",
+      "sha256": "b9e5eb4696a63285387882dc281d9899532179c8785df39366d4bd81deb1555e"
+    },
+    {
+      "path": "docs/ui-2b-1/ui2-tests.txt",
+      "sha256": "fddc9dc04e30c803d0c3122907c6826e2bfa28006b4dc3354d81a9d65f1aafd2"
+    },
+    {
+      "path": "docs/ui-2b-1/ui2b-tests.txt",
+      "sha256": "27d8901f2f4cd0a705c681f103225cfa23da1a71b4dc299442d80c46386ac13f"
+    },
+    {
+      "path": "docs/ui-2b/AUDIT_AND_PROPOSAL.md",
+      "sha256": "11309d0ab882f88e11ed232d5dc09fc259b9e576bd8560e34228da2c050972d3"
+    },
+    {
+      "path": "docs/ui-2b/after-capture-final.txt",
+      "sha256": "3cf97d336648c897819acf11c1e06792ccbcedaee59fc338a0d7724a514b34d4"
+    },
+    {
+      "path": "docs/ui-2b/after-capture.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2b/after-capture.txt",
+      "sha256": "3cf97d336648c897819acf11c1e06792ccbcedaee59fc338a0d7724a514b34d4"
+    },
+    {
+      "path": "docs/ui-2b/after/blocked-1280x800.png",
+      "sha256": "63e55eaa8a72c13038050bf43b478ac5a0b68078cf6633a57f7b20fa8d4610cf"
+    },
+    {
+      "path": "docs/ui-2b/after/cyan-1280x800.png",
+      "sha256": "9a66adfda5a2fa70ccefa3a3f565aca76deae818491319e5bfda6520c94b6099"
+    },
+    {
+      "path": "docs/ui-2b/after/dense-1280x800.png",
+      "sha256": "42d21900285a0dc32a014e1b6c36cea0379b6f2af5409e0b2df589c4cc6bd365"
+    },
+    {
+      "path": "docs/ui-2b/after/empty-1280x800.png",
+      "sha256": "d6245a37dbb0d6ac7f842c3eccdad6b32d3de017bd05120a4d7d6c068146ce54"
+    },
+    {
+      "path": "docs/ui-2b/after/error-1280x800.png",
+      "sha256": "abaa46ee98ef6455de8afb191025f3e0842ec775f5b2a183da0f68d729a7d1e6"
+    },
+    {
+      "path": "docs/ui-2b/after/geometry.json",
+      "sha256": "793ca22f2e96a8e097a193775b70f29fea08524c59c49afee9c37d8c90cb0088"
+    },
+    {
+      "path": "docs/ui-2b/after/home-1024x768.png",
+      "sha256": "325b8a1fe8575a1d7dc55d8400395b3998352542198e9019920c9e7cbaaf6f01"
+    },
+    {
+      "path": "docs/ui-2b/after/home-1280x800.png",
+      "sha256": "9e15047b0f9ccfb658ba7f4e2d81109c9cecccae7b2eb81d53f75e358a1b37bd"
+    },
+    {
+      "path": "docs/ui-2b/after/home-1440x900.png",
+      "sha256": "cf28f08054993882980ac9d639bda97ac520037201ce1ca9b5c149fe619ff3d8"
+    },
+    {
+      "path": "docs/ui-2b/after/home-720x520.png",
+      "sha256": "f1e20c8f070e20d59bc471c4e4e347c5f561ebdec6d61cbd4b516612b784c69e"
+    },
+    {
+      "path": "docs/ui-2b/after/loading-1280x800.png",
+      "sha256": "1a0938b9756648f8c68b53ed11870a31437ed122a94bee02416b0d2f33b80854"
+    },
+    {
+      "path": "docs/ui-2b/after/long-1280x800.png",
+      "sha256": "2fbaff324657def08f0658e7fda00ba4fddc4a7a1fe19bf2bf5f4635e7172530"
+    },
+    {
+      "path": "docs/ui-2b/after/missing-skin-1280x800.png",
+      "sha256": "f79aa0972fee74ce8ae278ca44884a1127c370af7be481b617240e64e9cc67a1"
+    },
+    {
+      "path": "docs/ui-2b/after/oled-simple-1280x800.png",
+      "sha256": "8f83ca9f767f080f99ab8d50059617dd1b2dfd7521d20c92e78659028ab65984"
+    },
+    {
+      "path": "docs/ui-2b/after/running-1280x800.png",
+      "sha256": "a5a7560e46cad4d4cd550ad23d8972165888da8adab688b0c1a388442b6e9925"
+    },
+    {
+      "path": "docs/ui-2b/after/sparse-1280x800.png",
+      "sha256": "875ab1286eca67652ce01d9c2e3ee541c827ad569d87500cabdc29af6c246e32"
+    },
+    {
+      "path": "docs/ui-2b/background-capture.txt",
+      "sha256": "fd90bcc867bc78e5d385d62c636654473575f4ba62c5b1567b82bfc998d53325"
+    },
+    {
+      "path": "docs/ui-2b/background/geometry.json",
+      "sha256": "1a70435a1093a3a43d545703f450890242e01e9c25c972964fb2f156282140ad"
+    },
+    {
+      "path": "docs/ui-2b/background/home-1024x768.png",
+      "sha256": "9177bee4ce8aedae16b7c131661f4ced9743ad4bb3b580e394749ad97e05eabf"
+    },
+    {
+      "path": "docs/ui-2b/background/home-1280x800.png",
+      "sha256": "84ad177d8fa4293919fd5abcb077d17e28d92bfa5b1fce3ba7425712b5631a9e"
+    },
+    {
+      "path": "docs/ui-2b/background/home-1440x900.png",
+      "sha256": "8e453f0374f7e93cb4bc7a1264e7799289588c8cfb039a63ea9e13e66d043520"
+    },
+    {
+      "path": "docs/ui-2b/background/home-720x520.png",
+      "sha256": "2b468ca96c4321e6ba199a184518878654ec3d52273ec158dbf712f60a040278"
+    },
+    {
+      "path": "docs/ui-2b/baseline.json",
+      "sha256": "d9d9a808fb55276b7c35ecfbf0aede740835140ab44c0c45d085202f6bc66ca7"
+    },
+    {
+      "path": "docs/ui-2b/before-capture.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "docs/ui-2b/before-capture.txt",
+      "sha256": "8bb54aacbe31022de01c8b5617af96d3761f91311265bf0297790e82220a176c"
+    },
+    {
+      "path": "docs/ui-2b/before/blocked-1280x800.png",
+      "sha256": "d22b85e8cfd55afc23216829b38145542a1bd4c34d5b9e4cb972e3a9cf3b772f"
+    },
+    {
+      "path": "docs/ui-2b/before/cyan-1280x800.png",
+      "sha256": "8bc7b28b7dc01b7bdad82c7c1e26405b12fe7accf59c109e3c62266041db7f08"
+    },
+    {
+      "path": "docs/ui-2b/before/dense-1280x800.png",
+      "sha256": "eb1d44c86cce74b6b2aed826cf44b0358f280c62359cd00202e48026d217e942"
+    },
+    {
+      "path": "docs/ui-2b/before/empty-1280x800.png",
+      "sha256": "b9b1fcc06e5a3ae26f744fceca78ee2cde13eeea3ba6c2c3c07cd4c735053ac5"
+    },
+    {
+      "path": "docs/ui-2b/before/error-1280x800.png",
+      "sha256": "a29f2082e71617fee78f8a3c91246c53389365fedec2f326cc67070913753317"
+    },
+    {
+      "path": "docs/ui-2b/before/geometry.json",
+      "sha256": "f01d1be94d382feaa1a706ed045797d95b173235716b1880f6109204479abcfe"
+    },
+    {
+      "path": "docs/ui-2b/before/home-1024x768.png",
+      "sha256": "44e83ca9aa307809fce6fbbee9774fd1dc2f36a398c8c7a0362896b3ea015cc7"
+    },
+    {
+      "path": "docs/ui-2b/before/home-1280x800.png",
+      "sha256": "48f7b29ad961eef3c39af9c89f37c5fff0377b2934aa67a794c50ac70ce52e0a"
+    },
+    {
+      "path": "docs/ui-2b/before/home-1440x900.png",
+      "sha256": "b4996ad8f5e21c2cca61621c7225d8ef3e8ab3991afca6c5ed0976c4a857986f"
+    },
+    {
+      "path": "docs/ui-2b/before/home-720x520.png",
+      "sha256": "a7854b1c3ffed1c232c4856655d84e22da6d1043783a56ab1cf0fa3429f24e88"
+    },
+    {
+      "path": "docs/ui-2b/before/loading-1280x800.png",
+      "sha256": "9e92b66d55d53aec61d8d1134ebcbdbde3764cdaf6c96872a5cc570f671bab54"
+    },
+    {
+      "path": "docs/ui-2b/before/long-1280x800.png",
+      "sha256": "f3cd198cace2a5cf1c2004ceb4fe537c97aa6f9d42eeccb6589f707f50ae1657"
+    },
+    {
+      "path": "docs/ui-2b/before/missing-skin-1280x800.png",
+      "sha256": "06b290c873a00f4878e93c1dc6b439b37448828b7551a754e1e4858430c0bb40"
+    },
+    {
+      "path": "docs/ui-2b/before/oled-simple-1280x800.png",
+      "sha256": "d99920ec04790140b2ca2b9ed3ebaed4fb30b74555f80cf0387447cee8a11b68"
+    },
+    {
+      "path": "docs/ui-2b/before/running-1280x800.png",
+      "sha256": "0a9f5bca651e980873f529aac680e2b3ae2a11021f8350c0f46e8d6b16a9a4f0"
+    },
+    {
+      "path": "docs/ui-2b/before/sparse-1280x800.png",
+      "sha256": "0899fc9d6d910c13d824ce76ec8a44741c6d5b73b9945a43b6e032d478e88617"
+    },
+    {
+      "path": "docs/ui-2b/blocked-1280x800.png",
+      "sha256": "63e55eaa8a72c13038050bf43b478ac5a0b68078cf6633a57f7b20fa8d4610cf"
+    },
+    {
+      "path": "docs/ui-2b/browser-exits-final.json",
+      "sha256": "a350e913cb91dfd5c204d8e394598256c0affbfbcd3075f936747c5f45495ea8"
+    },
+    {
+      "path": "docs/ui-2b/browser-exits.json",
+      "sha256": "b785bad4790f7ba76a68770cf8336dda4b378ac655a4bbacd9b01e99e07c49ad"
+    },
+    {
+      "path": "docs/ui-2b/browser-final-exits.json",
+      "sha256": "8c28af22dec1fdaa69b970c9602fdcc2c756d9f4ae45bec416c6520f39d54963"
+    },
+    {
+      "path": "docs/ui-2b/changed-files.txt",
+      "sha256": "4c95c9f25f9f4682c9946e37a4172896968f7a4438bb059e2f15d6796beddae0"
+    },
+    {
+      "path": "docs/ui-2b/check-exits-final.json",
+      "sha256": "06bd6163afd4272e2a90a58b87fa23ffe43e183d281dd2035b577423388d7d96"
+    },
+    {
+      "path": "docs/ui-2b/check-exits.json",
+      "sha256": "ba6c0c2a7236e2f25300696667b70aca568180dbcd52cdec54dbcc3baf8a8a11"
+    },
+    {
+      "path": "docs/ui-2b/contrast-samples.json",
+      "sha256": "e66a4990f1040a2994249ff871417814b51f086079557c52e6524de15b3a7c42"
+    },
+    {
+      "path": "docs/ui-2b/frontend-final-affected.txt",
+      "sha256": "7b20283729d7b7de0786e7311b54c430ed555560f575ceddb6ebed347279ce0d"
+    },
+    {
+      "path": "docs/ui-2b/frontend-tests.txt",
+      "sha256": "e8fe7867eb823a1e3e10f863a17480f3d5796058b97db85b8001155a6941a295"
+    },
+    {
+      "path": "docs/ui-2b/functional.json",
+      "sha256": "7718ffd01fdb4145138a3cb00cdee6daaa9901b60c7fec1078a3cfd2be0c6202"
+    },
+    {
+      "path": "docs/ui-2b/geometry-comparison.json",
+      "sha256": "f8be43b67e6689b23df03557719a76ebeeaacc6b5fddc77e364addf83bc0d212"
+    },
+    {
+      "path": "docs/ui-2b/hero-capture.txt",
+      "sha256": "24be33acdaeafe1131ee3ae93cbcd72aaf8dfab3dc070479aee38489ff401f5a"
+    },
+    {
+      "path": "docs/ui-2b/hero/geometry.json",
+      "sha256": "1a70435a1093a3a43d545703f450890242e01e9c25c972964fb2f156282140ad"
+    },
+    {
+      "path": "docs/ui-2b/hero/home-1024x768.png",
+      "sha256": "53c334dd1ed6f54f8463f56088b04c1414551c6613eb86b99409ebe268af7770"
+    },
+    {
+      "path": "docs/ui-2b/hero/home-1280x800.png",
+      "sha256": "980b826ff9720d7bd78d9d0e4e625ac846bce6c174daba39b6a685ba068782c8"
+    },
+    {
+      "path": "docs/ui-2b/hero/home-1440x900.png",
+      "sha256": "121e3d1f9b22d769aeb4f06320aecc7590a1fc4af40edd72a7a773117ac7b3ad"
+    },
+    {
+      "path": "docs/ui-2b/hero/home-720x520.png",
+      "sha256": "ac3cdda3e1026c40b025018afb2a53db204c03ac9a33b407b1883f284b154aa2"
+    },
+    {
+      "path": "docs/ui-2b/home-1024x768.png",
+      "sha256": "325b8a1fe8575a1d7dc55d8400395b3998352542198e9019920c9e7cbaaf6f01"
+    },
+    {
+      "path": "docs/ui-2b/home-1280x800.png",
+      "sha256": "9e15047b0f9ccfb658ba7f4e2d81109c9cecccae7b2eb81d53f75e358a1b37bd"
+    },
+    {
+      "path": "docs/ui-2b/home-1440x900.png",
+      "sha256": "cf28f08054993882980ac9d639bda97ac520037201ce1ca9b5c149fe619ff3d8"
+    },
+    {
+      "path": "docs/ui-2b/home-720x520.png",
+      "sha256": "f1e20c8f070e20d59bc471c4e4e347c5f561ebdec6d61cbd4b516612b784c69e"
+    },
+    {
+      "path": "docs/ui-2b/home-801x600.png",
+      "sha256": "8ab3ea92d25de337c0bfe6ef09155a02ff2fae47a5c9420d4cf8c2b5da42d50c"
+    },
+    {
+      "path": "docs/ui-2b/home-900x700.png",
+      "sha256": "649585cd94fd91a3b338942eaa44ae7f74669a2650686c33d94e03457d69d07f"
+    },
+    {
+      "path": "docs/ui-2b/home-comparison.png",
+      "sha256": "c8c41237332dc02fe1f7c14a17b59f9058308ec8e23410133eeb1f5e1926a309"
+    },
+    {
+      "path": "docs/ui-2b/native-build-corrected.txt",
+      "sha256": "2959c473ec43cb8b91a3fd127ffa003a6e421cc1cea8eb8a231fdf5015f3ecea"
+    },
+    {
+      "path": "docs/ui-2b/native-build-final.txt",
+      "sha256": "409db557552f5594474b58bca08b93ac7b1b63e4cbc9fdf1a881f66ff19223b2"
+    },
+    {
+      "path": "docs/ui-2b/native-build.txt",
+      "sha256": "2953ac1c266d3a6b4e58088b380cce9426738d70012c80d829e7d1c21ef1864f"
+    },
+    {
+      "path": "docs/ui-2b/native-correction-exits.json",
+      "sha256": "64e16a0ec231afe7f2de55c8dcc4a32ccace8938688a6a2fa56c9290635fe875"
+    },
+    {
+      "path": "docs/ui-2b/native-final/cyan-borealis-client.png",
+      "sha256": "f4f2e93b07b79619c28030aef7ea934e75dd6858871b6ec01b9f41baaae4bb7d"
+    },
+    {
+      "path": "docs/ui-2b/native-final/cyan-borealis-top-client.png",
+      "sha256": "31d37cfae6f96b578f5f9673a8f4cd074f0e27b40d185704147f1f6d4cd62cf0"
+    },
+    {
+      "path": "docs/ui-2b/native-final/cyan-borealis-top.json",
+      "sha256": "2c862a3a93e8c90e364b91360aa40cb8188a36b3d7173c458d35593277123038"
+    },
+    {
+      "path": "docs/ui-2b/native-final/cyan-borealis-window.jpg",
+      "sha256": "0fc71284f35e08553e1f39d17285a89e264be3a503ddf81f9666fc817f3ebfa6"
+    },
+    {
+      "path": "docs/ui-2b/native-final/cyan-borealis.json",
+      "sha256": "0549503d82797310121d9ab44e2d3ba288546814ec5314a3d8227dd37ea7ae4f"
+    },
+    {
+      "path": "docs/ui-2b/native-final/default-desktop-client.png",
+      "sha256": "90b915256acf34fc3a06db418ff3c5ce47a6ef44f3901455f96a70d9c0ce0608"
+    },
+    {
+      "path": "docs/ui-2b/native-final/default-desktop-window.jpg",
+      "sha256": "40b5f35178cbc55f472455cc2e9103e20d10a8c2faeab2002c021f50fc5a61e6"
+    },
+    {
+      "path": "docs/ui-2b/native-final/default-desktop.json",
+      "sha256": "a678001fa7c3df4b6c5305b3f99e245f0edfda8e90e6b42c2b0908cf948700d7"
+    },
+    {
+      "path": "docs/ui-2b/native-final/exit.json",
+      "sha256": "a6e0938cedbb9c87be3fe5df94ab060e9630bcdbb5a9ed6cebeb05fbe46784d0"
+    },
+    {
+      "path": "docs/ui-2b/native-final/maximized-client.png",
+      "sha256": "32f08cc748151c90bc486be4aa60330e992dfa33963d7a1f4d48d651ba25d774"
+    },
+    {
+      "path": "docs/ui-2b/native-final/maximized-window.jpg",
+      "sha256": "251dddda15fc8a1729721b57e77102b400ab2cb4e58055fa1fc88252013f51d0"
+    },
+    {
+      "path": "docs/ui-2b/native-final/maximized.json",
+      "sha256": "9e2135391790262ff3275390dd08d8640a97b0b5d11163e97264366fb4c9f999"
+    },
+    {
+      "path": "docs/ui-2b/native-final/medium-client.png",
+      "sha256": "682120119d3e9011d62e01ff78e327f633272278d96f2a50127c31e68da31ffd"
+    },
+    {
+      "path": "docs/ui-2b/native-final/medium.json",
+      "sha256": "954f18f5519f409032d2b8078d28ea18ebd562128658270da44b5d445570bc7f"
+    },
+    {
+      "path": "docs/ui-2b/native-final/start.json",
+      "sha256": "bad0225d4c300f8ad14ab4bd20c8a3e73307f69df34ce6c3e3f0e020dbfbd3ff"
+    },
+    {
+      "path": "docs/ui-2b/native-final/stderr.txt",
+      "sha256": "a88f12f5e9ed9c518afa8308e278359d9634a932b2f22fea8b0665bad157b03e"
+    },
+    {
+      "path": "docs/ui-2b/native-final/stdout.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/ui-2b/native-final/widget-editor-window.jpg",
+      "sha256": "8741c57b34626ee0fffaec9c5707a13f4ff06b706cc2f271bf2a09d7c4ea004c"
+    },
+    {
+      "path": "docs/ui-2b/native-review.png",
+      "sha256": "a979bde2c10b5f9590bdc380a022f2be1988678d33c5f5bcb127721af5093c48"
+    },
+    {
+      "path": "docs/ui-2b/native/exit.json",
+      "sha256": "19742a355cd689ab9fd7e601d33162958378a21bf557f3e8cfdc4955c411bf12"
+    },
+    {
+      "path": "docs/ui-2b/native/pilot-startup-window.jpg",
+      "sha256": "6f707d01331d6b2e4a58fa6c4e4ceee2c52b78824e7f7a72eefe1226b3fe8c92"
+    },
+    {
+      "path": "docs/ui-2b/native/start.json",
+      "sha256": "b52157730e40cead50b635596a8d48504b25ef0946d2c39ff2f707d595997499"
+    },
+    {
+      "path": "docs/ui-2b/native/stderr.txt",
+      "sha256": "619ad957ddb314b2a4341b9388324cac8aaa50eb7d1c7f3095fede5d4ac23b1e"
+    },
+    {
+      "path": "docs/ui-2b/native/stdout.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/ui-2b/preservation-log.txt",
+      "sha256": "4fdd83e23101146e80350ab46cafb2a4bc87b096248e2fa271f68979e08a97c2"
+    },
+    {
+      "path": "docs/ui-2b/preservation.json",
+      "sha256": "3179ad83686214c76e1100e5ea809cac414680a55cce46bce8dcafaf03b3a325"
+    },
+    {
+      "path": "docs/ui-2b/process-baseline.json",
+      "sha256": "b25336f755f9e71fb4ae8a5b51873c6f291b277d83e903912c58483791b8699d"
+    },
+    {
+      "path": "docs/ui-2b/states-comparison.png",
+      "sha256": "25fd97c955a09c86ab1905e2b57aea64dfcd914c032d3f471fae7c2bf23616e0"
+    },
+    {
+      "path": "docs/ui-2b/states/oled-cyan.png",
+      "sha256": "00ebf08fce7b5ae1fa7115900bf84656b4213900f555b9bc70c543fee2045065"
+    },
+    {
+      "path": "docs/ui-2b/states/play-pressed.png",
+      "sha256": "35a260195272ed82d2d1e30ebcfe4b11a14950bf20073b92ecb765b2f5290252"
+    },
+    {
+      "path": "docs/ui-2b/states/reduced-transparency.png",
+      "sha256": "9874de1a8e00c305724b1a2c05887aba8bebe2c0b5262edbe42f76eb10a94b2f"
+    },
+    {
+      "path": "docs/ui-2b/states/text-200-1024.png",
+      "sha256": "234df7af3f20ec7fefa362f8f0b8a0b51d4116bfb2b809b309b26aade7202614"
+    },
+    {
+      "path": "docs/ui-2b/states/text-200-1440.png",
+      "sha256": "21abdc581145c9788ed90a0d6e0857490d70b8bcac88a0a5c2b91180bb9b72c1"
+    },
+    {
+      "path": "docs/ui-2b/states/text-200-720.png",
+      "sha256": "b4be98c2d12d24cb5a5a389fdd5d2233ab423e6e6adb615e74f29275b7d48b4c"
+    },
+    {
+      "path": "docs/ui-2b/states/text-200-900.png",
+      "sha256": "bee4cf9242fa13c92f1a2a69b95435c18513fde0cf9cfb47b8508a10ed16894d"
+    },
+    {
+      "path": "docs/ui-2b/states/text-200-minimum.png",
+      "sha256": "02cd124bea8fce4c8c3dd3926a09917195f9517c2970f3ff0b4f567921f9ecc2"
+    },
+    {
+      "path": "docs/ui-2b/type-check-final.txt",
+      "sha256": "192661e306e9e9cbee82883595609e80a96c5765218de4aec3279e349eefc128"
+    },
+    {
+      "path": "docs/ui-2b/type-check-native-correction.txt",
+      "sha256": "192661e306e9e9cbee82883595609e80a96c5765218de4aec3279e349eefc128"
+    },
+    {
+      "path": "docs/ui-2b/type-check.txt",
+      "sha256": "5170c9ebc3379b3b031bb02427b1e66f492bf90141bdc68fbb355bd1d8ff3ec2"
+    },
+    {
+      "path": "docs/ui-2b/ui1-browser-final.txt",
+      "sha256": "b9e5eb4696a63285387882dc281d9899532179c8785df39366d4bd81deb1555e"
+    },
+    {
+      "path": "docs/ui-2b/ui1-browser-tests.txt",
+      "sha256": "b9e5eb4696a63285387882dc281d9899532179c8785df39366d4bd81deb1555e"
+    },
+    {
+      "path": "docs/ui-2b/ui1-regression/functional.json",
+      "sha256": "380516693b5fab8edbf2ecd19003d0cd2c111dcba9437980428d00589a020fa3"
+    },
+    {
+      "path": "docs/ui-2b/ui1-regression/states/home-long-name-blocked.png",
+      "sha256": "042d8b4d83a8a3d82b63d3ada929d7bc49fb9ade7d6fad2a3496899c455415a0"
+    },
+    {
+      "path": "docs/ui-2b/ui1-regression/states/home-text-200.png",
+      "sha256": "628e85d5332c31863708ef766311237513c56b603371b6f780fce09a686e4532"
+    },
+    {
+      "path": "docs/ui-2b/ui1-regression/states/mods-empty.png",
+      "sha256": "946a5e040b710500ce0f1b2fa05d3702205a9714ffc4810265e8f184d73bfd5f"
+    },
+    {
+      "path": "docs/ui-2b/ui1-regression/states/mods-error.png",
+      "sha256": "4ef0038b01d321564a563a807ba0623ddac162bbdf50c4c69f03daf4c5ceb663"
+    },
+    {
+      "path": "docs/ui-2b/ui1-regression/states/mods-loading.png",
+      "sha256": "674b8e877cc7dab1020e7ceda5657b2dfdc02b4a9036e9d21bfbc0d9461891d3"
+    },
+    {
+      "path": "docs/ui-2b/ui1-regression/states/mods-text-200.png",
+      "sha256": "940e3c848071289b384d9174071e1de9a594fefe54da7a839d6bd54f38c26865"
+    },
+    {
+      "path": "docs/ui-2b/ui2-browser-final.txt",
+      "sha256": "fddc9dc04e30c803d0c3122907c6826e2bfa28006b4dc3354d81a9d65f1aafd2"
+    },
+    {
+      "path": "docs/ui-2b/ui2-browser-tests-corrected.txt",
+      "sha256": "fddc9dc04e30c803d0c3122907c6826e2bfa28006b4dc3354d81a9d65f1aafd2"
+    },
+    {
+      "path": "docs/ui-2b/ui2-browser-tests.txt",
+      "sha256": "038ff86c63ee1302daf426929010cfd2755a2667cfd6995039077c1dd44a1fd8"
+    },
+    {
+      "path": "docs/ui-2b/ui2b-browser-final.txt",
+      "sha256": "27d8901f2f4cd0a705c681f103225cfa23da1a71b4dc299442d80c46386ac13f"
+    },
+    {
+      "path": "docs/ui-2b/ui2b-browser-tests-corrected.txt",
+      "sha256": "3176f99d7f0fbfa830f374274d09236f58f55a24e4a3d87df4a49ce054d9a24a"
+    },
+    {
+      "path": "docs/ui-2b/ui2b-browser-tests-final.exit",
+      "sha256": "f1b2f662800122bed0ff255693df89c4487fbdcf453d3524a42d4ec20c3d9c04"
+    },
+    {
+      "path": "docs/ui-2b/ui2b-browser-tests-final.txt",
+      "sha256": "be63dca72bb0b1a2ed9794a79d6ca2fd1a58b4e01b5bcfd666b0871bc4cf5702"
+    },
+    {
+      "path": "docs/ui-2b/ui2b-browser-tests.txt",
+      "sha256": "75b7ed8fdf2b04d700f85ca45023be2669989de5d52de74d451a4fd458b7dec7"
+    }
+  ]
+}
