@@ -357,7 +357,7 @@
 
 <svelte:window onkeydown={onWindowKeydown} />
 
-<section class="browse" class:browse-mods={browseKind === "mod"} class:browse-modpacks={browseKind === "modpack"} aria-label="Browse Modrinth">
+<section class="browse" class:browse-mods={browseKind === "mod"} class:browse-modpacks={browseKind === "modpack"} class:browse-resource-packs={browseKind === "resourcePack"} aria-label="Browse Modrinth">
   <div class="browse-heading">
     <div>
       <h3 class="group-title">Discover {browseKindLabel(browseKind)}</h3>
@@ -494,7 +494,7 @@
         {#each page.hits as hit (hit.projectId)}
           <article class="browse-row">
             <div class="browse-glyph" aria-hidden="true">
-              <InstalledArtwork projectId={hit.projectId} size={browseKind === "modpack" ? 104 : 44} fallback={browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"} />
+              <InstalledArtwork projectId={hit.projectId} size={browseKind === "modpack" ? 104 : browseKind === "resourcePack" ? 64 : 44} fallback={browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"} />
             </div>
             <div class="browse-copy">
               <h4>{hit.title}</h4>
@@ -690,6 +690,14 @@
   .browse-modpacks .browse-meta { color: var(--color-text-secondary); }
   .browse-modpacks .browse-actions { grid-column: 1; justify-content: space-between; }
   .browse-modpacks .browse-actions .btn { min-height: 40px; }
+  .browse-resource-packs .browse-list { grid-template-columns: minmax(0, 1fr); }
+  .browse-resource-packs .browse-row { grid-template-columns: 64px minmax(0, 1fr); padding: var(--space-3); }
+  .browse-resource-packs .browse-glyph { width: 64px; height: 64px; }
+  .browse-resource-packs .browse-copy h4 { font-size: var(--text-body); }
+  .browse-resource-packs .browse-copy p { margin-block: var(--space-1); font-size: var(--text-secondary); -webkit-line-clamp: 2; line-clamp: 2; }
+  .browse-resource-packs .browse-meta { color: var(--color-text-secondary); }
+  .browse-resource-packs .browse-actions .btn { min-height: 40px; }
+  @container (min-width: 761px) { .browse-resource-packs .browse-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @container (min-width: 561px) {
     .browse-mods .browse-row { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; }
     .browse-mods .browse-glyph { grid-row: 1; }
