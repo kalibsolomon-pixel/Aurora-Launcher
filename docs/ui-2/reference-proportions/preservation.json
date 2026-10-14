@@ -1,0 +1,8 @@
+{
+  "trackedBaselinePathsPresent": 1164,
+  "protectedHashesUnchanged": 4,
+  "worktrees": 7,
+  "trackedDeletions": 0,
+  "status": "M UI_2_HOME_COMPOSITION_ACCEPTANCE.md\n M src/lib/launcher/InstanceSwitcher.svelte\n M src/lib/pages/HomePage.svelte\n M src/lib/shell/AppShell.svelte\n M src/lib/shell/phase-f.css\n M tools/visual/ui2.test.mjs\n?? .zcode-icon-diag.py\n?? .zcodeignore\n?? UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt\n?? docs/performance-p0-2/__pycache__/\n?? docs/ui-2/reference-proportions/",
+  "nameStatus": "M\tUI_2_HOME_COMPOSITION_ACCEPTANCE.md\nM\tsrc/lib/launcher/InstanceSwitcher.svelte\nM\tsrc/lib/pages/HomePage.svelte\nM\tsrc/lib/shell/AppShell.svelte\nM\tsrc/lib/shell/phase-f.css\nM\ttools/visual/ui2.test.mjs"
+}

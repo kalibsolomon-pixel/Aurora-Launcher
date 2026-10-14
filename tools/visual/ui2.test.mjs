@@ -38,7 +38,13 @@ try {
       await page.setViewportSize({width,height}); await homeFixture(page); const g=await contained(); measurements.push(g);
       assert.equal(await page.locator('.instance-card .player-preview').count(),0);
       assert.equal(await page.locator('.instance-card .account-chip').count(),0);
-      assert.ok(Math.abs(g.instance.width/g.instance.height-4/3)<.01,'4:3 control footprint');
+      assert.ok(Math.abs(g.instance.width/g.instance.height-4)<.01,'reference 4:1 control footprint');
+      const brand=await page.locator('.rail-logo').boundingBox();
+      const firstIcon=await page.locator('.rail-link').first().boundingBox();
+      const lastIcon=await page.locator('.rail-link').last().boundingBox();
+      assert.ok(brand.width<=48 && brand.y+brand.height<firstIcon.y,'smaller logo above navigation');
+      assert.ok(lastIcon.y+lastIcon.height<g.account.y,'navigation stays above account dock');
+      assert.equal(await page.locator('.home-page .hero-logo').count(),0);
       const arrow=await page.locator('.launch-control .picker-trigger').boundingBox();
       assert.ok(Math.abs(g.play.right-arrow.x)<2,'separate adjacent launch/dropdown targets');
       const layout=await page.locator('.launch-control').evaluate(e=>({line:getComputedStyle(e.querySelector('.picker-trigger')).borderLeftWidth,word:getComputedStyle(e.querySelector('.launch-word')).fontWeight,name:getComputedStyle(e.querySelector('.picker-name')).fontWeight}));

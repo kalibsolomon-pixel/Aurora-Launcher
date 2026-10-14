@@ -1,6 +1,10 @@
 # Aurora Launcher — UI-2 Home composition acceptance
 
-> Latest owner refinement: a single 4:3 split Launch control, centered over the
+> Latest owner refinement: the supplied screenshot's approximately 4:1 Launch
+> proportions replace the earlier 4:3 footprint. A smaller Aurora logo now sits
+> above the sidebar icons. See [reference refinement acceptance](docs/ui-2/reference-proportions/README.md).
+
+> Earlier owner refinement: a single 4:3 split Launch control, centered over the
 > first small-widget column, replaces the separate card controls. See
 > [split-control acceptance](docs/ui-2/split-launch/README.md).
 

@@ -102,6 +102,6 @@
   .launch-control .picker-trigger { flex: none; width: 52px; min-height: 0; align-self: stretch; justify-content: center; padding: 0; border: 0; border-left: 1px solid var(--f-accent-edge); border-radius: 0 var(--f-radius-control) var(--f-radius-control) 0; color: var(--color-accent-contrast); background: transparent; }
   .launch-control .picker-trigger:hover:not(:disabled), .launch-control .picker-trigger[aria-expanded="true"] { background: rgb(255 255 255 / 10%); }
   .launch-control .chevron { color: inherit; }
-  .launch-control .picker-menu { top: calc(50% + 28px); max-height: min(240px, 30dvh); text-align: left; }
+  .launch-control .picker-menu { max-height: min(240px, 30dvh); text-align: left; }
   @media (prefers-reduced-motion: reduce) { .chevron, .picker-trigger, .picker-option { transition: none; } }
 </style>

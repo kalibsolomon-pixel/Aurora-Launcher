@@ -93,7 +93,6 @@
     {/if}
     <div class="home-composition">
     <div class="home-launch-column">
-    <img class="hero-logo" src="/aurora-icon.png" alt="Aurora" draggable="false" />
     <section class="instance-card" aria-label="Selected instance" aria-live="polite">
       <InstanceSwitcher compact status={{ ready: launch.tone === "status-success", label: launch.label }}
         launchAction={{ label: launch.playLabel, disabled: launch.disabled, run: () => launcher.runPlay(instance.id) }} />
@@ -133,8 +132,7 @@
   .aurora-update-notice { margin-bottom: 16px; }
   .home-composition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: center; min-height: min(52vh, 480px); padding: var(--space-4) 0 var(--space-5); }
   .home-launch-column { display: flex; flex-direction: column; align-items: center; gap: var(--space-5); min-width: 0; }
-  .hero-logo { width: clamp(112px, 11vw, 144px); height: auto; }
-  .instance-card { width: min(100%, 360px); aspect-ratio: 4 / 3; min-width: 0; margin: 0; position: relative; z-index: 2; }
+  .instance-card { width: min(100%, 320px); aspect-ratio: 4 / 1; min-height: 4rem; min-width: 0; margin: 0; position: relative; z-index: 2; }
   .launch-feedback { width: 100%; min-width: 0; margin: 0; overflow-wrap: anywhere; }
-  @media (max-width: 800px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 var(--space-4); } .hero-logo { width: 96px; } .home-launch-column { gap: var(--space-3); } }
+  @media (max-width: 800px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 var(--space-4); } .home-launch-column { gap: var(--space-3); } }
 </style>
