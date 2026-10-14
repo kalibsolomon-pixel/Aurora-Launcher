@@ -494,7 +494,7 @@
         {#each page.hits as hit (hit.projectId)}
           <article class="browse-row">
             <div class="browse-glyph" aria-hidden="true">
-              <InstalledArtwork projectId={hit.projectId} size={browseKind === "modpack" ? 104 : browseKind === "resourcePack" ? 64 : 44} fallback={browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"} />
+              <InstalledArtwork projectId={hit.projectId} size={browseKind === "resourcePack" ? 64 : 44} fallback={browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"} />
             </div>
             <div class="browse-copy">
               <h4>{hit.title}</h4>
@@ -671,25 +671,16 @@
   .browse-mods .sort-control, .browse-mods .category-filter { width: max(180px, 12em); }
   .browse-mods .filter-chevron { bottom: 0; height: auto; }
   .browse-mods .browse-search .btn { flex: none; }
-  .browse-mods .browse-list { grid-template-columns: minmax(0, 1fr); gap: 0; border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); }
-  .browse-mods .browse-row { padding: var(--space-3); border: none; border-bottom: 1px solid var(--f-edge); border-radius: 0; }
-  .browse-mods .browse-row:first-child { border-radius: var(--f-radius-control) var(--f-radius-control) 0 0; }
-  .browse-mods .browse-row:last-child { border-bottom: none; border-radius: 0 0 var(--f-radius-control) var(--f-radius-control); }
-  .browse-mods .browse-copy h4 { font-size: var(--text-body); font-weight: 600; }
-  .browse-mods .browse-copy p { margin-block: var(--space-1); font-size: var(--text-secondary); -webkit-line-clamp: 2; line-clamp: 2; }
-  .browse-mods .browse-meta { color: var(--color-text-secondary); }
-  .browse-mods .browse-actions .btn { min-height: 40px; }
+  /* Modpacks reuse the approved Mods rows; their review workflow stays distinct. */
+  :is(.browse-mods, .browse-modpacks) .browse-list { grid-template-columns: minmax(0, 1fr); gap: 0; border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); }
+  :is(.browse-mods, .browse-modpacks) .browse-row { padding: var(--space-3); border: none; border-bottom: 1px solid var(--f-edge); border-radius: 0; }
+  :is(.browse-mods, .browse-modpacks) .browse-row:first-child { border-radius: var(--f-radius-control) var(--f-radius-control) 0 0; }
+  :is(.browse-mods, .browse-modpacks) .browse-row:last-child { border-bottom: none; border-radius: 0 0 var(--f-radius-control) var(--f-radius-control); }
+  :is(.browse-mods, .browse-modpacks) .browse-copy h4 { font-size: var(--text-body); font-weight: 600; }
+  :is(.browse-mods, .browse-modpacks) .browse-copy p { margin-block: var(--space-1); font-size: var(--text-secondary); -webkit-line-clamp: 2; line-clamp: 2; }
+  :is(.browse-mods, .browse-modpacks) .browse-meta { color: var(--color-text-secondary); }
+  :is(.browse-mods, .browse-modpacks) .browse-actions .btn { min-height: 40px; }
   .browse-mods > .browse-status { padding: var(--space-4); border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); background: var(--f-content-panel); color: var(--color-text-secondary); }
-  /* The provider supplies square project icons, not pack banners. Enlarge
-     the same cached icon in a stable frame; never crop or fetch extra art. */
-  .browse-modpacks .browse-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
-  .browse-modpacks .browse-row { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto; gap: var(--space-3); padding: var(--space-3); }
-  .browse-modpacks .browse-glyph { grid-row: auto; width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: var(--f-radius-control); background: var(--color-surface-sunken); }
-  .browse-modpacks .browse-copy h4 { font-size: var(--text-body); }
-  .browse-modpacks .browse-copy p { margin-block: var(--space-2); -webkit-line-clamp: 2; line-clamp: 2; font-size: var(--text-secondary); }
-  .browse-modpacks .browse-meta { color: var(--color-text-secondary); }
-  .browse-modpacks .browse-actions { grid-column: 1; justify-content: space-between; }
-  .browse-modpacks .browse-actions .btn { min-height: 40px; }
   .browse-resource-packs .browse-list { grid-template-columns: minmax(0, 1fr); }
   .browse-resource-packs .browse-row { grid-template-columns: 64px minmax(0, 1fr); padding: var(--space-3); }
   .browse-resource-packs .browse-glyph { width: 64px; height: 64px; }
@@ -699,9 +690,9 @@
   .browse-resource-packs .browse-actions .btn { min-height: 40px; }
   @container (min-width: 761px) { .browse-resource-packs .browse-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @container (min-width: 561px) {
-    .browse-mods .browse-row { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; }
-    .browse-mods .browse-glyph { grid-row: 1; }
-    .browse-mods .browse-actions { grid-column: 3; grid-row: 1; align-self: center; }
+    :is(.browse-mods, .browse-modpacks) .browse-row { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; }
+    :is(.browse-mods, .browse-modpacks) .browse-glyph { grid-row: 1; }
+    :is(.browse-mods, .browse-modpacks) .browse-actions { grid-column: 3; grid-row: 1; align-self: center; }
   }
   @media (max-width: 760px) { .browse-heading { align-items: flex-start; flex-wrap: wrap; } .filter-context { margin-left: 0; } }
   @container (max-width: 900px) { .browse-list { grid-template-columns: minmax(0, 1fr); } }

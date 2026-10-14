@@ -1,0 +1,18 @@
+{
+  "provenance": "Actual compiled Tauri frontend; real Rust Modrinth results; new isolated data; read-only CDP measurement/capture",
+  "url": "http://tauri.localhost/",
+  "viewport": [
+    1120,
+    790
+  ],
+  "dpr": 1.25,
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "columns": null,
+  "results": 0,
+  "row": null,
+  "artwork": null,
+  "actions": null,
+  "rowOverflow": false,
+  "text": "Instances\n\nIsolated Minecraft installations Aurora launches from.\n\nModrinth modpacks\n\nChoose a published pack version to create its own Fabric instance.\n\nBrowse Modpacks\nCreate instance\n\nChoose a name, a Minecraft version, and a loader — everything else can be configured later.\n\nName\nMinecraft version\n1.21.11\nMinecraft platform\nVanilla\nFabric\nNeoForge\nForge\nFabric version\nNewest stable compatible version\nFabric — choose version\nAurora Client\n\nAurora Client 3.0.0 is available for this configuration. Included by default when compatible; you can turn it off. Required Fabric Loader: 0.19.5.\n\nShow snapshot versions\nCreate instance\n\nProduction releases are reviewed and bundled with this launcher build. Instances keep their installed versions until you choose an update or configuration change.\n\nDevelopment releases are available in this debug build. Serve src-tauri/development on 127.0.0.1:8765 to install those fixtures.\n\nYour instances\n\nNothing here yet.\n\nNo instances yet — create the first one above; every instance you create appears here."
+}

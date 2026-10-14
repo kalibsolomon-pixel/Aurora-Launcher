@@ -1,0 +1,9 @@
+[aurora-launcher] starting native backend
+[aurora-launcher] backend ready; managed data root: C:\Users\kalib\AppData\Local\Temp\aurora-ui31-a675cdd3-4107-4bef-9544-e2558f7a6e47\managed
+[aurora-launcher] initialized default launcher configuration at C:\Users\kalib\AppData\Local\Temp\aurora-ui31-a675cdd3-4107-4bef-9544-e2558f7a6e47\managed\launcher\config.json
+[aurora-launcher] backend ready; managed data root: C:\Users\kalib\AppData\Local\Temp\aurora-ui31-a675cdd3-4107-4bef-9544-e2558f7a6e47\managed
+[aurora-launcher] backend ready; managed data root: C:\Users\kalib\AppData\Local\Temp\aurora-ui31-a675cdd3-4107-4bef-9544-e2558f7a6e47\managed
+[aurora-launcher] backend ready; managed data root: C:\Users\kalib\AppData\Local\Temp\aurora-ui31-a675cdd3-4107-4bef-9544-e2558f7a6e47\managed
+[aurora-launcher] backend ready; managed data root: C:\Users\kalib\AppData\Local\Temp\aurora-ui31-a675cdd3-4107-4bef-9544-e2558f7a6e47\managed
+[aurora-launcher] backend ready; managed data root: C:\Users\kalib\AppData\Local\Temp\aurora-ui31-a675cdd3-4107-4bef-9544-e2558f7a6e47\managed
+[aurora-launcher] backend ready; managed data root: C:\Users\kalib\AppData\Local\Temp\aurora-ui31-a675cdd3-4107-4bef-9544-e2558f7a6e47\managed

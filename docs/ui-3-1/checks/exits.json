@@ -1,0 +1,161 @@
+{
+  "focused-browser": {
+    "command": [
+      "node",
+      "tools/visual/ui31.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-build": {
+    "command": [
+      "node",
+      "node_modules/@tauri-apps/cli/tauri.js",
+      "build",
+      "--debug",
+      "--no-bundle"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "frontend-tests": {
+    "command": [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-timeout=60000",
+      "src/lib/**/*.test.ts"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "typecheck": {
+    "command": [
+      "node",
+      "C:/Users/kalib/AppData/Local/Programs/node-v24.21.0/node_modules/npm/bin/npm-cli.js",
+      "run",
+      "check"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui3-browser": {
+    "command": [
+      "node",
+      "tools/visual/ui3.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui1-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui2-ui1-regression.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-startup": {
+    "command": [
+      "node",
+      "tools/visual/ui31-native-capture.mjs",
+      "startup"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui2-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui2.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui2b-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui2b.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "artwork-regression": {
+    "command": [
+      "node",
+      "tools/visual/l1.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-default": {
+    "command": [
+      "node",
+      "tools/visual/ui31-native-capture.mjs",
+      "modpacks-default"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-minimum": {
+    "command": [
+      "node",
+      "tools/visual/ui31-native-capture.mjs",
+      "modpacks-minimum"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-enforced-minimum": {
+    "command": [
+      "node",
+      "tools/visual/ui31-native-capture.mjs",
+      "enforced-minimum"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-minimum-results": {
+    "command": [
+      "node",
+      "tools/visual/ui31-native-capture.mjs",
+      "minimum-results"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-minimum-details": {
+    "command": [
+      "node",
+      "tools/visual/ui31-native-capture.mjs",
+      "minimum-details"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "final-after-capture": {
+    "command": [
+      "node",
+      "tools/visual/ui31-capture.mjs",
+      "after"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  }
+}

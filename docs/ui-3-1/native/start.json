@@ -1,0 +1,9 @@
+{
+  "pid": 20392,
+  "exe": "C:\\Dev\\aurora-launcher\\src-tauri\\target\\debug\\aurora-launcher.exe",
+  "sha256": "05191C44179CEB8C35D342E195701ABC59EC03809F7377567972816D4A103FCF",
+  "nativeData": "New empty root; no accounts, instances, game or modpack installations; actual compiled frontend",
+  "isolatedRoot": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui31-a675cdd3-4107-4bef-9544-e2558f7a6e47",
+  "webview": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui31-a675cdd3-4107-4bef-9544-e2558f7a6e47\\webview",
+  "managed": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui31-a675cdd3-4107-4bef-9544-e2558f7a6e47\\managed"
+}

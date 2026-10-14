@@ -99,7 +99,7 @@ try {
       assert.equal(layout.overflow, false); assert.equal(layout.overlaps, false);
       // UI-3 gives each content type its intended geometry. Keep the same
       // containment, overlap, artwork and provider assertions above.
-      const expectedColumns = kind === 'mod' ? 1 : kind === 'modpack' ? Math.max(1, Math.floor((layout.width + 12) / 252)) : kind === 'resourcePack' ? (layout.width > 760 ? 2 : 1) : (layout.width > 900 ? 2 : 1);
+      const expectedColumns = kind === 'mod' || kind === 'modpack' ? 1 : kind === 'resourcePack' ? (layout.width > 760 ? 2 : 1) : (layout.width > 900 ? 2 : 1);
       assert.equal(layout.columns, expectedColumns);
     }
     await page.setViewportSize({ width: 1600, height: 1000 });

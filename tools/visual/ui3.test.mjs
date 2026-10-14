@@ -5,8 +5,9 @@ const {chromium}=await import(process.env.AURORA_PLAYWRIGHT_MODULE || 'playwrigh
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:1280,height:800},reducedMotion:'reduce'});
 const errors=[],results=[];page.on('pageerror',e=>errors.push(e.message));
+const out=process.env.AURORA_UI3_OUTPUT || 'docs/ui-3';
 let externalRequests=0;await page.route(/^https?:\/\/(?!127\.0\.0\.1:1422)/,r=>{externalRequests++;return r.abort();});
-await mkdir('docs/ui-3/states',{recursive:true});
+await mkdir(`${out}/states`,{recursive:true});
 const check=async(name,fn)=>{await fn();results.push(name);console.log('PASS '+name);};
 const requests=command=>page.evaluate(c=>window.ui3Requests.filter(r=>r.command===c).map(r=>r.request),command);
 const search=()=>page.getByRole('searchbox');
@@ -53,7 +54,7 @@ try {
     await page.evaluate(()=>{window.ui3InstallMode='success';window.ui3Pending();});
     await page.getByRole('button',{name:'Mod Menu is installed',exact:true}).waitFor();
     await page.getByRole('status').filter({hasText:'Mod Menu installed.'}).waitFor();
-    await page.screenshot({path:'docs/ui-3/states/installed-state.png'});
+    await page.screenshot({path:`${out}/states/installed-state.png`});
   });
   await check('Collision/verification failures preserve explicit blocked or retryable feedback',async()=>{
     await openContentReview(page);await page.evaluate(()=>window.ui3InstallMode='blocked');
@@ -66,11 +67,12 @@ try {
     await page.getByRole('status').filter({hasText:'The download failed verification. Nothing was installed.'}).waitFor();
     assert.equal(await page.getByRole('button',{name:'Install newest eligible version of Mod Menu',exact:true}).isEnabled(),true);
   });
-  await check('Modpack artwork grid and exact version/optional-file review remain explicit',async()=>{
+  await check('Compact modpack rows and exact version/optional-file review remain explicit',async()=>{
     await openContentReview(page,'modpacks');
     assert.equal(await page.locator('.install-action').count(),0);
     const card=page.locator('.browse-row').first();
-    const art=await card.locator('.browse-glyph').boundingBox();assert.ok(Math.abs(art.width/art.height-16/9)<.01);
+    const art=await card.locator('.browse-glyph').boundingBox();assert.equal(art.width,44);assert.equal(art.height,44);
+    assert.equal(await page.locator('.browse-list').evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length),1);
     assert.equal(await card.locator('img').evaluate(e=>getComputedStyle(e).objectFit),'contain');
     await page.getByRole('button',{name:'Review Highland Adventures pack',exact:true}).click();
     await page.getByRole('button',{name:'Review pack installation',exact:true}).click();
@@ -82,7 +84,7 @@ try {
     await page.getByRole('alert').filter({hasText:'Fixture: pack installation failed safely.'}).waitFor();
     assert.equal((await requests('install_modrinth_pack')).length,1);assert.equal((await requests('quick_install_modrinth')).length,0);
     assert.deepEqual((await requests('install_modrinth_pack'))[0].selectedOptional,['resourcepacks/optional.zip']);
-    await page.screenshot({path:'docs/ui-3/states/modpack-review.png'});
+    await page.screenshot({path:`${out}/states/modpack-review.png`});
   });
   await check('Resource packs use their native kind and distinct medium artwork',async()=>{
     await openContentReview(page,'packs');
@@ -94,13 +96,13 @@ try {
   await check('Loading, empty and provider error/retry states stay distinct',async()=>{
     await openContentReview(page);await page.evaluate(()=>window.ui3Mode='loading');await submit('fixture');
     await page.getByRole('status').filter({hasText:'Loading Modrinth projects…'}).waitFor();
-    await page.screenshot({path:'docs/ui-3/states/loading.png'});
+    await page.screenshot({path:`${out}/states/loading.png`});
     await page.evaluate(()=>{window.ui3Mode='empty';window.ui3Pending();});
     await page.getByRole('heading',{name:'No matching results',exact:true}).waitFor();
-    await page.screenshot({path:'docs/ui-3/states/empty.png'});
+    await page.screenshot({path:`${out}/states/empty.png`});
     await page.evaluate(()=>window.ui3Mode='error');await submit('fixture');
     await page.getByRole('alert').filter({hasText:'Fixture: Modrinth is unavailable.'}).waitFor();
-    await page.screenshot({path:'docs/ui-3/states/error.png'});
+    await page.screenshot({path:`${out}/states/error.png`});
     await page.evaluate(()=>window.ui3Mode='normal');await search().fill('Sodium');await page.getByRole('button',{name:'Retry search',exact:true}).click();await rows(3);
   });
   await check('Installed Mods search/filter/sort, switch, details and cancel confirmation',async()=>{
@@ -133,7 +135,7 @@ try {
     for(const surface of ['mods','modpacks','packs','installed-mods','installed-packs'])for(const [width,height] of [[1440,900],[1280,800],[1024,768],[720,520],[706,512]]) {
       await page.setViewportSize({width,height});await openContentReview(page,surface);await contained();
       await page.addStyleTag({content:'html {font-size:200% !important}'});await contained();
-      if(surface==='packs'&&width===720)await page.screenshot({path:'docs/ui-3/states/resource-packs-text-200.png'});
+      if(surface==='packs'&&width===720)await page.screenshot({path:`${out}/states/resource-packs-text-200.png`});
     }
   });
   await check('Keyboard focus, alternate accents, reduced motion/transparency and cached artwork reuse',async()=>{
@@ -141,7 +143,7 @@ try {
     await search().focus();assert.equal(await search().evaluate(e=>getComputedStyle(e).outlineStyle),'solid');
     await page.keyboard.press('Tab');assert.equal(await page.locator('.browse-search > .btn').evaluate(e=>e===document.activeElement),true);
     await page.evaluate(async()=>{const s=await(await fetch('/Review.svelte')).text();const {appearance}=await import(s.match(/from "([^"\n]*appearance.svelte[^"\n]*)"/)[1]);appearance.apply({...appearance.state,accent:{type:'preset',id:'cyan'}});});
-    await page.screenshot({path:'docs/ui-3/states/cyan.png'});
+    await page.screenshot({path:`${out}/states/cyan.png`});
     const before=(await requests('resolve_project_artwork')).length;
     await page.getByRole('button',{name:'Installed',exact:true}).click();await page.getByRole('button',{name:'Browse Modrinth',exact:true}).click();await rows(20);
     assert.equal((await requests('resolve_project_artwork')).length,before,'ordinary navigation reuses artwork');
@@ -149,9 +151,9 @@ try {
     assert.equal(await page.locator('.browse-row').first().evaluate(e=>getComputedStyle(e).backdropFilter),'none');
     const backing=await page.locator('.browse-row').first().evaluate(e=>getComputedStyle(e).backgroundColor);
     assert.match(backing,/^rgb\(/,'reduced transparency uses an opaque backing');
-    await page.screenshot({path:'docs/ui-3/states/reduced-transparency.png'});await contained();
+    await page.screenshot({path:`${out}/states/reduced-transparency.png`});await contained();
   });
   assert.deepEqual(errors,[]);
-  await writeFile('docs/ui-3/functional.json',JSON.stringify({cases:results.length,results,pageErrors:errors,externalRequests,provenance:'Actual Svelte components; deterministic browser-only provider fixtures. No native forwarding or owner data.'},null,2));
+  await writeFile(`${out}/functional.json`,JSON.stringify({cases:results.length,results,pageErrors:errors,externalRequests,provenance:'Actual Svelte components; deterministic browser-only provider fixtures. No native forwarding or owner data.'},null,2));
   console.log(`PASS ${results.length} UI-3 browser groups; zero page errors`);
 } finally {await browser.close();}

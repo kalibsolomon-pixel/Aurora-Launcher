@@ -1,0 +1,1 @@
+PASS after: 15 matched screenshots + 3 scrolled result captures, 25 measured layouts, no page errors.

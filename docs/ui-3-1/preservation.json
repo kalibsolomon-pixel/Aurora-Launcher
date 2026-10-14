@@ -1,0 +1,15 @@
+{
+  "startingHead": "c0c934263e8ff6d0fb25d91cc4db719815bf31a1",
+  "checkedTracked": 1696,
+  "unchangedTracked": 1693,
+  "scopedExistingFiles": [
+    "src/lib/instances/ModrinthBrowse.svelte",
+    "tools/visual/ui3.test.mjs",
+    "tools/visual/l1.test.mjs"
+  ],
+  "protectedFiles": 4,
+  "worktrees": 7,
+  "otherWorktreesUnchanged": true,
+  "deletions": 0,
+  "providerAndInstallScriptUnchanged": true
+}

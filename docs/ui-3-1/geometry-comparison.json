@@ -1,0 +1,82 @@
+[
+  {
+    "viewport": "1440x900",
+    "columnsBefore": 4,
+    "columnsAfter": 1,
+    "firstRowBefore": 347.46875,
+    "firstRowAfter": 91.46875,
+    "artworkBefore": [
+      104,
+      104
+    ],
+    "artworkAfter": [
+      44,
+      44
+    ],
+    "overflow": false
+  },
+  {
+    "viewport": "1280x800",
+    "columnsBefore": 4,
+    "columnsAfter": 1,
+    "firstRowBefore": 326.765625,
+    "firstRowAfter": 91.46875,
+    "artworkBefore": [
+      104,
+      104
+    ],
+    "artworkAfter": [
+      44,
+      44
+    ],
+    "overflow": false
+  },
+  {
+    "viewport": "1024x768",
+    "columnsBefore": 3,
+    "columnsAfter": 1,
+    "firstRowBefore": 330.8125,
+    "firstRowAfter": 110.5,
+    "artworkBefore": [
+      104,
+      104
+    ],
+    "artworkAfter": [
+      44,
+      44
+    ],
+    "overflow": false
+  },
+  {
+    "viewport": "720x520",
+    "columnsBefore": 2,
+    "columnsAfter": 1,
+    "firstRowBefore": 331.46875,
+    "firstRowAfter": 158.5,
+    "artworkBefore": [
+      104,
+      104
+    ],
+    "artworkAfter": [
+      44,
+      44
+    ],
+    "overflow": false
+  },
+  {
+    "viewport": "706x512",
+    "columnsBefore": 2,
+    "columnsAfter": 1,
+    "firstRowBefore": 327.53125,
+    "firstRowAfter": 158.5,
+    "artworkBefore": [
+      104,
+      104
+    ],
+    "artworkAfter": [
+      44,
+      44
+    ],
+    "overflow": false
+  }
+]

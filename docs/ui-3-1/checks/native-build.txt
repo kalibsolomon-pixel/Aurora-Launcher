@@ -1,0 +1,79 @@
+
+> aurora-launcher@1.4.2 prebuild
+> npm run verify:version
+
+
+> aurora-launcher@1.4.2 verify:version
+> node tools/release/verify-version.mjs
+
+Aurora Launcher version contract: 1.4.2
+
+> aurora-launcher@1.4.2 build
+> vite build
+
+vite v8.3.0 building ssr environment for production...
+transforming...
+✓ 272 modules transformed.
+rendering chunks...
+vite v8.3.0 building client environment for production...
+transforming...
+✓ 289 modules transformed.
+rendering chunks...
+computing gzip size...
+.svelte-kit/output/client/_app/version.json                         0.02 kB │ gzip:  0.04 kB
+.svelte-kit/output/client/.vite/manifest.json                       3.13 kB │ gzip:  0.63 kB
+.svelte-kit/output/client/_app/immutable/assets/0.CXD6rOfz.css     13.96 kB │ gzip:  3.18 kB
+.svelte-kit/output/client/_app/immutable/assets/2.nmJl_eCd.css    105.70 kB │ gzip: 16.40 kB
+.svelte-kit/output/client/_app/immutable/chunks/xihTtKlq.js         0.06 kB │ gzip:  0.08 kB
+.svelte-kit/output/client/_app/immutable/entry/start.D7BaFMWb.js    0.07 kB │ gzip:  0.08 kB
+.svelte-kit/output/client/_app/immutable/nodes/1.C5E0fsFt.js        0.57 kB │ gzip:  0.32 kB
+.svelte-kit/output/client/_app/immutable/nodes/0.COnusHxp.js        0.85 kB │ gzip:  0.41 kB
+.svelte-kit/output/client/_app/immutable/chunks/BKnwzu3A.js         1.13 kB │ gzip:  0.56 kB
+.svelte-kit/output/client/_app/immutable/chunks/uBIymjUX.js         1.23 kB │ gzip:  0.68 kB
+.svelte-kit/output/client/_app/immutable/chunks/Bjy-W4x2.js         1.36 kB │ gzip:  0.65 kB
+.svelte-kit/output/client/_app/immutable/chunks/BiafP1Lf.js         1.82 kB │ gzip:  0.85 kB
+.svelte-kit/output/client/_app/immutable/entry/app.CIv2D8SX.js      2.95 kB │ gzip:  1.34 kB
+.svelte-kit/output/client/_app/immutable/chunks/d5_vdDiP.js        19.02 kB │ gzip:  4.40 kB
+.svelte-kit/output/client/_app/immutable/chunks/6ilfe7iz.js        28.38 kB │ gzip: 10.97 kB
+.svelte-kit/output/client/_app/immutable/chunks/BzG71teA.js        51.65 kB │ gzip: 19.68 kB
+.svelte-kit/output/client/_app/immutable/nodes/2.CISU2_k2.js      331.89 kB │ gzip: 92.53 kB
+
+✓ built in 500ms
+computing gzip size...
+.svelte-kit/output/server/.vite/manifest.json                           4.12 kB │ gzip:  0.69 kB
+.svelte-kit/output/server/_app/immutable/assets/_layout.o5w2IOMr.css   13.91 kB │ gzip:  3.16 kB
+.svelte-kit/output/server/_app/immutable/assets/_page.BNcuu-1S.css    105.08 kB │ gzip: 16.35 kB
+.svelte-kit/output/server/chunks/appearance2.svelte.js                  0.08 kB │ gzip:  0.07 kB
+.svelte-kit/output/server/chunks/windowActivity.js                      0.08 kB │ gzip:  0.07 kB
+.svelte-kit/output/server/env.js                                        0.22 kB │ gzip:  0.14 kB
+.svelte-kit/output/server/entries/pages/_layout.svelte.js               0.23 kB │ gzip:  0.18 kB
+.svelte-kit/output/server/chunks/env.js                                 0.28 kB │ gzip:  0.17 kB
+.svelte-kit/output/server/entries/pages/_layout.ts.js                   0.33 kB │ gzip:  0.20 kB
+.svelte-kit/output/server/internal.js                                   0.40 kB │ gzip:  0.19 kB
+.svelte-kit/output/server/chunks/internal.js                            0.74 kB │ gzip:  0.34 kB
+.svelte-kit/output/server/chunks/windowActivity2.js                     1.02 kB │ gzip:  0.50 kB
+.svelte-kit/output/server/entries/fallbacks/error.svelte.js             4.21 kB │ gzip:  1.66 kB
+.svelte-kit/output/server/chunks/index-server.js                        4.83 kB │ gzip:  1.77 kB
+.svelte-kit/output/server/chunks/exports.js                             9.01 kB │ gzip:  2.96 kB
+.svelte-kit/output/server/chunks/shared.js                             10.57 kB │ gzip:  3.38 kB
+.svelte-kit/output/server/chunks/appearance.svelte.js                  28.60 kB │ gzip:  5.46 kB
+.svelte-kit/output/server/chunks/utils.js                              31.76 kB │ gzip:  9.35 kB
+.svelte-kit/output/server/chunks/internal2.js                          35.84 kB │ gzip: 10.33 kB
+.svelte-kit/output/server/remote-entry.js                              54.49 kB │ gzip: 12.02 kB
+.svelte-kit/output/server/chunks/server.js                            122.57 kB │ gzip: 32.12 kB
+.svelte-kit/output/server/index.js                                    126.05 kB │ gzip: 31.93 kB
+.svelte-kit/output/server/entries/pages/_page.svelte.js               328.14 kB │ gzip: 66.21 kB
+
+✓ built in 2.20s
+
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-static
+  Wrote site to "build"
+  ✔ done
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm run build`
+warning: aurora-launcher@1.4.2: STATIC_VCRUNTIME is deprecated; use build.windows.staticVCRuntime in tauri.conf.json or tauri_build::WindowsAttributes::static_vc_runtime instead.
+   Compiling aurora-launcher v1.4.2 (C:\Dev\aurora-launcher\src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.24s
+       Built application at: C:\Dev\aurora-launcher\src-tauri\target\debug\aurora-launcher.exe
