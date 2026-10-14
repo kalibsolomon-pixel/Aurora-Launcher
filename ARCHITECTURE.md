@@ -38,6 +38,22 @@ malicious same-user namespace replacement and other filesystems retain F3R's
 existing limits. Policy, invariants, diagnostics, test and desktop evidence,
 measurements and deferred work: [FORGE_F3R_B_BACKUP_RETENTION.md](FORGE_F3R_B_BACKUP_RETENTION.md).
 
+F3R-B2a corrects the disposable acceptance helper, independently of production
+retention: exclusive fresh direct-temp roots, fixture-bound marker contents,
+strict schema/slot/digest and whole-inventory validation, and refusal of root
+or control-path reparse redirection. Only the two exact intentional file links
+are permitted observations. Gate fixtures are always preserved; no wrapper or
+helper cleanup interprets caller input as recursive-deletion authority. Verify
+queries the actual process token in both PowerShell and Rust and rejects
+an elevated or indeterminate context before retention. The real-link helper
+is explicitly ignored in ordinary suites; only its full verification evidence
+in an observed unelevated run closes that gate. Prepare also builds repository
+code and initializes synthetic game transactions, so privileged prepare needs
+separate authorization covering that scope. Installer-tool composition compares
+exact normalized repository paths (including extension) and agreeing published
+SHA-1, without changing launch-library merge policy. Details and historical
+claim corrections: [FORGE_F3R_B2A_REVIEW_CORRECTIONS.md](FORGE_F3R_B2A_REVIEW_CORRECTIONS.md).
+
 ## Phase F3R durable game operations (current)
 
 F3R supersedes the historical Phase 5 replacement/concurrency descriptions below.

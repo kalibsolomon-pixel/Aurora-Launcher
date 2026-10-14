@@ -1,0 +1,212 @@
+{
+  "formatVersion": 1,
+  "phase": "F3R-B2a",
+  "date": "2026-10-14",
+  "timezone": "America/New_York",
+  "verdict": "PARTIAL",
+  "implementationComplete": true,
+  "branch": "codex/client-3-production-authority",
+  "startingHead": "54e8a8f576bc5e98069ec230aa4b222f049de552",
+  "implementationHead": "2fcf81195eb22af4ce2b41d63b36f1241d508fdb",
+  "implementationCommits": [
+    "db4e515",
+    "2fcf811"
+  ],
+  "rootBoundary": {
+    "freshDirectTempChild": true,
+    "fixtureBoundMarkerContents": true,
+    "strictManifestAndSlot": true,
+    "wholeInventoryValidatedBeforeRetention": true,
+    "unsafeReparsePointsRejected": true,
+    "automaticGateCleanup": false,
+    "fixturesPreserved": true,
+    "negativeTestsCompareExactBytesAndInventory": true,
+    "realJunctionCases": [
+      "root",
+      "world",
+      "marker",
+      "manifest"
+    ]
+  },
+  "privilege": {
+    "mechanism": "OpenProcessToken + GetTokenInformation(TokenElevation) independently in PowerShell and Rust",
+    "observedMode": "UNELEVATED",
+    "elevatedVerifyRejectedInDecisionTest": true,
+    "tokenFailureRejectedInDecisionTest": true,
+    "realElevatedRejectionExecuted": false,
+    "elevationAttempted": false,
+    "windowsSettingsChanged": false
+  },
+  "composition": {
+    "key": "exact validated repository destination including extension",
+    "samePathSameSha1": "deduplicated regardless of URL",
+    "samePathDifferentSha1": "hard conflict",
+    "differentPaths": "retained regardless of equal hash, version identity or basename",
+    "launchMergePolicyChanged": false,
+    "officialFixturesChanged": false,
+    "forgeCompatibilityPassed": 13,
+    "neoForgePlanPassed": 9,
+    "sharedPlanPassed": 5
+  },
+  "verification": {
+    "npmCheck": {
+      "exit": 0,
+      "errors": 0,
+      "warnings": 0
+    },
+    "npmBuild": {
+      "exit": 0
+    },
+    "frontendFirstRun": {
+      "exit": 1,
+      "passed": 269,
+      "failed": 3,
+      "reason": "Vite shared-setup module invoke timeout"
+    },
+    "frontendAffectedRetry": {
+      "exit": 0,
+      "passed": 3,
+      "failed": 0
+    },
+    "frontendFinalFullSerialRun": {
+      "exit": 0,
+      "passed": 272,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 197688.4847
+    },
+    "rustFormat": {
+      "exit": 0
+    },
+    "rustAllTargets": {
+      "exit": 0
+    },
+    "rustDebug": {
+      "exit": 0,
+      "libraryPassed": 980,
+      "failed": 0,
+      "ignored": 31,
+      "integrationPassed": 6
+    },
+    "rustRelease": {
+      "exit": 0,
+      "libraryPassed": 980,
+      "failed": 0,
+      "ignored": 31,
+      "integrationPassed": 6
+    },
+    "safetyTests": {
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    "driverTests": {
+      "exit": 0,
+      "passed": 3,
+      "failed": 0
+    },
+    "installerSubset": {
+      "exit": 0,
+      "passed": 21,
+      "failed": 0,
+      "ignored": 1
+    },
+    "retentionBothProfiles": {
+      "passed": 26,
+      "ignored": 1
+    },
+    "journalBothProfiles": {
+      "passed": 11
+    },
+    "coordinationBothProfiles": {
+      "passed": 4
+    },
+    "nativeProductionNoBundle": {
+      "exit": 0,
+      "rustBuildSeconds": 407,
+      "installedOrRun": false
+    }
+  },
+  "realSymlinkGate": {
+    "result": "BLOCKED",
+    "error": 1314,
+    "directSingleShotExit": 101,
+    "wrapperPrepareExit": 101,
+    "bothModes": "UNELEVATED",
+    "retentionSecurityAssertionsExecuted": false,
+    "elevatedStepAuthorizedOrExecuted": false,
+    "failedVerify": {
+      "exit": 101,
+      "mode": "UNELEVATED",
+      "inventoryAndHashesUnchanged": true,
+      "entryCount": 41,
+      "root": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-f3rb1-symlink-8a1e1cc981314dc0bc085c481b4238db"
+    }
+  },
+  "nativeBoot": {
+    "result": "PASS",
+    "pid": 3176,
+    "exeSha256": "782fee2ec0e223c66d1bc67a7a467cc887c3219ed2987b4bfbea901bf126e754",
+    "root": "%TEMP%/aurora-f3ra-F3RB-B2a-ad131484e7bc43caacbae63da925e1f4",
+    "diagnosticFeatures": [
+      "f3ra-desktop-acceptance",
+      "tauri/custom-protocol"
+    ],
+    "temporaryConfigMerge": "empty updater key and diagnostic title; repository unchanged",
+    "observed": "backend Ready; Home No instances yet; Not signed in",
+    "webviewIsolated": true,
+    "normalClose": true,
+    "desktopReplacementPerformed": false,
+    "desktopBackupClassificationPerformed": false,
+    "desktopReclamationPerformed": false,
+    "authenticatedGameplayPerformed": false
+  },
+  "preservation": {
+    "originalTrackedPaths": 896,
+    "missingOriginalTrackedPaths": 0,
+    "newTrackedFiles": 4,
+    "originalUntrackedFiles": 4,
+    "changedOriginalUntrackedFiles": 0,
+    "trackedDeletions": 0,
+    "trackedRenames": 0,
+    "criticalFilesPresent": true,
+    "production142ExeUnchanged": true,
+    "parallelBranch": "codex/f3rb1-acceptance",
+    "parallelHead": "4f2ad56",
+    "parallelMergedOrModified": false,
+    "ownerProcessesTerminatedByAgent": false,
+    "normalDotMinecraftAccessed": false,
+    "pushTagPublishDeploy": false
+  },
+  "remaining": [
+    "Real live/dangling Windows file links and observed unelevated retention acceptance",
+    "Actual elevated verify rejection run unexecuted; no elevation authorized"
+  ],
+  "deferred": [
+    "Linux acceptance",
+    "F1C authenticated gameplay",
+    "Production replacement/publication"
+  ],
+  "ownerProcedure": "Review source/build chain; separately authorize prepare scope; run prepare with symlink capability; then ordinary verify; keep transcript and fixtures. PREPARED or Cargo success alone never closes the gate.",
+  "rawEvidenceRoot": "%TEMP%/aurora-f3rb2a-evidence-29379ea0-220c-41aa-ad4b-eaba144a8551",
+  "rawLogSha256": {
+    "composition-initial.log": "e5475436b59ad29edf06cde3fe78dc20029eada247e4cd915f3d03b5e451511e",
+    "direct-verify-rejection.log": "a631c0366ccab6c7dfaa4537dca3a576886a2c31adeefe776c3a44351efb6445",
+    "driver-tests.log": "612e0c64319a49be192af638c18e865df09d07bd1412a89a39c17dc54ce2b8c7",
+    "frontend-appearance-retry.log": "bcfdd1e732643c58da595550e796989c4605e91024725a668ebb1259cac09831",
+    "frontend-tests-final.log": "10a9d3a233dc522a664a9c22c2bd9a384b34c3cf849053c960806908abfa872f",
+    "frontend-tests.log": "7d35ddfce35d7604e5a3abb99fc5e2fc8d57a87b3e986a4bbce0339e88cecd8c",
+    "native-configured-build.log": "5011f5c10288ed37759bbb019a90710a77002229b798ef1cb6ee7ff734ea0674",
+    "native-debug-build.log": "09464dd2a87c6baed5b63be84470005ecbcc1bb08d12b22631468626369e680a",
+    "native-production-build.log": "b23fd3bd08988164c7f8883effccec48d04665d7dfe232709239a044a2a08373",
+    "npm-build.log": "63856ea687d26d4302473d91f4e42bd4f678a8528080a7130d7236d4aa70773f",
+    "npm-check.log": "192661e306e9e9cbee82883595609e80a96c5765218de4aec3279e349eefc128",
+    "real-driver-prepare.log": "881bdacf6e370063bcf29bfc1ea175efbfa4858e5aea1a04c53f8feb01e1b6bc",
+    "real-symlink-direct.log": "c5de721851b5edc04c295111379049268c84b90030f5f43b02643c96f19af742",
+    "rust-check.log": "8fb96b55b1849677564d91fdc5e550e770ad7c99f52014c65a789bc5efc1ac25",
+    "rust-debug.log": "7efad1f608c327d585ef9695c1d64886d996401f8c2da08339117f5d4665f3a5",
+    "rust-fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "rust-release.log": "37c9e07075cd9adae5c2d8a6cc1b5f197e3d992f041b09a95f48fbe523f42f90",
+    "safety-initial.log": "d5bd95885e9c39c3713f09dd5dcc7110d0dc919b22240910d8ad2e2a8fe6b7e6"
+  }
+}

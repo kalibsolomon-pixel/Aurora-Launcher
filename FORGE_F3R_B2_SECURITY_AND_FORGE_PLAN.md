@@ -1,5 +1,14 @@
 # F3R-B2 — Windows symlink security closure and Forge duplicate-entry correction
 
+> F3R-B2a correction (2026-10-14): the historical containment/cleanup and
+> enforced-unelevated claims below were too strong. The old wrapper deleted
+> caller-supplied roots, and neither phase checked token elevation. Installer
+> identity matching also omitted extensions. See
+> [FORGE_F3R_B2A_REVIEW_CORRECTIONS.md](FORGE_F3R_B2A_REVIEW_CORRECTIONS.md)
+> for the corrected implementation, exact evidence and remaining blocked gate.
+> Historical outcomes below are preserved; they do not close the real-link gate.
+
+
 Work date: 2026-10-13. Starting branch `codex/client-3-production-authority`,
 HEAD `76ba054e7a28b576ffaa2789764ce160dedb49d3` (the reported F3R-B1 HEAD).
 **Verdict: PARTIAL — the Forge duplicate-entry defect is corrected and fully
