@@ -63,7 +63,7 @@
       <button type="button" class="btn btn-quiet" aria-label="Zoom in" disabled={view.zoom>=MAX_ZOOM} onclick={()=>adjust(0,0,.05)}>+</button>
     </div>
     <div class="model-controls" role="group" aria-label="Local preview settings">
-      <label>Model preview <select bind:value={geometry} disabled={avatar?.skinHeight===32}><option value="classic">Classic</option><option value="slim">Slim</option></select></label>
+      <label>Model preview <select aria-label="Model preview" bind:value={geometry} disabled={avatar?.skinHeight===32}><option value="classic">Classic</option><option value="slim">Slim</option></select></label>
       <label><input type="checkbox" bind:checked={outerLayers} /> Outer layers</label>
       {#if cape}<label><input type="checkbox" bind:checked={capeVisible} /> Show cape</label>{/if}
     </div>
@@ -72,7 +72,7 @@
 </div>
 <style>
   .cosmetic-preview { min-width:0; text-align:center; }
-  .preview-stage { position:relative; height:clamp(320px,55vh,540px); min-width:0; overflow:hidden; display:grid; place-items:center; border-radius:18px; cursor:grab; touch-action:none; background:radial-gradient(ellipse at 50% 65%,var(--color-accent-soft),transparent 65%); }
+  .preview-stage { position:relative; height:clamp(320px,48vh,480px); min-width:0; overflow:hidden; display:grid; place-items:center; border-radius:18px; cursor:grab; touch-action:none; background:radial-gradient(ellipse at 50% 65%,var(--color-accent-soft),transparent 65%); }
   .preview-stage.dragging { cursor:grabbing; }
   .preview-stage.missing { cursor:default; }
   .preview-stage:focus-visible { outline:2px solid var(--color-accent); outline-offset:3px; }

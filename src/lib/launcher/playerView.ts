@@ -1,5 +1,6 @@
-import { PLAYER_DEFAULT_YAW } from './playerModel.ts';
-export const DEFAULT_VIEW = { yaw: PLAYER_DEFAULT_YAW, pitch: .10, zoom: 1 };
+// Kept dependency-free for the plain Node test runner. Pixel-equivalence tests
+// bind these defaults to the shared Home renderer's canonical projection.
+export const DEFAULT_VIEW = { yaw: -.42, pitch: .10, zoom: 1 };
 export const MIN_ZOOM = .75, MAX_ZOOM = 1.15;
 const clamp = (value: number, min: number, max: number, fallback: number) => Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
 /** Appearance-only camera policy. No change to the Home projection defaults. */
