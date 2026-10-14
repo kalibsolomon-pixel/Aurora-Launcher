@@ -28,11 +28,12 @@
   const previewAvatar = $derived(selected ? texture : currentAvatar);
   let notice = $state('');
   let dialog: HTMLDialogElement | undefined = $state(), nameInput: HTMLInputElement | undefined = $state();
-  let mode = $state<'import' | 'rename' | 'delete' | null>(null), dialogId = $state(''), draft = $state('');
+  let mode = $state<'import' | 'rename' | 'delete' | 'apply' | 'cape' | null>(null), dialogId = $state(''), draft = $state('');
+  let targetAccountId = $state<string | null>(null), targetAccountName = $state('');
   let file = $state<globalThis.File | null>(null), importModel = $state<SkinModel>('classic');
   let focusReturn: HTMLElement | null = null;
   const dialogPreset = $derived(cosmetics.presets.find(p=>p.id===dialogId));
-  $effect(() => { const id = accountId; untrack(() => { capeChoice=undefined; notice=''; void cosmetics.load(id); }); });
+  $effect(() => { const id = accountId; untrack(() => { capeChoice=undefined; notice=''; if(mode==='apply'||mode==='cape')mode=null; void cosmetics.load(id); }); });
   $effect(() => {
     const entry=selected; void retryTexture;
     let live=true; texture=null; textureError=''; textureLoading=!!entry;
@@ -43,8 +44,9 @@
     if(mode && dialog && !dialog.open) { dialog.showModal(); void tick().then(()=>{nameInput?.focus(); if(mode==='rename') nameInput?.select();}); }
     else if(!mode && dialog?.open) { dialog.close(); void tick().then(()=>{if(focusReturn?.isConnected) focusReturn.focus();}); }
   });
-  function openDialog(next: 'import' | 'rename' | 'delete') {
+  function openDialog(next: 'import' | 'rename' | 'delete' | 'apply' | 'cape') {
     focusReturn=document.activeElement as HTMLElement; mode=next; dialogId=selected?.id ?? ''; draft=next==='rename'?selected?.name ?? '':''; file=null; cosmetics.libraryError='';
+    targetAccountId=accountId; targetAccountName=account?.minecraftName ?? '';
   }
   function chooseFile(event: Event) {
     file=(event.currentTarget as HTMLInputElement).files?.[0] ?? null;
@@ -59,10 +61,15 @@
       if(await cosmetics.rename(dialogId,draft)) { notice='Saved skin renamed.'; mode=null; }
     } else if(mode==='delete') {
       if(await cosmetics.remove(dialogId)) { if(cosmetics.selectedPresetId===dialogId) cosmetics.selectedPresetId=null; notice='Skin removed from your local library. Your account skin is unchanged.'; mode=null; }
+    } else if((mode==='apply'||mode==='cape') && accountId===targetAccountId && fresh) {
+      const operationMode=mode, target=targetAccountId;
+      mode=null;
+      const success=operationMode==='apply'?await cosmetics.apply(dialogId):cape?await cosmetics.selectCape(cape.id):await cosmetics.disableCape();
+      if(success && accountId===target) notice=operationMode==='apply'?'Skin request completed and account profile refreshed.':'Cape choice confirmed by Minecraft.';
     }
   }
-  async function apply() { if(selected && await cosmetics.apply(selected.id)) notice='Skin request completed and account profile refreshed.'; }
-  async function equipCape() { const success=cape ? await cosmetics.selectCape(cape.id) : await cosmetics.disableCape(); if(success) notice='Cape choice confirmed by Minecraft.'; }
+  function apply() { if(selected) openDialog('apply'); }
+  function equipCape() { openDialog('cape'); }
   async function saveCurrent() { if(accountId) { const result=await cosmetics.saveCurrent(accountId); if(result) { cosmetics.selectedPresetId=result.id; notice=result.duplicate?'Already in your library.':'Current skin saved to your library.'; } } }
   function tabsKey(event: KeyboardEvent) {
     if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) { event.preventDefault(); navigation.cosmeticsTab=event.key==='Home'?'skins':event.key==='End'?'capes':tab==='skins'?'capes':'skins'; void tick().then(()=>document.getElementById(`cosmetic-tab-${navigation.cosmeticsTab}`)?.focus()); }
@@ -71,7 +78,7 @@
 
 <div class="page f-pilot cosmetics-page">
   <header class="page-header">
-    <div><h2 class="page-title">Skins &amp; Capes</h2><p class="page-subtitle">Your collection. Your character.</p></div>
+    <div><h2 class="page-title">Appearance</h2><p class="page-subtitle">Your collection. Your character.</p></div>
   </header>
   <div class="cosmetics-topbar">
     <div class="cosmetics-tabs" role="tablist" tabindex="-1" aria-label="Cosmetic library" onkeydown={tabsKey}>
@@ -87,10 +94,32 @@
   {#if cosmetics.remoteBusy}<p class="notice" role="status">{cosmetics.operation}</p>{/if}
   {#if cosmetics.remoteError}<div class="service-message" role="alert"><p>{cosmetics.remoteError}</p><span>{remote?'Showing the last fetched profile. Account changes are paused.':'Saved skins are still available below.'}</span></div>{/if}
   {#if !accountId}<p class="account-note">Your local library is always available. <button onclick={()=>accountManager.show()}>Connect an account</button> to apply skins and see owned capes.</p>
-  {:else}<p class="account-note">{cosmetics.loading?'Checking Minecraft profile…':fresh?'Minecraft profile refreshed this session.':'Account appearance may be cached.'} {#if account?.status==='reauthenticationRequired'}Sign in again through Accounts to change cosmetics.{/if}</p>{/if}
+  {:else}<p class="account-note"><strong>{account?.minecraftName}</strong> · {cosmetics.loading?'Checking Minecraft profile…':fresh?'Minecraft profile refreshed this session.':'Account appearance may be cached.'} {#if account?.status==='reauthenticationRequired'}Sign in again through Accounts to change cosmetics.{/if}</p>{/if}
 
   <div id="cosmetic-panel" class="cosmetics-layout" role="tabpanel" aria-labelledby={`cosmetic-tab-${tab}`}>
+    <aside class="preview-panel f-surface" aria-label="Character preview">
+      <div class="preview-heading"><span class="eyebrow">{tab==='capes'?'CAPE PREVIEW':selected?'SAVED SKIN':'ACCOUNT APPEARANCE'}</span><h3>{tab==='capes'?cape?.name ?? 'No Cape':selected?.name ?? account?.minecraftName ?? 'Your character'}</h3><p>{tab==='capes'?(fresh&&capeIsActive?'Currently active on this account':'Preview only · not confirmed equipped'):selected?'Local preview · not applied':currentConfirmed?'Current Minecraft skin':currentAvatar?'Cached account skin · last known appearance':!accountId?'No account selected':fresh&&remote?.hasCurrentSkin?'Account skin texture unavailable':fresh?'No current skin reported':'Account skin unavailable'}</p></div>
+      <CosmeticPreview avatar={previewAvatar} cape={cape?.preview} label={tab==='capes'?'Player with cape preview':'Player skin preview'} />
+      {#if cape && !cape.preview}<p class="detail-note">Cape texture unavailable. The inventory choice is retained.</p>{/if}
+      {#if tab==='capes' && selected}<p class="detail-note preview-skin-note">Shown on saved skin {selected.name} · local preview</p>{/if}
+      {#if selected && textureLoading}<p role="status">Loading saved texture…</p>{/if}
+      {#if selected && textureError}<div class="service-message" role="alert">{textureError}<button class="btn btn-quiet" onclick={()=>retryTexture++}>Retry texture</button></div>{/if}
+    </aside>
     <section class="library-panel f-surface" aria-label={tab==='skins'?'Saved skin library':'Owned Minecraft capes'}>
+      <p class="selection-summary">{tab==='skins'?selected?`Previewing ${selected.name}`:`Account: ${account?.minecraftName ?? 'No account selected'}`:cape?`Cape: ${cape.name}`:'No Cape'}</p>
+      <div class="detail-actions">
+        {#if tab==='skins' && selected}
+          <label class="model-setting">Saved model <select aria-label="Saved skin model" value={selected.model} disabled={cosmetics.localBusy} onchange={event=>cosmetics.setModel(selected.id,event.currentTarget.value as SkinModel)}><option value="classic">Classic · 4px arms</option><option value="slim">Slim · 3px arms</option></select></label>
+          <button class="btn btn-primary" disabled={!fresh || cosmetics.remoteBusy || cosmetics.localBusy || !texture || isCurrentSkin(selected,currentConfirmed)} onclick={apply}>{isCurrentSkin(selected,currentConfirmed)?'Current skin':cosmetics.remoteBusy?'Updating account…':`Apply to ${account?.minecraftName ?? 'Minecraft account'}`}</button>
+          <div class="secondary-actions"><button class="btn btn-secondary" disabled={cosmetics.localBusy} onclick={()=>openDialog('rename')}>Rename</button><button class="btn btn-quiet" disabled={cosmetics.localBusy} onclick={()=>openDialog('delete')}>Remove from library</button></div>
+          <p class="detail-note">Model and name changes stay local. Apply uploads this saved skin to the selected account.</p>
+        {:else if tab==='skins'}
+          <button class="btn btn-secondary" disabled={!fresh || !remote?.hasCurrentSkin || cosmetics.localBusy} onclick={saveCurrent}>Save current skin to library</button><p class="detail-note">Select a saved skin to preview, rename or apply it.</p>
+        {:else}
+          <button class="btn btn-primary" disabled={!fresh || cosmetics.remoteBusy || capeIsActive} onclick={equipCape}>{capeIsActive&&fresh?'Currently active':cape?`Equip ${cape.name}`:'Use No Cape'}</button><p class="detail-note">Only your official owned capes can be equipped. No custom cape imports or unlocks.</p>
+        {/if}
+      </div>
+
       {#if tab==='skins'}
         <div class="section-heading"><div><h3>Skin Library</h3><p>Saved on this Launcher · shared across accounts</p></div><span class="count">{cosmetics.presets.length} / 256</span></div>
         <div class="library-controls">
@@ -99,7 +128,7 @@
           <select aria-label="Sort saved skins" bind:value={cosmetics.sort}><option value="recent">Recent additions</option><option value="name">Name A–Z</option></select>
         </div>
         {#if currentAvatar || remote?.hasCurrentSkin}
-          <button class="current-skin" class:chosen={!selected} onclick={()=>cosmetics.selectedPresetId=null}><span class="current-dot"></span><span><strong>{account?.minecraftName}'s skin</strong><small>{currentConfirmed?'Current account skin':'Cached account appearance'} · {currentAvatar?.model==='slim'?'Slim':'Classic'}</small></span><span>Preview →</span></button>
+          <button class="current-skin" class:chosen={!selected} onclick={()=>cosmetics.selectedPresetId=null}><span class="current-dot"></span><span><strong>{account?.minecraftName}'s skin</strong><small>{currentConfirmed?'Current account skin':'Cached or unavailable account texture'} · {currentAvatar?.model==='slim'?'Slim':currentAvatar?.model==='classic'?'Classic':'Model unknown'}</small></span><span>{!selected?'Viewing':'Preview →'}</span></button>
         {/if}
         {#if cosmetics.libraryError}<div class="service-message" role="alert">{cosmetics.libraryError}<button class="btn btn-quiet" onclick={()=>cosmetics.loadPresets(true)}>Reload library</button></div>{/if}
         {#if cosmetics.libraryLoading && !cosmetics.presets.length}<p class="empty" role="status">Loading your saved skins…</p>
@@ -110,7 +139,7 @@
           <div class="cosmetic-grid" role="region" aria-label="Scrollable saved skins" tabindex="0">
             {#each entries as preset (preset.id)}
               <div class="cosmetic-card" class:chosen={selected?.id===preset.id}>
-                <button class="card-preview" aria-pressed={selected?.id===preset.id} aria-label={`Preview saved skin ${preset.name}`} onclick={()=>{cosmetics.selectedPresetId=preset.id;notice='';}}><SkinSwatch {preset} /><strong title={preset.name}>{preset.name}</strong><span class="card-meta">{preset.model==='slim'?'Slim · 3px arms':'Classic · 4px arms'}{#if isCurrentSkin(preset,currentConfirmed)}<b>Current</b>{/if}</span></button>
+                <button class="card-preview" aria-pressed={selected?.id===preset.id} aria-label={`Preview saved skin ${preset.name}`} onclick={()=>{cosmetics.selectedPresetId=preset.id;notice='';}}><SkinSwatch {preset} /><strong title={preset.name}>{preset.name}</strong><span class="card-meta">{preset.model==='slim'?'Slim · 3px arms':'Classic · 4px arms'}{#if isCurrentSkin(preset,currentConfirmed)}<b>Current</b>{/if}{#if selected?.id===preset.id}<b>Preview</b>{/if}</span></button>
                 <button class="favorite" aria-pressed={preset.favorite} aria-label={`${preset.favorite?'Unfavorite':'Favorite'} saved skin ${preset.name}`} disabled={cosmetics.localBusy} onclick={()=>cosmetics.favorite(preset.id,!preset.favorite)}>{preset.favorite?'★':'☆'}</button>
               </div>
             {/each}
@@ -134,31 +163,13 @@
         {/if}
       {/if}
     </section>
-    <aside class="preview-panel f-surface" aria-label="Cosmetic preview and actions">
-      <div class="preview-heading"><span class="eyebrow">{tab==='capes'?'CAPE PREVIEW':selected?'SAVED SKIN':'ACCOUNT APPEARANCE'}</span><h3>{tab==='capes'?cape?.name ?? 'No Cape':selected?.name ?? account?.minecraftName ?? 'Your character'}</h3><p>{tab==='capes'?(fresh&&capeIsActive?'Currently active on this account':'Preview only · not confirmed equipped'):selected?'Local preview · not applied':currentConfirmed?'Current Minecraft skin':'Cached or unavailable appearance'}</p></div>
-      <CosmeticPreview avatar={previewAvatar} cape={cape?.preview} label={tab==='capes'?'Player with cape preview':'Player skin preview'} />
-      {#if tab==='capes' && selected}<p class="detail-note preview-skin-note">Shown on saved skin {selected.name} · local preview</p>{/if}
-      {#if selected && textureLoading}<p role="status">Loading saved texture…</p>{/if}
-      {#if selected && textureError}<div class="service-message" role="alert">{textureError}<button class="btn btn-quiet" onclick={()=>retryTexture++}>Retry texture</button></div>{/if}
-      <div class="detail-actions">
-        {#if tab==='skins' && selected}
-          <label class="model-setting">Saved model <select aria-label="Saved skin model" value={selected.model} disabled={cosmetics.localBusy} onchange={event=>cosmetics.setModel(selected.id,event.currentTarget.value as SkinModel)}><option value="classic">Classic · 4px arms</option><option value="slim">Slim · 3px arms</option></select></label>
-          <button class="btn btn-primary" disabled={!fresh || cosmetics.remoteBusy || cosmetics.localBusy || !texture || isCurrentSkin(selected,currentConfirmed)} onclick={apply}>{isCurrentSkin(selected,currentConfirmed)?'Current skin':cosmetics.remoteBusy?'Updating account…':`Apply to ${account?.minecraftName ?? 'Minecraft account'}`}</button>
-          <div class="secondary-actions"><button class="btn btn-secondary" disabled={cosmetics.localBusy} onclick={()=>openDialog('rename')}>Rename</button><button class="btn btn-quiet" disabled={cosmetics.localBusy} onclick={()=>openDialog('delete')}>Remove from library</button></div>
-          <p class="detail-note">Model and name changes stay local. Apply uploads this saved skin to the selected account.</p>
-        {:else if tab==='skins'}
-          <button class="btn btn-secondary" disabled={!fresh || !remote?.hasCurrentSkin || cosmetics.localBusy} onclick={saveCurrent}>Save current skin to library</button><p class="detail-note">Select a saved skin to preview, rename or apply it.</p>
-        {:else}
-          <button class="btn btn-primary" disabled={!fresh || cosmetics.remoteBusy || capeIsActive} onclick={equipCape}>{capeIsActive&&fresh?'Currently active':cape?`Equip ${cape.name}`:'Use No Cape'}</button><p class="detail-note">Only your official owned capes can be equipped. No custom cape imports or unlocks.</p>
-        {/if}
-      </div>
-    </aside>
+
   </div>
 </div>
 
 <dialog class="cosmetic-dialog" bind:this={dialog} aria-labelledby="cosmetic-dialog-title" oncancel={event=>{if(cosmetics.localBusy)event.preventDefault();else mode=null;}} onclose={()=>mode=null}>
   <form onsubmit={saveDialog}>
-    <h3 id="cosmetic-dialog-title">{mode==='import'?'Import a skin':mode==='rename'?'Rename saved skin':'Remove saved skin?'}</h3>
+    <h3 id="cosmetic-dialog-title">{mode==='import'?'Import a skin':mode==='rename'?'Rename saved skin':mode==='apply'?'Apply skin to account?':mode==='cape'?'Change account cape?':'Remove saved skin?'}</h3>
     {#if mode==='import'}
       <p>Save a Java PNG locally. Your Minecraft account changes only when you choose Apply.</p>
       <label>Skin file<input type="file" accept="image/png,.png" aria-label="Choose skin PNG" onchange={chooseFile} disabled={cosmetics.localBusy} /></label>
@@ -167,10 +178,12 @@
       <label>Model<select bind:value={importModel} disabled={cosmetics.localBusy}><option value="classic">Classic · 4px arms</option><option value="slim">Slim · 3px arms</option></select></label>
       <small>Choose the intended model. Legacy 64×32 skins use Classic.</small>
     {:else if mode==='rename'}<label>Name<input bind:this={nameInput} bind:value={draft} disabled={cosmetics.localBusy} /></label>
+    {:else if mode==='apply'}<p>Apply <strong>{dialogPreset?.name}</strong> ({dialogPreset?.model==='slim'?'Slim':'Classic'}) to <strong>{targetAccountName}</strong>? This changes your Minecraft account skin. View controls remain local.</p>
+    {:else if mode==='cape'}<p>Set <strong>{targetAccountName}</strong>'s official cape to <strong>{cape?.name ?? 'No Cape'}</strong>? This changes the account's cape selection.</p>
     {:else}<p>Remove <strong>{dialogPreset?.name}</strong> from this Launcher's library? Your active Minecraft skin stays unchanged.</p>{/if}
-    {#if mode!=='delete' && draft && !validSkinName(draft)}<p class="form-error">Use a name of 1–80 UTF-8 bytes without control characters.</p>{/if}
+    {#if (mode==='import'||mode==='rename') && draft && !validSkinName(draft)}<p class="form-error">Use a name of 1–80 UTF-8 bytes without control characters.</p>{/if}
     {#if cosmetics.libraryError}<p class="form-error" role="alert">{cosmetics.libraryError}</p>{/if}
-    <div class="dialog-actions"><button type="button" class="btn btn-secondary" disabled={cosmetics.localBusy} onclick={()=>mode=null}>Cancel</button><button type="submit" class="btn" class:btn-primary={mode!=='delete'} class:btn-danger={mode==='delete'} disabled={cosmetics.localBusy || (mode!=='delete' && !validSkinName(draft)) || (mode==='import' && !file)}>{cosmetics.localBusy?'Saving…':mode==='import'?'Save to library':mode==='rename'?'Save name':'Remove from library'}</button></div>
+    <div class="dialog-actions"><button type="button" class="btn btn-secondary" disabled={cosmetics.localBusy} onclick={()=>mode=null}>Cancel</button><button type="submit" class="btn" class:btn-primary={mode!=='delete'} class:btn-danger={mode==='delete'} disabled={cosmetics.localBusy || ((mode==='import'||mode==='rename') && !validSkinName(draft)) || (mode==='import' && !file) || ((mode==='apply'||mode==='cape') && (!fresh||cosmetics.remoteBusy||accountId!==targetAccountId))}>{cosmetics.localBusy?'Saving…':mode==='import'?'Save to library':mode==='rename'?'Save name':mode==='apply'?'Confirm Apply':mode==='cape'?'Confirm cape change':'Remove from library'}</button></div>
   </form>
 </dialog>
 
@@ -187,8 +200,9 @@
   .account-note,.notice { font-size:12px; color:var(--color-text-secondary); margin:12px 0 18px; }
   .account-note button { background:transparent; border:0; font:inherit; color:var(--color-accent); text-decoration:underline; cursor:pointer; padding:0; }
   .notice { color:var(--color-success); }
-  .cosmetics-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,380px); gap:20px; align-items:start; }
+  .cosmetics-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(320px,420px); gap:24px; align-items:start; }
   .library-panel,.preview-panel { padding:24px; min-width:0; }
+  .preview-panel { background:transparent; border-color:transparent; box-shadow:none; backdrop-filter:none; padding:16px; }
   .section-heading { display:flex; align-items:start; justify-content:space-between; gap:12px; margin-bottom:20px; }
   h3 { margin:0; font-size:18px; font-weight:600; overflow-wrap:anywhere; }
   .section-heading p,.preview-heading p { margin:6px 0 0; font-size:12px; color:var(--color-text-secondary); line-height:1.5; }
@@ -204,12 +218,14 @@
   .current-skin small { display:block; margin-top:4px; font-size:11px; color:var(--color-text-secondary); }
   .current-skin>span:last-child { font-size:11px; flex:none; color:var(--color-text-secondary); }
   .current-dot { width:8px; height:8px; border-radius:50%; background:var(--color-accent); flex:none; }
-  .cosmetic-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(145px,1fr)); gap:12px; max-height:clamp(260px,calc(100dvh - 560px),620px); overflow-y:auto; overflow-x:hidden; padding:3px; scrollbar-gutter:stable; }
-  .cape-grid { grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); }
+  .cosmetic-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; max-height:330px; overflow-y:auto; overflow-x:hidden; padding:3px; scrollbar-gutter:stable; }
+  .cape-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .cosmetic-card { position:relative; border:1px solid var(--f-edge); border-radius:15px; background:rgb(255 255 255 / 3%); color:var(--color-text); min-width:0; }
   .cosmetic-card:hover { background:rgb(255 255 255 / 6%); }
   .chosen { border-color:var(--color-accent-outline); box-shadow:inset 0 0 0 1px var(--color-accent-outline); background:var(--color-accent-soft); }
   .card-preview { width:100%; border:0; background:transparent; color:inherit; text-align:left; padding:10px; cursor:pointer; font:inherit; }
+  .card-preview :global(.skin-swatch) { height:100px; }
+  .card-preview :global(.skin-swatch canvas) { height:100px; width:70px; }
   .card-preview strong,.cape-card strong,.no-cape strong { display:block; font-size:13px; font-weight:550; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:10px 0 7px; }
   .card-meta { font-size:10.5px; color:var(--color-text-secondary); display:flex; align-items:center; justify-content:space-between; gap:4px; flex-wrap:wrap; }
   .card-meta b { font-weight:550; color:var(--color-accent); }
@@ -220,7 +236,8 @@
   .empty p { font-size:13px; line-height:1.65; margin:0; }
   .preview-heading { text-align:center; margin-bottom:16px; }
   .eyebrow { display:block; font-size:10px; letter-spacing:.12em; color:var(--color-text-muted); margin-bottom:10px; }
-  .detail-actions { display:grid; gap:14px; margin-top:20px; }
+  .detail-actions { display:grid; gap:12px; padding-bottom:20px; margin:12px 0 20px; border-bottom:1px solid var(--f-edge); }
+  .selection-summary { margin:0; font-size:13px; font-weight:600; overflow-wrap:anywhere; }
   .detail-actions>.btn { white-space:normal; overflow-wrap:anywhere; }
   .model-setting { display:flex; flex-direction:column; gap:8px; font-size:12px; color:var(--color-text-secondary); }
   .secondary-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
@@ -234,7 +251,7 @@
   .service-message { padding:12px 14px; margin-bottom:14px; font-size:12px; line-height:1.6; color:var(--color-text); border:1px solid var(--color-border-strong); background:var(--color-surface-sunken); border-radius:12px; }
   .service-message p { margin:0; }
   .service-message span { color:var(--color-text-secondary); }
-  .cosmetic-dialog { width:min(460px,calc(100vw - 32px)); box-sizing:border-box; padding:26px; border:1px solid var(--f-edge); border-radius:22px; background:var(--f-dialog-panel); backdrop-filter:var(--f-blur); color:var(--color-text); box-shadow:var(--f-shadow); }
+  .cosmetic-dialog { width:min(460px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow-y:auto; box-sizing:border-box; padding:26px; border:1px solid var(--f-edge); border-radius:22px; background:var(--f-dialog-panel); backdrop-filter:var(--f-blur); color:var(--color-text); box-shadow:var(--f-shadow); }
   .cosmetic-dialog::backdrop { background:var(--f-dialog-dim); }
   form { display:grid; gap:16px; }
   form p { font-size:13px; line-height:1.6; margin:0; color:var(--color-text-secondary); }
@@ -242,7 +259,7 @@
   form small { color:var(--color-text-muted); font-size:11px; }
   .dialog-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; margin-top:6px; }
   form .form-error { color:var(--color-danger); }
-  @media(max-width:1100px) { .cosmetics-layout { grid-template-columns:minmax(0,1fr) minmax(260px,320px); gap:16px; } .library-panel,.preview-panel { padding:20px; } }
+  @media(max-width:1100px) { .cosmetics-layout { grid-template-columns:minmax(0,1fr) minmax(290px,340px); gap:16px; } .library-panel,.preview-panel { padding:16px; } }
   @media(max-width:900px) { .cosmetics-layout { grid-template-columns:minmax(0,1fr); } .preview-panel { max-width:none; } .page-header { flex-wrap:wrap; } .cosmetic-grid { max-height:440px; } }
   @media(max-width:600px) { .library-panel,.preview-panel { padding:16px; } .cosmetic-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; } .current-skin>span:last-child { display:none; } .top-actions .btn { padding:10px; } }
 </style>
