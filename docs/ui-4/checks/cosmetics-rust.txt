@@ -1,0 +1,77 @@
+
+running 18 tests
+test cosmetics::tests::profile_mapping_is_account_bound_and_ownership_scoped ... ok
+test cosmetics::tests::cape_preview_is_native_decoded_and_bounded ... ok
+test cosmetics::tests::png_validation_is_bounded_and_rejects_malformed_images ... ok
+test cosmetics::tests::remote_failures_are_structured_and_redacted ... ok
+test cosmetics::tests::skin_upload_is_multipart_and_refreshes_profile ... ok
+test cosmetics::tests::rejected_skin_and_unavailable_service_have_specific_errors ... ok
+test cosmetics::tests::cape_already_selected_skips_mutation_and_stale_ownership_is_rejected ... ok
+test cosmetics::tests::current_skin_download_is_bounded_and_png_typed ... ok
+test cosmetics::tests::cape_selection_checks_owned_set_and_disable_refreshes ... ok
+test cosmetics::tests::successful_upload_requires_matching_fresh_identity_and_profile ... ok
+test cosmetics::tests::presets_use_generated_paths_and_preserve_duplicate_display_names ... ok
+test cosmetics::tests::damaged_or_future_metadata_is_never_overwritten ... ok
+test cosmetics::tests::rename_and_model_updates_are_metadata_only ... ok
+test cosmetics::tests::full_preview_preserves_alpha_and_refuses_missing_or_changed_assets ... ok
+test cosmetics::tests::identical_bytes_and_model_are_deduplicated_but_models_stay_independent ... ok
+test cosmetics::tests::thumbnails_are_bounded_head_crops_of_verified_bytes ... ok
+test cosmetics::tests::schema_one_migrates_without_read_time_writes_and_favorites_survive_reopen ... ok
+test cosmetics::tests::library_exceeds_old_capacity_and_duplicate_reuse_requires_valid_bytes ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 995 filtered out; finished in 0.61s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+   Compiling aurora-launcher v1.4.2 (C:\Dev\aurora-launcher\src-tauri)
+warning: unused import: `std::io::Read`
+   --> src\server_enrichment\mod.rs:524:9
+    |
+524 |     use std::io::Read as _;
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> src\modrinth.rs:1747:13
+     |
+1747 |         let mut neoforge_file = VersionDto {
+     |             ----^^^^^^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `unbreak_path` is never used
+    --> src\instances\lifecycle.rs:2675:23
+     |
+2344 |     impl SyntheticWorld {
+     |     ------------------- method in this implementation
+...
+2675 |         pub(crate) fn unbreak_path(&self, path: &str) {
+     |                       ^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `carried_fabric_api` is never used
+    --> src\updates\client.rs:1180:12
+     |
+1064 |     impl Lab {
+     |     -------- method in this implementation
+...
+1180 |         fn carried_fabric_api(&self) -> serde_json::Value {
+     |            ^^^^^^^^^^^^^^^^^^
+
+warning: `aurora-launcher` (lib test) generated 4 warnings (run `cargo fix --lib -p aurora-launcher --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.69s
+     Running unittests src\lib.rs (src-tauri\target\debug\deps\aurora_launcher_lib-2ccb8a72d05df568.exe)
+     Running unittests src\main.rs (src-tauri\target\debug\deps\aurora_launcher-8b6fc8a43f36a692.exe)
+     Running tests\icon_assets.rs (src-tauri\target\debug\deps\icon_assets-84d3d91d64ba5657.exe)

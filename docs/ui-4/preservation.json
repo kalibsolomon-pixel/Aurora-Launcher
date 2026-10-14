@@ -1,0 +1,19 @@
+{
+  "startingHead": "f0319f105e188eb0d891bc79663d78f6ee6644e7",
+  "checkedTracked": 1819,
+  "unchangedTracked": 1813,
+  "scopedExistingFiles": [
+    "ARCHITECTURE.md",
+    "src/lib/launcher/playerModel.ts",
+    "src/lib/launcher/CosmeticPreview.svelte",
+    "src/lib/launcher/navigation.ts",
+    "src/lib/pages/CosmeticsPage.svelte",
+    "tools/visual/l3.test.mjs"
+  ],
+  "protectedFiles": 4,
+  "worktrees": 7,
+  "otherWorktreesUnchanged": true,
+  "deletions": 0,
+  "homeAndWidgetsByteIdentical": true,
+  "nativeAndReleaseFilesByteIdentical": true
+}

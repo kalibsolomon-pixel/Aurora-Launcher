@@ -1,0 +1,9 @@
+{
+  "pid": 21412,
+  "exe": "C:\\Dev\\aurora-launcher\\src-tauri\\target\\debug\\aurora-launcher.exe",
+  "isolatedRoot": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui4-0765f5b4-19a4-4d30-81eb-bc05279ff1bf",
+  "nativeData": "Actual compiled frontend; marked isolated root; no accounts/credentials/instances copied",
+  "sha256": "EFEC48F408DFD096E7A664D63DF06B3D8781C2611B9FD4E55C8E9BF4D2844F78",
+  "managed": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui4-0765f5b4-19a4-4d30-81eb-bc05279ff1bf\\managed",
+  "webview": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui4-0765f5b4-19a4-4d30-81eb-bc05279ff1bf\\webview"
+}

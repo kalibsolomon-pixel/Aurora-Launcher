@@ -1,0 +1,25 @@
+{
+  "provenance": "Actual compiled native frontend; read-only CDP screenshot/geometry; synthetic local imports, no account",
+  "url": "http://tauri.localhost/",
+  "viewport": [
+    1120,
+    790
+  ],
+  "dpr": 1.25,
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "stage": {
+    "width": 442,
+    "height": 379,
+    "orientation": "336 degrees rotation, 6 degrees tilt, 105 percent zoom"
+  },
+  "pixelBounds": {
+    "left": 93,
+    "top": 46,
+    "right": 467,
+    "bottom": 745,
+    "width": 560,
+    "height": 800
+  },
+  "text": "Appearance\n\nYour collection. Your character.\n\nSkin Library 1\nCapes\nImport skin\n\nSkin saved to your local library.\n\nYour local library is always available. Connect an account to apply skins and see owned capes.\n\nSAVED SKIN\nAurora-local-classic\n\nLocal preview · not applied\n\nFront\nBack\nReset view\n−\n105%\n+\nModel preview\nClassic\nSlim\nOuter layers\n\nDrag to rotate & tilt · Arrows / + / − / Home when focused\n336° rotation · 6° tilt · View controls stay local\n\nPreviewing Aurora-local-classic\n\nSaved model\nClassic · 4px arms\nSlim · 3px arms\nApply to Minecraft account\nRename\nRemove from library\n\nModel and name changes stay local. Apply uploads this saved skin to the selected account.\n\nSkin Library\n\nSaved on this Launcher · shared across accounts\n\n1 / 256\n★ Favorites\nRecent additions\nName A–Z\nAurora-local-classic\nClassic · 4px arms\nPreview\n☆"
+}

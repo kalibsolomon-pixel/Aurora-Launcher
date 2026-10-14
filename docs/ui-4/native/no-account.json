@@ -1,0 +1,18 @@
+{
+  "provenance": "Actual compiled native frontend; read-only CDP screenshot/geometry; synthetic local imports, no account",
+  "url": "http://tauri.localhost/",
+  "viewport": [
+    1120,
+    790
+  ],
+  "dpr": 1.25,
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "stage": {
+    "width": 442,
+    "height": 379,
+    "orientation": "336 degrees rotation, 6 degrees tilt, 100 percent zoom"
+  },
+  "pixelBounds": null,
+  "text": "Appearance\n\nYour collection. Your character.\n\nSkin Library 0\nCapes\nImport skin\n\nYour local library is always available. Connect an account to apply skins and see owned capes.\n\nACCOUNT APPEARANCE\nYour character\n\nNo account selected\n\nTexture unavailable\nSelect a saved skin to preview it.\n\nAccount: No account selected\n\nSave current skin to library\n\nSelect a saved skin to preview, rename or apply it.\n\nSkin Library\n\nSaved on this Launcher · shared across accounts\n\n0 / 256\n★ Favorites\nRecent additions\nName A–Z\nMake room for your favorites\n\nImport a Java skin to start your collection.\nYou can organize and preview it before applying.\n\nImport your first skin"
+}

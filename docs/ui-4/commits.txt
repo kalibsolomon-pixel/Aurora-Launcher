@@ -1,0 +1,5 @@
+89486575215b65ef21d8a9ffec93720009312451 Audit UI-4 appearance capabilities and preserve repository baseline
+f49bc24f4b0d4ee2f848a35d2831363f099efbc4 Add bounded interactive appearance views to the shared player renderer
+b15dfbf46f04255650e72422f880fb76c9831f85 Make Appearance a character-led workspace with explicit account confirmations
+3a9a0be5bc6c7fb91a4419d66f994f701a5ca0ce Refine preview sizing and accessible geometry controls
+3774468d75e4e73b710937251122d05841dfcc84 Verify Appearance workflows, native fixtures and regression preservation

@@ -1,0 +1,7 @@
+PASS Instance identity, honest metadata and management through Instances
+PASS Player stays distinct from instance and hero contains both controls
+PASS Home contrast foundation is scoped and adds no backdrop-filter stack
+PASS Reduced transparency uses opaque theme surfaces and reduced motion keeps still image
+PASS 200% text keeps heading, action, selector and error separated at minimum width
+PASS Missing skin and signed-out fallback explain the empty preview without a generic model
+PASS 6 UI-2B browser cases; zero page errors

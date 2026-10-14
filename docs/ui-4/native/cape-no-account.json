@@ -1,0 +1,29 @@
+{
+  "provenance": "Actual compiled native frontend; read-only CDP screenshot/geometry; synthetic local imports, no account",
+  "url": "http://tauri.localhost/",
+  "viewport": [
+    1120,
+    790
+  ],
+  "dpr": 1.25,
+  "previewGeometry": "classic",
+  "outerLayers": [
+    true
+  ],
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "stage": {
+    "width": 442,
+    "height": 379,
+    "orientation": "336 degrees rotation, 6 degrees tilt, 100 percent zoom"
+  },
+  "pixelBounds": {
+    "left": 102,
+    "top": 63,
+    "right": 458,
+    "bottom": 729,
+    "width": 560,
+    "height": 800
+  },
+  "text": "Appearance\n\nYour collection. Your character.\n\nSkin Library 1\nCapes\nImport skin\n\nYour local library is always available. Connect an account to apply skins and see owned capes.\n\nCAPE PREVIEW\nNo Cape\n\nPreview only · not confirmed equipped\n\nFront\nBack\nReset view\n−\n100%\n+\nModel preview\nClassic\nSlim\nOuter layers\n\nDrag to rotate & tilt · Arrows / + / − / Home when focused\n336° rotation · 6° tilt · View controls stay local\n\nShown on saved skin Aurora-local-classic · local preview\n\nNo Cape\n\nUse No Cape\n\nOnly your official owned capes can be equipped. No custom cape imports or unlocks.\n\nOfficial capes\n\nYour Minecraft account inventory\n\nPreview any owned cape, then choose Equip. A preview never changes your account.\n\nYour capes live with your account\n\nConnect a Minecraft account to see its official capes.\n\nConnect account"
+}

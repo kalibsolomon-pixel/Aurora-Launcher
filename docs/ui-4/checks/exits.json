@@ -1,0 +1,350 @@
+{
+  "native-build": {
+    "command": [
+      "node",
+      "node_modules/@tauri-apps/cli/tauri.js",
+      "build",
+      "--debug",
+      "--no-bundle"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "frontend-tests": {
+    "command": [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-timeout=60000",
+      "src/lib/**/*.test.ts"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "appearance-browser": {
+    "command": [
+      "node",
+      "tools/visual/ui4.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "cosmetics-rust": {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "src-tauri/Cargo.toml",
+      "cosmetics::tests"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-build-final": {
+    "command": [
+      "node",
+      "node_modules/@tauri-apps/cli/tauri.js",
+      "build",
+      "--debug",
+      "--no-bundle"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui1-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui2-ui1-regression.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui2-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui2.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui2b-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui2b.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui31-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui31.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui3-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui3.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-no-account": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "no-account"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "l3-regression": {
+    "command": [
+      "node",
+      "tools/visual/l3.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui2b1-crop": {
+    "command": [
+      "node",
+      "tools/visual/ui2b1-crop.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "final-check": {
+    "command": [
+      "node",
+      "node_modules/svelte-check/bin/svelte-check",
+      "--tsconfig",
+      "./tsconfig.json"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-imported": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "imported-classic"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-rotated": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "rotated"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-reset": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "reset-view"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-zoom": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "zoomed"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "final-frontend-tests": {
+    "command": [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-timeout=60000",
+      "src/lib/**/*.test.ts"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-slim": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "slim-preview"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-layers": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "outer-layers-off"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-minimum": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "minimum-attempt"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-width": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "narrow-width-attempt"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-cyan": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "cyan-borealis"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-default": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "appearance-default"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-capes": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "cape-no-account"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-maximized": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "maximized-cape-state"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-persistence": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "persisted-library",
+      "native-restart"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "appearance-browser-final": {
+    "command": [
+      "node",
+      "tools/visual/ui4.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-restarted-preview": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "persisted-preview",
+      "native-restart"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-removal-confirmation": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "removal-confirmation",
+      "native-restart"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-removed": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "removed-entry",
+      "native-restart"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-keyboard-size": {
+    "command": [
+      "node",
+      "tools/visual/ui4-native-capture.mjs",
+      "keyboard-size-attempt",
+      "native-restart"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "final-npm-check": {
+    "command": [
+      "node",
+      "C:\\Users\\kalib\\AppData\\Local\\Programs\\node-v24.21.0\\node_modules\\npm\\bin\\npm-cli.js",
+      "run",
+      "check"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  }
+}
