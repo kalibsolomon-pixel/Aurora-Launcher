@@ -1,0 +1,9 @@
+{
+  "checks": [
+    "Theme saves and renders native result",
+    "Failed radio write restores authority, announces error and retries requested value",
+    "Motion value and native save stay synchronized",
+    "Alternative accent reaches document tokens",
+    "Launcher navigation preserves live desktop capability"
+  ]
+}

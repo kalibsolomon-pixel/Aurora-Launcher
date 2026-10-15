@@ -1,0 +1,17 @@
+[
+  {
+    "key": "End",
+    "focus": "About",
+    "category": "About"
+  },
+  {
+    "key": "Home",
+    "focus": "Appearance",
+    "category": "Appearance"
+  },
+  {
+    "key": "ArrowDown",
+    "focus": "Home & Widgets",
+    "category": "Home & Widgets"
+  }
+]

@@ -1,0 +1,56 @@
+
+running 10 tests
+test appearance::tests::theme_ids_round_trip_through_their_persisted_strings ... ok
+test appearance::tests::preset_selections_resolve_and_unknown_ids_are_rejected ... ok
+test appearance::tests::appearance_preferences_normalize_unknown_values_to_the_default_look ... ok
+test appearance::tests::custom_accent_input_is_validated_with_explanations ... ok
+test appearance::tests::custom_accents_derive_deterministically_with_readable_buttons ... ok
+test appearance::tests::accent_hex_parses_and_normalizes ... ok
+test appearance::tests::every_curated_preset_stays_accessible_on_dark_surfaces ... ok
+test appearance::tests::the_violet_preset_reproduces_the_approved_default_accent ... ok
+test appearance::tests::a_custom_selection_serializes_with_its_hex ... ok
+test appearance::tests::appearance_preferences_serialize_to_inspectable_camel_case ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 1003 filtered out; finished in 0.01s
+
+warning: unused import: `std::io::Read`
+   --> src\server_enrichment\mod.rs:524:9
+    |
+524 |     use std::io::Read as _;
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> src\modrinth.rs:1747:13
+     |
+1747 |         let mut neoforge_file = VersionDto {
+     |             ----^^^^^^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `unbreak_path` is never used
+    --> src\instances\lifecycle.rs:2675:23
+     |
+2344 |     impl SyntheticWorld {
+     |     ------------------- method in this implementation
+...
+2675 |         pub(crate) fn unbreak_path(&self, path: &str) {
+     |                       ^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `carried_fabric_api` is never used
+    --> src\updates\client.rs:1180:12
+     |
+1064 |     impl Lab {
+     |     -------- method in this implementation
+...
+1180 |         fn carried_fabric_api(&self) -> serde_json::Value {
+     |            ^^^^^^^^^^^^^^^^^^
+
+warning: `aurora-launcher` (lib test) generated 4 warnings (run `cargo fix --lib -p aurora-launcher --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.51s
+     Running unittests src\lib.rs (src-tauri\target\debug\deps\aurora_launcher_lib-2ccb8a72d05df568.exe)

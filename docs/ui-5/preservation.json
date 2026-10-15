@@ -1,0 +1,17 @@
+{
+  "startingHead": "3e248361474d6de8eb39df8d50549ace1cd867a8",
+  "checkedTracked": 1984,
+  "scopedExistingFiles": [
+    "ARCHITECTURE.md",
+    "src/lib/pages/SettingsPage.svelte",
+    "src/lib/launcher/navigation.svelte.ts",
+    "src/lib/launcher/HomeWidgetSettings.svelte",
+    "src/lib/launcher/DiscordSettings.svelte"
+  ],
+  "protectedFiles": 4,
+  "worktrees": 7,
+  "otherWorktreesUnchanged": true,
+  "deletions": 0,
+  "nativeAndReleaseFilesByteIdentical": true,
+  "homeRendererRegistryAndPersistenceByteIdentical": true
+}

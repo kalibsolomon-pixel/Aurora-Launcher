@@ -1,0 +1,23 @@
+PASS Eight categories at five dimensions and 100%/200% text: 80 contained layouts
+PASS Arrow/Home/End keyboard category navigation and focus
+PASS Category reading position restored
+PASS Select/radio persistence, pending feedback, failed write and exact-value retry
+PASS Motion bounds and retained failed slider draft
+PASS Custom picker is focusable, commits completed changes and keeps failed input
+PASS Widget toggle persistence, unknown/hidden order and sizing preserved; failure retry
+PASS Layout reset requires explicit confirmation; Cancel/Escape preserve it and return focus
+PASS Edit Home reuses existing editor
+PASS Discord opt-ins remain independent, disabled server address preserves stored consent; save failures
+PASS Discord unavailable/setup states never claim connected or request OAuth
+PASS Game settings links keep instance scope; empty selection opens Library
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.waitForFunction: Timeout 30000ms exceeded.
+    at C:\Dev\aurora-launcher\tools\visual\ui5.test.mjs:68:133 {
+  log: [],
+  name: 'TimeoutError'
+}
+
+Node.js v24.21.0

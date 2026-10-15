@@ -1,0 +1,9 @@
+{
+  "isolatedRoot": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui5-a69eec16-d19e-45fd-bcaa-9583aeaae5cc",
+  "pid": 12456,
+  "sha256": "3448803F66F93CEA72FA3B7BB776C584FA405B4A6C6BA6244FFE2D62A941A524",
+  "webview": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui5-a69eec16-d19e-45fd-bcaa-9583aeaae5cc\\webview",
+  "managed": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-ui5-a69eec16-d19e-45fd-bcaa-9583aeaae5cc\\managed",
+  "exe": "C:\\Dev\\aurora-launcher\\src-tauri\\target\\debug\\aurora-launcher.exe",
+  "nativeData": "Actual compiled frontend; marked isolated root; no accounts/credentials/instances copied"
+}

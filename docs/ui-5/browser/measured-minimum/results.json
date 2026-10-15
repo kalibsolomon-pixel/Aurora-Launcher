@@ -1,0 +1,149 @@
+{
+  "provenance": "Browser fixtures at the separately measured native minimum; not native captures",
+  "metrics": [
+    {
+      "category": "Appearance",
+      "textScale": 1,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "Appearance",
+      "textScale": 2,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "Home",
+      "textScale": 1,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "Home",
+      "textScale": 2,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "General",
+      "textScale": 1,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "General",
+      "textScale": 2,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "Minecraft & Java",
+      "textScale": 1,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "Minecraft & Java",
+      "textScale": 2,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "Updates",
+      "textScale": 1,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "Updates",
+      "textScale": 2,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "Discord & privacy",
+      "textScale": 1,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "Discord & privacy",
+      "textScale": 2,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "Accessibility",
+      "textScale": 1,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "Accessibility",
+      "textScale": 2,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "About",
+      "textScale": 1,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    },
+    {
+      "category": "About",
+      "textScale": 2,
+      "viewport": [
+        712,
+        512
+      ],
+      "overflow": false
+    }
+  ]
+}

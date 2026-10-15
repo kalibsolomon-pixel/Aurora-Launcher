@@ -1,0 +1,25 @@
+{
+  "note": "Read-only hashes before isolated native acceptance; no owner file contents copied",
+  "files": [
+    {
+      "path": "C:/Users/kalib/AppData/Local/Aurora Launcher/aurora-launcher.exe",
+      "sha256": "711df646d834588b404c7170db76b6546b409433aecfd882b026299412d13818"
+    },
+    {
+      "path": "C:/Users/kalib/AppData/Local/com.aurora.launcher/launcher/config.json",
+      "sha256": "56056d64e5f05412206f0c2cf56d92192d5284d658066103c7062ced06448117"
+    },
+    {
+      "path": "C:/Users/kalib/AppData/Local/com.aurora.launcher/launcher/accounts.json",
+      "sha256": "8dd8794f6002f326f2a6e60f7f37e84e559e34d07f0584f29f9392b55e6d33d0"
+    },
+    {
+      "path": "C:/Users/kalib/AppData/Local/com.aurora.launcher/launcher/instances.json",
+      "sha256": "ae016b9bdc15aff06d66e10d66d8a00ad93ea7bfe7db407e8ebef7f7d44302f2"
+    },
+    {
+      "path": "C:/Users/kalib/AppData/Local/com.aurora.launcher/launcher/skin-presets/presets.json",
+      "sha256": "469279e06250824b68e893a253f906c9bcf3c8d69745964e26b6a3764fbb3a7e"
+    }
+  ]
+}

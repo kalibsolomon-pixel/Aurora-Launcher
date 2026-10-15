@@ -1,0 +1,902 @@
+{
+  "checks": [
+    "Eight categories at five dimensions and 100%/200% text: 80 contained layouts",
+    "Arrow/Home/End keyboard category navigation and focus",
+    "Category reading position restored",
+    "Select/radio persistence, pending feedback, failed write and exact-value retry",
+    "Motion bounds and retained failed slider draft",
+    "Custom picker is focusable, commits completed changes and keeps failed input",
+    "Widget toggle persistence, unknown/hidden order and sizing preserved; failure retry",
+    "Layout reset requires explicit confirmation; Cancel/Escape preserve it and return focus",
+    "Edit Home reuses existing editor",
+    "Discord opt-ins remain independent, disabled server address preserves stored consent; save failures",
+    "Discord unavailable/setup states never claim connected or request OAuth",
+    "Game settings links keep instance scope; empty selection opens Library",
+    "System motion/transparency status, opaque panel and forced-color selection",
+    "Rose accent propagates through Home, Library, Appearance, Settings and account dialog"
+  ],
+  "metrics": [
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Appearance",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Home & Widgets",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Launcher",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Minecraft & Java",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Updates",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Discord & privacy",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Accessibility",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "About",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Appearance",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Home & Widgets",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Launcher",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Minecraft & Java",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Updates",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Discord & privacy",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "Accessibility",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "category": "About",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Appearance",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Home & Widgets",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Launcher",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Minecraft & Java",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Updates",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Discord & privacy",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Accessibility",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "About",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Appearance",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Home & Widgets",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Launcher",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Minecraft & Java",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Updates",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Discord & privacy",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "Accessibility",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "category": "About",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Appearance",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Home & Widgets",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Launcher",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Minecraft & Java",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Updates",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Discord & privacy",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Accessibility",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "About",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Appearance",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Home & Widgets",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Launcher",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Minecraft & Java",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Updates",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Discord & privacy",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "Accessibility",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "category": "About",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Appearance",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Home & Widgets",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Launcher",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Minecraft & Java",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Updates",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Discord & privacy",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Accessibility",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "About",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Appearance",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Home & Widgets",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Launcher",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Minecraft & Java",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Updates",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Discord & privacy",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "Accessibility",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "category": "About",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Appearance",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Home & Widgets",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Launcher",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Minecraft & Java",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Updates",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Discord & privacy",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Accessibility",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "About",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Appearance",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Home & Widgets",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Launcher",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Minecraft & Java",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Updates",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Discord & privacy",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "Accessibility",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1,
+      "category": "About",
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "textScale": 2
+    }
+  ],
+  "pageErrors": [],
+  "provenance": "Deterministic browser fixtures; synthetic native responses, no owner data or external network"
+}

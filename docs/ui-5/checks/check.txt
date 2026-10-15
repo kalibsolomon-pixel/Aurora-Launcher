@@ -1,0 +1,32 @@
+
+> aurora-launcher@1.4.2 precheck
+> npm run verify:version
+
+
+> aurora-launcher@1.4.2 verify:version
+> node tools/release/verify-version.mjs
+
+Aurora Launcher version contract: 1.4.2
+
+> aurora-launcher@1.4.2 check
+> svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+
+Loading svelte-check in workspace: c:\Dev\aurora-launcher
+Getting Svelte diagnostics...
+
+c:\Dev\aurora-launcher\src\lib\launcher\DiscordSettings.svelte:8:7
+Warn: `retryOperation` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates
+https://svelte.dev/e/non_reactive_update (svelte)
+  let saved = $state(false);
+  let retryOperation: (() => Promise<void>) | null = null;
+  async function save(field: keyof DiscordPreferences, value: boolean) {
+
+c:\Dev\aurora-launcher\src\lib\launcher\HomeWidgetSettings.svelte:13:7
+Warn: `retryOperation` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates
+https://svelte.dev/e/non_reactive_update (svelte)
+  let resetCancel: HTMLButtonElement;
+  let retryOperation: (() => Promise<void>) | null = null;
+  async function save(operation: () => Promise<void>) {
+
+====================================
+svelte-check found 0 errors and 2 warnings in 2 files

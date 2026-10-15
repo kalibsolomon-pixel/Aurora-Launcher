@@ -1,0 +1,13 @@
+PASS Home/Mods containment and account dialog at 1440x900
+PASS Home/Mods containment and account dialog at 1280x800
+PASS Home/Mods containment and account dialog at 1024x768
+PASS Home/Mods containment and account dialog at 720x520
+PASS Sidebar focus/hover, active marker and Settings navigation
+PASS Instance picker keyboard selection, long names and readiness
+PASS Widget sizing/order persist through reload; history widgets still load
+PASS Mods search, categories, sorting, pagination and installed state
+PASS Mods empty/loading/error and safe fixture install feedback
+PASS 125%/200% text scale, long mod titles, filters and minimum-size wrapping
+Metadata contrast on Simple result backing: 9.65:1
+PASS Reduced motion, readable metadata contrast and no per-result blur
+PASS 11 UI-1 browser cases; zero page errors

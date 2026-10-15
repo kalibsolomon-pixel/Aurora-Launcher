@@ -1,0 +1,70 @@
+
+running 24 tests
+test config::tests::default_uses_the_current_schema_version_and_no_selection ... ok
+test config::tests::unsupported_schema_versions_fail_deliberately ... ok
+test config::tests::malformed_configurations_fail_and_are_reported_verbatim ... ok
+test config::tests::serializes_to_inspectable_camel_case_json ... ok
+test config::tests::current_configuration_has_no_update_preference ... ok
+test config::tests::missing_new_current_schema_privacy_is_damage_not_a_migration ... ok
+test config::tests::load_reports_a_missing_file_instead_of_inventing_one ... ok
+test config::tests::unknown_appearance_values_normalize_instead_of_failing_startup ... ok
+test config::tests::layout_and_privacy_changes_preserve_selection_appearance_and_unknown_ids ... ok
+test config::tests::schema_one_configurations_migrate_deterministically ... ok
+test config::tests::json_round_trip_preserves_the_selection_and_appearance ... ok
+test config::tests::an_unusable_custom_accent_normalizes_to_the_default_accent ... ok
+test config::tests::schema_two_migration_preserves_unrelated_preferences_and_is_idempotent ... ok
+test config::tests::phase_f_migration_preserves_existing_choices_and_requires_current_background ... ok
+test config::tests::save_creates_missing_parent_directories ... ok
+test config::tests::schema_five_migrates_speed_only_and_current_speed_is_strict ... ok
+test config::tests::malformed_widget_document_is_never_reset_or_overwritten ... ok
+test config::tests::malformed_configurations_are_never_overwritten ... ok
+test config::tests::load_or_initialize_materializes_safe_defaults_once ... ok
+test config::tests::save_replaces_existing_configuration_and_leaves_no_temporary_files ... ok
+test config::tests::stale_loaded_preferences_cannot_overwrite_another_process_and_damage_is_preserved ... ok
+test config::tests::schema_three_privacy_migration_preserves_every_existing_value ... ok
+test config::tests::malformed_legacy_update_preferences_are_never_overwritten ... ok
+test config::tests::every_legacy_channel_becomes_identical_production_behavior_without_state_loss ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 989 filtered out; finished in 0.06s
+
+warning: unused import: `std::io::Read`
+   --> src\server_enrichment\mod.rs:524:9
+    |
+524 |     use std::io::Read as _;
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> src\modrinth.rs:1747:13
+     |
+1747 |         let mut neoforge_file = VersionDto {
+     |             ----^^^^^^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `unbreak_path` is never used
+    --> src\instances\lifecycle.rs:2675:23
+     |
+2344 |     impl SyntheticWorld {
+     |     ------------------- method in this implementation
+...
+2675 |         pub(crate) fn unbreak_path(&self, path: &str) {
+     |                       ^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `carried_fabric_api` is never used
+    --> src\updates\client.rs:1180:12
+     |
+1064 |     impl Lab {
+     |     -------- method in this implementation
+...
+1180 |         fn carried_fabric_api(&self) -> serde_json::Value {
+     |            ^^^^^^^^^^^^^^^^^^
+
+warning: `aurora-launcher` (lib test) generated 4 warnings (run `cargo fix --lib -p aurora-launcher --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.90s
+     Running unittests src\lib.rs (src-tauri\target\debug\deps\aurora_launcher_lib-2ccb8a72d05df568.exe)

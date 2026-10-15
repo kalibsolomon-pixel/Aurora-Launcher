@@ -1,0 +1,32 @@
+✔ the Custom circle is the color picker: no redundant custom-color row remains (49630.3288ms)
+✔ choosing a color in the picker path applies a custom accent immediately (0.449ms)
+✔ status colors are not derived from the custom accent (0.2259ms)
+✔ General starts with live desktop conveniences, honoring native capability and conflicts (8391.7687ms)
+✔ refresh/create/remove use only the existing native boundary without saving preferences (0.6376ms)
+✔ default widgets sit below the unchanged primary card and 3D player (10900.2259ms)
+✔ available session is real, hidden widgets disappear, and all-off retains the edit entry point (3.2418ms)
+✔ unknown and removed widget IDs stay persisted but never render components (0.7061ms)
+✔ size and ordering choices are bounded and preserve hidden/unknown entries (0.2781ms)
+✔ Settings enable/disable, reorder, resize, restart load and reset use typed native persistence (0.8757ms)
+✔ failed save retains the prior layout with an actionable error (0.2403ms)
+✔ Home editor keeps deliberate edit mode and keyboard size/order controls (0.4237ms)
+✔ Discord describes automatic connection and shows native status without maintenance controls (1.5357ms)
+✔ missing application configuration disables connection honestly without hiding privacy choices (0.4172ms)
+✔ Discord preferences and reconnect invoke only native commands and never disturb Play (0.3664ms)
+✔ Discord failure leaves Ready and Play available (0.6448ms)
+✔ mod row preserves artwork and switch, promotes one trash, and excludes duplicate overflow removal (3.3481ms)
+✔ trash reuses native local confirmation and provider fingerprint lifecycle (0.4118ms)
+✔ gameplay preferences are separate opt-ins and address control requires server consent (0.4171ms)
+✔ category keyboard movement wraps, supports Home/End, and ignores unrelated keys (8984.815ms)
+✔ instance access renders saved MiB and targets existing workspace, with no global memory control (1.8293ms)
+✔ About renders only running native version/platform and truthfully handles unavailable values (0.4979ms)
+✔ system accessibility is informational, without persisted override controls (0.4395ms)
+✔ save feedback never claims success while pending or failed (0.2387ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 80220.1879

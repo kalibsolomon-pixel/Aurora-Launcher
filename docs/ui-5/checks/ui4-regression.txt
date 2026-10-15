@@ -1,0 +1,13 @@
+PASS Five requested/measured-minimum sizes at 100%/200% text; no horizontal overflow, dialog fit and focus return
+PASS Pointer/keyboard yaw and tilt, zoom bounds and pixel-exact reset
+PASS Classic/slim and outer layers stay local, no mutation requests
+PASS Apply requires named-account confirmation and refreshed success
+PASS Service failure has no false success and preserves local preview
+PASS Owned cape preview/visibility independent of explicit confirmed equip
+PASS No owned capes is truthful with no invented inventory
+PASS No-account, offline and expired states retain local preview and block Apply
+PASS Fresh profile with unavailable texture labels cached fallback accurately
+PASS Account switch closes confirmation and explicitly retains local skin preview
+PASS Late previous-account response cannot overwrite selected-account appearance
+PASS Local rename/removal confirmed, exact entry removed
+PASS Existing rail navigation away/back releases and reinitializes preview

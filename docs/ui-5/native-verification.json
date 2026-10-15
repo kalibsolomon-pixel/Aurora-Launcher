@@ -1,0 +1,50 @@
+{
+  "restartPreferencesIdentical": true,
+  "widgetOrderSizeAndOtherFlagsPreserved": true,
+  "configSchema": 7,
+  "selectedInstance": null,
+  "discordAllPreferencesOff": true,
+  "ownerHashesUnchanged": 4,
+  "ownerConfigDriftObserved": true,
+  "medium": {
+    "method": "Actual OS System > Size with keyboard and mouse final alignment; host screenshot matches client",
+    "viewport": [
+      1024,
+      768
+    ],
+    "dpr": 1.25,
+    "embeddedBrowserBoundsAttemptsExcluded": true
+  },
+  "minimum": {
+    "method": "Actual host window edge drags; repeated attempts to shrink width and height clamped",
+    "viewport": [
+      712,
+      512
+    ],
+    "dpr": 1.25,
+    "configuredMinimum": [
+      720,
+      520
+    ],
+    "embeddedBrowserBoundsAttemptsExcluded": true
+  },
+  "firstExit": {
+    "handleRetained": true,
+    "pid": 21188,
+    "exitCode": 0
+  },
+  "restartExit": {
+    "pid": 21000,
+    "handleRetained": true,
+    "exitCode": 0
+  },
+  "ui4": {
+    "verdict": "PARTIAL",
+    "reason": "No full-body character or populated library scrolling verified in this isolated UI-5 session. UI-5 Settings sizing does not grant UI-4 acceptance."
+  },
+  "excludedCaptures": [
+    "native-final/medium-updates",
+    "native-final/medium-1024x768"
+  ],
+  "excludedReason": "Browser window-bounds API resized/repositioned the embedded WebView, not its native host; not valid native host-size acceptance."
+}

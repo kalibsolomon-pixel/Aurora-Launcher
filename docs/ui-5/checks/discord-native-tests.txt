@@ -1,0 +1,63 @@
+
+running 17 tests
+test discord::tests::defaults_publish_nothing ... ok
+test discord::worker::tests::world_and_server_capability_is_available_independently_of_discord_setup ... ok
+test discord::tests::starting_running_exit_and_launcher_use_exact_supervisor_state ... ok
+test discord::tests::opt_in_generic_presence_omits_private_fields_and_time ... ok
+test discord::tests::payload_has_no_gameplay_or_secret_fields ... ok
+test discord::tests::address_is_never_a_name_fallback_or_hidden_in_the_name ... ok
+test discord::tests::each_supported_field_is_independent ... ok
+test discord::tests::all_gameplay_privacy_combinations_filter_before_serialization ... ok
+test discord::tests::validated_history_targets_never_enter_discord_projection ... ok
+test discord::worker::tests::off_and_shutdown_clear_activity ... ok
+test discord::worker::tests::disconnect_disable_and_reenable_preserve_activity_and_stop_disabled_ipc ... ok
+test discord::worker::tests::missing_configuration_and_disabled_boot_do_not_contact_discord ... ok
+test discord::worker::tests::late_discord_start_honors_capped_backoff_and_recovers_automatically ... ok
+test discord::worker::tests::unavailable_failure_reconnect_and_closed_are_isolated ... ok
+test discord::transport::tests::handshake_and_command_acknowledgement_are_strict ... ok
+test discord::transport::tests::oversized_frame_is_rejected_before_allocation ... ok
+test discord::transport::tests::malformed_and_error_responses_are_sanitized ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 996 filtered out; finished in 0.02s
+
+warning: unused import: `std::io::Read`
+   --> src\server_enrichment\mod.rs:524:9
+    |
+524 |     use std::io::Read as _;
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> src\modrinth.rs:1747:13
+     |
+1747 |         let mut neoforge_file = VersionDto {
+     |             ----^^^^^^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `unbreak_path` is never used
+    --> src\instances\lifecycle.rs:2675:23
+     |
+2344 |     impl SyntheticWorld {
+     |     ------------------- method in this implementation
+...
+2675 |         pub(crate) fn unbreak_path(&self, path: &str) {
+     |                       ^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `carried_fabric_api` is never used
+    --> src\updates\client.rs:1180:12
+     |
+1064 |     impl Lab {
+     |     -------- method in this implementation
+...
+1180 |         fn carried_fabric_api(&self) -> serde_json::Value {
+     |            ^^^^^^^^^^^^^^^^^^
+
+warning: `aurora-launcher` (lib test) generated 4 warnings (run `cargo fix --lib -p aurora-launcher --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+     Running unittests src\lib.rs (src-tauri\target\debug\deps\aurora_launcher_lib-2ccb8a72d05df568.exe)

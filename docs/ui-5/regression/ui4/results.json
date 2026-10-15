@@ -1,0 +1,291 @@
+{
+  "provenance": "Deterministic browser fixtures, actual components; synthetic accounts and service outcomes; no real authentication/mutations",
+  "checks": [
+    "Five requested/measured-minimum sizes at 100%/200% text; no horizontal overflow, dialog fit and focus return",
+    "Pointer/keyboard yaw and tilt, zoom bounds and pixel-exact reset",
+    "Classic/slim and outer layers stay local, no mutation requests",
+    "Apply requires named-account confirmation and refreshed success",
+    "Service failure has no false success and preserves local preview",
+    "Owned cape preview/visibility independent of explicit confirmed equip",
+    "No owned capes is truthful with no invented inventory",
+    "No-account, offline and expired states retain local preview and block Apply",
+    "Fresh profile with unavailable texture labels cached fallback accurately",
+    "Account switch closes confirmation and explicitly retains local skin preview",
+    "Late previous-account response cannot overwrite selected-account appearance",
+    "Local rename/removal confirmed, exact entry removed",
+    "Existing rail navigation away/back releases and reinitializes preview"
+  ],
+  "measurements": [
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "stage": {
+        "x": 170.59375,
+        "y": 313,
+        "width": 735.8125,
+        "height": 432,
+        "bottom": 745,
+        "right": 906.40625
+      },
+      "library": {
+        "x": 947.40625,
+        "y": 208,
+        "width": 420,
+        "height": 917.375,
+        "bottom": 1125.375,
+        "right": 1367.40625
+      },
+      "importVisible": true,
+      "accountSelectors": 1,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "stage": {
+        "x": 170.59375,
+        "y": 457,
+        "width": 735.8125,
+        "height": 432,
+        "bottom": 889,
+        "right": 906.40625
+      },
+      "library": {
+        "x": 947.40625,
+        "y": 297,
+        "width": 420,
+        "height": 1353.171875,
+        "bottom": 1650.171875,
+        "right": 1367.40625
+      },
+      "importVisible": true,
+      "accountSelectors": 1,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "stage": {
+        "x": 164.1875,
+        "y": 313,
+        "width": 588.625,
+        "height": 384,
+        "bottom": 697,
+        "right": 752.8125
+      },
+      "library": {
+        "x": 793.8125,
+        "y": 208,
+        "width": 420,
+        "height": 917.375,
+        "bottom": 1125.375,
+        "right": 1213.8125
+      },
+      "importVisible": true,
+      "accountSelectors": 1,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "stage": {
+        "x": 164.1875,
+        "y": 457,
+        "width": 588.625,
+        "height": 384,
+        "bottom": 841,
+        "right": 752.8125
+      },
+      "library": {
+        "x": 793.8125,
+        "y": 297,
+        "width": 420,
+        "height": 1353.171875,
+        "bottom": 1650.171875,
+        "right": 1213.8125
+      },
+      "importVisible": true,
+      "accountSelectors": 1,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "stage": {
+        "x": 153.953125,
+        "y": 313,
+        "width": 441.09375,
+        "height": 368.625,
+        "bottom": 681.625,
+        "right": 595.046875
+      },
+      "library": {
+        "x": 628.046875,
+        "y": 208,
+        "width": 340,
+        "height": 901.375,
+        "bottom": 1109.375,
+        "right": 968.046875
+      },
+      "importVisible": true,
+      "accountSelectors": 1,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "stage": {
+        "x": 153.953125,
+        "y": 529,
+        "width": 441.09375,
+        "height": 368.625,
+        "bottom": 897.625,
+        "right": 595.046875
+      },
+      "library": {
+        "x": 628.046875,
+        "y": 369,
+        "width": 340,
+        "height": 1539.5625,
+        "bottom": 1908.5625,
+        "right": 968.046875
+      },
+      "importVisible": true,
+      "accountSelectors": 1,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "stage": {
+        "x": 133,
+        "y": 305,
+        "width": 535,
+        "height": 360,
+        "bottom": 665,
+        "right": 668
+      },
+      "library": {
+        "x": 116,
+        "y": 835.375,
+        "width": 569,
+        "height": 946.1875,
+        "bottom": 1781.5625,
+        "right": 685
+      },
+      "importVisible": true,
+      "accountSelectors": 1,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        720,
+        520
+      ],
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "stage": {
+        "x": 133,
+        "y": 553,
+        "width": 535,
+        "height": 360,
+        "bottom": 913,
+        "right": 668
+      },
+      "library": {
+        "x": 116,
+        "y": 1232.171875,
+        "width": 569,
+        "height": 1276.78125,
+        "bottom": 2508.953125,
+        "right": 685
+      },
+      "importVisible": true,
+      "accountSelectors": 1,
+      "textScale": 2
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "stage": {
+        "x": 133,
+        "y": 305,
+        "width": 521,
+        "height": 360,
+        "bottom": 665,
+        "right": 654
+      },
+      "library": {
+        "x": 116,
+        "y": 835.375,
+        "width": 555,
+        "height": 946.1875,
+        "bottom": 1781.5625,
+        "right": 671
+      },
+      "importVisible": true,
+      "accountSelectors": 1,
+      "textScale": 1
+    },
+    {
+      "viewport": [
+        706,
+        512
+      ],
+      "documentOverflow": false,
+      "contentOverflow": false,
+      "stage": {
+        "x": 133,
+        "y": 553,
+        "width": 521,
+        "height": 360,
+        "bottom": 913,
+        "right": 654
+      },
+      "library": {
+        "x": 116,
+        "y": 1232.171875,
+        "width": 555,
+        "height": 1276.78125,
+        "bottom": 2508.953125,
+        "right": 671
+      },
+      "importVisible": true,
+      "accountSelectors": 1,
+      "textScale": 2
+    }
+  ],
+  "pageErrors": []
+}

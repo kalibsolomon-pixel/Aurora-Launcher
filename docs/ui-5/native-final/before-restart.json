@@ -1,0 +1,347 @@
+{
+  "provenance": "Actual compiled native frontend; no fixture substitution; read-only CDP screenshot and geometry",
+  "url": "http://tauri.localhost/",
+  "viewport": [
+    1024,
+    768
+  ],
+  "dpr": 1.25,
+  "category": "Appearance",
+  "documentOverflow": false,
+  "contentOverflow": false,
+  "text": "Settings\n\nPersonalize your launcher. Game settings belong to each instance.\n\nAppearance\nHome & Widgets\nLauncher\nMinecraft & Java\nUpdates\nDiscord & privacy\nAccessibility\nAbout\nAppearance\n\nPersonalize the launcher's surfaces, background and selection color. Changes apply immediately after saving.\n\nTheme: Aurora Dark\nBackground: Aurora Borealis\nAccent: Cyan\nTheme\nAurora Dark\nMidnight\nOLED Black\nBackground\nSimple\nAurora Borealis\n\nBorealis adds gentle motion and frosted surfaces. Motion rests when Aurora is inactive and follows your system’s reduced-motion setting.\n\nAurora motion\n70 / 100\nSlow\nFast\n\nPlayback speed from slow to fast; 0 is the slowest speed. Pauses when Aurora is inactive. Reduced motion in your system keeps Borealis still.\n\nAccent\nAurora violet\nBlue\n✓\nCyan\nGreen\nAmber\nRose\nNeutral\n+\nCustom\n\nSelection, focus and primary actions follow your accent across the launcher. Status colors keep their meaning. Custom colors must stay visible on dark surfaces.\n\nPreferences save as you change them. Game configuration uses Save changes in the instance workspace.",
+  "controls": [
+    {
+      "label": "Appearance",
+      "value": "",
+      "disabled": false,
+      "x": 136.9499969482422,
+      "y": 139.1999969482422,
+      "width": 95.9000015258789,
+      "height": 37.20000076293945
+    },
+    {
+      "label": "Home & Widgets",
+      "value": "",
+      "disabled": false,
+      "x": 238.85000610351562,
+      "y": 139.1999969482422,
+      "width": 125.30000305175781,
+      "height": 37.20000076293945
+    },
+    {
+      "label": "Launcher",
+      "value": "",
+      "disabled": false,
+      "x": 370.1499938964844,
+      "y": 139.1999969482422,
+      "width": 77.73750305175781,
+      "height": 37.20000076293945
+    },
+    {
+      "label": "Minecraft & Java",
+      "value": "",
+      "disabled": false,
+      "x": 453.88751220703125,
+      "y": 139.1999969482422,
+      "width": 121.8125,
+      "height": 37.20000076293945
+    },
+    {
+      "label": "Updates",
+      "value": "",
+      "disabled": false,
+      "x": 581.7000122070312,
+      "y": 139.1999969482422,
+      "width": 73.17500305175781,
+      "height": 37.20000076293945
+    },
+    {
+      "label": "Discord & privacy",
+      "value": "",
+      "disabled": false,
+      "x": 660.875,
+      "y": 139.1999969482422,
+      "width": 127.1500015258789,
+      "height": 37.20000076293945
+    },
+    {
+      "label": "Accessibility",
+      "value": "",
+      "disabled": false,
+      "x": 794.0250244140625,
+      "y": 139.1999969482422,
+      "width": 94.76250457763672,
+      "height": 37.20000076293945
+    },
+    {
+      "label": "About",
+      "value": "",
+      "disabled": false,
+      "x": 894.7875366210938,
+      "y": 139.1999969482422,
+      "width": 61.01250076293945,
+      "height": 37.20000076293945
+    },
+    {
+      "label": "",
+      "value": true,
+      "disabled": false,
+      "x": 167.5500030517578,
+      "y": 372.20001220703125,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "label": "",
+      "value": false,
+      "disabled": false,
+      "x": 431.9750061035156,
+      "y": 372.20001220703125,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "label": "",
+      "value": false,
+      "disabled": false,
+      "x": 696.4125366210938,
+      "y": 372.20001220703125,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "label": "",
+      "value": false,
+      "disabled": false,
+      "x": 167.5500030517578,
+      "y": 588,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "label": "",
+      "value": true,
+      "disabled": false,
+      "x": 564.2000122070312,
+      "y": 588,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "label": "",
+      "value": "70",
+      "disabled": false,
+      "x": 206.7375030517578,
+      "y": 879.6000366210938,
+      "width": 695.5875244140625,
+      "height": 16
+    },
+    {
+      "label": "",
+      "value": false,
+      "disabled": false,
+      "x": 190.25,
+      "y": 1037.4000244140625,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "label": "",
+      "value": false,
+      "disabled": false,
+      "x": 264.25,
+      "y": 1037.4000244140625,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "label": "",
+      "value": true,
+      "disabled": false,
+      "x": 338.25,
+      "y": 1037.4000244140625,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "label": "",
+      "value": false,
+      "disabled": false,
+      "x": 412.25,
+      "y": 1037.4000244140625,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "label": "",
+      "value": false,
+      "disabled": false,
+      "x": 486.25,
+      "y": 1037.4000244140625,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "label": "",
+      "value": false,
+      "disabled": false,
+      "x": 560.25,
+      "y": 1037.4000244140625,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "label": "",
+      "value": false,
+      "disabled": false,
+      "x": 634.25,
+      "y": 1037.4000244140625,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "label": "Custom accent color",
+      "value": "#8b80ff",
+      "disabled": false,
+      "x": 679.75,
+      "y": 1034.4000244140625,
+      "width": 56,
+      "height": 67.80000305175781
+    }
+  ],
+  "preferences": {
+    "appearance": {
+      "auroraMotionSpeed": 70,
+      "background": "borealis",
+      "theme": "aurora-dark",
+      "accent": {
+        "type": "preset",
+        "id": "cyan"
+      },
+      "palette": {
+        "accent": "#5bd0e0",
+        "accentStrong": "#37b3c6",
+        "accentHover": "#43bccd",
+        "accentPressed": "#2fa7b8",
+        "accentContrast": "#101116",
+        "accentSoft": "rgba(91, 208, 224, 0.14)",
+        "accentOutline": "rgba(91, 208, 224, 0.55)"
+      },
+      "themes": [
+        {
+          "id": "aurora-dark",
+          "label": "Aurora Dark",
+          "description": "The default Aurora look — neutral near-black surfaces."
+        },
+        {
+          "id": "midnight",
+          "label": "Midnight",
+          "description": "Cooler, deeper graphite surfaces with a subtle slate character."
+        },
+        {
+          "id": "oled",
+          "label": "OLED Black",
+          "description": "True-black major surfaces for maximum darkness."
+        }
+      ],
+      "accents": [
+        {
+          "id": "violet",
+          "label": "Aurora violet",
+          "hex": "#8b80ff"
+        },
+        {
+          "id": "blue",
+          "label": "Blue",
+          "hex": "#7ba4ff"
+        },
+        {
+          "id": "cyan",
+          "label": "Cyan",
+          "hex": "#5bd0e0"
+        },
+        {
+          "id": "green",
+          "label": "Green",
+          "hex": "#5ec98f"
+        },
+        {
+          "id": "amber",
+          "label": "Amber",
+          "hex": "#e2b655"
+        },
+        {
+          "id": "rose",
+          "label": "Rose",
+          "hex": "#ef8fa5"
+        },
+        {
+          "id": "neutral",
+          "label": "Neutral",
+          "hex": "#dfe3ee"
+        }
+      ]
+    },
+    "widgets": {
+      "widgets": [
+        {
+          "id": "instance-details",
+          "enabled": false,
+          "size": "small"
+        },
+        {
+          "id": "content-summary",
+          "enabled": true,
+          "size": "small"
+        },
+        {
+          "id": "session",
+          "enabled": false,
+          "size": "small"
+        },
+        {
+          "id": "playtime",
+          "enabled": true,
+          "size": "small"
+        },
+        {
+          "id": "recent-worlds",
+          "enabled": true,
+          "size": "small"
+        },
+        {
+          "id": "recent-servers",
+          "enabled": true,
+          "size": "small"
+        },
+        {
+          "id": "skin-manager",
+          "enabled": true,
+          "size": "wide"
+        },
+        {
+          "id": "cape-selector",
+          "enabled": true,
+          "size": "small"
+        }
+      ]
+    },
+    "discord": {
+      "connection": "configurationMissing",
+      "configured": false,
+      "preferences": {
+        "enabled": false,
+        "instanceName": false,
+        "minecraftVersion": false,
+        "platform": false,
+        "auroraActive": false,
+        "elapsedTime": false,
+        "world": false,
+        "server": false,
+        "serverAddress": false
+      },
+      "gameplayCapability": true
+    }
+  }
+}

@@ -1,0 +1,1 @@
+PASS 16 layouts at measured 712x512 minimum, 100%/200% text

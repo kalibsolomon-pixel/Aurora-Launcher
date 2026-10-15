@@ -1,0 +1,19 @@
+{
+  "cases": [
+    "20 non-Modpack layouts preserve exact geometry; 10 approved Mods/Resource PNGs are byte-identical",
+    "Modpack spacing, typography, borders, artwork and truncation match approved Mods rows at all five sizes",
+    "Long rows + keyboard + optional review: 1440x900 at 100%",
+    "Long rows + keyboard + optional review: 1440x900 at 200%",
+    "Long rows + keyboard + optional review: 1280x800 at 100%",
+    "Long rows + keyboard + optional review: 1280x800 at 200%",
+    "Long rows + keyboard + optional review: 1024x768 at 100%",
+    "Long rows + keyboard + optional review: 1024x768 at 200%",
+    "Long rows + keyboard + optional review: 720x520 at 100%",
+    "Long rows + keyboard + optional review: 720x520 at 200%",
+    "Long rows + keyboard + optional review: 706x512 at 100%",
+    "Long rows + keyboard + optional review: 706x512 at 200%",
+    "Exact version, renewed optional fingerprint and independent instance selection succeed through browser-only native-command fixtures"
+  ],
+  "pageErrors": [],
+  "provenance": "Actual components; deterministic browser-only fixtures, no native install or owner data."
+}

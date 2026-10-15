@@ -1,0 +1,185 @@
+{
+  "provenance": "Browser fixtures, synthetic data",
+  "metrics": [
+    {
+      "category": "General",
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Appearance",
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Home",
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Updates",
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Discord & privacy",
+      "viewport": [
+        1440,
+        900
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "General",
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Appearance",
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Home",
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Updates",
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Discord & privacy",
+      "viewport": [
+        1280,
+        800
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "General",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Appearance",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Home",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Updates",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Discord & privacy",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "General",
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Appearance",
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Home",
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Updates",
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "overflow": false
+    },
+    {
+      "category": "Discord & privacy",
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "overflow": false
+    }
+  ]
+}

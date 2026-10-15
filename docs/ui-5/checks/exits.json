@@ -1,0 +1,286 @@
+{
+  "check": {
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "npm",
+      "run",
+      "check"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui5-browser": {
+    "command": [
+      "node",
+      "tools/visual/ui5.test.mjs"
+    ],
+    "exit": 1,
+    "signal": null,
+    "error": null
+  },
+  "check-final": {
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "npm",
+      "run",
+      "check"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-build": {
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "npm",
+      "run",
+      "tauri",
+      "build",
+      "--",
+      "--debug",
+      "--no-bundle"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "regressions": {
+    "command": [
+      "node",
+      "tools/visual/ui5-regression.mjs",
+      "ui1"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui5-browser-final": {
+    "command": [
+      "node",
+      "tools/visual/ui5.test.mjs"
+    ],
+    "exit": 1,
+    "signal": null,
+    "error": null
+  },
+  "rust-config": {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "src-tauri/Cargo.toml",
+      "config::tests::",
+      "--lib"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui5-browser-verified": {
+    "command": [
+      "node",
+      "tools/visual/ui5.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui2-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui5-regression.mjs",
+      "ui2"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "frontend-tests": {
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "npm",
+      "test"
+    ],
+    "exit": 1,
+    "signal": null,
+    "error": null
+  },
+  "ui2b-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui5-regression.mjs",
+      "ui2b"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "frontend-tests-serial": {
+    "command": [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-timeout=60000",
+      "src/lib/**/*.test.ts"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui3-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui5-regression.mjs",
+      "ui3"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui31-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui5-regression.mjs",
+      "ui31"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui2b1-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui5-regression.mjs",
+      "ui2b1-crop"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "ui4-regression": {
+    "command": [
+      "node",
+      "tools/visual/ui5-regression.mjs",
+      "ui4"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "check-completion": {
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "npm",
+      "run",
+      "check"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-build-completion": {
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "npm",
+      "run",
+      "tauri",
+      "build",
+      "--",
+      "--debug",
+      "--no-bundle"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "appearance-native-tests": {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "src-tauri/Cargo.toml",
+      "appearance::tests::",
+      "--lib"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "discord-native-tests": {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "src-tauri/Cargo.toml",
+      "discord::",
+      "--lib"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "focused-completion": {
+    "command": [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-timeout=60000",
+      "src/lib/launcher/settings.test.ts",
+      "src/lib/launcher/appearanceCustomAccent.test.ts",
+      "src/lib/launcher/releasePolish.test.ts",
+      "src/lib/launcher/generalSettings.test.ts"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "browser-completion": {
+    "command": [
+      "node",
+      "tools/visual/ui5.test.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "measured-minimum-browser": {
+    "command": [
+      "node",
+      "tools/visual/ui5-minimum.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-verification": {
+    "command": [
+      "node",
+      "tools/visual/ui5-native-verify.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  },
+  "native-verification-final": {
+    "command": [
+      "node",
+      "tools/visual/ui5-native-verify.mjs"
+    ],
+    "exit": 0,
+    "signal": null,
+    "error": null
+  }
+}

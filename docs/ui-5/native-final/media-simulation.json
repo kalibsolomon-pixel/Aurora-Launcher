@@ -1,0 +1,10 @@
+{
+  "note": "Native compiled WebView under emulated media preferences; Windows settings unchanged",
+  "motion": true,
+  "transparency": true,
+  "filter": "none",
+  "viewport": [
+    1024,
+    768
+  ]
+}

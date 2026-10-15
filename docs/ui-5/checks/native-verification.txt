@@ -1,0 +1,1 @@
+PASS native restart, isolated config, widget preservation and native sizes; owner hashes: 4 unchanged; pre-session config drift preserved and reported
