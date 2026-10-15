@@ -2,6 +2,45 @@
 
 # Aurora Launcher architecture
 
+## UI-5 Settings and personalization (current)
+
+Global Settings retains the existing Aurora shell and session-only category
+keys. A compact local sidebar wraps into section buttons at narrow widths;
+arrow keys, Home and End select categories and move focus. Reading positions
+are kept per category for the session. General is presented as Launcher and
+Home as Home & Widgets; existing Updates deep links remain compatible.
+
+The eight categories expose implemented behavior only: Appearance, Home &
+Widgets, Launcher, Minecraft & Java, Updates, Discord & privacy, Accessibility
+and About. Shared presentation rows associate control names and descriptions;
+checkboxes show textual On/Off state. Pending writes never claim success.
+Rejected writes restore authoritative selections and offer a retry for the
+requested operation; failed motion/color input remains available for retry.
+Appearance uses the same native-derived root tokens, direct color picker and
+Borealis renderer. Its numeric motion value is not an animation-off switch.
+
+Widget visibility uses the existing catalog and shared Home layout store.
+Hiding preserves order, size and unknown registrations. Edit Home opens the
+existing editor; global Settings reset now asks for confirmation of the
+existing native reset. No second widget renderer or persistence system exists.
+
+Minecraft & Java provides explicitly scoped links into the selected instance's
+Settings and Overview, or Library when none is selected. It introduces no global
+memory/runtime override. Instance drafts, atomic Save and deliberate installation
+remain unchanged. Discord keeps its native worker and privacy defaults, automatic
+connection and independent opt-ins; setup/unavailable/loading states stay distinct.
+Accessibility observes three supported media preferences while mounted and
+disposes listeners on departure, without persisted overrides. About reuses the
+running application's native version/platform and does not expose private paths.
+
+Launcher config remains schema 7; registry, cosmetics and widget schemas,
+defaults, migrations, native commands, error codes, release authority and native
+minimum are unchanged. There are no new dependencies, preview subscriptions,
+background polls, telemetry, cleanup operations or release changes. Audit:
+`docs/ui-5/SETTINGS_AUDIT.md`; results and browser/native evidence:
+`UI_5_SETTINGS_PERSONALIZATION_ACCEPTANCE.md`. UI-4 remains separately PARTIAL
+until its full-body/native library-sizing requirements are independently verified.
+
 ## UI-4 Player Appearance (current)
 
 The existing instance-independent `cosmetics` destination is labeled **Appearance**.

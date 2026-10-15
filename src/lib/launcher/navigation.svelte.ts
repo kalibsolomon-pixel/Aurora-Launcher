@@ -7,6 +7,7 @@ import {
   type InstanceTab,
   type NavigationState,
 } from "$lib/launcher/navigation";
+import type { SettingsCategory } from './settings';
 
 /**
  * The frontend owner of navigation state. One typed value distinguishes the
@@ -15,7 +16,9 @@ import {
  * model stays testable outside Svelte.
  */
 class NavigationStore {
-  settingsCategory = $state<"General" | "Appearance" | "Home" | "Updates" | "Discord & privacy">("General");
+  settingsCategory = $state<SettingsCategory>("General");
+  /** Session-only reading positions; never written to launcher configuration. */
+  settingsScroll: Partial<Record<SettingsCategory, number>> = {};
   state = $state<NavigationState>({ kind: "global", page: "home" });
 
   goTo(page: GlobalPage): void {
