@@ -1,0 +1,4 @@
+timestamp_s,cpu_percent_one_core,rss_bytes,peak_rss_bytes,heap_committed_bytes,heap_used_bytes,system_available_bytes,background_cpu_percent_one_core
+0,100,104857600,104857600,67108864,33554432,4294967296,20
+0.05,200,125829120,125829120,67108864,41943040,4273995776,30
+0.1,150,115343360,125829120,67108864,33554432,4284481536,25

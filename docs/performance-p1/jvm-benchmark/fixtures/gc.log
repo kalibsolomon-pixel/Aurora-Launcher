@@ -1,0 +1,6 @@
+[2026-10-16T00:00:00.000+0000][0.001s][info][gc] Using G1
+[2026-10-16T00:05:00.020+0000][300.020s][info][gc,start] GC(0) Pause Young (Normal) (G1 Evacuation Pause)
+[2026-10-16T00:05:00.025+0000][300.025s][info][gc] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 100M->30M(256M) 5.000ms
+[300.050s][info][gc] GC(1) Pause Remark 1.000ms
+[300.080s][info][gc] GC(1) Pause Cleanup 500us
+[301.000s][info][gc] GC(2) Pause Full (G1 Compaction Pause) 100M->20M(256M) 0.010s
