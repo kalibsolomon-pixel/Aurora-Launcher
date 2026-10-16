@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "source": "actual freshly created isolated B/C instances; normal native Aurora and provider verified installers",
+  "instances": [
+    {
+      "workload": "B",
+      "contentStatus": "ready",
+      "auroraVersion": "3.0.0",
+      "mods": [
+        {
+          "id": "aurora",
+          "version": "3.0.0",
+          "officialAlgorithm": "sha256",
+          "officialDigest": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+          "observedSha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+          "sizeBytes": 3077377
+        },
+        {
+          "id": "fabricApi",
+          "version": "0.141.6+1.21.11",
+          "officialAlgorithm": "sha256",
+          "officialDigest": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+          "observedSha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+          "sizeBytes": 2426039
+        },
+        {
+          "id": "sodium",
+          "version": "mc1.21.11-0.8.14-fabric",
+          "versionId": "rkdTcxoT",
+          "officialAlgorithm": "sha1",
+          "officialDigest": "4a8733fe544168068d12fa94b2ab03e6c0c7bf91",
+          "officialSha512": "04c43f9e8534b87a52c42ffd51b0e344d4ef92dc9cc52da33d13af6a18bf74b05380d2027f1e0db982698d0aff274c42741c1e21b313b0cd75ed3af005fc98d9",
+          "observedSha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d",
+          "sizeBytes": 1909150
+        },
+        {
+          "id": "lithium",
+          "version": "mc1.21.11-0.21.4-fabric",
+          "versionId": "Ow7wA0kG",
+          "officialAlgorithm": "sha1",
+          "officialDigest": "203bdcb26e97b3217b045e1182651a7d7b6462ec",
+          "officialSha512": "f14a5c3d2fad786347ca25083f902139694f618b7c103947f2fd067a7c5ee88a63e1ef8926f7d693ea79ed7d00f57317bae77ef9c2d630bf5ed01ac97a752b94",
+          "observedSha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b",
+          "sizeBytes": 900462
+        }
+      ]
+    },
+    {
+      "workload": "C",
+      "contentStatus": "ready",
+      "auroraVersion": "3.0.0",
+      "mods": [
+        {
+          "id": "aurora",
+          "version": "3.0.0",
+          "officialAlgorithm": "sha256",
+          "officialDigest": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+          "observedSha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+          "sizeBytes": 3077377
+        },
+        {
+          "id": "fabricApi",
+          "version": "0.141.6+1.21.11",
+          "officialAlgorithm": "sha256",
+          "officialDigest": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+          "observedSha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+          "sizeBytes": 2426039
+        },
+        {
+          "id": "sodium",
+          "version": "mc1.21.11-0.8.14-fabric",
+          "versionId": "rkdTcxoT",
+          "officialAlgorithm": "sha1",
+          "officialDigest": "4a8733fe544168068d12fa94b2ab03e6c0c7bf91",
+          "officialSha512": "04c43f9e8534b87a52c42ffd51b0e344d4ef92dc9cc52da33d13af6a18bf74b05380d2027f1e0db982698d0aff274c42741c1e21b313b0cd75ed3af005fc98d9",
+          "observedSha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d",
+          "sizeBytes": 1909150
+        },
+        {
+          "id": "lithium",
+          "version": "mc1.21.11-0.21.4-fabric",
+          "versionId": "Ow7wA0kG",
+          "officialAlgorithm": "sha1",
+          "officialDigest": "203bdcb26e97b3217b045e1182651a7d7b6462ec",
+          "officialSha512": "f14a5c3d2fad786347ca25083f902139694f618b7c103947f2fd067a7c5ee88a63e1ef8926f7d693ea79ed7d00f57317bae77ef9c2d630bf5ed01ac97a752b94",
+          "observedSha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b",
+          "sizeBytes": 900462
+        }
+      ]
+    }
+  ],
+  "gameCompatibilityExecution": "NOT TESTED",
+  "worldsCreated": false
+}

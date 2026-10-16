@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "sessions": [
+    {
+      "phase": "initial",
+      "exitCode": 0,
+      "exactHandleRetained": true
+    },
+    {
+      "phase": "restart",
+      "exitCode": 0,
+      "exactHandleRetained": true
+    },
+    {
+      "phase": "runtime-ui",
+      "exitCode": 0,
+      "exactHandleRetained": true
+    },
+    {
+      "phase": "materials",
+      "exitCode": 0,
+      "exactHandleRetained": true
+    }
+  ],
+  "processNameTermination": false
+}

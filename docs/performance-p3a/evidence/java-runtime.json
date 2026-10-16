@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "provenance": "Actual isolated runtime installed and deeply validated by native Aurora game-plan pipeline; fixed bounded credential-free diagnostics",
+  "component": "java-runtime-delta",
+  "runtimeVersion": "21.0.7",
+  "manifestSha1": "cb4394a27089d19f65d5baa6cf0482c27c3c7865",
+  "platform": "windows-x64",
+  "versionOutput": "openjdk version \"21.0.7\" 2025-04-15 LTS\nOpenJDK Runtime Environment Microsoft-11369940 (build 21.0.7+6-LTS)\nOpenJDK 64-Bit Server VM Microsoft-11369940 (build 21.0.7+6-LTS, mixed mode)",
+  "releaseIdentity": [
+    "JAVA_VERSION=\"21.0.7\""
+  ],
+  "launchExecutableSha256": "1ba6a4fb32a6a3d5c925fe837ae6717e2f75743a71e013e668e6dadb909245ba",
+  "diagnosticExecutableSha256": "0afb1170b83c156dfdb7f54bb34c9b058064175c329a5d80b782bcc9dbaa2164",
+  "defaultCollectorDiagnostic": "G1",
+  "advertisedCollectorSelectors": [
+    "bool UseG1GC                                  = true                                      {product} {ergonomic}",
+    "bool UseParallelGC                            = false                                     {product} {default}",
+    "bool UseSerialGC                              = false                                     {product} {default}",
+    "bool UseShenandoahGC                          = false                                     {product} {default}",
+    "bool UseZGC                                   = false                                     {product} {default}"
+  ],
+  "collectorExecutionValidation": "Only default collector version diagnostic executed; nondefault collectors NOT TESTED",
+  "diagnostics": {
+    "version": {
+      "exitCode": 0,
+      "lines": 3
+    },
+    "defaultGc": {
+      "exitCode": 0,
+      "lines": 4
+    },
+    "flags": {
+      "exitCode": 0,
+      "lines": 532
+    },
+    "logging": {
+      "exitCode": 0,
+      "lines": 71
+    },
+    "modules": {
+      "exitCode": 0,
+      "lines": 70
+    }
+  },
+  "managementModules": [
+    "java.management@21.0.7",
+    "java.management.rmi@21.0.7",
+    "jdk.attach@21.0.7",
+    "jdk.jfr@21.0.7",
+    "jdk.management@21.0.7",
+    "jdk.management.agent@21.0.7",
+    "jdk.management.jfr@21.0.7"
+  ],
+  "diagnosticToolsPresent": {
+    "jcmd.exe": true,
+    "jfr.exe": true,
+    "jstat.exe": true,
+    "jmap.exe": true
+  },
+  "checkedFiles": 402,
+  "verifiedBytes": 99041788,
+  "minecraftLaunched": false
+}

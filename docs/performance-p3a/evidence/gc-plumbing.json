@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "evidenceScope": "Actual bounded standalone Java GC plumbing; NOT Minecraft or presentation calibration",
+  "runtimeManifestSha1": "cb4394a27089d19f65d5baa6cf0482c27c3c7865",
+  "exitCode": 0,
+  "timeoutSeconds": 15,
+  "diagnosticHeapBoundMib": 128,
+  "sourceSha256": "a515ecfc3f76e6fcae882493a88f1f9deb8e13f311aaefdb3d7ab65c654958ab",
+  "rawSha256": "20f19903c90840a4a45735019d3d1f87405955fd9281888557ed01039c030c4f",
+  "metrics": {
+    "collector": "G1",
+    "pause_ms": {
+      "count": 3,
+      "mean": 3.294,
+      "median": 3.514,
+      "p95": 4.6434999999999995,
+      "p99": 4.7439,
+      "p999": null,
+      "max": 4.769,
+      "variance": 1.6990166666666668
+    },
+    "total_pause_ms": 9.882,
+    "pause_wall_percent": 2.3472684085510687,
+    "collection_count": 3,
+    "collections_per_minute": 427.5534441805226,
+    "full_gc_count": 2,
+    "max_post_gc_used_bytes": 2097152.0,
+    "max_post_gc_committed_bytes": 134217728.0,
+    "gc_logged_phase_cpu_seconds": 0.07,
+    "gc_logged_phase_cpu_percent_one_core": 16.627078384798104,
+    "gc_cpu_limit": "rounded process CPU during logged phases; not isolated GC worker CPU or total GC CPU",
+    "outside_window_pause_count": 0,
+    "oom_count": null
+  },
+  "minecraftLaunched": false,
+  "performanceConclusion": "NOT MEASURED",
+  "parserWindowSeconds": 0.421,
+  "windowLimit": "0 to last logged VM uptime, not exact external process lifetime"
+}

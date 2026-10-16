@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "evidenceScope": "Actual 30-second read-only ambient-system observation; target is this tooling process, never owner Java",
+  "observedUtc": "2026-10-16T12:57:41.686347+00:00",
+  "durationSeconds": 30.001499,
+  "samples": 61,
+  "maxSampleReadOverheadNs": 770000,
+  "metrics": {
+    "cpu_percent_one_core_mean": 0.0,
+    "cpu_percent_one_core_peak_sampled": 0.0,
+    "system_cpu_percent_machine_mean": 6.501122274089626,
+    "background_cpu_percent_one_core_estimate_mean": 178.68902536994156,
+    "rss_bytes_peak_sampled": 20307968,
+    "peak_rss_bytes_os": 21282816,
+    "system_available_bytes_min": 10804998144,
+    "sample_interval_seconds_max": 0.5007897000000003,
+    "covered_seconds": 30.0,
+    "boundary_coverage": true,
+    "boundary_method": "time-weighted counter intervals clipped at window edges; within-interval rate assumed uniform",
+    "heap_used_bytes": null,
+    "heap_committed_bytes": null,
+    "paging_bytes_per_second": null,
+    "gc_cpu_percent": null
+  },
+  "quietSystemReady": false,
+  "reasons": [
+    "Two pre-existing owner Java processes and production launcher remain running",
+    "Preparation/development activity is not a controlled idle baseline",
+    "AC status, thermals and GPU idle utilization not validated"
+  ],
+  "host": {
+    "os": "Windows 11 Home",
+    "build": "26300",
+    "cpu": "Intel Core i7-14700F",
+    "logicalProcessors": 28,
+    "gpu": "AMD Radeon RX 9070 XT",
+    "driver": "32.0.31041.1004",
+    "reportedDesktop": [
+      2560,
+      1440,
+      240
+    ],
+    "powerScheme": "Ultimate Performance (observed, unchanged)"
+  },
+  "rawSha256": "515187648b36f3a5e78473a8f5cc52e2c54b071731ae7247e92d28417f386cad",
+  "minecraftBenchmark": false
+}

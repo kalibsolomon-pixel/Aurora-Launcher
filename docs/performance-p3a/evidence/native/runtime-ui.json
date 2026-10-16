@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "source": "actual isolated native restart",
+  "executableSha256": "05B97F5BE5517972863E2460738E36C1A92257853EC9F72809C610C81114E09A",
+  "profile": "balanced",
+  "memoryMib": 2048,
+  "additionalJvmArguments": "",
+  "accounts": 0,
+  "runtime": {
+    "status": "ready",
+    "checkedFiles": 402,
+    "verifiedBytes": 99041788,
+    "major": 21
+  },
+  "viewport": [
+    1120,
+    790
+  ],
+  "dpr": 1.25,
+  "realMinecraftLaunch": false
+}

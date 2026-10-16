@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import process_capture as pc
 import quality
 
@@ -33,6 +34,10 @@ class WindowsProcessTests(unittest.TestCase):
     def test_nonfinite_and_unbounded_parameters_are_refused(self):
         for seconds,interval in [(float('nan'),1),(1,float('inf')),(661,.5),(1,.01)]:
             with self.assertRaises(ValueError):pc.capture(os.getpid(),'unused',seconds,interval,Path('never-created'))
+
+    def test_unvalidated_processor_group_accounting_is_refused(self):
+        with patch('process_capture.os.cpu_count',return_value=65):
+            with self.assertRaises(ValueError):pc.Reader(os.getpid())
 
 
 if __name__=='__main__':unittest.main()

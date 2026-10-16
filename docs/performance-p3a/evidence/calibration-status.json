@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "parserFixtures": "PASS, synthetic only",
+  "standaloneGcPlumbing": "PASS, actual Java, no presentation",
+  "windowsSelfTelemetry": "PASS, actual own-process/system counters",
+  "controlledPresentationCapture": "BLOCKED: no approved capture tool",
+  "minecraftPresentationCapture": "BLOCKED: no authorized isolated gameplay",
+  "actualPresentationSamples": 0,
+  "gameplayPerformance": "NOT MEASURED"
+}

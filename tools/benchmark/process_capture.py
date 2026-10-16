@@ -36,6 +36,8 @@ def ticks(value):
 class Reader:
     def __init__(self,pid):
         if os.name!='nt': raise ValueError('Windows adapter only; Linux capture remains untested')
+        if os.cpu_count() is None or os.cpu_count()>64:
+            raise ValueError('Windows processor-group accounting needs a separately validated adapter')
         self.kernel=ctypes.WinDLL('kernel32',use_last_error=True)
         self.psapi=ctypes.WinDLL('psapi',use_last_error=True)
         self.kernel.OpenProcess.argtypes=[w.DWORD,w.BOOL,w.DWORD]

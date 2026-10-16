@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "source": "actual isolated development host",
+  "executableSha256": "05B97F5BE5517972863E2460738E36C1A92257853EC9F72809C610C81114E09A",
+  "checks": [
+    "fresh separate managed root, empty registry, zero accounts",
+    "Workload A base installed through normal verified native lifecycle; world absent",
+    "schema-6 Balanced persisted with unchanged heap/text",
+    "exact game-plan Java installed/validated by existing SHA-1 runtime path and bounded version diagnostic",
+    "no login/Play/credential operation; zero accounts at shutdown"
+  ],
+  "screenshots": [
+    {
+      "name": "isolated-startup",
+      "viewport": [
+        1120,
+        790
+      ],
+      "dpr": 1.25,
+      "provenance": "actual native WebView; no viewport override"
+    },
+    {
+      "name": "benchmark-instance",
+      "viewport": [
+        1120,
+        790
+      ],
+      "dpr": 1.25,
+      "provenance": "actual native WebView; no viewport override"
+    },
+    {
+      "name": "performance-settings",
+      "viewport": [
+        1120,
+        790
+      ],
+      "dpr": 1.25,
+      "provenance": "actual native WebView; no viewport override"
+    },
+    {
+      "name": "runtime-and-auth-required",
+      "viewport": [
+        1120,
+        790
+      ],
+      "dpr": 1.25,
+      "provenance": "actual native WebView; no viewport override"
+    }
+  ],
+  "realMinecraftLaunch": false,
+  "authenticationAttempted": false,
+  "instance": {
+    "id": "ca76b23d995d4040a5942d9ed3d23ee7",
+    "minecraftVersion": "1.21.11",
+    "loader": {
+      "kind": "fabric",
+      "policy": {
+        "type": "pinned",
+        "version": "0.19.5"
+      }
+    },
+    "memoryMib": 2048
+  },
+  "runtime": {
+    "component": "java-runtime-delta",
+    "version": "21.0.7",
+    "requiredMajor": 21,
+    "checkedFiles": 402,
+    "verifiedBytes": 99041788,
+    "status": "ready"
+  }
+}

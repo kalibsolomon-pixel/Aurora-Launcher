@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "description": "Exact small retained artifacts; no Minecraft or actual presentation capture. Raw bytes protected by scoped Git attributes.",
+  "files": [
+    {
+      "path": "docs/performance-p3a/evidence/ambient-process.csv",
+      "kind": "actual-ambient-system-self-process",
+      "bytes": 7826,
+      "sha256": "515187648b36f3a5e78473a8f5cc52e2c54b071731ae7247e92d28417f386cad"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/calibration-status.json",
+      "kind": "verification-status",
+      "bytes": 436,
+      "sha256": "b8ad78f9db45a511b7292c90151af2bd32e2ea36f07c484d6c43ec972f852521"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/gc-plumbing.json",
+      "kind": "actual-standalone-gc",
+      "bytes": 1468,
+      "sha256": "74417a9cd6271a461bdd5566fe91af2e3580f18d24aa422b6f52d886678ad3d0"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/java-runtime.json",
+      "kind": "actual-native-java",
+      "bytes": 2427,
+      "sha256": "01775b8a6f8ab05ee1d0ba634b6575d11f13415f1fc4ede627e64359880b3655"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/mod-environment.json",
+      "kind": "actual-installed-content",
+      "bytes": 4074,
+      "sha256": "9638d2dce8328f6daf60f4afd27e7848be328e1b2f6ff77399c41ec8bf94420b"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/native/benchmark-instance.png",
+      "kind": "actual-native",
+      "bytes": 88449,
+      "sha256": "5ce3ad6ae27cc2fbb5042c4d91d493cf07167aa0f459e849c0c43b919b544afc"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/native/exits.json",
+      "kind": "actual-native",
+      "bytes": 485,
+      "sha256": "d6d8a45e9361d41dbab0ffaafb5faa031c57c57614487552c2a3c60218c688df"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/native/isolated-startup.png",
+      "kind": "actual-native",
+      "bytes": 61731,
+      "sha256": "5704279cd4eaec19ae691ccfba1088a0c879d2ebda373a28615b7f79d06bbe65"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/native/materials.json",
+      "kind": "actual-native",
+      "bytes": 5971,
+      "sha256": "44225526974595109499b1bf9e7807fe2b2b0c23cf752d0c69400019124a8a68"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/native/performance-settings.png",
+      "kind": "actual-native",
+      "bytes": 103886,
+      "sha256": "0fec23bc98cb2a180b91c34773b709e9f2567536543bbb278267ed0590c849bf"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/native/restart-settings.png",
+      "kind": "actual-native",
+      "bytes": 103999,
+      "sha256": "f71a292c3517f0951cc4fe90df37ca52b49153c9545b610a038796fc16aec853"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/native/restart.json",
+      "kind": "actual-native",
+      "bytes": 456,
+      "sha256": "319f359088071dc5f607c1c328ed2804105194b8c5914ff1122e7054a3ab4329"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/native/runtime-and-auth-required.png",
+      "kind": "actual-native",
+      "bytes": 88793,
+      "sha256": "bb45f9dedad7dce8843103a0b3e0389901c4eb6b78c67c76f3dc162f158ffbc9"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/native/runtime-ui.json",
+      "kind": "actual-native",
+      "bytes": 456,
+      "sha256": "319f359088071dc5f607c1c328ed2804105194b8c5914ff1122e7054a3ab4329"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/native/validated-runtime.png",
+      "kind": "actual-native",
+      "bytes": 85828,
+      "sha256": "cd3a3bc8c46330b8129b60561700f467ecfbf55915fdb92f142dbf77f8a19f28"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/native/verification.json",
+      "kind": "actual-native",
+      "bytes": 1865,
+      "sha256": "9bc754d75a72f3af963b048a5c1fa52c2e6831f40c0313331ba98763c526e832"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/quiet-preflight.json",
+      "kind": "actual-ambient-system-self-process",
+      "bytes": 1771,
+      "sha256": "4fa0b137c16b9db0f152d5680fac43e9b312cb43a8944387d4ccd1e32a0bed4d"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/standalone-gc.log",
+      "kind": "actual-standalone-gc",
+      "bytes": 5391,
+      "sha256": "20f19903c90840a4a45735019d3d1f87405955fd9281888557ed01039c030c4f"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/synthetic/frames.csv",
+      "kind": "synthetic-parser",
+      "bytes": 2004,
+      "sha256": "87e65b30a62d43f3448a097579650ef77805dfd95194f1557d47764aae8ce76a"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/synthetic/gc.log",
+      "kind": "synthetic-parser",
+      "bytes": 208,
+      "sha256": "1e1a3f4587edbef38019b5ac4eabde89d3217d10c0a6951205f83fcea7856eeb"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/synthetic/process.csv",
+      "kind": "synthetic-parser",
+      "bytes": 691,
+      "sha256": "2167ebdf6dee6631159673b57e90a57b41b89c071a634d4c0601d97154ac22b4"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/synthetic/run.json",
+      "kind": "synthetic-parser",
+      "bytes": 3284,
+      "sha256": "4a29b840d648a24476e4a685a80f0761b7c9be35c401499486cfced7ba2d26eb"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/synthetic/summary.json",
+      "kind": "synthetic-parser",
+      "bytes": 3064,
+      "sha256": "9e88d7d9e799b94ce73db397cba4c7f96454d921d9eb7b61b3302ba338f2859b"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/validation.json",
+      "kind": "verification-status",
+      "bytes": 779,
+      "sha256": "f4d7a5bde221638c40d356f09bc902d13307978b0a0e2da43d455c6a14ba8323"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/workload-a-installed.json",
+      "kind": "actual-installed-content",
+      "bytes": 28360,
+      "sha256": "ddacfbca7b5c3a6be64c266409035fca3ad1927b7620ba5c34b3a6c93a573d1e"
+    }
+  ]
+}

@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "evidenceScope": "actual isolated B/C native artifact preparation; runtime/game compatibility execution NOT TESTED",
+  "instances": [
+    {
+      "workload": "B",
+      "id": "9eb3e941b6ec44e498482a69973aa4f1",
+      "configuration": {
+        "performanceMode": null,
+        "minecraftVersion": "1.21.11",
+        "auroraEnabled": true,
+        "loader": {
+          "kind": "fabric",
+          "policy": {
+            "type": "pinned",
+            "version": "0.19.5"
+          }
+        },
+        "memoryMib": 2048,
+        "additionalJvmArguments": "",
+        "window": null
+      },
+      "mods": [
+        {
+          "projectId": "AANobbMI",
+          "versionId": "rkdTcxoT",
+          "records": [
+            {
+              "contentType": "mod",
+              "provider": "modrinth",
+              "projectId": "AANobbMI",
+              "versionId": "rkdTcxoT",
+              "fileId": "04c43f9e8534b87a52c42ffd51b0e344d4ef92dc9cc52da33d13af6a18bf74b05380d2027f1e0db982698d0aff274c42741c1e21b313b0cd75ed3af005fc98d9",
+              "fileName": "sodium-fabric-0.8.14+mc1.21.11.jar",
+              "sha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d",
+              "displayVersion": "mc1.21.11-0.8.14-fabric",
+              "compatibility": {
+                "minecraftVersions": [
+                  "1.21.11"
+                ],
+                "loader": "fabric",
+                "environment": "client_only"
+              },
+              "dependencies": [],
+              "explicitlyRetained": true,
+              "requires": [],
+              "origin": "direct",
+              "installedAtUnixSeconds": 1792156811,
+              "pinned": false,
+              "updateChannel": "stable"
+            }
+          ]
+        },
+        {
+          "projectId": "gvQqBUqZ",
+          "versionId": "Ow7wA0kG",
+          "records": [
+            {
+              "contentType": "mod",
+              "provider": "modrinth",
+              "projectId": "gvQqBUqZ",
+              "versionId": "Ow7wA0kG",
+              "fileId": "f14a5c3d2fad786347ca25083f902139694f618b7c103947f2fd067a7c5ee88a63e1ef8926f7d693ea79ed7d00f57317bae77ef9c2d630bf5ed01ac97a752b94",
+              "fileName": "lithium-fabric-0.21.4+mc1.21.11.jar",
+              "sha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b",
+              "displayVersion": "mc1.21.11-0.21.4-fabric",
+              "compatibility": {
+                "minecraftVersions": [
+                  "1.21.11"
+                ],
+                "loader": "fabric",
+                "environment": "client_or_server_prefers_both"
+              },
+              "dependencies": [],
+              "explicitlyRetained": true,
+              "requires": [],
+              "origin": "direct",
+              "installedAtUnixSeconds": 1792156817,
+              "pinned": false,
+              "updateChannel": "stable"
+            }
+          ]
+        }
+      ],
+      "nativeValidationCompleted": true
+    },
+    {
+      "workload": "C",
+      "id": "21ed6f88a83f4f7baa208e9077eed915",
+      "configuration": {
+        "performanceMode": null,
+        "minecraftVersion": "1.21.11",
+        "auroraEnabled": true,
+        "loader": {
+          "kind": "fabric",
+          "policy": {
+            "type": "pinned",
+            "version": "0.19.5"
+          }
+        },
+        "memoryMib": 2048,
+        "additionalJvmArguments": "",
+        "window": null
+      },
+      "mods": [
+        {
+          "projectId": "AANobbMI",
+          "versionId": "rkdTcxoT",
+          "records": [
+            {
+              "contentType": "mod",
+              "provider": "modrinth",
+              "projectId": "AANobbMI",
+              "versionId": "rkdTcxoT",
+              "fileId": "04c43f9e8534b87a52c42ffd51b0e344d4ef92dc9cc52da33d13af6a18bf74b05380d2027f1e0db982698d0aff274c42741c1e21b313b0cd75ed3af005fc98d9",
+              "fileName": "sodium-fabric-0.8.14+mc1.21.11.jar",
+              "sha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d",
+              "displayVersion": "mc1.21.11-0.8.14-fabric",
+              "compatibility": {
+                "minecraftVersions": [
+                  "1.21.11"
+                ],
+                "loader": "fabric",
+                "environment": "client_only"
+              },
+              "dependencies": [],
+              "explicitlyRetained": true,
+              "requires": [],
+              "origin": "direct",
+              "installedAtUnixSeconds": 1792156877,
+              "pinned": false,
+              "updateChannel": "stable"
+            }
+          ]
+        },
+        {
+          "projectId": "gvQqBUqZ",
+          "versionId": "Ow7wA0kG",
+          "records": [
+            {
+              "contentType": "mod",
+              "provider": "modrinth",
+              "projectId": "gvQqBUqZ",
+              "versionId": "Ow7wA0kG",
+              "fileId": "f14a5c3d2fad786347ca25083f902139694f618b7c103947f2fd067a7c5ee88a63e1ef8926f7d693ea79ed7d00f57317bae77ef9c2d630bf5ed01ac97a752b94",
+              "fileName": "lithium-fabric-0.21.4+mc1.21.11.jar",
+              "sha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b",
+              "displayVersion": "mc1.21.11-0.21.4-fabric",
+              "compatibility": {
+                "minecraftVersions": [
+                  "1.21.11"
+                ],
+                "loader": "fabric",
+                "environment": "client_or_server_prefers_both"
+              },
+              "dependencies": [],
+              "explicitlyRetained": true,
+              "requires": [],
+              "origin": "direct",
+              "installedAtUnixSeconds": 1792156883,
+              "pinned": false,
+              "updateChannel": "stable"
+            }
+          ]
+        }
+      ],
+      "nativeValidationCompleted": true
+    }
+  ],
+  "accounts": 0,
+  "authenticationAttempted": false,
+  "realMinecraftLaunch": false
+}
