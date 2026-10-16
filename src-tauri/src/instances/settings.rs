@@ -73,6 +73,8 @@ const MAX_JVM_ARGUMENTS_TEXT_LENGTH: usize = 8_192;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstanceConfiguration {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    performance_mode: Option<super::performance::PerformanceMode>,
     minecraft_version: String,
     aurora_enabled: bool,
     loader: LoaderConfiguration,
@@ -170,6 +172,7 @@ pub struct WindowConfiguration {
 impl Default for InstanceConfiguration {
     fn default() -> Self {
         Self {
+            performance_mode: None,
             minecraft_version: String::new(),
             aurora_enabled: true,
             loader: LoaderConfiguration::Fabric {
@@ -202,6 +205,7 @@ impl InstanceConfiguration {
         window: Option<WindowConfiguration>,
     ) -> Self {
         Self {
+            performance_mode: None,
             minecraft_version: minecraft_version.into(),
             aurora_enabled: true,
             loader,
@@ -254,6 +258,20 @@ impl InstanceConfiguration {
 
     pub fn memory_mib(&self) -> u32 {
         self.memory_mib
+    }
+
+    pub fn performance_mode(&self) -> Option<super::performance::PerformanceMode> {
+        self.performance_mode
+    }
+    pub fn set_performance_mode(&mut self, mode: Option<super::performance::PerformanceMode>) {
+        self.performance_mode = mode;
+    }
+    pub fn validated_jvm_arguments(&self) -> Result<Vec<String>, InvalidJvmArguments> {
+        if self.performance_mode.is_some() {
+            super::performance::validate_arguments(&self.additional_jvm_arguments)
+        } else {
+            parse_jvm_arguments(&self.additional_jvm_arguments)
+        }
     }
 
     pub fn additional_jvm_arguments(&self) -> &str {
@@ -337,7 +355,7 @@ impl InstanceConfiguration {
             }
         }
         validate_memory_mib(self.memory_mib)?;
-        parse_jvm_arguments(&self.additional_jvm_arguments)?;
+        self.validated_jvm_arguments()?;
         if let Some(window) = self.window {
             validate_window_dimension("width", window.width)?;
             validate_window_dimension("height", window.height)?;
@@ -672,6 +690,7 @@ impl From<InvalidJvmArguments> for InvalidInstanceConfiguration {
 /// Custom JVM argument text that failed parsing or validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InvalidJvmArguments {
+    PerformancePolicy(&'static str),
     UnterminatedQuote,
     ControlCharacter,
     TextTooLong { limit: usize },
@@ -683,6 +702,7 @@ pub enum InvalidJvmArguments {
 impl fmt::Display for InvalidJvmArguments {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::PerformancePolicy(message) => formatter.write_str(message),
             Self::UnterminatedQuote => write!(
                 formatter,
                 "additional JVM arguments have an unterminated quote"

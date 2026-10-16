@@ -15,6 +15,7 @@
 //! ordinary load and complete validation remain read-only.
 //! Schema 5 adds optional exact Modrinth pack identity; schema 4 migrates
 //! additively with every historical record remaining pack-free.
+//! Schema 6 adds opt-in performance intent; legacy effective JVM settings stay unchanged.
 //!
 //! Instance lifecycle orchestration (create/retry/rename/select/validate and
 //! configuration updates) lives in [`lifecycle`]; Aurora's own installed state
@@ -23,6 +24,7 @@
 
 pub mod deletion;
 pub mod lifecycle;
+pub mod performance;
 pub mod platform;
 pub mod settings;
 pub mod transition;
@@ -36,7 +38,7 @@ use crate::distribution::ReleaseChannel;
 use crate::instances::settings::InstanceConfiguration;
 
 /// Schema 5 adds an optional exact Modrinth pack identity to instance records.
-pub const INSTANCE_REGISTRY_SCHEMA_VERSION: u32 = 5;
+pub const INSTANCE_REGISTRY_SCHEMA_VERSION: u32 = 6;
 
 /// Oldest explicitly migratable schema. Schema 3 is also supported.
 const LEGACY_REGISTRY_SCHEMA_VERSION: u32 = 2;
@@ -463,7 +465,7 @@ impl InstanceRegistry {
 
     /// Parses and validates registry data from JSON text.
     ///
-    /// Schema 5 parses directly. Schema 4 adds no pack identity; schemas 2
+    /// Schema 6 parses directly. Schemas 4/5 activate no performance mode; schemas 2
     /// and 3 — the Aurora-only shapes —
     /// migrates deterministically: identifiers, display names, lifecycle
     /// states, and release pins survive. Schema 2 derives desired settings
@@ -473,18 +475,34 @@ impl InstanceRegistry {
         let registry = match Self::parse_schema_version(text)? {
             Self::SCHEMA_VERSION => serde_json::from_str(text)
                 .map_err(|error| InstanceRegistryError::Malformed(error.to_string()))?,
-            4 => {
+            4 | 5 => {
                 let mut value: serde_json::Value = serde_json::from_str(text)
                     .map_err(|error| InstanceRegistryError::Malformed(error.to_string()))?;
-                if value
-                    .get("instances")
-                    .and_then(serde_json::Value::as_array)
-                    .is_some_and(|instances| {
-                        instances.iter().any(|record| record.get("pack").is_some())
-                    })
+                if Self::parse_schema_version(text)? == 4
+                    && value
+                        .get("instances")
+                        .and_then(serde_json::Value::as_array)
+                        .is_some_and(|instances| {
+                            instances.iter().any(|record| record.get("pack").is_some())
+                        })
                 {
                     return Err(InstanceRegistryError::Malformed(
                         "schema 4 cannot contain a pack identity".into(),
+                    ));
+                }
+                if value
+                    .get("instances")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|records| {
+                        records.iter().any(|record| {
+                            record
+                                .get("configuration")
+                                .is_some_and(|c| c.get("performanceMode").is_some())
+                        })
+                    })
+                {
+                    return Err(InstanceRegistryError::Malformed(
+                        "legacy registry cannot contain performanceMode".into(),
                     ));
                 }
                 value["schemaVersion"] = serde_json::json!(Self::SCHEMA_VERSION);
@@ -1304,7 +1322,7 @@ mod tests {
         registry.save(&saved).unwrap();
         assert_eq!(InstanceRegistry::load(&saved).unwrap(), registry);
         let persisted = std::fs::read_to_string(&saved).unwrap();
-        assert!(persisted.contains("\"schemaVersion\": 5"));
+        assert!(persisted.contains("\"schemaVersion\": 6"));
         assert!(persisted.contains("\"configuration\""));
     }
 
@@ -1412,8 +1430,8 @@ mod tests {
             ("{ not json".to_owned(), "malformed"),
             ("{}".to_owned(), "schema version"),
             (
-                r#"{ "schemaVersion": 6, "instances": [] }"#.to_owned(),
-                "schema version 6",
+                r#"{ "schemaVersion": 7, "instances": [] }"#.to_owned(),
+                "schema version 7",
             ),
             (
                 r#"{ "schemaVersion": 1, "instances": [] }"#.to_owned(),
@@ -1515,7 +1533,7 @@ mod tests {
         assert_eq!(InstanceRegistry::load(&path).unwrap(), registry);
         let persisted: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        assert_eq!(persisted["schemaVersion"], 5);
+        assert_eq!(persisted["schemaVersion"], 6);
         assert!(persisted["instances"][0].get("release").is_none());
         assert_eq!(
             persisted["instances"][0]["installed"]["platform"],

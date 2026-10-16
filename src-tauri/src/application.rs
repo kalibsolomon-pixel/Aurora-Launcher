@@ -195,6 +195,8 @@ fn recovery_summary(status: &'static str) -> RecoverySummary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceConfigurationDto {
+    #[serde(default)]
+    pub performance_mode: Option<crate::instances::performance::PerformanceMode>,
     pub minecraft_version: String,
     pub aurora_enabled: bool,
     pub loader: crate::instances::settings::LoaderConfiguration,
@@ -216,6 +218,7 @@ impl InstanceConfigurationDto {
     ) -> Self {
         Self {
             minecraft_version: configuration.minecraft_version().to_owned(),
+            performance_mode: configuration.performance_mode(),
             aurora_enabled: configuration.aurora_enabled(),
             loader: configuration.loader().clone(),
             memory_mib: configuration.memory_mib(),
@@ -240,6 +243,7 @@ impl InstanceConfigurationDto {
             }),
         );
         configuration.set_aurora_enabled(self.aurora_enabled);
+        configuration.set_performance_mode(self.performance_mode);
         Ok(configuration)
     }
 }
@@ -2322,6 +2326,38 @@ pub struct UpdateInstanceConfigurationRequest {
     instance_id: String,
     configuration: InstanceConfigurationDto,
     expected_configuration: InstanceConfigurationDto,
+}
+
+/// Read-only advice for one registered instance; no runtime discovery or mutation.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PerformanceAdviceRequest {
+    instance_id: String,
+    mode: Option<crate::instances::performance::PerformanceMode>,
+}
+
+#[tauri::command]
+pub fn get_instance_performance_advice(
+    app: AppHandle,
+    request: PerformanceAdviceRequest,
+) -> Result<crate::instances::performance::MemoryAdvice, CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())?;
+    let record = registry.find(&id).ok_or_else(|| {
+        CommandError::new(
+            "instance_not_found",
+            "Open a registered instance to request memory advice.",
+        )
+    })?;
+    let mut advice = crate::instances::performance::recommend(
+        crate::instances::performance::host_facts(),
+        request.mode,
+    );
+    advice.argument_notices = crate::instances::performance::argument_notices(
+        record.configuration().additional_jvm_arguments(),
+    );
+    Ok(advice)
 }
 
 /// Atomically persists a new desired configuration for one ready instance.
@@ -5878,10 +5914,10 @@ async fn play_instance_with_target(
         configuration
             .validate()
             .map_err(|error| CommandError::new("launch_metadata_invalid", error.to_string()))?;
-        let additional_jvm_arguments = crate::instances::settings::parse_jvm_arguments(
-            configuration.additional_jvm_arguments(),
-        )
-        .map_err(|error| CommandError::new("launch_jvm_arguments_invalid", error.to_string()))?;
+        let additional_jvm_arguments =
+            configuration.validated_jvm_arguments().map_err(|error| {
+                CommandError::new("launch_jvm_arguments_invalid", error.to_string())
+            })?;
         let launch_options = crate::launch::resolve::LaunchOptions::new(
             configuration.memory_mib(),
             additional_jvm_arguments,

@@ -119,6 +119,7 @@ pub fn run() {
             application::retry_instance_install,
             application::rename_instance,
             application::update_instance_configuration,
+            application::get_instance_performance_advice,
             application::install_instance_configuration,
             application::list_minecraft_versions,
             application::list_fabric_loader_versions,

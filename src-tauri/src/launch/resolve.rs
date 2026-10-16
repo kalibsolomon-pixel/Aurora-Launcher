@@ -1330,6 +1330,57 @@ mod tests {
     }
 
     #[test]
+    fn performance_modes_keep_the_one_native_argument_order_and_heap_authority() {
+        use crate::instances::{performance::PerformanceMode, settings::InstanceConfiguration};
+        let fixture = Fixture::new();
+        let mut configuration = InstanceConfiguration::for_minecraft_version("1.21.11");
+        configuration.set_memory_mib(3217);
+        configuration.set_additional_jvm_arguments(r#"-Dlabel="two words" -Dlabel=last -ea -ea"#);
+        let mut baseline = None;
+        for mode in [
+            None,
+            Some(PerformanceMode::Balanced),
+            Some(PerformanceMode::Efficient),
+            Some(PerformanceMode::Performance),
+            Some(PerformanceMode::Custom),
+        ] {
+            configuration.set_performance_mode(mode);
+            configuration.validate().unwrap();
+            let options = LaunchOptions::new(
+                configuration.memory_mib(),
+                configuration.validated_jvm_arguments().unwrap(),
+                None,
+            );
+            let spec = fixture
+                .resolve_with_options(&options.feature_profile(), options)
+                .unwrap();
+            let args = spec
+                .jvm_arguments()
+                .iter()
+                .map(|a| a.expose().to_owned())
+                .collect::<Vec<_>>();
+            assert_eq!(args[0], "-Xmx3217m");
+            assert_eq!(
+                &args[args.len() - 4..],
+                &["-Dlabel=two words", "-Dlabel=last", "-ea", "-ea"]
+            );
+            if let Some(previous) = &baseline {
+                assert_eq!(&args, previous);
+            } else {
+                baseline = Some(args);
+            }
+        }
+        configuration.set_performance_mode(Some(PerformanceMode::Custom));
+        configuration.set_additional_jvm_arguments("-XX:+UseZGC");
+        assert!(configuration.validate().is_err());
+        configuration.set_performance_mode(None);
+        assert!(
+            configuration.validate().is_ok(),
+            "Legacy compatibility stays explicit"
+        );
+    }
+
+    #[test]
     fn a_custom_window_enables_minecrafts_own_resolution_arguments() {
         let fixture = Fixture::new();
         let options = LaunchOptions::new(2048, Vec::new(), Some((1280, 720)));
