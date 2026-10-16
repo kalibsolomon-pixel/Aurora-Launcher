@@ -3,6 +3,8 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+import subprocess
+import sys
 import process_capture as pc
 import quality
 
@@ -38,6 +40,15 @@ class WindowsProcessTests(unittest.TestCase):
     def test_unvalidated_processor_group_accounting_is_refused(self):
         with patch('process_capture.os.cpu_count',return_value=65):
             with self.assertRaises(ValueError):pc.Reader(os.getpid())
+
+    def test_exact_handle_exit_detection_even_for_exit_code_259(self):
+        child=subprocess.Popen([sys.executable,'-c','import time,sys;time.sleep(.3);sys.exit(259)'])
+        reader=pc.Reader(child.pid)
+        try:
+            self.assertEqual(child.wait(timeout=3),259)
+            with self.assertRaises(OSError):reader.sample()
+        finally:
+            reader.close();child.wait(timeout=3)
 
 
 if __name__=='__main__':unittest.main()

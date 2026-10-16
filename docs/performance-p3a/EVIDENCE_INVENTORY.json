@@ -144,7 +144,7 @@
       "path": "docs/performance-p3a/evidence/validation.json",
       "kind": "verification-status",
       "bytes": 779,
-      "sha256": "f4d7a5bde221638c40d356f09bc902d13307978b0a0e2da43d455c6a14ba8323"
+      "sha256": "cc445468c084a92a5144e8e343a06bcc535f963f03d83d78f1d1dae2a07b1463"
     },
     {
       "path": "docs/performance-p3a/evidence/workload-a-installed.json",

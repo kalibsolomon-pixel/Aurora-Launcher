@@ -47,8 +47,10 @@ class Reader:
         self.kernel.GlobalMemoryStatusEx.argtypes=[ctypes.POINTER(MEMORY)]
         self.kernel.CloseHandle.argtypes=[w.HANDLE]
         self.kernel.GetExitCodeProcess.argtypes=[w.HANDLE,ctypes.POINTER(w.DWORD)]
+        self.kernel.WaitForSingleObject.argtypes=[w.HANDLE,w.DWORD]
+        self.kernel.WaitForSingleObject.restype=w.DWORD
         self.psapi.GetProcessMemoryInfo.argtypes=[w.HANDLE,ctypes.POINTER(COUNTERS),w.DWORD]
-        self.handle=self.kernel.OpenProcess(0x0400|0x0010,False,pid) # QUERY_INFORMATION | VM_READ
+        self.handle=self.kernel.OpenProcess(0x0400|0x0010|0x100000,False,pid) # QUERY_INFORMATION | VM_READ | SYNCHRONIZE
         if not self.handle: raise OSError('cannot open the authorized process read-only')
         self.pid=pid
         try: self.creation_id=self.sample()['creation_id']
@@ -60,6 +62,8 @@ class Reader:
             self.kernel.CloseHandle(self.handle); self.handle=None
 
     def sample(self):
+        wait=self.kernel.WaitForSingleObject(self.handle,0)
+        if wait!=258: raise OSError('authorized process exited or handle wait failed')
         created,exited,kernel,user=(FILETIME() for _ in range(4))
         idle,system_kernel,system_user=(FILETIME() for _ in range(3))
         memory=MEMORY(); memory.length=ctypes.sizeof(memory)

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "newToolTests": 35,
+  "newToolTests": 36,
   "p1AnalyzerTests": 13,
   "rustPassed": 992,
   "rustIgnored": 31,
