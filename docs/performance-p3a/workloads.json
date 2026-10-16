@@ -1,0 +1,303 @@
+{
+  "schemaVersion": 1,
+  "kind": "proposed-workload-locks-not-run-manifests",
+  "workloads": [
+    {
+      "minecraft": "1.21.11",
+      "loader": {
+        "kind": "fabric",
+        "version": "0.19.5",
+        "digestPolicy": "Loader/intermediary may be SecureTransportObserved, not expected-digest verified"
+      },
+      "java": {
+        "vendor": "Microsoft-11369940",
+        "version": "21.0.7",
+        "build": "21.0.7+6-LTS",
+        "architecture": "windows-x64",
+        "manifestSha1": "cb4394a27089d19f65d5baa6cf0482c27c3c7865",
+        "executableSha256": "1ba6a4fb32a6a3d5c925fe837ae6717e2f75743a71e013e668e6dadb909245ba"
+      },
+      "warmupSeconds": 300,
+      "captureSeconds": 600,
+      "seed": 123456789,
+      "gameMode": "creative",
+      "difficulty": "normal",
+      "timeOfDay": 6000,
+      "fixedDaylight": true,
+      "weather": "clear",
+      "fixedWeather": true,
+      "naturalMobSpawning": false,
+      "randomTickSpeed": 3,
+      "graphics": {
+        "width": 1920,
+        "height": 1080,
+        "windowMode": "windowed",
+        "fov": 70,
+        "guiScale": 2,
+        "graphics": "fancy",
+        "clouds": "off",
+        "particles": "all",
+        "fpsCap": "unlimited",
+        "vSync": false,
+        "shaders": [],
+        "resourcePacks": [],
+        "dynamicResolution": false
+      },
+      "worldSha256": null,
+      "routeSha256": null,
+      "settingsSha256": null,
+      "worldGeneration": "declared chunks generated and lighting settled before immutable snapshot; NOT CREATED",
+      "power": "owner-confirmed AC and unchanged observed power mode; not validated",
+      "cameraMovement": "stationary after exact positioning; no automation mod",
+      "id": "workload-a-stationary-v1",
+      "worldType": "superflat",
+      "cameraXYZYawPitch": [
+        0.5,
+        66,
+        0.5,
+        0,
+        10
+      ],
+      "renderDistance": 12,
+      "simulationDistance": 8,
+      "mods": [],
+      "fabricApi": null,
+      "entityConditions": {
+        "armorStands": 0,
+        "hoppers": 0,
+        "otherSpawnedEntities": 0,
+        "inventoryStatus": "exact world inventory pending"
+      },
+      "readiness": {
+        "specified": "PARTIAL: scene/protocol complete, material hashes pending",
+        "materials": "PARTIAL: base installed, world absent",
+        "isolatedInstance": "PARTIAL: base content/Java verified, no authenticated world",
+        "executionValidated": "NOT TESTED"
+      }
+    },
+    {
+      "minecraft": "1.21.11",
+      "loader": {
+        "kind": "fabric",
+        "version": "0.19.5",
+        "digestPolicy": "Loader/intermediary may be SecureTransportObserved, not expected-digest verified"
+      },
+      "java": {
+        "vendor": "Microsoft-11369940",
+        "version": "21.0.7",
+        "build": "21.0.7+6-LTS",
+        "architecture": "windows-x64",
+        "manifestSha1": "cb4394a27089d19f65d5baa6cf0482c27c3c7865",
+        "executableSha256": "1ba6a4fb32a6a3d5c925fe837ae6717e2f75743a71e013e668e6dadb909245ba"
+      },
+      "warmupSeconds": 300,
+      "captureSeconds": 600,
+      "seed": 123456789,
+      "gameMode": "creative",
+      "difficulty": "normal",
+      "timeOfDay": 6000,
+      "fixedDaylight": true,
+      "weather": "clear",
+      "fixedWeather": true,
+      "naturalMobSpawning": false,
+      "randomTickSpeed": 3,
+      "graphics": {
+        "width": 1920,
+        "height": 1080,
+        "windowMode": "windowed",
+        "fov": 70,
+        "guiScale": 2,
+        "graphics": "fancy",
+        "clouds": "off",
+        "particles": "all",
+        "fpsCap": "unlimited",
+        "vSync": false,
+        "shaders": [],
+        "resourcePacks": [],
+        "dynamicResolution": false
+      },
+      "worldSha256": null,
+      "routeSha256": null,
+      "settingsSha256": null,
+      "worldGeneration": "declared chunks generated and lighting settled before immutable snapshot; NOT CREATED",
+      "power": "owner-confirmed AC and unchanged observed power mode; not validated",
+      "cameraMovement": "stationary after exact positioning; no automation mod",
+      "id": "workload-b-stationary-v1",
+      "worldType": "normal",
+      "cameraXYZYawPitch": [
+        128.5,
+        96,
+        128.5,
+        135,
+        15
+      ],
+      "renderDistance": 12,
+      "simulationDistance": 8,
+      "mods": [
+        {
+          "id": "aurora",
+          "version": "3.0.0",
+          "algorithm": "sha256",
+          "digest": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+          "status": "acquired through verified native installer; digest rechecked; execution NOT TESTED",
+          "observedSha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c"
+        },
+        {
+          "id": "fabricApi",
+          "version": "0.141.6+1.21.11",
+          "algorithm": "sha256",
+          "digest": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+          "status": "acquired through verified native installer; digest rechecked; execution NOT TESTED",
+          "observedSha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f"
+        },
+        {
+          "id": "sodium",
+          "version": "mc1.21.11-0.8.14-fabric",
+          "versionId": "rkdTcxoT",
+          "algorithm": "sha1",
+          "digest": "4a8733fe544168068d12fa94b2ab03e6c0c7bf91",
+          "additionalOfficialSha512": "04c43f9e8534b87a52c42ffd51b0e344d4ef92dc9cc52da33d13af6a18bf74b05380d2027f1e0db982698d0aff274c42741c1e21b313b0cd75ed3af005fc98d9",
+          "status": "acquired through verified native installer; digest rechecked; execution NOT TESTED",
+          "source": "https://api.modrinth.com/v2/version/rkdTcxoT",
+          "observedSha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d"
+        },
+        {
+          "id": "lithium",
+          "version": "mc1.21.11-0.21.4-fabric",
+          "versionId": "Ow7wA0kG",
+          "algorithm": "sha1",
+          "digest": "203bdcb26e97b3217b045e1182651a7d7b6462ec",
+          "additionalOfficialSha512": "f14a5c3d2fad786347ca25083f902139694f618b7c103947f2fd067a7c5ee88a63e1ef8926f7d693ea79ed7d00f57317bae77ef9c2d630bf5ed01ac97a752b94",
+          "status": "acquired through verified native installer; digest rechecked; execution NOT TESTED",
+          "source": "https://api.modrinth.com/v2/version/Ow7wA0kG",
+          "observedSha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b"
+        }
+      ],
+      "fabricApi": "0.141.6+1.21.11",
+      "entityConditions": {
+        "armorStands": 0,
+        "hoppers": 0,
+        "otherSpawnedEntities": 0,
+        "inventoryStatus": "exact world inventory pending"
+      },
+      "readiness": {
+        "specified": "PARTIAL: scene/protocol complete, material hashes pending",
+        "materials": "PARTIAL: exact mod/base artifacts available and verified; world absent",
+        "isolatedInstance": "PARTIAL: installed content validated, shared locked Java available, no authenticated world",
+        "executionValidated": "NOT TESTED"
+      }
+    },
+    {
+      "minecraft": "1.21.11",
+      "loader": {
+        "kind": "fabric",
+        "version": "0.19.5",
+        "digestPolicy": "Loader/intermediary may be SecureTransportObserved, not expected-digest verified"
+      },
+      "java": {
+        "vendor": "Microsoft-11369940",
+        "version": "21.0.7",
+        "build": "21.0.7+6-LTS",
+        "architecture": "windows-x64",
+        "manifestSha1": "cb4394a27089d19f65d5baa6cf0482c27c3c7865",
+        "executableSha256": "1ba6a4fb32a6a3d5c925fe837ae6717e2f75743a71e013e668e6dadb909245ba"
+      },
+      "warmupSeconds": 300,
+      "captureSeconds": 600,
+      "seed": 123456789,
+      "gameMode": "creative",
+      "difficulty": "normal",
+      "timeOfDay": 6000,
+      "fixedDaylight": true,
+      "weather": "clear",
+      "fixedWeather": true,
+      "naturalMobSpawning": false,
+      "randomTickSpeed": 3,
+      "graphics": {
+        "width": 1920,
+        "height": 1080,
+        "windowMode": "windowed",
+        "fov": 70,
+        "guiScale": 2,
+        "graphics": "fancy",
+        "clouds": "off",
+        "particles": "all",
+        "fpsCap": "unlimited",
+        "vSync": false,
+        "shaders": [],
+        "resourcePacks": [],
+        "dynamicResolution": false
+      },
+      "worldSha256": null,
+      "routeSha256": null,
+      "settingsSha256": null,
+      "worldGeneration": "declared chunks generated and lighting settled before immutable snapshot; NOT CREATED",
+      "power": "owner-confirmed AC and unchanged observed power mode; not validated",
+      "cameraMovement": "stationary after exact positioning; no automation mod",
+      "id": "workload-c-stationary-v1",
+      "worldType": "normal",
+      "cameraXYZYawPitch": [
+        256.5,
+        96,
+        256.5,
+        225,
+        20
+      ],
+      "renderDistance": 24,
+      "simulationDistance": 12,
+      "mods": [
+        {
+          "id": "aurora",
+          "version": "3.0.0",
+          "algorithm": "sha256",
+          "digest": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+          "status": "acquired through verified native installer; digest rechecked; execution NOT TESTED",
+          "observedSha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c"
+        },
+        {
+          "id": "fabricApi",
+          "version": "0.141.6+1.21.11",
+          "algorithm": "sha256",
+          "digest": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+          "status": "acquired through verified native installer; digest rechecked; execution NOT TESTED",
+          "observedSha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f"
+        },
+        {
+          "id": "sodium",
+          "version": "mc1.21.11-0.8.14-fabric",
+          "versionId": "rkdTcxoT",
+          "algorithm": "sha1",
+          "digest": "4a8733fe544168068d12fa94b2ab03e6c0c7bf91",
+          "additionalOfficialSha512": "04c43f9e8534b87a52c42ffd51b0e344d4ef92dc9cc52da33d13af6a18bf74b05380d2027f1e0db982698d0aff274c42741c1e21b313b0cd75ed3af005fc98d9",
+          "status": "acquired through verified native installer; digest rechecked; execution NOT TESTED",
+          "source": "https://api.modrinth.com/v2/version/rkdTcxoT",
+          "observedSha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d"
+        },
+        {
+          "id": "lithium",
+          "version": "mc1.21.11-0.21.4-fabric",
+          "versionId": "Ow7wA0kG",
+          "algorithm": "sha1",
+          "digest": "203bdcb26e97b3217b045e1182651a7d7b6462ec",
+          "additionalOfficialSha512": "f14a5c3d2fad786347ca25083f902139694f618b7c103947f2fd067a7c5ee88a63e1ef8926f7d693ea79ed7d00f57317bae77ef9c2d630bf5ed01ac97a752b94",
+          "status": "acquired through verified native installer; digest rechecked; execution NOT TESTED",
+          "source": "https://api.modrinth.com/v2/version/Ow7wA0kG",
+          "observedSha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b"
+        }
+      ],
+      "fabricApi": "0.141.6+1.21.11",
+      "entityConditions": {
+        "armorStands": 16,
+        "hoppers": 64,
+        "otherSpawnedEntities": 0,
+        "inventoryStatus": "exact world inventory pending"
+      },
+      "readiness": {
+        "specified": "PARTIAL: scene/protocol complete, material hashes pending",
+        "materials": "PARTIAL: exact mod/base artifacts available and verified; world absent",
+        "isolatedInstance": "PARTIAL: installed content validated, shared locked Java available, no authenticated world",
+        "executionValidated": "NOT TESTED"
+      }
+    }
+  ]
+}
