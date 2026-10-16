@@ -567,12 +567,29 @@ export interface InstanceWindow {
 
 /** The desired configuration of one instance: what the user wants it to be. */
 export interface InstanceConfiguration {
+  performanceMode?: PerformanceMode | null;
   minecraftVersion: string;
   auroraEnabled: boolean;
   loader: InstanceLoader;
   memoryMib: number;
   additionalJvmArguments: string;
   window: InstanceWindow | null;
+}
+
+export type PerformanceMode = "efficient" | "balanced" | "performance" | "custom";
+export interface MemoryAdvice {
+  facts: { totalMib: number | null; availableMib: number | null; architecture: string; source: string; ageSeconds: number };
+  recommendedMib: number | null;
+  explanation: string;
+  unknowns: string[];
+  argumentNotices: string[];
+}
+export async function getInstancePerformanceAdvice(instanceId: string, mode: PerformanceMode | null): Promise<MemoryAdvice> {
+  try { return await invoke<MemoryAdvice>("get_instance_performance_advice", { request: { instanceId, mode } }); }
+  catch (error: unknown) {
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    throw error;
+  }
 }
 
 export type InstancePlatform =

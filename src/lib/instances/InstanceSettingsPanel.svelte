@@ -29,14 +29,16 @@
     finally { deleting = false; }
   }
   import AuroraUpdatePanel from "./AuroraUpdatePanel.svelte";
+  import PerformanceSettings from "./PerformanceSettings.svelte";
 
   let { instance }: { instance: InstanceSummary } = $props();
+  const instanceId = $derived(instance.id);
 
   // The draft lives in the store keyed by instance id: seeding is idempotent
   // and unsaved edits survive tab switches, other instances, and leaving the
   // workspace. Dirty state is derived, never tracked.
   $effect(() => {
-    const id = instance.id;
+    const id = instanceId;
     untrack(() => launcher.openDetail(id));
   });
 
@@ -201,24 +203,8 @@
         </label>
         {/if}
       </div>
-      </section><section class="settings-section"><h4 class="detail-section-title">Performance</h4>
-      <div class="field-grid">
-        <label class="field">
-          <span class="field-label">Memory (MiB)</span>
-          <input
-            type="number"
-            min="512"
-            max="32768"
-            step="1"
-            bind:value={draft.memoryMib}
-            onchange={onDraftChange}
-            required
-          />
-          <span class="field-hint">
-            The memory allocated to the game, between 512 and 32768 MiB.
-          </span>
-        </label>
-      </div>
+      </section><section class="settings-section">
+      <PerformanceSettings {instance} {draft} busy={launcher.detailBusy !== null} onModeChange={mode => { draft.performanceMode = mode; }} onMemoryChange={mib => { draft.memoryMib = mib; }} />
 
       </section><section class="settings-section"><h4 class="detail-section-title">Java</h4>
       <div class="field-grid">
@@ -234,11 +220,14 @@
           <span class="field-label">Additional JVM arguments</span>
           <input
             type="text"
+            aria-label="Additional JVM arguments"
+            aria-describedby="custom-jvm-description"
             bind:value={draft.additionalJvmArguments}
+            disabled={launcher.detailBusy !== null}
             oninput={onDraftChange}
             placeholder='e.g. -Dexample=value "-Dlabel=two words"'
           />
-          <span class="field-hint">
+          <span class="field-hint" id="custom-jvm-description">
             Passed to the Java process as separate arguments. Double quotes group text;
             heap settings (-Xmx, -Xms) and classpath flags are owned by Aurora.
           </span>
