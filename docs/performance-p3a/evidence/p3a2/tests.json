@@ -1,0 +1,35 @@
+{
+  "benchmarkTests": {
+    "passed": 52,
+    "originalP3A1Tests": 44,
+    "newShortCalibrationTests": 8,
+    "failed": 0
+  },
+  "p1Tests": {
+    "passed": 13,
+    "failed": 0
+  },
+  "actualControlledCli": {
+    "exit": 0,
+    "quality": "VALID WITH WARNINGS"
+  },
+  "actualMinecraftCli": {
+    "exit": 0,
+    "quality": "VALID WITH WARNINGS"
+  },
+  "actualWorldCheckerCli": {
+    "exit": 0,
+    "quality": "VALID"
+  },
+  "fullMeasuredRunQuality": "INCOMPLETE",
+  "productSourceChanged": false,
+  "rustFrontendBuildTests": "not rerun; no product/native/startup/dependency source changed",
+  "rawLogsSha256": {
+    "performance-p3a2-all-tests-encoding-final.txt": "0216cb2a45800238f1653f018cb1738842b49fc7d823100c55d056458eda86e0",
+    "performance-p3a2-p1-final-tests.txt": "b8b9ea9933522a35075bfa416550551a2295d47f9431abdb1f9aa61ce4facf77",
+    "performance-p3a2-controlled-cli.txt": "744db57d3764d1df0613c3cf0b480c4fb96c880d81d3f5b47720cb12ff8e9ae8",
+    "performance-p3a2-minecraft-cli.txt": "e9cf1fa94a77b84342d7321341802a11a6d72c632dfa920d03eb0e72e5494bae",
+    "performance-p3a2-world-cli.txt": "78474b180a2f2e7d14bcc6b4567caa39b115c4ed084ab4da71b5bc30ad7d683d",
+    "performance-p3a2-final-benchmark-tests.txt": "216949306eb6b934908caf3dc2a26117e01e8791b259cc244778f36fcef94617"
+  }
+}

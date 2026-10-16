@@ -1,53 +1,73 @@
-# Minecraft capture validation — BLOCKED / INCOMPLETE
+# Minecraft P3-A.2 capture — real data, overall PARTIAL
 
-**No authenticated Minecraft session or actual presentation capture occurred.**
-The owner confirmed the separate Windows test user is not provisioned. No test
-launcher was started, no account read/refreshed, no Play command or Java attachment,
-and no world operation. No production behavior, JVM policy or preset changed.
+[Actual sanitized capture](evidence/p3a2/minecraft-capture.json),
+[native/auth proof](evidence/p3a2/native-auth.json),
+[quiet preflight](evidence/p3a2/quiet-preflight.json).
+One real Workload A Minecraft session and one bounded gameplay capture occurred.
+No B/C game execution, repeated A/B comparisons or P3-B work occurred.
 
-| Evidence class | Actual result |
+All three prepared installations revalidated Ready through native commands, including
+402 files / 99,041,788 bytes of exact Microsoft OpenJDK 21.0.7+6-LTS runtime per
+validation. Game execution used the locked javaw SHA-256 and official runtime manifest
+SHA-1 from [JAVA_RUNTIME_LOCK.md](JAVA_RUNTIME_LOCK.md). Main menu and F3 verified
+Minecraft 1.21.11/Fabric, Java 21.0.7, 1920x1080 framebuffer, expected RX 9070 XT and
+camera 0.5/66/0.5, yaw/pitch 0/10. A had no optional mods or Fabric API.
+
+The owner completed legitimate sign-in interactively in the isolated launcher and
+confirmed this in chat. Supported session restoration and entitlement/readiness
+returned ready without blockers. No production account database copying, fabricated
+records, token export, credential backup or direct production vault inspection.
+The owner signed in while read-only revalidation was underway: prelaunch test-tree
+checks had passed, but final live WebView profile confirmation followed sign-in.
+This observation-order limitation is retained; it is not retroactively claimed as a
+fully observed pre-authentication gate. Final native/WebView/canonical paths all
+point to the intended isolated tree. Shared credential continuity risk was accepted;
+production sign-in was not probed, so its reauthentication effect remains unknown.
+
+Normal launch with Aurora's explicit 1920x1080 window setting failed before spawning:
+`launch_placeholder_unresolved` for resolution_width. The failed attempt is retained.
+Restoring the supported null window setting and using Minecraft's own saved
+1920x1080 overrideWidth/overrideHeight allowed the normal authenticated pipeline.
+No native resolver fix, fake session, shell launch or validator bypass occurred.
+An earlier driver result lost the structured exception crossing the browser boundary;
+the checked native call preserved the concrete code. No failed game child existed.
+
+The isolated game PID was **25332**, creation FILETIME **134366600133671485**.
+The executable path/hash matched the locked managed runtime; no child argument array
+was read or exported. Capture ran **2026-10-16 21:45:51.390345–21:46:17.513650 UTC**.
+It followed 334.372 seconds of stationary warm-up, used a unique ETW session, exact PID,
+QPC timestamps, display tracking and no input tracking. PresentMon timed 26 seconds
+with a predeclared 20-second inner window starting four seconds after the origin.
+Capture and telemetry retained independent read-only process identity/handles.
+
+| Actual data / gate | Result |
 | --- | --- |
-| Real Minecraft gameplay presentation | Unavailable — zero rows |
-| Controlled presentation calibration | Unavailable — zero rows |
-| PresentMon executable identity | Actual official hash/signature/help, not capture |
-| Synthetic importer/quality tests | PASS — existing 36 tooling tests rerun |
-| Synthetic world/isolation refusal tests | PASS — eight new tests |
-| Historical P3-A GC/process/native evidence | Retained, explicitly not Minecraft |
+| PresentMon process exit | 0, bounded normal start/stop |
+| Raw presentation rows | 776, one Other stream 0x0, no unavailable display rows |
+| Inner intervals / coverage | 598 / PASS, 250 ms boundary screen |
+| Offline short reader | VALID WITH WARNINGS; original UTF-16 decoding failure retained, same bytes reinspected |
+| Presentation pacing | Approximately 29.924 Hz despite saved Unlimited/VSync OFF; a condition discrepancy, not an optimization result |
+| CPU/memory telemetry | 61 samples over 30 s; complete counter-derived 20 s window, max interval 0.501306 s |
+| Sampled / OS-peak RSS | 1,738,133,504 / 1,787,535,360 bytes |
+| Mean process CPU | 8.75045% of one logical core; not GC CPU |
+| Background interference | Capture mean machine CPU 6.04158%, higher than preflight 0.68541%; retain warning |
+| Game GC / correlation | Unavailable; Balanced profile kept, no hidden logging flags or laboratory instance |
+| Clean supervised Minecraft exit | exited / 0 / no diagnostic, 21:47:59.145 UTC |
+| Isolated launcher normal exit | 0, retained child handle, 21:48:50.829297 UTC |
+| Full measured-run quality | INCOMPLETE; short calibration never satisfies 300/600 s and three-source gates |
 
-Actual short-session readiness checks 1–11 (legitimate auth, entitlement, Java,
-Minecraft/Fabric/mods, main menu, disposable world, exact process target, gameplay
-samples, clean game exit): **NOT TESTED**. Preservation/no test authentication into
-production: PASS within the agent's action scope. Read-only inspection found the
-existing production launcher process; it was left running. Owner software's normal
-independent writes are not claimed to be frozen.
+F3 immediately after capture showed about 30 FPS with an unlimited target; later
+input/menu interaction showed thousands of FPS. Saved inactivity limiting was AFK.
+This is consistent with an inactivity/focus limiter, but the cause was not isolated.
+Do not treat these samples as an unlimited stationary workload baseline. No retry
+was made to choose more favorable metrics. The native 1.21.11 UI represents the
+individual requested graphics as Custom, with smooth lighting/leaves enabled,
+clouds off, particles All, GUI scale 2, render/simulation 12/8 and normal FOV. The
+older specification's generic Fancy label is not a newly validated preset mapping.
 
-Unavailable: game GC pauses/CPU, game working set, clock anchors, frame tails,
-observer overhead, gameplay export completeness and scene execution. None are zero.
-No causal GC/stall conclusion, optimization comparison or performance win exists.
-Full real-run artifact classification is **INCOMPLETE** due to absent sources;
-no dummy run.json is created. The historical synthetic CLI remains VALID WITH
-WARNINGS, strictly as parser evidence. Failed future captures must be retained with
-INVALID/INCOMPLETE reasons; no retries to select favorable samples.
-
-Next execution after [isolation](WINDOWS_TEST_USER_VALIDATION.md) passes: check the
-exact managed Microsoft Java lock and workload A pins natively, legitimate entitlement
-and main menu, then a disposable stationary world. Review exact child PID/creation
-identity without exposing the child command line. Capture one bounded 20-second
-gameplay interval with >=2 s pre/post-roll after reaching a stable scene. This is
-short calibration, outside the future P3-B protocol. Preserve menu/loading separately,
-quit normally and record the supervised exit. B can follow only after A succeeds and
-conditions permit; C remains pending. Stop after a failure and retain diagnostics.
-
-Collect raw CSV, producer warnings/settings, CPU/memory and, if explicitly prepared,
-G1 logs from a disposable **Existing Configuration** lab instance. P2 opted-in modes
-continue rejecting GC switches. The current phase does not authorize a validator
-exception, hidden flags or a production logging change. Two GC-uptime/QPC anchors
-must include acquisition uncertainty and drift; use <=100 ppm and <=5 ms screening
-from the protocol or explicitly label coarse/failed alignment. Temporal proximity
-never demonstrates causality.
-
-As [calibration review](PRESENTMON_CALIBRATION.md) explains, the full existing
-measured schema requires 300/600 s and all sources. Use direct frame-adapter
-inspection plus a reviewed short-calibration report; keep full-run status INCOMPLETE.
-Do not extend this session to 600 s just to satisfy the validator or relabel real
-data synthetic. A dedicated short-session manifest adapter remains pending review.
+After a clean save/exit, the complete snapshot/restoration validated, but NBT inspection
+found 19 non-player entities rather than the specified zero. See
+[WORLD_SNAPSHOT_LOCK.md](WORLD_SNAPSHOT_LOCK.md). Captured-world reproducibility and
+exact workload conformity are distinct. Capture pacing, entity drift, full cadence,
+loss/overhead confidence and pre-auth observation ordering remain open. No performance
+improvement or causal GC/stall conclusion is claimed. P3-B remains unauthorized.

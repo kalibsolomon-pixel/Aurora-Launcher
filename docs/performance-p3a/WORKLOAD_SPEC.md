@@ -1,3 +1,7 @@
+> P3-A.2 created and restored an actual A snapshot, but its 19 entities and capture
+> pacing do not meet this proposed workload lock. Canonical hashes remain unresolved.
+> See [current world status](WORLD_SNAPSHOT_LOCK.md) and [capture report](MINECRAFT_CAPTURE_VALIDATION.md).
+
 # Reproducible workload specification — execution pending
 
 Machine-readable proposals and unresolved material hashes: [workloads.json](workloads.json).

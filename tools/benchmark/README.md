@@ -24,9 +24,10 @@ Creation identity is the exact Windows creation FILETIME integer, not wall-clock
 text or an inferred process name. The future native supervisor can identify the
 authorized child; no production identity-export command was added in P3-A.
 
-PresentMon importer supports **only** 2.3.1's pinned default CSV with QPC columns,
-not arbitrary v1/v2/current formats. This is an experimental adapter with synthetic
-tests, not validated Minecraft capture. GC parser supports HotSpot G1 summaries;
+The historical PresentMon importer expects 2.3.1 v2-style columns with QPC,
+despite its legacy `default-qpc` format tag. P3-A.2 real execution showed that the
+actual default CSV differs. That adapter and measured-run gates remain unchanged;
+use the separate short-calibration reader for actual default exports. GC parser supports HotSpot G1 summaries;
 other collectors fail rather than using a misleading generic estimate. `quality.py`
 reuses P1 statistics but fixes shrink-capacity handling in its own P3-A parser.
 
@@ -70,3 +71,24 @@ limited report; full-run integration remains INCOMPLETE. Never relabel real samp
 synthetic or weaken thresholds. See [calibration status](../../docs/performance-p3a/PRESENTMON_CALIBRATION.md).
 The owner confirmed no separate Windows test user exists, so this phase acquired
 and verified PresentMon 2.3.1 and executed help only; no live trace/game session.
+
+
+P3-A.2 supersedes the separate-user requirement with explicit owner-approved
+same-user credential-continuity risk acceptance, verified isolated managed/WebView/
+registry/game/world paths and normal owner-operated Microsoft sign-in. See
+[authorization](../../docs/performance-p3a/AUTHORIZATION.md); this grants no P3-B.
+
+`short_calibration.py` strictly validates a separately named bounded artifact:
+[format](../../docs/performance-p3a/SHORT_CALIBRATION_FORMAT.md). It handles actual
+2.3.1 default `TimeInQPC` / `MsUntilDisplayed` columns, retains NA display rows and
+warnings, verifies raw hashes/identities/units/order/coverage, and always leaves
+full measured-run quality INCOMPLETE. It neither captures nor authenticates.
+Eight focused regressions use a real controlled OpenGL CSV excerpt and deliberately
+malformed temporary copies. Original 44 benchmark and 13 P1 tests remain unchanged.
+
+```powershell
+python -B tools/benchmark/short_calibration.py <test-owned-directory>/short-calibration.json
+```
+
+Direct Windows producer diagnostic redirection uses UTF-16LE with BOM; strict decoding
+is covered by the eighth new regression. Original measured gates remain unchanged.

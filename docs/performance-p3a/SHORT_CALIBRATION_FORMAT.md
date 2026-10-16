@@ -19,7 +19,7 @@ Required fields:
 | format | `presentmon-2.3.1-default-present-qpc` only |
 | qpcFrequencyHz / originQpc | positive integer frequency / integer origin, recorded from live Windows QPC |
 | swapChain / presentRuntime | exact hexadecimal stream identity / `Other` |
-| windowStartSeconds / windowSeconds | nonnegative offset / 1â€“30-second inner window |
+| windowStartSeconds / windowSeconds | nonnegative offset / 1–30-second inner window |
 | framesSha256 / diagnosticsSha256 | exact raw file hashes |
 
 Default PresentMon 2.3.1 CSV actually emits `TimeInQPC`, `MsUntilDisplayed` and

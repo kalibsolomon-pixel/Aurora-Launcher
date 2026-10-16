@@ -1,56 +1,62 @@
-# PresentMon calibration — BLOCKED
+# PresentMon P3-A.2 operational calibration — PARTIAL
 
-P3-A.1 safely acquired the verified portable console. **Zero actual presentation
-samples**, zero controlled-workload runs, zero ETW sessions and zero overhead pairs.
-The owner confirmed no Windows test user is provisioned; live validation stops at
-that boundary. The help output is tool-identity evidence, not a calibration capture.
+Actual execution under the owner's existing unelevated Windows principal is now
+validated. No privilege/group/policy change, service, driver, installer or new tool
+version was used. Same-user scope: [AUTHORIZATION.md](AUTHORIZATION.md).
+[Sanitized evidence](evidence/p3a2/controlled-calibration.json).
 
-| Stage | Result |
+The staged 421,312-byte PresentMon 2.3.1 executable was rehashed before execution:
+`364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c`.
+Authenticode remained Valid / Intel Corporation. Official acquisition identity is
+unchanged from [P3-A.1](PRESENTMON_INSTALLATION.md). A three-second unique-session
+permission check against the isolated launcher host started/stopped and exited 0.
+It generated no CSV because that host did not present frames; this is permission
+plumbing only, not successful presentation capture. No existing trace was stopped.
+
+| Stage | P3-A.2 result |
 | --- | --- |
-| 1: executable/version/options | PARTIAL — official digest + valid Intel signature + actual 2.3.1 help; help exit 1 |
-| 1: tracing permissions/start/stop/PID targeting | NOT TESTED — no trace attempted |
-| 2: controlled presentation | BLOCKED — no approved isolated session or executed native stimulus |
-| 3: observer overhead | NOT TESTED — no instrumented/uninstrumented pair |
-| 4: actual CSV/import compatibility | BLOCKED — parser tests are synthetic only |
+| Identity and unelevated tracing/start-stop | PASS, actual execution |
+| Controlled native OpenGL presentation | Actual 1,428 rows; bounded operational capture PASS WITH WARNINGS |
+| Full fixed/variable/stall protocol | PARTIAL, mixed-cadence overlap only; not 20 seconds per cadence |
+| Units and exact target | PASS, PID 3856 / recorded creation FILETIME, Other stream 0x0; QPC frequency 10,000,000 Hz |
+| Export/parser integrity | PASS WITH WARNINGS; real default CSV and raw hashes retained |
+| Independent event-loss accounting | NOT ESTABLISHED, no explicit producer loss counters |
+| Observer overhead / A/A | NOT MEASURED; no repeated runs authorized |
 
-Exact executable and source: [PRESENTMON_INSTALLATION.md](PRESENTMON_INSTALLATION.md).
-Local raw help SHA-256:
-`30514b1e312789dafc5f0b02c224d5511d604658265c7fcf77bc0dc8deead9ba`.
-Pinned license SHA-256:
-`4c949341b1893c8c6ad82f7fb4eedf622cd1fd9c22a9af8f19b2dac19d1947b6`.
-There is no raw frame artifact to hash. Do not fabricate a successful empty run.
+The exclusively created native WGL stimulus ran 36 seconds, emitted 2,320 independent
+pre-SwapBuffers QPC markers and exited 0. It requested 30/60/120 Hz, an alternating
+phase and 100/250 ms stalls. PresentMon's bounded 20-second collection overlapped
+17.109695 seconds of presentation data because the stimulus finished before its
+timer. The inspected inner window was declared from retained boundaries, with
+pre/post-roll; it is **13.109695 seconds**, not a claimed complete 20-second capture.
+No rows were erased. There were 1,427 application markers inside the first/last
+present span versus 1,428 CSV rows, consistent with boundary quantization but not
+independent loss proof. Nearest marker discrepancy: mean 0.212443 ms, max 1.7794 ms.
+The helper's initial plannedStallsSeconds metadata was stale; the private review
+explicitly records actual code timings 29/31 seconds and preserves original metadata.
 
-After isolation passes, follow [CALIBRATION_PROTOCOL.md](CALIBRATION_PROTOCOL.md):
-review the bounded native OpenGL stimulus before execution, use its fixed 30/60/120
-Hz, alternating cadence and predeclared stalls, 20 seconds per stimulus with >=2 s
-pre/post-roll. Preserve independent monotonic swap markers and producer diagnostics.
-The native stimulus is not implemented or executed by this preparation phase.
+The actual default producer CSV uses `TimeInQPC`, `MsUntilDisplayed` and
+`MsBetweenDisplayChange`. The old adapter expected v2 columns and did not fit this
+export. The separate [short artifact reader](SHORT_CALIBRATION_FORMAT.md) uses
+present-QPC plus latency in milliseconds; it never substitutes CPU-start timestamps.
+It counted all 424 unavailable display rows and kept their uncertainty. These rows
+are not automatically missing CSV events or physical-display drops. Strict failures
+cover identity, stream, units/order, missing/invalid columns/rows, bounds and hashes.
+The actual 180-row prefix regression specimen is byte-identical to the raw prefix.
 
-The verified help confirms `--process_id`, `--qpc_time`, `--session_name`,
-`--output_file`, `--timed`, `--terminate_after_timed`, `--terminate_on_proc_exit`
-and `--no_track_input`. Use an exact authorized child PID plus creation identity,
-unique trace name, explicitly new output and a bounded interval. Keep dropped rows
-and display tracking. Never stop an existing session or target by process name.
-An access-denied result is a stop/approval boundary, not an elevation fallback.
+Direct Windows stdout/stderr redirection produced UTF-16LE with BOM during the
+Minecraft capture; the first inspection failed decoding. That failed result remains
+private. Strict BOM-aware decoding and a regression now support the observed
+encoding; the **same raw capture** passes reinspection. No second game capture was
+made and no measured-run gate was weakened. Final tests: 52 benchmark / 13 P1 pass.
 
-Record integer QPC frequency/origin and before/after monotonic/UTC pairs. Under
-`--qpc_time`, `CPUStartQPC` is integer ticks; DisplayLatency/DisplayedTime are ms.
-Import estimates display timestamps as `(CPUStartQPC-origin)/frequency + latency/1000`.
-Compare emitted swaps/raw rows/undisplayed rows against duration, boundaries,
-duplicates, missing samples and producer loss warnings. Retain unexpected gaps.
-OpenGL's `Other` runtime has less instrumentation; latency-derived estimates need
-actual calibration. See the pinned [console contract](https://github.com/GameTechDev/PresentMon/blob/v2.3.1/README-ConsoleApplication.md)
-and [OpenGL limitations](https://github.com/GameTechDev/PresentMon/blob/v2.3.1/README.md#analyzing-opengl-and-vulkan-applications).
+The tool emits a generic unelevated process-query warning. Exact PID and live creation
+identity were verified independently; no process-name targeting or elevation fallback
+was used. No error/loss warning was observed, but absence of warnings does not prove
+loss-free capture. OpenGL Other/composed timing remains an ETW display estimate,
+not optical display measurement. Observer overhead, thermals and VRR remain unknown.
 
-Use the existing `quality.presentmon` adapter for **frame-only calibration inspection**
-with reviewed identity/QPC/stream/window settings. The full schema-1 measured-run
-validator intentionally requires >=300 s warm-up and >=600 s measurement and all
-three sources. A short calibration cannot become a schema-1 complete measured run;
-do not label real data synthetic or weaken those thresholds. Until a separately
-reviewed short-capture manifest adapter exists, retain short raw artifacts plus an
-explicit frame-only/manual report and classify full-run integration INCOMPLETE.
-This is an additional integration limitation discovered during source review.
-
-No parser/threshold changed. Any real-format correction must retain its raw
-reproducible fixture and regression. Overhead on another application cannot establish
-Minecraft overhead. Calibration observations never authorize P3-B comparison sets.
+Actual Minecraft capture is now available, separately reported in
+[MINECRAFT_CAPTURE_VALIDATION.md](MINECRAFT_CAPTURE_VALIDATION.md). Near-30-Hz pacing
+and world-condition drift keep overall P3-A.2 PARTIAL. Full measured-run classification
+remains INCOMPLETE, and P3-B is NOT READY / NOT AUTHORIZED.

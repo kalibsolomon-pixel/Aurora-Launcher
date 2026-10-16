@@ -1,46 +1,50 @@
-# Isolated-session authorization gate
+# P3-A.2 same-user short-session authorization
 
-No Microsoft login, credential read/copy, entitlement bypass or Minecraft launch
-was attempted. Installation readiness is distinct from authenticated playability.
-The isolated root has zero accounts and no owner configuration copied into it.
+The owner explicitly authorizes the current Windows session, existing legitimate
+Minecraft account, isolated development launcher/gameplay, bounded PresentMon 2.3.1
+calibration and disposable benchmark world creation/freezing. This supersedes the
+mandatory separate-Windows-user requirement from P3-A/P3-A.1 for **P3-A.2 only**.
+P3-B repeated benchmarking and preset changes remain **NOT AUTHORIZED**.
 
-Critical boundary: `src-tauri/src/auth/credentials.rs` derives the OS credential
-target from account UUID only. A separate data/WebView root under the same Windows
-user is **not** a separate secret store. Signing into the owner's same account
-could rotate the refresh credential used by production. Removing that account could
-delete that shared credential. Do not do either as a benchmark cleanup operation.
+Credential Manager targets use the Minecraft account UUID, not the managed root.
+The owner accepts that normal same-account authentication/refresh can rotate the
+shared refresh credential and require signing into production Aurora again. Managed
+filesystem isolation is not credential-store isolation. Do not deliberately modify
+production credentials, directly read its Credential Manager entries, extract/export/
+back up secrets, restore credentials, copy production account databases or remove the
+account as cleanup. Observe continuity effects only through supported Aurora behavior.
 
-Safe proposed procedure, requiring explicit owner authorization:
+Before authentication, verify canonical paths and junction/symlink boundaries:
+marked test managed root, separate registry/configuration, WebView profile, instance
+working/game/world/log paths, exact managed Java and benchmark artifact root. Confirm
+the running native backend's reported root and live WebView profile; environment
+variables alone are insufficient. Any unexpected production target stops execution.
 
-1. Use a separate Windows test user/session, with its own Credential Manager and
-   WebView profile. Creating/configuring that user is an owner action, not performed
-   here. Alternatively review a dedicated test account proven unused in production;
-   do not discover this by reading owner account databases. Changing credential
-   namespace is separate compatibility/security work, not a P3-A workaround.
-2. Recreate the disposable launcher root through the normal native preparation
-   workflow in that session. Re-resolve/revalidate the locked official runtime and
-   fail on identity drift. Do not copy accounts, tokens or owner worlds. The prepared
-   root in this phase is useful unauthenticated evidence, not an authenticated handoff.
-3. Owner explicitly authorizes a legitimate Minecraft-owned account and initiates
-   system-browser Microsoft sign-in. Owner handles passwords/MFA/consent. Never embed
-   login, intercept cookies, scrape pages or put credentials in scripts/manifests.
-4. Aurora performs its normal OAuth/entitlement/profile/session checks. No fake
-   identity, offline token or account-file injection. Cancel/error leaves the gate
-   pending. Application-registration problems are blockers, not reasons to borrow IDs.
-5. Owner authorizes the specific short capture-validation session and, separately,
-   P3-B repeated gameplay after reviewing readiness. Specify permitted workloads,
-   tools, resource/time window, retention and exact processes. No P3-B authority is
-   implied by P3-A or by successful installation.
+Use only Aurora's supported account selection/session/launch commands. No fabricated
+records, fake identities, offline tokens or entitlement bypass. Microsoft login stays
+in the system browser. The owner operates passwords, MFA and consent; hand over any
+interactive login rather than submit it. Authentication failure stops launch attempts;
+preserve sanitized diagnostics only. Never export full child arguments or tokens.
 
-Separate approvals still needed: pinned frame-tool acquisition/installation and
-ETW privileges if required; an available quiet resource window; disposable world
-creation/material locks; any future automation mod. No external upload is needed.
-Keep raw recordings local. Export only reviewed sanitized artifacts; no account
-UUID/name/email, server destination, access/refresh token or full child command line.
+Recheck staged PresentMon's expected SHA-256 and Intel signature. Use unique trace
+names, exact test PID/creation identities and bounded output; never stop another trace
+or terminate by process name. Elevation, privilege/group changes, security-policy
+changes, system services and other tool versions require separate authorization.
 
-Future duration: 300 s warm-up plus 600 s measurement, at least five usable runs
-per effective configuration = >=75 minutes per workload/configuration, plus setup,
-cooldown and failures. Expect sustained CPU/GPU work, instance heap plus native/GPU
-memory, and multiple GiB of asset/world/raw-data storage. First calibrate a short
-authorized capture. Do not close owner applications, change power settings or begin
-the sustained series merely to make the system quiet.
+Use Workload A first; B is optional only after A succeeds, and C may remain blocked.
+Keep short calibration distinct from measured schema-1 300/600-second, three-source
+benchmark runs. Do not extend this session to satisfy that schema. Preserve failures,
+raw data, quality warnings and null unavailable metrics. GC instrumentation may use
+only the documented disposable Existing Configuration laboratory mechanism; P2's
+argument validator and profiles remain unchanged.
+
+Worlds must be disposable and test-owned. After clean supervised exit, freeze full
+world/options/config bytes, hash and inventory them, and restore into a separate
+verification directory. Never use owner worlds or overwrite production. Seeds alone
+do not establish reproducibility. Keep recordings local and commit reviewed sanitized
+evidence only. Do not close unrelated apps or change power settings for a quiet window.
+
+No push, merge, tag, release, version bump, production installation/deployment or
+P3-B work. Scoped local commits and preservation checks are authorized. The optional
+[separate-user procedure](WINDOWS_TEST_USER_VALIDATION.md) is historical guidance,
+not a requirement for the owner's approved P3-A.2 approach.

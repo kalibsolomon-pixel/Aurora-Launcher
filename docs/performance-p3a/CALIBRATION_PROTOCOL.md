@@ -1,3 +1,7 @@
+> P3-A.2 now has actual bounded controlled OpenGL and Minecraft captures. This
+> protocol retains the original full-calibration requirements, which remain partial.
+> See [current operational results](PRESENTMON_CALIBRATION.md).
+
 # Calibration and measurement-quality protocol
 
 Three distinct evidence levels: parser fixtures (performed), controlled native

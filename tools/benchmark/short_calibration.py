@@ -21,6 +21,7 @@ TOOL_SHA256 = '364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c'
 
 
 def inspect(root, m):
+    root = Path(root).absolute()
     q.require(isinstance(m, dict) and set(m) == FIELDS, 'short calibration fields')
     q.require(type(m['schemaVersion']) is int and m['schemaVersion'] == 1, 'unsupported short schema')
     q.require(m['artifactKind'] == 'short-calibration', 'not a short calibration')
@@ -79,6 +80,7 @@ def inspect(root, m):
 
 
 def load(path):
+    path = Path(path).absolute()
     def pairs(items):
         result = {}
         for key, value in items:

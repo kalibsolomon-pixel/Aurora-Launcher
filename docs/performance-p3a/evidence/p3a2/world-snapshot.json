@@ -1,0 +1,101 @@
+{
+  "utc": "2026-10-16T21:48:01.989515+00:00",
+  "inventory": {
+    "classification": "VALID",
+    "sampleKind": "test-world",
+    "workloadId": "A",
+    "manifestSha256": "2570658c952055bceaaf8b66bac9b1b036110ce4d61b408ddfb41c896db1d7e1",
+    "files": 56,
+    "scope": "offline inventory and conditions only; provenance and clean exit require review"
+  },
+  "archiveSha256": "6e77ef39a966e4175469d06ba0f503500f0fd4f269a9bbbc0b1e03aed4354c33",
+  "archiveBytes": 22159360,
+  "conditionsSha256": "be3c6f81e0d2386a61e0b1d4fe21d4c6e5f63c1f3f21b7fe8c9897e98e986371",
+  "optionsSha256": "8d6484f7cc489795a6966bdd757511447939081448b45da7ab07afcc1819d15d",
+  "worldFileCount": 56,
+  "worldDirectoryCount": 12,
+  "restoredFromArchive": true,
+  "archiveExtractionPathValidated": true,
+  "supervisedExitCode": 0,
+  "conditions": {
+    "minecraftVersion": "1.21.11",
+    "seed": 123456789,
+    "generationSettings": {
+      "settings": {
+        "features": 0,
+        "biome": "minecraft:plains",
+        "layers": [
+          {
+            "block": "minecraft:bedrock",
+            "height": 1
+          },
+          {
+            "block": "minecraft:dirt",
+            "height": 128
+          },
+          {
+            "block": "minecraft:grass_block",
+            "height": 1
+          }
+        ],
+        "structure_overrides": [
+          "minecraft:strongholds",
+          "minecraft:villages"
+        ],
+        "lakes": 0
+      },
+      "type": "minecraft:flat"
+    },
+    "playerPosition": [
+      0.5,
+      66.0,
+      0.5
+    ],
+    "orientation": [
+      0.0,
+      10.0
+    ],
+    "gameMode": "creative",
+    "difficulty": "normal",
+    "weather": "clear",
+    "timeOfDay": 6000,
+    "renderDistance": 12,
+    "simulationDistance": 8,
+    "entityConditions": {
+      "nonPlayerEntityCount": 19,
+      "entityTypes": [
+        "minecraft:chicken",
+        "minecraft:horse",
+        "minecraft:item",
+        "minecraft:pig"
+      ],
+      "blockEntityCount": 0
+    },
+    "resourcePacks": [],
+    "shaders": [],
+    "gamerules": {
+      "advance_time": 0,
+      "advance_weather": 0,
+      "spawn_mobs": 0,
+      "random_tick_speed": 3
+    },
+    "generatedChunks": {
+      "totalRecordedChunks": 5329,
+      "requiredFullChunks": 1024,
+      "missingRequiredFullChunks": 0,
+      "requiredChunkRectangle": [
+        -16,
+        -16,
+        15,
+        15
+      ]
+    }
+  },
+  "missingRequiredChunks": [],
+  "sourceNBT": true,
+  "worldContainsPrivatePlayerIdentifiers": true,
+  "workloadSpecLock": "BLOCKED: expected zero non-player entities; actual frozen inventory is 19",
+  "snapshotFilesReadOnly": true,
+  "absoluteImmutabilityGuaranteed": false,
+  "canonicalWorkloadHashesUnchanged": true
+}

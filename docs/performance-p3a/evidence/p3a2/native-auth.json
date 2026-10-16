@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "recordedUtc": "2026-10-16T21:25:22.954Z",
+  "scope": "actual isolated P3-A.2 native validation and supported authentication",
+  "launcherExecutableSha256": "05b97f5be5517972863e2460738e36c1a92257853ec9f72809c610c81114e09a",
+  "isolation": {
+    "nativeReportedManagedRootMatches": true,
+    "liveWebViewUserDataMatches": true,
+    "canonicalProductionRootsDisjoint": true,
+    "redirectedTestPaths": 0,
+    "verifiedCategories": [
+      "managed-root",
+      "registry",
+      "configuration",
+      "webview",
+      "game-working-directory",
+      "managed-game",
+      "world-parent",
+      "runtime",
+      "logs",
+      "benchmark-artifacts"
+    ]
+  },
+  "installations": [
+    {
+      "workload": "A",
+      "configuration": {
+        "performanceMode": "balanced",
+        "minecraftVersion": "1.21.11",
+        "auroraEnabled": false,
+        "loader": {
+          "kind": "fabric",
+          "policy": {
+            "type": "pinned",
+            "version": "0.19.5"
+          }
+        },
+        "memoryMib": 2048,
+        "additionalJvmArguments": "",
+        "window": null
+      },
+      "content": "ready",
+      "runtime": {
+        "status": "ready",
+        "checkedFiles": 402,
+        "verifiedBytes": 99041788,
+        "major": 21,
+        "version": "21.0.7"
+      },
+      "problems": []
+    },
+    {
+      "workload": "B",
+      "configuration": {
+        "performanceMode": null,
+        "minecraftVersion": "1.21.11",
+        "auroraEnabled": true,
+        "loader": {
+          "kind": "fabric",
+          "policy": {
+            "type": "pinned",
+            "version": "0.19.5"
+          }
+        },
+        "memoryMib": 2048,
+        "additionalJvmArguments": "",
+        "window": null
+      },
+      "content": "ready",
+      "runtime": {
+        "status": "ready",
+        "checkedFiles": 402,
+        "verifiedBytes": 99041788,
+        "major": 21,
+        "version": "21.0.7"
+      },
+      "problems": []
+    },
+    {
+      "workload": "C",
+      "configuration": {
+        "performanceMode": null,
+        "minecraftVersion": "1.21.11",
+        "auroraEnabled": true,
+        "loader": {
+          "kind": "fabric",
+          "policy": {
+            "type": "pinned",
+            "version": "0.19.5"
+          }
+        },
+        "memoryMib": 2048,
+        "additionalJvmArguments": "",
+        "window": null
+      },
+      "content": "ready",
+      "runtime": {
+        "status": "ready",
+        "checkedFiles": 402,
+        "verifiedBytes": 99041788,
+        "major": 21,
+        "version": "21.0.7"
+      },
+      "problems": []
+    }
+  ],
+  "ownerConfirmedInteractiveSignIn": true,
+  "accountCount": 1,
+  "authentication": {
+    "utc": "2026-10-16T21:29:43.234Z",
+    "sessionStatus": "ready",
+    "ready": true,
+    "instanceStatus": "ready",
+    "runtimeStatus": "ready",
+    "accountStatus": "ready",
+    "processStatus": "stopped",
+    "blockerCodes": []
+  },
+  "credentialContinuity": {
+    "normalSameUserRiskAccepted": true,
+    "directProductionVaultInspection": false,
+    "secretsExported": false,
+    "productionSignInRetested": false,
+    "observedProductionReauthenticationEffect": null
+  },
+  "runtimeManifestSha1": "cb4394a27089d19f65d5baa6cf0482c27c3c7865",
+  "javawSha256": "1ba6a4fb32a6a3d5c925fe837ae6717e2f75743a71e013e668e6dadb909245ba",
+  "launcherExit": {
+    "handleRetained": true,
+    "pid": 10164,
+    "exitCode": 0,
+    "endUtc": "2026-10-16T21:48:50.8292971Z"
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "scope": "read-only actual isolated A/B/C jar rehash; no gameplay compatibility claim",
+  "workloads": [
+    {
+      "workload": "A",
+      "jarCount": 0,
+      "mods": [],
+      "status": "PASS"
+    },
+    {
+      "workload": "B",
+      "jarCount": 4,
+      "mods": [
+        {
+          "id": "aurora",
+          "version": "3.0.0",
+          "officialAlgorithm": "sha256",
+          "officialDigest": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+          "observedSha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+          "sizeBytes": 3077377,
+          "allRecordedPublisherDigestsMatch": true
+        },
+        {
+          "id": "fabricApi",
+          "version": "0.141.6+1.21.11",
+          "officialAlgorithm": "sha256",
+          "officialDigest": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+          "observedSha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+          "sizeBytes": 2426039,
+          "allRecordedPublisherDigestsMatch": true
+        },
+        {
+          "id": "sodium",
+          "version": "mc1.21.11-0.8.14-fabric",
+          "officialAlgorithm": "sha1",
+          "officialDigest": "4a8733fe544168068d12fa94b2ab03e6c0c7bf91",
+          "observedSha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d",
+          "sizeBytes": 1909150,
+          "allRecordedPublisherDigestsMatch": true
+        },
+        {
+          "id": "lithium",
+          "version": "mc1.21.11-0.21.4-fabric",
+          "officialAlgorithm": "sha1",
+          "officialDigest": "203bdcb26e97b3217b045e1182651a7d7b6462ec",
+          "observedSha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b",
+          "sizeBytes": 900462,
+          "allRecordedPublisherDigestsMatch": true
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "workload": "C",
+      "jarCount": 4,
+      "mods": [
+        {
+          "id": "aurora",
+          "version": "3.0.0",
+          "officialAlgorithm": "sha256",
+          "officialDigest": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+          "observedSha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c",
+          "sizeBytes": 3077377,
+          "allRecordedPublisherDigestsMatch": true
+        },
+        {
+          "id": "fabricApi",
+          "version": "0.141.6+1.21.11",
+          "officialAlgorithm": "sha256",
+          "officialDigest": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+          "observedSha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f",
+          "sizeBytes": 2426039,
+          "allRecordedPublisherDigestsMatch": true
+        },
+        {
+          "id": "sodium",
+          "version": "mc1.21.11-0.8.14-fabric",
+          "officialAlgorithm": "sha1",
+          "officialDigest": "4a8733fe544168068d12fa94b2ab03e6c0c7bf91",
+          "observedSha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d",
+          "sizeBytes": 1909150,
+          "allRecordedPublisherDigestsMatch": true
+        },
+        {
+          "id": "lithium",
+          "version": "mc1.21.11-0.21.4-fabric",
+          "officialAlgorithm": "sha1",
+          "officialDigest": "203bdcb26e97b3217b045e1182651a7d7b6462ec",
+          "observedSha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b",
+          "sizeBytes": 900462,
+          "allRecordedPublisherDigestsMatch": true
+        }
+      ],
+      "status": "PASS"
+    }
+  ]
+}

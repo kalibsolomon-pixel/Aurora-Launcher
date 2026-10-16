@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "scope": "reviewed sanitized P3-A.2 summaries; raw worlds/account material stays private",
+  "artifacts": [
+    {
+      "path": "evidence/p3a2/controlled-calibration.json",
+      "sizeBytes": 3211,
+      "sha256": "363b6070cbc4d1cf727c0cf77b7f76a3383fe2b93b51fcc5918f94b523f6dd6d"
+    },
+    {
+      "path": "evidence/p3a2/minecraft-capture.json",
+      "sizeBytes": 5591,
+      "sha256": "914209a6d96eab6dce8c485d5672e2f8f4b741a77addc32d6206e2db1b044c2c"
+    },
+    {
+      "path": "evidence/p3a2/mod-revalidation.json",
+      "sizeBytes": 3653,
+      "sha256": "bed4a9176b04ef58289b39389ef1a00bf2077e7cf192a061ccf6240018814c39"
+    },
+    {
+      "path": "evidence/p3a2/native-auth.json",
+      "sizeBytes": 3597,
+      "sha256": "80dd1e724cdad5b2da6dabd46aaa801aed6f01f9b3165853e34b5ae46f7130d9"
+    },
+    {
+      "path": "evidence/p3a2/quiet-preflight.json",
+      "sizeBytes": 1365,
+      "sha256": "725c3aedcbee0e03819a6826c498be8eb2188f1b8ffb0386b3ddc96f83091516"
+    },
+    {
+      "path": "evidence/p3a2/tests.json",
+      "sizeBytes": 1325,
+      "sha256": "42a35165675101677e14120560db78884c29b40cea724e8b3e9e898e9b66b3a6"
+    },
+    {
+      "path": "evidence/p3a2/world-snapshot.json",
+      "sizeBytes": 2802,
+      "sha256": "b30720330da15157be662f6a10ca98694ff85ab49cb25e74ac1b5ac0d77090af"
+    }
+  ]
+}

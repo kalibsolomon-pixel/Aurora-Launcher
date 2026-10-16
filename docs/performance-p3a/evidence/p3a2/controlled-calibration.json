@@ -1,0 +1,81 @@
+{
+  "artifactKind": "short-calibration",
+  "quality": "VALID WITH WARNINGS",
+  "targetKind": "controlled-opengl",
+  "rawRows": 1428,
+  "unavailableDisplayRows": 424,
+  "unpairedDisplayRows": 0,
+  "metrics": {
+    "count": 769,
+    "mean": 17.03303250975293,
+    "median": 13.420500000000501,
+    "p95": 34.079440000001426,
+    "p99": 49.30467599999921,
+    "p999": null,
+    "max": 287.36140000000177,
+    "variance": 192.6379118844324,
+    "presentation_rate_hz": 58.709451733119806,
+    "stutter_frames_over_50ms": 2,
+    "stutter_events_over_50ms": 2,
+    "stutter_frames_per_minute": 9.15353103180509,
+    "long_gaps_over_1000ms": 0,
+    "boundary_coverage": true,
+    "discarded_boundary_intervals": 234
+  },
+  "warnings": [
+    "etw-display-estimate-not-physical-display-proof",
+    "producer-loss-counters-unavailable",
+    "observer-overhead-unmeasured",
+    "short-calibration-not-performance-benchmark",
+    "unavailable-display-rows-retained",
+    "unelevated-process-query-limitation"
+  ],
+  "fullMeasuredRunQuality": "INCOMPLETE",
+  "reconciliation": {
+    "capturedRows": 1428,
+    "allStimulusSwaps": 2320,
+    "swapsInsidePresentSpan": 1427,
+    "nearestSwapMarkerMaxMs": 1.7794,
+    "nearestSwapMarkerMeanMs": 0.21244285714285716,
+    "actualStallsSeconds": [
+      29,
+      31
+    ],
+    "actualStallDurationsMs": [
+      100,
+      250
+    ],
+    "metadataCorrection": "initial plannedStallsSeconds field is stale; actual helper code uses 29/31 and independent swaps retain measured timing",
+    "firstLastPresentSpanSeconds": 17.109695,
+    "observerOverhead": "unmeasured; no A/A pair",
+    "producerEventLossCounters": null,
+    "full20SecondsPerCadenceProtocol": "not performed; bounded mixed-cadence overlap only"
+  },
+  "execution": {
+    "exitCode": 0,
+    "endUtc": "2026-10-16T21:28:15.0438673Z",
+    "startUtc": "2026-10-16T21:27:54.9605902Z",
+    "creationId": "134366596560093570",
+    "targetPid": 3856
+  },
+  "rawSha256": {
+    "capture-execution.json": "f102816313cd3239277814a270fb2a509184ba687f3e97408317b2dfae746420",
+    "frames.csv": "63917e9a8185ec15288cad9f64e7585e618bf176aab572fb10902c0f1bae0254",
+    "identity.json": "06c6becdb47db04e61271e9da1d60d0f75ca2a8afd460baa4beb302ad0f9e2bd",
+    "presentmon-stderr.txt": "fa8cc09eba927931fa1670be29df1558c531367d416e48cd784acabfa3c77fa6",
+    "presentmon-stdout.txt": "cbf5730be32edae5d0ad1618e2375f3c4c472da75350c4971980e20d98aca0e6",
+    "quality.json": "ff5168eb626bd1fc05c9e41eb2f7d70372de29df24b6642760d50f5b6588ab1b",
+    "short-calibration.json": "f9f5ecf857021fa4984df4de2f73629151a9c8a51bfcabe0fba798ef46117793",
+    "stimulus-review.json": "ff761c2588c74c41f5b393a26f1402d7c5e3ccae00ec702710728b40ca64038b",
+    "swaps.csv": "22de25560f5c83a632b1794914391a4259f557de84d464614a3cac0003471d16"
+  },
+  "tool": {
+    "version": "2.3.1",
+    "sha256": "364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c",
+    "authenticode": "Valid",
+    "signer": "Intel Corporation",
+    "elevation": false,
+    "serviceInstalled": false
+  },
+  "scope": "bounded actual native OpenGL capture; full cadence/overhead calibration PARTIAL"
+}

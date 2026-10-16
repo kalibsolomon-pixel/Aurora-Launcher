@@ -1,3 +1,7 @@
+> P3-A.2 supersedes this mandatory separate-user gate with the owner-approved
+> same-user risk acceptance in [AUTHORIZATION.md](AUTHORIZATION.md). The procedure
+> below records P3-A.1 and remains an optional future isolation approach.
+
 # Windows test-user isolation — BLOCKED
 
 The owner confirmed: **Not provisioned; document owner setup.** No Windows user was

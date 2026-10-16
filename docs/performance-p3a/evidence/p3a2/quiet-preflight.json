@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "sampleKind": "process-plumbing",
+  "pid": 14408,
+  "creationId": "134366597923834038",
+  "originMonotonicNs": 93524175743500,
+  "logicalProcessors": 28,
+  "startUtc": "2026-10-16T21:29:52.446499+00:00",
+  "endUtc": "2026-10-16T21:30:52.452867+00:00",
+  "requestedSeconds": 60,
+  "elapsedSeconds": 60.0004146,
+  "intervalSeconds": 1,
+  "samples": 61,
+  "status": "complete",
+  "maxReadOverheadNs": 1438300,
+  "clock": "Windows QPC via Python perf_counter_ns; sample timestamp taken after bounded OS reads",
+  "unknowns": [
+    "Java used/committed heap",
+    "GC CPU",
+    "paging rate",
+    "GPU usage",
+    "thermals"
+  ],
+  "target": "explicit authorized process; retained read-only handle; no command-line access",
+  "meanMachineCpu": 0.685412555398831,
+  "p95MachineCpu": 1.06171201061712,
+  "minimumAvailableBytes": 23094452224,
+  "acConnected": true,
+  "gpuIdleObservedMaxEnginePercent": 0.21050259618543898,
+  "gpuObservation": "one prelaunch sample, not continuous aggregate GPU load",
+  "gpu": "AMD Radeon RX 9070 XT",
+  "driver": "32.0.31041.1004",
+  "desktop": [
+    2560,
+    1440,
+    240
+  ],
+  "thermals": null,
+  "vrr": null,
+  "powerSettingsChanged": false,
+  "ownerConfirmedQuietWindow": true,
+  "quality": "CPU/RAM/AC screen PASS; GPU/thermal/VRR/overhead confidence limited"
+}
