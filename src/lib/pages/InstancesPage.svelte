@@ -117,18 +117,6 @@
     </div>
   </header>
 
-  <section class="group modpack-group" aria-label="Modrinth modpacks">
-    <div class="group-heading">
-      <div><h3 class="group-title">Modrinth modpacks</h3><p class="group-subtitle">Choose a published pack version to create its own Fabric instance.</p></div>
-      <button type="button" class="btn" aria-expanded={browsingPacks} onclick={() => browsingPacks = !browsingPacks}>{browsingPacks ? "Close Modpacks" : "Browse Modpacks"}</button>
-    </div>
-    {#if browsingPacks}
-      <div class="modpack-browser">
-      <ModrinthBrowse instanceId="" instanceName="" minecraftVersion="" kind="mod" installedProjectIds={[]} dependencyOnlyProjectIds={[]} onInstalled={async () => {}} standalonePackBrowse />
-      </div>
-    {/if}
-  </section>
-
   {#snippet createSection()}
   <section class="group" aria-labelledby="create-title">
     <div class="group-heading">
@@ -402,13 +390,22 @@
   <!-- DOM order, reading order and keyboard order all follow the rendered
        branch: the instance list precedes creation whenever instances exist,
        and creation leads only in the intentional zero-instance empty state. -->
+  <div class="instances-composition" class:existing-first={existingFirst} class:creation-first={!existingFirst}>
+    <section class="group modpack-group" aria-label="Modrinth modpacks">
+      <div class="group-heading">
+        <div><h3 class="group-title">Modrinth modpacks</h3><p class="group-subtitle">Choose a published pack version to create its own Fabric instance.</p></div>
+        <button type="button" class="btn" aria-expanded={browsingPacks} onclick={() => browsingPacks = !browsingPacks}>{browsingPacks ? "Close Modpacks" : "Browse Modpacks"}</button>
+      </div>
+      {#if browsingPacks}
+        <div class="modpack-browser">
+        <ModrinthBrowse instanceId="" instanceName="" minecraftVersion="" kind="mod" installedProjectIds={[]} dependencyOnlyProjectIds={[]} onInstalled={async () => {}} standalonePackBrowse />
+        </div>
+      {/if}
+    </section>
   {#if existingFirst}
-    <div class="instances-composition existing-first">
       {@render instancesSection()}
       {@render createSection()}
-    </div>
   {:else}
-    <div class="instances-composition creation-first">
       {@render createSection()}
       <section class="group" aria-labelledby="list-title">
         <div class="group-heading">
@@ -419,18 +416,19 @@
         </div>
         <p class="group-footer">No instances yet — create the first one above; every instance you create appears here.</p>
       </section>
-    </div>
   {/if}
+  </div>
 </div>
 
 <style>
   .modpack-browser { padding: 0 24px 24px; }
+  .modpack-group { grid-column: 1 / -1; }
   /* Recovery badges and retry actions must not squeeze their explanation
      into a few characters at the desktop's supported narrow widths. */
   .group-row-main { flex-basis: 240px; }
   .group-row-actions { max-width: 100%; }
   .instances-page { --instance-panel-gap: var(--space-5); max-width: 1500px; width: 100%; margin-inline: auto; display: grid; gap: var(--instance-panel-gap); }
-  .instances-page > .page-header, .instances-page > .group { margin: 0; }
+  .instances-page > .page-header { margin: 0; }
   .instances-composition { display: grid; gap: var(--instance-panel-gap); align-items: start; }
   /* The existing-instance collection is the primary region: left column and
      at least as wide as the creation form. Stacking keeps DOM order, so the
