@@ -62,7 +62,10 @@ def inspect(root, m):
     q.strictly_increasing(ticks)
     metrics = q.frame_metrics(displayed, offset, duration, .25)
     q.require(metrics['count'] >= 10, 'insufficient short calibration samples')
-    diagnostic = diagnostics.read_text(encoding='utf-8-sig')
+    # The Windows console producer emits UTF-16LE with BOM when its stderr is
+    # redirected directly; PowerShell's text redirection instead retained UTF-8.
+    raw_diagnostic = diagnostics.read_bytes()
+    diagnostic = raw_diagnostic.decode('utf-16' if raw_diagnostic.startswith(b'\xff\xfe') else 'utf-8-sig')
     q.require(not re.search(r'\b(error|failed|denied|lost|dropped)\b', diagnostic, re.I), 'producer diagnostics need review')
     warnings = ['etw-display-estimate-not-physical-display-proof', 'producer-loss-counters-unavailable',
                 'observer-overhead-unmeasured', 'short-calibration-not-performance-benchmark']

@@ -89,5 +89,14 @@ class ShortCalibrationTests(unittest.TestCase):
         path = self.root/'short.json'; path.write_text('{"schemaVersion":1,"schemaVersion":1}')
         with self.assertRaises(ValueError): s.load(path)
 
+    def test_windows_redirected_diagnostic_encoding(self):
+        path = self.root/'presentmon-stderr.txt'
+        path.write_bytes('warning: elevated privilege process-query limitation'.encode('utf-16'))
+        self.m['diagnosticsSha256'] = q.sha256(path)
+        self.assertIn('unelevated-process-query-limitation', self.run_check()['warnings'])
+        path.write_bytes(b'\xff\xfe\x01')
+        self.m['diagnosticsSha256'] = q.sha256(path)
+        with self.assertRaises(ValueError): self.run_check()
+
 
 if __name__ == '__main__': unittest.main()

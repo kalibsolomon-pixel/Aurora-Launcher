@@ -19,7 +19,7 @@ Required fields:
 | format | `presentmon-2.3.1-default-present-qpc` only |
 | qpcFrequencyHz / originQpc | positive integer frequency / integer origin, recorded from live Windows QPC |
 | swapChain / presentRuntime | exact hexadecimal stream identity / `Other` |
-| windowStartSeconds / windowSeconds | nonnegative offset / 1–30-second inner window |
+| windowStartSeconds / windowSeconds | nonnegative offset / 1â€“30-second inner window |
 | framesSha256 / diagnosticsSha256 | exact raw file hashes |
 
 Default PresentMon 2.3.1 CSV actually emits `TimeInQPC`, `MsUntilDisplayed` and
@@ -43,7 +43,8 @@ VALID WITH WARNINGS proves bounded offline consistency, not physical screen timi
 producer authenticity, independent loss accounting, Minecraft scene provenance or
 observer overhead. Those require live operator review. Full measured-run quality
 always remains INCOMPLETE for this format. No short artifact is labeled synthetic.
-The 180-row regression specimen is an actual controlled native OpenGL export;
+Redirected producer diagnostics support strict UTF-8 (optional BOM) and observed
+Windows UTF-16LE with BOM; malformed encoding fails. The 180-row regression specimen is an actual controlled native OpenGL export;
 malformed variants in tests are explicitly test-only transformations.
 
 ```powershell
