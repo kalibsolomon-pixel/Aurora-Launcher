@@ -1,0 +1,90 @@
+{
+  "phase": "restart",
+  "executableSha256": "4903E5ECFE014900D3FB1565309DCB29B68F63E83C9631981EF79DFD037D2CCC",
+  "provenance": "Actual isolated native host; schema-5 synthetic record, no installed Minecraft or accounts, no command substitution",
+  "checks": [
+    "restart restores Custom, exact 3217 MiB and byte-exact custom text"
+  ],
+  "records": [
+    {
+      "name": "restart-default",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 1400,
+          "B": 950
+        },
+        "mode": "size",
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        },
+        "dpiScale": 1.25,
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1989,
+          "B": 1186
+        }
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    },
+    {
+      "name": "restart-custom",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 1400,
+          "B": 950
+        },
+        "mode": "size",
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        },
+        "dpiScale": 1.25,
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1989,
+          "B": 1186
+        }
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    }
+  ],
+  "finalConfiguration": {
+    "performanceMode": "custom",
+    "minecraftVersion": "1.21.11",
+    "auroraEnabled": false,
+    "loader": {
+      "kind": "fabric",
+      "policy": {
+        "type": "pinned",
+        "version": "0.19.5"
+      }
+    },
+    "memoryMib": 3217,
+    "additionalJvmArguments": "-Dlabel=\"two words\" -Dlabel=last",
+    "window": null
+  },
+  "registrySchema": 6,
+  "accounts": 0,
+  "realMinecraftLaunch": false
+}

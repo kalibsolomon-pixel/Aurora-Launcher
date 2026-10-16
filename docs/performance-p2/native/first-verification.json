@@ -1,0 +1,373 @@
+{
+  "phase": "first",
+  "executableSha256": "4903E5ECFE014900D3FB1565309DCB29B68F63E83C9631981EF79DFD037D2CCC",
+  "provenance": "Actual isolated native host; schema-5 synthetic record, no installed Minecraft or accounts, no command substitution",
+  "checks": [
+    "real Windows memory advice and untouched legacy heap/text",
+    "all four modes persist through actual native commands without replacing heap/text",
+    "native rejected save keeps authoritative settings and editable error draft",
+    "measured native minimum and 200% text remain horizontally contained",
+    "actual native Rose preference applied without production state"
+  ],
+  "records": [
+    {
+      "name": "first-default",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "dpiScale": 1.25,
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        },
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 1400,
+          "B": 950
+        },
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1989,
+          "B": 1186
+        },
+        "mode": "size"
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    },
+    {
+      "name": "unsaved-efficient",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "dpiScale": 1.25,
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        },
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 1400,
+          "B": 950
+        },
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1989,
+          "B": 1186
+        },
+        "mode": "size"
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    },
+    {
+      "name": "custom-mode",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "dpiScale": 1.25,
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        },
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 1400,
+          "B": 950
+        },
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1989,
+          "B": 1186
+        },
+        "mode": "size"
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    },
+    {
+      "name": "advanced-jvm",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "dpiScale": 1.25,
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        },
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 1400,
+          "B": 950
+        },
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1989,
+          "B": 1186
+        },
+        "mode": "size"
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    },
+    {
+      "name": "native-save-error",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "dpiScale": 1.25,
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        },
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 1400,
+          "B": 950
+        },
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1989,
+          "B": 1186
+        },
+        "mode": "size"
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    },
+    {
+      "name": "native-1024x768",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1869,
+          "B": 1196
+        },
+        "dpiScale": 1.25,
+        "mode": "size",
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 1280,
+          "B": 960
+        },
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        }
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    },
+    {
+      "name": "native-minimum",
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        },
+        "dpiScale": 1.25,
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 882,
+          "B": 640
+        },
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1471,
+          "B": 876
+        },
+        "mode": "minimum"
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    },
+    {
+      "name": "native-minimum-text200",
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        },
+        "dpiScale": 1.25,
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 882,
+          "B": 640
+        },
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1471,
+          "B": 876
+        },
+        "mode": "minimum"
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    },
+    {
+      "name": "native-minimum-heap-text200",
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        },
+        "dpiScale": 1.25,
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 882,
+          "B": 640
+        },
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1471,
+          "B": 876
+        },
+        "mode": "minimum"
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    },
+    {
+      "name": "native-minimum-advanced-text200",
+      "viewport": [
+        706,
+        512
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        },
+        "dpiScale": 1.25,
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 882,
+          "B": 640
+        },
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1471,
+          "B": 876
+        },
+        "mode": "minimum"
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    },
+    {
+      "name": "native-rose-accent",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1.25,
+      "documentOverflow": false,
+      "mainOverflow": false,
+      "geometry": {
+        "outer": {
+          "L": 571,
+          "T": 226,
+          "R": 1989,
+          "B": 1186
+        },
+        "nativeMinimum": {
+          "X": 900,
+          "Y": 650
+        },
+        "dpiScale": 1.25,
+        "mode": "size",
+        "client": {
+          "L": 0,
+          "T": 0,
+          "R": 1400,
+          "B": 950
+        }
+      },
+      "provenance": "Compiled frontend in actual Windows Tauri/WebView2 host; no fixture substitution or browser viewport resizing"
+    }
+  ],
+  "finalConfiguration": {
+    "performanceMode": "custom",
+    "minecraftVersion": "1.21.11",
+    "auroraEnabled": false,
+    "loader": {
+      "kind": "fabric",
+      "policy": {
+        "type": "pinned",
+        "version": "0.19.5"
+      }
+    },
+    "memoryMib": 3217,
+    "additionalJvmArguments": "-Dlabel=\"two words\" -Dlabel=last",
+    "window": null
+  },
+  "registrySchema": 6,
+  "accounts": 0,
+  "realMinecraftLaunch": false
+}

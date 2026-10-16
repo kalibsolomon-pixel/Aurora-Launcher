@@ -1,0 +1,1048 @@
+{
+  "description": "All captures are new P2 evidence. Native captures are actual host screenshots; other captures are synthetic browser fixtures. Ignored PNGs remain locally retained.",
+  "files": [
+    {
+      "path": "docs/performance-p2/native/advanced-jvm.png",
+      "kind": "actual native",
+      "bytes": 84331,
+      "sha256": "7c2ebc016617ce969a9c9e7bd24e2a6d21d4cadc8abf9df570a7b66604c8329b",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/custom-mode.png",
+      "kind": "actual native",
+      "bytes": 92868,
+      "sha256": "828e489967825ce3deeae520cc5668867e2a6222ef7c6d75a094dcda5c2bc6eb",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/first-default.png",
+      "kind": "actual native",
+      "bytes": 101544,
+      "sha256": "9e81dea2cca58d3e210bc145b96b39afea3afa1d3dd5c5f05821a6949f83017d",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/first-verification.json",
+      "kind": "actual native",
+      "bytes": 8690,
+      "sha256": "a296ca159c91e7fffad76c384b4198342ad164cb6887d21d2a02de95a7b5014f",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/native-1024x768.png",
+      "kind": "actual native",
+      "bytes": 96768,
+      "sha256": "2998e59c917a1193f7f5bf845fc5510c43dec9fd465016195534458771ea0916",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/native-minimum-advanced-text200.png",
+      "kind": "actual native",
+      "bytes": 84015,
+      "sha256": "1c6a08e7dd9a4bb166e00ee149d8e3f401b88c935d00149e0ea8ec8f75f53d30",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/native-minimum-heap-text200.png",
+      "kind": "actual native",
+      "bytes": 74667,
+      "sha256": "269b406b6afd1bbad41237a732e9fb2062431f66251a160172f3feb376787755",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/native-minimum-text200.png",
+      "kind": "actual native",
+      "bytes": 74667,
+      "sha256": "269b406b6afd1bbad41237a732e9fb2062431f66251a160172f3feb376787755",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/native-minimum.png",
+      "kind": "actual native",
+      "bytes": 51991,
+      "sha256": "67d005e8f5ecbef312f6ac291fddc2e250ad7fef7e510386cae3678ec282d0f4",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/native-rose-accent.png",
+      "kind": "actual native",
+      "bytes": 92254,
+      "sha256": "945942e2ced947100f3b8bb1d1c047d4ebac22d8be8f63ce000b6be2804f06b3",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/native-save-error.png",
+      "kind": "actual native",
+      "bytes": 79606,
+      "sha256": "32958b663273219ac5a47237e9623561b3554c98c9ef68b613f46c202a2ff813",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/restart-custom.png",
+      "kind": "actual native",
+      "bytes": 98331,
+      "sha256": "b221ef98728fadcd26c93ab54bfbd903b910b79d4efa78bf11185fb7ec5d270d",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/restart-default.png",
+      "kind": "actual native",
+      "bytes": 98331,
+      "sha256": "b221ef98728fadcd26c93ab54bfbd903b910b79d4efa78bf11185fb7ec5d270d",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/restart-verification.json",
+      "kind": "actual native",
+      "bytes": 2169,
+      "sha256": "5c781cb836d32c6abb962be446d5ea7453801984122cd3cd5b9928a39f80f797",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/native/unsaved-efficient.png",
+      "kind": "actual native",
+      "bytes": 95312,
+      "sha256": "bc243aec9007d06c5422ce1c0738c513d48e20cfbdc8cd7cc81c612d17663ee3",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/browser/advanced-1024x768-text1.png",
+      "kind": "synthetic browser",
+      "bytes": 593252,
+      "sha256": "8acb43170a6f828251f49f0dac54cd4a7572e14e7ba2537b0620910d9dd55562",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/advanced-1024x768-text2.png",
+      "kind": "synthetic browser",
+      "bytes": 577933,
+      "sha256": "c4a4bd0239b7ee788ce305b8942042379ba05641ff742c6bf073236cbb6dc5aa",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/advanced-1120x760-text1.png",
+      "kind": "synthetic browser",
+      "bytes": 623799,
+      "sha256": "aebf9fb6bcb5c114a3be429298dfec86d74fa8863120e3a299262566b931aa11",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/advanced-1120x760-text2.png",
+      "kind": "synthetic browser",
+      "bytes": 626948,
+      "sha256": "401bb81811ebc0324d63bee8c56833f4cdcac2039c9c79ba671cfa56e26637da",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/advanced-712x512-text1.png",
+      "kind": "synthetic browser",
+      "bytes": 296526,
+      "sha256": "0fceac3660b5311c871729b25009d89b24cc75e2f30336fdf22d38ccfd5e0393",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/advanced-712x512-text2.png",
+      "kind": "synthetic browser",
+      "bytes": 302068,
+      "sha256": "239e645c1e1c306fb1b76d438f2928abf75e278792e77236349ac34af908452c",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/advanced-720x520-text1.png",
+      "kind": "synthetic browser",
+      "bytes": 307562,
+      "sha256": "baadba649ff69d72273ab1f0903cae1e8ee545de445fc82ea2bfae8bf0440ba2",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/advanced-720x520-text2.png",
+      "kind": "synthetic browser",
+      "bytes": 307476,
+      "sha256": "c456eb9383bd96113d8897ee80ff8c9ce4773376edf5414fb990050835f1b838",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/custom-1024x768-text1.png",
+      "kind": "synthetic browser",
+      "bytes": 616116,
+      "sha256": "d6079267026e385f8c7cec30f263fdcf4bfc2f0b55e9931ae5b8dd394e636215",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/custom-1024x768-text2.png",
+      "kind": "synthetic browser",
+      "bytes": 596000,
+      "sha256": "fa2a0aa282b8f28ac10185d748f151b1ccbf8a1e8511ac8fa505106b0fa02bd5",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/custom-1120x760-text1.png",
+      "kind": "synthetic browser",
+      "bytes": 652505,
+      "sha256": "bde1f92e62a5ad93fb28ce63fcf7a7f89c424427b56022133401d851c27700d7",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/custom-1120x760-text2.png",
+      "kind": "synthetic browser",
+      "bytes": 627907,
+      "sha256": "af5105898b4a4c22baf9ddbd8b7ce8081b310fc8e5c4962563db2d3431f750e9",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/custom-712x512-text1.png",
+      "kind": "synthetic browser",
+      "bytes": 291531,
+      "sha256": "e9d67942f27203af15dc649a24a74a8d36685dd42162e52d425af99d8847f9c0",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/custom-712x512-text2.png",
+      "kind": "synthetic browser",
+      "bytes": 299527,
+      "sha256": "81c739bd1f147baa8f581533b91017fc4f98ee7c838966cc096b1d09a5fc6555",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/custom-720x520-text1.png",
+      "kind": "synthetic browser",
+      "bytes": 295852,
+      "sha256": "45c9c7655f32536d5c50cb3ee0b28571613e15cc0c84b0b803794daa774715bb",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/custom-720x520-text2.png",
+      "kind": "synthetic browser",
+      "bytes": 306033,
+      "sha256": "3bcd7617686ffa0ce34341358a0e3958e34e58bd1d6ef2fa67997fd7517d3522",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/existing-default.png",
+      "kind": "synthetic browser",
+      "bytes": 651137,
+      "sha256": "8e5b2fb92a4ed8a591a11506ce01ec1c8716654974acfa0ed11008628c846536",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/forced-colors.png",
+      "kind": "synthetic browser",
+      "bytes": 202540,
+      "sha256": "7bb5d09492bdf91629b4ffc734bc1837a1767c991ba865b780502a30c3006529",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/rejected-save.png",
+      "kind": "synthetic browser",
+      "bytes": 624286,
+      "sha256": "c0ab0d4ea9a104135ec8bc5513a2abef116666134e2a984529e583db058994ff",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/browser/results.json",
+      "kind": "synthetic browser",
+      "bytes": 4007,
+      "sha256": "02dbe9549157e260c07c868147b8dc5098970acb6cdd1723fd8fe1466e2bdc72",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui1/functional.json",
+      "kind": "synthetic regression",
+      "bytes": 934,
+      "sha256": "380516693b5fab8edbf2ecd19003d0cd2c111dcba9437980428d00589a020fa3",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui1/states/home-long-name-blocked.png",
+      "kind": "synthetic regression",
+      "bytes": 706698,
+      "sha256": "0c3e63c1db5ec541077503ac02609447973f142a6c1287bd1f53f3de89206281",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui1/states/home-text-200.png",
+      "kind": "synthetic regression",
+      "bytes": 517017,
+      "sha256": "4cc5b6622b04c29cb441fe8d79135da49f94c2726026cda7ecefda7822b2a032",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui1/states/mods-empty.png",
+      "kind": "synthetic regression",
+      "bytes": 611179,
+      "sha256": "fd20c5b52b0858d0427d2c3db1a80cc3fcd569165082591ed0284134e87da844",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui1/states/mods-error.png",
+      "kind": "synthetic regression",
+      "bytes": 618248,
+      "sha256": "4ac0c02295b5be9a61c3974d2505570336758fd545915f592db83e62ae4374eb",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui1/states/mods-loading.png",
+      "kind": "synthetic regression",
+      "bytes": 615834,
+      "sha256": "f7600098034bda0a90f6040bb82d96eb3bfa75a3a430c238d894988d6f949652",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui1/states/mods-text-200.png",
+      "kind": "synthetic regression",
+      "bytes": 433400,
+      "sha256": "bbe42c8e2601526934a0fb746a7fdcd1b7ce8976ed6ca78e512ca49924a09014",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/blocked-1280x800.png",
+      "kind": "synthetic regression",
+      "bytes": 883586,
+      "sha256": "333ebf5d5f20ff411f6089996ebf19bb91ce4a4fcd89ea1f3c526617117be4ad",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/functional.json",
+      "kind": "synthetic regression",
+      "bytes": 15197,
+      "sha256": "2052f11b2be687fd87fe911f654d3ad35af9c4f5b4c8f4194674255b9e24da14",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/home-1024x768.png",
+      "kind": "synthetic regression",
+      "bytes": 667593,
+      "sha256": "c878391a90c7fae3aeebdf6f01a3447e4462a80d131372f5437707d30b9a628d",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/home-1280x800.png",
+      "kind": "synthetic regression",
+      "bytes": 843783,
+      "sha256": "d71a757799788f099049a4e41a294d05ec38cfe08a501c3c7ef28e9753c8176f",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/home-1440x900.png",
+      "kind": "synthetic regression",
+      "bytes": 1061680,
+      "sha256": "a4517e657bd6c82e02f41eb2adeed2e42692a264953752c138ccc46edb9c64e4",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/home-720x520.png",
+      "kind": "synthetic regression",
+      "bytes": 362211,
+      "sha256": "a41165e07887312612434952f7cc59889253b08271a5e3cf2d18c7775df499cf",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/home-801x600.png",
+      "kind": "synthetic regression",
+      "bytes": 418514,
+      "sha256": "96f2c06a1c1c4522f38f40add9591ca3e0b6750d46ec2e27bfa986bc2ef8a546",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/home-900x700.png",
+      "kind": "synthetic regression",
+      "bytes": 554117,
+      "sha256": "349b36c2f54808d4c5d37e19e91f6ab5b9abe7cefcef102ef73be2509d8e27ad",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/states/oled-cyan.png",
+      "kind": "synthetic regression",
+      "bytes": 181326,
+      "sha256": "0be1a06157da2fb2b81d903a498e5380efa4ea7b1ef302b85718880efdcd3f8d",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/states/play-pressed.png",
+      "kind": "synthetic regression",
+      "bytes": 841945,
+      "sha256": "999e59d5e428c813204478146df44717445007850b1c8e00d32ff48f731e2d51",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/states/text-200-1024.png",
+      "kind": "synthetic regression",
+      "bytes": 676692,
+      "sha256": "6b272df9d844ab83bed9fce5915efb2563cf1ff2a447c5e56e03670238e76941",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/states/text-200-1440.png",
+      "kind": "synthetic regression",
+      "bytes": 948671,
+      "sha256": "169dc7738a978adb11c845041e360045c0ee71e7e368e64fe75f8d124fb22189",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/states/text-200-720.png",
+      "kind": "synthetic regression",
+      "bytes": 515427,
+      "sha256": "33a22e927b64210635c3ba8229f8f2289279498e1e4bc962f092c53c9d9c97b1",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2/states/text-200-900.png",
+      "kind": "synthetic regression",
+      "bytes": 606394,
+      "sha256": "ca5d70f9065ef8a84ba730f33839d03425dc927c9f4d8237e2bb87857f083fef",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2b/functional.json",
+      "kind": "synthetic regression",
+      "bytes": 626,
+      "sha256": "549721fe4f9c059398825e503decd3a5a5c11f9cd59f76c0597086ea376a3e35",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2b/states/reduced-transparency.png",
+      "kind": "synthetic regression",
+      "bytes": 494361,
+      "sha256": "aa012112be6fe48d6769cd68924b19f20b4a4105623e7f4ed89d80412a7d88e5",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2b/states/text-200-minimum.png",
+      "kind": "synthetic regression",
+      "bytes": 384716,
+      "sha256": "7f10aa8f98adfd53f96644d03a63c1c909af4c4589c1953f9446f080e1134095",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui2b1-crop/crop-tests.json",
+      "kind": "synthetic regression",
+      "bytes": 13935,
+      "sha256": "2bc994c643be62b73ca775af95637730e0023dae7fe6ad3a48fe2a1895babe13",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui3/functional.json",
+      "kind": "synthetic regression",
+      "bytes": 1168,
+      "sha256": "f039d9f5cadd4ab4455b21d75699eb1ec65928f7da6b9f6adcc4ba7a4e3cebdc",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui3/states/cyan.png",
+      "kind": "synthetic regression",
+      "bytes": 720235,
+      "sha256": "fb33f444be7ed411cf0375cf8fad0a3d500efd11e11d745fae90fe21c48e4a40",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui3/states/empty.png",
+      "kind": "synthetic regression",
+      "bytes": 746951,
+      "sha256": "04c5b2a5c372de37e0ecd5271430276555e37df4e6920dc6db383bb47c6e20ed",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui3/states/error.png",
+      "kind": "synthetic regression",
+      "bytes": 751807,
+      "sha256": "aaacacc7854a10d2e69d143eaab564d1de61c614a7033341927bf80b4aedb70f",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui3/states/installed-state.png",
+      "kind": "synthetic regression",
+      "bytes": 719508,
+      "sha256": "055f7c5f026c87ec0ecc6d6fc1959151987f5dc0e26ca9baf7d21836add18c49",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui3/states/loading.png",
+      "kind": "synthetic regression",
+      "bytes": 747155,
+      "sha256": "979876edb9974cad191112660d7ac6e9a3095299d0480151b89cf1a0a9d1f61a",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui3/states/modpack-review.png",
+      "kind": "synthetic regression",
+      "bytes": 720156,
+      "sha256": "2cdebd28589b2460b212f68df80889383e4ca4393a10ee8425861df3d89d5fc7",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui3/states/reduced-transparency.png",
+      "kind": "synthetic regression",
+      "bytes": 316281,
+      "sha256": "376f309e10ca7f001f872e3b5bff061c06983f8e8d6c606a674d1b3f61489ab4",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui3/states/resource-packs-text-200.png",
+      "kind": "synthetic regression",
+      "bytes": 322143,
+      "sha256": "dfe3866f5740c375852fbeda4af0366b40c6a92efde929c9e197a591b84ab44b",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui31/functional.json",
+      "kind": "synthetic regression",
+      "bytes": 1138,
+      "sha256": "885531c3f8945f299f7d673e6d71252e904207240bbc9283c5611fb6a78d3b25",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui31/states/review-1024x768.png",
+      "kind": "synthetic regression",
+      "bytes": 572500,
+      "sha256": "8d5bca37411c4b6655ecda87bc61696e27ca5d2119eef8e22967ff99e46505b3",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui31/states/review-1280x800.png",
+      "kind": "synthetic regression",
+      "bytes": 729431,
+      "sha256": "45d5af7a9de9eeba6aa6ec1bbe9ceef1aa17af1f12f6761ecfd4df618ddbff22",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui31/states/review-1440x900.png",
+      "kind": "synthetic regression",
+      "bytes": 880397,
+      "sha256": "10c75db32d436435d9358f9445252a078a58573c9803d90b2f6b495f5511c299",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui31/states/review-706x512.png",
+      "kind": "synthetic regression",
+      "bytes": 304891,
+      "sha256": "f41b27044de4ce71a57fb14f82f2a698762602c91c2090cec8790571f2147ae9",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui31/states/review-720x520.png",
+      "kind": "synthetic regression",
+      "bytes": 313710,
+      "sha256": "3c2d8d1bdf28e11663633b162b879a9075fd3b7c67b82588fd97ea7a6c5b080d",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui31/states/review-minimum-200.png",
+      "kind": "synthetic regression",
+      "bytes": 307521,
+      "sha256": "f42961526db2d8a450b62ac57550743de7b4dff6aa996c9fee7927bc4ae72c8d",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/accounts-0.png",
+      "kind": "synthetic regression",
+      "bytes": 1221663,
+      "sha256": "f5f4af9a8f46849bf610921a180dc50d38fb7db0c88b9a0a1a250fa072a92c44",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/appearance-1024x768.png",
+      "kind": "synthetic regression",
+      "bytes": 774055,
+      "sha256": "8cc26fad53d7a9841ca7d19b8fddb1f4890633892c045f96b5fa2f236434b0c0",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/appearance-1280x800.png",
+      "kind": "synthetic regression",
+      "bytes": 986071,
+      "sha256": "3345ce09a8d4f56cda55a5ed785308bb019dbde383acabf08f76ab00b0220647",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/appearance-1440x900.png",
+      "kind": "synthetic regression",
+      "bytes": 1215200,
+      "sha256": "14237c9d3ecfa59a313a154d2f6be566fae00f3ac993cfdce258ac572721ec93",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/appearance-706x512.png",
+      "kind": "synthetic regression",
+      "bytes": 412534,
+      "sha256": "7f8f85451165d17e10aeb787307396707b26998ddfda79b7e12c536fe8a99311",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/appearance-720x520.png",
+      "kind": "synthetic regression",
+      "bytes": 425165,
+      "sha256": "365dbde0a29fcfd99518e8f3a28953c6eaa16bca64f2ef091de6ac193907c623",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/cape-preview.png",
+      "kind": "synthetic regression",
+      "bytes": 1223550,
+      "sha256": "18d368cd471524b86b9ec1dc9a1c098ec9d03028c6c1d61fcbe60b6d395202b6",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/expired.png",
+      "kind": "synthetic regression",
+      "bytes": 1132451,
+      "sha256": "6cd20c6d18263ab6ddbf57df63848f0ad97ef4e564586ab209e6faf2337ba942",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/no-capes.png",
+      "kind": "synthetic regression",
+      "bytes": 1229132,
+      "sha256": "29d0abfc5eec2c3fb990204b64aff35b5c13ef3abfe21e2ba1053e5379598d06",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/offline.png",
+      "kind": "synthetic regression",
+      "bytes": 1131619,
+      "sha256": "4addff08141eb7521c2cbe4f931e6ecd32e30f24277e24638d8b40adabc02fde",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/reduced-transparency.png",
+      "kind": "synthetic regression",
+      "bytes": 178112,
+      "sha256": "1137f2e1861ff38f8ee01a8deb23dc7d47ef59b51f7a2b09957ae350a53b2054",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/results.json",
+      "kind": "synthetic regression",
+      "bytes": 6710,
+      "sha256": "17bf57e0aee719068bdfa7f8ca005c10b4fb000847c613bc3c3f6853e86c4dc8",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/rotated.png",
+      "kind": "synthetic regression",
+      "bytes": 1232756,
+      "sha256": "5f3844fb0462cf244d934e23e09fb23ad15706c1bbe1c1838d7f6097f51bb704",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/text-200-1024x768.png",
+      "kind": "synthetic regression",
+      "bytes": 795468,
+      "sha256": "f90dd2171d83583e9fad5a275ff7f01fd9250e58c7653bc06c96558bd3801e50",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/text-200-1280x800.png",
+      "kind": "synthetic regression",
+      "bytes": 1017661,
+      "sha256": "192aa8aeb49e2d8c35b1a7cb2d4e91736a4924ed2e14a48fbb8babc416b98511",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/text-200-1440x900.png",
+      "kind": "synthetic regression",
+      "bytes": 1250297,
+      "sha256": "b8a011e8b117dbaa5c01d489fa225f9636f03eeecd234ecf9c108e43320eb86b",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/text-200-706x512.png",
+      "kind": "synthetic regression",
+      "bytes": 409551,
+      "sha256": "8906f3d57d2bcba5f2649c27b7885a17b4d543ac288c18876c7feabc77ec4e4b",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/text-200-720x520.png",
+      "kind": "synthetic regression",
+      "bytes": 423494,
+      "sha256": "d8935c518a9781375b054e8b4460d09a1d0649ac84a908d8836e16f00127aed6",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/text-200-minimum-library.png",
+      "kind": "synthetic regression",
+      "bytes": 320560,
+      "sha256": "a8373a6c4f0bf854730aa48b1c4cf86bbb65b4d5e4acaa3d5f85ff0a187f9783",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui4/text-200-minimum-stage.png",
+      "kind": "synthetic regression",
+      "bytes": 404536,
+      "sha256": "30ecb318341a821587414312f3022607a54c23cf90e0ccf3b31e0426e2274088",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/about-1024x768-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 729873,
+      "sha256": "cf0e06de3f09456ecfe129914e4750b1892de7ff46ecf46424bee231883734ec",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/about-1280x800-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 945614,
+      "sha256": "34bee05b7cd0f529fe771a1a9118ae18ad45afa50ab05b7357935a21a0ec6ae9",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/about-1440x900-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 1155789,
+      "sha256": "393fe6991da2b1becff0c19e3fcdcbe908859ec24f9062574be578bcc1474474",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/about-706x512-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 409368,
+      "sha256": "8954d7117061d09fc31eb3960fc3aa1d2afb12c82813efcd5fe971b72a2df061",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/about-720x520-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 421542,
+      "sha256": "7a9481f0c6022bfb0a9423dad86d24b1d00074b1faf9c36b997cee999fcfa05e",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/about-720x520-text2.png",
+      "kind": "synthetic regression",
+      "bytes": 463731,
+      "sha256": "5d65e2be137e0135f0f4d64ef35d5bebfa3ba520be97d7ee41258cab08cca61b",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/accessibility-1024x768-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 750059,
+      "sha256": "44e4cee9e4a9fa1ec91d9ad897d53260d8ce87b9bcddcea8782ee7d6ff05b0f9",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/accessibility-1280x800-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 953241,
+      "sha256": "b0573c728885fb485f7be36328a4b9ccbe52e5094410fec408504f87ee6c1c3c",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/accessibility-1440x900-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 1161761,
+      "sha256": "ea75f5ce600de33e17e5ac33e01ef1e9322816ddb2c2f07c360273573b45ae41",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/accessibility-706x512-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 425325,
+      "sha256": "529da9fa9a97afec0c4f0edc00aba80efd58e2f812bd7df997ad48987c071ade",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/accessibility-720x520-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 435990,
+      "sha256": "9705c62161a0ca8d5568ad1ee9b36df4ef69237d357cd87197174a409eb682f2",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/accessibility-720x520-text2.png",
+      "kind": "synthetic regression",
+      "bytes": 464374,
+      "sha256": "034986e063bde322aeaa44aaa72a6851fc181dd310cef2668beda5b04c64935a",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/appearance-1024x768-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 663785,
+      "sha256": "3d4f9ed6abfe2218b817f6e3cf2d619a49bdf2adc33fa837c3a9b71730c5eabc",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/appearance-1280x800-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 854766,
+      "sha256": "f1988ab07c4bf56b92c64ba62df6853f73d411ce93d5e4bb0c1ecce818b37f0e",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/appearance-1440x900-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 1046011,
+      "sha256": "75d255c02f07fc59ca796f5282ccd1d2c7d34e87030b46b846c3bf365caf3d6c",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/appearance-706x512-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 369473,
+      "sha256": "856c10c6c3cdc2ce03f129c9295f686883d9ec20b98200a14e8ef3189ced35ac",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/appearance-720x520-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 379518,
+      "sha256": "35e4248c85da5a3bb6aabf7054881665a06093295b9239bdc3f9c1b4c3f22709",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/appearance-720x520-text2.png",
+      "kind": "synthetic regression",
+      "bytes": 443590,
+      "sha256": "82d7b86da14f9b059f7f929d0c5cf8b33ce61390d3d10b3c21fb80fce990b134",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/appearance-save-error.png",
+      "kind": "synthetic regression",
+      "bytes": 1012141,
+      "sha256": "558545548f57041a6db316cbbdee6595b0a0eb30ecc259b0ccd289e59268ea2d",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/discord-1024x768-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 715333,
+      "sha256": "65d463b38122d977523bdde343e2302394d6a9e974fbc80c78dd5915dbfc46ed",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/discord-1280x800-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 926120,
+      "sha256": "cd7ba208d7f4109215b9526dec39aa36caa3c60258186c1aa8395c5e474fd7a7",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/discord-1440x900-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 1122839,
+      "sha256": "e236a1adababd485f74167a69e382a4b659be1f9c7e61168cfdeb76ab2121c35",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/discord-706x512-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 403791,
+      "sha256": "5e1a4ceb1dfcb72f50a83a95c4f2d9f9e8328ac0742eeebeaee3e90ff79811ab",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/discord-720x520-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 417380,
+      "sha256": "514aff80aad905f5d7d6331c7f587746cd44b5ee3a1d7792abb4f87472cc6fc1",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/discord-720x520-text2.png",
+      "kind": "synthetic regression",
+      "bytes": 463776,
+      "sha256": "c7bca58c836c03c9806358bb8136dad9d2fcb35733a7d7e0f36ff96066cfadd1",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/discord-unconfigured.png",
+      "kind": "synthetic regression",
+      "bytes": 1067270,
+      "sha256": "75f521e3adad716de076df49e23f571ebce867fc3566d29f8a3166d117bbe38b",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/forced-colors.png",
+      "kind": "synthetic regression",
+      "bytes": 590529,
+      "sha256": "8e0b0490ff3110b6c6ce0b50e096129d6fdf80c528d3c21c396d3b31a6e01690",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/general-1024x768-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 720581,
+      "sha256": "907a2046124f434adfa8a430ba3f726672e51117f3f66fdbda6340cee8ec438c",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/general-1280x800-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 930087,
+      "sha256": "8c57cbf6cad285be17061965823a37a900cdfabb7afb47187fe67cfd14d8a3a3",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/general-1440x900-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 1136198,
+      "sha256": "e71d1ad32de645231adef618684183f8fc297c4bdb76ce3415ff9ab4b747384f",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/general-706x512-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 406974,
+      "sha256": "35b40e5e7723453ecba917aaca1ecf946e8fb73677ff3b20f349268b1d96f1dd",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/general-720x520-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 416832,
+      "sha256": "bc8f8378d7b1cce27a4d50ab5d058a9c4207fb40d94e2216cf58011ad13d91c6",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/general-720x520-text2.png",
+      "kind": "synthetic regression",
+      "bytes": 460736,
+      "sha256": "669b6bbf96199c377ef194fe0eda8674cf597d650585fab2591fbaee26cb95f6",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/home-1024x768-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 717516,
+      "sha256": "0e9c5507e46fed38eac974a6ae10a2fb61724c5b558d26f352a0269cde7dbdd0",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/home-1280x800-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 930228,
+      "sha256": "e947f58b66479c2107c3ff6f98305ebf9c8b7dab60199d2689b7fd89467e31af",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/home-1440x900-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 1132923,
+      "sha256": "7eba237a00c8445c0aa86d6e68c4561e2ee7f1dffc82088c545c9e00afe39b4e",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/home-706x512-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 406842,
+      "sha256": "4c86290b74ab642fc1de80d7559132c50695179c6013186fafabd7d6c5ca2a76",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/home-720x520-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 417215,
+      "sha256": "0ef4a2af9df3573f2c483cab022e98de34cfcff66f0c1712e72695b840284f83",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/home-720x520-text2.png",
+      "kind": "synthetic regression",
+      "bytes": 457996,
+      "sha256": "55e1c8e6ab8ecd3eacc9f39393268c11388e2a5be8113a27ae6e89900fb440d7",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/minecraft-1024x768-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 738393,
+      "sha256": "e65e74774a18d411b35dec9aa327205187174fd91389cc494caf53906b2af21d",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/minecraft-1280x800-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 951618,
+      "sha256": "d8bb61fff82a60a5273f003da2cd7ca5912391aabd0a1a4702f5b2d1901093e7",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/minecraft-1440x900-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 1161367,
+      "sha256": "71468ff27ef0e1088ebf38e6c76a98ddb85ba48f7f67ec05529dc2bcecf2b4b3",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/minecraft-706x512-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 415927,
+      "sha256": "870652ce9ac955864bcb0c93f5de25bb430ee3554da1188fa304e9846f463c41",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/minecraft-720x520-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 427786,
+      "sha256": "483e180474e213efc9e845ecf4fa39a692406b318f1988f95e5db665f7625c83",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/minecraft-720x520-text2.png",
+      "kind": "synthetic regression",
+      "bytes": 465100,
+      "sha256": "237d09e95d066e8ae011b70c78e441310274978a9effb4f1bbea4a0df8300ae4",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/reduced-transparency.png",
+      "kind": "synthetic regression",
+      "bytes": 738539,
+      "sha256": "1cbf5c0942b90a8c3196503986355616e406e515e94057b02dc233d57aad73d0",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/results.json",
+      "kind": "synthetic regression",
+      "bytes": 17476,
+      "sha256": "53e264b8fd9c0cd44fae1482fc634ba50a5e0a7eeb70477a0caf46895c572256",
+      "committed": true
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/updates-1024x768-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 745175,
+      "sha256": "c0f5ef114964ed9114c86662862b82504dd5231926773e6d865aa2624691a785",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/updates-1280x800-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 959738,
+      "sha256": "b1c9d3d112c15cc762d6624a6700bffc009cfc5558363262ddd8ad2b34a8ac9f",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/updates-1440x900-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 1163261,
+      "sha256": "72ab15dc600ddc60fe099211e1acbc3ced3c398b2742d54543ce0a13395ea743",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/updates-706x512-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 405330,
+      "sha256": "b917bd8c0529c9f69a14d4bba7b02aaa85d39d96dbc3594de43d3935cdf45b45",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/updates-720x520-text1.png",
+      "kind": "synthetic regression",
+      "bytes": 415974,
+      "sha256": "90a5f0fb15bccd2a2ed755aa82d4a800afbcbb65d46b258667c012a3d8f338c4",
+      "committed": false
+    },
+    {
+      "path": "docs/performance-p2/regressions/ui5/updates-720x520-text2.png",
+      "kind": "synthetic regression",
+      "bytes": 467928,
+      "sha256": "55e31673fcc95957ae2564e07e17a07bc153d8a4c383e6e2a1d37c4eccfb1bd0",
+      "committed": false
+    }
+  ]
+}

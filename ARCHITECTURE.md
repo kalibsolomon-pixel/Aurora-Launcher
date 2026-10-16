@@ -2,6 +2,40 @@
 
 # Aurora Launcher architecture
 
+## Performance P2 — explicit JVM configuration modes (current)
+
+Instance registry schema **6** adds an optional performanceMode to the existing
+InstanceConfiguration. Efficient, Balanced, Performance and Custom are opt-in
+advice modes; missing/null remains Existing Configuration, including fresh instances.
+Known 2–5 migrations preserve heap/custom text and activate no mode. Legacy files
+already containing the new field, malformed state, unknown fields/modes/schemas
+fail deliberately. Config 7, game/runtime schemas and release authority are unchanged.
+
+Modes do not emit JVM flags or change memory automatically. Use recommendation
+changes the existing memoryMib draft; native atomic Save applies it. Efficient's
+heuristic target is at most 1536 MiB, Balanced/Performance/Custom advice at most
+2048 MiB, capped by total/available RAM reserves and architecture. Performance
+intentionally matches Balanced until measured workload evidence exists. No real
+Minecraft performance result or optimization claim is introduced.
+
+instances::performance queries bounded Windows memory status or Linux meminfo only
+on settings requests, caches facts for 30 seconds and reports unknowns/age. It never
+polls, scans mods/GPUs, selects Java, modifies power/priority/affinity, or clamps saved
+heaps. Explicit recommendation application refreshes facts and rejects stale draft
+or instance/mode generations. Svelte displays native advice in the existing instance
+Performance area, reached through global Minecraft & Java. Saved values, unsaved
+mode, recommendation and advanced text remain distinct. Errors survive a native
+registry refresh; editor initialization follows instance identity, not object replacement.
+
+The established launch order/spec/spawn pipeline and legacy parser remain unchanged.
+Opted-in modes support portable user properties/assertions, preserve duplicate order,
+and reject managed properties, indirection and unvalidated VM/collector options.
+Initial-heap and typed GC tuning remain unsupported pending exact-build validation.
+No user argument is executed as a validation command. Managed runtime selection and
+session/containment/final validation remain authoritative. P2 uses isolated native
+roots; no production migration, game launch, release or P3 work was performed.
+Details: docs/performance-p2/PROFILE_SPEC.md and PERFORMANCE_P2_ACCEPTANCE.md.
+
 ## UI-5 Settings and personalization (current)
 
 Global Settings retains the existing Aurora shell and session-only category

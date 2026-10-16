@@ -1,0 +1,46 @@
+{
+  "rust": {
+    "passed": 992,
+    "ignored": 31,
+    "failed": 0
+  },
+  "frontend": {
+    "passed": 282,
+    "failed": 0,
+    "execution": "sequential, existing full assertions"
+  },
+  "focusedFinalComponents": {
+    "passed": 7,
+    "failed": 0
+  },
+  "types": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "format": "PASS",
+  "rustAllTargetsCheck": "PASS",
+  "productionFrontendBuild": "PASS",
+  "debugNativeBuild": "PASS",
+  "nativeFirst": "PASS",
+  "nativeRestart": "PASS",
+  "nativeExitCodes": [
+    0,
+    0
+  ],
+  "nativeScreenshotCount": 13,
+  "uiRegressionSuites": [
+    "ui1",
+    "ui2",
+    "ui2b",
+    "ui2b1-crop",
+    "ui3",
+    "ui31",
+    "ui4",
+    "ui5"
+  ],
+  "regressions": "PASS",
+  "newBrowserInteractions": "PASS",
+  "realMinecraftLaunch": false,
+  "gameplayPerformance": "NOT MEASURED",
+  "productionInstallation": false
+}

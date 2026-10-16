@@ -1,0 +1,205 @@
+{
+  "provenance": "Synthetic browser fixtures, not native acceptance",
+  "checks": [
+    "all transitions persist mode without changing heap or custom text",
+    "recommendation is explicit, refreshed, undoable and unsaved",
+    "delayed memory advice never overwrites a newer manual heap",
+    "rejected save retains saved state and editable draft",
+    "keyboard focus, responsive and 200% text layouts",
+    "missing hardware/advice failure does not change heap"
+  ],
+  "metrics": [
+    {
+      "name": "existing-default",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "rejected-save",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "custom-1120x760-text1",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "advanced-1120x760-text1",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "custom-1120x760-text2",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "advanced-1120x760-text2",
+      "viewport": [
+        1120,
+        760
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "custom-1024x768-text1",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "advanced-1024x768-text1",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "custom-1024x768-text2",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "advanced-1024x768-text2",
+      "viewport": [
+        1024,
+        768
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "custom-720x520-text1",
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "advanced-720x520-text1",
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "custom-720x520-text2",
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "advanced-720x520-text2",
+      "viewport": [
+        720,
+        520
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "custom-712x512-text1",
+      "viewport": [
+        712,
+        512
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "advanced-712x512-text1",
+      "viewport": [
+        712,
+        512
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "custom-712x512-text2",
+      "viewport": [
+        712,
+        512
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "advanced-712x512-text2",
+      "viewport": [
+        712,
+        512
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    },
+    {
+      "name": "forced-colors",
+      "viewport": [
+        712,
+        512
+      ],
+      "dpr": 1,
+      "documentOverflow": false,
+      "mainOverflow": false
+    }
+  ],
+  "errors": [],
+  "ownershipWarnings": []
+}

@@ -1,0 +1,19 @@
+{
+  "cases": 11,
+  "results": [
+    "Search stays explicit; clear restores focus and respects categories/sort; pagination appends",
+    "Categories retain search/sort, native provider values and keyboard focus",
+    "Installed and dependency states; pending install excludes duplicate requests and announces completion",
+    "Collision/verification failures preserve explicit blocked or retryable feedback",
+    "Compact modpack rows and exact version/optional-file review remain explicit",
+    "Resource packs use their native kind and distinct medium artwork",
+    "Loading, empty and provider error/retry states stay distinct",
+    "Installed Mods search/filter/sort, switch, details and cancel confirmation",
+    "Installed Packs toggle, full details, safe removal cancellation and empty library",
+    "All content layouts and long text remain contained at four required sizes and 200% text",
+    "Keyboard focus, alternate accents, reduced motion/transparency and cached artwork reuse"
+  ],
+  "pageErrors": [],
+  "externalRequests": 0,
+  "provenance": "Actual Svelte components; deterministic browser-only provider fixtures. No native forwarding or owner data."
+}
