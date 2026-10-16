@@ -1,0 +1,511 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:aurora:benchmark:run:1",
+  "title": "P3-A benchmark run schema 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifacts",
+    "blockId",
+    "capture",
+    "clocks",
+    "configurationId",
+    "dataQualityWarnings",
+    "endUtc",
+    "environment",
+    "graphics",
+    "hardware",
+    "jvmArguments",
+    "measurementSeconds",
+    "minecraft",
+    "mods",
+    "process",
+    "qualityPolicy",
+    "runId",
+    "runtime",
+    "sampleKind",
+    "scene",
+    "schemaVersion",
+    "startUtc",
+    "status",
+    "warmupSeconds",
+    "window",
+    "workloadId"
+  ],
+  "properties": {
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frames",
+        "gc",
+        "process"
+      ],
+      "properties": {
+        "frames": {
+          "type": "object",
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "gc": {
+          "type": "object",
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "process": {
+          "type": "object",
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "blockId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,80}$"
+    },
+    "capture": {
+      "type": "object",
+      "required": [
+        "tool",
+        "version",
+        "format",
+        "frameSemantic",
+        "toolSha256",
+        "settingsSha256"
+      ],
+      "properties": {
+        "tool": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "units": {
+          "type": "string"
+        },
+        "frameSemantic": {
+          "type": "string"
+        },
+        "toolSha256": {
+          "type": "string"
+        },
+        "settingsSha256": {
+          "type": "string"
+        }
+      }
+    },
+    "clocks": {
+      "type": "object",
+      "required": [
+        "gcUptimeToRun"
+      ],
+      "properties": {
+        "gcUptimeToRun": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source0",
+            "source1",
+            "run0",
+            "run1",
+            "uncertaintyMs",
+            "maxDriftPpm"
+          ],
+          "properties": {
+            "source0": {
+              "type": "number",
+              "minimum": 0
+            },
+            "source1": {
+              "type": "number",
+              "minimum": 0
+            },
+            "run0": {
+              "type": "number",
+              "minimum": 0
+            },
+            "run1": {
+              "type": "number",
+              "minimum": 0
+            },
+            "uncertaintyMs": {
+              "type": "number",
+              "minimum": 0
+            },
+            "maxDriftPpm": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "configurationId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,80}$"
+    },
+    "dataQualityWarnings": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_-]{1,80}$"
+      }
+    },
+    "endUtc": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "object",
+      "required": [
+        "power",
+        "acConnected",
+        "thermals",
+        "background",
+        "display",
+        "quietPreflightSha256"
+      ],
+      "properties": {
+        "power": {
+          "type": "string"
+        },
+        "acConnected": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "thermals": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "background": {
+          "type": "string"
+        },
+        "display": {
+          "type": "string"
+        },
+        "quietPreflightSha256": {
+          "type": "string"
+        }
+      }
+    },
+    "failureReason": {
+      "type": "string"
+    },
+    "graphics": {
+      "type": "object",
+      "required": [
+        "width",
+        "height",
+        "refreshHz",
+        "windowMode",
+        "renderDistance",
+        "simulationDistance",
+        "optionsSha256"
+      ],
+      "properties": {
+        "width": {
+          "type": "integer"
+        },
+        "height": {
+          "type": "integer"
+        },
+        "refreshHz": {
+          "type": "integer"
+        },
+        "windowMode": {
+          "type": "string"
+        },
+        "renderDistance": {
+          "type": "integer"
+        },
+        "simulationDistance": {
+          "type": "integer"
+        },
+        "optionsSha256": {
+          "type": "string"
+        }
+      }
+    },
+    "hardware": {
+      "type": "object",
+      "required": [
+        "cpu",
+        "gpu",
+        "gpuDriver",
+        "ramBytes",
+        "os",
+        "osBuild"
+      ],
+      "properties": {
+        "cpu": {
+          "type": "string"
+        },
+        "gpu": {
+          "type": "string"
+        },
+        "gpuDriver": {
+          "type": "string"
+        },
+        "ramBytes": {
+          "type": "integer"
+        },
+        "os": {
+          "type": "string"
+        },
+        "osBuild": {
+          "type": "string"
+        }
+      }
+    },
+    "jvmArguments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "measurementSeconds": {
+      "type": "number"
+    },
+    "minecraft": {
+      "type": "object",
+      "required": [
+        "version",
+        "loader",
+        "loaderVersion",
+        "fabricApi"
+      ],
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "loader": {
+          "type": "string"
+        },
+        "loaderVersion": {
+          "type": "string"
+        },
+        "fabricApi": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "mods": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "version",
+          "algorithm",
+          "digest"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "algorithm": {
+            "enum": [
+              "sha1",
+              "sha256",
+              "sha512"
+            ]
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]+$"
+          }
+        }
+      }
+    },
+    "process": {
+      "type": "object",
+      "required": [
+        "pid",
+        "creationId",
+        "originMonotonicNs",
+        "logicalProcessors"
+      ],
+      "properties": {
+        "pid": {
+          "type": "integer"
+        },
+        "creationId": {
+          "type": "string"
+        },
+        "originMonotonicNs": {
+          "type": "integer"
+        },
+        "logicalProcessors": {
+          "type": "integer"
+        }
+      }
+    },
+    "qualityPolicy": {
+      "type": "object",
+      "required": [
+        "minimumWarmupSeconds",
+        "minimumFrames",
+        "boundaryToleranceSeconds",
+        "maxProcessIntervalSeconds"
+      ],
+      "properties": {
+        "minimumWarmupSeconds": {
+          "type": "integer"
+        },
+        "minimumFrames": {
+          "type": "integer"
+        },
+        "boundaryToleranceSeconds": {
+          "type": "number"
+        },
+        "maxProcessIntervalSeconds": {
+          "type": "integer"
+        }
+      }
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,80}$"
+    },
+    "runtime": {
+      "type": "object",
+      "required": [
+        "vendor",
+        "version",
+        "build",
+        "architecture",
+        "manifestSha1",
+        "executableSha256"
+      ],
+      "properties": {
+        "vendor": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "build": {
+          "type": "string"
+        },
+        "architecture": {
+          "type": "string"
+        },
+        "manifestSha1": {
+          "type": "string"
+        },
+        "executableSha256": {
+          "type": "string"
+        }
+      }
+    },
+    "sampleKind": {
+      "enum": [
+        "synthetic",
+        "measured"
+      ]
+    },
+    "scene": {
+      "type": "object",
+      "required": [
+        "worldSha256",
+        "routeSha256",
+        "settingsSha256"
+      ],
+      "properties": {
+        "worldSha256": {
+          "type": "string"
+        },
+        "routeSha256": {
+          "type": "string"
+        },
+        "settingsSha256": {
+          "type": "string"
+        }
+      }
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "startUtc": {
+      "type": "string"
+    },
+    "startupSeconds": {
+      "type": "object"
+    },
+    "status": {
+      "enum": [
+        "complete",
+        "failed",
+        "interrupted"
+      ]
+    },
+    "warmupSeconds": {
+      "type": "number"
+    },
+    "window": {
+      "type": "object",
+      "required": [
+        "startSeconds"
+      ],
+      "properties": {
+        "startSeconds": {
+          "type": "integer"
+        }
+      }
+    },
+    "workloadId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,80}$"
+    }
+  },
+  "$comment": "Structural companion. quality.py additionally enforces nested identity, hashes, clocks, privacy and physical plausibility; JSON Schema alone cannot validate artifacts or provenance."
+}

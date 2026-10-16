@@ -1,0 +1,90 @@
+{
+  "runId": "synthetic-parser-1",
+  "classification": "VALID WITH WARNINGS",
+  "reasons": [],
+  "warnings": [
+    "P99.9 unavailable below 10000 intervals; lower tails descriptive"
+  ],
+  "evidenceScope": "offline data-quality checks; not Minecraft capture validation",
+  "metrics": {
+    "frames_ms": {
+      "count": 200,
+      "mean": 10.0,
+      "median": 10.000000000000009,
+      "p95": 10.000000000000009,
+      "p99": 10.000000000000009,
+      "p999": null,
+      "max": 10.000000000000009,
+      "variance": 1.240750723990368e-27,
+      "presentation_rate_hz": 100.0,
+      "stutter_frames_over_50ms": 0,
+      "stutter_events_over_50ms": 0,
+      "stutter_frames_per_minute": 0.0,
+      "long_gaps_over_1000ms": 0,
+      "boundary_coverage": true,
+      "discarded_boundary_intervals": 0
+    },
+    "gc": {
+      "collector": "G1",
+      "pause_ms": {
+        "count": 2,
+        "mean": 7.5,
+        "median": 7.5,
+        "p95": 9.75,
+        "p99": 9.95,
+        "p999": null,
+        "max": 10.0,
+        "variance": 6.25
+      },
+      "total_pause_ms": 15.0,
+      "pause_wall_percent": 0.75,
+      "collection_count": 2,
+      "collections_per_minute": 60.0,
+      "full_gc_count": 1,
+      "max_post_gc_used_bytes": 16777216.0,
+      "max_post_gc_committed_bytes": 134217728.0,
+      "gc_logged_phase_cpu_seconds": null,
+      "gc_logged_phase_cpu_percent_one_core": null,
+      "gc_cpu_limit": "rounded process CPU during logged phases; not isolated GC worker CPU or total GC CPU",
+      "outside_window_pause_count": 0,
+      "oom_count": null
+    },
+    "clock": {
+      "driftPpm": 0.0,
+      "uncertaintyMs": 1.0,
+      "causalityEstablished": false
+    },
+    "gc_stutter_proximity": {
+      "stutter_intervals_near_gc": 0,
+      "causalityEstablished": false
+    },
+    "process": {
+      "cpu_percent_one_core_mean": 150.0,
+      "cpu_percent_one_core_peak_sampled": 150.0,
+      "system_cpu_percent_machine_mean": 7.142857142857142,
+      "background_cpu_percent_one_core_estimate_mean": 50.0,
+      "rss_bytes_peak_sampled": 200000000,
+      "peak_rss_bytes_os": 220000000,
+      "system_available_bytes_min": 8589934592,
+      "sample_interval_seconds_max": 0.5,
+      "covered_seconds": 2.0,
+      "boundary_coverage": true,
+      "boundary_method": "time-weighted counter intervals clipped at window edges; within-interval rate assumed uniform",
+      "heap_used_bytes": null,
+      "heap_committed_bytes": null,
+      "paging_bytes_per_second": null,
+      "gc_cpu_percent": null
+    },
+    "startup_seconds": {
+      "jvm": null,
+      "mainMenu": null,
+      "worldLoad": null
+    }
+  },
+  "sampleKind": "synthetic",
+  "configurationId": "current",
+  "blockId": "block-1",
+  "manifestSha256": "4a29b840d648a24476e4a685a80f0761b7c9be35c401499486cfced7ba2d26eb",
+  "cohortSha256": "fc6fed5cb361bb13f1a054cd0ec0c3151d255ace5a5348d13d8d376c8b56a047",
+  "configurationSha256": "8590b65e23a921763870c9576b3dc9ae457bfa9f555d8d97ea8972888bcc57e1"
+}

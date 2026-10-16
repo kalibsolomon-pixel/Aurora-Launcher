@@ -1,0 +1,9 @@
+# Large/unsanitized future captures stay local; examples have explicit fixture names.
+private/
+raw/
+*.etl
+*.jfr
+*.mp4
+!standalone-gc.log
+synthetic/gc.log
+!synthetic/gc.log

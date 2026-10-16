@@ -1,0 +1,4 @@
+# Preserve raw artifact hashes on every checkout, including Windows autocrlf hosts.
+evidence/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+workloads.json -text
+run.schema.json text eol=lf

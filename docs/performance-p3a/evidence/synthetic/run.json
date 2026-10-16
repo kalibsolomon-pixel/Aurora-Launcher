@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "runId": "synthetic-parser-1",
+  "workloadId": "synthetic-no-game",
+  "configurationId": "current",
+  "blockId": "block-1",
+  "sampleKind": "synthetic",
+  "status": "complete",
+  "startUtc": "2026-10-16T12:00:00Z",
+  "endUtc": "2026-10-16T12:00:02Z",
+  "warmupSeconds": 300,
+  "measurementSeconds": 2,
+  "window": {
+    "startSeconds": 0
+  },
+  "process": {
+    "pid": 123,
+    "creationId": "fixture-creation",
+    "originMonotonicNs": 1000000000000000,
+    "logicalProcessors": 28
+  },
+  "runtime": {
+    "vendor": "synthetic",
+    "version": "21.0.0",
+    "build": "fixture+1",
+    "architecture": "x64",
+    "manifestSha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "executableSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "minecraft": {
+    "version": "synthetic-no-game",
+    "loader": "synthetic",
+    "loaderVersion": "none",
+    "fabricApi": null
+  },
+  "mods": [],
+  "graphics": {
+    "width": 1920,
+    "height": 1080,
+    "refreshHz": 240,
+    "windowMode": "windowed",
+    "renderDistance": 12,
+    "simulationDistance": 8,
+    "optionsSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "scene": {
+    "worldSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "routeSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "settingsSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "hardware": {
+    "cpu": "synthetic",
+    "gpu": "synthetic",
+    "gpuDriver": "fixture",
+    "ramBytes": 17179869184,
+    "os": "synthetic",
+    "osBuild": "fixture"
+  },
+  "environment": {
+    "power": "synthetic",
+    "acConnected": null,
+    "thermals": null,
+    "background": "synthetic",
+    "display": "synthetic",
+    "quietPreflightSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "capture": {
+    "tool": "fixture-generator",
+    "version": "1",
+    "format": "normalized-timestamps-v1",
+    "units": "s",
+    "frameSemantic": "synthetic-presentation",
+    "toolSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "settingsSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "clocks": {
+    "gcUptimeToRun": {
+      "source0": 300,
+      "source1": 302,
+      "run0": 0,
+      "run1": 2,
+      "uncertaintyMs": 1,
+      "maxDriftPpm": 100
+    }
+  },
+  "jvmArguments": [
+    "-Xmx2048m"
+  ],
+  "artifacts": {
+    "frames": {
+      "path": "frames.csv",
+      "sha256": "87e65b30a62d43f3448a097579650ef77805dfd95194f1557d47764aae8ce76a"
+    },
+    "gc": {
+      "path": "gc.log",
+      "sha256": "1e1a3f4587edbef38019b5ac4eabde89d3217d10c0a6951205f83fcea7856eeb"
+    },
+    "process": {
+      "path": "process.csv",
+      "sha256": "2167ebdf6dee6631159673b57e90a57b41b89c071a634d4c0601d97154ac22b4"
+    }
+  },
+  "startupSeconds": {
+    "jvm": null,
+    "mainMenu": null,
+    "worldLoad": null
+  },
+  "qualityPolicy": {
+    "minimumWarmupSeconds": 300,
+    "minimumFrames": 100,
+    "boundaryToleranceSeconds": 0.05,
+    "maxProcessIntervalSeconds": 1
+  },
+  "dataQualityWarnings": []
+}
