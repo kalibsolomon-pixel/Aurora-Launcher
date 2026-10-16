@@ -1,28 +1,34 @@
-# P3-A readiness matrix
+# P3-A / P3-A.1 readiness matrix
 
-Overall **PARTIAL**. P3-B **NOT READY / NOT AUTHORIZED**. Offline correctness
-and native installation do not substitute for actual authenticated game capture.
+Overall **PARTIAL** as of 2026-10-16. P3-B **NOT READY / NOT AUTHORIZED**.
+Owner decision: PresentMon 2.3.1 console, separate Windows test user, short capture
+only. Owner confirms the test user is **not provisioned**; document setup, do not
+create an account. [Acceptance](../../PERFORMANCE_P3A1_ACCEPTANCE.md).
 
 | Gate | Status | Evidence / exact remaining condition |
 | --- | --- | --- |
-| Frame capture selected | PASS | [Decision](FRAME_CAPTURE_DECISION.md): PresentMon 2.3.1 console primary candidate; Windows/Linux alternatives and semantics defined |
-| Frame capture calibrated | BLOCKED | No approved installed binary, actual native presentation stimulus or raw calibration output; follow [protocol](CALIBRATION_PROTOCOL.md) |
-| Minecraft capture validated | BLOCKED | Zero real Minecraft samples; needs isolated authorized authentication and capture; Aurora/Sodium coexistence untested |
-| Java runtime locked | PASS | [Actual lock](evidence/java-runtime.json): Microsoft 21.0.7+6-LTS, exact manifest/executable hashes, deep native validation; nondefault collectors untested and out of scope |
-| Workload A ready | PARTIAL | Base content/Fabric/Java actually installed and validated; exact scene/protocol specified; no world snapshot/settings/route hash or authenticated execution |
-| Workload B ready | PARTIAL | Exact base/mod artifacts actually installed and rehashed; world snapshots and coexistence execution pending |
-| Workload C ready | PARTIAL | Same B inventory installed/rehashed plus bounded scene specification; world/intensity/execution pending |
-| Isolated environment ready | PASS | Fresh marked direct-temp managed/WebView root, native installed instance, registry 6, actual restart; worlds/logs remain test-root scoped and unpopulated until authorized |
-| Authentication ready | BLOCKED | Zero accounts; same-account Credential Manager namespace risk requires separate Windows test user or reviewed dedicated-account policy, then explicit owner sign-in |
-| GC capture ready | PARTIAL | G1 synthetic/real standalone log ingestion validated; fixed Java logging works; no instrumented game capture or game clock anchors |
-| CPU/memory capture ready | PARTIAL | Actual Windows self-process/system sampling and offline ingestion pass; not yet exact-child game sampling; live heap/paging/GPU/thermal sources unknown |
-| Artifact integrity | PASS | Required metadata/digests/containment/identity/clock/cohort checks tested; reviewed privacy/producer authenticity still manual |
-| Quiet-system readiness | BLOCKED | Actual 30 s ambient evidence says NOT READY; owner Java activity, uncontrolled preparation, unknown AC/GPU/thermals and shorter-than-planned observation |
-| P3-B execution plan | PASS | [Review-only protocol](P3B_PROTOCOL.md): effective-vector equivalence, A/A, >=5 repetitions, order rotation, warm-up/retention/promotion gates |
-| Linux native/capture | NOT TESTED | Separate runtime, credential-store limitation, capture/CPU accounting adapter and Wayland/X11 calibration required |
+| PresentMon selected and acquired | PASS | [Installation](PRESENTMON_INSTALLATION.md): exact official 2.3.1 portable x64 asset, expected SHA-256 match, valid Intel signature, actual help banner; no installer |
+| Presentation calibration | BLOCKED | [Calibration](PRESENTMON_CALIBRATION.md): zero actual presentation rows; tracing/start-stop/PID behavior and controlled OpenGL stimulus untested |
+| Windows user isolation | BLOCKED | [Isolation](WINDOWS_TEST_USER_VALIDATION.md): owner says not provisioned; current principal is owner; no separate token/profile/vault demonstrated |
+| Authenticated Minecraft | BLOCKED | Legitimate isolated sign-in/entitlement NOT TESTED; no credential read/rotation or Play |
+| Minecraft capture | BLOCKED | [Capture report](MINECRAFT_CAPTURE_VALIDATION.md): zero real gameplay rows; no validated target/process/producer loss evidence |
+| Workload A | PARTIAL | P3-A installed Fabric/Java evidence retained; [world lock](WORLD_SNAPSHOT_LOCK.md) BLOCKED, no authenticated execution |
+| Workload B | PARTIAL | P3-A exact Aurora/API/Sodium/Lithium artifacts retained; world/coexistence/execution BLOCKED |
+| Workload C | PARTIAL | P3-A B inventory and proposed heavier scene retained; world/intensity/execution BLOCKED; may remain pending |
+| Java runtime lock | PASS | [Prior actual lock](JAVA_RUNTIME_LOCK.md): Microsoft 21.0.7+6-LTS and exact official manifest; must revalidate under test user before launch |
+| Native filesystem isolation | PARTIAL | P3-A marked managed/WebView/registry/game root and restarts preserved; that owner's-user root is not authenticated credential isolation |
+| GC correlation | PARTIAL | Real standalone G1 + synthetic clock/proximity tests retained/rerun; no game G1, anchors or causal evidence |
+| CPU/memory capture | PARTIAL | Read-only self-process API/capture tests pass; no authorized game-child telemetry; heap/paging/GPU/thermals unavailable |
+| Artifact quality | PARTIAL | Offline checks/tests and hashes PASS; actual capture manifests/raw sources absent. Full real run INCOMPLETE; short-session schema adapter pending, 300/600 s policy unchanged |
+| Snapshot validation tooling | PASS | Read-only complete directory/restore inventory and condition checks; eight synthetic world/isolation tests. No actual world lock/provenance PASS implied |
+| Quiet-system preflight | BLOCKED | [Current ambient facts](P3A1_QUIET_PREFLIGHT.md): instant CPU/memory only; no test-session 60 s preflight, AC/GPU/thermals/overhead unknown |
+| P3-B protocol prepared | PASS | [Review-only plan](P3B_PROTOCOL.md) retained unchanged; it is not execution approval |
+| P3-B authorization | BLOCKED | Explicit separate owner decision required; repeated comparison sets and preset tuning remain prohibited |
+| Linux native/capture | NOT TESTED | Separate runtime/credential-store/capture/accounting calibration still required |
 
-Owner actions are concrete and separate: approve exact capture-tool installation/
-permissions; choose a safe Windows test-user/account arrangement; authorize short
-legitimate Minecraft/material/capture validation; choose a quiet resource window;
-then review updated gates and separately authorize P3-B. No approval is inferred
-from this matrix or from passing parser tests.
+Next owner action: provision/select a dedicated standard local Windows test user,
+sign into its separate interactive profile and make that session available. Then
+verify token/vault/paths before legitimate owner sign-in, confirm tracing permission
+without elevation, and select a quiet short-validation window. No new privilege,
+software installation or credential action is inferred from tool selection. All
+captures/world locks must be reviewed before any separate P3-B decision.

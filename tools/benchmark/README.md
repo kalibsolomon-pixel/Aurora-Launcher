@@ -51,3 +51,22 @@ Evidence is retained; no broad cleanup/reset helper is provided. Private full lo
 temporary paths and raw inventories remain local under .git or the disposable root.
 Small committed files explicitly distinguish synthetic/parser, actual standalone
 GC, actual self-process/system telemetry and actual native installation evidence.
+
+P3-A.1 adds `readiness_checks.py`, a read-only directory snapshot/restoration
+inventory checker. It never copies, restores, extracts, authenticates or launches.
+See [WORLD_SNAPSHOT_LOCK.md](../../docs/performance-p3a/WORLD_SNAPSHOT_LOCK.md) for
+its strict schema/layout and provenance limits. The pure `isolation_guard` is a
+refusal helper for observed SID/elevation facts, not a live credential-vault probe.
+Eight synthetic tests add missing/extra/changed-file, directory, hash, metadata,
+path/redirection and principal/elevation coverage; the original 36 remain unchanged.
+
+```powershell
+python -B tools/benchmark/readiness_checks.py <test-owned-evidence>/snapshot.json
+```
+
+Schema-1 `sampleKind=measured` still requires 300/600-second gameplay and all three
+sources. Short P3-A.1 calibration uses frame-only adapter inspection and an explicitly
+limited report; full-run integration remains INCOMPLETE. Never relabel real samples
+synthetic or weaken thresholds. See [calibration status](../../docs/performance-p3a/PRESENTMON_CALIBRATION.md).
+The owner confirmed no separate Windows test user exists, so this phase acquired
+and verified PresentMon 2.3.1 and executed help only; no live trace/game session.

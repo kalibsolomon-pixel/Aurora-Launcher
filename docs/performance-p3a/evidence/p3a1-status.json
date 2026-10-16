@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "phase": "P3-A.1",
+  "recordedUtc": "2026-10-16T21:03:31.985807+00:00",
+  "verdict": "PARTIAL",
+  "presentMon": {
+    "version": "2.3.1",
+    "source": "https://github.com/GameTechDev/PresentMon/releases/download/v2.3.1/PresentMon-2.3.1-x64.exe",
+    "assetId": 262569611,
+    "size": 421312,
+    "expectedSha256": "364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c",
+    "observedSha256": "364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c",
+    "signatureStatus": "Valid",
+    "signer": "CN=Intel Corporation, O=Intel Corporation, S=California, C=US",
+    "fileVersion": null,
+    "productVersion": null
+  },
+  "identityExecution": {
+    "argument": "--help",
+    "bannerVersion": "2.3.1",
+    "exitCode": 1,
+    "helpSha256": "30514b1e312789dafc5f0b02c224d5511d604658265c7fcf77bc0dc8deead9ba",
+    "licenseSha256": "4c949341b1893c8c6ad82f7fb4eedf622cd1fd9c22a9af8f19b2dac19d1947b6"
+  },
+  "authorization": {
+    "testUser": "owner-confirmed-not-provisioned",
+    "accountCreation": "not-authorized-not-performed",
+    "authentication": "not-performed",
+    "p3b": "not-authorized"
+  },
+  "captures": {
+    "etwSessionsStarted": 0,
+    "controlledPresentationRows": 0,
+    "minecraftPresentationRows": 0,
+    "minecraftLaunches": 0,
+    "worldsCreated": 0,
+    "worldSnapshots": 0,
+    "fullRealRunClassification": "INCOMPLETE"
+  },
+  "tests": {
+    "p3aExisting": 36,
+    "p3a1NewSynthetic": 8,
+    "benchmarkTotalPassed": 44,
+    "p1Passed": 13,
+    "failures": 0,
+    "rustFrontendNative": "not-rerun-no-product-change"
+  },
+  "ambient": {
+    "scope": "instant-owner-session-only-not-quiet-preflight",
+    "cpuCimLoadPercent": 2,
+    "freeMemoryKiB": 22185508,
+    "visibleMemoryKiB": 33304812,
+    "displayReported": [
+      2560,
+      1440,
+      240
+    ],
+    "gpu": "AMD Radeon RX 9070 XT",
+    "driver": "32.0.31041.1004",
+    "ac": null,
+    "gpuUtilization": null,
+    "thermals": null,
+    "overhead": null
+  },
+  "limitations": [
+    "separate-test-user-unavailable",
+    "no-live-capture",
+    "no-world-locks",
+    "no-real-clock-correlation",
+    "schema-1-measured-requires-300-600-seconds"
+  ]
+}

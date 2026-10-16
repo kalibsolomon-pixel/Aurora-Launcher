@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "scope": "P3-A.1 identity/tests only; zero real frame/world artifacts",
+  "artifacts": [
+    {
+      "path": "docs/performance-p3a/evidence/p3a1-status.json",
+      "retention": "committed",
+      "sizeBytes": 2246,
+      "sha256": "35b0843e41b05cf40374d2d6a25c663355be7962caa82c8a1582c8b7a0c08814"
+    },
+    {
+      "path": ".git/performance-p3a1-tools-tests.txt",
+      "retention": "private-local",
+      "sizeBytes": 6517,
+      "sha256": "53339e3f52423671fe85dd4dca0c8c0570aa6a0f7c5360deb1be7267375983e0"
+    },
+    {
+      "path": ".git/performance-p3a1-p1-tests.txt",
+      "retention": "private-local",
+      "sizeBytes": 1397,
+      "sha256": "cb8f3a42add933c897d599b9c6694fd25ee3227c75af84b4379daaa39b80cc30"
+    },
+    {
+      "path": ".git/performance-p3a1-synthetic-summary.json",
+      "retention": "private-local",
+      "sizeBytes": 3530,
+      "sha256": "260dadb49150d59acd3aa2ebbc5312d5886a2a9f57835f3874263eb8296ebce4"
+    },
+    {
+      "path": "<private-new-tools-directory>/PresentMon-2.3.1-x64.exe",
+      "retention": "private-local-not-committed",
+      "sizeBytes": 421312,
+      "sha256": "364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c"
+    },
+    {
+      "path": "<private-new-tools-directory>/help.txt",
+      "retention": "private-local-not-committed",
+      "sizeBytes": 5094,
+      "sha256": "30514b1e312789dafc5f0b02c224d5511d604658265c7fcf77bc0dc8deead9ba"
+    },
+    {
+      "path": "<private-new-tools-directory>/LICENSE.txt",
+      "retention": "private-local-not-committed",
+      "sizeBytes": 1067,
+      "sha256": "4c949341b1893c8c6ad82f7fb4eedf622cd1fd9c22a9af8f19b2dac19d1947b6"
+    }
+  ]
+}

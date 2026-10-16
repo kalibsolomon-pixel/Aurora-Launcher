@@ -1,0 +1,15 @@
+A	PERFORMANCE_P3A1_ACCEPTANCE.md
+A	docs/performance-p3a/MINECRAFT_CAPTURE_VALIDATION.md
+A	docs/performance-p3a/P3A1_CHANGED_FILES.txt
+A	docs/performance-p3a/P3A1_EVIDENCE_INVENTORY.json
+A	docs/performance-p3a/P3A1_QUIET_PREFLIGHT.md
+A	docs/performance-p3a/P3A1_TEST_MATRIX.md
+A	docs/performance-p3a/PRESENTMON_CALIBRATION.md
+A	docs/performance-p3a/PRESENTMON_INSTALLATION.md
+M	docs/performance-p3a/READINESS_MATRIX.md
+A	docs/performance-p3a/WINDOWS_TEST_USER_VALIDATION.md
+A	docs/performance-p3a/WORLD_SNAPSHOT_LOCK.md
+A	docs/performance-p3a/evidence/p3a1-status.json
+M	tools/benchmark/README.md
+A	tools/benchmark/readiness_checks.py
+A	tools/benchmark/test_readiness_checks.py
