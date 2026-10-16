@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-10-16T06:04:27.4757389+00:00",
+  "cpu": [
+    {
+      "Name": "Intel(R) Core(TM) i7-14700F",
+      "NumberOfCores": 20,
+      "NumberOfLogicalProcessors": 28,
+      "Architecture": 9
+    }
+  ],
+  "os": {
+    "Caption": "Microsoft Windows 11 Home",
+    "Version": "10.0.26300",
+    "BuildNumber": "26300",
+    "OSArchitecture": "64-bit",
+    "TotalVisibleMemorySize": 33304812,
+    "FreePhysicalMemory": 18276076
+  },
+  "ram": [
+    {
+      "Capacity": 17179869184,
+      "Speed": 6000
+    },
+    {
+      "Capacity": 17179869184,
+      "Speed": 6000
+    }
+  ],
+  "gpu": [
+    {
+      "Name": "AMD Radeon RX 9070 XT",
+      "DriverVersion": "32.0.31041.1004",
+      "AdapterRAM": 4293918720
+    }
+  ],
+  "system": {
+    "PCSystemType": 1,
+    "TotalPhysicalMemory": 34104127488
+  },
+  "battery": [],
+  "powerStatus": null,
+  "powerSchemeLabel": "Ultimate Performance",
+  "observationKind": "read-only host inventory, not Minecraft benchmark",
+  "javaObservation": {
+    "source": "file metadata from two pre-existing javaw executables and adjacent release files; no command lines read",
+    "company": "Microsoft",
+    "productVersion": "21.0.7.0",
+    "JAVA_VERSION": "21.0.7",
+    "fullVmBuild": null,
+    "benchmarkRuntimeManifestSha1": null
+  }
+}
