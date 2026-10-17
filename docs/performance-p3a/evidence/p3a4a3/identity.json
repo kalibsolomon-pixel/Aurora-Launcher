@@ -1,0 +1,109 @@
+{
+  "kind": "actual-disposable-screening-workload-not-canonical-B",
+  "workloadId": "workload-b-a-scene-diagnostic-v1",
+  "worldArchiveSha256": "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f",
+  "preLaunchInventoryEqual": true,
+  "optionsSha256Before": "efd1595619f579723159ed7bb0cbb1e06d7336dc9980662252162abd15f24ae1",
+  "optionsSha256After": "64cec45e976849b23c95fc3c0b7652d72c535167903b3716fef7e93820b6cf65",
+  "mods": [
+    {
+      "name": "aurora-3.0.0.jar",
+      "size": 3077377,
+      "sha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c"
+    },
+    {
+      "name": "cloth-config-21.11.153-fabric.jar",
+      "size": 1148427,
+      "sha256": "8a40c84e5ecde525acfb6c4e13b8002dacfca3ef9534d7faf6e8049656f423c8"
+    },
+    {
+      "name": "fabric-api-0.141.6+1.21.11.jar",
+      "size": 2426039,
+      "sha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f"
+    },
+    {
+      "name": "lithium-fabric-0.21.4+mc1.21.11.jar",
+      "size": 900462,
+      "sha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b"
+    },
+    {
+      "name": "performanceoverlay-1.0.2+mc1.21.9-1.21.11-fabric.jar",
+      "size": 188784,
+      "sha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2"
+    },
+    {
+      "name": "sodium-fabric-0.8.14+mc1.21.11.jar",
+      "size": 1909150,
+      "sha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d"
+    }
+  ],
+  "configuration": {
+    "performanceMode": null,
+    "minecraftVersion": "1.21.11",
+    "auroraEnabled": true,
+    "loader": {
+      "kind": "fabric",
+      "policy": {
+        "type": "pinned",
+        "version": "0.19.5"
+      }
+    },
+    "memoryMib": 2048,
+    "additionalJvmArguments": "",
+    "window": null
+  },
+  "copiedConfigs": [
+    {
+      "path": "config\\aurora.json",
+      "sha256": "c24fa87e4621463de284fea38531a0dea9377a044323e8449532edaeae476951",
+      "source": "previous disposable post-exit configuration"
+    },
+    {
+      "path": "config\\lithium.properties",
+      "sha256": "6cf6f83720071fd1657c8e79b357caf68d40f410ae123e5f922483eb1d1d25be",
+      "source": "previous disposable post-exit configuration"
+    },
+    {
+      "path": "config\\sodium-options.json",
+      "sha256": "edc4b8a2e4aa7bac58270e89b4c5e54cb35c054f9cba6439951e4c89e66b915e",
+      "source": "previous disposable post-exit configuration"
+    },
+    {
+      "path": "config\\profiles\\default.json",
+      "sha256": "6a4c52ede5b8b200545a07e9e1ffce30d8a8cc5188790734fb60896d339ee833",
+      "source": "previous disposable post-exit configuration"
+    }
+  ],
+  "runtime": {
+    "contentStatus": "ready",
+    "status": "ready",
+    "component": "java-runtime-delta",
+    "requiredMajorVersion": 21,
+    "runtimeVersion": "21.0.7",
+    "checkedFiles": 402,
+    "verifiedBytes": 99041788,
+    "reportedMajorVersion": 21,
+    "diagnosticSummary": "managed Java 21.0.7 executed successfully",
+    "problems": [],
+    "reused": true
+  },
+  "launcherSha256": "05b97f5be5517972863e2460738e36c1a92257853ec9f72809c610c81114e09a",
+  "excludedStartup": {
+    "status": "exited",
+    "exitCode": 0,
+    "processId": null,
+    "utc": "2026-10-17T05:41:56.151Z"
+  },
+  "measuredSessionExit": {
+    "status": "exited",
+    "exitCode": 0,
+    "processId": null,
+    "utc": "2026-10-17T05:54:57.221Z"
+  },
+  "launcherExit": {
+    "exitCode": 0,
+    "endUtc": "2026-10-17T05:54:57.6425423Z",
+    "handleRetained": true,
+    "pid": 20000
+  }
+}

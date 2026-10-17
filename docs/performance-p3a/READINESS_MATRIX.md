@@ -1,4 +1,24 @@
-# P3-A.4a.2 current readiness
+# P3-A.4a.3 practical readiness — PARTIAL
+
+Use the separate [Practical Performance Protocol](PRACTICAL_PROTOCOL.md).
+[Actual recordings and acceptance](../../PERFORMANCE_P3A4A3_ACCEPTANCE.md).
+
+| Practical gate | Result | Evidence / limit |
+| --- | --- | --- |
+| A: recording usability | PASS | Five coherent Overlay CSVs; three readable locked-JDK JFR exports; no reported writer failure/DataLoss |
+| A: observer acceptance for heap/CPU comparisons | INCONCLUSIVE | Inactive control game CPU 5.058→6.065%; combined GC frequency differs from JFR-only; no reliable isolated resource-cost estimate |
+| B: three comparable stationary intervals | PASS WITH LIMITS | 30 s each after >=300 s warm-up; throughput range 2.339%, P99 range 4.957%; same process, B stack on A scene, no canonical representative B |
+| B: resource/restart sensitivity | INCOMPLETE | CPU drift and cumulative RSS growth; no independent JVM restart cohort or general gameplay baseline |
+| C: one reversible experiment | DESIGN PREPARED | 2048→1536 MiB only; matched-pair/regression/reversal rules; no candidate executed |
+| D: candidate acceptance | NOT RUN | Separate authorization required |
+| P3-B | NOT READY / NOT AUTHORIZED | Resolve practical resource-control uncertainty with existing tools before the proposed heap experiment |
+
+This is not a renewed strict-precision requirement: callback diagnostics can screen
+coarse pacing effects without optical timing or exact JFR correlation. The remaining
+issue is observed resource drift in the very metrics the proposed heap experiment
+would evaluate. No failed historical capture is upgraded. Strict reports follow.
+
+# P3-A.4a.2 current readiness (historical)
 
 **PARTIAL. No accepted primary. P3-B NOT READY / NOT AUTHORIZED.**
 [Acceptance](../../PERFORMANCE_P3A4A2_ACCEPTANCE.md),

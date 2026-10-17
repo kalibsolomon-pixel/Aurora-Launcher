@@ -1,3 +1,15 @@
+# P3-A.4a.3 practical validation authorization
+
+The owner authorizes the separate [Practical Performance Protocol](PRACTICAL_PROTOCOL.md),
+process-attributed environment review, bounded Overlay/JFR recordings and observer
+comparisons, up to three practical baseline captures, offline checks, experiment
+design and one scoped local commit. This supersedes the total-CPU stop rule for
+these practical captures only. Strict Research Protocol gates and historical
+failures remain unchanged. Existing isolated native launch/session safeguards,
+same-user credential-continuity risk and approved startup sequencing still apply.
+No JVM candidate execution, production advice change, owner-instance mutation,
+custom mod, push, release or P3-B. Interactive sign-in stays owner-operated.
+
 # P3-A.4a.2 authorization extension
 
 The owner explicitly requests released Valence/Performance Overlay source/artifact

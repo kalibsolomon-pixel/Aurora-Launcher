@@ -1,0 +1,447 @@
+{
+  "kind": "actual-isolated-Minecraft-HUD-callback-diagnostics",
+  "runs": [
+    {
+      "protocol": "Practical Performance Protocol v1",
+      "strictReview": {
+        "status": "CONSISTENT DIAGNOSTIC",
+        "metricRole": "DIAGNOSTIC ONLY",
+        "semantic": "eligible-hud-callback-interval",
+        "errors": [],
+        "incomplete": [],
+        "warnings": [
+          "warm-up not independently verified; compatibility only",
+          "integer-ms timestamps may tie; identical rows cannot prove duplication",
+          "0.001-ms rounded intervals; no absolute nanoTime or epoch anchor",
+          "footer reconciles exported rows, not all Minecraft frames",
+          "no independent observer-overhead or physical-display validation"
+        ],
+        "metrics": {
+          "frameCount": 58276,
+          "summedIntervalMs": 30040.202,
+          "elapsedTimestampSpanMs": 30035,
+          "internalIntervalRateHz": 1939.9336928559933,
+          "medianMs": 0.486,
+          "p95Ms": 0.958,
+          "p99Ms": 1.346,
+          "maximumMs": 7.114,
+          "intervalsAbove50Ms": 0
+        },
+        "missingOrDroppedSamples": null,
+        "independentCompleteness": false,
+        "jfrPreciseAlignment": false,
+        "observerOverheadBounded": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "rawSha256": "361df426a404eb751f7d4aae166c4e7fff3370625322ec8d3c7ebdc7136b145e",
+        "timestampTies": 29029,
+        "indistinguishableAdjacentRows": 7
+      },
+      "status": "COHERENT INTERNAL DIAGNOSTIC",
+      "producerSummaryConsistent": true,
+      "practicalTimingOverheadKnown": false,
+      "allRenderedFramesProven": false,
+      "producerReciprocalBounds": {
+        "AvgFPS": [
+          1938.0038438798679,
+          1941.867192153236
+        ],
+        "Low1FPS": [
+          742.6161705558857,
+          743.2681355224822
+        ],
+        "Low01FPS": [
+          322.27070810556,
+          322.47463424197974
+        ]
+      },
+      "metrics": {
+        "frameCount": 58276,
+        "summedIntervalMs": 30040.202,
+        "elapsedTimestampSpanMs": 30035,
+        "internalIntervalRateHz": 1939.9336928559933,
+        "medianMs": 0.486,
+        "p95Ms": 0.958,
+        "p99Ms": 1.346,
+        "maximumMs": 7.114,
+        "intervalsAbove50Ms": 0
+      },
+      "stuttersAbove50PerMinute": 0.0,
+      "intervalsAmbiguousAt50Ms": 0,
+      "label": "pilot-overlay",
+      "rawFile": "benchmark_20261017_014341.csv",
+      "metadata": {
+        "format": "performanceoverlay-1.0.2-csv",
+        "sourceJarSha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2",
+        "workloadId": "workload-b-a-scene-diagnostic-v1",
+        "worldArchiveSha256": "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f",
+        "timestampUnit": "ms",
+        "frameUnit": "ms",
+        "rawSha256": "361df426a404eb751f7d4aae166c4e7fff3370625322ec8d3c7ebdc7136b145e",
+        "recordingComplete": true,
+        "bufferOverflow": false,
+        "expectedWindowMs": [
+          0,
+          30000
+        ],
+        "warmupEvidenceVerified": false
+      },
+      "keyBracket": null
+    },
+    {
+      "protocol": "Practical Performance Protocol v1",
+      "strictReview": {
+        "status": "CONSISTENT DIAGNOSTIC",
+        "metricRole": "DIAGNOSTIC ONLY",
+        "semantic": "eligible-hud-callback-interval",
+        "errors": [],
+        "incomplete": [],
+        "warnings": [
+          "integer-ms timestamps may tie; identical rows cannot prove duplication",
+          "0.001-ms rounded intervals; no absolute nanoTime or epoch anchor",
+          "footer reconciles exported rows, not all Minecraft frames",
+          "no independent observer-overhead or physical-display validation"
+        ],
+        "metrics": {
+          "frameCount": 54375,
+          "summedIntervalMs": 30046.918,
+          "elapsedTimestampSpanMs": 30043,
+          "internalIntervalRateHz": 1809.6697970820169,
+          "medianMs": 0.502,
+          "p95Ms": 1.019,
+          "p99Ms": 1.372,
+          "maximumMs": 6.563,
+          "intervalsAbove50Ms": 0
+        },
+        "missingOrDroppedSamples": null,
+        "independentCompleteness": false,
+        "jfrPreciseAlignment": false,
+        "observerOverheadBounded": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "rawSha256": "0309a61394badbbe3ed6a2801e8e6449bf7d764572c0e0cab2dbf843d3877aaf",
+        "timestampTies": 25029,
+        "indistinguishableAdjacentRows": 13
+      },
+      "status": "COHERENT INTERNAL DIAGNOSTIC",
+      "producerSummaryConsistent": true,
+      "practicalTimingOverheadKnown": false,
+      "allRenderedFramesProven": false,
+      "producerReciprocalBounds": {
+        "AvgFPS": [
+          1807.9838239794328,
+          1811.358733435156
+        ],
+        "Low1FPS": [
+          728.5474489089254,
+          729.1786922139992
+        ],
+        "Low01FPS": [
+          475.3481449472307,
+          475.6742578370987
+        ]
+      },
+      "metrics": {
+        "frameCount": 54375,
+        "summedIntervalMs": 30046.918,
+        "elapsedTimestampSpanMs": 30043,
+        "internalIntervalRateHz": 1809.6697970820169,
+        "medianMs": 0.502,
+        "p95Ms": 1.019,
+        "p99Ms": 1.372,
+        "maximumMs": 6.563,
+        "intervalsAbove50Ms": 0
+      },
+      "stuttersAbove50PerMinute": 0.0,
+      "intervalsAmbiguousAt50Ms": 0,
+      "label": "baseline-1",
+      "rawFile": "benchmark_20261017_014926.csv",
+      "metadata": {
+        "format": "performanceoverlay-1.0.2-csv",
+        "sourceJarSha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2",
+        "workloadId": "workload-b-a-scene-diagnostic-v1",
+        "worldArchiveSha256": "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f",
+        "timestampUnit": "ms",
+        "frameUnit": "ms",
+        "rawSha256": "0309a61394badbbe3ed6a2801e8e6449bf7d764572c0e0cab2dbf843d3877aaf",
+        "recordingComplete": true,
+        "bufferOverflow": false,
+        "expectedWindowMs": [
+          0,
+          30000
+        ],
+        "warmupEvidenceVerified": true
+      },
+      "keyBracket": {
+        "label": "baseline-1",
+        "startUtc": "2026-10-17T05:49:26.600Z",
+        "endUtc": "2026-10-17T05:49:26.639Z"
+      }
+    },
+    {
+      "protocol": "Practical Performance Protocol v1",
+      "strictReview": {
+        "status": "CONSISTENT DIAGNOSTIC",
+        "metricRole": "DIAGNOSTIC ONLY",
+        "semantic": "eligible-hud-callback-interval",
+        "errors": [],
+        "incomplete": [],
+        "warnings": [
+          "integer-ms timestamps may tie; identical rows cannot prove duplication",
+          "0.001-ms rounded intervals; no absolute nanoTime or epoch anchor",
+          "footer reconciles exported rows, not all Minecraft frames",
+          "no independent observer-overhead or physical-display validation"
+        ],
+        "metrics": {
+          "frameCount": 55661,
+          "summedIntervalMs": 30049.729,
+          "elapsedTimestampSpanMs": 30047,
+          "internalIntervalRateHz": 1852.2962386782258,
+          "medianMs": 0.497,
+          "p95Ms": 0.972,
+          "p99Ms": 1.3064000000000016,
+          "maximumMs": 5.928,
+          "intervalsAbove50Ms": 0
+        },
+        "missingOrDroppedSamples": null,
+        "independentCompleteness": false,
+        "jfrPreciseAlignment": false,
+        "observerOverheadBounded": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "rawSha256": "02c1ed1571bb610e162d7b8fa5c0c6fb46d932c148481aa02729b835f77bee35",
+        "timestampTies": 26191,
+        "indistinguishableAdjacentRows": 9
+      },
+      "status": "COHERENT INTERNAL DIAGNOSTIC",
+      "producerSummaryConsistent": true,
+      "practicalTimingOverheadKnown": false,
+      "allRenderedFramesProven": false,
+      "producerReciprocalBounds": {
+        "AvgFPS": [
+          1850.532324337932,
+          1854.0633306366985
+        ],
+        "Low1FPS": [
+          764.7683546405354,
+          765.4537514783773
+        ],
+        "Low01FPS": [
+          497.833992029624,
+          498.1820059813201
+        ]
+      },
+      "metrics": {
+        "frameCount": 55661,
+        "summedIntervalMs": 30049.729,
+        "elapsedTimestampSpanMs": 30047,
+        "internalIntervalRateHz": 1852.2962386782258,
+        "medianMs": 0.497,
+        "p95Ms": 0.972,
+        "p99Ms": 1.3064000000000016,
+        "maximumMs": 5.928,
+        "intervalsAbove50Ms": 0
+      },
+      "stuttersAbove50PerMinute": 0.0,
+      "intervalsAmbiguousAt50Ms": 0,
+      "label": "baseline-2",
+      "rawFile": "benchmark_20261017_015009.csv",
+      "metadata": {
+        "format": "performanceoverlay-1.0.2-csv",
+        "sourceJarSha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2",
+        "workloadId": "workload-b-a-scene-diagnostic-v1",
+        "worldArchiveSha256": "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f",
+        "timestampUnit": "ms",
+        "frameUnit": "ms",
+        "rawSha256": "02c1ed1571bb610e162d7b8fa5c0c6fb46d932c148481aa02729b835f77bee35",
+        "recordingComplete": true,
+        "bufferOverflow": false,
+        "expectedWindowMs": [
+          0,
+          30000
+        ],
+        "warmupEvidenceVerified": true
+      },
+      "keyBracket": {
+        "label": "baseline-2",
+        "startUtc": "2026-10-17T05:50:08.953Z",
+        "endUtc": "2026-10-17T05:50:08.983Z"
+      }
+    },
+    {
+      "protocol": "Practical Performance Protocol v1",
+      "strictReview": {
+        "status": "CONSISTENT DIAGNOSTIC",
+        "metricRole": "DIAGNOSTIC ONLY",
+        "semantic": "eligible-hud-callback-interval",
+        "errors": [],
+        "incomplete": [],
+        "warnings": [
+          "integer-ms timestamps may tie; identical rows cannot prove duplication",
+          "0.001-ms rounded intervals; no absolute nanoTime or epoch anchor",
+          "footer reconciles exported rows, not all Minecraft frames",
+          "no independent observer-overhead or physical-display validation"
+        ],
+        "metrics": {
+          "frameCount": 54763,
+          "summedIntervalMs": 30050.394,
+          "elapsedTimestampSpanMs": 30047,
+          "internalIntervalRateHz": 1822.3721126584896,
+          "medianMs": 0.502,
+          "p95Ms": 0.993,
+          "p99Ms": 1.3233799999999973,
+          "maximumMs": 5.404,
+          "intervalsAbove50Ms": 0
+        },
+        "missingOrDroppedSamples": null,
+        "independentCompleteness": false,
+        "jfrPreciseAlignment": false,
+        "observerOverheadBounded": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "rawSha256": "3b2d61d206d1b584f1a590ec857bf927d517adf9dcda085a897c41cc629d6069",
+        "timestampTies": 25332,
+        "indistinguishableAdjacentRows": 9
+      },
+      "status": "COHERENT INTERNAL DIAGNOSTIC",
+      "producerSummaryConsistent": true,
+      "practicalTimingOverheadKnown": false,
+      "allRenderedFramesProven": false,
+      "producerReciprocalBounds": {
+        "AvgFPS": [
+          1820.6631032653072,
+          1824.0841481396315
+        ],
+        "Low1FPS": [
+          754.9518865047188,
+          755.6223470521344
+        ],
+        "Low01FPS": [
+          486.9234589464329,
+          487.26071963581006
+        ]
+      },
+      "metrics": {
+        "frameCount": 54763,
+        "summedIntervalMs": 30050.394,
+        "elapsedTimestampSpanMs": 30047,
+        "internalIntervalRateHz": 1822.3721126584896,
+        "medianMs": 0.502,
+        "p95Ms": 0.993,
+        "p99Ms": 1.3233799999999973,
+        "maximumMs": 5.404,
+        "intervalsAbove50Ms": 0
+      },
+      "stuttersAbove50PerMinute": 0.0,
+      "intervalsAmbiguousAt50Ms": 0,
+      "label": "baseline-3",
+      "rawFile": "benchmark_20261017_015115.csv",
+      "metadata": {
+        "format": "performanceoverlay-1.0.2-csv",
+        "sourceJarSha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2",
+        "workloadId": "workload-b-a-scene-diagnostic-v1",
+        "worldArchiveSha256": "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f",
+        "timestampUnit": "ms",
+        "frameUnit": "ms",
+        "rawSha256": "3b2d61d206d1b584f1a590ec857bf927d517adf9dcda085a897c41cc629d6069",
+        "recordingComplete": true,
+        "bufferOverflow": false,
+        "expectedWindowMs": [
+          0,
+          30000
+        ],
+        "warmupEvidenceVerified": true
+      },
+      "keyBracket": {
+        "label": "baseline-3",
+        "startUtc": "2026-10-17T05:51:15.122Z",
+        "endUtc": "2026-10-17T05:51:15.152Z"
+      }
+    },
+    {
+      "protocol": "Practical Performance Protocol v1",
+      "strictReview": {
+        "status": "CONSISTENT DIAGNOSTIC",
+        "metricRole": "DIAGNOSTIC ONLY",
+        "semantic": "eligible-hud-callback-interval",
+        "errors": [],
+        "incomplete": [],
+        "warnings": [
+          "integer-ms timestamps may tie; identical rows cannot prove duplication",
+          "0.001-ms rounded intervals; no absolute nanoTime or epoch anchor",
+          "footer reconciles exported rows, not all Minecraft frames",
+          "no independent observer-overhead or physical-display validation"
+        ],
+        "metrics": {
+          "frameCount": 55136,
+          "summedIntervalMs": 30050.333,
+          "elapsedTimestampSpanMs": 30047,
+          "internalIntervalRateHz": 1834.7883199830098,
+          "medianMs": 0.5,
+          "p95Ms": 0.992,
+          "p99Ms": 1.3186500000000014,
+          "maximumMs": 6.08,
+          "intervalsAbove50Ms": 0
+        },
+        "missingOrDroppedSamples": null,
+        "independentCompleteness": false,
+        "jfrPreciseAlignment": false,
+        "observerOverheadBounded": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "rawSha256": "52208b6ada4a2c144f55682e512763e0375ca095ecaa93a1391080f0c58d7b29",
+        "timestampTies": 25682,
+        "indistinguishableAdjacentRows": 7
+      },
+      "status": "COHERENT INTERNAL DIAGNOSTIC",
+      "producerSummaryConsistent": true,
+      "practicalTimingOverheadKnown": false,
+      "allRenderedFramesProven": false,
+      "producerReciprocalBounds": {
+        "AvgFPS": [
+          1833.0566376580634,
+          1836.523090670455
+        ],
+        "Low1FPS": [
+          757.8128258283442,
+          758.4876195058779
+        ],
+        "Low01FPS": [
+          494.6321657078902,
+          494.97699926775556
+        ]
+      },
+      "metrics": {
+        "frameCount": 55136,
+        "summedIntervalMs": 30050.333,
+        "elapsedTimestampSpanMs": 30047,
+        "internalIntervalRateHz": 1834.7883199830098,
+        "medianMs": 0.5,
+        "p95Ms": 0.992,
+        "p99Ms": 1.3186500000000014,
+        "maximumMs": 6.08,
+        "intervalsAbove50Ms": 0
+      },
+      "stuttersAbove50PerMinute": 0.0,
+      "intervalsAmbiguousAt50Ms": 0,
+      "label": "combined",
+      "rawFile": "benchmark_20261017_015240.csv",
+      "metadata": {
+        "format": "performanceoverlay-1.0.2-csv",
+        "sourceJarSha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2",
+        "workloadId": "workload-b-a-scene-diagnostic-v1",
+        "worldArchiveSha256": "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f",
+        "timestampUnit": "ms",
+        "frameUnit": "ms",
+        "rawSha256": "52208b6ada4a2c144f55682e512763e0375ca095ecaa93a1391080f0c58d7b29",
+        "recordingComplete": true,
+        "bufferOverflow": false,
+        "expectedWindowMs": [
+          0,
+          30000
+        ],
+        "warmupEvidenceVerified": true
+      },
+      "keyBracket": {
+        "label": "combined",
+        "startUtc": "2026-10-17T05:52:40.845Z",
+        "endUtc": "2026-10-17T05:52:40.875Z"
+      }
+    }
+  ]
+}

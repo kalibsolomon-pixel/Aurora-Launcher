@@ -1,4 +1,20 @@
-# P3-A.4a.2 current frame-source decision
+# P3-A.4a.3 practical frame-source decision
+
+Performance Overlay 1.0.2 now exports coherent **eligible HUD-callback intervals**:
+five real CSVs, complete matching row/footer counts, valid numeric columns and
+reproduced summaries within producer precision. Three warmed-up stationary runs
+have 2.339% throughput and 4.957% P99 observed ranges. This is useful practical
+internal frame-loop diagnostic evidence, never physical presentation or proof of
+all rendered frames. Precise frame/JFR alignment remains unsupported.
+
+Locked-JDK JFR start/stop/export/readability and aggregate GC/heap coverage now pass.
+Combined pacing falls within the baseline ranges, but resource observer attribution
+is inconclusive because inactive CPU/RSS drift and GC differences remain. No
+negligible-overhead claim or ready heap-comparison workflow. [Practical protocol](PRACTICAL_PROTOCOL.md),
+[results](../../PERFORMANCE_P3A4A3_ACCEPTANCE.md). Strict primary-source decisions
+and failed historical captures below are unchanged. P3-B is not authorized.
+
+# P3-A.4a.2 current frame-source decision (historical)
 
 Performance Overlay 1.0.2 is the selected **PROVISIONAL** internal callback-interval
 collector after static/raw-format audit and real isolated Aurora/Sodium/Lithium

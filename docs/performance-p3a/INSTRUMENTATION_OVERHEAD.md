@@ -1,4 +1,33 @@
-# P3-A.4a.2 existing collector/JFR overhead — UNKNOWN
+# P3-A.4a.3 practical observer review — INCONCLUSIVE for resource comparisons
+
+Actual inactive / Overlay recording / JFR with inactive Overlay / combined subset
+is complete, with inactive controls before and after. Recording/export/stability
+checks pass. Combined callback throughput/P99 fall inside three Overlay-only
+baseline ranges; no large additional pacing disturbance was observed in that one
+combined window. This cannot establish Overlay's own uninstrumented timing cost.
+
+Inactive game CPU changes from 5.057570% to 6.064723% of machine capacity
+(+1.007153 percentage points, about 19.9% relative). Overlay-only runs are
+5.220532%, 5.355283%, 5.746549%; warmed JFR-only 5.470582%; combined 6.006968%.
+Active-minus-first-control and active-minus-last-control differ even in sign.
+RSS rises through the session, including inactive windows; snapshots/JFR startup
+and cached recording state are additional common-observer/context limits.
+
+Warmed JFR-only and combined recordings report approximately 1.161 versus 1.412
+collections/s and 2.348 versus 2.843 ms of top-level pause/s, using rounded 31/34 s
+recording durations. Windows differ and collection counts include concurrent G1
+cycles; these are not isolated overhead estimates or frame-spike attribution.
+The pattern matters to a heap/GC experiment and should not be hidden by stable FPS.
+No arbitrary percentage budget, zero-cost claim or overhead subtraction is applied.
+
+Verdict: useful pacing diagnostics, **resource overhead INCONCLUSIVE**. One
+counterbalanced inactive/recording/JFR control set on a frozen representative
+workload, with equal fresh-process warm-up and no new tooling, is the smallest
+next validation. If drift still obscures the proposed resource benefit, stop or
+defer that resource claim. Do not pursue optical/per-frame research prerequisites
+to resolve this practical question. [Full results](../../PERFORMANCE_P3A4A3_ACCEPTANCE.md).
+
+# P3-A.4a.2 existing collector/JFR overhead — UNKNOWN (historical)
 
 Fresh title quiet CPU 2.979357% exceeds the unchanged 2% screen; all timing/on-off/
 240/1000 trials were deferred. Static allocations, self-cost claims and JFR's

@@ -1,0 +1,682 @@
+{
+  "kind": "actual-process-attributed-Windows-counters",
+  "runs": {
+    "pilot-overlay": {
+      "protocol": "Practical Performance Protocol v1",
+      "samples": 61,
+      "elapsedSeconds": 30.0001916,
+      "machineCpuMeanPercent": {
+        "game": 5.7684077333879165,
+        "launcher": 0.0,
+        "sampler": 0.0,
+        "total": 9.489961109767217,
+        "residual": 3.7215533763793003
+      },
+      "intervalCpuRangePercent": {
+        "game": [
+          3.4675615212527964,
+          8.998875140607424
+        ],
+        "launcher": [
+          0.0,
+          0.0
+        ],
+        "sampler": [
+          0.0,
+          0.0
+        ],
+        "total": [
+          7.110091743119266,
+          16.49484536082474
+        ],
+        "residual": [
+          2.399127589967285,
+          10.65292096219931
+        ]
+      },
+      "negativeResidualIntervals": 0,
+      "minimumAvailableBytes": 19277164544,
+      "memoryReservePassed": true,
+      "gameRssRangeBytes": [
+        1314451456,
+        1345589248
+      ],
+      "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+      "unrelatedCpuCertified": false,
+      "environmentComparable": null,
+      "startUtc": "2026-10-17T05:43:41.921456+00:00",
+      "endUtc": "2026-10-17T05:44:11.923429+00:00",
+      "logicalProcessors": 28,
+      "identities": {
+        "game": {
+          "pid": 19948,
+          "creationId": "134366893539454996"
+        },
+        "launcher": {
+          "pid": 20000,
+          "creationId": "134366891321988005"
+        },
+        "sampler": {
+          "pid": 18912,
+          "creationId": "134366894218517702"
+        }
+      },
+      "maxReadOverheadNs": 1591400,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "GPU utilization",
+        "thermals",
+        "effective core frequency",
+        "VRR",
+        "paging rate",
+        "WebView/attach CPU attribution"
+      ]
+    },
+    "jfr-only": {
+      "protocol": "Practical Performance Protocol v1",
+      "samples": 61,
+      "elapsedSeconds": 30.0005344,
+      "machineCpuMeanPercent": {
+        "game": 7.44063128117323,
+        "launcher": 0.0,
+        "sampler": 0.0,
+        "total": 12.55862428348098,
+        "residual": 5.117993002307749
+      },
+      "intervalCpuRangePercent": {
+        "game": [
+          3.732809430255403,
+          30.942895086321382
+        ],
+        "launcher": [
+          0.0,
+          0.0
+        ],
+        "sampler": [
+          0.0,
+          0.0
+        ],
+        "total": [
+          7.203389830508475,
+          35.590969455511285
+        ],
+        "residual": [
+          2.8108108108108096,
+          17.341040462427745
+        ]
+      },
+      "negativeResidualIntervals": 0,
+      "minimumAvailableBytes": 18862809088,
+      "memoryReservePassed": true,
+      "gameRssRangeBytes": [
+        1331539968,
+        1435205632
+      ],
+      "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+      "unrelatedCpuCertified": false,
+      "environmentComparable": null,
+      "startUtc": "2026-10-17T05:44:38.253557+00:00",
+      "endUtc": "2026-10-17T05:45:08.255554+00:00",
+      "logicalProcessors": 28,
+      "identities": {
+        "game": {
+          "pid": 19948,
+          "creationId": "134366893539454996"
+        },
+        "launcher": {
+          "pid": 20000,
+          "creationId": "134366891321988005"
+        },
+        "sampler": {
+          "pid": 20516,
+          "creationId": "134366894781415775"
+        }
+      },
+      "maxReadOverheadNs": 703200,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "GPU utilization",
+        "thermals",
+        "effective core frequency",
+        "VRR",
+        "paging rate",
+        "WebView/attach CPU attribution"
+      ]
+    },
+    "control-before": {
+      "protocol": "Practical Performance Protocol v1",
+      "samples": 61,
+      "elapsedSeconds": 30.000192,
+      "machineCpuMeanPercent": {
+        "game": 5.05756961366046,
+        "launcher": 0.0,
+        "sampler": 0.0,
+        "total": 8.874462900615688,
+        "residual": 3.816893286955228
+      },
+      "intervalCpuRangePercent": {
+        "game": [
+          3.2467532467532467,
+          8.979089790897909
+        ],
+        "launcher": [
+          0.0,
+          0.0
+        ],
+        "sampler": [
+          0.0,
+          0.0
+        ],
+        "total": [
+          6.621773288439955,
+          14.170506912442397
+        ],
+        "residual": [
+          1.893095768374165,
+          8.870967741935484
+        ]
+      },
+      "negativeResidualIntervals": 0,
+      "minimumAvailableBytes": 19048333312,
+      "memoryReservePassed": true,
+      "gameRssRangeBytes": [
+        1484935168,
+        1491902464
+      ],
+      "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+      "unrelatedCpuCertified": false,
+      "environmentComparable": null,
+      "startUtc": "2026-10-17T05:48:42.575134+00:00",
+      "endUtc": "2026-10-17T05:49:12.577292+00:00",
+      "logicalProcessors": 28,
+      "identities": {
+        "game": {
+          "pid": 19948,
+          "creationId": "134366893539454996"
+        },
+        "launcher": {
+          "pid": 20000,
+          "creationId": "134366891321988005"
+        },
+        "sampler": {
+          "pid": 12704,
+          "creationId": "134366897225095346"
+        }
+      },
+      "gameForegroundSamples": 61,
+      "maxReadOverheadNs": 1152000,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "continuous GPU utilization",
+        "thermals",
+        "effective core frequency",
+        "VRR",
+        "paging rate",
+        "WebView/attach CPU attribution"
+      ]
+    },
+    "baseline-1": {
+      "protocol": "Practical Performance Protocol v1",
+      "samples": 61,
+      "elapsedSeconds": 30.0002897,
+      "machineCpuMeanPercent": {
+        "game": 5.220532107017185,
+        "launcher": 0.0,
+        "sampler": 0.0,
+        "total": 8.78963340842658,
+        "residual": 3.569101301409395
+      },
+      "intervalCpuRangePercent": {
+        "game": [
+          2.6373626373626373,
+          8.222222222222221
+        ],
+        "launcher": [
+          0.0,
+          0.0
+        ],
+        "sampler": [
+          0.0,
+          0.0
+        ],
+        "total": [
+          5.274725274725275,
+          14.26872770511296
+        ],
+        "residual": [
+          2.0385050962627407,
+          8.633093525179856
+        ]
+      },
+      "negativeResidualIntervals": 0,
+      "minimumAvailableBytes": 18973032448,
+      "memoryReservePassed": true,
+      "gameRssRangeBytes": [
+        1502191616,
+        1514934272
+      ],
+      "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+      "unrelatedCpuCertified": false,
+      "environmentComparable": null,
+      "startUtc": "2026-10-17T05:49:27.118485+00:00",
+      "endUtc": "2026-10-17T05:49:57.120573+00:00",
+      "logicalProcessors": 28,
+      "identities": {
+        "game": {
+          "pid": 19948,
+          "creationId": "134366893539454996"
+        },
+        "launcher": {
+          "pid": 20000,
+          "creationId": "134366891321988005"
+        },
+        "sampler": {
+          "pid": 5712,
+          "creationId": "134366897670351302"
+        }
+      },
+      "gameForegroundSamples": 61,
+      "maxReadOverheadNs": 623100,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "continuous GPU utilization",
+        "thermals",
+        "effective core frequency",
+        "VRR",
+        "paging rate",
+        "WebView/attach CPU attribution"
+      ]
+    },
+    "baseline-2": {
+      "protocol": "Practical Performance Protocol v1",
+      "samples": 61,
+      "elapsedSeconds": 30.0001298,
+      "machineCpuMeanPercent": {
+        "game": 5.355282738095238,
+        "launcher": 0.0,
+        "sampler": 0.0,
+        "total": 8.424479166666666,
+        "residual": 3.069196428571428
+      },
+      "intervalCpuRangePercent": {
+        "game": [
+          2.86697247706422,
+          9.673518742442564
+        ],
+        "launcher": [
+          0.0,
+          0.0
+        ],
+        "sampler": [
+          0.0,
+          0.0
+        ],
+        "total": [
+          5.549510337323177,
+          13.784764207980652
+        ],
+        "residual": [
+          1.9586507072905328,
+          4.352678571428571
+        ]
+      },
+      "negativeResidualIntervals": 0,
+      "minimumAvailableBytes": 19469017088,
+      "memoryReservePassed": true,
+      "gameRssRangeBytes": [
+        1515397120,
+        1527975936
+      ],
+      "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+      "unrelatedCpuCertified": false,
+      "environmentComparable": null,
+      "startUtc": "2026-10-17T05:50:09.385590+00:00",
+      "endUtc": "2026-10-17T05:50:39.387651+00:00",
+      "logicalProcessors": 28,
+      "identities": {
+        "game": {
+          "pid": 19948,
+          "creationId": "134366893539454996"
+        },
+        "launcher": {
+          "pid": 20000,
+          "creationId": "134366891321988005"
+        },
+        "sampler": {
+          "pid": 12704,
+          "creationId": "134366898093097766"
+        }
+      },
+      "gameForegroundSamples": 61,
+      "maxReadOverheadNs": 339900,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "continuous GPU utilization",
+        "thermals",
+        "effective core frequency",
+        "VRR",
+        "paging rate",
+        "WebView/attach CPU attribution"
+      ]
+    },
+    "baseline-3": {
+      "protocol": "Practical Performance Protocol v1",
+      "samples": 61,
+      "elapsedSeconds": 30.0005437,
+      "machineCpuMeanPercent": {
+        "game": 5.74654909402091,
+        "launcher": 0.0,
+        "sampler": 0.0,
+        "total": 9.41139264054768,
+        "residual": 3.66484354652677
+      },
+      "intervalCpuRangePercent": {
+        "game": [
+          3.1512605042016806,
+          8.29646017699115
+        ],
+        "launcher": [
+          0.0,
+          0.0
+        ],
+        "sampler": [
+          0.0,
+          0.0
+        ],
+        "total": [
+          6.588735387885229,
+          13.57615894039735
+        ],
+        "residual": [
+          1.9889502762430933,
+          8.562019758507136
+        ]
+      },
+      "negativeResidualIntervals": 0,
+      "minimumAvailableBytes": 19477884928,
+      "memoryReservePassed": true,
+      "gameRssRangeBytes": [
+        1540112384,
+        1551507456
+      ],
+      "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+      "unrelatedCpuCertified": false,
+      "environmentComparable": null,
+      "startUtc": "2026-10-17T05:51:15.545199+00:00",
+      "endUtc": "2026-10-17T05:51:45.547541+00:00",
+      "logicalProcessors": 28,
+      "identities": {
+        "game": {
+          "pid": 19948,
+          "creationId": "134366893539454996"
+        },
+        "launcher": {
+          "pid": 20000,
+          "creationId": "134366891321988005"
+        },
+        "sampler": {
+          "pid": 2708,
+          "creationId": "134366898754682403"
+        }
+      },
+      "gameForegroundSamples": 61,
+      "maxReadOverheadNs": 697100,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "continuous GPU utilization",
+        "thermals",
+        "effective core frequency",
+        "VRR",
+        "paging rate",
+        "WebView/attach CPU attribution"
+      ]
+    },
+    "combined": {
+      "protocol": "Practical Performance Protocol v1",
+      "samples": 61,
+      "elapsedSeconds": 30.000554,
+      "machineCpuMeanPercent": {
+        "game": 6.00696838143504,
+        "launcher": 0.0,
+        "sampler": 0.0,
+        "total": 9.785545266531274,
+        "residual": 3.7785768850962347
+      },
+      "intervalCpuRangePercent": {
+        "game": [
+          3.3444816053511706,
+          10.485933503836318
+        ],
+        "launcher": [
+          0.0,
+          0.0
+        ],
+        "sampler": [
+          0.0,
+          0.0
+        ],
+        "total": [
+          7.38581146744412,
+          16.646706586826348
+        ],
+        "residual": [
+          2.040816326530612,
+          8.502994011976048
+        ]
+      },
+      "negativeResidualIntervals": 0,
+      "minimumAvailableBytes": 19434262528,
+      "memoryReservePassed": true,
+      "gameRssRangeBytes": [
+        1569857536,
+        1587707904
+      ],
+      "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+      "unrelatedCpuCertified": false,
+      "environmentComparable": null,
+      "startUtc": "2026-10-17T05:52:41.290405+00:00",
+      "endUtc": "2026-10-17T05:53:11.292735+00:00",
+      "logicalProcessors": 28,
+      "identities": {
+        "game": {
+          "pid": 19948,
+          "creationId": "134366893539454996"
+        },
+        "launcher": {
+          "pid": 20000,
+          "creationId": "134366891321988005"
+        },
+        "sampler": {
+          "pid": 18332,
+          "creationId": "134366899612147018"
+        }
+      },
+      "gameForegroundSamples": 61,
+      "maxReadOverheadNs": 1785500,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "continuous GPU utilization",
+        "thermals",
+        "effective core frequency",
+        "VRR",
+        "paging rate",
+        "WebView/attach CPU attribution"
+      ]
+    },
+    "jfr-warm": {
+      "protocol": "Practical Performance Protocol v1",
+      "samples": 61,
+      "elapsedSeconds": 30.0005212,
+      "machineCpuMeanPercent": {
+        "game": 5.470581667969186,
+        "launcher": 0.0,
+        "sampler": 0.0,
+        "total": 9.324178482378773,
+        "residual": 3.8535968144095873
+      },
+      "intervalCpuRangePercent": {
+        "game": [
+          3.6996735582154514,
+          9.026128266033254
+        ],
+        "launcher": [
+          0.0,
+          0.0
+        ],
+        "sampler": [
+          0.0,
+          0.0
+        ],
+        "total": [
+          7.0098576122672505,
+          15.468409586056644
+        ],
+        "residual": [
+          1.8801410105757927,
+          10.784313725490197
+        ]
+      },
+      "negativeResidualIntervals": 0,
+      "minimumAvailableBytes": 19009884160,
+      "memoryReservePassed": true,
+      "gameRssRangeBytes": [
+        1555636224,
+        1566666752
+      ],
+      "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+      "unrelatedCpuCertified": false,
+      "environmentComparable": null,
+      "startUtc": "2026-10-17T05:51:54.686298+00:00",
+      "endUtc": "2026-10-17T05:52:24.688202+00:00",
+      "logicalProcessors": 28,
+      "identities": {
+        "game": {
+          "pid": 19948,
+          "creationId": "134366893539454996"
+        },
+        "launcher": {
+          "pid": 20000,
+          "creationId": "134366891321988005"
+        },
+        "sampler": {
+          "pid": 20860,
+          "creationId": "134366899146090332"
+        }
+      },
+      "gameForegroundSamples": 61,
+      "maxReadOverheadNs": 755500,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "continuous GPU utilization",
+        "thermals",
+        "effective core frequency",
+        "VRR",
+        "paging rate",
+        "WebView/attach CPU attribution"
+      ]
+    },
+    "control-after": {
+      "protocol": "Practical Performance Protocol v1",
+      "samples": 61,
+      "elapsedSeconds": 30.0002301,
+      "machineCpuMeanPercent": {
+        "game": 6.064722630589724,
+        "launcher": 0.0,
+        "sampler": 0.03535738876379403,
+        "total": 9.669315369298621,
+        "residual": 3.569235349945103
+      },
+      "intervalCpuRangePercent": {
+        "game": [
+          3.90625,
+          8.461538461538462
+        ],
+        "launcher": [
+          0.0,
+          0.0
+        ],
+        "sampler": [
+          0.0,
+          0.22321428571428573
+        ],
+        "total": [
+          7.589285714285714,
+          14.466130884041332
+        ],
+        "residual": [
+          2.249718785151855,
+          8.495981630309988
+        ]
+      },
+      "negativeResidualIntervals": 0,
+      "minimumAvailableBytes": 19412606976,
+      "memoryReservePassed": true,
+      "gameRssRangeBytes": [
+        1599770624,
+        1605283840
+      ],
+      "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+      "unrelatedCpuCertified": false,
+      "environmentComparable": null,
+      "startUtc": "2026-10-17T05:53:36.402488+00:00",
+      "endUtc": "2026-10-17T05:54:06.402783+00:00",
+      "logicalProcessors": 28,
+      "identities": {
+        "game": {
+          "pid": 19948,
+          "creationId": "134366893539454996"
+        },
+        "launcher": {
+          "pid": 20000,
+          "creationId": "134366891321988005"
+        },
+        "sampler": {
+          "pid": 14776,
+          "creationId": "134366900163243584"
+        }
+      },
+      "gameForegroundSamples": 61,
+      "maxReadOverheadNs": 1879500,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "continuous GPU utilization",
+        "thermals",
+        "effective core frequency",
+        "VRR",
+        "paging rate",
+        "WebView/attach CPU attribution"
+      ]
+    }
+  },
+  "display": [
+    {
+      "Name": "AMD Radeon RX 9070 XT",
+      "DriverVersion": "32.0.31041.1004",
+      "CurrentHorizontalResolution": 2560,
+      "CurrentVerticalResolution": 1440,
+      "CurrentRefreshRate": 240
+    }
+  ],
+  "gpuSpot": {
+    "comparable": null,
+    "utc": "2026-10-17T05:46:51.3254946Z",
+    "engineCount": 284,
+    "scope": "single read-only Windows GPU-engine sample, not continuous per-run GPU load",
+    "systemEngineSumPercent": 51.481428298385126,
+    "gameEngineSumPercent": 40.82689443467314
+  },
+  "physicalWindow": {
+    "pid": 19948,
+    "physicalClientWidth": 1920,
+    "physicalClientHeight": 1080,
+    "dpi": 120,
+    "framebufferObserved": false,
+    "scope": "read-only window geometry; calling thread DPI context only"
+  },
+  "powerScheme": "Power Scheme GUID: 16cccdeb-b6f7-4a6b-9337-2ffb6adebbee  (Ultimate Performance)",
+  "warmup": {
+    "startUtc": "2026-10-17T05:43:41.499Z",
+    "scope": "world entry confirmed, no movement after entry",
+    "minimumSeconds": 300
+  }
+}

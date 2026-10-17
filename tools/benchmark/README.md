@@ -1,5 +1,22 @@
 # P3-A benchmark infrastructure
 
+P3-A.4a.3 adds the separate [Practical Performance Protocol](../../docs/performance-p3a/PRACTICAL_PROTOCOL.md).
+Actual recording, baseline and observer results are in
+[P3-A.4a.3 acceptance](../../PERFORMANCE_P3A4A3_ACCEPTANCE.md). Historical statements
+below describe their original phase. Strict Research Protocol/schema-1 gates and
+all prior tests remain unchanged; practical diagnostics do not promote old captures.
+
+`practical_review.py` exposes three offline functions: `environment(rows, heap_mib)`
+for weighted machine/process/residual CPU and memory context; `overlay(path, metadata)`
+for the existing exact-format reader plus producer-summary rounding checks; and
+`variation(values)` for observed run ranges. Import with `tools/benchmark` on the
+Python module path. It does not certify unrelated CPU, observer cost, complete
+frame coverage, physical FPS, precise JFR alignment or a performance winner.
+Run `python -B tools/benchmark/practical_review.py <frames.csv> <metadata.json>`
+to reproduce the practical export review (exit 0 coherent, 2 invalid). The metadata
+contract remains that of `collector_review.py` below. Invalid or
+incomplete strict diagnostic input never becomes a coherent practical export.
+
 P3-A.4a.2 evaluates existing collectors. PresentMon is optional external diagnostics,
 not a mandatory primary source. Performance Overlay is PROVISIONAL after actual
 startup/world/HUD coexistence; recording and overhead were deferred for quiet CPU.

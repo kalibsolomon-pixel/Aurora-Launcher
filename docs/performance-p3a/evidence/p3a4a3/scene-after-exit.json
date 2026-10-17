@@ -1,0 +1,68 @@
+{
+  "position": [
+    0.5,
+    66.0,
+    0.5
+  ],
+  "orientation": [
+    0.0,
+    10.0
+  ],
+  "seed": 123456789,
+  "generator": {
+    "type": "minecraft:flat",
+    "settings": {
+      "features": 0,
+      "lakes": 0,
+      "layers": [
+        {
+          "block": "minecraft:bedrock",
+          "height": 1
+        },
+        {
+          "block": "minecraft:dirt",
+          "height": 128
+        },
+        {
+          "block": "minecraft:grass_block",
+          "height": 1
+        }
+      ],
+      "structure_overrides": [
+        "minecraft:strongholds",
+        "minecraft:villages"
+      ],
+      "biome": "minecraft:plains"
+    }
+  },
+  "timeOfDay": 6000,
+  "weatherClear": true,
+  "entities": 0,
+  "blockEntities": 0,
+  "totalRecordedChunks": 5329,
+  "missingRequiredFullChunks": 0,
+  "options": {
+    "maxFps": "260",
+    "enableVsync": "false",
+    "inactivityFpsLimit": "\"minimized\"",
+    "renderDistance": "12",
+    "simulationDistance": "8",
+    "overrideWidth": "1920",
+    "overrideHeight": "1080",
+    "fullscreen": "false",
+    "resourcePacks": "[]"
+  },
+  "limiter": {
+    "frameCapFps": 0,
+    "adaptiveRenderSleeping": false,
+    "framePacingStrategy": "PARK",
+    "smoothFramePacer": true,
+    "framePacerSpinThresholdMicros": 500,
+    "framePacerParkThresholdMicros": 2000,
+    "framePacerLowCpuMode": false,
+    "lowLatencyRender": true,
+    "disableVSync": false,
+    "guiFpsLimit": 60
+  },
+  "sceneScope": "B-stack/A-scene diagnostic, not canonical B"
+}

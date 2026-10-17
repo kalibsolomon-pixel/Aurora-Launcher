@@ -1,0 +1,45 @@
+{
+  "kind": "synthetic-offline-regression-coverage-separate-from-real-measurements",
+  "baselineBenchmark": 97,
+  "baselineP1": 13,
+  "finalBenchmark": 113,
+  "finalP1": 13,
+  "newTests": 16,
+  "allPassed": true,
+  "logs": [
+    {
+      "label": "baseline-benchmark-tests.txt",
+      "sha256": "1669bf37a7102f14f45f223956fdab663856f207eb32a2f01871b436393472a4"
+    },
+    {
+      "label": "baseline-p1-tests.txt",
+      "sha256": "0567cc9f7a391d8d76a9bc9d95bbf03e5c258a5767fb729686e82aa1954c5d4c"
+    },
+    {
+      "label": "focused-tests.txt",
+      "sha256": "cafdaa1472a0ba5363102e568d565e3a72ea2a21de8697e5046c194094c85678"
+    },
+    {
+      "label": "final-benchmark-tests.txt",
+      "sha256": "21e1c43db55c5663dcc630bc37b7772d65a60779ba0d674863e91b5ea518b662"
+    },
+    {
+      "label": "final-p1-tests.txt",
+      "sha256": "a349c1da7ef8929fe9862e7d8f7b11561287d112171b7d6dfa2f83789b77f94b"
+    },
+    {
+      "label": "final-benchmark-tests-v2.txt",
+      "sha256": "dd9d0aa877893afbe71a8503728ece4bf470c669de5b43476a12a360bb1df10f"
+    },
+    {
+      "label": "final-p1-tests-v2.txt",
+      "sha256": "0567cc9f7a391d8d76a9bc9d95bbf03e5c258a5767fb729686e82aa1954c5d4c"
+    }
+  ],
+  "actualExportsReproducedWithFinalParser": 5,
+  "productCodeChanged": false,
+  "broadProductSuitesRun": false,
+  "rationale": "Performance documentation/offline Python only; actual isolated application/game/runtime execution verified",
+  "actualCliExitCode": 0,
+  "actualCliOutputSha256": "0d53c4ef0575e1b8354b4b7eff81419c646363400e526c1bf4ac0af694baf4d0"
+}

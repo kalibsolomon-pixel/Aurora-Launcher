@@ -1,0 +1,50 @@
+{
+  "kind": "reviewed-sanitized-evidence",
+  "files": [
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a3/environment.json",
+      "size": 19039,
+      "sha256": "6da65936c358aee86862e73a332cb201174c7f12af9630484a45a2cb714834bd"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a3/frames.json",
+      "size": 16178,
+      "sha256": "4e4875647c18ddc9419a9c26a503fc33cc4402fd9cf4ac30f6cdef66260e4b7f"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a3/identity.json",
+      "size": 3597,
+      "sha256": "8bf2b418c9e32c8b5598a9b2ab46bbdb400f0382977b6afbfa324e060456ff0e"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a3/jfr.json",
+      "size": 32644,
+      "sha256": "1d53a58c95b4aa8358520c1208968569df7e4d118997e242d35989f0cf9e13a8"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a3/preservation.json",
+      "size": 1927,
+      "sha256": "4d3df6710e0bd6ce38702f9a273a3df8a5fd101b06ba4820531d93de19f0dced"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a3/raw-inventory.json",
+      "size": 14657,
+      "sha256": "e9c2b94bbffd63b21f6025594e239cf0616333b0cf2bc506d1251b1992a05f22"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a3/repeatability.json",
+      "size": 1245,
+      "sha256": "0c626347f5b2a62d38a45b1e14534e5c0b27e4873670390129b01017d94667db"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a3/scene-after-exit.json",
+      "size": 1549,
+      "sha256": "ac9755244d100776b2b425b946dd8ae6ddc0344d2fb483c1cd25173674fb8ba9"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a3/tests.json",
+      "size": 1596,
+      "sha256": "a3fbcdf8545a7c77174f92114954c519bd5969dc5be83de687a68d5b958b6153"
+    }
+  ]
+}

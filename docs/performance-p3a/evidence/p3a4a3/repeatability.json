@@ -1,0 +1,42 @@
+{
+  "internalIntervalRateHz": {
+    "runs": 3,
+    "minimum": 1809.6697970820169,
+    "maximum": 1852.2962386782258,
+    "median": 1822.3721126584896,
+    "rangePercentOfMedian": 2.339063537030598,
+    "scope": "observed variation only; not a population confidence interval"
+  },
+  "medianMs": {
+    "runs": 3,
+    "minimum": 0.497,
+    "maximum": 0.502,
+    "median": 0.502,
+    "rangePercentOfMedian": 0.996015936254981,
+    "scope": "observed variation only; not a population confidence interval"
+  },
+  "p95Ms": {
+    "runs": 3,
+    "minimum": 0.972,
+    "maximum": 1.019,
+    "median": 0.993,
+    "rangePercentOfMedian": 4.733131923464243,
+    "scope": "observed variation only; not a population confidence interval"
+  },
+  "p99Ms": {
+    "runs": 3,
+    "minimum": 1.3064000000000016,
+    "maximum": 1.372,
+    "median": 1.3233799999999973,
+    "rangePercentOfMedian": 4.957004035122087,
+    "scope": "observed variation only; not a population confidence interval"
+  },
+  "maximumMs": {
+    "runs": 3,
+    "minimum": 5.404,
+    "maximum": 6.563,
+    "median": 5.928,
+    "rangePercentOfMedian": 19.551282051282048,
+    "scope": "observed variation only; not a population confidence interval"
+  }
+}

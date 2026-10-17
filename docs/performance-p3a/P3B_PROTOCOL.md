@@ -1,3 +1,13 @@
+# Practical first experiment — design only
+
+P3-A.4a.3 introduces a distinct [practical protocol](PRACTICAL_PROTOCOL.md) and
+[single maximum-heap experiment design](FIRST_JVM_EXPERIMENT.md). Its readiness
+decision is in [the current acceptance report](../../PERFORMANCE_P3A4A3_ACCEPTANCE.md).
+P3-B requires separate owner authorization. The strict research proposal below
+remains intact, including its longer runs and historical prerequisites; its
+separate-user requirement has the later approved same-user exception documented
+in AUTHORIZATION.md. Do not combine the protocols or relabel historical evidence.
+
 # Proposed P3-B — owner review only
 
 P3-B is **NOT AUTHORIZED / NOT READY**. First close frame-tool permission,
