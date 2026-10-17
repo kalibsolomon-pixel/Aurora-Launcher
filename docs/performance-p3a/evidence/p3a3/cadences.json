@@ -1,0 +1,265 @@
+{
+  "sampleKind": "actual-controlled-native-opengl",
+  "qpcFrequencyHz": 10000000,
+  "stimulusSecondsEach": 26,
+  "innerSecondsEach": 20,
+  "controlled": [
+    {
+      "requestedHz": 30,
+      "pid": 14580,
+      "creationId": "134366634158555872",
+      "capture": {
+        "artifactKind": "short-calibration",
+        "quality": "VALID WITH WARNINGS",
+        "targetKind": "controlled-opengl",
+        "rawRows": 779,
+        "unavailableDisplayRows": 0,
+        "unpairedDisplayRows": 0,
+        "metrics": {
+          "count": 599,
+          "mean": 33.33311469115192,
+          "median": 33.33669999999955,
+          "p95": 34.81410000000036,
+          "p99": 34.96824199999947,
+          "p999": null,
+          "max": 39.62220000000016,
+          "variance": 1.1511954300014315,
+          "presentation_rate_hz": 30.000196779254,
+          "stutter_frames_over_50ms": 0,
+          "stutter_events_over_50ms": 0,
+          "stutter_frames_per_minute": 0.0,
+          "long_gaps_over_1000ms": 0,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 179
+        },
+        "warnings": [
+          "etw-display-estimate-not-physical-display-proof",
+          "producer-loss-counters-unavailable",
+          "observer-overhead-unmeasured",
+          "short-calibration-not-performance-benchmark",
+          "unelevated-process-query-limitation"
+        ],
+        "fullMeasuredRunQuality": "INCOMPLETE"
+      },
+      "reconciliation": {
+        "presentRowsInWindow": 600,
+        "independentMarkersInWindow": 600,
+        "unmatchedMarkers": 0,
+        "duplicateNearestMarkers": 0,
+        "meanPresentToPreSwapMs": 0.2824896666666667,
+        "maxPresentToPreSwapMs": 0.9351999999999999,
+        "meanSignedPresentMinusPreSwapMs": 0.2824896666666667,
+        "meanIntervalDisagreementMs": 0.06012387312186978,
+        "maxIntervalDisagreementMs": 0.6763,
+        "unmatchedOnlyAtBoundary": true,
+        "presentInsideSwapBracket": 35,
+        "independentMeanIntervalMs": 33.332720534223704,
+        "independentRateHz": 30.00055152933797,
+        "markerConfidence": "RECONCILED",
+        "boundaryAllowance": "at most one marker on the exact inner-window edge",
+        "scope": "call/row reconciliation; unavailable display estimates and physical scanout are separate",
+        "lossStatus": "ZERO OBSERVED THROUGH WINDOW",
+        "hz": 30
+      },
+      "lossCounterSnapshots": [
+        {
+          "statusCode": 0,
+          "qpcNs": 97149798099100,
+          "queryDurationNs": 40800,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 47
+        },
+        {
+          "statusCode": 0,
+          "qpcNs": 97174299007400,
+          "queryDurationNs": 21700,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 712
+        }
+      ],
+      "framesSha256": "ab5617319f1b0f6d02717d79bae6bbb10f02d938682c829892dc8d4d289ad626",
+      "diagnosticsSha256": "7bd31a7082b233def4721f421372e6e4916d7f224979ef56a577daecf669f100",
+      "markersSha256": "826526a99406f255b7591e99b787f9cec997a4582f483d6e3724dbe0ea3c55d1",
+      "metadataSha256": "1556defc6c9f1abb4d3299b587fd09f57f1a66e630daf8c69ab0f84c6f257a77"
+    },
+    {
+      "requestedHz": 60,
+      "pid": 5060,
+      "creationId": "134366634482096003",
+      "capture": {
+        "artifactKind": "short-calibration",
+        "quality": "VALID WITH WARNINGS",
+        "targetKind": "controlled-opengl",
+        "rawRows": 1559,
+        "unavailableDisplayRows": 0,
+        "unpairedDisplayRows": 0,
+        "metrics": {
+          "count": 1199,
+          "mean": 16.66548140116764,
+          "median": 16.6643999999998,
+          "p95": 18.428470000002406,
+          "p99": 18.68780799999854,
+          "p999": null,
+          "max": 20.877099999996318,
+          "variance": 1.0350953209300449,
+          "presentation_rate_hz": 60.00426725926661,
+          "stutter_frames_over_50ms": 0,
+          "stutter_events_over_50ms": 0,
+          "stutter_frames_per_minute": 0.0,
+          "long_gaps_over_1000ms": 0,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 359
+        },
+        "warnings": [
+          "etw-display-estimate-not-physical-display-proof",
+          "producer-loss-counters-unavailable",
+          "observer-overhead-unmeasured",
+          "short-calibration-not-performance-benchmark",
+          "unelevated-process-query-limitation"
+        ],
+        "fullMeasuredRunQuality": "INCOMPLETE"
+      },
+      "reconciliation": {
+        "presentRowsInWindow": 1200,
+        "independentMarkersInWindow": 1201,
+        "unmatchedMarkers": 1,
+        "duplicateNearestMarkers": 0,
+        "meanPresentToPreSwapMs": 0.26264824999999997,
+        "maxPresentToPreSwapMs": 1.1998,
+        "meanSignedPresentMinusPreSwapMs": 0.26264824999999997,
+        "meanIntervalDisagreementMs": 0.06866080066722269,
+        "maxIntervalDisagreementMs": 0.9819,
+        "unmatchedOnlyAtBoundary": true,
+        "presentInsideSwapBracket": 13,
+        "independentMeanIntervalMs": 16.666580916666668,
+        "independentRateHz": 60.00030870158827,
+        "markerConfidence": "RECONCILED",
+        "boundaryAllowance": "at most one marker on the exact inner-window edge",
+        "scope": "call/row reconciliation; unavailable display estimates and physical scanout are separate",
+        "lossStatus": "ZERO OBSERVED THROUGH WINDOW",
+        "hz": 60
+      },
+      "lossCounterSnapshots": [
+        {
+          "statusCode": 0,
+          "qpcNs": 97182102274200,
+          "queryDurationNs": 28700,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 46
+        },
+        {
+          "statusCode": 0,
+          "qpcNs": 97206604549000,
+          "queryDurationNs": 37100,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 731
+        }
+      ],
+      "framesSha256": "3370de6791a2586af584cb3cc0ca71bfd899bd5112a3634ea0edd06a85e4d280",
+      "diagnosticsSha256": "7bd31a7082b233def4721f421372e6e4916d7f224979ef56a577daecf669f100",
+      "markersSha256": "d48b6d893558d6f785532ccedc9f67541e7250aa981d9641eb91737ec064162f",
+      "metadataSha256": "bb4a9239ef2fca3e29f98fb552935d14254823fdf7cfc1a97649db0e3fe79441"
+    },
+    {
+      "requestedHz": 120,
+      "pid": 18684,
+      "creationId": "134366634805092715",
+      "capture": {
+        "artifactKind": "short-calibration",
+        "quality": "VALID WITH WARNINGS",
+        "targetKind": "controlled-opengl",
+        "rawRows": 3119,
+        "unavailableDisplayRows": 11,
+        "unpairedDisplayRows": 0,
+        "metrics": {
+          "count": 2388,
+          "mean": 8.371646273031827,
+          "median": 8.330199999999621,
+          "p95": 11.332224999998633,
+          "p99": 13.502558000000137,
+          "p999": null,
+          "max": 17.9557999999993,
+          "variance": 2.8022767532318524,
+          "presentation_rate_hz": 119.45081855899363,
+          "stutter_frames_over_50ms": 0,
+          "stutter_events_over_50ms": 0,
+          "stutter_frames_per_minute": 0.0,
+          "long_gaps_over_1000ms": 0,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 719
+        },
+        "warnings": [
+          "etw-display-estimate-not-physical-display-proof",
+          "producer-loss-counters-unavailable",
+          "observer-overhead-unmeasured",
+          "short-calibration-not-performance-benchmark",
+          "unavailable-display-rows-retained",
+          "unelevated-process-query-limitation"
+        ],
+        "fullMeasuredRunQuality": "INCOMPLETE"
+      },
+      "reconciliation": {
+        "presentRowsInWindow": 2400,
+        "independentMarkersInWindow": 2400,
+        "unmatchedMarkers": 0,
+        "duplicateNearestMarkers": 0,
+        "meanPresentToPreSwapMs": 0.22503095833333334,
+        "maxPresentToPreSwapMs": 1.2087999999999999,
+        "meanSignedPresentMinusPreSwapMs": 0.22503095833333334,
+        "meanIntervalDisagreementMs": 0.053167069612338476,
+        "maxIntervalDisagreementMs": 1.0391000000000001,
+        "unmatchedOnlyAtBoundary": true,
+        "presentInsideSwapBracket": 0,
+        "independentMeanIntervalMs": 8.333396456857024,
+        "independentRateHz": 119.99909102814416,
+        "markerConfidence": "RECONCILED",
+        "boundaryAllowance": "at most one marker on the exact inner-window edge",
+        "scope": "call/row reconciliation; unavailable display estimates and physical scanout are separate",
+        "lossStatus": "ZERO OBSERVED THROUGH WINDOW",
+        "hz": 120
+      },
+      "lossCounterSnapshots": [
+        {
+          "statusCode": 0,
+          "qpcNs": 97214402058200,
+          "queryDurationNs": 22800,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 47
+        },
+        {
+          "statusCode": 0,
+          "qpcNs": 97238903089900,
+          "queryDurationNs": 19600,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 789
+        }
+      ],
+      "framesSha256": "7d40c271babc083b1f2c1be568fb55596184da1305762091fe23828c22460d82",
+      "diagnosticsSha256": "7bd31a7082b233def4721f421372e6e4916d7f224979ef56a577daecf669f100",
+      "markersSha256": "730ef50ac6940fdc14154752b7978fc7defa0ec57f52129818e1133bfe38b5ac",
+      "metadataSha256": "ea9d652b08d528c871d639893bd16e100610631680e0ef07c0f44753b93f3949"
+    }
+  ],
+  "uncertainties": [
+    "PresentMon present timestamps occur after CPU swap markers; this is measured asynchronous offset, not physical scanout proof",
+    "Loss snapshots cover measured windows; unobserved trace shutdown tails remain unknown"
+  ]
+}

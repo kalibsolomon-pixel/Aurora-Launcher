@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "workloadId": "workload-a-stationary-v1",
+  "kind": "stationary-camera",
+  "position": [
+    0.5,
+    66,
+    0.5
+  ],
+  "yawPitch": [
+    0,
+    10
+  ],
+  "movement": "none after positioning",
+  "warmupSeconds": 300,
+  "measuredSeconds": 600,
+  "status": "future measured protocol; P3-A.3 final is a short validation only"
+}

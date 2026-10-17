@@ -1,0 +1,28 @@
+{
+  "sampleKind": "actual-preservation-audit",
+  "startingHead": "c653fcbf6b3644ebaec4b9ca6d0efbc4367c0d35",
+  "startingBranch": "codex/client-3-production-authority",
+  "originalTracked": 2462,
+  "protectedUntracked": 4,
+  "originalByteIdenticalIncludingProtected": 2457,
+  "scopedOriginalChanges": [
+    "docs/performance-p3a/.gitattributes",
+    "docs/performance-p3a/AUTHORIZATION.md",
+    "docs/performance-p3a/MINECRAFT_CAPTURE_VALIDATION.md",
+    "docs/performance-p3a/PRESENTMON_CALIBRATION.md",
+    "docs/performance-p3a/READINESS_MATRIX.md",
+    "docs/performance-p3a/WORKLOAD_SPEC.md",
+    "docs/performance-p3a/WORLD_SNAPSHOT_LOCK.md",
+    "docs/performance-p3a/workloads.json",
+    "tools/benchmark/README.md"
+  ],
+  "worktreesPreserved": 7,
+  "otherWorktreeHeadsUnchanged": true,
+  "priorPrivateEvidenceFilesByteIdentical": 149,
+  "originalP3A2WorldByteIdentical": true,
+  "productionBinaryConfigRegistryByteIdentical": true,
+  "productionHashScope": "binary, launcher configuration, instance registry only; no owner-world or credential inventory",
+  "bcWorkloadObjectsUnchanged": true,
+  "deletions": 0,
+  "noGeneratedGameRuntimeDataStaged": true
+}

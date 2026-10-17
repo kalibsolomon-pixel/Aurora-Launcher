@@ -1,0 +1,18 @@
+{
+  "sampleKind": "test-execution",
+  "benchmark": {
+    "passed": 65,
+    "existing": 52,
+    "newFocused": 13,
+    "failures": 0,
+    "logSha256": "30351757935d9caba1bc478928ab50cd681897007a6e269a59643a06ebb76f81"
+  },
+  "p1": {
+    "passed": 13,
+    "failures": 0,
+    "logSha256": "7286b6115221a9250838796c8f2f4d181b6be830ccd3c88476dc3a69a4bb76ee"
+  },
+  "productSourceChanged": false,
+  "rustFrontendBuildRerun": false,
+  "limitations": "Synthetic refusal tests do not replace actual capture/world evidence; existing ResourceWarning retained in private test log"
+}

@@ -1,0 +1,194 @@
+{
+  "sampleKind": "actual-controlled-native-opengl",
+  "series": [
+    {
+      "instrument": "presentmon",
+      "ordering": "off/on/on/off, same long-lived 120-Hz stimulus",
+      "innerSecondsPerBlock": 14,
+      "blocks": [
+        {
+          "phase": "off-1",
+          "markers": 1680,
+          "rateHz": 120.0001575225415,
+          "meanMs": 8.33332239428231,
+          "p99Ms": 8.85842,
+          "maxMs": 12.0521,
+          "variance": 0.08446947636567897,
+          "stimulusCpuOneCorePercent": 1.562573664187026,
+          "stimulusRssStartBytes": 57516032,
+          "stimulusRssEndBytes": 60882944,
+          "machineCpuPercent": 1.9708757231198883,
+          "popenAndIdentityMs": 0.0017
+        },
+        {
+          "phase": "on-1",
+          "markers": 1680,
+          "rateHz": 120.00368945232255,
+          "meanMs": 8.333077129243597,
+          "p99Ms": 8.89254,
+          "maxMs": 11.6192,
+          "variance": 0.09076936832743476,
+          "stimulusCpuOneCorePercent": 4.017865723870368,
+          "stimulusRssStartBytes": 62115840,
+          "stimulusRssEndBytes": 62681088,
+          "machineCpuPercent": 1.916258316401737,
+          "popenAndIdentityMs": 8.0818,
+          "observerCpuOneCorePercent": 0.0,
+          "observerRssEndBytes": 14065664,
+          "totalElapsedBeyondRequested18Seconds": 0.04880269999999953,
+          "observerExitCode": 0
+        },
+        {
+          "phase": "on-2",
+          "markers": 1680,
+          "rateHz": 119.99925356033104,
+          "meanMs": 8.333385169743895,
+          "p99Ms": 9.340972,
+          "maxMs": 15.3338,
+          "variance": 0.21431209963116535,
+          "stimulusCpuOneCorePercent": 3.6829424569213587,
+          "stimulusRssStartBytes": 62910464,
+          "stimulusRssEndBytes": 63422464,
+          "machineCpuPercent": 1.248105909562166,
+          "popenAndIdentityMs": 4.3419,
+          "observerCpuOneCorePercent": 0.2232086720161845,
+          "observerRssEndBytes": 13926400,
+          "totalElapsedBeyondRequested18Seconds": 0.026519100000001572,
+          "observerExitCode": 0
+        },
+        {
+          "phase": "off-2",
+          "markers": 1680,
+          "rateHz": 120.01304003509213,
+          "meanMs": 8.332427873734366,
+          "p99Ms": 9.199584,
+          "maxMs": 15.4351,
+          "variance": 0.1941522639997077,
+          "stimulusCpuOneCorePercent": 0.6696672617312096,
+          "stimulusRssStartBytes": 63557632,
+          "stimulusRssEndBytes": 64012288,
+          "machineCpuPercent": 0.6899852430901767,
+          "popenAndIdentityMs": 0.0038
+        }
+      ],
+      "onMinusOffMean": {
+        "rateHz": -0.005127272490028645,
+        "p99Ms": 0.08775400000000033,
+        "stimulusCpuOneCorePercent": 2.7342836274367457,
+        "machineCpuPercent": 0.2517516298769189
+      },
+      "uncertainty": "two blocks/state, one short series/instrument; observed range only, no general confidence bound or negligible-overhead claim; 120-Hz work does not establish overhead at uncapped Minecraft rates",
+      "markersSha256": "2eb44d15d8af0b04831a0bb00ede58e672537fe0a4f707b347ce58e12be206c7",
+      "counterRecordsSha256": "fdaeef059a67831a836f6d21f5dcccbd7fabe07ee36803a0a193d50534cb1c38",
+      "metadataSha256": "caf2c4f2d363aaf57181e46b7c9b6f645e777bb7c673217b16dbcec82d209b6f",
+      "criteria": {
+        "rateDifferencePercent": 2,
+        "p99IntervalDifferenceMs": 2,
+        "machineCpuDifferencePercentagePoints": 2,
+        "scope": "observed bounded 120-Hz instrument pairs; two blocks per state cannot bound small gameplay effects"
+      }
+    },
+    {
+      "instrument": "sampler",
+      "ordering": "off/on/on/off, same long-lived 120-Hz stimulus",
+      "innerSecondsPerBlock": 14,
+      "blocks": [
+        {
+          "phase": "off-1",
+          "markers": 1680,
+          "rateHz": 120.00146889231011,
+          "meanMs": 8.33323132817153,
+          "p99Ms": 8.921958,
+          "maxMs": 9.7705,
+          "variance": 0.06971479175231578,
+          "stimulusCpuOneCorePercent": 4.129537024559304,
+          "stimulusRssStartBytes": 57421824,
+          "stimulusRssEndBytes": 60825600,
+          "machineCpuPercent": 1.663143620627767,
+          "popenAndIdentityMs": 0.0012
+        },
+        {
+          "phase": "on-1",
+          "markers": 1680,
+          "rateHz": 119.9995134266305,
+          "meanMs": 8.33336712328767,
+          "p99Ms": 9.054590000000001,
+          "maxMs": 12.042,
+          "variance": 0.10368294382680493,
+          "stimulusCpuOneCorePercent": 0.4464522589098513,
+          "stimulusRssStartBytes": 62009344,
+          "stimulusRssEndBytes": 62582784,
+          "machineCpuPercent": 1.316104331179708,
+          "popenAndIdentityMs": 5.0453,
+          "observerCpuOneCorePercent": 0.0,
+          "observerRssEndBytes": 16912384,
+          "totalElapsedBeyondRequested18Seconds": 0.06940219999999897,
+          "observerExitCode": 0,
+          "sampleReadDurationMaxNs": 1363200,
+          "samplerSamples": 37,
+          "samplerStatus": "complete"
+        },
+        {
+          "phase": "on-2",
+          "markers": 1680,
+          "rateHz": 119.98382655178054,
+          "meanMs": 8.334456640857653,
+          "p99Ms": 9.029098,
+          "maxMs": 17.2446,
+          "variance": 0.17666050978168815,
+          "stimulusCpuOneCorePercent": 1.3392542705086632,
+          "stimulusRssStartBytes": 62812160,
+          "stimulusRssEndBytes": 63275008,
+          "machineCpuPercent": 1.2886495112706962,
+          "popenAndIdentityMs": 5.4817,
+          "observerCpuOneCorePercent": 0.0,
+          "observerRssEndBytes": 17133568,
+          "totalElapsedBeyondRequested18Seconds": 0.07333170000000067,
+          "observerExitCode": 0,
+          "sampleReadDurationMaxNs": 555300,
+          "samplerSamples": 37,
+          "samplerStatus": "complete"
+        },
+        {
+          "phase": "off-2",
+          "markers": 1680,
+          "rateHz": 119.99897997293498,
+          "meanMs": 8.333404169148302,
+          "p99Ms": 9.204596,
+          "maxMs": 14.8404,
+          "variance": 0.16834541962526264,
+          "stimulusCpuOneCorePercent": 1.3392691647453214,
+          "stimulusRssStartBytes": 63471616,
+          "stimulusRssEndBytes": 63926272,
+          "machineCpuPercent": 0.9023396949612713,
+          "popenAndIdentityMs": 0.0044
+        }
+      ],
+      "onMinusOffMean": {
+        "rateHz": -0.008554443417025936,
+        "p99Ms": -0.02143299999999826,
+        "stimulusCpuOneCorePercent": -1.8415498299430553,
+        "machineCpuPercent": 0.019635263430682892
+      },
+      "uncertainty": "two blocks/state, one short series/instrument; observed range only, no general confidence bound or negligible-overhead claim; 120-Hz work does not establish overhead at uncapped Minecraft rates",
+      "markersSha256": "0632987e849723e1b676f334eb87e232b7850ba007a37924c77b71156d260659",
+      "counterRecordsSha256": "4b3ccf89204f492a88f973e28de3279cf99b4fce696b5c2451d6ea0d0a2a4107",
+      "metadataSha256": "0a5472ad195912d25b8f9daa23ea657b6d10ef7db7957e7a3e76a6e1f46b682b",
+      "criteria": {
+        "rateDifferencePercent": 2,
+        "p99IntervalDifferenceMs": 2,
+        "machineCpuDifferencePercentagePoints": 2,
+        "scope": "observed bounded 120-Hz instrument pairs; two blocks per state cannot bound small gameplay effects"
+      }
+    }
+  ],
+  "failedAttempt": {
+    "status": "cancelled by window close at approximately 43 seconds",
+    "markerSha256": "c00a7ffdeaf660a7c5cbded2829fb77138735824e42df4b2e78629df8704e8c7",
+    "metadataSha256": "e52ea1cf82c88b59f9b271d98592ab7b51df42f99d8da49d65694efad2a062f6",
+    "retained": true
+  },
+  "assessment": "Observed 120-Hz screens pass; uncapped Minecraft overhead remains unbounded. Calibration PARTIAL.",
+  "cpuResolution": "GetProcessTimes counters can advance in roughly 15.625 ms quanta; observed 0.0% is not zero cost",
+  "memoryCaveat": "Stimulus retains every marker in memory; its RSS growth is not instrument memory cost"
+}

@@ -34,20 +34,21 @@
         "windowMode": "windowed",
         "fov": 70,
         "guiScale": 2,
-        "graphics": "fancy",
+        "graphics": "custom: reviewed 1.21.11 individual settings",
         "clouds": "off",
         "particles": "all",
         "fpsCap": "unlimited",
         "vSync": false,
         "shaders": [],
         "resourcePacks": [],
-        "dynamicResolution": false
+        "dynamicResolution": false,
+        "inactivityFpsLimit": "minimized"
       },
-      "worldSha256": null,
-      "routeSha256": null,
-      "settingsSha256": null,
-      "worldGeneration": "declared chunks generated and lighting settled before immutable snapshot; NOT CREATED",
-      "power": "owner-confirmed AC and unchanged observed power mode; not validated",
+      "worldSha256": "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f",
+      "routeSha256": "248100eebc6f48b381c0d88041680e7d09b5800542bafe05902685d4cdd28219",
+      "settingsSha256": "efd1595619f579723159ed7bb0cbb1e06d7336dc9980662252162abd15f24ae1",
+      "worldGeneration": "All 1024 required full chunks; 5329 recorded chunks; canonical P3-A.3 archive independently restored",
+      "power": "AC observed and existing Ultimate Performance scheme unchanged; thermals/VRR unknown",
       "cameraMovement": "stationary after exact positioning; no automation mod",
       "id": "workload-a-stationary-v1",
       "worldType": "superflat",
@@ -66,13 +67,13 @@
         "armorStands": 0,
         "hoppers": 0,
         "otherSpawnedEntities": 0,
-        "inventoryStatus": "exact world inventory pending"
+        "inventoryStatus": "NBT/region verified: zero non-player entities and zero block entities, sustained after save/reload"
       },
       "readiness": {
-        "specified": "PARTIAL: scene/protocol complete, material hashes pending",
-        "materials": "PARTIAL: base installed, world absent",
-        "isolatedInstance": "PARTIAL: base content/Java verified, no authenticated world",
-        "executionValidated": "NOT TESTED"
+        "specified": "PASS: scene and exact canonical material hashes",
+        "materials": "PASS: base game/Fabric/Java and conforming restored world",
+        "isolatedInstance": "PASS: normal authenticated A execution; final short capture reported separately",
+        "executionValidated": "P3-A.3 final short validation; not a full measured benchmark"
       }
     },
     {

@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "workloadId": "workload-a-stationary-v1",
+  "kind": "actual-canonical-A-material-lock",
+  "worldArchiveSha256": "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f",
+  "worldManifestSha256": "5082795f0ac5987c1eb61412102a2be5bc7a29868842dd317f985f3193258c61",
+  "conditionsSha256": "410362e1c4d26d9abf12a52b93712d66b6cb78f7becdded559d15b2f82b9b6c9",
+  "optionsSha256": "efd1595619f579723159ed7bb0cbb1e06d7336dc9980662252162abd15f24ae1",
+  "routeSha256": "248100eebc6f48b381c0d88041680e7d09b5800542bafe05902685d4cdd28219",
+  "scene": {
+    "minecraftVersion": "1.21.11",
+    "seed": 123456789,
+    "generationSettings": {
+      "settings": {
+        "features": 0,
+        "biome": "minecraft:plains",
+        "layers": [
+          {
+            "block": "minecraft:bedrock",
+            "height": 1
+          },
+          {
+            "block": "minecraft:dirt",
+            "height": 128
+          },
+          {
+            "block": "minecraft:grass_block",
+            "height": 1
+          }
+        ],
+        "structure_overrides": [
+          "minecraft:strongholds",
+          "minecraft:villages"
+        ],
+        "lakes": 0
+      },
+      "type": "minecraft:flat"
+    },
+    "playerPosition": [
+      0.5,
+      66.0,
+      0.5
+    ],
+    "orientation": [
+      0.0,
+      10.0
+    ],
+    "gameMode": "creative",
+    "difficulty": "normal",
+    "weather": "clear",
+    "timeOfDay": 6000,
+    "renderDistance": 12,
+    "simulationDistance": 8,
+    "entityConditions": {
+      "nonPlayerEntityCount": 0,
+      "entityTypes": [],
+      "blockEntityCount": 0
+    },
+    "resourcePacks": [],
+    "shaders": [],
+    "gamerules": {
+      "advance_time": 0,
+      "advance_weather": 0,
+      "spawn_mobs": 0,
+      "random_tick_speed": 3
+    },
+    "generatedChunks": {
+      "totalRecordedChunks": 5329,
+      "requiredFullChunks": 1024,
+      "missingRequiredFullChunks": 0,
+      "requiredChunkRectangle": [
+        -16,
+        -16,
+        15,
+        15
+      ]
+    }
+  },
+  "effectiveOptions": {
+    "maxFps": "260",
+    "enableVsync": "false",
+    "inactivityFpsLimit": "\"minimized\"",
+    "fullscreen": "false",
+    "overrideWidth": "1920",
+    "overrideHeight": "1080",
+    "graphicsPreset": "\"custom\"",
+    "renderDistance": "12",
+    "simulationDistance": "8",
+    "renderClouds": "\"false\"",
+    "guiScale": "2",
+    "fov": "0.0",
+    "particles": "0",
+    "ao": "true",
+    "cutoutLeaves": "true",
+    "improvedTransparency": "false",
+    "mipmapLevels": "4",
+    "textureFiltering": "0",
+    "resourcePacks": "[]"
+  },
+  "shaderAbsenceEvidence": "Actual empty A mods directory; no shader loader; resourcePacks=[]",
+  "readiness": "Canonical world PASS; full measurement calibration/readiness remains separate"
+}

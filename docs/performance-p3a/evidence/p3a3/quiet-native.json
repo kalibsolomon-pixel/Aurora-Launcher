@@ -1,0 +1,74 @@
+{
+  "sampleKind": "actual-native-and-system-observation",
+  "quiet": {
+    "machineCpuMeanPercent": 1.2323632541830594,
+    "minimumAvailableBytes": 21132648448,
+    "samples": 121,
+    "ACLineStatus": 1,
+    "unknowns": [
+      "GPU idle/VRR/thermals",
+      "background app workload stability"
+    ],
+    "quietCpuScreenPercent": 2,
+    "cpuScreenPassed": true,
+    "processCsvSha256": "e9b069c94c812269c9021a7d9cde547cfe43bf3b8ace6a4fce288e59e188919d",
+    "captureMetadataSha256": "53fcf1af4491e6e51a6229deda3eea571b40e29f5a0bc54f81621e2971686ba3",
+    "observation": "Fresh final main-menu preflight; earlier pre-interruption observation was not reused",
+    "unelevatedTokenObserved": true
+  },
+  "isolation": {
+    "markedDirectTempRoot": true,
+    "canonicalDerivedPathsChecked": true,
+    "ancestorAndDescendantReparsePoints": 0,
+    "threeIsolatedRegistryRecords": true,
+    "nativeTargetEvidence": "Normal native commands selected the known isolated registry identity; exact isolated runtime path/hash, world writes and launch logs independently corroborate the managed root",
+    "liveWebViewProfileVerifiedAfterBothStarts": true,
+    "beforeAuthenticationLiveCheckGuaranteed": false,
+    "startupSequencingException": "Owner explicitly authorized startup after canonical checks and immediate live WebView verification, accepting earlier automatic native refresh",
+    "sameUserCredentialRotationRiskAccepted": true,
+    "interactiveSignInNeededThisPhase": false,
+    "accountDatabaseOrProfileCopied": false,
+    "secretsExported": false
+  },
+  "presentmon": {
+    "version": "2.3.1",
+    "sha256": "364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c",
+    "authenticode": "Valid / Intel Corporation",
+    "bytes": 421312
+  },
+  "runtime": {
+    "version": "21.0.7+6-LTS",
+    "manifestSha1": "cb4394a27089d19f65d5baa6cf0482c27c3c7865",
+    "javawSha256": "1ba6a4fb32a6a3d5c925fe837ae6717e2f75743a71e013e668e6dadb909245ba",
+    "authority": "Normal native Play deep validation; no custom/system Java"
+  },
+  "configuration": {
+    "performanceMode": "balanced",
+    "memoryMib": 2048,
+    "additionalJvmArguments": "",
+    "window": null
+  },
+  "displayPower": {
+    "gpu": "AMD Radeon RX 9070 XT",
+    "driver": "32.0.31041.1004",
+    "desktop": [
+      2560,
+      1440,
+      240
+    ],
+    "gameFramebuffer": [
+      1920,
+      1080
+    ],
+    "activeScheme": "Ultimate Performance",
+    "changed": false,
+    "VRR": null,
+    "thermals": null
+  },
+  "exits": {
+    "preparationGame": 0,
+    "originalLauncher": "unobserved after interruption",
+    "finalGame": 0,
+    "finalLauncher": 0
+  }
+}

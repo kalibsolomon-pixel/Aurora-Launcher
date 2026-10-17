@@ -1,3 +1,25 @@
+# P3-A.3 authorization extension
+
+The owner explicitly continues P3-A.2's same-user/account model for the corrective
+pacing tests, bounded native calibration/overhead trials, a new disposable A world,
+and one final restored-scene short capture. Shared UUID-keyed credential rotation
+risk remains accepted. P3-B, JVM comparisons, tuning and production changes remain
+NOT AUTHORIZED. B/C gameplay is outside this A-only corrective scope.
+
+Source review found that Home skin/cape widgets may call normal native session
+refresh during startup. Canonical filesystem/reparse checks therefore precede
+startup, but a live WebView check cannot be guaranteed before that refresh. The
+owner explicitly answered **Authorize that limited startup sequence**. Both actual
+starts performed immediate live profile checks afterward. This is an approved
+sequencing exception, not a claimed fully observed pre-authentication live check.
+Interactive sign-in, if required, remains owner-operated. No credential extraction,
+account/profile copying, direct vault inspection or production sign-in probe.
+
+The original isolated launcher was no longer present after the interruption;
+its exact exit is unobserved. Restart uses the same reviewed binary/root/profile,
+with fresh logs and renewed canonical/live checks. Final clean exit is reported
+separately. The historical P3-A.2 authorization follows unchanged.
+
 # P3-A.2 same-user short-session authorization
 
 The owner explicitly authorizes the current Windows session, existing legitimate

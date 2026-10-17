@@ -1,3 +1,21 @@
+# Current P3-A.3 Workload A lock
+
+A now has a conforming, independently restored zero-entity canonical world.
+Exact archive/route/options identities are in [workloads.json](workloads.json) and
+[workload-a-lock.json](workload-a-lock.json). The actual 1.21.11 UI calls the reviewed
+individual graphics Custom; the earlier Fancy proposal is superseded for A only.
+A uses Reduce FPS when: Minimized, Unlimited maximum, VSync off, 1920x1080 windowed,
+render/simulation 12/8 and the otherwise unchanged scene. This prevents the confirmed
+AFK cap during stationary warm-up/capture without simulating input.
+
+Normal in-game entity cleanup preserved terrain and required gamerules. Complete
+NBT/region inspection, save/reload, archive extraction and the final run's persisted
+state verify zero entities/block entities, exact camera and required full chunks.
+See [world evidence](WORLD_SNAPSHOT_LOCK.md) and [final capture](MINECRAFT_CAPTURE_VALIDATION.md).
+B/C proposals and objects are unchanged and remain unvalidated for gameplay/worlds.
+Full 300/600-second benchmarking remains unauthorized; high-rate calibration/GC
+and representative-workload readiness remain blocked. Historical proposal follows.
+
 > P3-A.2 created and restored an actual A snapshot, but its 19 entities and capture
 > pacing do not meet this proposed workload lock. Canonical hashes remain unresolved.
 > See [current world status](WORLD_SNAPSHOT_LOCK.md) and [capture report](MINECRAFT_CAPTURE_VALIDATION.md).

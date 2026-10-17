@@ -1,3 +1,36 @@
+# P3-A.3 readiness matrix
+
+**Overall PARTIAL. P3-B NOT READY / NOT AUTHORIZED.** Corrective A-only work is
+complete; high-throughput timing/observer confidence remains an essential gate.
+[Acceptance](../../PERFORMANCE_P3A3_ACCEPTANCE.md), [authorization](AUTHORIZATION.md).
+
+| Gate | Current result | Evidence / remaining condition |
+| --- | --- | --- |
+| Same-user/account scope | PASS | Explicit continuation and accepted credential-rotation risk |
+| Canonical/reparse/native WebView isolation | PASS | Checks before both starts; immediate live profile checks afterward |
+| Startup authentication ordering | APPROVED EXCEPTION | Home widgets may refresh first; owner reviewed and authorized this limitation |
+| Exact PresentMon / unelevated operation | PASS | Pinned 2.3.1 hash, Valid Intel signature, unique bounded traces |
+| Fixed native 30/60/120 Hz calibration | PASS WITH LIMITS | 20 s inner windows, independent QPC swaps/rows reconciled; physical scanout unproved |
+| Loss counters | PASS WITH LIMITS | Read-only ETW queries show zero through measured windows; shutdown tails unknown |
+| Instrumentation overhead | PARTIAL | Alternating 120-Hz screens pass; two blocks/state do not bound uncapped Minecraft interference |
+| Unintended 30 Hz limiter | PASS | Focused AFK reproduction after >60 s; Minimized controls it without input simulation |
+| Canonical A world | PASS | Zero entities/block entities after save/reload, exact scene, complete chunks, archive restoration |
+| Final restored-A short capture | VALID WITH WARNINGS | 46170 rows, exact child/focus, 342.978 s warm-up; no AFK cap; high NA fraction/estimate gaps retained |
+| A frame-tail measurement fidelity | BLOCKED | Uncapped display estimates/observer effects not established physical gameplay tails |
+| Quiet preflight | PASS WITH LIMITS | Fresh 60 s / 121 samples, 1.232% mean machine CPU, AC present, >=19.68 GiB available; GPU/thermals/VRR unknown |
+| CPU/memory telemetry | PASS WITH LIMITS | 61 samples, full 20 s counter window; capture machine CPU 14.677% includes game/OS/observer and background |
+| Clean final exits | PASS | Exact supervised game and retained-handle launcher both exit 0 |
+| Custom-resolution product defect | DEFERRED | Saved-game overrides remain validated workaround; native resolver unchanged |
+| Game GC / correlation | NOT AVAILABLE | Balanced/2048 MiB/empty JVM text retained; no hidden logging or validator bypass |
+| B/C gameplay/world readiness | NOT TESTED | Installation evidence preserved; no inference from A-only success |
+| Full measured-run quality | INCOMPLETE | Existing 300/600 s, three-source and clock/quality policy unchanged |
+| Regression tests | PASS | 65 benchmark (52 existing + 13 focused), 13 P1; product source untouched |
+| Other hardware / Linux | NOT TESTED | No equivalence or portability claim |
+| P3-B decision | BLOCKED | Separate authorization plus calibration/GC/representative-world gates required |
+
+No preset, heap/collector policy, native DTO, production dependency, release or
+global setting changed. Original P3-A.2 evidence remains intact. Historical matrix follows.
+
 # P3-A.2 readiness matrix
 
 Current phase: same-user short validation only, 2026-10-16.

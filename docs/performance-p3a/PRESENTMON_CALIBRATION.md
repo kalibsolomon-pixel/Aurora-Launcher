@@ -1,3 +1,54 @@
+# PresentMon P3-A.3 — fixed cadences PASS, full calibration PARTIAL
+
+The exact 421312-byte 2.3.1 binary and Valid Intel signature were rechecked at
+both isolated starts. SHA-256 remains
+`364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c`.
+No elevation, service, driver, privilege change or replacement tool was used.
+[Actual cadence evidence](evidence/p3a3/cadences.json),
+[overhead report](INSTRUMENTATION_OVERHEAD.md), [pacing diagnosis](FRAME_PACING_DIAGNOSIS.md).
+
+| Requested cadence | Independent observed rate | ETW display-estimate rate | Inner present rows / markers | Mean / max paired interval disagreement |
+| --- | --- | --- | --- | --- |
+| 30 Hz | 30.00055 Hz | 30.00020 Hz | 600 / 600 | 0.06012 / 0.6763 ms |
+| 60 Hz | 60.00031 Hz | 60.00427 Hz | 1200 / 1201 | 0.06866 / 0.9819 ms |
+| 120 Hz | 119.99909 Hz | 119.45082 Hz | 2400 / 2400 | 0.05317 / 1.0391 ms |
+
+Each stimulus ran 26 s with a 20 s inner window (3–23 s), >=2 s pre/post-roll,
+independent pre/post-swap integer QPC markers, exact PID/creation identity and a
+unique bounded trace. The stimulus gate followed capture startup. All short
+inspections are VALID WITH WARNINGS. Raw rows are 779/1559/3119; unavailable
+display rows are 0/0/11. The unmatched 60-Hz marker is at the window boundary;
+there are no interior unmatched or duplicate-nearest markers. QPC frequency is
+10000000 Hz. Present timestamps follow pre-swap markers by mean 0.225–0.282 ms,
+max 1.209 ms; most are outside the CPU-call bracket. This is an observed
+asynchronous boundary, not identical API/physical-display timestamps.
+
+One phase plan now drives stimulus metadata and execution. Independent markers
+bracket swaps, and fixed deadlines avoid adding drawing work to each period.
+Stale P3-A.2 phase/stall metadata and original captures remain untouched. New
+regressions reject stale fields, phase bounds, wrong QPC units, identity mismatch,
+incomplete stimuli and interior losses. The old variable/stall specimen remains
+historical evidence; no new variable/stall calibration or game-stall inference is claimed.
+
+Read-only ControlTrace QUERY succeeded for each owned trace without privileged
+changes. EventsLost, LogBuffersLost and RealTimeBuffersLost were zero before the
+stimulus and after the inner window: **ZERO OBSERVED THROUGH WINDOW**, not
+unconditional zero loss or shutdown-tail proof. Failed/absent queries stay UNKNOWN.
+Microsoft documents the [query operation](https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-controltracew)
+and [counter meanings](https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties).
+Marker reconciliation adds bounded completeness confidence. NA display fields,
+boundary truncation, stream mismatch and invalid CSV remain separate classifications.
+The generic short reader does not consume external counter/overhead reviews;
+its conservative warnings remain alongside this additional evidence.
+
+Alternating instrument-off/on trials passed their observed 120-Hz screens, but
+two blocks/state cannot establish negligible interference or bound high-throughput
+Minecraft overhead. Uncapped Minecraft's unavailable display estimates and long
+estimate gaps remain unresolved for frame-tail comparisons. No full-run schema,
+threshold, clock/GC requirement or measured 300/600 s gate was weakened. Overall
+calibration is PARTIAL; full measured-run quality INCOMPLETE. P3-B remains
+NOT READY / NOT AUTHORIZED. Historical P3-A.2 results follow.
+
 # PresentMon P3-A.2 operational calibration — PARTIAL
 
 Actual execution under the owner's existing unelevated Windows principal is now

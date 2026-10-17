@@ -1,3 +1,48 @@
+# P3-A.3 canonical Workload A — PASS
+
+A new disposable preparation copy was extracted from the preserved P3-A.2 archive;
+the original world/archive were never edited. The supported in-game non-player
+entity removal command removed 18 entities, then 15 resulting drops. Exact commands
+are retained in [the sanitized evidence](evidence/p3a3/world.json). All archived
+entities had been within the loaded area. No direct NBT edit, terrain change,
+difficulty change or gamerule relaxation occurred. The specified camera was restored.
+Zero entities persisted through normal save/reload and a further stationary observation.
+Full NBT/region inspection then checked every dimension, beyond F3's loaded counter.
+
+[Canonical material lock](workload-a-lock.json), [stationary route](workload-a-route.json).
+
+| Canonical artifact / condition | Result |
+| --- | --- |
+| Archive SHA-256 | `d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f` |
+| Archive bytes | 22190080 |
+| Inventory manifest SHA-256 | `5082795f0ac5987c1eb61412102a2be5bc7a29868842dd317f985f3193258c61` |
+| Conditions SHA-256 | `410362e1c4d26d9abf12a52b93712d66b6cb78f7becdded559d15b2f82b9b6c9` |
+| Options SHA-256 | `efd1595619f579723159ed7bb0cbb1e06d7336dc9980662252162abd15f24ae1` |
+| Complete inventory | 56 files / 12 directories, identical independent extraction |
+| Scene | Exact seed, plains superflat/layers, creative/normal, camera, frozen 6000/clear, required gamerules |
+| Entities / block entities | 0 / 0 after cleanup and reload, snapshot and restoration |
+| Required full chunks | 1024 / 1024, (-16,-16)–(15,15), 5329 total recorded |
+| Graphics | Actual 1.21.11 Custom settings, 12/8, 1920x1080 windowed, Unlimited/VSync off, Minimized limiter |
+| Shader/resource-pack absence | Actual empty A mods directory, no shader loader, resourcePacks=[] |
+
+Aurora's supervised preparation child exited 0 before freezing. Two inventories
+confirmed stable source bytes. The complete new snapshot/archive was exclusively
+created, safely extracted into a new verification directory, rehashed and inspected
+again. Files/archive are read-only; same-owner attribute changes remain possible,
+and later hashes detect drift. A fresh final-run save copied from the verified
+restoration matched the complete canonical inventory before launch. Execution writes
+its disposable copy and never the frozen source.
+
+The bounded read-only scene tool adds NBT/region, safe decompression, sector and
+archive checks to the existing inventory gate. Empty entity-region placeholders
+are supported because the installed game emitted them; nonempty truncated files fail.
+Synthetic regressions remain separate from the actual world validation. Private
+player/UUID-bearing data remains outside Git.
+
+Only A's world/route/settings hashes are populated in workloads.json. B/C objects,
+installations and evidence remain unchanged; neither has a canonical world or gameplay
+acceptance. The original nonconforming P3-A.2 lock follows intact.
+
 # P3-A.2 world snapshots — inventory PASS, workload lock PARTIAL
 
 Workload A now has a complete actual test-world snapshot, archive and independently

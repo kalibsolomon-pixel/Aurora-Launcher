@@ -1,3 +1,50 @@
+# Minecraft P3-A.3 — restored scene validated, measurement confidence PARTIAL
+
+[Actual final capture](evidence/p3a3/final-capture.json),
+[pacing diagnosis](FRAME_PACING_DIAGNOSIS.md), [canonical world](WORLD_SNAPSHOT_LOCK.md).
+One final short capture used a fresh copy of the independently restored canonical
+A archive. Aurora performed normal authenticated entitlement, deep content/runtime
+validation and exact-child launch. Microsoft OpenJDK 21.0.7+6-LTS, Minecraft 1.21.11,
+Fabric 0.19.5, no optional mods, Balanced/2048 MiB and empty JVM text are unchanged.
+No child arguments, reusable secrets or account identity were exported.
+
+| Final actual observation | Result |
+| --- | --- |
+| Warm-up / measured inner window | 342.978 s stationary / 20 s, 26 s requested capture |
+| Target | Exact native child PID 11780 / creation FILETIME 134366777835965485 |
+| Runtime/framebuffer/camera | Locked Java hash; F3 verifies Java 21.0.7, 1920x1080, (0.5,66,0.5), yaw/pitch 0/10 before and after |
+| Focus / inactivity | All 56 foreground samples target the game; Minimized limiting; debug overlay off during capture |
+| PresentMon | Exit 0; 46170 rows, one Other stream 0x0 |
+| Independent presentation-call rate | 1832.378 Hz; proves the stationary scene avoided the 30 FPS branch, not physical FPS |
+| Unavailable display estimates | 43026 rows retained, not automatically lost events |
+| Display-estimate intervals | 2486 inner intervals; mean 8.044 ms / 124.320 Hz, max 504.896 ms; gaps retained |
+| Short reader | VALID WITH WARNINGS; full measured-run quality INCOMPLETE |
+| ETW loss | Zero counters through inner window; shutdown tail unknown |
+| Process telemetry | 61 samples / 30 s, full 20 s weighted window, max interval 0.500419 s |
+| Process CPU / sampled RSS | 262.506% of one logical core / 1122340864 bytes; neither GC CPU nor Java heap |
+| Machine busy CPU | 14.677% during capture versus fresh preflight 1.232%; includes game/OS/observer/unrelated work |
+| Normal exits | Supervised Minecraft exit 0; retained-handle isolated launcher exit 0 |
+| Post-exit scene/options | Exact canonical conditions including 0 entities and 0 block entities; options hash unchanged |
+
+The fresh 60-second main-menu preflight observed AC power and >=21132648448 bytes
+available RAM. GPU idle/VRR/thermals were unavailable. The machine-minus-game CPU
+estimate includes instrumentation and OS work; it is not attributed solely to
+unrelated apps. No app, priority, power or driver settings were changed.
+
+F3 observations were 3477 before warm-up and 3582 after capture with new input;
+they are instantaneous rendering observations. The final no-input presentation calls
+and earlier controlled AFK/Minimized comparison establish limiter control. Display
+estimates are a separate quantity. Their high unavailable fraction and recurring
+long gaps are not validated physical stutters and cannot support a JVM performance
+claim. The 120-Hz overhead experiment does not bound this uncapped workload.
+
+The final native restart revalidated canonical paths, binary/signature and live
+WebView isolation under the owner's approved startup-refresh sequencing exception.
+The earlier launcher disappeared during the interruption; its exact exit is unknown.
+All failed/interrupted attempts and old P3-A.2 bytes remain preserved. Capture QPC
+origins are session-specific; no cross-session or absent-GC causal alignment is claimed.
+P3-B remains NOT READY / NOT AUTHORIZED. Historical P3-A.2 evidence follows.
+
 # Minecraft P3-A.2 capture — real data, overall PARTIAL
 
 [Actual sanitized capture](evidence/p3a2/minecraft-capture.json),
