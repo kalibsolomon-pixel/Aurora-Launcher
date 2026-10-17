@@ -50,7 +50,7 @@ def read_capture(root, m):
     # redirection may instead retain UTF-8. Decode strictly in either case.
     raw_diagnostic = diagnostics.read_bytes()
     diagnostic = raw_diagnostic.decode('utf-16' if raw_diagnostic.startswith(b'\xff\xfe') else 'utf-8-sig')
-    q.require(not re.search(r'\b(error|failed|denied|lost|dropped)\b', diagnostic, re.I), 'producer diagnostics need review')
+    q.require(not re.search(r'\b(error|failed|denied|lost|dropped|overflow|overflowed)\b', diagnostic, re.I), 'producer diagnostics need review')
     return root, rows, diagnostic
 
 

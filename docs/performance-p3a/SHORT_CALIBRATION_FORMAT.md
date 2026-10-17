@@ -61,3 +61,12 @@ python -B tools/benchmark/short_calibration.py <test-owned-directory>/short-cali
 Exit 0: VALID WITH WARNINGS. Exit 2: INVALID/INCOMPLETE. Failed artifacts are retained.
 Raw game/account/world material stays private; committed summaries retain reviewed
 hashes and limitations without account identifiers, private paths or child arguments.
+
+## P3-A.4a.1 producer-diagnostic correction
+
+Consumer `overflow` / `overflowed present events` warnings reject a short capture
+as INVALID, even with producer exit0 and zero ETW session-loss counters. Consumer
+ring retention and ETW delivery are separate. Preserve rejected raw data for
+explicitly labeled failure diagnosis; never promote its rate/tails as complete
+Minecraft timing. Prior permissive labels are superseded by
+[P3-A.4a.1 completeness review](P3A4A1_COMPLETENESS.md).

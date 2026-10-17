@@ -1,0 +1,359 @@
+{
+  "sampleKind": "actual-controlled-buffer-confirmation",
+  "presentBufferEntries": 8192,
+  "conditions": [
+    {
+      "requestedHz": 1800,
+      "fidelity": {
+        "artifactKind": "short-submission-fidelity",
+        "quality": "VALID WITH WARNINGS",
+        "semantic": "etw-application-submission-proxy",
+        "rawRows": 46562,
+        "submissionIntervals": {
+          "count": 35820,
+          "mean": 0.5583369625907314,
+          "median": 0.5249000000020487,
+          "p95": 0.9418049999997176,
+          "p99": 1.1584999999996715,
+          "p999": 1.3126049999986444,
+          "max": 1.8187000000011722,
+          "variance": 0.029155261436109508,
+          "presentation_rate_hz": 1791.033134112981,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 10741,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "unavailableDisplayRows": 42820,
+        "unavailableDisplayFraction": 0.9196340363386453,
+        "displayEstimateIntervals": {
+          "count": 2877,
+          "mean": 6.948784497740701,
+          "median": 6.948500000000024,
+          "p95": 7.049500000000819,
+          "p99": 7.071072000000669,
+          "p999": null,
+          "max": 7.13879999999989,
+          "variance": 0.002455455665139084,
+          "presentation_rate_hz": 143.91006086390158,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 864,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "displayInterpretation": "available estimates only; missingness is not optical drop evidence",
+        "fields": {
+          "SwapChainAddress": {
+            "0x0": 46562
+          },
+          "PresentRuntime": {
+            "Other": 46562
+          },
+          "SyncInterval": {
+            "-1": 46562
+          },
+          "PresentFlags": {
+            "0": 46562
+          },
+          "AllowsTearing": {
+            "0": 46562
+          },
+          "PresentMode": {
+            "Composed: Copy with GPU GDI": 46562
+          },
+          "MsBetweenSimulationStart": {
+            "unavailable": 46562,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenPresents": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 46562,
+              "mean": 0.5583472746016065,
+              "median": 0.525,
+              "p95": 0.9419,
+              "p99": 1.1626779999999999,
+              "p999": 1.3085730999999956,
+              "max": 1.8187,
+              "variance": 0.02930745222196527
+            }
+          },
+          "MsBetweenDisplayChange": {
+            "unavailable": 42821,
+            "zero": 0,
+            "distribution": {
+              "count": 3741,
+              "mean": 6.948776984763432,
+              "median": 6.9484,
+              "p95": 7.0499,
+              "p99": 7.07482,
+              "p999": null,
+              "max": 7.1388,
+              "variance": 0.0025158121540732785
+            }
+          },
+          "MsInPresentAPI": {
+            "unavailable": 0,
+            "zero": 46562,
+            "distribution": {
+              "count": 46562,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": 0.0,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsRenderPresentLatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 46562,
+              "mean": 0.055461223744684505,
+              "median": 0.0522,
+              "p95": 0.0784,
+              "p99": 0.1075,
+              "p999": 0.1701,
+              "max": 0.7979,
+              "variance": 0.00025258594432092755
+            }
+          },
+          "MsUntilDisplayed": {
+            "unavailable": 42820,
+            "zero": 0,
+            "distribution": {
+              "count": 3742,
+              "mean": 4.484225868519508,
+              "median": 4.5161999999999995,
+              "p95": 6.346855,
+              "p99": 6.817354,
+              "p999": null,
+              "max": 7.2955,
+              "variance": 1.5413216947129682
+            }
+          },
+          "MsPCLatency": {
+            "unavailable": 46562,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenAppStart": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 46562,
+              "mean": 0.5583472746016065,
+              "median": 0.525,
+              "p95": 0.9419,
+              "p99": 1.1626779999999999,
+              "p999": 1.3085730999999956,
+              "max": 1.8187,
+              "variance": 0.02930745222196527
+            }
+          },
+          "MsCPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 46562,
+              "mean": 0.5583472746016065,
+              "median": 0.525,
+              "p95": 0.9419,
+              "p99": 1.1626779999999999,
+              "p999": 1.3085730999999956,
+              "max": 1.8187,
+              "variance": 0.02930745222196527
+            }
+          },
+          "MsCPUWait": {
+            "unavailable": 0,
+            "zero": 46562,
+            "distribution": {
+              "count": 46562,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": 0.0,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsGPULatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 46562,
+              "mean": 0.06056615909969503,
+              "median": 0.0562,
+              "p95": 0.0871,
+              "p99": 0.1334,
+              "p999": 0.1786877999999997,
+              "max": 0.7958,
+              "variance": 0.0003454894752565051
+            }
+          },
+          "MsGPUTime": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 46562,
+              "mean": 0.5540344873501998,
+              "median": 0.5185,
+              "p95": 0.9425,
+              "p99": 1.1681389999999998,
+              "p999": 1.312729199999996,
+              "max": 1.8076,
+              "variance": 0.03140913695374368
+            }
+          },
+          "MsGPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 46562,
+              "mean": 0.1031866156952021,
+              "median": 0.0988,
+              "p95": 0.1362,
+              "p99": 0.1599,
+              "p999": 0.2141877999999997,
+              "max": 0.3756,
+              "variance": 0.00042481524116020036
+            }
+          },
+          "MsGPUWait": {
+            "unavailable": 0,
+            "zero": 1666,
+            "distribution": {
+              "count": 46562,
+              "mean": 0.4508478716549976,
+              "median": 0.4291,
+              "p95": 0.8252949999999998,
+              "p99": 1.0526389999999999,
+              "p999": 1.1853267999999981,
+              "max": 1.6887,
+              "variance": 0.028577894396591235
+            }
+          },
+          "MsAnimationError": {
+            "unavailable": 42820,
+            "zero": 1,
+            "distribution": {
+              "count": 3742,
+              "mean": 9.070016034206442e-05,
+              "median": 1.1583999999999999,
+              "p95": 1.8854849999999996,
+              "p99": 2.18136,
+              "p999": null,
+              "max": 2.7336000000000005,
+              "variance": 4.092318674782567
+            }
+          },
+          "AnimationTime": {
+            "unavailable": 42820,
+            "zero": 0,
+            "distribution": {
+              "count": 3742,
+              "mean": 14992.048055344736,
+              "median": 14991.512999999999,
+              "p95": 26689.476365,
+              "p99": 27729.344291,
+              "p999": null,
+              "max": 27989.2042,
+              "variance": 56342762.20969191
+            }
+          }
+        },
+        "exportedIntervalMaxDisagreementMs": 2.220446049250313e-16,
+        "lossStatus": "ZERO OBSERVED THROUGH WINDOW",
+        "uncertainty": {
+          "qpcTickMs": 0.0001,
+          "displayLatencyRoundingMs": 5e-05,
+          "etwToApiEntryMs": null,
+          "physicalScanoutMs": null,
+          "clockDriftPpm": null,
+          "shutdownTailLoss": "UNKNOWN"
+        },
+        "metricClassification": {
+          "submission": "DIAGNOSTIC ONLY; independent event completeness and overhead required",
+          "display": "DIAGNOSTIC ONLY",
+          "gpu": "DIAGNOSTIC ONLY",
+          "physicalDisplay": "UNAVAILABLE"
+        },
+        "captureCompleteness": "offline consistency only; row completeness requires independent evidence",
+        "independentCreationIdentityMatched": true,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "warnings": [
+          "short-only; no performance conclusion",
+          "Other runtime is not API-entry instrumentation",
+          "display estimates are not physical scanout",
+          "observer interference needs independent review"
+        ]
+      },
+      "markerReview": {
+        "presentRowsInWindow": 35821,
+        "independentMarkersInWindow": 35821,
+        "unmatchedMarkers": 1556,
+        "duplicateNearestMarkers": 1556,
+        "meanPresentToPreSwapMs": 0.10012401384662628,
+        "maxPresentToPreSwapMs": 0.5238,
+        "meanSignedPresentMinusPreSwapMs": 0.09768198263588398,
+        "meanIntervalDisagreementMs": 0.030249316701825187,
+        "maxIntervalDisagreementMs": 0.955,
+        "unmatchedOnlyAtBoundary": false,
+        "presentInsideSwapBracket": 93,
+        "independentMeanIntervalMs": 0.5583386404243439,
+        "independentRateHz": 1791.027751975017,
+        "markerConfidence": "REVIEW REQUIRED",
+        "boundaryAllowance": "at most one marker on the exact inner-window edge",
+        "scope": "call/row reconciliation; unavailable display estimates and physical scanout are separate"
+      }
+    }
+  ],
+  "stimulusExitCode": 0,
+  "presentmonExitCode": 0,
+  "loss": [
+    {
+      "statusCode": 0,
+      "qpcNs": 19647116032800,
+      "queryDurationNs": 29800,
+      "lossStatus": "COUNTER SNAPSHOT",
+      "eventsLost": 0,
+      "logBuffersLost": 0,
+      "realTimeBuffersLost": 0,
+      "buffersWritten": 17
+    },
+    {
+      "statusCode": 0,
+      "qpcNs": 19673117079200,
+      "queryDurationNs": 29500,
+      "lossStatus": "COUNTER SNAPSHOT",
+      "eventsLost": 0,
+      "logBuffersLost": 0,
+      "realTimeBuffersLost": 0,
+      "buffersWritten": 1737
+    }
+  ],
+  "rawHashes": {
+    "frames.csv": "1731798872e4f46e3a391d075becbedd00a1199d6bac396687bf96c66b2b37bb",
+    "hz1800-manifest.json": "232eeca23541a0e85b0dac7bae1321ef368456fae61f3ca5b37388a0d27cea15",
+    "loss.json": "a7eaaeec8fbf5ba0ad8398be67de945e4d3f907f34a17fe035bf5f02a36dd8a1",
+    "plan.json": "67859226fcb0d06844874c64fbb07ecc05cdaf6c57ac23bfd3dba9ac9fe10aa2",
+    "presentmon-stderr.txt": "7bd31a7082b233def4721f421372e6e4916d7f224979ef56a577daecf669f100",
+    "presentmon-stdout.txt": "a9130f7ca0a9bf20318a0122cdf0d1189d2a1ffbb038a45a6bfaf514bf9c5931",
+    "protocol.md": "7679074dda80ccb86738d17ce4f8e3225d05efc1ec748034931941245396b194",
+    "stimulus-stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stimulus-stdout.txt": "6afdb66dee9a8594829f982a5c47d34dc3769756006a7550ac6d0435d13cd5c7",
+    "stimulus/identity.json": "a4244b4df0241c10b82d5b1ad9e2c7975307bc7d0153d6597af8467b240757cf",
+    "stimulus/result.json": "b08d01b09643cd59f19a43af5d2ef4e847d6045c63014a3620efd577346e8961",
+    "stimulus/start.gate": "62143c30fe43c6e2e0b3623011d598af19f993ca05d1bbda94333f3a519e2d55",
+    "stimulus/started.json": "9c8add8648cd8c7b91ed499f102cc4acba6b9baa8906831479b23a6e5fb82b73",
+    "stimulus/swaps.csv": "0b17c888e618160c7a8825ca2beeab0d6e69b28b9bf1d89d2e2e5b72da511b26"
+  }
+}

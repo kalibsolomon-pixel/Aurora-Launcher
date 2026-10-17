@@ -1,0 +1,1846 @@
+{
+  "sampleKind": "actual-controlled-high-rate-overhead",
+  "requestedHz": 500,
+  "innerSeconds": 6,
+  "blocks": [
+    {
+      "label": "none-1",
+      "markers": 4937,
+      "independentSubmissionIntervals": {
+        "count": 2999,
+        "mean": 2.0000477825941982,
+        "median": 2.052299999999896,
+        "p95": 2.3194800000004174,
+        "p99": 2.4819059999999737,
+        "p999": null,
+        "max": 2.7631000000001293,
+        "variance": 0.049637913865535274,
+        "presentation_rate_hz": 499.9880546368407,
+        "stutter_frames_over_50ms": 0,
+        "stutter_events_over_50ms": 0,
+        "stutter_frames_per_minute": 0.0,
+        "long_gaps_over_1000ms": 0,
+        "boundary_coverage": true,
+        "discarded_boundary_intervals": 1937
+      },
+      "machineCpuPercent": 1.2200800968613206,
+      "stimulusCpuOneCorePercent": 14.58336055560637,
+      "stimulusRssStart": 60157952,
+      "stimulusRssEnd": 63922176,
+      "observerPopenAndIdentityMs": 0.0046,
+      "observerWallExcessMs": null,
+      "exits": {},
+      "loss": [],
+      "observers": {}
+    },
+    {
+      "label": "presentmon-1",
+      "markers": 5000,
+      "independentSubmissionIntervals": {
+        "count": 2999,
+        "mean": 2.000054384794932,
+        "median": 2.0538000000005496,
+        "p95": 2.3306399999988514,
+        "p99": 2.5174820000009035,
+        "p999": null,
+        "max": 2.7924999999999756,
+        "variance": 0.052889671557127635,
+        "presentation_rate_hz": 499.9864041709702,
+        "stutter_frames_over_50ms": 0,
+        "stutter_events_over_50ms": 0,
+        "stutter_frames_per_minute": 0.0,
+        "long_gaps_over_1000ms": 0,
+        "boundary_coverage": true,
+        "discarded_boundary_intervals": 2000
+      },
+      "machineCpuPercent": 1.283840357242534,
+      "stimulusCpuOneCorePercent": 14.062523671914848,
+      "stimulusRssStart": 64598016,
+      "stimulusRssEnd": 65544192,
+      "observerPopenAndIdentityMs": 4.4317,
+      "observerWallExcessMs": 77.13260000000082,
+      "exits": {
+        "presentmon": 0
+      },
+      "loss": [
+        {
+          "statusCode": 0,
+          "qpcNs": 19529239598100,
+          "queryDurationNs": 28600,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 51
+        },
+        {
+          "statusCode": 0,
+          "qpcNs": 19535239524100,
+          "queryDurationNs": 22900,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 220
+        }
+      ],
+      "observers": {
+        "presentmon": {
+          "cpuOneCorePercent": 0.5208342100709202,
+          "rssStart": 11886592,
+          "rssEnd": 14336000
+        }
+      },
+      "fidelity": {
+        "artifactKind": "short-submission-fidelity",
+        "quality": "VALID WITH WARNINGS",
+        "semantic": "etw-application-submission-proxy",
+        "rawRows": 4491,
+        "submissionIntervals": {
+          "count": 2999,
+          "mean": 2.0000340113371124,
+          "median": 2.041999999999433,
+          "p95": 2.341240000000022,
+          "p99": 2.5317620000000307,
+          "p999": null,
+          "max": 3.0130000000001544,
+          "variance": 0.05926074072385675,
+          "presentation_rate_hz": 499.9914973103158,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 1491,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "unavailableDisplayRows": 3198,
+        "unavailableDisplayFraction": 0.7120908483633934,
+        "displayEstimateIntervals": {
+          "count": 863,
+          "mean": 6.94854808806489,
+          "median": 6.948200000000071,
+          "p95": 7.08179999999885,
+          "p99": 7.131376000000111,
+          "p999": null,
+          "max": 7.1950000000002845,
+          "variance": 0.008354618046746818,
+          "presentation_rate_hz": 143.9149570998351,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 429,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "displayInterpretation": "available estimates only; missingness is not optical drop evidence",
+        "fields": {
+          "SwapChainAddress": {
+            "0x0": 4491
+          },
+          "PresentRuntime": {
+            "Other": 4491
+          },
+          "SyncInterval": {
+            "-1": 4491
+          },
+          "PresentFlags": {
+            "0": 4491
+          },
+          "AllowsTearing": {
+            "0": 4491
+          },
+          "PresentMode": {
+            "Composed: Copy with GPU GDI": 4491
+          },
+          "MsBetweenSimulationStart": {
+            "unavailable": 4491,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenPresents": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 1.999983856602093,
+              "median": 2.0423,
+              "p95": 2.3411,
+              "p99": 2.522260000000002,
+              "p999": null,
+              "max": 3.013,
+              "variance": 0.058531277786596225
+            }
+          },
+          "MsBetweenDisplayChange": {
+            "unavailable": 3199,
+            "zero": 0,
+            "distribution": {
+              "count": 1292,
+              "mean": 6.948758900928793,
+              "median": 6.94945,
+              "p95": 7.090115,
+              "p99": 7.132945,
+              "p999": null,
+              "max": 7.195,
+              "variance": 0.008530472204055202
+            }
+          },
+          "MsInPresentAPI": {
+            "unavailable": 0,
+            "zero": 4491,
+            "distribution": {
+              "count": 4491,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": null,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsRenderPresentLatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 0.06987457136495212,
+              "median": 0.0657,
+              "p95": 0.09625,
+              "p99": 0.1266,
+              "p999": null,
+              "max": 0.4717,
+              "variance": 0.0003499036419616739
+            }
+          },
+          "MsUntilDisplayed": {
+            "unavailable": 3198,
+            "zero": 0,
+            "distribution": {
+              "count": 1293,
+              "mean": 5.28653596287703,
+              "median": 5.2629,
+              "p95": 7.491839999999999,
+              "p99": 8.042691999999999,
+              "p999": null,
+              "max": 8.4546,
+              "variance": 1.7706271027824643
+            }
+          },
+          "MsPCLatency": {
+            "unavailable": 4491,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenAppStart": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 1.999983856602093,
+              "median": 2.0423,
+              "p95": 2.3411,
+              "p99": 2.522260000000002,
+              "p999": null,
+              "max": 3.013,
+              "variance": 0.058531277786596225
+            }
+          },
+          "MsCPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 1.999983856602093,
+              "median": 2.0423,
+              "p95": 2.3411,
+              "p99": 2.522260000000002,
+              "p999": null,
+              "max": 3.013,
+              "variance": 0.058531277786596225
+            }
+          },
+          "MsCPUWait": {
+            "unavailable": 0,
+            "zero": 4491,
+            "distribution": {
+              "count": 4491,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": null,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsGPULatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 0.07401084391004231,
+              "median": 0.0695,
+              "p95": 0.1002,
+              "p99": 0.12783000000000083,
+              "p999": null,
+              "max": 0.4755,
+              "variance": 0.000343074433734487
+            }
+          },
+          "MsGPUTime": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 1.995847584057003,
+              "median": 2.0385,
+              "p95": 2.34245,
+              "p99": 2.5249000000000024,
+              "p999": null,
+              "max": 3.0393,
+              "variance": 0.06082711107577088
+            }
+          },
+          "MsGPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 0.13703144065909598,
+              "median": 0.1356,
+              "p95": 0.16394999999999998,
+              "p99": 0.19803000000000012,
+              "p999": null,
+              "max": 0.5609,
+              "variance": 0.0003816210021329182
+            }
+          },
+          "MsGPUWait": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 1.858816143397907,
+              "median": 1.9021,
+              "p95": 2.19975,
+              "p99": 2.3885100000000015,
+              "p999": null,
+              "max": 2.8441,
+              "variance": 0.05922031635261715
+            }
+          },
+          "MsAnimationError": {
+            "unavailable": 3198,
+            "zero": 1,
+            "distribution": {
+              "count": 1293,
+              "mean": 0.0002812838360402187,
+              "median": 0.9054000000000002,
+              "p95": 3.07784,
+              "p99": 3.403243999999999,
+              "p999": null,
+              "max": 3.732800000000001,
+              "variance": 4.429751343717764
+            }
+          },
+          "AnimationTime": {
+            "unavailable": 3198,
+            "zero": 0,
+            "distribution": {
+              "count": 1293,
+              "mean": 4495.202067826759,
+              "median": 4493.1374,
+              "p95": 8534.179799999998,
+              "p99": 8895.912272,
+              "p999": null,
+              "max": 8985.3493,
+              "variance": 6727197.648724207
+            }
+          }
+        },
+        "exportedIntervalMaxDisagreementMs": 4.440892098500626e-16,
+        "lossStatus": "ZERO OBSERVED THROUGH WINDOW",
+        "uncertainty": {
+          "qpcTickMs": 0.0001,
+          "displayLatencyRoundingMs": 5e-05,
+          "etwToApiEntryMs": null,
+          "physicalScanoutMs": null,
+          "clockDriftPpm": null,
+          "shutdownTailLoss": "UNKNOWN"
+        },
+        "metricClassification": {
+          "submission": "DIAGNOSTIC ONLY; independent event completeness and overhead required",
+          "display": "DIAGNOSTIC ONLY",
+          "gpu": "DIAGNOSTIC ONLY",
+          "physicalDisplay": "UNAVAILABLE"
+        },
+        "captureCompleteness": "offline consistency only; row completeness requires independent evidence",
+        "independentCreationIdentityMatched": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "warnings": [
+          "short-only; no performance conclusion",
+          "Other runtime is not API-entry instrumentation",
+          "display estimates are not physical scanout",
+          "observer interference needs independent review"
+        ]
+      },
+      "markerReview": {
+        "presentRowsInWindow": 3000,
+        "independentMarkersInWindow": 3000,
+        "unmatchedMarkers": 2,
+        "duplicateNearestMarkers": 2,
+        "meanPresentToPreSwapMs": 0.16012916666666666,
+        "maxPresentToPreSwapMs": 0.7337999999999999,
+        "meanSignedPresentMinusPreSwapMs": 0.15918536666666666,
+        "meanIntervalDisagreementMs": 0.0544722203672788,
+        "maxIntervalDisagreementMs": 0.4498,
+        "unmatchedOnlyAtBoundary": false,
+        "presentInsideSwapBracket": 9,
+        "independentMeanIntervalMs": 2.0000543847949315,
+        "independentRateHz": 499.98640417097033,
+        "markerConfidence": "REVIEW REQUIRED",
+        "boundaryAllowance": "at most one marker on the exact inner-window edge",
+        "scope": "call/row reconciliation; unavailable display estimates and physical scanout are separate"
+      }
+    },
+    {
+      "label": "sampler-1",
+      "markers": 5001,
+      "independentSubmissionIntervals": {
+        "count": 2999,
+        "mean": 2.0001700900300103,
+        "median": 2.0553000000020916,
+        "p95": 2.314510000000425,
+        "p99": 2.4869759999997854,
+        "p999": null,
+        "max": 2.8325000000002376,
+        "variance": 0.05247815213308549,
+        "presentation_rate_hz": 499.9574811085172,
+        "stutter_frames_over_50ms": 0,
+        "stutter_events_over_50ms": 0,
+        "stutter_frames_per_minute": 0.0,
+        "long_gaps_over_1000ms": 0,
+        "boundary_coverage": true,
+        "discarded_boundary_intervals": 2001
+      },
+      "machineCpuPercent": 0.961000186601978,
+      "stimulusCpuOneCorePercent": 11.458687788742266,
+      "stimulusRssStart": 66125824,
+      "stimulusRssEnd": 66936832,
+      "observerPopenAndIdentityMs": 4.9676,
+      "observerWallExcessMs": 74.8718000000008,
+      "exits": {
+        "sampler": 0
+      },
+      "loss": [],
+      "observers": {
+        "sampler": {
+          "cpuOneCorePercent": 0.0,
+          "rssStart": 16863232,
+          "rssEnd": 16871424
+        }
+      },
+      "sampler": {
+        "schemaVersion": 1,
+        "sampleKind": "process-plumbing",
+        "pid": 19736,
+        "creationId": "134366833103465469",
+        "originMonotonicNs": 19537307831300,
+        "logicalProcessors": 28,
+        "startUtc": "2026-10-17T04:02:10.585388+00:00",
+        "endUtc": "2026-10-17T04:02:19.586035+00:00",
+        "requestedSeconds": 9.0,
+        "elapsedSeconds": 9.0003267,
+        "intervalSeconds": 0.5,
+        "samples": 19,
+        "status": "complete",
+        "maxReadOverheadNs": 60600,
+        "clock": "Windows QPC via Python perf_counter_ns; sample timestamp taken after bounded OS reads",
+        "unknowns": [
+          "Java used/committed heap",
+          "GC CPU",
+          "paging rate",
+          "GPU usage",
+          "thermals"
+        ],
+        "target": "explicit authorized process; retained read-only handle; no command-line access"
+      }
+    },
+    {
+      "label": "both-1",
+      "markers": 5001,
+      "independentSubmissionIntervals": {
+        "count": 2999,
+        "mean": 2.0000121373791275,
+        "median": 2.055599999998492,
+        "p95": 2.3429200000009587,
+        "p99": 2.516925999996289,
+        "p999": null,
+        "max": 2.821199999999635,
+        "variance": 0.05578887267693932,
+        "presentation_rate_hz": 499.99696567363253,
+        "stutter_frames_over_50ms": 0,
+        "stutter_events_over_50ms": 0,
+        "stutter_frames_per_minute": 0.0,
+        "long_gaps_over_1000ms": 0,
+        "boundary_coverage": true,
+        "discarded_boundary_intervals": 2001
+      },
+      "machineCpuPercent": 1.2470916705444393,
+      "stimulusCpuOneCorePercent": 15.103954456106559,
+      "stimulusRssStart": 67702784,
+      "stimulusRssEnd": 68534272,
+      "observerPopenAndIdentityMs": 9.0259,
+      "observerWallExcessMs": 77.71299999999974,
+      "exits": {
+        "presentmon": 0,
+        "sampler": 0
+      },
+      "loss": [
+        {
+          "statusCode": 0,
+          "qpcNs": 19549239365400,
+          "queryDurationNs": 21800,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 52
+        },
+        {
+          "statusCode": 0,
+          "qpcNs": 19555239437900,
+          "queryDurationNs": 23500,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 221
+        }
+      ],
+      "observers": {
+        "presentmon": {
+          "cpuOneCorePercent": 0.5208260157278123,
+          "rssStart": 11890688,
+          "rssEnd": 14147584
+        },
+        "sampler": {
+          "cpuOneCorePercent": 0.0,
+          "rssStart": 16936960,
+          "rssEnd": 16949248
+        }
+      },
+      "sampler": {
+        "schemaVersion": 1,
+        "sampleKind": "process-plumbing",
+        "pid": 19736,
+        "creationId": "134366833103465469",
+        "originMonotonicNs": 19547310705100,
+        "logicalProcessors": 28,
+        "startUtc": "2026-10-17T04:02:20.587930+00:00",
+        "endUtc": "2026-10-17T04:02:29.589231+00:00",
+        "requestedSeconds": 9.0,
+        "elapsedSeconds": 9.000657,
+        "intervalSeconds": 0.5,
+        "samples": 19,
+        "status": "complete",
+        "maxReadOverheadNs": 69900,
+        "clock": "Windows QPC via Python perf_counter_ns; sample timestamp taken after bounded OS reads",
+        "unknowns": [
+          "Java used/committed heap",
+          "GC CPU",
+          "paging rate",
+          "GPU usage",
+          "thermals"
+        ],
+        "target": "explicit authorized process; retained read-only handle; no command-line access"
+      },
+      "fidelity": {
+        "artifactKind": "short-submission-fidelity",
+        "quality": "VALID WITH WARNINGS",
+        "semantic": "etw-application-submission-proxy",
+        "rawRows": 4496,
+        "submissionIntervals": {
+          "count": 2999,
+          "mean": 2.000020740246749,
+          "median": 2.0415999999991996,
+          "p95": 2.3544200000002125,
+          "p99": 2.5658880000001716,
+          "p999": null,
+          "max": 2.8567999999999927,
+          "variance": 0.062045596902286365,
+          "presentation_rate_hz": 499.99481499208196,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 1496,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "unavailableDisplayRows": 3202,
+        "unavailableDisplayFraction": 0.7121886120996441,
+        "displayEstimateIntervals": {
+          "count": 863,
+          "mean": 6.948644843568944,
+          "median": 6.95120000000049,
+          "p95": 7.107160000000068,
+          "p99": 7.133632000000585,
+          "p999": null,
+          "max": 7.179899999999684,
+          "variance": 0.010235578232394,
+          "presentation_rate_hz": 143.91295317467726,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 430,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "displayInterpretation": "available estimates only; missingness is not optical drop evidence",
+        "fields": {
+          "SwapChainAddress": {
+            "0x0": 4496
+          },
+          "PresentRuntime": {
+            "Other": 4496
+          },
+          "SyncInterval": {
+            "-1": 4496
+          },
+          "PresentFlags": {
+            "0": 4496
+          },
+          "AllowsTearing": {
+            "0": 4496
+          },
+          "PresentMode": {
+            "Composed: Copy with GPU GDI": 4496
+          },
+          "MsBetweenSimulationStart": {
+            "unavailable": 4496,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenPresents": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4496,
+              "mean": 2.000070106761566,
+              "median": 2.0419,
+              "p95": 2.349025,
+              "p99": 2.5545250000000017,
+              "p999": null,
+              "max": 2.9577,
+              "variance": 0.06135622802098504
+            }
+          },
+          "MsBetweenDisplayChange": {
+            "unavailable": 3203,
+            "zero": 0,
+            "distribution": {
+              "count": 1293,
+              "mean": 6.948763186388244,
+              "median": 6.9498,
+              "p95": 7.1072,
+              "p99": 7.133172,
+              "p999": null,
+              "max": 7.1799,
+              "variance": 0.00986116593014082
+            }
+          },
+          "MsInPresentAPI": {
+            "unavailable": 0,
+            "zero": 4496,
+            "distribution": {
+              "count": 4496,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": null,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsRenderPresentLatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4496,
+              "mean": 0.06847720195729537,
+              "median": 0.065,
+              "p95": 0.0948,
+              "p99": 0.12556500000000023,
+              "p999": null,
+              "max": 0.5323,
+              "variance": 0.00042415850827415985
+            }
+          },
+          "MsUntilDisplayed": {
+            "unavailable": 3202,
+            "zero": 0,
+            "distribution": {
+              "count": 1294,
+              "mean": 5.288617387944359,
+              "median": 5.22245,
+              "p95": 7.492214999999999,
+              "p99": 8.025644999999997,
+              "p999": null,
+              "max": 8.7437,
+              "variance": 1.82308882389395
+            }
+          },
+          "MsPCLatency": {
+            "unavailable": 4496,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenAppStart": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4496,
+              "mean": 2.000070106761566,
+              "median": 2.0419,
+              "p95": 2.349025,
+              "p99": 2.5545250000000017,
+              "p999": null,
+              "max": 2.9577,
+              "variance": 0.06135622802098504
+            }
+          },
+          "MsCPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4496,
+              "mean": 2.000070106761566,
+              "median": 2.0419,
+              "p95": 2.349025,
+              "p99": 2.5545250000000017,
+              "p999": null,
+              "max": 2.9577,
+              "variance": 0.06135622802098504
+            }
+          },
+          "MsCPUWait": {
+            "unavailable": 0,
+            "zero": 4496,
+            "distribution": {
+              "count": 4496,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": null,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsGPULatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4496,
+              "mean": 0.07256883896797153,
+              "median": 0.06895000000000001,
+              "p95": 0.099,
+              "p99": 0.13167500000000026,
+              "p999": null,
+              "max": 0.5306,
+              "variance": 0.0004157595472285171
+            }
+          },
+          "MsGPUTime": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4496,
+              "mean": 1.9959784697508898,
+              "median": 2.03755,
+              "p95": 2.34685,
+              "p99": 2.559425000000002,
+              "p999": null,
+              "max": 2.9646,
+              "variance": 0.0635956588602918
+            }
+          },
+          "MsGPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4496,
+              "mean": 0.13530987544483986,
+              "median": 0.1345,
+              "p95": 0.161825,
+              "p99": 0.18736000000000022,
+              "p999": null,
+              "max": 0.5794,
+              "variance": 0.0003416891329026355
+            }
+          },
+          "MsGPUWait": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4496,
+              "mean": 1.86066859430605,
+              "median": 1.9050500000000001,
+              "p95": 2.213225,
+              "p99": 2.423125000000001,
+              "p999": null,
+              "max": 2.8296,
+              "variance": 0.062254585948735765
+            }
+          },
+          "MsAnimationError": {
+            "unavailable": 3202,
+            "zero": 1,
+            "distribution": {
+              "count": 1294,
+              "mean": -0.00032565687789799097,
+              "median": 0.8828000000000005,
+              "p95": 3.0580100000000003,
+              "p99": 3.3913540000000006,
+              "p999": null,
+              "max": 3.9570999999999996,
+              "variance": 4.518685437054244
+            }
+          },
+          "AnimationTime": {
+            "unavailable": 3202,
+            "zero": 0,
+            "distribution": {
+              "count": 1294,
+              "mean": 4495.876323647604,
+              "median": 4496.6977,
+              "p95": 8540.27358,
+              "p99": 8897.122135,
+              "p999": null,
+              "max": 8988.8199,
+              "variance": 6737646.379199565
+            }
+          }
+        },
+        "exportedIntervalMaxDisagreementMs": 4.440892098500626e-16,
+        "lossStatus": "ZERO OBSERVED THROUGH WINDOW",
+        "uncertainty": {
+          "qpcTickMs": 0.0001,
+          "displayLatencyRoundingMs": 5e-05,
+          "etwToApiEntryMs": null,
+          "physicalScanoutMs": null,
+          "clockDriftPpm": null,
+          "shutdownTailLoss": "UNKNOWN"
+        },
+        "metricClassification": {
+          "submission": "DIAGNOSTIC ONLY; independent event completeness and overhead required",
+          "display": "DIAGNOSTIC ONLY",
+          "gpu": "DIAGNOSTIC ONLY",
+          "physicalDisplay": "UNAVAILABLE"
+        },
+        "captureCompleteness": "offline consistency only; row completeness requires independent evidence",
+        "independentCreationIdentityMatched": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "warnings": [
+          "short-only; no performance conclusion",
+          "Other runtime is not API-entry instrumentation",
+          "display estimates are not physical scanout",
+          "observer interference needs independent review"
+        ]
+      },
+      "markerReview": {
+        "presentRowsInWindow": 3000,
+        "independentMarkersInWindow": 3000,
+        "unmatchedMarkers": 1,
+        "duplicateNearestMarkers": 1,
+        "meanPresentToPreSwapMs": 0.15936683333333335,
+        "maxPresentToPreSwapMs": 0.7783,
+        "meanSignedPresentMinusPreSwapMs": 0.15888096666666668,
+        "meanIntervalDisagreementMs": 0.0567300967634301,
+        "maxIntervalDisagreementMs": 0.6106,
+        "unmatchedOnlyAtBoundary": false,
+        "presentInsideSwapBracket": 34,
+        "independentMeanIntervalMs": 2.000012137379126,
+        "independentRateHz": 499.9969656736328,
+        "markerConfidence": "REVIEW REQUIRED",
+        "boundaryAllowance": "at most one marker on the exact inner-window edge",
+        "scope": "call/row reconciliation; unavailable display estimates and physical scanout are separate"
+      }
+    },
+    {
+      "label": "both-2",
+      "markers": 5001,
+      "independentSubmissionIntervals": {
+        "count": 2999,
+        "mean": 1.9999917639213072,
+        "median": 2.05370000000471,
+        "p95": 2.3352499999980125,
+        "p99": 2.490714000002754,
+        "p999": null,
+        "max": 2.8447999999983153,
+        "variance": 0.05152290106923928,
+        "presentation_rate_hz": 500.00205902815236,
+        "stutter_frames_over_50ms": 0,
+        "stutter_events_over_50ms": 0,
+        "stutter_frames_per_minute": 0.0,
+        "long_gaps_over_1000ms": 0,
+        "boundary_coverage": true,
+        "discarded_boundary_intervals": 2001
+      },
+      "machineCpuPercent": 0.969787392763894,
+      "stimulusCpuOneCorePercent": 9.636140983263909,
+      "stimulusRssStart": 69292032,
+      "stimulusRssEnd": 70361088,
+      "observerPopenAndIdentityMs": 9.8103,
+      "observerWallExcessMs": 133.2453999999998,
+      "exits": {
+        "presentmon": 0,
+        "sampler": 0
+      },
+      "loss": [
+        {
+          "statusCode": 0,
+          "qpcNs": 19559239819600,
+          "queryDurationNs": 23900,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 55
+        },
+        {
+          "statusCode": 0,
+          "qpcNs": 19565239389900,
+          "queryDurationNs": 24400,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 224
+        }
+      ],
+      "observers": {
+        "presentmon": {
+          "cpuOneCorePercent": 0.7813087283727493,
+          "rssStart": 11890688,
+          "rssEnd": 14249984
+        },
+        "sampler": {
+          "cpuOneCorePercent": 0.0,
+          "rssStart": 16896000,
+          "rssEnd": 16908288
+        }
+      },
+      "sampler": {
+        "schemaVersion": 1,
+        "sampleKind": "process-plumbing",
+        "pid": 19736,
+        "creationId": "134366833103465469",
+        "originMonotonicNs": 19557309757100,
+        "logicalProcessors": 28,
+        "startUtc": "2026-10-17T04:02:30.586211+00:00",
+        "endUtc": "2026-10-17T04:02:39.587951+00:00",
+        "requestedSeconds": 9.0,
+        "elapsedSeconds": 9.0004826,
+        "intervalSeconds": 0.5,
+        "samples": 19,
+        "status": "complete",
+        "maxReadOverheadNs": 401800,
+        "clock": "Windows QPC via Python perf_counter_ns; sample timestamp taken after bounded OS reads",
+        "unknowns": [
+          "Java used/committed heap",
+          "GC CPU",
+          "paging rate",
+          "GPU usage",
+          "thermals"
+        ],
+        "target": "explicit authorized process; retained read-only handle; no command-line access"
+      },
+      "fidelity": {
+        "artifactKind": "short-submission-fidelity",
+        "quality": "VALID WITH WARNINGS",
+        "semantic": "etw-application-submission-proxy",
+        "rawRows": 4491,
+        "submissionIntervals": {
+          "count": 2999,
+          "mean": 1.9999970990330111,
+          "median": 2.039200000000463,
+          "p95": 2.3383099999998436,
+          "p99": 2.496766000000017,
+          "p999": null,
+          "max": 2.8441999999992973,
+          "variance": 0.05638793292589559,
+          "presentation_rate_hz": 500.00072524279915,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 1491,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "unavailableDisplayRows": 3199,
+        "unavailableDisplayFraction": 0.7123135159207303,
+        "displayEstimateIntervals": {
+          "count": 862,
+          "mean": 6.94877018561485,
+          "median": 6.946149999999651,
+          "p95": 7.125365000000494,
+          "p99": 7.138539000000046,
+          "p999": null,
+          "max": 7.1824999999998695,
+          "variance": 0.012312742417363541,
+          "presentation_rate_hz": 143.91035727015006,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 429,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "displayInterpretation": "available estimates only; missingness is not optical drop evidence",
+        "fields": {
+          "SwapChainAddress": {
+            "0x0": 4491
+          },
+          "PresentRuntime": {
+            "Other": 4491
+          },
+          "SyncInterval": {
+            "-1": 4491
+          },
+          "PresentFlags": {
+            "0": 4491
+          },
+          "AllowsTearing": {
+            "0": 4491
+          },
+          "PresentMode": {
+            "Composed: Copy with GPU GDI": 4491
+          },
+          "MsBetweenSimulationStart": {
+            "unavailable": 4491,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenPresents": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 1.9999387664217323,
+              "median": 2.039,
+              "p95": 2.3482000000000003,
+              "p99": 2.5235,
+              "p999": null,
+              "max": 2.8442,
+              "variance": 0.05809019994673034
+            }
+          },
+          "MsBetweenDisplayChange": {
+            "unavailable": 3199,
+            "zero": 0,
+            "distribution": {
+              "count": 1292,
+              "mean": 6.948890712074303,
+              "median": 6.94555,
+              "p95": 7.124535,
+              "p99": 7.1390769999999995,
+              "p999": null,
+              "max": 7.1835,
+              "variance": 0.011876099666056418
+            }
+          },
+          "MsInPresentAPI": {
+            "unavailable": 0,
+            "zero": 4491,
+            "distribution": {
+              "count": 4491,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": null,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsRenderPresentLatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 0.069533110665776,
+              "median": 0.0656,
+              "p95": 0.0958,
+              "p99": 0.12501000000000004,
+              "p999": null,
+              "max": 0.5276,
+              "variance": 0.0003258847353471385
+            }
+          },
+          "MsUntilDisplayed": {
+            "unavailable": 3199,
+            "zero": 0,
+            "distribution": {
+              "count": 1292,
+              "mean": 5.252158204334365,
+              "median": 5.2158999999999995,
+              "p95": 7.53428,
+              "p99": 8.012053,
+              "p999": null,
+              "max": 8.4018,
+              "variance": 1.8491134201261874
+            }
+          },
+          "MsPCLatency": {
+            "unavailable": 4491,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenAppStart": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 1.9999387664217323,
+              "median": 2.039,
+              "p95": 2.3482000000000003,
+              "p99": 2.5235,
+              "p999": null,
+              "max": 2.8442,
+              "variance": 0.05809019994673034
+            }
+          },
+          "MsCPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 1.9999387664217323,
+              "median": 2.039,
+              "p95": 2.3482000000000003,
+              "p99": 2.5235,
+              "p999": null,
+              "max": 2.8442,
+              "variance": 0.05809019994673034
+            }
+          },
+          "MsCPUWait": {
+            "unavailable": 0,
+            "zero": 4491,
+            "distribution": {
+              "count": 4491,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": null,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsGPULatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 0.07371834780672457,
+              "median": 0.0696,
+              "p95": 0.0997,
+              "p99": 0.1311300000000001,
+              "p999": null,
+              "max": 0.5313,
+              "variance": 0.0003231201042397519
+            }
+          },
+          "MsGPUTime": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 1.9957535292807838,
+              "median": 2.0355,
+              "p95": 2.3476999999999997,
+              "p99": 2.51349,
+              "p999": null,
+              "max": 2.8442,
+              "variance": 0.05946427221366308
+            }
+          },
+          "MsGPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 0.13701418392340237,
+              "median": 0.1363,
+              "p95": 0.1637,
+              "p99": 0.1922,
+              "p999": null,
+              "max": 0.5935,
+              "variance": 0.00034561739623337326
+            }
+          },
+          "MsGPUWait": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4491,
+              "mean": 1.8587393453573815,
+              "median": 1.9002,
+              "p95": 2.20465,
+              "p99": 2.3750600000000004,
+              "p999": null,
+              "max": 2.7454,
+              "variance": 0.058277936031546504
+            }
+          },
+          "MsAnimationError": {
+            "unavailable": 3199,
+            "zero": 1,
+            "distribution": {
+              "count": 1292,
+              "mean": -0.0004113777089783317,
+              "median": 0.8867000000000003,
+              "p95": 3.0768700000000004,
+              "p99": 3.3903979999999985,
+              "p999": null,
+              "max": 3.6679000000000004,
+              "variance": 4.476032950451043
+            }
+          },
+          "AnimationTime": {
+            "unavailable": 3199,
+            "zero": 0,
+            "distribution": {
+              "count": 1292,
+              "mean": 4500.804479721362,
+              "median": 4499.4408,
+              "p95": 8537.221785,
+              "p99": 8896.101862,
+              "p999": null,
+              "max": 8987.7806,
+              "variance": 6716858.4702985305
+            }
+          }
+        },
+        "exportedIntervalMaxDisagreementMs": 4.440892098500626e-16,
+        "lossStatus": "ZERO OBSERVED THROUGH WINDOW",
+        "uncertainty": {
+          "qpcTickMs": 0.0001,
+          "displayLatencyRoundingMs": 5e-05,
+          "etwToApiEntryMs": null,
+          "physicalScanoutMs": null,
+          "clockDriftPpm": null,
+          "shutdownTailLoss": "UNKNOWN"
+        },
+        "metricClassification": {
+          "submission": "DIAGNOSTIC ONLY; independent event completeness and overhead required",
+          "display": "DIAGNOSTIC ONLY",
+          "gpu": "DIAGNOSTIC ONLY",
+          "physicalDisplay": "UNAVAILABLE"
+        },
+        "captureCompleteness": "offline consistency only; row completeness requires independent evidence",
+        "independentCreationIdentityMatched": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "warnings": [
+          "short-only; no performance conclusion",
+          "Other runtime is not API-entry instrumentation",
+          "display estimates are not physical scanout",
+          "observer interference needs independent review"
+        ]
+      },
+      "markerReview": {
+        "presentRowsInWindow": 3000,
+        "independentMarkersInWindow": 3000,
+        "unmatchedMarkers": 0,
+        "duplicateNearestMarkers": 0,
+        "meanPresentToPreSwapMs": 0.15666803333333335,
+        "maxPresentToPreSwapMs": 0.8045,
+        "meanSignedPresentMinusPreSwapMs": 0.15666803333333335,
+        "meanIntervalDisagreementMs": 0.054407269089696564,
+        "maxIntervalDisagreementMs": 0.6718,
+        "unmatchedOnlyAtBoundary": true,
+        "presentInsideSwapBracket": 25,
+        "independentMeanIntervalMs": 1.9999917639213072,
+        "independentRateHz": 500.00205902815236,
+        "markerConfidence": "RECONCILED",
+        "boundaryAllowance": "at most one marker on the exact inner-window edge",
+        "scope": "call/row reconciliation; unavailable display estimates and physical scanout are separate"
+      }
+    },
+    {
+      "label": "sampler-2",
+      "markers": 5001,
+      "independentSubmissionIntervals": {
+        "count": 2999,
+        "mean": 1.99998776258753,
+        "median": 2.0536000000035415,
+        "p95": 2.333120000001543,
+        "p99": 2.5138320000026226,
+        "p999": null,
+        "max": 2.8831999999994196,
+        "variance": 0.05261824434176635,
+        "presentation_rate_hz": 500.0030593718369,
+        "stutter_frames_over_50ms": 0,
+        "stutter_events_over_50ms": 0,
+        "stutter_frames_per_minute": 0.0,
+        "long_gaps_over_1000ms": 0,
+        "boundary_coverage": true,
+        "discarded_boundary_intervals": 2001
+      },
+      "machineCpuPercent": 1.255463591555845,
+      "stimulusCpuOneCorePercent": 10.416884032313474,
+      "stimulusRssStart": 70877184,
+      "stimulusRssEnd": 71774208,
+      "observerPopenAndIdentityMs": 5.4668,
+      "observerWallExcessMs": 74.3163999999997,
+      "exits": {
+        "sampler": 0
+      },
+      "loss": [],
+      "observers": {
+        "sampler": {
+          "cpuOneCorePercent": 0.0,
+          "rssStart": 17092608,
+          "rssEnd": 17100800
+        }
+      },
+      "sampler": {
+        "schemaVersion": 1,
+        "sampleKind": "process-plumbing",
+        "pid": 19736,
+        "creationId": "134366833103465469",
+        "originMonotonicNs": 19567307046000,
+        "logicalProcessors": 28,
+        "startUtc": "2026-10-17T04:02:40.584377+00:00",
+        "endUtc": "2026-10-17T04:02:49.585459+00:00",
+        "requestedSeconds": 9.0,
+        "elapsedSeconds": 9.0005342,
+        "intervalSeconds": 0.5,
+        "samples": 19,
+        "status": "complete",
+        "maxReadOverheadNs": 76000,
+        "clock": "Windows QPC via Python perf_counter_ns; sample timestamp taken after bounded OS reads",
+        "unknowns": [
+          "Java used/committed heap",
+          "GC CPU",
+          "paging rate",
+          "GPU usage",
+          "thermals"
+        ],
+        "target": "explicit authorized process; retained read-only handle; no command-line access"
+      }
+    },
+    {
+      "label": "presentmon-2",
+      "markers": 5000,
+      "independentSubmissionIntervals": {
+        "count": 2999,
+        "mean": 1.9999091030343432,
+        "median": 2.0536000000035415,
+        "p95": 2.324040000001304,
+        "p99": 2.5125200000005066,
+        "p999": null,
+        "max": 2.9037000000045055,
+        "variance": 0.050535375939079565,
+        "presentation_rate_hz": 500.02272527424344,
+        "stutter_frames_over_50ms": 0,
+        "stutter_events_over_50ms": 0,
+        "stutter_frames_per_minute": 0.0,
+        "long_gaps_over_1000ms": 0,
+        "boundary_coverage": true,
+        "discarded_boundary_intervals": 2000
+      },
+      "machineCpuPercent": 1.3209302325581396,
+      "stimulusCpuOneCorePercent": 10.67701855942074,
+      "stimulusRssStart": 72208384,
+      "stimulusRssEnd": 73080832,
+      "observerPopenAndIdentityMs": 4.0519,
+      "observerWallExcessMs": 102.64199999999983,
+      "exits": {
+        "presentmon": 0
+      },
+      "loss": [
+        {
+          "statusCode": 0,
+          "qpcNs": 19579239549500,
+          "queryDurationNs": 22500,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 50
+        },
+        {
+          "statusCode": 0,
+          "qpcNs": 19585239529100,
+          "queryDurationNs": 21100,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 214
+        }
+      ],
+      "observers": {
+        "presentmon": {
+          "cpuOneCorePercent": 0.78124526044542,
+          "rssStart": 11902976,
+          "rssEnd": 14811136
+        }
+      },
+      "fidelity": {
+        "artifactKind": "short-submission-fidelity",
+        "quality": "VALID WITH WARNINGS",
+        "semantic": "etw-application-submission-proxy",
+        "rawRows": 4485,
+        "submissionIntervals": {
+          "count": 2999,
+          "mean": 1.9999233077692562,
+          "median": 2.041600000000088,
+          "p95": 2.321619999999891,
+          "p99": 2.5318279999998694,
+          "p999": null,
+          "max": 2.8946000000003025,
+          "variance": 0.05468261309796497,
+          "presentation_rate_hz": 500.01917379292644,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 1485,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "unavailableDisplayRows": 3194,
+        "unavailableDisplayFraction": 0.7121516164994426,
+        "displayEstimateIntervals": {
+          "count": 862,
+          "mean": 6.948636310904873,
+          "median": 6.947900000000118,
+          "p95": 7.125564999999323,
+          "p99": 7.138838999999457,
+          "p999": null,
+          "max": 7.173199999999547,
+          "variance": 0.01207518293906491,
+          "presentation_rate_hz": 143.9131298943716,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 428,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "displayInterpretation": "available estimates only; missingness is not optical drop evidence",
+        "fields": {
+          "SwapChainAddress": {
+            "0x0": 4485
+          },
+          "PresentRuntime": {
+            "Other": 4485
+          },
+          "SyncInterval": {
+            "-1": 4485
+          },
+          "PresentFlags": {
+            "0": 4485
+          },
+          "AllowsTearing": {
+            "0": 4485
+          },
+          "PresentMode": {
+            "Composed: Copy with GPU GDI": 4485
+          },
+          "MsBetweenSimulationStart": {
+            "unavailable": 4485,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenPresents": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4485,
+              "mean": 1.999953690078038,
+              "median": 2.0406,
+              "p95": 2.32396,
+              "p99": 2.5048239999999993,
+              "p999": null,
+              "max": 2.8946,
+              "variance": 0.05485367845962747
+            }
+          },
+          "MsBetweenDisplayChange": {
+            "unavailable": 3195,
+            "zero": 0,
+            "distribution": {
+              "count": 1290,
+              "mean": 6.948749379844961,
+              "median": 6.947900000000001,
+              "p95": 7.12312,
+              "p99": 7.139755,
+              "p999": null,
+              "max": 7.1757,
+              "variance": 0.01168163183294874
+            }
+          },
+          "MsInPresentAPI": {
+            "unavailable": 0,
+            "zero": 4485,
+            "distribution": {
+              "count": 4485,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": null,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsRenderPresentLatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4485,
+              "mean": 0.06892396878483835,
+              "median": 0.0651,
+              "p95": 0.095,
+              "p99": 0.1301079999999998,
+              "p999": null,
+              "max": 0.2076,
+              "variance": 0.00028113510665677365
+            }
+          },
+          "MsUntilDisplayed": {
+            "unavailable": 3194,
+            "zero": 0,
+            "distribution": {
+              "count": 1291,
+              "mean": 5.296481022463206,
+              "median": 5.2639,
+              "p95": 7.50445,
+              "p99": 7.969359999999995,
+              "p999": null,
+              "max": 8.4215,
+              "variance": 1.7694186646669638
+            }
+          },
+          "MsPCLatency": {
+            "unavailable": 4485,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenAppStart": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4485,
+              "mean": 1.999953690078038,
+              "median": 2.0406,
+              "p95": 2.32396,
+              "p99": 2.5048239999999993,
+              "p999": null,
+              "max": 2.8946,
+              "variance": 0.05485367845962747
+            }
+          },
+          "MsCPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4485,
+              "mean": 1.999953690078038,
+              "median": 2.0406,
+              "p95": 2.32396,
+              "p99": 2.5048239999999993,
+              "p999": null,
+              "max": 2.8946,
+              "variance": 0.05485367845962747
+            }
+          },
+          "MsCPUWait": {
+            "unavailable": 0,
+            "zero": 4485,
+            "distribution": {
+              "count": 4485,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": null,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsGPULatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4485,
+              "mean": 0.07315516164994426,
+              "median": 0.069,
+              "p95": 0.099,
+              "p99": 0.138116,
+              "p999": null,
+              "max": 0.2153,
+              "variance": 0.00027758173311210786
+            }
+          },
+          "MsGPUTime": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4485,
+              "mean": 1.995722497212932,
+              "median": 2.0388,
+              "p95": 2.3177600000000003,
+              "p99": 2.4936399999999987,
+              "p999": null,
+              "max": 2.9049,
+              "variance": 0.056182157699003615
+            }
+          },
+          "MsGPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4485,
+              "mean": 0.13673375696767,
+              "median": 0.1352,
+              "p95": 0.16466000000000006,
+              "p99": 0.19714799999999996,
+              "p999": null,
+              "max": 0.2793,
+              "variance": 0.00032063450818173794
+            }
+          },
+          "MsGPUWait": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 4485,
+              "mean": 1.858988740245262,
+              "median": 1.9037,
+              "p95": 2.1806799999999997,
+              "p99": 2.3584319999999996,
+              "p999": null,
+              "max": 2.7775,
+              "variance": 0.05486598940053119
+            }
+          },
+          "MsAnimationError": {
+            "unavailable": 3194,
+            "zero": 1,
+            "distribution": {
+              "count": 1291,
+              "mean": -0.0017089078233927207,
+              "median": 0.9049000000000005,
+              "p95": 3.053350000000001,
+              "p99": 3.4216999999999986,
+              "p999": null,
+              "max": 3.6381000000000006,
+              "variance": 4.5062010743358325
+            }
+          },
+          "AnimationTime": {
+            "unavailable": 3194,
+            "zero": 0,
+            "distribution": {
+              "count": 1291,
+              "mean": 4491.751872037181,
+              "median": 4491.123,
+              "p95": 8525.2878,
+              "p99": 8882.17828,
+              "p999": null,
+              "max": 8973.0797,
+              "variance": 6706407.752945718
+            }
+          }
+        },
+        "exportedIntervalMaxDisagreementMs": 4.440892098500626e-16,
+        "lossStatus": "ZERO OBSERVED THROUGH WINDOW",
+        "uncertainty": {
+          "qpcTickMs": 0.0001,
+          "displayLatencyRoundingMs": 5e-05,
+          "etwToApiEntryMs": null,
+          "physicalScanoutMs": null,
+          "clockDriftPpm": null,
+          "shutdownTailLoss": "UNKNOWN"
+        },
+        "metricClassification": {
+          "submission": "DIAGNOSTIC ONLY; independent event completeness and overhead required",
+          "display": "DIAGNOSTIC ONLY",
+          "gpu": "DIAGNOSTIC ONLY",
+          "physicalDisplay": "UNAVAILABLE"
+        },
+        "captureCompleteness": "offline consistency only; row completeness requires independent evidence",
+        "independentCreationIdentityMatched": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "warnings": [
+          "short-only; no performance conclusion",
+          "Other runtime is not API-entry instrumentation",
+          "display estimates are not physical scanout",
+          "observer interference needs independent review"
+        ]
+      },
+      "markerReview": {
+        "presentRowsInWindow": 3000,
+        "independentMarkersInWindow": 3000,
+        "unmatchedMarkers": 0,
+        "duplicateNearestMarkers": 0,
+        "meanPresentToPreSwapMs": 0.15529473333333332,
+        "maxPresentToPreSwapMs": 0.5063,
+        "meanSignedPresentMinusPreSwapMs": 0.15529473333333332,
+        "meanIntervalDisagreementMs": 0.05194431477159053,
+        "maxIntervalDisagreementMs": 0.3781,
+        "unmatchedOnlyAtBoundary": true,
+        "presentInsideSwapBracket": 23,
+        "independentMeanIntervalMs": 1.9999091030343448,
+        "independentRateHz": 500.02272527424304,
+        "markerConfidence": "RECONCILED",
+        "boundaryAllowance": "at most one marker on the exact inner-window edge",
+        "scope": "call/row reconciliation; unavailable display estimates and physical scanout are separate"
+      }
+    },
+    {
+      "label": "none-2",
+      "markers": 5001,
+      "independentSubmissionIntervals": {
+        "count": 2999,
+        "mean": 1.9999684561520485,
+        "median": 2.054499999999848,
+        "p95": 2.283909999999878,
+        "p99": 2.4736179999879937,
+        "p999": null,
+        "max": 2.7814000000034866,
+        "variance": 0.04446391801125424,
+        "presentation_rate_hz": 500.0078860863666,
+        "stutter_frames_over_50ms": 0,
+        "stutter_events_over_50ms": 0,
+        "stutter_frames_per_minute": 0.0,
+        "long_gaps_over_1000ms": 0,
+        "boundary_coverage": true,
+        "discarded_boundary_intervals": 2001
+      },
+      "machineCpuPercent": 2.032671245591238,
+      "stimulusCpuOneCorePercent": 11.458514377860505,
+      "stimulusRssStart": 73469952,
+      "stimulusRssEnd": 74006528,
+      "observerPopenAndIdentityMs": 0.0036,
+      "observerWallExcessMs": null,
+      "exits": {},
+      "loss": [],
+      "observers": {}
+    }
+  ],
+  "onMinusOffBlockMeans": {
+    "presentmon": {
+      "ratePercent": 0.0013188775543238052,
+      "p99Ms": 0.03723900000672131,
+      "machineCpuPoints": -0.32399037632594263
+    },
+    "sampler": {
+      "ratePercent": -0.0035400386553141594,
+      "p99Ms": 0.022642000007220275,
+      "machineCpuPoints": -0.518143782147368
+    },
+    "both": {
+      "ratePercent": 0.0003083991096497485,
+      "p99Ms": 0.026058000005537707,
+      "machineCpuPoints": -0.5179361395721127
+    }
+  },
+  "individualNearestMirroredControlDifferences": [
+    {
+      "label": "presentmon-1",
+      "ratePercent": -0.00033010106044173426,
+      "p99Ms": 0.03557600000092975,
+      "machineCpuPoints": 0.06376026038121352
+    },
+    {
+      "label": "sampler-1",
+      "ratePercent": -0.006114851752947459,
+      "p99Ms": 0.005069999999811614,
+      "machineCpuPoints": -0.2590799102593426
+    },
+    {
+      "label": "both-1",
+      "ratePercent": 0.00178224993760967,
+      "p99Ms": 0.03501999999631522,
+      "machineCpuPoints": 0.027011573683118684
+    },
+    {
+      "label": "both-2",
+      "ratePercent": -0.0011653932620703245,
+      "p99Ms": 0.017096000014760193,
+      "machineCpuPoints": -1.062883852827344
+    },
+    {
+      "label": "sampler-2",
+      "ratePercent": -0.000965327680624295,
+      "p99Ms": 0.04021400001462894,
+      "machineCpuPoints": -0.7772076540353932
+    },
+    {
+      "label": "presentmon-2",
+      "ratePercent": 0.0029677907668501646,
+      "p99Ms": 0.03890200001251287,
+      "machineCpuPoints": -0.7117410130330986
+    }
+  ],
+  "offOffDrift": {
+    "ratePercent": 0.003966384664999545,
+    "p99Ms": -0.008288000011980046,
+    "machineCpuPoints": 0.8125911487299176
+  },
+  "operationalScreensPass": false,
+  "minecraftOverheadPrerequisitePass": false,
+  "overall": "PARTIAL",
+  "equivalenceBoundEstablished": false,
+  "rawHashes": {
+    "blocks.json": "5750b7c04355a0a71e7b74c6b979cda2076c386a9013ed23f03699bd77b1c2f4",
+    "exit.json": "5baec376d08198766a402c4c5c49aa67b45cb4b81c77a65ef040c6e3dd7da31b",
+    "plan.json": "309e722b28d88ca5f300da025931c711468a836fea341a5309a769c11e733baa",
+    "protocol.md": "5f048e33c71f08906679981b941ccf32fca63eaa15f2cc270a50a803587fd0a6",
+    "stimulus-stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stimulus-stdout.txt": "478c3d8660983d99cedc87a07029096a5a04184508d5aa86ea1db53ade242621",
+    "both-1/frames.csv": "ce7ce0c0fe3aa1788d58db6aabfdbe27357cf3f2f0628f191cbff9d9da4f80ab",
+    "both-1/presentmon-stderr.txt": "7bd31a7082b233def4721f421372e6e4916d7f224979ef56a577daecf669f100",
+    "both-1/presentmon-stdout.txt": "a9130f7ca0a9bf20318a0122cdf0d1189d2a1ffbb038a45a6bfaf514bf9c5931",
+    "both-1/sampler-stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "both-1/sampler-stdout.txt": "cf9c3d9061d0c95004f80f82b8cddf505056ffe37ae0544fd808ce9ff3258ed4",
+    "both-1/short-calibration.json": "d9deaba3ab86307d5e1541df3e016a3f6980c2008c33e696dacb9a6e5afb7bfe",
+    "both-2/frames.csv": "0721a50226e853da08e15f43ee5d3241333b96024897d0c34b0c69e5748b59be",
+    "both-2/presentmon-stderr.txt": "7bd31a7082b233def4721f421372e6e4916d7f224979ef56a577daecf669f100",
+    "both-2/presentmon-stdout.txt": "a9130f7ca0a9bf20318a0122cdf0d1189d2a1ffbb038a45a6bfaf514bf9c5931",
+    "both-2/sampler-stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "both-2/sampler-stdout.txt": "02b95ed4b789aa89f1684d471e0544f6a01f41de6b37a747e098582b6404eaf7",
+    "both-2/short-calibration.json": "a3d279db7013e78aa7f7098f1885f4524f1c1e914400a7654be0cd4f4afd9771",
+    "presentmon-1/frames.csv": "ebf70dbe9fbb45194d30e4ca3bccc4bbdee1770cc84e42e003bbba6402a9f0ea",
+    "presentmon-1/presentmon-stderr.txt": "7bd31a7082b233def4721f421372e6e4916d7f224979ef56a577daecf669f100",
+    "presentmon-1/presentmon-stdout.txt": "a9130f7ca0a9bf20318a0122cdf0d1189d2a1ffbb038a45a6bfaf514bf9c5931",
+    "presentmon-1/short-calibration.json": "fcba7c04985a48dc3caf46cbe409675f443b22dda3cf6b3740c4b5a401b84139",
+    "presentmon-2/frames.csv": "0d38d7c14e017209402f6451ce0a1a9de8b2dbddabc700a097e9e5e25ac37b72",
+    "presentmon-2/presentmon-stderr.txt": "7bd31a7082b233def4721f421372e6e4916d7f224979ef56a577daecf669f100",
+    "presentmon-2/presentmon-stdout.txt": "a9130f7ca0a9bf20318a0122cdf0d1189d2a1ffbb038a45a6bfaf514bf9c5931",
+    "presentmon-2/short-calibration.json": "9cfef66aad9e016936f942ef6ba4f084b19b48b7a82813b28c064583aa10ec64",
+    "sampler-1/sampler-stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sampler-1/sampler-stdout.txt": "9fe2f478ac7da92b204e9d32b316a1f9b14a6ca91e6bcdae7ba003ccab71ef4e",
+    "sampler-2/sampler-stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sampler-2/sampler-stdout.txt": "4e5761f226fedb53c23bf2a0359c799e01ccc460fb538b07d4a5e662e06bd619",
+    "stimulus/identity.json": "3c23052f9424f4a382cd447d45511da790c805541a2d3f81434c15d290c9b76c",
+    "stimulus/result.json": "79074064587027303463f94669b23dc808abd2fca1eb6c00b4919802d68df62a",
+    "stimulus/start.gate": "862f9c4f3cf36dacff5182986fae3da6b13dec10faf943e9e0927011e53e8e9b",
+    "stimulus/started.json": "e9616809dae7cf0edd490c4f45267299f3c49de6ac5c713e5b6aaea4192f4629",
+    "stimulus/swaps.csv": "3323719ef28c292ceb8f70cd9c9c82167085e3945f38b939ab3b1a0d9f802632",
+    "both-1/telemetry/capture.json": "09be9b89ff9f88791d9c4dde9f903971d4df010810034c20e4713108fa0ab279",
+    "both-1/telemetry/process.csv": "ce4a2b8627caacb29a164e5ffad50e6e62e431b2888ead4f7d40d287602e230b",
+    "both-2/telemetry/capture.json": "1805a405606cddc0dae07136b24542a2b231925ffb202eb1860700c67a3fd089",
+    "both-2/telemetry/process.csv": "902f151ab09c0c7a31a2c4400991825d5a86ae8909cd8b963166f4286c2fbc73",
+    "sampler-1/telemetry/capture.json": "dd274c9a6ff9c737f1af558c2a1701b32f3f368694c1790cae111e4efa59fc82",
+    "sampler-1/telemetry/process.csv": "1a62d934e9d08c45f112e38c24aeec213ac5c93d523bed18d1cbd3b720655694",
+    "sampler-2/telemetry/capture.json": "83766b4ba60a76450dfff6f3ac0df0315aaece2b0bcebedba2437e017e27d8cf",
+    "sampler-2/telemetry/process.csv": "cc5c9387ccae975111ec54e7b5410fe71d5ccd9abf80798255e7401d267d5d62"
+  },
+  "limitations": [
+    "two mirrored blocks/state cannot establish statistical equivalence",
+    "all blocks retain swap markers and endpoint reads",
+    "no GPU thermal or VRR telemetry",
+    "Other timestamps are downstream ETW events, not API entry"
+  ]
+}

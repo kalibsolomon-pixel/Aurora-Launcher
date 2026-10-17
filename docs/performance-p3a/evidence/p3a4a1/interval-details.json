@@ -1,0 +1,77 @@
+[
+  {
+    "label": "C1",
+    "varianceMsSquared": 0.18429938587161665,
+    "intervalsOver50Ms": 0,
+    "intervalsOver1000Ms": 0,
+    "rawRows": 3699,
+    "innerRows": 2313,
+    "innerRowsPerSecond": 231.3,
+    "target": {
+      "idealMs": 4.166666666666667,
+      "observed": {
+        "count": 2312,
+        "mean": 4.322742084775086,
+        "median": 4.194250000000288,
+        "p95": 5.09513499999974,
+        "p99": 5.60870300000026,
+        "p999": null,
+        "max": 7.764100000001051,
+        "variance": 0.18429938587161665
+      },
+      "observedRowsPerSecond": 231.33464370267427,
+      "intervalsShorterThanTarget": 940,
+      "intervalsLongerThanTarget": 1372,
+      "minimumSignedErrorMs": -3.214866666667386,
+      "maximumSignedErrorMs": 3.5974333333343838,
+      "fractionWithinFivePercent": 0.5683391003460208,
+      "limitation": "ETW intervals only; neither limiter accuracy nor complete Minecraft frame count is proven"
+    },
+    "process": {
+      "cpu_percent_one_core_mean": 33.91324064739935,
+      "cpu_percent_one_core_peak_sampled": 75.04758016582511,
+      "system_cpu_percent_machine_mean": 3.463678313060002,
+      "background_cpu_percent_one_core_estimate_mean": 63.279335306157996,
+      "rss_bytes_peak_sampled": 1113337856,
+      "peak_rss_bytes_os": 1192095744,
+      "system_available_bytes_min": 20703408128,
+      "sample_interval_seconds_max": 0.5008477999999998,
+      "covered_seconds": 10.0,
+      "boundary_coverage": true,
+      "boundary_method": "time-weighted counter intervals clipped at window edges; within-interval rate assumed uniform",
+      "heap_used_bytes": null,
+      "heap_committed_bytes": null,
+      "paging_bytes_per_second": null,
+      "gc_cpu_percent": null
+    },
+    "consumerOverflowCounts": []
+  },
+  {
+    "label": "C2",
+    "varianceMsSquared": 121.0743195119887,
+    "intervalsOver50Ms": 10,
+    "intervalsOver1000Ms": 0,
+    "rawRows": 29461,
+    "innerRows": 18281,
+    "innerRowsPerSecond": 1828.1,
+    "target": null,
+    "process": {
+      "cpu_percent_one_core_mean": 254.84323104802561,
+      "cpu_percent_one_core_peak_sampled": 325.0726862526467,
+      "system_cpu_percent_machine_mean": 14.211841627301627,
+      "background_cpu_percent_one_core_estimate_mean": 133.594121757718,
+      "rss_bytes_peak_sampled": 1114591232,
+      "peak_rss_bytes_os": 1192095744,
+      "system_available_bytes_min": 20679933952,
+      "sample_interval_seconds_max": 0.5005348999999999,
+      "covered_seconds": 10.0,
+      "boundary_coverage": true,
+      "boundary_method": "time-weighted counter intervals clipped at window edges; within-interval rate assumed uniform",
+      "heap_used_bytes": null,
+      "heap_committed_bytes": null,
+      "paging_bytes_per_second": null,
+      "gc_cpu_percent": null
+    },
+    "consumerOverflowCounts": []
+  }
+]

@@ -1,0 +1,32 @@
+{
+  "sampleKind": "actual-preservation-audit",
+  "startingHead": "fd9f1a7efc8380082d89752fc39432786b89b903",
+  "branch": "codex/client-3-production-authority",
+  "originalTracked": 2500,
+  "protectedUntracked": 4,
+  "originalByteIdenticalIncludingProtected": 2496,
+  "scopedOriginalChanges": [
+    "docs\\performance-p3a\\INSTRUMENTATION_OVERHEAD.md",
+    "docs\\performance-p3a\\MINECRAFT_CAPTURE_VALIDATION.md",
+    "docs\\performance-p3a\\PRESENTMON_CALIBRATION.md",
+    "docs\\performance-p3a\\READINESS_MATRIX.md",
+    "docs\\performance-p3a\\SHORT_CALIBRATION_FORMAT.md",
+    "tools\\benchmark\\README.md",
+    "tools\\benchmark\\short_calibration.py",
+    "tools\\benchmark\\test_presentation_fidelity.py"
+  ],
+  "criticalFilesByteIdentical": 11,
+  "priorPrivateEvidenceByteIdentical": 518,
+  "launcherWorktreesPreserved": 7,
+  "otherWorktreeHeadsUnchanged": true,
+  "clientHead": "5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d",
+  "clientTrackedByteIdentical": 422,
+  "clientIndexStatusAndWorktreesUnchanged": true,
+  "canonicalArchiveInventoryOptionsAndLockPreserved": true,
+  "liveAOptionsRestored": true,
+  "productionBinaryConfigRegistryByteIdentical": true,
+  "productionScope": "limited binary/config/registry hashes, not a credential or owner-world inventory",
+  "deletions": 0,
+  "productSourceUnchanged": true,
+  "fullMeasuredImporterSchemaAndThresholdsUnchanged": true
+}

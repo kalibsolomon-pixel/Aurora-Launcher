@@ -1,0 +1,146 @@
+{
+  "sampleKind": "actual-post-exit-scene-audit",
+  "conditionsEqual": true,
+  "records": [
+    {
+      "workload": "A",
+      "conditions": {
+        "version": "1.21.11",
+        "seed": 123456789,
+        "generator": {
+          "settings": {
+            "features": 0,
+            "biome": "minecraft:plains",
+            "layers": [
+              {
+                "block": "minecraft:bedrock",
+                "height": 1
+              },
+              {
+                "block": "minecraft:dirt",
+                "height": 128
+              },
+              {
+                "block": "minecraft:grass_block",
+                "height": 1
+              }
+            ],
+            "structure_overrides": [
+              "minecraft:strongholds",
+              "minecraft:villages"
+            ],
+            "lakes": 0
+          },
+          "type": "minecraft:flat"
+        },
+        "features": 0,
+        "position": [
+          0.5,
+          66.0,
+          0.5
+        ],
+        "rotation": [
+          0.0,
+          10.0
+        ],
+        "time": 6000,
+        "raining": 0,
+        "thundering": 0,
+        "gameType": 1,
+        "difficulty": 2,
+        "gamerules": {
+          "advance_time": 0,
+          "advance_weather": 0,
+          "spawn_mobs": 0,
+          "random_tick_speed": 3
+        },
+        "nonPlayerEntities": 0,
+        "blockEntities": 0,
+        "missingRequiredChunks": 0,
+        "options": {
+          "renderDistance": "12",
+          "simulationDistance": "8",
+          "overrideWidth": "1920",
+          "overrideHeight": "1080",
+          "enableVsync": "false",
+          "fullscreen": "false",
+          "resourcePacks": "[]"
+        }
+      },
+      "inventorySha256": "38a828f6c8fa61000ddc1c3c2e7472cc1bf0d88efd3f580da64445c0da286d6d",
+      "modCount": 0,
+      "shaderScope": "minimal A empty mods",
+      "sceneReaderScope": "read-only common NBT/region primitives; no Workload A empty-mod attestation applied to B"
+    },
+    {
+      "workload": "B",
+      "conditions": {
+        "version": "1.21.11",
+        "seed": 123456789,
+        "generator": {
+          "type": "minecraft:flat",
+          "settings": {
+            "features": 0,
+            "lakes": 0,
+            "layers": [
+              {
+                "block": "minecraft:bedrock",
+                "height": 1
+              },
+              {
+                "block": "minecraft:dirt",
+                "height": 128
+              },
+              {
+                "block": "minecraft:grass_block",
+                "height": 1
+              }
+            ],
+            "structure_overrides": [
+              "minecraft:strongholds",
+              "minecraft:villages"
+            ],
+            "biome": "minecraft:plains"
+          }
+        },
+        "features": 0,
+        "position": [
+          0.5,
+          66.0,
+          0.5
+        ],
+        "rotation": [
+          0.0,
+          10.0
+        ],
+        "time": 6000,
+        "raining": 0,
+        "thundering": 0,
+        "gameType": 1,
+        "difficulty": 2,
+        "gamerules": {
+          "advance_time": 0,
+          "advance_weather": 0,
+          "spawn_mobs": 0,
+          "random_tick_speed": 3
+        },
+        "nonPlayerEntities": 0,
+        "blockEntities": 0,
+        "missingRequiredChunks": 0,
+        "options": {
+          "renderDistance": "12",
+          "simulationDistance": "8",
+          "overrideWidth": "1920",
+          "overrideHeight": "1080",
+          "enableVsync": "false",
+          "fullscreen": "false",
+          "resourcePacks": "[]"
+        }
+      },
+      "inventorySha256": "d9596f440db6695d7b4a05f0d7ea40f45119b22a9e2dd4589599fd0e2fd60c21",
+      "modCount": 4,
+      "shaderScope": "No external shader-pack loader in verified inventory; Aurora built-in shader/HUD behavior remains part of B",
+      "sceneReaderScope": "read-only common NBT/region primitives; no Workload A empty-mod attestation applied to B"
+    }
+  ]
+}

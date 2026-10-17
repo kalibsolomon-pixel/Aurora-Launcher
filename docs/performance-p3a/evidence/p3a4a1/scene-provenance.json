@@ -1,0 +1,41 @@
+[
+  {
+    "workload": "A",
+    "world": "P3A4A1-A-diagnostic",
+    "inventoryEquivalentBeforeLaunch": true,
+    "optionsSha256": "efd1595619f579723159ed7bb0cbb1e06d7336dc9980662252162abd15f24ae1",
+    "canonicalArchiveSha256": "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f",
+    "canonicalInventorySha256": "5082795f0ac5987c1eb61412102a2be5bc7a29868842dd317f985f3193258c61",
+    "modFiles": []
+  },
+  {
+    "workload": "B",
+    "world": "P3A4A1-B-diagnostic",
+    "inventoryEquivalentBeforeLaunch": true,
+    "optionsSha256": "efd1595619f579723159ed7bb0cbb1e06d7336dc9980662252162abd15f24ae1",
+    "canonicalArchiveSha256": "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f",
+    "canonicalInventorySha256": "5082795f0ac5987c1eb61412102a2be5bc7a29868842dd317f985f3193258c61",
+    "modFiles": [
+      {
+        "name": "aurora-3.0.0.jar",
+        "size": 3077377,
+        "sha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c"
+      },
+      {
+        "name": "fabric-api-0.141.6+1.21.11.jar",
+        "size": 2426039,
+        "sha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f"
+      },
+      {
+        "name": "lithium-fabric-0.21.4+mc1.21.11.jar",
+        "size": 900462,
+        "sha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b"
+      },
+      {
+        "name": "sodium-fabric-0.8.14+mc1.21.11.jar",
+        "size": 1909150,
+        "sha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d"
+      }
+    ]
+  }
+]

@@ -135,3 +135,13 @@ Exit 0 proves offline archive/inventory/A-scene consistency; provenance, clean e
 live framebuffer/focus and subsequent writes remain operator-reviewed gates.
 Thirteen focused P3-A.3 tests use explicitly synthetic variants. Actual cadence,
 overhead, scene and game evidence are separately labeled in the phase reports.
+
+P3-A.4a.1 adds `limiter_review.py`: pure gates for installed UI cap0–2000,
+required live-configuration evidence, native/adaptive limiter confounds, target
+interval arithmetic, unchanged observer budgets, canonical identity and metric
+suitability. It never changes game files or promotes a primary metric. Nine
+focused tests are synthetic. A tenth regression covers consumer overflow in both
+short readers: explicit overflow diagnostics reject a capture even when ETW
+counters are zero. Existing full measured importer/schema remain unchanged.
+Actual evidence and historical quality corrections are documented in
+[P3-A.4a.1 acceptance](../../PERFORMANCE_P3A4A1_ACCEPTANCE.md).

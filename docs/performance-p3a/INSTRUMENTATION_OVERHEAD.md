@@ -1,5 +1,16 @@
 # P3-A.4a representative-rate overhead — PARTIAL
 
+## P3-A.4a.1 current interference gate
+
+PARTIAL. The counterbalanced 500-Hz recovery passes state means but both2 versus
+its mirrored control differs by −1.062884 machine CPU percentage points, exceeding
+the unchanged absolute 1pp budget. Off/off drift +0.812591pp limits attribution;
+no outlier removal or zero-cost claim. Independent matching also remains uncertain.
+Minecraft observer on/off escalation was not performed. See
+[recovery details](P3A4A1_OVERHEAD_RECOVERY.md). Historical evidence below remains
+intact; prior consumer-overflowed PresentMon captures now classify INVALID.
+
+
 [Predeclared protocol](P3A4A_DIAGNOSTIC_PROTOCOL.md), [focused results](P3A4A_OVERHEAD_RESULTS.md),
 [actual evidence](evidence/p3a4a/overhead.json). One 80-second WGL child achieved
 1789.54–1791.75 independent swaps/sec in mirrored none/PresentMon/sampler/both

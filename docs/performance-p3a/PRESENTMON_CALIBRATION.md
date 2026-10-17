@@ -1,5 +1,17 @@
 # PresentMon P3-A.4a — high-rate fidelity PARTIAL
 
+## P3-A.4a.1 correction and recovery
+
+The earlier review missed producer consumer-overflow warnings (including 30,711
+in uncapped Minecraft). The shared short reader now rejects overflow diagnostics;
+old raw bytes/reports remain preserved. ETW zero counters do not rule out loss
+inside PresentMon's present ring. One 8192-entry controlled confirmation recovered
+aggregate 1800-Hz row/swap counts, but unique timing association still failed.
+No primary Minecraft metric accepted; see [full correction](P3A4A1_COMPLETENESS.md)
+and [metric decision](P3A4A1_METRIC_DECISION.md). Historical findings below retain
+their original wording and must be read with this superseding qualification.
+
+
 [Field semantics](PRESENTMON_FIELD_SEMANTICS.md), [OpenGL matrix](OPENGL_PRESENTATION_INVESTIGATION.md),
 [gap evidence](evidence/p3a4a/gap-review.json), [quality decisions](P3A4A_QUALITY_GATES.md).
 Three same-child stationary Minecraft traces show 93.329% unavailable display

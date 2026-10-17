@@ -1,0 +1,112 @@
+[
+  {
+    "phase": "prior-p3a4a",
+    "relativePath": "unlimited/presentmon-stderr.txt",
+    "overflowedPresents": [
+      30711
+    ],
+    "diagnosticsSha256": "4b985fb6eecfa3e1a7c5465035219a3dbf2ff6f5614181a184c7cb9f764ae8ab",
+    "framesSha256": "9938d096055e4d3d0decfa7d2a92b67fc76658143f789483cd580a38ae9d0c24",
+    "manifestSha256": "b5c07183fe80de2f4032cff27569d7449d59432f1feb3e1db7004df40514a99a",
+    "correctedReaderResults": {
+      "short": {
+        "quality": "INVALID",
+        "reason": "producer diagnostics need review"
+      },
+      "fidelity": {
+        "quality": "INVALID",
+        "reason": "producer diagnostics need review"
+      }
+    },
+    "priorLabel": "VALID WITH WARNINGS / offline consistency; see unchanged original report",
+    "rawBytesUnchanged": true
+  },
+  {
+    "phase": "prior-p3a4a",
+    "relativePath": "controlled-overhead/both-1/presentmon-stderr.txt",
+    "overflowedPresents": [
+      4802
+    ],
+    "diagnosticsSha256": "0e82c9484ea1eb2efcc2522d3ef69f64dc001fbe6e01c1076bd367643690b495",
+    "framesSha256": "afbf9e8f1f806d058c6b42debdfd9658fb3c312a4cb283309b745a87c7510a46",
+    "manifestSha256": "ded97dffd365cf4d4215fc2332fc98474e886bb5a33391e145c29280034b38a7",
+    "correctedReaderResults": {
+      "short": {
+        "quality": "INVALID",
+        "reason": "producer diagnostics need review"
+      },
+      "fidelity": {
+        "quality": "INVALID",
+        "reason": "producer diagnostics need review"
+      }
+    },
+    "priorLabel": "VALID WITH WARNINGS / offline consistency; see unchanged original report",
+    "rawBytesUnchanged": true
+  },
+  {
+    "phase": "prior-p3a4a",
+    "relativePath": "controlled-overhead/both-2/presentmon-stderr.txt",
+    "overflowedPresents": [
+      6592
+    ],
+    "diagnosticsSha256": "9f9d473f7dc2c000a40494be5e9e28bd59cb23516fb104dadfbd9423d1bb6874",
+    "framesSha256": "ee672af1dbe07228fcb8687105e84563046f230ef84b461b5a801341989248ef",
+    "manifestSha256": "e4c9b34bf63ca922d340560b7347685aeedba817ae2980cdcc3987da651b8d30",
+    "correctedReaderResults": {
+      "short": {
+        "quality": "INVALID",
+        "reason": "producer diagnostics need review"
+      },
+      "fidelity": {
+        "quality": "INVALID",
+        "reason": "producer diagnostics need review"
+      }
+    },
+    "priorLabel": "VALID WITH WARNINGS / offline consistency; see unchanged original report",
+    "rawBytesUnchanged": true
+  },
+  {
+    "phase": "prior-p3a4a",
+    "relativePath": "controlled-overhead/presentmon-1/presentmon-stderr.txt",
+    "overflowedPresents": [
+      3350
+    ],
+    "diagnosticsSha256": "6d4349141be4c0d010b3bcc687aee363521ea43b153961d1db6fbe0a70ad83c0",
+    "framesSha256": "5236b3400d9a3a2710f490c334d202b0a0b6e6fc4ee7dc26f97c41a38f3855af",
+    "manifestSha256": "b4821073b7d2350d94e3f1aa508ee8d189d0626a10af4b93009d7ea4d251a970",
+    "correctedReaderResults": {
+      "short": {
+        "quality": "INVALID",
+        "reason": "producer diagnostics need review"
+      },
+      "fidelity": {
+        "quality": "INVALID",
+        "reason": "producer diagnostics need review"
+      }
+    },
+    "priorLabel": "VALID WITH WARNINGS / offline consistency; see unchanged original report",
+    "rawBytesUnchanged": true
+  },
+  {
+    "phase": "prior-p3a4a",
+    "relativePath": "controlled-overhead/presentmon-2/presentmon-stderr.txt",
+    "overflowedPresents": [
+      4412
+    ],
+    "diagnosticsSha256": "f811e53d9065a638bf677cc830b1192d0d332c6b03f0fb0edaf43f989e5c199a",
+    "framesSha256": "e857de98abafb75bbd7063aad6635926df3d6a50a23c2fd61f1275380d3fd942",
+    "manifestSha256": "3c7c8f352c96f0cf21e5af036520e5412a2ca6e7bd9d104536ba3e101426b6a5",
+    "correctedReaderResults": {
+      "short": {
+        "quality": "INVALID",
+        "reason": "producer diagnostics need review"
+      },
+      "fidelity": {
+        "quality": "INVALID",
+        "reason": "producer diagnostics need review"
+      }
+    },
+    "priorLabel": "VALID WITH WARNINGS / offline consistency; see unchanged original report",
+    "rawBytesUnchanged": true
+  }
+]

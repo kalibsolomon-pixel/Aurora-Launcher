@@ -1,5 +1,20 @@
 # P3-A.4a readiness matrix
 
+## P3-A.4a.1 current decision
+
+PARTIAL; P3-B NOT READY / NOT AUTHORIZED. Installed Aurora cap range verified
+(OFF 0, integer 1–2000), requested caps supported. No primary operating point;
+independent Minecraft completeness and observer bounds remain unresolved. See
+[limiter audit](AURORA_LIMITER_AUDIT.md), [matrix](P3A4A1_MATRIX.md),
+[completeness correction](P3A4A1_COMPLETENESS.md),
+[overhead recovery](P3A4A1_OVERHEAD_RECOVERY.md) and
+[metric/prerequisite decision](P3A4A1_METRIC_DECISION.md).
+
+Earlier phase reports below are preserved historical records. Explicit consumer
+overflow warnings now make affected P3-A.4a captures INVALID; old permissive
+offline quality labels are superseded. Canonical A and production remain protected.
+
+
 **Overall PARTIAL. P3-B NOT READY / NOT AUTHORIZED.** No accepted primary metric
 for uncapped JVM comparisons. [Acceptance](../../PERFORMANCE_P3A4A_ACCEPTANCE.md).
 

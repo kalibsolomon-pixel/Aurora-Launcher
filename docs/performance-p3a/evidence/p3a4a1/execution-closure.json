@@ -1,0 +1,247 @@
+{
+  "sampleKind": "actual-isolated-execution-closure",
+  "utc": "2026-10-17T04:43:01.920285+00:00",
+  "launches": {
+    "game-launch-A": {
+      "utc": "2026-10-17T04:09:39.418Z",
+      "status": "running",
+      "pid": 13304,
+      "startedAtUnixSeconds": 1792210179,
+      "sessionStatus": "ready",
+      "configuration": {
+        "performanceMode": "balanced",
+        "minecraftVersion": "1.21.11",
+        "auroraEnabled": false,
+        "loader": {
+          "kind": "fabric",
+          "policy": {
+            "type": "pinned",
+            "version": "0.19.5"
+          }
+        },
+        "memoryMib": 2048,
+        "additionalJvmArguments": "",
+        "window": null
+      }
+    },
+    "game-launch-B-first": {
+      "utc": "2026-10-17T04:25:59.824Z",
+      "status": "running",
+      "pid": 9660,
+      "startedAtUnixSeconds": 1792211159,
+      "sessionStatus": "ready",
+      "configuration": {
+        "performanceMode": null,
+        "minecraftVersion": "1.21.11",
+        "auroraEnabled": true,
+        "loader": {
+          "kind": "fabric",
+          "policy": {
+            "type": "pinned",
+            "version": "0.19.5"
+          }
+        },
+        "memoryMib": 2048,
+        "additionalJvmArguments": "",
+        "window": null
+      }
+    },
+    "game-launch": {
+      "utc": "2026-10-17T04:33:57.512Z",
+      "status": "running",
+      "pid": 4844,
+      "startedAtUnixSeconds": 1792211637,
+      "sessionStatus": "ready",
+      "configuration": {
+        "performanceMode": null,
+        "minecraftVersion": "1.21.11",
+        "auroraEnabled": true,
+        "loader": {
+          "kind": "fabric",
+          "policy": {
+            "type": "pinned",
+            "version": "0.19.5"
+          }
+        },
+        "memoryMib": 2048,
+        "additionalJvmArguments": "",
+        "window": null
+      }
+    }
+  },
+  "exits": {
+    "game-exit-A": {
+      "utc": "2026-10-17T04:25:12.838Z",
+      "status": "exited",
+      "exitCode": 0,
+      "diagnostic": null,
+      "processId": null
+    },
+    "game-exit-B-first": {
+      "utc": "2026-10-17T04:33:39.277Z",
+      "status": "exited",
+      "exitCode": 0,
+      "diagnostic": null,
+      "processId": null
+    },
+    "game-exit-B": {
+      "utc": "2026-10-17T04:35:36.994Z",
+      "status": "exited",
+      "exitCode": 0,
+      "diagnostic": null,
+      "processId": null
+    },
+    "launcher-exit": {
+      "exitCode": 0,
+      "endUtc": "2026-10-17T04:35:53.7084698Z",
+      "pid": 7196,
+      "handleRetained": true
+    }
+  },
+  "initialBMainMenuAndWorldReached": true,
+  "normalBRestartReachedMainMenu": true,
+  "persistence": {
+    "beforeExit": {
+      "frameCapFps": 1000,
+      "smoothFramePacer": true,
+      "framePacingStrategy": "PARK",
+      "framePacerSpinThresholdMicros": 500,
+      "framePacerParkThresholdMicros": 2000,
+      "framePacerLowCpuMode": false,
+      "lowLatencyRender": true,
+      "adaptiveRenderSleeping": false,
+      "disableVSync": false,
+      "guiFpsLimit": 60
+    },
+    "afterRestart": {
+      "actualConfig": {
+        "frameCapFps": 1000,
+        "smoothFramePacer": true,
+        "framePacingStrategy": "PARK",
+        "framePacerSpinThresholdMicros": 500,
+        "framePacerParkThresholdMicros": 2000,
+        "framePacerLowCpuMode": false,
+        "lowLatencyRender": true,
+        "adaptiveRenderSleeping": false,
+        "disableVSync": false,
+        "guiFpsLimit": 60
+      },
+      "activation": {
+        "requestedCap": 1000,
+        "globalCapActive": true,
+        "waitStrategy": "PARK",
+        "nativeOption": "Unlimited sentinel 260",
+        "independentMinecraftTiming": false
+      },
+      "uiValueObserved": 1000,
+      "scope": "configuration persistence only; no capture or rate claim"
+    },
+    "finalRestoredOff": {
+      "frameCapFps": 0,
+      "smoothFramePacer": true,
+      "framePacingStrategy": "PARK",
+      "framePacerSpinThresholdMicros": 500,
+      "framePacerParkThresholdMicros": 2000,
+      "framePacerLowCpuMode": false,
+      "lowLatencyRender": true,
+      "adaptiveRenderSleeping": false,
+      "disableVSync": false,
+      "guiFpsLimit": 60
+    },
+    "uiValuesObserved": [
+      0,
+      1000,
+      1000,
+      0
+    ],
+    "scope": "UI/configuration persistence only; no B performance capture or rate/accuracy inference"
+  },
+  "modHashesStillMatchBeforeLaunch": true,
+  "presentmonSignature": {
+    "utc": "2026-10-17T03:54:58.2095697Z",
+    "signer": "CN=Intel Corporation, O=Intel Corporation, S=California, C=US",
+    "sha256": "364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c",
+    "status": "Valid"
+  },
+  "signatureOrderLimitation": "same bytes had prior verified valid Intel signature; fresh phase signature recorded during first cadence, after its hash check/start; later trials and all game attempts followed fresh valid signature",
+  "runtimeJavawSha256": "1ba6a4fb32a6a3d5c925fe837ae6717e2f75743a71e013e668e6dadb909245ba",
+  "authentication": "normal authorized Rust-owned session refresh/readiness/play; no account identifiers/tokens/child arguments exported",
+  "webview": "live isolated-root argument evidence matches; not independent full filesystem-access proof",
+  "UIRecovery": "helper detected user input during navigation; state reobserved; later transient screenshot failure recovered by fresh returned window selection",
+  "unperformedBMatrix": {
+    "reason": "Post-capture process-counter review exceeded quiet-system background screen; defer further captures without favorable retries",
+    "quietScreenMachinePercent": 2,
+    "backgroundMachineEstimates": {
+      "C1": 2.259976260934214,
+      "C2": 4.771218634204215
+    },
+    "retainedControls": "C1 offline VALID WITH WARNINGS but phase INCOMPLETE/confounded; C2 INVALID overflow and confounded",
+    "deferred": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "A5"
+    ],
+    "minecraftObserverTrials": "not authorized by failed controlled gate",
+    "BGameplayReached": true
+  },
+  "BSettingsDifferences": {
+    "canonicalMinecraftGraphicsAndOtherExistingOptionValuesUnchanged": true,
+    "addedAuroraKeyBindings": [
+      "key_key.aurora.blur_test",
+      "key_key.aurora.free_look",
+      "key_key.aurora.hitbox_toggle",
+      "key_key.aurora.hitreg_score_left",
+      "key_key.aurora.hitreg_score_reset",
+      "key_key.aurora.hitreg_score_right",
+      "key_key.aurora.hitreg_score_send",
+      "key_key.aurora.hitreg_settings",
+      "key_key.aurora.hitreg_switch_hand",
+      "key_key.aurora.hud_editor",
+      "key_key.aurora.minimap_toggle",
+      "key_key.aurora.toggle_sneak",
+      "key_key.aurora.toggle_sprint",
+      "key_key.aurora.totem_reset",
+      "key_key.aurora.waypoint_drop",
+      "key_key.aurora.waypoint_manager",
+      "key_key.aurora.world_map",
+      "key_key.aurora.zoom"
+    ],
+    "optionsSha256": "3b08e0eb41cb020534f848788914d5f858fb494649ed88ac4f8baf7195cc9619",
+    "sodiumOptions": {
+      "quality": {
+        "hidden_fluid_culling": true,
+        "improved_fluid_shaping": false,
+        "use_closest_point_entity_sort": false,
+        "pixel_filtering_mode": "NEAREST"
+      },
+      "performance": {
+        "chunk_builder_threads": 0,
+        "chunk_build_defer_mode": "ALWAYS",
+        "animate_only_visible_textures": true,
+        "use_entity_culling": true,
+        "use_fog_occlusion": true,
+        "use_block_face_culling": true,
+        "use_no_error_g_l_context": true,
+        "quad_splitting_mode": "SAFE"
+      },
+      "advanced": {
+        "enable_memory_tracing": false,
+        "use_advanced_staging_buffers": true,
+        "cpu_render_ahead_limit": 3
+      },
+      "debug": {
+        "terrain_sorting_enabled": true
+      },
+      "notifications": {
+        "has_cleared_donation_button": false,
+        "has_seen_donation_prompt": false
+      }
+    },
+    "sodiumOptionsSha256": "edc4b8a2e4aa7bac58270e89b4c5e54cb35c054f9cba6439951e4c89e66b915e",
+    "lithiumPropertiesSha256": "6cf6f83720071fd1657c8e79b357caf68d40f410ae123e5f922483eb1d1d25be",
+    "sodiumMixinsPropertiesSha256": "b627c4456e6fa0bc4b5f85e2f1cd949faedae3cb9afdaf2a5f52e6f3b6ae1f01",
+    "scope": "B defaults recorded, not tuned; device fingerprint file not inspected/exported"
+  }
+}

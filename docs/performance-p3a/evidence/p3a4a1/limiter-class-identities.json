@@ -1,0 +1,27 @@
+[
+  {
+    "className": "com.aurora.client.util.FramePacer",
+    "installedClassSha256": "835c36157ed9e7a3fdb57f22178a55ad3ade5be1049f4f9ad52e0df574658ca8",
+    "existingBuildClassByteIdentical": false
+  },
+  {
+    "className": "com.aurora.client.mixin.MinecraftClientRenderMixin",
+    "installedClassSha256": "50d1029fb5bcbd7c8137915e71c454142d257170d1b627f68350329a4e8c04c8",
+    "existingBuildClassByteIdentical": false
+  },
+  {
+    "className": "com.aurora.client.mixin.RenderSystemMixin",
+    "installedClassSha256": "ab101947b3a30d2be93a4ff9ef277c407e86e0b078389fdf738801356fc28980",
+    "existingBuildClassByteIdentical": false
+  },
+  {
+    "className": "com.aurora.client.config.AuroraConfig",
+    "installedClassSha256": "7000b180c022a6c996109ee779f4d032194866e0104fda92f41e7f2580325d7c",
+    "existingBuildClassByteIdentical": false
+  },
+  {
+    "className": "com.aurora.client.screen.FeatureRegistry",
+    "installedClassSha256": "da4fd0f33ad90f20e095da2603f2d15fd53070f00989c5cf13ec10644cddfde2",
+    "existingBuildClassByteIdentical": false
+  }
+]

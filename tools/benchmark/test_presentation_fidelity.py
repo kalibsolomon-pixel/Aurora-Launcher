@@ -1,5 +1,7 @@
 """Explicit synthetic mutations of a retained real specimen; not empirical proof."""
 import unittest
+import quality as q
+import short_calibration as short
 
 import native_wgl
 import presentation_fidelity as fidelity
@@ -82,6 +84,13 @@ class FidelityTests(unittest.TestCase):
         mixed=[dict(statusCode=5),dict(statusCode=0,qpcNs=1,eventsLost=1,logBuffersLost=0,realTimeBuffersLost=0)]
         self.assertEqual(fidelity.inspect(self.root,self.m,mixed)['lossStatus'],'CONFIRMED LOSS')
         self.assertEqual(fidelity.inspect(self.root,self.m,mixed)['quality'],'INCOMPLETE')
+
+    def test_consumer_overflow_warning_rejects_capture(self):
+        path=self.root/'presentmon-stderr.txt'
+        path.write_text('warning: 8343 overflowed present events detected. This could be due to a high-fps application.')
+        self.m['diagnosticsSha256']=q.sha256(path)
+        with self.assertRaises(ValueError):short.inspect(self.root,self.m)
+        with self.assertRaises(ValueError):fidelity.inspect(self.root,self.m)
 
 
 del ShortCalibrationTests

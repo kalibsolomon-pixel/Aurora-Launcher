@@ -1,0 +1,33 @@
+{
+  "sampleKind": "synthetic-regression-results-not-empirical-evidence",
+  "checks": [
+    {
+      "label": "baseline benchmark",
+      "tests": 74,
+      "status": "PASS",
+      "rawLogSha256": "dfe8fd4d7a0d95903286a56b37681e7ec9485ff91f6b00794f41ed2e73531643"
+    },
+    {
+      "label": "baseline P1",
+      "tests": 13,
+      "status": "PASS",
+      "rawLogSha256": "222cc81f30c2f7702decfad3690e86a7e2df94df3fe29f701ea38745edc00e8b"
+    },
+    {
+      "label": "final benchmark",
+      "tests": 84,
+      "status": "PASS",
+      "rawLogSha256": "562dff1986aeb23ef37901108e1a350eb42038fed22d0a024fc883d69940369d"
+    },
+    {
+      "label": "final P1",
+      "tests": 13,
+      "status": "PASS",
+      "rawLogSha256": "a8699aed8c143cd61610ec283841ef79ab176cdb4b548055a63a27338ac1b397"
+    }
+  ],
+  "newFocusedTests": 10,
+  "expectedBeforeFixRegression": "consumer overflow warning was accepted; failing log retained privately",
+  "finalP1DiscoveryPathError": "wrong start path failed before tests; retained then corrected; final13 PASS",
+  "productTests": "not run: product source unchanged"
+}

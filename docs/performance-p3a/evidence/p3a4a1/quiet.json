@@ -1,0 +1,60 @@
+{
+  "observations": [
+    {
+      "label": "quiet-initial",
+      "machineCpuMeanPercent": 0.7022080023809967,
+      "minimumAvailableBytes": 22151942144,
+      "samples": 121,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "GPU idle/VRR/thermals",
+        "background app workload stability"
+      ],
+      "quietCpuScreenPercent": 2,
+      "cpuScreenPassed": true
+    },
+    {
+      "label": "quiet-recovery",
+      "machineCpuMeanPercent": 0.9580147701694663,
+      "minimumAvailableBytes": 22119292928,
+      "samples": 121,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "GPU idle/VRR/thermals",
+        "background app workload stability"
+      ],
+      "quietCpuScreenPercent": 2,
+      "cpuScreenPassed": true
+    },
+    {
+      "label": "quiet-minecraft",
+      "machineCpuMeanPercent": 1.0277444497149288,
+      "minimumAvailableBytes": 22451314688,
+      "samples": 121,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "GPU idle/VRR/thermals",
+        "background app workload stability"
+      ],
+      "quietCpuScreenPercent": 2,
+      "cpuScreenPassed": true
+    }
+  ],
+  "gpuWarmupObservation": {
+    "Count": 255,
+    "Average": null,
+    "Sum": 19.245602626909754,
+    "Maximum": 12.704784095289895,
+    "Minimum": null,
+    "StandardDeviation": null,
+    "Property": "CookedValue"
+  },
+  "gpuScope": "aggregate engines during A warmup, not quiet idle or per-game GPU usage",
+  "display": {
+    "Name": "AMD Radeon RX 9070 XT",
+    "DriverVersion": "32.0.31041.1004",
+    "CurrentHorizontalResolution": 2560,
+    "CurrentVerticalResolution": 1440,
+    "CurrentRefreshRate": 240
+  }
+}

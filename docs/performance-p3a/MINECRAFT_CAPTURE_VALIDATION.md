@@ -1,5 +1,20 @@
 # P3-A.4a three-condition Minecraft diagnostic — PARTIAL
 
+## P3-A.4a.1 current diagnostic scope
+
+See [native/Aurora matrix](P3A4A1_MATRIX.md) and [implementation audit](AURORA_LIMITER_AUDIT.md).
+Requested global caps 240/500/750/1000 are supported; actual configuration and native
+Unlimited/VSync/inactivity interactions are separate gates. One short initial
+capture per condition is diagnostic, not repeated JVM benchmarking. Standalone
+WGL cannot supply independent events inside Minecraft. Consumer-overflowed
+captures are INVALID; no primary metric or benchmark operating point is accepted.
+Post-control background estimates 2.26%/4.77% exceeded the quiet-system screen;
+five B captures were deferred without favorable retries. B gameplay and a
+1000→restart→1000→OFF configuration check succeeded, without a B timing claim.
+Historical P3-A.4a raw data and reports below remain preserved with the
+[overflow correction](P3A4A1_COMPLETENESS.md). P3-B remains NOT AUTHORIZED.
+
+
 [Matrix and interpretation](OPENGL_PRESENTATION_INVESTIGATION.md),
 [actual captures](evidence/p3a4a/minecraft.json), [world integrity](evidence/p3a4a/world.json).
 One normally authenticated isolated A child used the exact locked Java, Minecraft
