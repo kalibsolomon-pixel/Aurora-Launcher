@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "startingHead": "64d8cd8d66596b91882acfe93ba6b41b39caecda",
+  "originalTrackedFiles": 2594,
+  "protectedLocalFiles": [
+    ".zcode-icon-diag.py",
+    ".zcodeignore",
+    "UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt",
+    "docs/performance-p0-2/__pycache__/analyze.cpython-312.pyc"
+  ],
+  "priorEvidenceFiles": 2951,
+  "criticalFiles": 11,
+  "productionIdentityFiles": 3,
+  "productionAuditLimit": "Executable/config/registry hashes only; no whole owner-world/runtime or credential-byte audit",
+  "clientHead": "5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d",
+  "clientTrackedFiles": 422,
+  "worktrees": 7,
+  "failures": {
+    "files": [],
+    "critical": [],
+    "production": [],
+    "priorEvidence": [],
+    "clientFiles": [],
+    "clientState": [],
+    "worktrees": [],
+    "deletions": []
+  },
+  "intendedOriginalModifications": [
+    {
+      "path": "AGENTS.md",
+      "reason": "Owner-required standing Client handoff policy appended; all original bytes preserved",
+      "beforeSha256": "e9e1656365c9ff2768c83892450479aabd21ce4f54afa5efd0ccc7dea7c3a330",
+      "afterSha256": "3086fd136a56d55f8b50bb534f0b326c0291deed1d177da2fcd28e9a338fcbbc"
+    }
+  ]
+}

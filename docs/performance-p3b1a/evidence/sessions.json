@@ -1,0 +1,511 @@
+{
+  "kind": "actual-camera-continuity-validation-not-jvm-comparison",
+  "sessions": [
+    {
+      "label": "s1",
+      "status": "CAMERA CHECKPOINTS AND SAVED STATE PASS",
+      "identity": {
+        "utc": "2026-10-17T10:13:56.128Z",
+        "status": "running",
+        "pid": 19388,
+        "startedAtUnixSeconds": 1792232036,
+        "sessionStatus": "ready",
+        "creationId": "134367056361061500",
+        "label": "s1",
+        "executableHashVerified": true
+      },
+      "restoration": {
+        "label": "s1",
+        "archiveSha256": "e53e838b0136a03dbdfa8848321063b001e44a33c3dc42d76001b85dfacaf287",
+        "worldInventoryEqual": true,
+        "optionsSha256": "33695bc0df527fbfe49ec2177cc75bed7b46cadfc581ab542eedaa16ca20fe87",
+        "configInventoryEqual": true,
+        "modsEqual": true,
+        "configuration": {
+          "performanceMode": null,
+          "minecraftVersion": "1.21.11",
+          "auroraEnabled": true,
+          "loader": {
+            "kind": "fabric",
+            "policy": {
+              "type": "pinned",
+              "version": "0.19.5"
+            }
+          },
+          "memoryMib": 2048,
+          "additionalJvmArguments": "",
+          "window": null
+        },
+        "initialCamera": {
+          "position": [
+            128.5,
+            96.0,
+            128.5
+          ],
+          "orientation": [
+            135.0,
+            15.0
+          ],
+          "seed": 123456789,
+          "minecraftVersion": "1.21.11"
+        }
+      },
+      "savedCamera": {
+        "position": [
+          128.5,
+          96.0,
+          128.5
+        ],
+        "orientation": [
+          135.0,
+          15.0
+        ],
+        "seed": 123456789,
+        "minecraftVersion": "1.21.11",
+        "label": "s1",
+        "exactCameraMatch": true
+      },
+      "normalExitCode": 0,
+      "overlayToSamplerGapSeconds": 0.625594,
+      "performanceObserverTimingGatePassed": false,
+      "performanceComparisonEligibility": "NOT A PERFORMANCE COMPARISON; historical <0.5s gate retained and reported separately",
+      "warmupToCaptureGapSeconds": 24.873783,
+      "captureEndToCheckpointSeconds": 7.134783,
+      "performanceOptimizationClaim": false,
+      "preWarmMaterialIdentity": {
+        "utc": "2026-10-17T10:14:05.173191+00:00",
+        "label": "s1",
+        "instanceId": "2ba9a192fc384b30b7c05496778708e4",
+        "configuration": {
+          "performanceMode": null,
+          "minecraftVersion": "1.21.11",
+          "auroraEnabled": true,
+          "loader": {
+            "kind": "fabric",
+            "policy": {
+              "type": "pinned",
+              "version": "0.19.5"
+            }
+          },
+          "memoryMib": 2048,
+          "additionalJvmArguments": "",
+          "window": null
+        },
+        "installedStateSha256": {
+          "game/installed-game.json": "01c803f6c97386383cbcbc102d8abbfce4f192b01e339caa39425f69b1473765",
+          "aurora-installed.json": "0d99ce604275e9b8784364472a552ca7debd11b7398d8c83bb03c8f5e4d9330d",
+          "content-managed.json": "0c388f6064aa97b4d2764fed92981031bd3abe11b3a1faabe7bb0fa77d34e16b"
+        },
+        "runtimeInstalledStateSha256": "850ac063ba477fbeb7e2e6380b484eff942ef424b1a5836ddd58e946ac11feda",
+        "mods": [
+          {
+            "name": "aurora-3.0.0.jar",
+            "sha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c"
+          },
+          {
+            "name": "cloth-config-21.11.153-fabric.jar",
+            "sha256": "8a40c84e5ecde525acfb6c4e13b8002dacfca3ef9534d7faf6e8049656f423c8"
+          },
+          {
+            "name": "fabric-api-0.141.6+1.21.11.jar",
+            "sha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f"
+          },
+          {
+            "name": "lithium-fabric-0.21.4+mc1.21.11.jar",
+            "sha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b"
+          },
+          {
+            "name": "performanceoverlay-1.0.2+mc1.21.9-1.21.11-fabric.jar",
+            "sha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2"
+          },
+          {
+            "name": "sodium-fabric-0.8.14+mc1.21.11.jar",
+            "sha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d"
+          }
+        ],
+        "launcherSha256": "05b97f5be5517972863e2460738e36c1a92257853ec9f72809c610c81114e09a",
+        "javaExecutableSha256": "1ba6a4fb32a6a3d5c925fe837ae6717e2f75743a71e013e668e6dadb909245ba"
+      },
+      "checkpoints": [
+        {
+          "session": "s1",
+          "phase": "after-entry",
+          "startUtc": "2026-10-17T10:14:59.297Z",
+          "endUtc": "2026-10-17T10:14:59.636Z",
+          "image": "s1-after-entry.png",
+          "roundedYaw": 135.0,
+          "roundedPitch": 15.0,
+          "observation": "F3 one-decimal display visually checked; no exact live angle API",
+          "bytes": 273909,
+          "sha256": "613538bc94ee87a7b939a50c5649522352c88962052237cbd8b8085a1c1279a4"
+        },
+        {
+          "session": "s1",
+          "phase": "before-warmup",
+          "startUtc": "2026-10-17T10:15:05.004Z",
+          "endUtc": "2026-10-17T10:15:05.073Z",
+          "image": "s1-before-warmup.png",
+          "roundedYaw": 135.0,
+          "roundedPitch": 15.0,
+          "observation": "F3 one-decimal display visually checked; no exact live angle API",
+          "bytes": 275777,
+          "sha256": "9b26a0fe4194e3c5383dcea88465998522bc58501039d100f618a9f56d22b34d"
+        },
+        {
+          "session": "s1",
+          "phase": "after-warmup",
+          "startUtc": "2026-10-17T10:20:21.831Z",
+          "endUtc": "2026-10-17T10:20:22.049Z",
+          "image": "s1-after-warmup.png",
+          "roundedYaw": 135.0,
+          "roundedPitch": 15.0,
+          "observation": "F3 one-decimal display visually checked; no exact live angle API",
+          "bytes": 277071,
+          "sha256": "c2d8646bf145bcd249b9cb3fe8eeac0d635e511e5d36b325ec2fd3e70cb165ce"
+        },
+        {
+          "session": "s1",
+          "phase": "before-capture",
+          "startUtc": "2026-10-17T10:20:30.057Z",
+          "endUtc": "2026-10-17T10:20:30.194Z",
+          "image": "s1-before-capture.png",
+          "roundedYaw": 135.0,
+          "roundedPitch": 15.0,
+          "observation": "F3 one-decimal display visually checked; no exact live angle API",
+          "bytes": 277060,
+          "sha256": "9297442312f967a82fa0980c0e43da37b9b86b503ae570a815e6204eaae90ebf"
+        },
+        {
+          "session": "s1",
+          "phase": "after-capture",
+          "startUtc": "2026-10-17T10:21:12.591Z",
+          "endUtc": "2026-10-17T10:21:12.771Z",
+          "image": "s1-after-capture.png",
+          "roundedYaw": 135.0,
+          "roundedPitch": 15.0,
+          "observation": "F3 one-decimal display visually checked; no exact live angle API",
+          "bytes": 287356,
+          "sha256": "0071be6fc6d2beda8e4916aa05c3e2042213ec2f72578efb70079c442b39ad73"
+        },
+        {
+          "session": "s1",
+          "phase": "after-inspection",
+          "startUtc": "2026-10-17T10:21:17.120Z",
+          "endUtc": "2026-10-17T10:21:17.220Z",
+          "image": "s1-after-inspection.png",
+          "roundedYaw": 135.0,
+          "roundedPitch": 15.0,
+          "observation": "F3 one-decimal display visually checked; no exact live angle API",
+          "bytes": 277001,
+          "sha256": "b9c9958c96eb5e206a5a7c8f2ab27e0b14f2454bcbd27de803090cb6a7d9862a"
+        }
+      ],
+      "warmup": {
+        "startUtc": "2026-10-17T10:15:10.572207+00:00",
+        "endUtc": "2026-10-17T10:20:10.579811+00:00",
+        "elapsedSeconds": 300.0003835,
+        "samples": 601,
+        "gameForegroundSamples": 601
+      },
+      "capture": {
+        "startUtc": "2026-10-17T10:20:35.453594+00:00",
+        "endUtc": "2026-10-17T10:21:05.456217+00:00",
+        "elapsedSeconds": 30.0002688,
+        "samples": 61,
+        "gameForegroundSamples": 61
+      },
+      "overlay": {
+        "status": "COHERENT INTERNAL DIAGNOSTIC",
+        "sha256": "1e28dcd3808218c88e3d5e020fea3a34befbf37185de865fdc63eb2801b7c2b0",
+        "heapMaximumMiB": [
+          2048.0
+        ],
+        "metrics": {
+          "frameCount": 27933,
+          "summedIntervalMs": 30009.962,
+          "elapsedTimestampSpanMs": 30001,
+          "internalIntervalRateHz": 930.7909153633717,
+          "medianMs": 1.042,
+          "p95Ms": 1.588,
+          "p99Ms": 2.1163600000000007,
+          "maximumMs": 10.559,
+          "intervalsAbove50Ms": 0
+        }
+      },
+      "jfr": {
+        "sha256": "703c7d11090f448163668f1f4c7ba2d53529eff1a1bfbb2ae965a77afb5c8761",
+        "bytes": 3837222,
+        "reportedDataLossEvents": 0,
+        "privacyExcludedCounts": {
+          "jdk.JVMInformation": 0,
+          "jdk.InitialSystemProperty": 0,
+          "jdk.InitialEnvironmentVariable": 0,
+          "jdk.InitialSecurityProperty": 0,
+          "jdk.SystemProcess": 0
+        },
+        "analysisWindow": {
+          "startUtc": "2026-10-17T10:20:35.453594+00:00",
+          "endUtc": "2026-10-17T10:21:05.456217+00:00",
+          "seconds": 30.002623,
+          "selection": "Fully contained events; all original events retained; boundary-crossing collection/pause events counted separately"
+        },
+        "preciseFrameAlignment": false
+      }
+    },
+    {
+      "label": "s2",
+      "status": "CAMERA CHECKPOINTS AND SAVED STATE PASS",
+      "identity": {
+        "utc": "2026-10-17T10:22:22.296Z",
+        "status": "running",
+        "pid": 27228,
+        "startedAtUnixSeconds": 1792232542,
+        "sessionStatus": "ready",
+        "creationId": "134367061422691092",
+        "label": "s2",
+        "executableHashVerified": true
+      },
+      "restoration": {
+        "label": "s2",
+        "archiveSha256": "e53e838b0136a03dbdfa8848321063b001e44a33c3dc42d76001b85dfacaf287",
+        "worldInventoryEqual": true,
+        "optionsSha256": "33695bc0df527fbfe49ec2177cc75bed7b46cadfc581ab542eedaa16ca20fe87",
+        "configInventoryEqual": true,
+        "modsEqual": true,
+        "configuration": {
+          "performanceMode": null,
+          "minecraftVersion": "1.21.11",
+          "auroraEnabled": true,
+          "loader": {
+            "kind": "fabric",
+            "policy": {
+              "type": "pinned",
+              "version": "0.19.5"
+            }
+          },
+          "memoryMib": 2048,
+          "additionalJvmArguments": "",
+          "window": null
+        },
+        "initialCamera": {
+          "position": [
+            128.5,
+            96.0,
+            128.5
+          ],
+          "orientation": [
+            135.0,
+            15.0
+          ],
+          "seed": 123456789,
+          "minecraftVersion": "1.21.11"
+        }
+      },
+      "savedCamera": {
+        "position": [
+          128.5,
+          96.0,
+          128.5
+        ],
+        "orientation": [
+          135.0,
+          15.0
+        ],
+        "seed": 123456789,
+        "minecraftVersion": "1.21.11",
+        "label": "s2",
+        "exactCameraMatch": true
+      },
+      "normalExitCode": 0,
+      "overlayToSamplerGapSeconds": 0.520806,
+      "performanceObserverTimingGatePassed": false,
+      "performanceComparisonEligibility": "NOT A PERFORMANCE COMPARISON; historical <0.5s gate retained and reported separately",
+      "warmupToCaptureGapSeconds": 83.4471,
+      "captureEndToCheckpointSeconds": 2.825945,
+      "performanceOptimizationClaim": false,
+      "preWarmMaterialIdentity": {
+        "utc": "2026-10-17T10:22:28.702508+00:00",
+        "label": "s2",
+        "instanceId": "2ba9a192fc384b30b7c05496778708e4",
+        "configuration": {
+          "performanceMode": null,
+          "minecraftVersion": "1.21.11",
+          "auroraEnabled": true,
+          "loader": {
+            "kind": "fabric",
+            "policy": {
+              "type": "pinned",
+              "version": "0.19.5"
+            }
+          },
+          "memoryMib": 2048,
+          "additionalJvmArguments": "",
+          "window": null
+        },
+        "installedStateSha256": {
+          "game/installed-game.json": "01c803f6c97386383cbcbc102d8abbfce4f192b01e339caa39425f69b1473765",
+          "aurora-installed.json": "0d99ce604275e9b8784364472a552ca7debd11b7398d8c83bb03c8f5e4d9330d",
+          "content-managed.json": "0c388f6064aa97b4d2764fed92981031bd3abe11b3a1faabe7bb0fa77d34e16b"
+        },
+        "runtimeInstalledStateSha256": "850ac063ba477fbeb7e2e6380b484eff942ef424b1a5836ddd58e946ac11feda",
+        "mods": [
+          {
+            "name": "aurora-3.0.0.jar",
+            "sha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c"
+          },
+          {
+            "name": "cloth-config-21.11.153-fabric.jar",
+            "sha256": "8a40c84e5ecde525acfb6c4e13b8002dacfca3ef9534d7faf6e8049656f423c8"
+          },
+          {
+            "name": "fabric-api-0.141.6+1.21.11.jar",
+            "sha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f"
+          },
+          {
+            "name": "lithium-fabric-0.21.4+mc1.21.11.jar",
+            "sha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b"
+          },
+          {
+            "name": "performanceoverlay-1.0.2+mc1.21.9-1.21.11-fabric.jar",
+            "sha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2"
+          },
+          {
+            "name": "sodium-fabric-0.8.14+mc1.21.11.jar",
+            "sha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d"
+          }
+        ],
+        "launcherSha256": "05b97f5be5517972863e2460738e36c1a92257853ec9f72809c610c81114e09a",
+        "javaExecutableSha256": "1ba6a4fb32a6a3d5c925fe837ae6717e2f75743a71e013e668e6dadb909245ba"
+      },
+      "checkpoints": [
+        {
+          "session": "s2",
+          "phase": "after-entry",
+          "startUtc": "2026-10-17T10:23:22.513Z",
+          "endUtc": "2026-10-17T10:23:22.835Z",
+          "image": "s2-after-entry.png",
+          "roundedYaw": 135.0,
+          "roundedPitch": 15.0,
+          "observation": "F3 one-decimal display visually checked; no exact live angle API",
+          "bytes": 273510,
+          "sha256": "9919ce5ca78f1de96cdde93b0f47d6cfcc71aa976f948d92ea52f80910841d01"
+        },
+        {
+          "session": "s2",
+          "phase": "before-warmup",
+          "startUtc": "2026-10-17T10:23:28.285Z",
+          "endUtc": "2026-10-17T10:23:28.348Z",
+          "image": "s2-before-warmup.png",
+          "roundedYaw": 135.0,
+          "roundedPitch": 15.0,
+          "observation": "F3 one-decimal display visually checked; no exact live angle API",
+          "bytes": 275847,
+          "sha256": "834c121f6fa6ff664f3fe14a416367606024c902daedffaf903b27a805a09809"
+        },
+        {
+          "session": "s2",
+          "phase": "after-warmup",
+          "startUtc": "2026-10-17T10:29:40.152Z",
+          "endUtc": "2026-10-17T10:29:40.679Z",
+          "image": "s2-after-warmup.png",
+          "roundedYaw": 135.0,
+          "roundedPitch": 15.0,
+          "observation": "F3 one-decimal display visually checked; no exact live angle API",
+          "bytes": 277157,
+          "sha256": "65ed7a5be28e8311a024a392dbd6bf908110baf1a019bebca7c6e285908be8d2"
+        },
+        {
+          "session": "s2",
+          "phase": "before-capture",
+          "startUtc": "2026-10-17T10:29:50.005Z",
+          "endUtc": "2026-10-17T10:29:50.172Z",
+          "image": "s2-before-capture.png",
+          "roundedYaw": 135.0,
+          "roundedPitch": 15.0,
+          "observation": "F3 one-decimal display visually checked; no exact live angle API",
+          "bytes": 277106,
+          "sha256": "244189906d5ff93b8c5f4ac76f9c1b972f3edd8a78bfc50b7e0bb09e78d87269"
+        },
+        {
+          "session": "s2",
+          "phase": "after-capture",
+          "startUtc": "2026-10-17T10:30:30.307Z",
+          "endUtc": "2026-10-17T10:30:30.518Z",
+          "image": "s2-after-capture.png",
+          "roundedYaw": 135.0,
+          "roundedPitch": 15.0,
+          "observation": "F3 one-decimal display visually checked; no exact live angle API",
+          "bytes": 287021,
+          "sha256": "c8eb318d4f2c6f5a9254424b63b2b366969791f15c6de82724e0f321bd185bfa"
+        },
+        {
+          "session": "s2",
+          "phase": "after-inspection",
+          "startUtc": "2026-10-17T10:30:35.863Z",
+          "endUtc": "2026-10-17T10:30:35.931Z",
+          "image": "s2-after-inspection.png",
+          "roundedYaw": 135.0,
+          "roundedPitch": 15.0,
+          "observation": "F3 one-decimal display visually checked; no exact live angle API",
+          "bytes": 287341,
+          "sha256": "ef71e84b755bec588a256497d26b065618808975635f785140cf224d2edeb01e"
+        }
+      ],
+      "warmup": {
+        "startUtc": "2026-10-17T10:23:34.028167+00:00",
+        "endUtc": "2026-10-17T10:28:34.032706+00:00",
+        "elapsedSeconds": 300.0003391,
+        "samples": 601,
+        "gameForegroundSamples": 601
+      },
+      "capture": {
+        "startUtc": "2026-10-17T10:29:57.479806+00:00",
+        "endUtc": "2026-10-17T10:30:27.481055+00:00",
+        "elapsedSeconds": 30.0004475,
+        "samples": 61,
+        "gameForegroundSamples": 61
+      },
+      "overlay": {
+        "status": "COHERENT INTERNAL DIAGNOSTIC",
+        "sha256": "b835da26e2b6efdd20a9fd5f95c33150d309924df881d58e47d8b824e3a5dde6",
+        "heapMaximumMiB": [
+          2048.0
+        ],
+        "metrics": {
+          "frameCount": 27682,
+          "summedIntervalMs": 30021.664,
+          "elapsedTimestampSpanMs": 30014,
+          "internalIntervalRateHz": 922.0674776721237,
+          "medianMs": 1.054,
+          "p95Ms": 1.676949999999997,
+          "p99Ms": 2.1843799999999973,
+          "maximumMs": 6.888,
+          "intervalsAbove50Ms": 0
+        }
+      },
+      "jfr": {
+        "sha256": "abc43578607d7ac3315bdfa9e9dea4b9958c8bc203ad1d0ddf63fd98d942f5e9",
+        "bytes": 3847299,
+        "reportedDataLossEvents": 0,
+        "privacyExcludedCounts": {
+          "jdk.JVMInformation": 0,
+          "jdk.InitialSystemProperty": 0,
+          "jdk.InitialEnvironmentVariable": 0,
+          "jdk.InitialSecurityProperty": 0,
+          "jdk.SystemProcess": 0
+        },
+        "analysisWindow": {
+          "startUtc": "2026-10-17T10:29:57.479806+00:00",
+          "endUtc": "2026-10-17T10:30:27.481055+00:00",
+          "seconds": 30.001249,
+          "selection": "Fully contained events; all original events retained; boundary-crossing collection/pause events counted separately"
+        },
+        "preciseFrameAlignment": false
+      }
+    }
+  ],
+  "endpointLimit": "Discrete boundary observations and exact normal-save metadata cannot exclude transient move-and-return between observations.",
+  "unexecuted": [
+    "s3"
+  ]
+}

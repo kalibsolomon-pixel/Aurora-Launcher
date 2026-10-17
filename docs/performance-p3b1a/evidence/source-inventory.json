@@ -1,0 +1,72 @@
+{
+  "kind": "scoped-working-tree-byte-inventory-before-local-commit",
+  "selfExcluded": "docs/performance-p3b1a/evidence/source-inventory.json",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 20476,
+      "sha256": "3086fd136a56d55f8b50bb534f0b326c0291deed1d177da2fcd28e9a338fcbbc"
+    },
+    {
+      "path": "docs/performance-p3b1a/CHANGED_FILES.txt",
+      "bytes": 630,
+      "sha256": "ab675c6319d60c11fa5c140ada915849f89517c7af9c5daf43b458b2e91871e4"
+    },
+    {
+      "path": "docs/performance-p3b1a/CONTINUITY_PROTOCOL.md",
+      "bytes": 4452,
+      "sha256": "41ffa1fef9be68321b777cbf8e80c00d65566dbdec24815e9804e655526f4d9f"
+    },
+    {
+      "path": "docs/performance-p3b1a/evidence/baseline.json",
+      "bytes": 4973,
+      "sha256": "e28fb3faafdd07a095ea9eb49d7febfbf10f77e02e9782a74df31b255f1a0a21"
+    },
+    {
+      "path": "docs/performance-p3b1a/evidence/investigation-sources.json",
+      "bytes": 1620,
+      "sha256": "8aa1c9aa2ce3ba6f02b21734849e24c9e0a6d15f486b9fb9ea445baed829363b"
+    },
+    {
+      "path": "docs/performance-p3b1a/evidence/preservation.json",
+      "bytes": 1255,
+      "sha256": "3309761d54dac3864f1f20c6af25b14493f5b9c884b16244f0db31e6e9b6994e"
+    },
+    {
+      "path": "docs/performance-p3b1a/evidence/raw-inventory.json",
+      "bytes": 41407,
+      "sha256": "36f7a498defa282c16fed019f18715cde7f3191bd2a96880d0f0ffa4dbb03e70"
+    },
+    {
+      "path": "docs/performance-p3b1a/evidence/sessions.json",
+      "bytes": 19312,
+      "sha256": "da8fe0fd5fb1c906b2941753143ff4b3c17d427e427e8eed8f00b247952ed027"
+    },
+    {
+      "path": "docs/performance-p3b1a/evidence/shutdown.json",
+      "bytes": 1061,
+      "sha256": "7b4868a6f2a05d81f5be5bf45b58d964d9f8458b83b09d154d60e757bf3a95b0"
+    },
+    {
+      "path": "docs/performance-p3b1a/evidence/tests.json",
+      "bytes": 955,
+      "sha256": "2d7279dbb5baa799bebc5a2dbc36b01db3393166e333e114dd261928ad5b6036"
+    },
+    {
+      "path": "docs/performance-p3b1a/INPUT_INVESTIGATION.md",
+      "bytes": 9279,
+      "sha256": "566feab5eeaf9a8c54bd0180951d9928b31b52a50bf89c90c14a48e4f79ccfdb"
+    },
+    {
+      "path": "docs/performance-p3b1a/PERFORMANCE_ROADMAP.md",
+      "bytes": 12478,
+      "sha256": "fcf427dd8a9ba9cd4dcc5f99386d0ed8da47dd5bcb918048840026758cfa7195"
+    },
+    {
+      "path": "PERFORMANCE_P3B1A_ACCEPTANCE.md",
+      "bytes": 17368,
+      "sha256": "ceaa7f292b8be527774666f2be0cbf6f53d2b4f2bb3e3f458b7e481cdefc717e"
+    }
+  ],
+  "privacy": "Reviewed sanitized summaries only; raw account-bearing material remains private"
+}

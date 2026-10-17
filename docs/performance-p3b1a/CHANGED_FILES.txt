@@ -1,0 +1,14 @@
+AGENTS.md
+docs/performance-p3b1a/CHANGED_FILES.txt
+docs/performance-p3b1a/CONTINUITY_PROTOCOL.md
+docs/performance-p3b1a/evidence/baseline.json
+docs/performance-p3b1a/evidence/investigation-sources.json
+docs/performance-p3b1a/evidence/preservation.json
+docs/performance-p3b1a/evidence/raw-inventory.json
+docs/performance-p3b1a/evidence/sessions.json
+docs/performance-p3b1a/evidence/shutdown.json
+docs/performance-p3b1a/evidence/source-inventory.json
+docs/performance-p3b1a/evidence/tests.json
+docs/performance-p3b1a/INPUT_INVESTIGATION.md
+docs/performance-p3b1a/PERFORMANCE_ROADMAP.md
+PERFORMANCE_P3B1A_ACCEPTANCE.md

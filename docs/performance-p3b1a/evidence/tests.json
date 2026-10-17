@@ -1,0 +1,35 @@
+{
+  "suites": [
+    {
+      "log": "baseline-benchmark-tests.txt",
+      "tests": 119,
+      "status": "PASS",
+      "bytes": 15929,
+      "sha256": "586de1a2d4f964c89e1c9d4f212d49a4f697c76a5e0c784910d2bb3389204d23"
+    },
+    {
+      "log": "baseline-p1-tests.txt",
+      "tests": 13,
+      "status": "PASS",
+      "bytes": 1397,
+      "sha256": "6887448d48ee27299e7321aef5ebd83f08a9ce5ca1613498086d982143df074b"
+    },
+    {
+      "log": "final-benchmark-tests.txt",
+      "tests": 119,
+      "status": "PASS",
+      "bytes": 15929,
+      "sha256": "69257ba503d238fa1d15fe697e797def811e058476283171f57acf47913a1fc3"
+    },
+    {
+      "log": "final-p1-tests.txt",
+      "tests": 13,
+      "status": "PASS",
+      "bytes": 1397,
+      "sha256": "32808a23f587fea1741ac29586d835496900808d535e38c8391c3edc2bff49ae"
+    }
+  ],
+  "productionSourceChanged": false,
+  "newInstrumentation": false,
+  "newDependencies": false
+}

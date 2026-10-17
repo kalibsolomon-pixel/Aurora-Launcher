@@ -1,0 +1,117 @@
+{
+  "branch": "codex/client-3-production-authority",
+  "head": "64d8cd8d66596b91882acfe93ba6b41b39caecda",
+  "status": "?? .zcode-icon-diag.py\n?? .zcodeignore\n?? UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt\n?? docs/performance-p0-2/__pycache__/",
+  "indexSha256": "759ade333a09abdd47e71a5245469f42c1b73528a1c0e47f019eb45514588fde",
+  "trackedFiles": 2594,
+  "untracked": [
+    ".zcode-icon-diag.py",
+    ".zcodeignore",
+    "UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt",
+    "docs/performance-p0-2/__pycache__/analyze.cpython-312.pyc"
+  ],
+  "worktrees": "worktree C:/Dev/aurora-launcher\nHEAD 64d8cd8d66596b91882acfe93ba6b41b39caecda\nbranch refs/heads/codex/client-3-production-authority\n\nworktree C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/corrected-source\nHEAD 420f54c0ad48ec9aa70320786a77d678b51864f1\ndetached\n\nworktree C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/fix-source\nHEAD e4c25cb7dc02e00ca433c7df5b759cef62730d48\nbranch refs/heads/codex/native-boot-updater-config\n\nworktree C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/old-source\nHEAD 4575a0e3f1c28da6cfe072948fe91b60eeaf608f\ndetached\n\nworktree <user>/.codex/worktrees/f3rb1-acceptance/aurora-launcher\nHEAD 4f2ad561fe12e38523aade0265017a1c364751d1\nbranch refs/heads/codex/f3rb1-acceptance\n\nworktree <user>/.codex/worktrees/installed-artwork-reliability/aurora-launcher\nHEAD f50a3b3bece2d0664eb2e09a33b62825dcd6612d\nbranch refs/heads/codex/installed-artwork-reliability\n\nworktree <user>/.codex/worktrees/performance-p0-2-build/aurora-launcher\nHEAD 6cbabd38bc1c5268b9f6c80034f18da3a26f1e21\ndetached",
+  "criticalFiles": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 18722,
+      "sha256": "e9e1656365c9ff2768c83892450479aabd21ce4f54afa5efd0ccc7dea7c3a330"
+    },
+    {
+      "path": "ARCHITECTURE.md",
+      "bytes": 313658,
+      "sha256": "941f30360352faa3941ab71930f6d16ea0a18f23575ad8b66da14fd7f902c181"
+    },
+    {
+      "path": "README.md",
+      "bytes": 14722,
+      "sha256": "a874b67ddc4bcc823950ca655027424740fd3a9bb4e2d036bd4de0f1cf05a0af"
+    },
+    {
+      "path": "package.json",
+      "bytes": 1048,
+      "sha256": "711b12ccf522e4d2061a88a6ae27c2f9d495a15e4d9fb2faa0daaa5bdde245d5"
+    },
+    {
+      "path": "package-lock.json",
+      "bytes": 51932,
+      "sha256": "5b5c6c0b6d2c90d47764389e67cf4bf8506b175376857846cf17012969149f79"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "bytes": 6233,
+      "sha256": "5de869365f36fa6434cbe10a308d29a89310151eab4c3696f1fd9bcf47c19871"
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "bytes": 133914,
+      "sha256": "eb5f5f54334de99a2c9976f37ae12c10194ece953ed15f1609a28b014299078c"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "bytes": 1112,
+      "sha256": "2199edd6a1c0e3b4866e794c91a2abf584243bc269c0e4c6dc564948d6965bb8"
+    },
+    {
+      "path": "src-tauri/build.rs",
+      "bytes": 42,
+      "sha256": "4ae2333b11623039cc115e29b696e7ff5cdfcd5b7d628280ddf48fa733e6418d"
+    },
+    {
+      "path": "svelte.config.js",
+      "bytes": 591,
+      "sha256": "fadc69dca3da4956622f7450056da248d1d52ea3f119d6a706e06195b07d9a34"
+    },
+    {
+      "path": "vite.config.js",
+      "bytes": 907,
+      "sha256": "ff64c375899326df8b8dc53b2d036a9fa0ab26bc03dba09775e8e669e1b1419b"
+    }
+  ],
+  "protectedLocalFiles": [
+    {
+      "path": ".zcode-icon-diag.py",
+      "bytes": 2195,
+      "sha256": "5e6199883ece4cb38308d080aaf9d45612594acf0ade0660baeb95aea1200f16"
+    },
+    {
+      "path": ".zcodeignore",
+      "bytes": 794,
+      "sha256": "e7577714c5582301e11449a27731439051a29d035c4d2373595fb6c5042bcc3e"
+    },
+    {
+      "path": "UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt",
+      "bytes": 1463,
+      "sha256": "ad1790bff169f56025e6da2bc6f75b9434a046d478643f50ba0d68cbb25b5250"
+    },
+    {
+      "path": "docs/performance-p0-2/__pycache__/analyze.cpython-312.pyc",
+      "bytes": 17645,
+      "sha256": "76dc3497a710faf67fc16a0ecb3aaebe19c652bfbc266cc85c9c3480ec0e2ce3"
+    }
+  ],
+  "priorEvidenceFiles": 2951,
+  "production": [
+    {
+      "identity": "installed-launcher-1.4.2",
+      "bytes": 19662848,
+      "sha256": "711df646d834588b404c7170db76b6546b409433aecfd882b026299412d13818"
+    },
+    {
+      "identity": "production-config",
+      "bytes": 1319,
+      "sha256": "a959e96fcd304edecd7ccf80d802df725c02a8f5900a6400c32863067357c8b6"
+    },
+    {
+      "identity": "production-registry",
+      "bytes": 749,
+      "sha256": "ae016b9bdc15aff06d66e10d66d8a00ad93ea7bfe7db407e8ebef7f7d44302f2"
+    }
+  ],
+  "client": {
+    "head": "5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d",
+    "trackedFiles": 422,
+    "status": "",
+    "indexSha256": "034e20369e96d7b11855649763b02d61d32527b478d9d985beae0691065b64f1"
+  }
+}

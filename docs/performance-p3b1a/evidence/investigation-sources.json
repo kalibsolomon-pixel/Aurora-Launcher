@@ -1,0 +1,50 @@
+{
+  "sources": [
+    {
+      "id": "p3b1-report",
+      "bytes": 22899,
+      "sha256": "15d15db885596c92ca8acbd96f7ea135a5519e7702174298455b023e7e9fdbda"
+    },
+    {
+      "id": "p3b1-plan",
+      "bytes": 9067,
+      "sha256": "270c409411bfabf7432731f802175f42a959cd7be4626e8a1822358189829054"
+    },
+    {
+      "id": "p3b1-jvm",
+      "bytes": 2789,
+      "sha256": "b04d2e1c011ae1973800edf89949c4fbdf7b3090a0ae609e8fbd02e552715001"
+    },
+    {
+      "id": "practical-protocol",
+      "bytes": 10324,
+      "sha256": "ea8a6580a3f9bd3d714c5ca3ce01e81b7dce26a3159cda551ae4b094c690aec3"
+    },
+    {
+      "id": "p3b1-excluded",
+      "bytes": 40684,
+      "sha256": "ec1ac012b05ac5c65d672738cda3d4b9ea94deb8a333b22ccdf96f722736ea1e"
+    },
+    {
+      "id": "b2-start-camera",
+      "bytes": 280088,
+      "sha256": "04fc70314b7285b759b0131c59b801d18f310aae520f2a96bbaf66393ecb1906"
+    },
+    {
+      "id": "b2-end-camera",
+      "bytes": 279072,
+      "sha256": "1b4511c38d5bb7f3b03d5e9d35d3d11de7934c29a92add08bd80c5491964fe9f"
+    },
+    {
+      "id": "b2-saved-state-observation",
+      "bytes": 4149,
+      "sha256": "aaf0f2bce02849b52a7ea85354921306b99448c6511268a0435a3af4005854d6"
+    },
+    {
+      "id": "original-action-transcript",
+      "bytes": 26491796,
+      "sha256": "c4f4f7f49afd5b5d33e3b09d8ea2e459acbe2a6c458d4a678864d13d27f76544"
+    }
+  ],
+  "scope": "Exact source bytes; account-bearing images/logs/worlds/transcript remain private. Timeline operation intervals are transcript call/completion brackets, not exact nested input timestamps."
+}
