@@ -74,6 +74,24 @@ class CollectorReviewTests(unittest.TestCase):
         self.meta["workloadId"] = "workload-b-normal-stationary-v1"
         self.assertEqual(self.run_review()["status"], "INVALID")
 
+    def test_locked_heap_scene_remains_diagnostic(self):
+        self.meta["workloadId"] = "workload-heap-static-24-12-v1"
+        self.meta["worldArchiveSha256"] = c.WORKLOAD_ARCHIVES[self.meta["workloadId"]]
+        result = self.run_review()
+        self.assertEqual(result["status"], "CONSISTENT DIAGNOSTIC")
+        self.assertEqual(result["metricRole"], "DIAGNOSTIC ONLY")
+        self.assertFalse(result["independentCompleteness"])
+
+    def test_heap_scene_rejects_historical_archive(self):
+        self.meta["workloadId"] = "workload-heap-static-24-12-v1"
+        self.meta["worldArchiveSha256"] = c.WORKLOAD_ARCHIVES["workload-b-normal-stationary-v1"]
+        self.assertEqual(self.run_review()["status"], "INVALID")
+
+    def test_historical_scene_rejects_heap_archive(self):
+        self.meta["workloadId"] = "workload-b-normal-stationary-v1"
+        self.meta["worldArchiveSha256"] = c.WORKLOAD_ARCHIVES["workload-heap-static-24-12-v1"]
+        self.assertEqual(self.run_review()["status"], "INVALID")
+
     def test_unreviewed_and_malformed_workload_refused(self):
         for workload in ["unreviewed-world", None, [], {}]:
             with self.subTest(workload=workload):

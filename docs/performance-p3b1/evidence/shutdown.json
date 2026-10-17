@@ -1,0 +1,32 @@
+{
+  "kind": "normal-native-supervised-completion",
+  "game": {
+    "status": "exited",
+    "exitCode": 0,
+    "processId": null,
+    "utc": "2026-10-17T09:10:26.032Z"
+  },
+  "launcher": {
+    "pid": 23724,
+    "exitCode": 0,
+    "endUtc": "2026-10-17T09:10:46.2231582Z",
+    "handleRetained": true
+  },
+  "finalDisposableInstanceConfiguration": {
+    "performanceMode": null,
+    "minecraftVersion": "1.21.11",
+    "auroraEnabled": true,
+    "loader": {
+      "kind": "fabric",
+      "policy": {
+        "type": "pinned",
+        "version": "0.19.5"
+      }
+    },
+    "memoryMib": 2048,
+    "additionalJvmArguments": "",
+    "window": null
+  },
+  "contentReadyAfterNativeSave": true,
+  "productionDefaultsChanged": false
+}

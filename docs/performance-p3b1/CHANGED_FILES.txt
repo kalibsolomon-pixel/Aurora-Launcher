@@ -1,0 +1,16 @@
+docs/performance-p3b1/CHANGED_FILES.txt
+docs/performance-p3b1/evidence/comparisons.json
+docs/performance-p3b1/evidence/excluded.json
+docs/performance-p3b1/evidence/preparation.json
+docs/performance-p3b1/evidence/preservation.json
+docs/performance-p3b1/evidence/raw-inventory.json
+docs/performance-p3b1/evidence/runs.json
+docs/performance-p3b1/evidence/shutdown.json
+docs/performance-p3b1/evidence/source-inventory.json
+docs/performance-p3b1/evidence/tests.json
+docs/performance-p3b1/evidence/workload.json
+docs/performance-p3b1/JVM_CONFIGURATION.md
+docs/performance-p3b1/TRIAL_PLAN.md
+PERFORMANCE_P3B1_ACCEPTANCE.md
+tools/benchmark/collector_review.py
+tools/benchmark/test_collector_review.py

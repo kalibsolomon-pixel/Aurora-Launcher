@@ -1,0 +1,369 @@
+{
+  "kind": "actual-frozen-memory-relevant-static-scene",
+  "workloadId": "workload-heap-static-24-12-v1",
+  "instanceId": "dca43ecadb984d0bb088e376c4059fd4",
+  "preparationSourceArchiveSha256": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6",
+  "comparisonArchiveSha256": "e53e838b0136a03dbdfa8848321063b001e44a33c3dc42d76001b85dfacaf287",
+  "archiveBytes": 40417280,
+  "inventorySha256": "50b0f718759a4a71d40995a722e458ecf4a78222c55d614a09778e74030e71ae",
+  "worldFiles": 47,
+  "worldDirectories": 12,
+  "scene": {
+    "minecraftVersion": "1.21.11",
+    "seed": 123456789,
+    "generationSettings": {
+      "bonus_chest": 0,
+      "seed": 123456789,
+      "generate_features": 1,
+      "dimensions": {
+        "minecraft:the_nether": {
+          "type": "minecraft:the_nether",
+          "generator": {
+            "type": "minecraft:noise",
+            "biome_source": {
+              "type": "minecraft:multi_noise",
+              "preset": "minecraft:nether"
+            },
+            "settings": "minecraft:nether"
+          }
+        },
+        "minecraft:overworld": {
+          "type": "minecraft:overworld",
+          "generator": {
+            "type": "minecraft:noise",
+            "biome_source": {
+              "type": "minecraft:multi_noise",
+              "preset": "minecraft:overworld"
+            },
+            "settings": "minecraft:overworld"
+          }
+        },
+        "minecraft:the_end": {
+          "type": "minecraft:the_end",
+          "generator": {
+            "type": "minecraft:noise",
+            "biome_source": {
+              "type": "minecraft:the_end"
+            },
+            "settings": "minecraft:end"
+          }
+        }
+      }
+    },
+    "dimension": "minecraft:overworld",
+    "position": [
+      128.5,
+      96.0,
+      128.5
+    ],
+    "orientation": [
+      135.0,
+      15.0
+    ],
+    "playerGameMode": 1,
+    "worldGameMode": 1,
+    "abilities": {
+      "walkSpeed": 0.10000000149011612,
+      "instabuild": 1,
+      "flying": 1,
+      "flySpeed": 0.05000000074505806,
+      "mayfly": 1,
+      "invulnerable": 1,
+      "mayBuild": 1
+    },
+    "time": 6000,
+    "raining": 0,
+    "thundering": 0,
+    "difficulty": 2,
+    "gameRules": {
+      "minecraft:advance_weather": 0,
+      "minecraft:max_entity_cramming": 24,
+      "minecraft:command_block_output": 1,
+      "minecraft:fall_damage": 1,
+      "minecraft:spawn_wardens": 1,
+      "minecraft:respawn_radius": 10,
+      "minecraft:max_command_sequence_length": 65536,
+      "minecraft:immediate_respawn": 0,
+      "minecraft:drowning_damage": 1,
+      "minecraft:natural_health_regeneration": 1,
+      "minecraft:player_movement_check": 1,
+      "minecraft:tnt_explosion_drop_decay": 0,
+      "minecraft:advance_time": 0,
+      "minecraft:players_nether_portal_creative_delay": 0,
+      "minecraft:fire_damage": 1,
+      "minecraft:spectators_generate_chunks": 1,
+      "minecraft:keep_inventory": 0,
+      "minecraft:command_blocks_work": 1,
+      "minecraft:log_admin_commands": 1,
+      "minecraft:block_drops": 1,
+      "minecraft:limited_crafting": 0,
+      "minecraft:elytra_movement_check": 1,
+      "minecraft:global_sound_events": 1,
+      "minecraft:spread_vines": 1,
+      "minecraft:lava_source_conversion": 0,
+      "minecraft:players_nether_portal_default_delay": 80,
+      "minecraft:players_sleeping_percentage": 100,
+      "minecraft:entity_drops": 1,
+      "minecraft:spawn_phantoms": 1,
+      "minecraft:spawn_mobs": 0,
+      "minecraft:freeze_damage": 1,
+      "minecraft:forgive_dead_players": 1,
+      "minecraft:mob_drops": 1,
+      "minecraft:max_command_forks": 65536,
+      "minecraft:show_advancement_messages": 1,
+      "minecraft:water_source_conversion": 1,
+      "minecraft:show_death_messages": 1,
+      "minecraft:allow_entering_nether_using_portals": 1,
+      "minecraft:spawn_patrols": 1,
+      "minecraft:block_explosion_drop_decay": 1,
+      "minecraft:send_command_feedback": 1,
+      "minecraft:max_block_modifications": 32768,
+      "minecraft:mob_griefing": 1,
+      "minecraft:pvp": 1,
+      "minecraft:spawn_monsters": 1,
+      "minecraft:locator_bar": 1,
+      "minecraft:fire_spread_radius_around_player": 128,
+      "minecraft:random_tick_speed": 3,
+      "minecraft:ender_pearls_vanish_on_death": 1,
+      "minecraft:spawner_blocks_work": 1,
+      "minecraft:spawn_wandering_traders": 1,
+      "minecraft:mob_explosion_drop_decay": 1,
+      "minecraft:tnt_explodes": 1,
+      "minecraft:max_snow_accumulation_height": 1,
+      "minecraft:projectiles_can_break_blocks": 1,
+      "minecraft:reduced_debug_info": 0,
+      "minecraft:universal_anger": 0,
+      "minecraft:raids": 1
+    },
+    "totalRecordedChunks": 5625,
+    "requiredFullChunks": 2401,
+    "missingRequiredFullChunks": 0,
+    "chunkRectangle": [
+      -16,
+      -16,
+      32,
+      32
+    ],
+    "entityCount": 199,
+    "entityTypes": {
+      "minecraft:chest_minecart": 37,
+      "minecraft:bee": 10,
+      "minecraft:cat": 2,
+      "minecraft:villager": 9,
+      "minecraft:iron_golem": 1,
+      "minecraft:drowned": 12,
+      "minecraft:falling_block": 100,
+      "minecraft:item": 28
+    },
+    "blockEntityCount": 803,
+    "blockEntityTypes": {
+      "DUMMY": 16,
+      "minecraft:mob_spawner": 101,
+      "minecraft:sculk_sensor": 94,
+      "minecraft:sculk_catalyst": 26,
+      "minecraft:chest": 125,
+      "minecraft:beehive": 12,
+      "minecraft:brushable_block": 53,
+      "minecraft:vault": 47,
+      "minecraft:barrel": 42,
+      "minecraft:decorated_pot": 124,
+      "minecraft:trial_spawner": 45,
+      "minecraft:dispenser": 34,
+      "minecraft:hopper": 20,
+      "minecraft:bed": 38,
+      "minecraft:bell": 1,
+      "minecraft:blast_furnace": 1,
+      "minecraft:creaking_heart": 15,
+      "minecraft:sculk_shrieker": 9
+    }
+  },
+  "optionsSha256": "33695bc0df527fbfe49ec2177cc75bed7b46cadfc581ab542eedaa16ca20fe87",
+  "options": {
+    "enableVsync": "false",
+    "fullscreen": "false",
+    "maxFps": "260",
+    "inactivityFpsLimit": "\"minimized\"",
+    "renderClouds": "\"false\"",
+    "overrideWidth": "1920",
+    "overrideHeight": "1080",
+    "guiScale": "2",
+    "fov": "0.0",
+    "particles": "0",
+    "graphicsPreset": "\"custom\"",
+    "ao": "true",
+    "cutoutLeaves": "true",
+    "improvedTransparency": "false",
+    "mipmapLevels": "4",
+    "textureFiltering": "0",
+    "renderDistance": "24",
+    "simulationDistance": "12",
+    "resourcePacks": "[]"
+  },
+  "baselineConfiguration": {
+    "performanceMode": null,
+    "minecraftVersion": "1.21.11",
+    "auroraEnabled": true,
+    "loader": {
+      "kind": "fabric",
+      "policy": {
+        "type": "pinned",
+        "version": "0.19.5"
+      }
+    },
+    "memoryMib": 2048,
+    "additionalJvmArguments": "",
+    "window": null
+  },
+  "candidateDifference": {
+    "memoryMib": 1536
+  },
+  "mods": [
+    {
+      "name": "aurora-3.0.0.jar",
+      "size": 3077377,
+      "sha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c"
+    },
+    {
+      "name": "cloth-config-21.11.153-fabric.jar",
+      "size": 1148427,
+      "sha256": "8a40c84e5ecde525acfb6c4e13b8002dacfca3ef9534d7faf6e8049656f423c8"
+    },
+    {
+      "name": "fabric-api-0.141.6+1.21.11.jar",
+      "size": 2426039,
+      "sha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f"
+    },
+    {
+      "name": "lithium-fabric-0.21.4+mc1.21.11.jar",
+      "size": 900462,
+      "sha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b"
+    },
+    {
+      "name": "performanceoverlay-1.0.2+mc1.21.9-1.21.11-fabric.jar",
+      "size": 188784,
+      "sha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2"
+    },
+    {
+      "name": "sodium-fabric-0.8.14+mc1.21.11.jar",
+      "size": 1909150,
+      "sha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d"
+    }
+  ],
+  "configs": [
+    {
+      "path": "aurora-worldmap/sp_p3a4a4-b-normal/minecraft_overworld/r.-1.-1.wmr",
+      "sizeBytes": 27476,
+      "sha256": "8a152d54d567052e69bb903e0e4bb15bf2896d14fbc6a1297900677831d6f3ed"
+    },
+    {
+      "path": "aurora-worldmap/sp_p3a4a4-b-normal/minecraft_overworld/r.-1.0.wmr",
+      "sizeBytes": 78882,
+      "sha256": "75fd60b3e4f2d3fde7da20895740b80fe297a585b8d05d71ca17131effb968f5"
+    },
+    {
+      "path": "aurora-worldmap/sp_p3a4a4-b-normal/minecraft_overworld/r.-1.1.wmr",
+      "sizeBytes": 2090,
+      "sha256": "bf6b8dc0f507287e7a2018de128fbb409bba19adaf681e6fe687cd901b058c04"
+    },
+    {
+      "path": "aurora-worldmap/sp_p3a4a4-b-normal/minecraft_overworld/r.0.-1.wmr",
+      "sizeBytes": 64057,
+      "sha256": "f77b68a1078c3c1f3bfea18b315dd36bffc906a8c0209bfde36bf9330655e276"
+    },
+    {
+      "path": "aurora-worldmap/sp_p3a4a4-b-normal/minecraft_overworld/r.0.0.wmr",
+      "sizeBytes": 187113,
+      "sha256": "8b693f2f75c4d1063a261308f18767f13be13928a037586d049645fd55d0b9c8"
+    },
+    {
+      "path": "aurora-worldmap/sp_p3a4a4-b-normal/minecraft_overworld/r.0.1.wmr",
+      "sizeBytes": 10258,
+      "sha256": "bb67139333bdcd4984e1bd08b449397c1ccd3ac54524e85d9dfec88d68fc6d5f"
+    },
+    {
+      "path": "aurora-worldmap/sp_p3a4a4-b-normal/minecraft_overworld/r.1.-1.wmr",
+      "sizeBytes": 1418,
+      "sha256": "60158fdbf5dff729d155ea1276892fbe957002ffe66600f9ffa998fd0808867c"
+    },
+    {
+      "path": "aurora-worldmap/sp_p3a4a4-b-normal/minecraft_overworld/r.1.0.wmr",
+      "sizeBytes": 9650,
+      "sha256": "7673aae2c20e1b9723b3c0b3ba965fb13d446f1d8cf8fdc23e7f8cfe9d042e3d"
+    },
+    {
+      "path": "aurora.json",
+      "sizeBytes": 14583,
+      "sha256": "2a556110118477ac5d7da4f681ccee206011f37787c705f857035983f217090a"
+    },
+    {
+      "path": "fabric/indigo-renderer.properties",
+      "sizeBytes": 260,
+      "sha256": "cfcc4bfb08d79459e82df9dd605d164bb585ffe7cae74953f484716523eb3eaf"
+    },
+    {
+      "path": "lithium.properties",
+      "sizeBytes": 267,
+      "sha256": "6cf6f83720071fd1657c8e79b357caf68d40f410ae123e5f922483eb1d1d25be"
+    },
+    {
+      "path": "performanceoverlay.json",
+      "sizeBytes": 59,
+      "sha256": "a54660fe52db91f6db350b6d743b1fb1b2087b39437bd738cac3cb02c9b7c662"
+    },
+    {
+      "path": "profiles/default.json",
+      "sizeBytes": 15628,
+      "sha256": "6a4c52ede5b8b200545a07e9e1ffce30d8a8cc5188790734fb60896d339ee833"
+    },
+    {
+      "path": "sodium-fingerprint.json",
+      "sizeBytes": 427,
+      "sha256": "a489c76927a327661bd685bd6b158cafbb9bcbb1736dfada34fdbaaa2e7945b5"
+    },
+    {
+      "path": "sodium-mixins.properties",
+      "sizeBytes": 258,
+      "sha256": "b627c4456e6fa0bc4b5f85e2f1cd949faedae3cb9afdaf2a5f52e6f3b6ae1f01"
+    },
+    {
+      "path": "sodium-options.json",
+      "sizeBytes": 776,
+      "sha256": "edc4b8a2e4aa7bac58270e89b4c5e54cb35c054f9cba6439951e4c89e66b915e"
+    }
+  ],
+  "launcherSha256": "05b97f5be5517972863e2460738e36c1a92257853ec9f72809c610c81114e09a",
+  "runtime": {
+    "vendor": "Microsoft OpenJDK",
+    "version": "21.0.7+6-LTS",
+    "manifestSha1": "cb4394a27089d19f65d5baa6cf0482c27c3c7865",
+    "platform": "windows-x64",
+    "launchExecutableSha256": "1ba6a4fb32a6a3d5c925fe837ae6717e2f75743a71e013e668e6dadb909245ba",
+    "installedStateSha256": "850ac063ba477fbeb7e2e6380b484eff942ef424b1a5836ddd58e946ac11feda"
+  },
+  "jfrProfileSha256": "d48adb550887e5e4e0fd8c3aedbd05e5c234aef17ec5812bb06310a290af5a80",
+  "liveBoundaryEntities": {
+    "preparationStart": 13,
+    "preparationEnd": 10
+  },
+  "actualLoadedChunks": null,
+  "actualLoadedBlockEntities": null,
+  "physicalClient": [
+    1920,
+    1080
+  ],
+  "renderer": "Sodium0.8.14; OpenGL3.3 Core AMD RX9070XT",
+  "canonicalAChanged": false,
+  "priorNormalTerrainSourceChanged": false,
+  "manualEntitiesOrBlocksAdded": false,
+  "limitations": [
+    "Persisted inventories are not loaded counts",
+    "Static screen excludes traversal/loading/combat/server/endurance claims",
+    "Preparation generated terrain before freezing; excluded from matched pairs",
+    "Natural dynamic entity evolution can differ after equal restores"
+  ],
+  "installedStateSha256": {
+    "game/installed-game.json": "b3c74821d9ade92fe96f638a362b271e773a7ac89c0e406748dc890040f7a19d",
+    "aurora-installed.json": "b9f3ab299627662d37a4d6425e253adca4974693ad24a1fcc3fdc6493c76d0ad",
+    "content-managed.json": "210eabb8568b207310aca1e8085c300a958d0f26d54da968503e157ce11c8566"
+  }
+}

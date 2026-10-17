@@ -1,0 +1,577 @@
+{
+  "kind": "descriptive-matched-pair-comparisons",
+  "pairs": [
+    {
+      "pair": 1,
+      "baseline": "b1",
+      "candidate": "c1",
+      "metrics": {
+        "p99Ms": {
+          "baseline": 2.191,
+          "candidate": 2.0045800000000016,
+          "absolute": -0.18641999999999825,
+          "relativePercent": -8.508443633044193
+        },
+        "p95Ms": {
+          "baseline": 1.685,
+          "candidate": 1.577,
+          "absolute": -0.1080000000000001,
+          "relativePercent": -6.40949554896143
+        },
+        "medianMs": {
+          "baseline": 1.034,
+          "candidate": 1.045,
+          "absolute": 0.010999999999999899,
+          "relativePercent": 1.0638297872340328
+        },
+        "internalCallbackRateHz": {
+          "baseline": 923.3732388563209,
+          "candidate": 889.4408242184932,
+          "absolute": -33.93241463782772,
+          "relativePercent": -3.674831932519076
+        },
+        "maximumMs": {
+          "baseline": 7.423,
+          "candidate": 6.565,
+          "absolute": -0.8579999999999997,
+          "relativePercent": -11.558669001751309
+        },
+        "intervalsAbove50Ms": {
+          "baseline": 0,
+          "candidate": 0,
+          "absolute": 0,
+          "relativePercent": null
+        },
+        "committedAfterGcMinMiB": {
+          "baseline": 1484.0,
+          "candidate": 1512.0,
+          "absolute": 28.0,
+          "relativePercent": 1.8867924528301887
+        },
+        "committedAfterGcMaxMiB": {
+          "baseline": 1484.0,
+          "candidate": 1512.0,
+          "absolute": 28.0,
+          "relativePercent": 1.8867924528301887
+        },
+        "afterGcUsedMinMiB": {
+          "baseline": 674.5271911621094,
+          "candidate": 676.4473571777344,
+          "absolute": 1.920166015625,
+          "relativePercent": 0.2846684375046233
+        },
+        "afterGcUsedMaxMiB": {
+          "baseline": 691.7657089233398,
+          "candidate": 691.0397262573242,
+          "absolute": -0.725982666015625,
+          "relativePercent": -0.10494632165932888
+        },
+        "collections": {
+          "baseline": 8,
+          "candidate": 8,
+          "absolute": 0,
+          "relativePercent": 0.0
+        },
+        "collectionsPerSecond": {
+          "baseline": 0.2666469703437906,
+          "candidate": 0.26664754803747237,
+          "absolute": 5.776936817802891e-07,
+          "relativePercent": 0.00021665113278259375
+        },
+        "topLevelPauses": {
+          "baseline": 10,
+          "candidate": 10,
+          "absolute": 0,
+          "relativePercent": 0.0
+        },
+        "pauseSumMs": {
+          "baseline": 27.828799999999998,
+          "candidate": 30.173199999999998,
+          "absolute": 2.3444000000000003,
+          "relativePercent": 8.424366124302882
+        },
+        "pauseP95Ms": {
+          "baseline": 4.556784999999999,
+          "candidate": 4.670704999999999,
+          "absolute": 0.11392000000000024,
+          "relativePercent": 2.5000082294863653
+        },
+        "maximumPauseMs": {
+          "baseline": 4.940499999999999,
+          "candidate": 5.0429,
+          "absolute": 0.10240000000000116,
+          "relativePercent": 2.072664710049614
+        },
+        "allocationSamples": {
+          "baseline": 4316,
+          "candidate": 4339,
+          "absolute": 23,
+          "relativePercent": 0.5329008341056534
+        },
+        "allocationSampleWeightBytes": {
+          "baseline": 5492029088,
+          "candidate": 5197456608,
+          "absolute": -294572480,
+          "relativePercent": -5.363636559093185
+        },
+        "rssMeanMiB": {
+          "baseline": 2387.285491325682,
+          "candidate": 2366.785609456228,
+          "absolute": -20.49988186945393,
+          "relativePercent": -0.8587109478083476
+        },
+        "gameCpuMachinePercent": {
+          "baseline": 4.037527223990618,
+          "candidate": 3.2381732236572747,
+          "absolute": -0.7993540003333433,
+          "relativePercent": -19.79810799995737
+        },
+        "totalCpuMachinePercent": {
+          "baseline": 7.929859831350869,
+          "candidate": 7.01231994640265,
+          "absolute": -0.9175398849482184,
+          "relativePercent": -11.570694873075878
+        },
+        "residualCpuMachinePercent": {
+          "baseline": 3.8923326073602507,
+          "candidate": 3.7741467227453755,
+          "absolute": -0.11818588461487511,
+          "relativePercent": -3.0363768088932113
+        }
+      }
+    }
+  ],
+  "observedVariation": {
+    "baseline": {
+      "p99Ms": {
+        "values": [
+          2.191
+        ],
+        "minimum": 2.191,
+        "maximum": 2.191,
+        "median": 2.191,
+        "range": 0.0
+      },
+      "p95Ms": {
+        "values": [
+          1.685
+        ],
+        "minimum": 1.685,
+        "maximum": 1.685,
+        "median": 1.685,
+        "range": 0.0
+      },
+      "medianMs": {
+        "values": [
+          1.034
+        ],
+        "minimum": 1.034,
+        "maximum": 1.034,
+        "median": 1.034,
+        "range": 0.0
+      },
+      "internalCallbackRateHz": {
+        "values": [
+          923.3732388563209
+        ],
+        "minimum": 923.3732388563209,
+        "maximum": 923.3732388563209,
+        "median": 923.3732388563209,
+        "range": 0.0
+      },
+      "maximumMs": {
+        "values": [
+          7.423
+        ],
+        "minimum": 7.423,
+        "maximum": 7.423,
+        "median": 7.423,
+        "range": 0.0
+      },
+      "intervalsAbove50Ms": {
+        "values": [
+          0
+        ],
+        "minimum": 0,
+        "maximum": 0,
+        "median": 0,
+        "range": 0
+      },
+      "committedAfterGcMinMiB": {
+        "values": [
+          1484.0
+        ],
+        "minimum": 1484.0,
+        "maximum": 1484.0,
+        "median": 1484.0,
+        "range": 0.0
+      },
+      "committedAfterGcMaxMiB": {
+        "values": [
+          1484.0
+        ],
+        "minimum": 1484.0,
+        "maximum": 1484.0,
+        "median": 1484.0,
+        "range": 0.0
+      },
+      "afterGcUsedMinMiB": {
+        "values": [
+          674.5271911621094
+        ],
+        "minimum": 674.5271911621094,
+        "maximum": 674.5271911621094,
+        "median": 674.5271911621094,
+        "range": 0.0
+      },
+      "afterGcUsedMaxMiB": {
+        "values": [
+          691.7657089233398
+        ],
+        "minimum": 691.7657089233398,
+        "maximum": 691.7657089233398,
+        "median": 691.7657089233398,
+        "range": 0.0
+      },
+      "collections": {
+        "values": [
+          8
+        ],
+        "minimum": 8,
+        "maximum": 8,
+        "median": 8,
+        "range": 0
+      },
+      "collectionsPerSecond": {
+        "values": [
+          0.2666469703437906
+        ],
+        "minimum": 0.2666469703437906,
+        "maximum": 0.2666469703437906,
+        "median": 0.2666469703437906,
+        "range": 0.0
+      },
+      "topLevelPauses": {
+        "values": [
+          10
+        ],
+        "minimum": 10,
+        "maximum": 10,
+        "median": 10,
+        "range": 0
+      },
+      "pauseSumMs": {
+        "values": [
+          27.828799999999998
+        ],
+        "minimum": 27.828799999999998,
+        "maximum": 27.828799999999998,
+        "median": 27.828799999999998,
+        "range": 0.0
+      },
+      "pauseP95Ms": {
+        "values": [
+          4.556784999999999
+        ],
+        "minimum": 4.556784999999999,
+        "maximum": 4.556784999999999,
+        "median": 4.556784999999999,
+        "range": 0.0
+      },
+      "maximumPauseMs": {
+        "values": [
+          4.940499999999999
+        ],
+        "minimum": 4.940499999999999,
+        "maximum": 4.940499999999999,
+        "median": 4.940499999999999,
+        "range": 0.0
+      },
+      "allocationSamples": {
+        "values": [
+          4316
+        ],
+        "minimum": 4316,
+        "maximum": 4316,
+        "median": 4316,
+        "range": 0
+      },
+      "allocationSampleWeightBytes": {
+        "values": [
+          5492029088
+        ],
+        "minimum": 5492029088,
+        "maximum": 5492029088,
+        "median": 5492029088,
+        "range": 0
+      },
+      "rssMeanMiB": {
+        "values": [
+          2387.285491325682
+        ],
+        "minimum": 2387.285491325682,
+        "maximum": 2387.285491325682,
+        "median": 2387.285491325682,
+        "range": 0.0
+      },
+      "gameCpuMachinePercent": {
+        "values": [
+          4.037527223990618
+        ],
+        "minimum": 4.037527223990618,
+        "maximum": 4.037527223990618,
+        "median": 4.037527223990618,
+        "range": 0.0
+      },
+      "totalCpuMachinePercent": {
+        "values": [
+          7.929859831350869
+        ],
+        "minimum": 7.929859831350869,
+        "maximum": 7.929859831350869,
+        "median": 7.929859831350869,
+        "range": 0.0
+      },
+      "residualCpuMachinePercent": {
+        "values": [
+          3.8923326073602507
+        ],
+        "minimum": 3.8923326073602507,
+        "maximum": 3.8923326073602507,
+        "median": 3.8923326073602507,
+        "range": 0.0
+      }
+    },
+    "candidate": {
+      "p99Ms": {
+        "values": [
+          2.0045800000000016,
+          2.1683299999999983
+        ],
+        "minimum": 2.0045800000000016,
+        "maximum": 2.1683299999999983,
+        "median": 2.086455,
+        "range": 0.16374999999999673
+      },
+      "p95Ms": {
+        "values": [
+          1.577,
+          1.6216499999999978
+        ],
+        "minimum": 1.577,
+        "maximum": 1.6216499999999978,
+        "median": 1.599324999999999,
+        "range": 0.04464999999999786
+      },
+      "medianMs": {
+        "values": [
+          1.045,
+          1.0495
+        ],
+        "minimum": 1.045,
+        "maximum": 1.0495,
+        "median": 1.04725,
+        "range": 0.0045000000000001705
+      },
+      "internalCallbackRateHz": {
+        "values": [
+          889.4408242184932,
+          911.1562708912072
+        ],
+        "minimum": 889.4408242184932,
+        "maximum": 911.1562708912072,
+        "median": 900.2985475548502,
+        "range": 21.71544667271405
+      },
+      "maximumMs": {
+        "values": [
+          6.565,
+          6.381
+        ],
+        "minimum": 6.381,
+        "maximum": 6.565,
+        "median": 6.473000000000001,
+        "range": 0.18400000000000016
+      },
+      "intervalsAbove50Ms": {
+        "values": [
+          0,
+          0
+        ],
+        "minimum": 0,
+        "maximum": 0,
+        "median": 0.0,
+        "range": 0
+      },
+      "committedAfterGcMinMiB": {
+        "values": [
+          1512.0,
+          1536.0
+        ],
+        "minimum": 1512.0,
+        "maximum": 1536.0,
+        "median": 1524.0,
+        "range": 24.0
+      },
+      "committedAfterGcMaxMiB": {
+        "values": [
+          1512.0,
+          1536.0
+        ],
+        "minimum": 1512.0,
+        "maximum": 1536.0,
+        "median": 1524.0,
+        "range": 24.0
+      },
+      "afterGcUsedMinMiB": {
+        "values": [
+          676.4473571777344,
+          677.0646896362305
+        ],
+        "minimum": 676.4473571777344,
+        "maximum": 677.0646896362305,
+        "median": 676.7560234069824,
+        "range": 0.6173324584960938
+      },
+      "afterGcUsedMaxMiB": {
+        "values": [
+          691.0397262573242,
+          687.4491271972656
+        ],
+        "minimum": 687.4491271972656,
+        "maximum": 691.0397262573242,
+        "median": 689.2444267272949,
+        "range": 3.5905990600585938
+      },
+      "collections": {
+        "values": [
+          8,
+          6
+        ],
+        "minimum": 6,
+        "maximum": 8,
+        "median": 7.0,
+        "range": 2
+      },
+      "collectionsPerSecond": {
+        "values": [
+          0.26664754803747237,
+          0.19998955387896905
+        ],
+        "minimum": 0.19998955387896905,
+        "maximum": 0.26664754803747237,
+        "median": 0.2333185509582207,
+        "range": 0.06665799415850332
+      },
+      "topLevelPauses": {
+        "values": [
+          10,
+          7
+        ],
+        "minimum": 7,
+        "maximum": 10,
+        "median": 8.5,
+        "range": 3
+      },
+      "pauseSumMs": {
+        "values": [
+          30.173199999999998,
+          24.2897
+        ],
+        "minimum": 24.2897,
+        "maximum": 30.173199999999998,
+        "median": 27.23145,
+        "range": 5.883499999999998
+      },
+      "pauseP95Ms": {
+        "values": [
+          4.670704999999999,
+          5.18042
+        ],
+        "minimum": 4.670704999999999,
+        "maximum": 5.18042,
+        "median": 4.9255625,
+        "range": 0.5097150000000008
+      },
+      "maximumPauseMs": {
+        "values": [
+          5.0429,
+          5.2007
+        ],
+        "minimum": 5.0429,
+        "maximum": 5.2007,
+        "median": 5.1218,
+        "range": 0.15779999999999994
+      },
+      "allocationSamples": {
+        "values": [
+          4339,
+          4312
+        ],
+        "minimum": 4312,
+        "maximum": 4339,
+        "median": 4325.5,
+        "range": 27
+      },
+      "allocationSampleWeightBytes": {
+        "values": [
+          5197456608,
+          5501255576
+        ],
+        "minimum": 5197456608,
+        "maximum": 5501255576,
+        "median": 5349356092.0,
+        "range": 303798968
+      },
+      "rssMeanMiB": {
+        "values": [
+          2366.785609456228,
+          2439.4803017485524
+        ],
+        "minimum": 2366.785609456228,
+        "maximum": 2439.4803017485524,
+        "median": 2403.13295560239,
+        "range": 72.69469229232436
+      },
+      "gameCpuMachinePercent": {
+        "values": [
+          3.2381732236572747,
+          3.810640753564913
+        ],
+        "minimum": 3.2381732236572747,
+        "maximum": 3.810640753564913,
+        "median": 3.524406988611094,
+        "range": 0.5724675299076383
+      },
+      "totalCpuMachinePercent": {
+        "values": [
+          7.01231994640265,
+          7.755314792062251
+        ],
+        "minimum": 7.01231994640265,
+        "maximum": 7.755314792062251,
+        "median": 7.3838173692324505,
+        "range": 0.7429948456596005
+      },
+      "residualCpuMachinePercent": {
+        "values": [
+          3.7741467227453755,
+          3.9446740384973378
+        ],
+        "minimum": 3.7741467227453755,
+        "maximum": 3.9446740384973378,
+        "median": 3.8594103806213567,
+        "range": 0.17052731575196223
+      }
+    }
+  },
+  "practicalMemoryGoalMiB": 128,
+  "automaticVerdict": null,
+  "limitations": [
+    "Three pairs are practical screening, not population confidence bounds",
+    "CPU is total machine capacity; residual is estimated unattributed work",
+    "Allocation weights are sampled indicators",
+    "Internal callbacks are not physical displayed FPS",
+    "No precise GC/frame causal attribution"
+  ]
+}

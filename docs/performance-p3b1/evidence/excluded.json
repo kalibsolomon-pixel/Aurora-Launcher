@@ -1,0 +1,1180 @@
+{
+  "kind": "excluded-and-unexecuted-attempts",
+  "initialPreparation": {
+    "status": "INVALID",
+    "details": "See preparation.json: foreground/camera/window interruption; one diagnostic retry used"
+  },
+  "excludedRuns": [
+    {
+      "label": "b2",
+      "status": "INVALID",
+      "includedInPairs": false,
+      "reason": "End camera orientation differs from frozen workload; onset and cause are unknown",
+      "expectedOrientation": [
+        135.0,
+        15.0
+      ],
+      "observedOrientation": [
+        137.8499755859375,
+        12.600001335144043
+      ],
+      "observedPosition": [
+        128.5,
+        96.0,
+        128.5
+      ],
+      "identity": {
+        "utc": "2026-10-17T09:00:22.544Z",
+        "status": "running",
+        "pid": 20360,
+        "startedAtUnixSeconds": 1792227622,
+        "sessionStatus": "ready",
+        "creationId": "134367012225187561",
+        "label": "b2",
+        "executableHashVerified": true
+      },
+      "restoration": {
+        "label": "b2",
+        "preLaunchInventoryEqual": true,
+        "optionsSha256": "33695bc0df527fbfe49ec2177cc75bed7b46cadfc581ab542eedaa16ca20fe87",
+        "archiveSha256": "e53e838b0136a03dbdfa8848321063b001e44a33c3dc42d76001b85dfacaf287",
+        "scene": {
+          "minecraftVersion": "1.21.11",
+          "seed": 123456789,
+          "generationSettings": {
+            "bonus_chest": 0,
+            "seed": 123456789,
+            "generate_features": 1,
+            "dimensions": {
+              "minecraft:the_nether": {
+                "type": "minecraft:the_nether",
+                "generator": {
+                  "type": "minecraft:noise",
+                  "biome_source": {
+                    "type": "minecraft:multi_noise",
+                    "preset": "minecraft:nether"
+                  },
+                  "settings": "minecraft:nether"
+                }
+              },
+              "minecraft:overworld": {
+                "type": "minecraft:overworld",
+                "generator": {
+                  "type": "minecraft:noise",
+                  "biome_source": {
+                    "type": "minecraft:multi_noise",
+                    "preset": "minecraft:overworld"
+                  },
+                  "settings": "minecraft:overworld"
+                }
+              },
+              "minecraft:the_end": {
+                "type": "minecraft:the_end",
+                "generator": {
+                  "type": "minecraft:noise",
+                  "biome_source": {
+                    "type": "minecraft:the_end"
+                  },
+                  "settings": "minecraft:end"
+                }
+              }
+            }
+          },
+          "dimension": "minecraft:overworld",
+          "position": [
+            128.5,
+            96.0,
+            128.5
+          ],
+          "orientation": [
+            135.0,
+            15.0
+          ],
+          "playerGameMode": 1,
+          "worldGameMode": 1,
+          "abilities": {
+            "walkSpeed": 0.10000000149011612,
+            "instabuild": 1,
+            "flying": 1,
+            "flySpeed": 0.05000000074505806,
+            "mayfly": 1,
+            "invulnerable": 1,
+            "mayBuild": 1
+          },
+          "time": 6000,
+          "raining": 0,
+          "thundering": 0,
+          "difficulty": 2,
+          "gameRules": {
+            "minecraft:advance_weather": 0,
+            "minecraft:max_entity_cramming": 24,
+            "minecraft:command_block_output": 1,
+            "minecraft:fall_damage": 1,
+            "minecraft:spawn_wardens": 1,
+            "minecraft:respawn_radius": 10,
+            "minecraft:max_command_sequence_length": 65536,
+            "minecraft:immediate_respawn": 0,
+            "minecraft:drowning_damage": 1,
+            "minecraft:natural_health_regeneration": 1,
+            "minecraft:player_movement_check": 1,
+            "minecraft:tnt_explosion_drop_decay": 0,
+            "minecraft:advance_time": 0,
+            "minecraft:players_nether_portal_creative_delay": 0,
+            "minecraft:fire_damage": 1,
+            "minecraft:spectators_generate_chunks": 1,
+            "minecraft:keep_inventory": 0,
+            "minecraft:command_blocks_work": 1,
+            "minecraft:log_admin_commands": 1,
+            "minecraft:block_drops": 1,
+            "minecraft:limited_crafting": 0,
+            "minecraft:elytra_movement_check": 1,
+            "minecraft:global_sound_events": 1,
+            "minecraft:spread_vines": 1,
+            "minecraft:lava_source_conversion": 0,
+            "minecraft:players_nether_portal_default_delay": 80,
+            "minecraft:players_sleeping_percentage": 100,
+            "minecraft:entity_drops": 1,
+            "minecraft:spawn_phantoms": 1,
+            "minecraft:spawn_mobs": 0,
+            "minecraft:freeze_damage": 1,
+            "minecraft:forgive_dead_players": 1,
+            "minecraft:mob_drops": 1,
+            "minecraft:max_command_forks": 65536,
+            "minecraft:show_advancement_messages": 1,
+            "minecraft:water_source_conversion": 1,
+            "minecraft:show_death_messages": 1,
+            "minecraft:allow_entering_nether_using_portals": 1,
+            "minecraft:spawn_patrols": 1,
+            "minecraft:block_explosion_drop_decay": 1,
+            "minecraft:send_command_feedback": 1,
+            "minecraft:max_block_modifications": 32768,
+            "minecraft:mob_griefing": 1,
+            "minecraft:pvp": 1,
+            "minecraft:spawn_monsters": 1,
+            "minecraft:locator_bar": 1,
+            "minecraft:fire_spread_radius_around_player": 128,
+            "minecraft:random_tick_speed": 3,
+            "minecraft:ender_pearls_vanish_on_death": 1,
+            "minecraft:spawner_blocks_work": 1,
+            "minecraft:spawn_wandering_traders": 1,
+            "minecraft:mob_explosion_drop_decay": 1,
+            "minecraft:tnt_explodes": 1,
+            "minecraft:max_snow_accumulation_height": 1,
+            "minecraft:projectiles_can_break_blocks": 1,
+            "minecraft:reduced_debug_info": 0,
+            "minecraft:universal_anger": 0,
+            "minecraft:raids": 1
+          },
+          "totalRecordedChunks": 5625,
+          "requiredFullChunks": 2401,
+          "missingRequiredFullChunks": 0,
+          "chunkRectangle": [
+            -16,
+            -16,
+            32,
+            32
+          ],
+          "entityCount": 199,
+          "entityTypes": {
+            "minecraft:chest_minecart": 37,
+            "minecraft:bee": 10,
+            "minecraft:cat": 2,
+            "minecraft:villager": 9,
+            "minecraft:iron_golem": 1,
+            "minecraft:drowned": 12,
+            "minecraft:falling_block": 100,
+            "minecraft:item": 28
+          },
+          "blockEntityCount": 803,
+          "blockEntityTypes": {
+            "DUMMY": 16,
+            "minecraft:mob_spawner": 101,
+            "minecraft:sculk_sensor": 94,
+            "minecraft:sculk_catalyst": 26,
+            "minecraft:chest": 125,
+            "minecraft:beehive": 12,
+            "minecraft:brushable_block": 53,
+            "minecraft:vault": 47,
+            "minecraft:barrel": 42,
+            "minecraft:decorated_pot": 124,
+            "minecraft:trial_spawner": 45,
+            "minecraft:dispenser": 34,
+            "minecraft:hopper": 20,
+            "minecraft:bed": 38,
+            "minecraft:bell": 1,
+            "minecraft:blast_furnace": 1,
+            "minecraft:creaking_heart": 15,
+            "minecraft:sculk_shrieker": 9
+          }
+        }
+      },
+      "warmup": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 601,
+        "elapsedSeconds": 300.0001309,
+        "machineCpuMeanPercent": {
+          "game": 4.000833429450569,
+          "launcher": 0.0,
+          "sampler": 0.0,
+          "total": 7.831632368316287,
+          "residual": 3.8307989388657173
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            1.3303769401330376,
+            19.58997722095672
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            4.0,
+            30.237825594563986
+          ],
+          "residual": [
+            1.7316017316017316,
+            20.194384449244062
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18108243968,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          2536382464,
+          2660265984
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T09:04:06.896366+00:00",
+        "endUtc": "2026-10-17T09:09:06.901569+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 20360,
+            "creationId": "134367012225187561"
+          },
+          "launcher": {
+            "pid": 23724,
+            "creationId": "134366983402750256"
+          },
+          "sampler": {
+            "pid": 26148,
+            "creationId": "134367014467809121"
+          }
+        },
+        "gameForegroundSamples": 601,
+        "maxReadOverheadNs": 4132200,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 2640429056,
+          "endBytes": 2660265984,
+          "deltaBytes": 19836928,
+          "meanBytes": 2631156808.909756,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0001821,
+            "cpu": {
+              "game": 6.277926720285969,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 11.064566577301163,
+              "residual": 4.786639857015193
+            },
+            "rssStartBytes": 2640429056,
+            "rssEndBytes": 2605326336
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 10.0000036,
+            "cpu": {
+              "game": 3.3076321376690134,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.604313331098446,
+              "residual": 5.296681193429432
+            },
+            "rssStartBytes": 2605326336,
+            "rssEndBytes": 2609164288
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 10.0003782,
+            "cpu": {
+              "game": 3.916652738314112,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.245584712240236,
+              "residual": 4.328931973926124
+            },
+            "rssStartBytes": 2609164288,
+            "rssEndBytes": 2615681024
+          },
+          {
+            "startSeconds": 30.0,
+            "elapsedSeconds": 9.9996914,
+            "cpu": {
+              "game": 3.6607142857142856,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.5,
+              "residual": 3.8392857142857144
+            },
+            "rssStartBytes": 2615681024,
+            "rssEndBytes": 2617556992
+          },
+          {
+            "startSeconds": 40.0,
+            "elapsedSeconds": 9.9997669,
+            "cpu": {
+              "game": 3.584189370254578,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.44193836534167,
+              "residual": 3.8577489950870922
+            },
+            "rssStartBytes": 2617556992,
+            "rssEndBytes": 2616975360
+          },
+          {
+            "startSeconds": 50.0,
+            "elapsedSeconds": 10.0002601,
+            "cpu": {
+              "game": 3.226166555034606,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.28957356552802,
+              "residual": 4.063407010493414
+            },
+            "rssStartBytes": 2616975360,
+            "rssEndBytes": 2617143296
+          },
+          {
+            "startSeconds": 60.0,
+            "elapsedSeconds": 10.0000113,
+            "cpu": {
+              "game": 3.662553737926414,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.073251074758529,
+              "residual": 4.410697336832115
+            },
+            "rssStartBytes": 2617143296,
+            "rssEndBytes": 2617704448
+          },
+          {
+            "startSeconds": 70.0,
+            "elapsedSeconds": 9.9999847,
+            "cpu": {
+              "game": 3.219147511716135,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.351930372684668,
+              "residual": 5.1327828609685335
+            },
+            "rssStartBytes": 2617704448,
+            "rssEndBytes": 2620514304
+          },
+          {
+            "startSeconds": 80.0,
+            "elapsedSeconds": 10.0000589,
+            "cpu": {
+              "game": 3.3737891103440596,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.0983186727535905,
+              "residual": 3.724529562409531
+            },
+            "rssStartBytes": 2620514304,
+            "rssEndBytes": 2620858368
+          },
+          {
+            "startSeconds": 90.0,
+            "elapsedSeconds": 9.9999233,
+            "cpu": {
+              "game": 3.1465203516040536,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.116062930407032,
+              "residual": 3.969542578802978
+            },
+            "rssStartBytes": 2620858368,
+            "rssEndBytes": 2619842560
+          },
+          {
+            "startSeconds": 100.0,
+            "elapsedSeconds": 9.9997809,
+            "cpu": {
+              "game": 3.2821776632687354,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.191665733169038,
+              "residual": 3.9094880699003025
+            },
+            "rssStartBytes": 2619842560,
+            "rssEndBytes": 2620411904
+          },
+          {
+            "startSeconds": 110.0,
+            "elapsedSeconds": 10.0001067,
+            "cpu": {
+              "game": 3.4482758620689653,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.713837886251679,
+              "residual": 4.265562024182714
+            },
+            "rssStartBytes": 2620411904,
+            "rssEndBytes": 2621087744
+          },
+          {
+            "startSeconds": 120.0,
+            "elapsedSeconds": 10.0001351,
+            "cpu": {
+              "game": 4.553269369419334,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.655593145138928,
+              "residual": 5.1023237757195945
+            },
+            "rssStartBytes": 2621087744,
+            "rssEndBytes": 2626551808
+          },
+          {
+            "startSeconds": 130.0,
+            "elapsedSeconds": 10.0001698,
+            "cpu": {
+              "game": 3.377173428444048,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 6.8156486847971465,
+              "residual": 3.4384752563530983
+            },
+            "rssStartBytes": 2626551808,
+            "rssEndBytes": 2627084288
+          },
+          {
+            "startSeconds": 140.0,
+            "elapsedSeconds": 9.9995859,
+            "cpu": {
+              "game": 4.119912912409982,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.720649807402445,
+              "residual": 3.6007368949924636
+            },
+            "rssStartBytes": 2627084288,
+            "rssEndBytes": 2628243456
+          },
+          {
+            "startSeconds": 150.0,
+            "elapsedSeconds": 10.0001254,
+            "cpu": {
+              "game": 3.821939940943785,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.387598194885509,
+              "residual": 3.565658253941724
+            },
+            "rssStartBytes": 2628243456,
+            "rssEndBytes": 2630492160
+          },
+          {
+            "startSeconds": 160.0,
+            "elapsedSeconds": 10.0000048,
+            "cpu": {
+              "game": 4.158504505512957,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.897240723120837,
+              "residual": 3.7387362176078804
+            },
+            "rssStartBytes": 2630492160,
+            "rssEndBytes": 2631712768
+          },
+          {
+            "startSeconds": 170.0,
+            "elapsedSeconds": 10.0002986,
+            "cpu": {
+              "game": 3.980767080398077,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.821760035782176,
+              "residual": 3.840992955384099
+            },
+            "rssStartBytes": 2631712768,
+            "rssEndBytes": 2637545472
+          },
+          {
+            "startSeconds": 180.0,
+            "elapsedSeconds": 9.9996498,
+            "cpu": {
+              "game": 3.8760122870706506,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.193521362747836,
+              "residual": 3.3175090756771852
+            },
+            "rssStartBytes": 2637545472,
+            "rssEndBytes": 2637836288
+          },
+          {
+            "startSeconds": 190.0,
+            "elapsedSeconds": 10.0001566,
+            "cpu": {
+              "game": 4.513289129102357,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.945617651975261,
+              "residual": 3.432328522872904
+            },
+            "rssStartBytes": 2637836288,
+            "rssEndBytes": 2639060992
+          },
+          {
+            "startSeconds": 200.0,
+            "elapsedSeconds": 9.9999375,
+            "cpu": {
+              "game": 3.995776369901078,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.269089696565522,
+              "residual": 3.273313326664444
+            },
+            "rssStartBytes": 2639060992,
+            "rssEndBytes": 2641063936
+          },
+          {
+            "startSeconds": 210.0,
+            "elapsedSeconds": 9.9999193,
+            "cpu": {
+              "game": 4.5703125,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.840401785714286,
+              "residual": 3.2700892857142856
+            },
+            "rssStartBytes": 2641063936,
+            "rssEndBytes": 2642558976
+          },
+          {
+            "startSeconds": 220.0,
+            "elapsedSeconds": 9.9999969,
+            "cpu": {
+              "game": 4.4692737430167595,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.960893854748603,
+              "residual": 3.4916201117318435
+            },
+            "rssStartBytes": 2642558976,
+            "rssEndBytes": 2644389888
+          },
+          {
+            "startSeconds": 230.0,
+            "elapsedSeconds": 10.0001816,
+            "cpu": {
+              "game": 4.17620456702585,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.5428507621015015,
+              "residual": 3.366646195075652
+            },
+            "rssStartBytes": 2644389888,
+            "rssEndBytes": 2646003712
+          },
+          {
+            "startSeconds": 240.0,
+            "elapsedSeconds": 9.9998896,
+            "cpu": {
+              "game": 4.141713773996754,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.796496334023619,
+              "residual": 3.654782560026865
+            },
+            "rssStartBytes": 2646003712,
+            "rssEndBytes": 2647396352
+          },
+          {
+            "startSeconds": 250.0,
+            "elapsedSeconds": 10.0000919,
+            "cpu": {
+              "game": 4.527207850133809,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.526761819803746,
+              "residual": 2.999553969669937
+            },
+            "rssStartBytes": 2647396352,
+            "rssEndBytes": 2650230784
+          },
+          {
+            "startSeconds": 260.0,
+            "elapsedSeconds": 9.9997651,
+            "cpu": {
+              "game": 4.315186565089251,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.685035867207919,
+              "residual": 3.369849302118668
+            },
+            "rssStartBytes": 2650230784,
+            "rssEndBytes": 2653360128
+          },
+          {
+            "startSeconds": 270.0,
+            "elapsedSeconds": 9.9999814,
+            "cpu": {
+              "game": 4.655576643965613,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.847828514011388,
+              "residual": 4.192251870045775
+            },
+            "rssStartBytes": 2653360128,
+            "rssEndBytes": 2654957568
+          },
+          {
+            "startSeconds": 280.0,
+            "elapsedSeconds": 10.0001788,
+            "cpu": {
+              "game": 4.569066636876501,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.389822934703681,
+              "residual": 2.82075629782718
+            },
+            "rssStartBytes": 2654957568,
+            "rssEndBytes": 2657394688
+          },
+          {
+            "startSeconds": 290.0,
+            "elapsedSeconds": 9.9999147,
+            "cpu": {
+              "game": 4.090985301514559,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 6.9524395014810265,
+              "residual": 2.8614541999664675
+            },
+            "rssStartBytes": 2657394688,
+            "rssEndBytes": 2660265984
+          }
+        ]
+      },
+      "resource": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 61,
+        "elapsedSeconds": 30.0001467,
+        "machineCpuMeanPercent": {
+          "game": 4.908911591209364,
+          "launcher": 0.0,
+          "sampler": 0.0,
+          "total": 7.672267812947766,
+          "residual": 2.763356221738402
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            2.628696604600219,
+            8.4726867335563
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            4.928806133625411,
+            10.925306577480491
+          ],
+          "residual": [
+            1.44927536231884,
+            4.381161007667032
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18481762304,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          2668515328,
+          2674008064
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T09:09:16.699735+00:00",
+        "endUtc": "2026-10-17T09:09:46.701344+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 20360,
+            "creationId": "134367012225187561"
+          },
+          "launcher": {
+            "pid": 23724,
+            "creationId": "134366983402750256"
+          },
+          "sampler": {
+            "pid": 25836,
+            "creationId": "134367017566195848"
+          }
+        },
+        "gameForegroundSamples": 61,
+        "maxReadOverheadNs": 454400,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 2674008064,
+          "endBytes": 2673922048,
+          "deltaBytes": -86016,
+          "meanBytes": 2671036160.310901,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0002481,
+            "cpu": {
+              "game": 4.7839937405689374,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.522494830380595,
+              "residual": 2.738501089811658
+            },
+            "rssStartBytes": 2674008064,
+            "rssEndBytes": 2670510080
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 10.0001021,
+            "cpu": {
+              "game": 4.932560472634043,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.652435625905696,
+              "residual": 2.719875153271653
+            },
+            "rssStartBytes": 2670510080,
+            "rssEndBytes": 2671505408
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 9.9997965,
+            "cpu": {
+              "game": 5.0100536193029495,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.841823056300268,
+              "residual": 2.8317694369973188
+            },
+            "rssStartBytes": 2671505408,
+            "rssEndBytes": 2673922048
+          }
+        ]
+      },
+      "heapStart": {
+        "committedBytes": 1693450240,
+        "usedBytes": 766082048,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "heapEnd": {
+        "committedBytes": 1693450240,
+        "usedBytes": 1161680896,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "frames": {
+        "protocol": "Practical Performance Protocol v1",
+        "strictReview": {
+          "status": "CONSISTENT DIAGNOSTIC",
+          "metricRole": "DIAGNOSTIC ONLY",
+          "semantic": "eligible-hud-callback-interval",
+          "errors": [],
+          "incomplete": [],
+          "warnings": [
+            "integer-ms timestamps may tie; identical rows cannot prove duplication",
+            "0.001-ms rounded intervals; no absolute nanoTime or epoch anchor",
+            "footer reconciles exported rows, not all Minecraft frames",
+            "no independent observer-overhead or physical-display validation"
+          ],
+          "metrics": {
+            "frameCount": 27644,
+            "summedIntervalMs": 30037.443,
+            "elapsedTimestampSpanMs": 30034,
+            "internalIntervalRateHz": 920.3180177487145,
+            "medianMs": 1.024,
+            "p95Ms": 1.5758499999999986,
+            "p99Ms": 2.015709999999999,
+            "maximumMs": 8.574,
+            "intervalsAbove50Ms": 0
+          },
+          "missingOrDroppedSamples": null,
+          "independentCompleteness": false,
+          "jfrPreciseAlignment": false,
+          "observerOverheadBounded": false,
+          "fullMeasuredRunQuality": "INCOMPLETE",
+          "rawSha256": "4ba97de7603e9395a593999154c23e0b3929756b7edf826f07f60e5cd49db864",
+          "timestampTies": 1805,
+          "indistinguishableAdjacentRows": 0
+        },
+        "status": "COHERENT INTERNAL DIAGNOSTIC",
+        "producerSummaryConsistent": true,
+        "practicalTimingOverheadKnown": false,
+        "allRenderedFramesProven": false,
+        "producerReciprocalBounds": {
+          "AvgFPS": [
+            919.8447189061337,
+            920.7917063392725
+          ],
+          "Low1FPS": [
+            495.6129481945477,
+            495.9587537894868
+          ],
+          "Low01FPS": [
+            384.19591638712774,
+            384.44362006592354
+          ]
+        },
+        "metrics": {
+          "frameCount": 27644,
+          "summedIntervalMs": 30037.443,
+          "elapsedTimestampSpanMs": 30034,
+          "internalIntervalRateHz": 920.3180177487145,
+          "medianMs": 1.024,
+          "p95Ms": 1.5758499999999986,
+          "p99Ms": 2.015709999999999,
+          "maximumMs": 8.574,
+          "intervalsAbove50Ms": 0
+        },
+        "stuttersAbove50PerMinute": 0.0,
+        "intervalsAmbiguousAt50Ms": 0,
+        "label": "b2",
+        "metadata": {
+          "format": "performanceoverlay-1.0.2-csv",
+          "sourceJarSha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2",
+          "workloadId": "workload-heap-static-24-12-v1",
+          "worldArchiveSha256": "e53e838b0136a03dbdfa8848321063b001e44a33c3dc42d76001b85dfacaf287",
+          "timestampUnit": "ms",
+          "frameUnit": "ms",
+          "rawSha256": "4ba97de7603e9395a593999154c23e0b3929756b7edf826f07f60e5cd49db864",
+          "recordingComplete": true,
+          "bufferOverflow": false,
+          "expectedWindowMs": [
+            0,
+            30000
+          ],
+          "warmupEvidenceVerified": true
+        },
+        "keyBracket": {
+          "startUtc": "2026-10-17T09:09:16.237Z",
+          "endUtc": "2026-10-17T09:09:16.270Z"
+        },
+        "reportedWriterFailure": false,
+        "longTails": {
+          "thresholdMs": 50,
+          "intervalsAbove": 0,
+          "bursts": 0,
+          "thresholdSemantics": "strictly greater than50ms; rounded CSV threshold uncertainty retained"
+        },
+        "heapSamples": {
+          "usedMinimumMiB": 682.0,
+          "usedMaximumMiB": 1526.0,
+          "maximumMiB": [
+            2048.0
+          ]
+        }
+      },
+      "jfr": {
+        "label": "b2",
+        "sha256": "5cae05f49dacb116ce915419c1a92c46bafabfb401dd20637fc479d36726a992",
+        "bytes": 2747679,
+        "chunks": 1,
+        "roundedExportSeconds": 31,
+        "reportedDataLossEvents": 0,
+        "privacyExcludedCounts": {
+          "jdk.JVMInformation": 0,
+          "jdk.InitialSystemProperty": 0,
+          "jdk.InitialEnvironmentVariable": 0,
+          "jdk.InitialSecurityProperty": 0,
+          "jdk.SystemProcess": 0
+        },
+        "eventCounts": {
+          "jdk.GCPhaseParallel": 74103,
+          "jdk.ObjectAllocationSample": 4507,
+          "jdk.ThreadPark": 2031,
+          "jdk.NativeMethodSample": 1502,
+          "jdk.ModuleExport": 1262,
+          "jdk.BooleanFlag": 500,
+          "jdk.ActiveSetting": 407,
+          "jdk.NativeLibrary": 245,
+          "jdk.LongFlag": 161,
+          "jdk.ModuleRequire": 159,
+          "jdk.ThreadAllocationStatistics": 147,
+          "jdk.Checkpoint": 144,
+          "jdk.UnsignedLongFlag": 132,
+          "jdk.ExecutionSample": 98,
+          "jdk.ThreadCPULoad": 94,
+          "jdk.TenuringDistribution": 60,
+          "jdk.Deoptimization": 36,
+          "jdk.ResidentSetSize": 31,
+          "jdk.CPULoad": 31,
+          "jdk.JavaThreadStatistics": 31,
+          "jdk.ClassLoadingStatistics": 31,
+          "jdk.CompilerStatistics": 31,
+          "jdk.ExceptionStatistics": 31,
+          "jdk.StringFlag": 28,
+          "jdk.IntFlag": 25,
+          "jdk.GCPhasePauseLevel1": 22,
+          "jdk.ThreadEnd": 20,
+          "jdk.MetaspaceChunkFreeListSummary": 20,
+          "jdk.GCReferenceStatistics": 20,
+          "jdk.ClassRedefinition": 18,
+          "jdk.ThreadStart": 16,
+          "jdk.DoubleFlag": 15,
+          "jdk.UnsignedIntFlag": 14,
+          "jdk.ClassLoaderStatistics": 12,
+          "jdk.OldObjectSample": 11,
+          "jdk.GCHeapSummary": 10,
+          "jdk.MetaspaceSummary": 10,
+          "jdk.G1HeapSummary": 10,
+          "jdk.GCPhasePauseLevel2": 10,
+          "jdk.GCHeapMemoryPoolUsage": 6,
+          "jdk.G1MMU": 6,
+          "jdk.GCCPUTime": 6,
+          "jdk.GCPhasePause": 6,
+          "jdk.GCPhaseConcurrent": 6,
+          "jdk.CompilerQueueUtilization": 6,
+          "jdk.CodeCacheStatistics": 6,
+          "jdk.DirectBufferStatistics": 6,
+          "jdk.GarbageCollection": 5,
+          "jdk.NetworkUtilization": 5,
+          "jdk.YoungGarbageCollection": 4,
+          "jdk.G1GarbageCollection": 4,
+          "jdk.EvacuationInformation": 4,
+          "jdk.G1EvacuationYoungStatistics": 4,
+          "jdk.G1EvacuationOldStatistics": 4,
+          "jdk.G1BasicIHOP": 4,
+          "jdk.G1AdaptiveIHOP": 4,
+          "jdk.GCPhaseConcurrentLevel1": 4,
+          "jdk.FinalizerStatistics": 4,
+          "jdk.ThreadContextSwitchRate": 3,
+          "jdk.SymbolTableStatistics": 3,
+          "jdk.StringTableStatistics": 3,
+          "jdk.JavaErrorThrow": 3,
+          "jdk.GCHeapMemoryUsage": 2,
+          "jdk.PhysicalMemory": 2,
+          "jdk.ThreadDump": 2,
+          "jdk.GCConfiguration": 2,
+          "jdk.Metadata": 1,
+          "jdk.RetransformClasses": 1,
+          "jdk.MetaspaceGCThreshold": 1,
+          "jdk.OldGarbageCollection": 1,
+          "jdk.ExecuteVMOperation": 1,
+          "jdk.OSInformation": 1,
+          "jdk.VirtualizationInformation": 1,
+          "jdk.CPUInformation": 1,
+          "jdk.CPUTimeStampCounter": 1,
+          "jdk.CompilerConfiguration": 1,
+          "jdk.CodeCacheConfiguration": 1,
+          "jdk.GCSurvivorConfiguration": 1,
+          "jdk.GCTLABConfiguration": 1,
+          "jdk.GCHeapConfiguration": 1,
+          "jdk.YoungGenerationConfiguration": 1,
+          "jdk.ActiveRecording": 1,
+          "jdk.JavaMonitorEnter": 0,
+          "jdk.JavaMonitorWait": 0,
+          "jdk.JavaMonitorInflate": 0,
+          "jdk.SyncOnValueBasedClass": 0,
+          "jdk.ContinuationFreeze": 0,
+          "jdk.ContinuationThaw": 0,
+          "jdk.ContinuationFreezeFast": 0,
+          "jdk.ThreadSleep": 0,
+          "jdk.ContinuationFreezeSlow": 0,
+          "jdk.ContinuationThawFast": 0,
+          "jdk.ContinuationThawSlow": 0,
+          "jdk.ReservedStackActivation": 0,
+          "jdk.ClassLoad": 0,
+          "jdk.ClassDefine": 0,
+          "jdk.RedefineClasses": 0,
+          "jdk.ClassUnload": 0,
+          "jdk.IntFlagChanged": 0,
+          "jdk.UnsignedIntFlagChanged": 0,
+          "jdk.LongFlagChanged": 0,
+          "jdk.UnsignedLongFlagChanged": 0,
+          "jdk.DoubleFlagChanged": 0,
+          "jdk.BooleanFlagChanged": 0,
+          "jdk.StringFlagChanged": 0,
+          "jdk.MetaspaceAllocationFailure": 0,
+          "jdk.MetaspaceOOM": 0,
+          "jdk.PSHeapSummary": 0,
+          "jdk.SystemGC": 0,
+          "jdk.ParallelOldGarbageCollection": 0,
+          "jdk.ObjectCountAfterGC": 0,
+          "jdk.PromoteObjectInNewPLAB": 0,
+          "jdk.PromoteObjectOutsidePLAB": 0,
+          "jdk.PromotionFailed": 0,
+          "jdk.EvacuationFailed": 0,
+          "jdk.ConcurrentModeFailure": 0,
+          "jdk.GCPhasePauseLevel3": 0,
+          "jdk.GCPhasePauseLevel4": 0,
+          "jdk.GCPhaseConcurrentLevel2": 0,
+          "jdk.AllocationRequiringGC": 0,
+          "jdk.G1HeapRegionTypeChange": 0,
+          "jdk.JITRestart": 0,
+          "jdk.Compilation": 0,
+          "jdk.CompilerPhase": 0,
+          "jdk.CompilationFailure": 0,
+          "jdk.CompilerInlining": 0,
+          "jdk.CodeCacheFull": 0,
+          "jdk.SafepointBegin": 0,
+          "jdk.SafepointStateSynchronization": 0,
+          "jdk.SafepointCleanup": 0,
+          "jdk.SafepointCleanupTask": 0,
+          "jdk.SafepointEnd": 0,
+          "jdk.Shutdown": 0,
+          "jdk.ObjectAllocationInNewTLAB": 0,
+          "jdk.ObjectAllocationOutsideTLAB": 0,
+          "jdk.NativeMemoryUsage": 0,
+          "jdk.NativeMemoryUsageTotal": 0,
+          "jdk.DumpReason": 0,
+          "jdk.DataLoss": 0,
+          "jdk.JVMInformation": 0,
+          "jdk.InitialSystemProperty": 0,
+          "jdk.InitialEnvironmentVariable": 0,
+          "jdk.SystemProcess": 0,
+          "jdk.SecurityProviderService": 0,
+          "jdk.X509Validation": 0,
+          "jdk.ObjectCount": 0,
+          "jdk.G1HeapRegionInformation": 0,
+          "jdk.ZYoungGarbageCollection": 0,
+          "jdk.ZOldGarbageCollection": 0,
+          "jdk.ZAllocationStall": 0,
+          "jdk.ZPageAllocation": 0,
+          "jdk.ZRelocationSet": 0,
+          "jdk.ZRelocationSetGroup": 0,
+          "jdk.ZStatisticsCounter": 0,
+          "jdk.ZStatisticsSampler": 0,
+          "jdk.ZThreadPhase": 0,
+          "jdk.ZUncommit": 0,
+          "jdk.ZUnmap": 0,
+          "jdk.ShenandoahHeapRegionStateChange": 0,
+          "jdk.ShenandoahHeapRegionInformation": 0,
+          "jdk.Flush": 0,
+          "jdk.HeapDump": 0,
+          "jdk.GCLocker": 0,
+          "jdk.JavaAgent": 0,
+          "jdk.NativeAgent": 0,
+          "jdk.TLSHandshake": 0,
+          "jdk.X509Certificate": 0,
+          "jdk.FileForce": 0,
+          "jdk.FileRead": 0,
+          "jdk.FileWrite": 0,
+          "jdk.SocketRead": 0,
+          "jdk.SocketWrite": 0,
+          "jdk.JavaExceptionThrow": 0,
+          "jdk.Deserialization": 0,
+          "jdk.ProcessStart": 0,
+          "jdk.SecurityPropertyModification": 0,
+          "jdk.VirtualThreadStart": 0,
+          "jdk.VirtualThreadEnd": 0,
+          "jdk.VirtualThreadPinned": 0,
+          "jdk.VirtualThreadSubmitFailed": 0,
+          "jdk.InitialSecurityProperty": 0,
+          "jdk.ContainerConfiguration": 0,
+          "jdk.ContainerCPUUsage": 0,
+          "jdk.ContainerCPUThrottling": 0,
+          "jdk.ContainerMemoryUsage": 0,
+          "jdk.ContainerIOUsage": 0
+        },
+        "analysisWindow": {
+          "startUtc": "2026-10-17T09:09:16.699735+00:00",
+          "endUtc": "2026-10-17T09:09:46.701344+00:00",
+          "seconds": 30.001609,
+          "selection": "Fully contained events; all original events retained; boundary-crossing collection/pause events counted separately"
+        },
+        "boundaryCrossing": {
+          "jdk.GarbageCollection": 0,
+          "jdk.GCPhasePause": 0
+        },
+        "gc": {
+          "collections": 5,
+          "names": {
+            "G1New": 4,
+            "G1Old": 1
+          },
+          "collectionsPerSecond": 0.16665772825717448,
+          "topLevelPauses": 6,
+          "pauseTotalMs": 17.6092,
+          "pauseMedianMs": 3.307,
+          "pauseP95Ms": 3.8716,
+          "pauseP99Ms": 3.95288,
+          "maximumPauseMs": 3.9732
+        },
+        "heap": {
+          "Before GC": {
+            "samples": 5,
+            "usedMinBytes": 707274728,
+            "usedMaxBytes": 1614666376,
+            "committedMinBytes": 1693450240,
+            "committedMaxBytes": 1693450240
+          },
+          "After GC": {
+            "samples": 5,
+            "usedMinBytes": 704844296,
+            "usedMaxBytes": 715663336,
+            "committedMinBytes": 1693450240,
+            "committedMaxBytes": 1693450240
+          }
+        },
+        "allocation": {
+          "sampleCount": 4354,
+          "sampleWeightSumBytes": 6671009200,
+          "semantics": "Weighted samples, not exhaustive allocation accounting"
+        },
+        "preciseFrameAlignment": false
+      },
+      "normalExitCode": 0
+    }
+  ],
+  "unexecutedRuns": [
+    {
+      "label": "b3",
+      "status": "NOT RUN",
+      "reason": "Matrix stopped after B2 camera drift"
+    },
+    {
+      "label": "c3",
+      "status": "NOT RUN",
+      "reason": "Matrix stopped after B2 camera drift"
+    }
+  ],
+  "decision": "PARTIAL / INCONCLUSIVE",
+  "retryDecision": "The interrupted-setup retry had already been used. Conservatively stop on renewed camera/setup drift; no additional retry category or favorable replacement is introduced.",
+  "cause": "Unproven; no owner action or heap causality inferred"
+}

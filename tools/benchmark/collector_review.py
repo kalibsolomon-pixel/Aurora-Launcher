@@ -19,6 +19,7 @@ WORKLOAD = "workload-b-a-scene-diagnostic-v1"
 WORKLOAD_ARCHIVES = {
     WORKLOAD: ARCHIVE_SHA256,
     "workload-b-normal-stationary-v1": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6",
+    "workload-heap-static-24-12-v1": "e53e838b0136a03dbdfa8848321063b001e44a33c3dc42d76001b85dfacaf287",
 }
 COLUMNS = "elapsed_ms,frame_ms,inst_fps,fps_smoothed,avg_fps,low1_fps,low01_fps,stutters,stutter_percent,max_spike_ms,gc_time_delta_ms,mem_used_mb,mem_max_mb".split(",")
 

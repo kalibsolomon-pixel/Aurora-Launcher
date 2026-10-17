@@ -1,0 +1,83 @@
+{
+  "kind": "scoped-working-tree-byte-inventory-at-seal",
+  "selfExcluded": "docs/performance-p3b1/evidence/source-inventory.json",
+  "files": [
+    {
+      "path": "docs/performance-p3b1/CHANGED_FILES.txt",
+      "bytes": 709,
+      "sha256": "688f15e6a7118cbda75fbbcaea1f596b76bdff4364b704007051884e3c4eb7b7"
+    },
+    {
+      "path": "docs/performance-p3b1/evidence/comparisons.json",
+      "bytes": 15298,
+      "sha256": "a755b90db044d3f86e1a3f919dfae54bc48aa35df4d2ca34a7cc68b6a12ebe32"
+    },
+    {
+      "path": "docs/performance-p3b1/evidence/excluded.json",
+      "bytes": 40684,
+      "sha256": "ec1ac012b05ac5c65d672738cda3d4b9ea94deb8a333b22ccdf96f722736ea1e"
+    },
+    {
+      "path": "docs/performance-p3b1/evidence/preparation.json",
+      "bytes": 41097,
+      "sha256": "67fb2ad414e541c99532bfac0ffee484bbc6296bb9fa52e6e8ab864bfc3d1b24"
+    },
+    {
+      "path": "docs/performance-p3b1/evidence/preservation.json",
+      "bytes": 1622,
+      "sha256": "6601f494be97a6763f7c9518281164eb1fe1b7c5b50c6557f2a31e02b8187124"
+    },
+    {
+      "path": "docs/performance-p3b1/evidence/raw-inventory.json",
+      "bytes": 121256,
+      "sha256": "109ccc2a28d0e609333d985d7b7694814ef75653458312eed498f52dcbe635a0"
+    },
+    {
+      "path": "docs/performance-p3b1/evidence/runs.json",
+      "bytes": 142357,
+      "sha256": "f881bb9e4decce5b9c2b7220336c6848ce6d0f85d156e70fd5ad7346dcb9d4dc"
+    },
+    {
+      "path": "docs/performance-p3b1/evidence/shutdown.json",
+      "bytes": 756,
+      "sha256": "d6390234a9e4343476719f40e6622fc3b75557552a71f546497fb9f77d812c32"
+    },
+    {
+      "path": "docs/performance-p3b1/evidence/tests.json",
+      "bytes": 955,
+      "sha256": "cb398e8b24c000dcd7f95c251b08030612b295f0b5452a9e88990363cbe124c1"
+    },
+    {
+      "path": "docs/performance-p3b1/evidence/workload.json",
+      "bytes": 12716,
+      "sha256": "442ca5551a13b016e3ee0588081d7cd1985cc5f5752fe58eb4710338d12948c4"
+    },
+    {
+      "path": "docs/performance-p3b1/JVM_CONFIGURATION.md",
+      "bytes": 2789,
+      "sha256": "b04d2e1c011ae1973800edf89949c4fbdf7b3090a0ae609e8fbd02e552715001"
+    },
+    {
+      "path": "docs/performance-p3b1/TRIAL_PLAN.md",
+      "bytes": 9067,
+      "sha256": "270c409411bfabf7432731f802175f42a959cd7be4626e8a1822358189829054"
+    },
+    {
+      "path": "PERFORMANCE_P3B1_ACCEPTANCE.md",
+      "bytes": 22899,
+      "sha256": "15d15db885596c92ca8acbd96f7ea135a5519e7702174298455b023e7e9fdbda"
+    },
+    {
+      "path": "tools/benchmark/collector_review.py",
+      "bytes": 8700,
+      "sha256": "2496bc074c0f495b8eb948852c32d37d3d0798b4afe9102117f7480a424410c4"
+    },
+    {
+      "path": "tools/benchmark/test_collector_review.py",
+      "bytes": 6190,
+      "sha256": "7c26ccea46fecac5f2831e6eea8878b206b3402d1328e10e3ebeac429047d21a"
+    }
+  ],
+  "privacyReview": "PASS: sanitized summaries only; raw account-bearing content remains private",
+  "scope": "Working-tree bytes before local commit; self is excluded to avoid recursive hashing"
+}
