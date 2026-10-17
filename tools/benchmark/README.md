@@ -92,3 +92,35 @@ python -B tools/benchmark/short_calibration.py <test-owned-directory>/short-cali
 
 Direct Windows producer diagnostic redirection uses UTF-16LE with BOM; strict decoding
 is covered by the eighth new regression. Original measured gates remain unchanged.
+
+P3-A.3 adds four standard-library tools, without changing measured schema 1:
+
+* `native_wgl.py <new-output-directory> <phase-plan.json>` is an explicitly invoked
+  Windows native calibration window. Each phase has exactly `label`, `seconds`
+  (1–30) and `hz` (1–240); at most eight phases/90 seconds. It waits at most 60
+  seconds for an operator-created `start.gate` in its exclusively created output
+  directory. One plan drives both execution and metadata. Independent integer QPC
+  markers bracket every swap; requested rates never replace observed timings.
+  It changes no global input, timer, priority, power or display settings.
+* `etw_query.query(name)` permits only this phase's unique session namespace and
+  calls ControlTrace QUERY (control code 0). It cannot stop/flush/update a trace.
+  Failed queries return UNKNOWN/null counters. Zero snapshots cover their query
+  times, never an unobserved shutdown tail.
+* `calibration_review.py` reconciles validated short exports with independent
+  stimulus identity/QPC/markers. Interior unmatched markers cannot use the single
+  boundary allowance. Reconciliation does not prove physical display timing.
+* `world_scene.py` reads bounded NBT/region files, checks all dimensions for
+  entities/block entities, and verifies Workload A's exact scene/options. It
+  requires the minimal A installation's empty mods directory before reporting
+  shader absence. It rejects unsupported compression, oversized decompression,
+  malformed sectors/NBT, scene drift and altered restoration/archive identities.
+  It never edits NBT, copies, extracts, deletes, launches or authenticates.
+
+```powershell
+python -B tools/benchmark/world_scene.py <snapshot.json> --archive <snapshot.tar> --expected-archive-sha256 <reviewed-sha256> --options <frozen-options.txt> --mods <isolated-A-mods-directory>
+```
+
+Exit 0 proves offline archive/inventory/A-scene consistency; provenance, clean exit,
+live framebuffer/focus and subsequent writes remain operator-reviewed gates.
+Thirteen focused P3-A.3 tests use explicitly synthetic variants. Actual cadence,
+overhead, scene and game evidence are separately labeled in the phase reports.
