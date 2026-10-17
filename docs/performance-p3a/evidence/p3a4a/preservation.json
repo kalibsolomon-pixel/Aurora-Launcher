@@ -1,0 +1,29 @@
+{
+  "sampleKind": "actual-preservation-audit",
+  "startingHead": "aaa21984a3bac564d988733a1786572aee870aa4",
+  "branch": "codex/client-3-production-authority",
+  "originalTracked": 2481,
+  "protectedUntracked": 4,
+  "originalByteIdenticalIncludingProtected": 2476,
+  "scopedOriginalChanges": [
+    "docs\\performance-p3a\\AUTHORIZATION.md",
+    "docs\\performance-p3a\\INSTRUMENTATION_OVERHEAD.md",
+    "docs\\performance-p3a\\MINECRAFT_CAPTURE_VALIDATION.md",
+    "docs\\performance-p3a\\PRESENTMON_CALIBRATION.md",
+    "docs\\performance-p3a\\READINESS_MATRIX.md",
+    "docs\\performance-p3a\\SHORT_CALIBRATION_FORMAT.md",
+    "tools\\benchmark\\README.md",
+    "tools\\benchmark\\native_wgl.py",
+    "tools\\benchmark\\short_calibration.py"
+  ],
+  "criticalFilesByteIdentical": 11,
+  "priorPrivateEvidenceByteIdentical": 421,
+  "worktreesPreserved": 7,
+  "otherWorktreeHeadsUnchanged": true,
+  "canonicalMaterialLockByteIdentical": true,
+  "productionBinaryConfigRegistryByteIdentical": true,
+  "productionScope": "binary, launcher configuration and instance registry; no credential or owner-world inventory",
+  "deletions": 0,
+  "fullMeasuredImporterAndSchemaUnchanged": true,
+  "productionSourceUnchanged": true
+}

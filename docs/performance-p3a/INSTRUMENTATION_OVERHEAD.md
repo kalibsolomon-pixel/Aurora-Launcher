@@ -1,3 +1,25 @@
+# P3-A.4a representative-rate overhead — PARTIAL
+
+[Predeclared protocol](P3A4A_DIAGNOSTIC_PROTOCOL.md), [focused results](P3A4A_OVERHEAD_RESULTS.md),
+[actual evidence](evidence/p3a4a/overhead.json). One 80-second WGL child achieved
+1789.54–1791.75 independent swaps/sec in mirrored none/PresentMon/sampler/both
+blocks. Compared with controls, block-mean rate changes are -0.01438% / -0.02112%
+/ -0.10506%; P99 changes +0.003353 / -0.002911 / -0.001343 ms; machine CPU changes
++0.03975 / +0.11185 / +0.80431 points.
+
+These means fit the numerical operational budget, but both-2 exceeds its mirrored
+control by 1.306 machine-CPU points, failing the declared 1-point individual screen.
+Two blocks/state provide no statistical equivalence bound. Independent marker
+retention and endpoint reads exist in every control; observer startup/elapsed excess,
+CPU/RSS and sampler read latency are retained with quantization/attribution limits.
+
+More decisively, high-rate ETW rows fail independent completeness: long row holes
+occur while controlled swaps continue. PresentMon process exit 0 and observed zero
+ETW session counters cannot repair that limitation. The prerequisite for Minecraft
+observer-on/off trials failed, so none were performed. No favorable retry, discarded
+block or negligible-overhead conclusion. P3-B remains NOT READY / NOT AUTHORIZED.
+Historical 120-Hz observations follow unchanged.
+
 # P3-A.3 instrumentation overhead — bounded observations, overall PARTIAL
 
 [Actual counter/marker evidence](evidence/p3a3/overhead.json). Two separate 80-second

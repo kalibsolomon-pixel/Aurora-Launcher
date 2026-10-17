@@ -1,5 +1,12 @@
 # Short calibration artifact v1
 
+P3-A.4a adds [a separate submission-fidelity review](P3A4A_QUALITY_GATES.md)
+using this unchanged manifest. The original display-based reader retains its
+behavior; an actual P3-A.3 capture produces exactly the same original result.
+The new review reports display and submission completeness separately, with
+optional external loss/creation-identity evidence. No old result is overwritten
+or silently reinterpreted, and full measured-run requirements stay unchanged.
+
 `tools/benchmark/short_calibration.py` inspects real bounded presentation exports.
 It does not authenticate, capture, launch, change settings or produce a benchmark
 winner. Measured schema 1 and its 300/600-second/three-source gates are unchanged.

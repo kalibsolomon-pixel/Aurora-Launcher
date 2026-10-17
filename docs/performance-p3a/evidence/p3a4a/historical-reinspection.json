@@ -1,0 +1,299 @@
+{
+  "sampleKind": "actual-historical-capture-reinspection",
+  "originalShortResultUnchanged": true,
+  "originalFramesSha256": "74c6787598aa9e654498c70e2a28963b8f3d9ba8db0a3190ba2bdeecf7fa287c",
+  "originalQualitySha256": "9d92d4785c60af94337e04a4e290ac0ac3b5c871118825ec0348d6a0fac2bbf8",
+  "fidelity": {
+    "artifactKind": "short-submission-fidelity",
+    "quality": "VALID WITH WARNINGS",
+    "semantic": "etw-application-submission-proxy",
+    "rawRows": 46170,
+    "submissionIntervals": {
+      "count": 36647,
+      "mean": 0.5457389690834175,
+      "median": 0.2443999999997004,
+      "p95": 0.5968699999998602,
+      "p99": 0.7673080000001244,
+      "p999": 1.4513655999992277,
+      "max": 500.3353999999973,
+      "variance": 127.104738874237,
+      "presentation_rate_hz": 1832.3778521433526,
+      "boundary_coverage": true,
+      "discarded_boundary_intervals": 9522,
+      "intervalsOver50Ms": 20,
+      "gapRunsOver50Ms": 20,
+      "intervalsOver1000Ms": 0
+    },
+    "unavailableDisplayRows": 43026,
+    "unavailableDisplayFraction": 0.9319038336582196,
+    "displayEstimateIntervals": {
+      "count": 2486,
+      "mean": 8.043730088495575,
+      "median": 4.167300000000651,
+      "p95": 5.95150000000122,
+      "p99": 6.221559999998938,
+      "p999": null,
+      "max": 504.8956999999987,
+      "variance": 1855.2597563072266,
+      "presentation_rate_hz": 124.32043206300955,
+      "boundary_coverage": true,
+      "discarded_boundary_intervals": 657,
+      "intervalsOver50Ms": 20,
+      "gapRunsOver50Ms": 20,
+      "intervalsOver1000Ms": 0
+    },
+    "displayInterpretation": "available estimates only; missingness is not optical drop evidence",
+    "fields": {
+      "SwapChainAddress": {
+        "0x0": 46170
+      },
+      "PresentRuntime": {
+        "Other": 46170
+      },
+      "SyncInterval": {
+        "-1": 46170
+      },
+      "PresentFlags": {
+        "0": 46170
+      },
+      "AllowsTearing": {
+        "0": 46170
+      },
+      "PresentMode": {
+        "Composed: Copy with GPU GDI": 46170
+      },
+      "MsBetweenSimulationStart": {
+        "unavailable": 46170,
+        "zero": 0,
+        "distribution": null
+      },
+      "MsBetweenPresents": {
+        "unavailable": 0,
+        "zero": 0,
+        "distribution": {
+          "count": 46170,
+          "mean": 0.552914052414988,
+          "median": 0.2451,
+          "p95": 0.5958549999999996,
+          "p99": 0.7684619999999995,
+          "p999": 1.4574943999999959,
+          "max": 1367.0141,
+          "variance": 156.0558996790657
+        }
+      },
+      "MsBetweenDisplayChange": {
+        "unavailable": 43027,
+        "zero": 0,
+        "distribution": {
+          "count": 3143,
+          "mean": 8.119882437161948,
+          "median": 4.167,
+          "p95": 5.963529999999999,
+          "p99": 6.221248,
+          "p999": null,
+          "max": 1370.8176,
+          "variance": 2272.611644917331
+        }
+      },
+      "MsInPresentAPI": {
+        "unavailable": 0,
+        "zero": 46170,
+        "distribution": {
+          "count": 46170,
+          "mean": 0.0,
+          "median": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "variance": 0.0
+        }
+      },
+      "MsRenderPresentLatency": {
+        "unavailable": 0,
+        "zero": 0,
+        "distribution": {
+          "count": 46170,
+          "mean": 0.3675402339181287,
+          "median": 0.3488,
+          "p95": 0.7351,
+          "p99": 0.9528309999999998,
+          "p999": 1.0801492999999995,
+          "max": 1.3982,
+          "variance": 0.03887377926535572
+        }
+      },
+      "MsUntilDisplayed": {
+        "unavailable": 43026,
+        "zero": 0,
+        "distribution": {
+          "count": 3144,
+          "mean": 4.2925138358778625,
+          "median": 4.52695,
+          "p95": 4.818865,
+          "p99": 4.992999,
+          "p999": null,
+          "max": 6.1816,
+          "variance": 0.3669506347672199
+        }
+      },
+      "MsPCLatency": {
+        "unavailable": 46170,
+        "zero": 0,
+        "distribution": null
+      },
+      "MsBetweenAppStart": {
+        "unavailable": 0,
+        "zero": 0,
+        "distribution": {
+          "count": 46170,
+          "mean": 0.552914052414988,
+          "median": 0.2451,
+          "p95": 0.5958549999999996,
+          "p99": 0.7684619999999995,
+          "p999": 1.4574943999999959,
+          "max": 1367.0141,
+          "variance": 156.0558996790657
+        }
+      },
+      "MsCPUBusy": {
+        "unavailable": 0,
+        "zero": 0,
+        "distribution": {
+          "count": 46170,
+          "mean": 0.552914052414988,
+          "median": 0.2451,
+          "p95": 0.5958549999999996,
+          "p99": 0.7684619999999995,
+          "p999": 1.4574943999999959,
+          "max": 1367.0141,
+          "variance": 156.0558996790657
+        }
+      },
+      "MsCPUWait": {
+        "unavailable": 0,
+        "zero": 46170,
+        "distribution": {
+          "count": 46170,
+          "mean": 0.0,
+          "median": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "variance": 0.0
+        }
+      },
+      "MsGPULatency": {
+        "unavailable": 0,
+        "zero": 0,
+        "distribution": {
+          "count": 46170,
+          "mean": 0.6447382174572233,
+          "median": 0.3545,
+          "p95": 0.7446549999999996,
+          "p99": 0.9701309999999997,
+          "p999": 1.1228831,
+          "max": 1367.1222,
+          "variance": 156.05187437913224
+        }
+      },
+      "MsGPUTime": {
+        "unavailable": 0,
+        "zero": 0,
+        "distribution": {
+          "count": 46170,
+          "mean": 0.28218194931773877,
+          "median": 0.2409,
+          "p95": 0.5236549999999995,
+          "p99": 0.6273549999999989,
+          "p999": 0.9919450999999965,
+          "max": 1.9932,
+          "variance": 0.010216340987146662
+        }
+      },
+      "MsGPUBusy": {
+        "unavailable": 0,
+        "zero": 0,
+        "distribution": {
+          "count": 46170,
+          "mean": 0.27402878492527616,
+          "median": 0.2379,
+          "p95": 0.5148549999999996,
+          "p99": 0.593,
+          "p999": 0.689098599999999,
+          "max": 1.2902,
+          "variance": 0.007879593513641635
+        }
+      },
+      "MsGPUWait": {
+        "unavailable": 0,
+        "zero": 39710,
+        "distribution": {
+          "count": 46170,
+          "mean": 0.008153164392462638,
+          "median": 0.0,
+          "p95": 0.0491,
+          "p99": 0.1394,
+          "p999": 0.5938804999999738,
+          "max": 1.5361,
+          "variance": 0.0016056550752151237
+        }
+      },
+      "MsAnimationError": {
+        "unavailable": 43026,
+        "zero": 1,
+        "distribution": {
+          "count": 3144,
+          "mean": -3.683206106870025e-05,
+          "median": 0.007899999999999796,
+          "p95": 1.8186949999999995,
+          "p99": 2.1434900000000012,
+          "p999": null,
+          "max": 2.4601,
+          "variance": 0.9481354042350023
+        }
+      },
+      "AnimationTime": {
+        "unavailable": 43026,
+        "zero": 0,
+        "distribution": {
+          "count": 3144,
+          "mean": 12752.248135114503,
+          "median": 12734.52935,
+          "p95": 23969.224885,
+          "p99": 25859.616988,
+          "p999": null,
+          "max": 25990.6027,
+          "variance": 53462778.551437244
+        }
+      }
+    },
+    "exportedIntervalMaxDisagreementMs": 5.684341886080802e-14,
+    "lossStatus": "ZERO OBSERVED THROUGH WINDOW",
+    "uncertainty": {
+      "qpcTickMs": 0.0001,
+      "displayLatencyRoundingMs": 5e-05,
+      "etwToApiEntryMs": null,
+      "physicalScanoutMs": null,
+      "clockDriftPpm": null,
+      "shutdownTailLoss": "UNKNOWN"
+    },
+    "metricClassification": {
+      "submission": "DIAGNOSTIC ONLY; independent event completeness and overhead required",
+      "display": "DIAGNOSTIC ONLY",
+      "gpu": "DIAGNOSTIC ONLY",
+      "physicalDisplay": "UNAVAILABLE"
+    },
+    "captureCompleteness": "offline consistency only; row completeness requires independent evidence",
+    "independentCreationIdentityMatched": false,
+    "fullMeasuredRunQuality": "INCOMPLETE",
+    "warnings": [
+      "short-only; no performance conclusion",
+      "Other runtime is not API-entry instrumentation",
+      "display estimates are not physical scanout",
+      "observer interference needs independent review"
+    ]
+  },
+  "interpretation": "New separately named review; original capture and quality bytes unchanged"
+}

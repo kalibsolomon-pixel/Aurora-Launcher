@@ -1,3 +1,27 @@
+# P3-A.4a readiness matrix
+
+**Overall PARTIAL. P3-B NOT READY / NOT AUTHORIZED.** No accepted primary metric
+for uncapped JVM comparisons. [Acceptance](../../PERFORMANCE_P3A4A_ACCEPTANCE.md).
+
+| Gate | Current result | Evidence / remaining condition |
+| --- | --- | --- |
+| Same-user isolated authenticated execution | PASS WITH APPROVED EXCEPTION | Canonical/reparse/native root/live WebView checks; prior startup-refresh ordering exception and accepted credential-continuity risk |
+| Exact tool/runtime | PASS | Pinned PresentMon 2.3.1 hash/Valid Intel signature; exact managed Microsoft 21.0.7+6-LTS; no replacement tools |
+| Field semantics | PASS WITH LIMITS | [Pinned source review](PRESENTMON_FIELD_SEMANTICS.md); Other/Composed GPU-copy inference differs from API/optical timing |
+| Capped/uncapped diagnostics | COMPLETE WITH LIMITS | [Three bounded captures](OPENGL_PRESENTATION_INVESTIGATION.md); display NA 93.329% / 0% / 1.272%; no physical claim |
+| High-rate submission completeness | FAILED CALIBRATION GATE | Independent swaps continue during long ETW row holes despite observed zero session counters |
+| Uncapped primary frame metric | REJECTED | Submission and display tails DIAGNOSTIC ONLY; GPU attribution unvalidated; physical scanout unavailable |
+| Representative-rate observer bound | PARTIAL | [1800-Hz trial](P3A4A_OVERHEAD_RESULTS.md); one individual CPU screen fails; no equivalence bound; Minecraft overhead prerequisite failed |
+| Quiet environment | PARTIAL | Controlled preflight 0.679% CPU/AC; corrected title preflight 2.650% exceeds 2%; GPU idle/VRR/thermals not established |
+| Canonical stationary A materials | PASS | Frozen archive/inventory/restoration preserved; saved options restored byte-for-byte after each cap; post-exit zero-entity scene |
+| Normal exits | PASS | Exact supervised game and retained-handle launcher both exit 0 |
+| Offline capture gates/tests | PASS WITH LIMITS | 74 benchmark and 13 P1 tests; consistency distinct from independent completeness; old actual reader result unchanged |
+| Full measured-run quality | INCOMPLETE | Required sources, hashes, 300/600-second durations and existing thresholds unchanged |
+| GC/B/C/other hardware | STILL BLOCKED OR UNTESTED | No hidden logging, new worlds, preset/JVM comparisons or portability claims |
+| P3-B | NOT READY / NOT AUTHORIZED | [P3-A.4b prerequisites](P3A4A_QUALITY_GATES.md) plus separate owner authorization |
+
+Historical matrices follow unchanged.
+
 # P3-A.3 readiness matrix
 
 **Overall PARTIAL. P3-B NOT READY / NOT AUTHORIZED.** Corrective A-only work is

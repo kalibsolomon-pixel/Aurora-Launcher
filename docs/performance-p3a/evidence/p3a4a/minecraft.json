@@ -1,0 +1,1229 @@
+{
+  "sampleKind": "actual-minecraft-diagnostic-matrix",
+  "conditions": [
+    {
+      "label": "unlimited",
+      "sampleKind": "actual-short-minecraft",
+      "fidelity": {
+        "artifactKind": "short-submission-fidelity",
+        "quality": "VALID WITH WARNINGS",
+        "semantic": "etw-application-submission-proxy",
+        "rawRows": 29605,
+        "submissionIntervals": {
+          "count": 18272,
+          "mean": 0.5472457804290718,
+          "median": 0.24519999999972342,
+          "p95": 0.5787449999998807,
+          "p99": 0.7465769999998007,
+          "p999": 1.287911999999334,
+          "max": 508.6165000000005,
+          "variance": 132.06609638211006,
+          "presentation_rate_hz": 1827.3324998795663,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 11332,
+          "intervalsOver50Ms": 10,
+          "gapRunsOver50Ms": 10,
+          "intervalsOver1000Ms": 0
+        },
+        "unavailableDisplayRows": 27630,
+        "unavailableDisplayFraction": 0.9332882958959635,
+        "displayEstimateIntervals": {
+          "count": 1223,
+          "mean": 8.173033360588715,
+          "median": 4.166899999999529,
+          "p95": 5.990490000000381,
+          "p99": 6.228697999999291,
+          "p999": null,
+          "max": 512.4966000000004,
+          "variance": 1948.5444208661636,
+          "presentation_rate_hz": 122.35359332094646,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 751,
+          "intervalsOver50Ms": 10,
+          "gapRunsOver50Ms": 10,
+          "intervalsOver1000Ms": 0
+        },
+        "displayInterpretation": "available estimates only; missingness is not optical drop evidence",
+        "fields": {
+          "SwapChainAddress": {
+            "0x0": 29605
+          },
+          "PresentRuntime": {
+            "Other": 29605
+          },
+          "SyncInterval": {
+            "-1": 29605
+          },
+          "PresentFlags": {
+            "0": 29605
+          },
+          "AllowsTearing": {
+            "0": 29605
+          },
+          "PresentMode": {
+            "Composed: Copy with GPU GDI": 29605
+          },
+          "MsBetweenSimulationStart": {
+            "unavailable": 29605,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenPresents": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 29605,
+              "mean": 0.5240344907954737,
+              "median": 0.2451,
+              "p95": 0.5786599999999998,
+              "p99": 0.753,
+              "p999": 1.2669564000000006,
+              "max": 702.2258,
+              "variance": 124.23949272122181
+            }
+          },
+          "MsBetweenDisplayChange": {
+            "unavailable": 27631,
+            "zero": 0,
+            "distribution": {
+              "count": 1974,
+              "mean": 7.856418034447822,
+              "median": 4.1663,
+              "p95": 5.93804,
+              "p99": 6.226607,
+              "p999": null,
+              "max": 704.2377,
+              "variance": 1841.449601626463
+            }
+          },
+          "MsInPresentAPI": {
+            "unavailable": 0,
+            "zero": 29605,
+            "distribution": {
+              "count": 29605,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": 0.0,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsRenderPresentLatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 29605,
+              "mean": 0.37952718797500423,
+              "median": 0.3818,
+              "p95": 0.73798,
+              "p99": 0.9636959999999999,
+              "p999": 1.0711396,
+              "max": 1.1868,
+              "variance": 0.04083667073826715
+            }
+          },
+          "MsUntilDisplayed": {
+            "unavailable": 27630,
+            "zero": 0,
+            "distribution": {
+              "count": 1975,
+              "mean": 4.306718379746836,
+              "median": 4.5405,
+              "p95": 4.83865,
+              "p99": 4.90483,
+              "p999": null,
+              "max": 5.2521,
+              "variance": 0.36894956351534947
+            }
+          },
+          "MsPCLatency": {
+            "unavailable": 29605,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenAppStart": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 29605,
+              "mean": 0.5240344907954737,
+              "median": 0.2451,
+              "p95": 0.5786599999999998,
+              "p99": 0.753,
+              "p999": 1.2669564000000006,
+              "max": 702.2258,
+              "variance": 124.23949272122181
+            }
+          },
+          "MsCPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 29605,
+              "mean": 0.5240344907954737,
+              "median": 0.2451,
+              "p95": 0.5786599999999998,
+              "p99": 0.753,
+              "p999": 1.2669564000000006,
+              "max": 702.2258,
+              "variance": 124.23949272122181
+            }
+          },
+          "MsCPUWait": {
+            "unavailable": 0,
+            "zero": 29605,
+            "distribution": {
+              "count": 29605,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": 0.0,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsGPULatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 29605,
+              "mean": 0.6331632089174126,
+              "median": 0.3875,
+              "p95": 0.74768,
+              "p99": 0.9780639999999992,
+              "p999": 1.1051324000000045,
+              "max": 702.638,
+              "variance": 124.28356700072783
+            }
+          },
+          "MsGPUTime": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 29605,
+              "mean": 0.276488630298936,
+              "median": 0.235,
+              "p95": 0.5136,
+              "p99": 0.6049,
+              "p999": 0.8080304000000048,
+              "max": 2.2978,
+              "variance": 0.00907290633517847
+            }
+          },
+          "MsGPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 29605,
+              "mean": 0.269769400439115,
+              "median": 0.2319,
+              "p95": 0.50668,
+              "p99": 0.5823879999999998,
+              "p999": 0.6704404000000032,
+              "max": 0.8676,
+              "variance": 0.007424742747841844
+            }
+          },
+          "MsGPUWait": {
+            "unavailable": 0,
+            "zero": 25540,
+            "distribution": {
+              "count": 29605,
+              "mean": 0.006719229859820976,
+              "median": 0.0,
+              "p95": 0.0422,
+              "p99": 0.1153,
+              "p999": 0.36584160000001575,
+              "max": 1.81,
+              "variance": 0.0011666680730430942
+            }
+          },
+          "MsAnimationError": {
+            "unavailable": 27630,
+            "zero": 2,
+            "distribution": {
+              "count": 1975,
+              "mean": -0.0002306835443037972,
+              "median": 0.010200000000000209,
+              "p95": 1.7945599999999997,
+              "p99": 2.1048599999999995,
+              "p999": null,
+              "max": 2.5080999999999998,
+              "variance": 0.9440563073420645
+            }
+          },
+          "AnimationTime": {
+            "unavailable": 27630,
+            "zero": 0,
+            "distribution": {
+              "count": 1975,
+              "mean": 8289.187683898734,
+              "median": 8569.3677,
+              "p95": 15578.71799,
+              "p99": 15908.024858,
+              "p999": null,
+              "max": 15989.9025,
+              "variance": 21253888.638009157
+            }
+          }
+        },
+        "exportedIntervalMaxDisagreementMs": 5.684341886080802e-14,
+        "lossStatus": "ZERO OBSERVED THROUGH WINDOW",
+        "uncertainty": {
+          "qpcTickMs": 0.0001,
+          "displayLatencyRoundingMs": 5e-05,
+          "etwToApiEntryMs": null,
+          "physicalScanoutMs": null,
+          "clockDriftPpm": null,
+          "shutdownTailLoss": "UNKNOWN"
+        },
+        "metricClassification": {
+          "submission": "DIAGNOSTIC ONLY; independent event completeness and overhead required",
+          "display": "DIAGNOSTIC ONLY",
+          "gpu": "DIAGNOSTIC ONLY",
+          "physicalDisplay": "UNAVAILABLE"
+        },
+        "captureCompleteness": "offline consistency only; row completeness requires independent evidence",
+        "independentCreationIdentityMatched": true,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "warnings": [
+          "short-only; no performance conclusion",
+          "Other runtime is not API-entry instrumentation",
+          "display estimates are not physical scanout",
+          "observer interference needs independent review"
+        ]
+      },
+      "originalDisplayReader": {
+        "artifactKind": "short-calibration",
+        "quality": "VALID WITH WARNINGS",
+        "targetKind": "minecraft",
+        "rawRows": 29605,
+        "unavailableDisplayRows": 27630,
+        "unpairedDisplayRows": 1,
+        "metrics": {
+          "count": 1223,
+          "mean": 8.173033360588715,
+          "median": 4.166899999999529,
+          "p95": 5.990490000000381,
+          "p99": 6.228697999999291,
+          "p999": null,
+          "max": 512.4966000000004,
+          "variance": 1948.5444208661636,
+          "presentation_rate_hz": 122.35359332094646,
+          "stutter_frames_over_50ms": 10,
+          "stutter_events_over_50ms": 10,
+          "stutter_frames_per_minute": 60.0,
+          "long_gaps_over_1000ms": 0,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 751
+        },
+        "warnings": [
+          "etw-display-estimate-not-physical-display-proof",
+          "producer-loss-counters-unavailable",
+          "observer-overhead-unmeasured",
+          "short-calibration-not-performance-benchmark",
+          "unavailable-display-rows-retained",
+          "unpaired-display-change-rows-retained",
+          "unelevated-process-query-limitation"
+        ],
+        "fullMeasuredRunQuality": "INCOMPLETE"
+      },
+      "settings": {
+        "maxFps": "260",
+        "enableVsync": "false",
+        "inactivityFpsLimit": "\"minimized\"",
+        "renderDistance": "12",
+        "simulationDistance": "8",
+        "overrideWidth": "1920",
+        "overrideHeight": "1080",
+        "fullscreen": "false"
+      },
+      "warmupSeconds": 300.1195292000011,
+      "captureSecondsRequested": 16,
+      "innerWindowSeconds": 10,
+      "presentmonExitCode": 0,
+      "qpcFrequencyBeforeHz": 10000000,
+      "qpcFrequencyAfterHz": 10000000,
+      "processIdentityMatched": true,
+      "allForeground": true,
+      "focusSamples": 36,
+      "lossSnapshots": [
+        {
+          "statusCode": 0,
+          "qpcNs": 17335676045800,
+          "queryDurationNs": 45400,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 533
+        },
+        {
+          "statusCode": 0,
+          "qpcNs": 17348677008300,
+          "queryDurationNs": 27800,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 4129
+        }
+      ],
+      "processTelemetry": {
+        "cpu_percent_one_core_mean": 235.31253951861748,
+        "cpu_percent_one_core_peak_sampled": 275.1067964583851,
+        "system_cpu_percent_machine_mean": 13.481984239737347,
+        "background_cpu_percent_one_core_estimate_mean": 140.46334781552545,
+        "rss_bytes_peak_sampled": 1180033024,
+        "peak_rss_bytes_os": 1194070016,
+        "system_available_bytes_min": 20571045888,
+        "sample_interval_seconds_max": 0.5007785,
+        "covered_seconds": 10.0,
+        "boundary_coverage": true,
+        "boundary_method": "time-weighted counter intervals clipped at window edges; within-interval rate assumed uniform",
+        "heap_used_bytes": null,
+        "heap_committed_bytes": null,
+        "paging_bytes_per_second": null,
+        "gc_cpu_percent": null
+      },
+      "telemetryStatus": "complete",
+      "telemetrySamples": 41,
+      "telemetryReadMaxNs": 509600,
+      "telemetryErrors": [],
+      "rawHashes": {
+        "frames": "9938d096055e4d3d0decfa7d2a92b67fc76658143f789483cd580a38ae9d0c24",
+        "diagnostics": "4b985fb6eecfa3e1a7c5465035219a3dbf2ff6f5614181a184c7cb9f764ae8ab",
+        "manifest": "b5c07183fe80de2f4032cff27569d7449d59432f1feb3e1db7004df40514a99a",
+        "processCsv": "c9468ac08bb3c7de3c74e8c2368d474a131e052e851dac59575262960e09181f",
+        "options": "efd1595619f579723159ed7bb0cbb1e06d7336dc9980662252162abd15f24ae1",
+        "execution": "a7e87496e7baf1814864cf0214d1ad168f647990435ab35e93a7f97b91577f8c"
+      },
+      "gc": null
+    },
+    {
+      "label": "cap120",
+      "sampleKind": "actual-short-minecraft",
+      "fidelity": {
+        "artifactKind": "short-submission-fidelity",
+        "quality": "VALID WITH WARNINGS",
+        "semantic": "etw-application-submission-proxy",
+        "rawRows": 1889,
+        "submissionIntervals": {
+          "count": 1181,
+          "mean": 8.460359949195597,
+          "median": 8.388099999999454,
+          "p95": 9.277799999999559,
+          "p99": 9.609860000000483,
+          "p999": null,
+          "max": 10.382200000000452,
+          "variance": 0.20156534400980985,
+          "presentation_rate_hz": 118.1982806884096,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 707,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "unavailableDisplayRows": 0,
+        "unavailableDisplayFraction": 0.0,
+        "displayEstimateIntervals": {
+          "count": 1181,
+          "mean": 8.46067950889077,
+          "median": 8.332499999999854,
+          "p95": 10.439600000001548,
+          "p99": 12.51865999999886,
+          "p999": null,
+          "max": 14.025900000001812,
+          "variance": 1.7900956904355034,
+          "presentation_rate_hz": 118.19381634172125,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 707,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "displayInterpretation": "available estimates only; missingness is not optical drop evidence",
+        "fields": {
+          "SwapChainAddress": {
+            "0x0": 1889
+          },
+          "PresentRuntime": {
+            "Other": 1889
+          },
+          "SyncInterval": {
+            "-1": 1889
+          },
+          "PresentFlags": {
+            "0": 1889
+          },
+          "AllowsTearing": {
+            "0": 1889
+          },
+          "PresentMode": {
+            "Composed: Copy with GPU GDI": 1889
+          },
+          "MsBetweenSimulationStart": {
+            "unavailable": 1889,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenPresents": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 1889,
+              "mean": 8.466757596611965,
+              "median": 8.4012,
+              "p95": 9.251539999999999,
+              "p99": 9.605787999999999,
+              "p999": null,
+              "max": 10.3822,
+              "variance": 0.194603881171778
+            }
+          },
+          "MsBetweenDisplayChange": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 1889,
+              "mean": 8.465659343568026,
+              "median": 8.3326,
+              "p95": 10.43724,
+              "p99": 12.989851999999972,
+              "p999": null,
+              "max": 14.0719,
+              "variance": 1.7890488036196857
+            }
+          },
+          "MsInPresentAPI": {
+            "unavailable": 0,
+            "zero": 1889,
+            "distribution": {
+              "count": 1889,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": null,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsRenderPresentLatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 1889,
+              "mean": 0.25337178401270516,
+              "median": 0.1994,
+              "p95": 0.6079,
+              "p99": 0.9268919999999998,
+              "p999": null,
+              "max": 1.0653,
+              "variance": 0.028128610760237097
+            }
+          },
+          "MsUntilDisplayed": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 1889,
+              "mean": 6.21006458443621,
+              "median": 6.2038,
+              "p95": 8.1327,
+              "p99": 8.501019999999999,
+              "p999": null,
+              "max": 8.6426,
+              "variance": 1.6072482009956055
+            }
+          },
+          "MsPCLatency": {
+            "unavailable": 1889,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenAppStart": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 1889,
+              "mean": 8.466757596611965,
+              "median": 8.4012,
+              "p95": 9.251539999999999,
+              "p99": 9.605787999999999,
+              "p999": null,
+              "max": 10.3822,
+              "variance": 0.194603881171778
+            }
+          },
+          "MsCPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 1889,
+              "mean": 8.466757596611965,
+              "median": 8.4012,
+              "p95": 9.251539999999999,
+              "p99": 9.605787999999999,
+              "p999": null,
+              "max": 10.3822,
+              "variance": 0.194603881171778
+            }
+          },
+          "MsCPUWait": {
+            "unavailable": 0,
+            "zero": 1889,
+            "distribution": {
+              "count": 1889,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": null,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsGPULatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 1889,
+              "mean": 0.27365897300158815,
+              "median": 0.2179,
+              "p95": 0.6366799999999999,
+              "p99": 0.9565279999999998,
+              "p999": null,
+              "max": 1.1138,
+              "variance": 0.029378960439601705
+            }
+          },
+          "MsGPUTime": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 1889,
+              "mean": 8.446470407623082,
+              "median": 8.3742,
+              "p95": 9.248079999999998,
+              "p99": 9.669036,
+              "p999": null,
+              "max": 10.3077,
+              "variance": 0.2046550396907285
+            }
+          },
+          "MsGPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 1889,
+              "mean": 0.4533310217046056,
+              "median": 0.3822,
+              "p95": 0.8031199999999998,
+              "p99": 1.1183479999999992,
+              "p999": null,
+              "max": 1.4963,
+              "variance": 0.029009463960893652
+            }
+          },
+          "MsGPUWait": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 1889,
+              "mean": 7.993139385918475,
+              "median": 7.9752,
+              "p95": 8.7536,
+              "p99": 9.069135999999999,
+              "p999": null,
+              "max": 9.8073,
+              "variance": 0.19618040196383676
+            }
+          },
+          "MsAnimationError": {
+            "unavailable": 0,
+            "zero": 1,
+            "distribution": {
+              "count": 1889,
+              "mean": 0.00041011116993117975,
+              "median": 0.0812999999999997,
+              "p95": 1.8202799999999995,
+              "p99": 4.4930720000000015,
+              "p999": null,
+              "max": 6.803800000000001,
+              "variance": 2.0343873502153924
+            }
+          },
+          "AnimationTime": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 1889,
+              "mean": 8001.626433933298,
+              "median": 8004.1756,
+              "p95": 15194.0968,
+              "p99": 15835.870675999999,
+              "p999": null,
+              "max": 15994.0154,
+              "variance": 21309286.923652466
+            }
+          }
+        },
+        "exportedIntervalMaxDisagreementMs": 1.7763568394002505e-15,
+        "lossStatus": "ZERO OBSERVED THROUGH WINDOW",
+        "uncertainty": {
+          "qpcTickMs": 0.0001,
+          "displayLatencyRoundingMs": 5e-05,
+          "etwToApiEntryMs": null,
+          "physicalScanoutMs": null,
+          "clockDriftPpm": null,
+          "shutdownTailLoss": "UNKNOWN"
+        },
+        "metricClassification": {
+          "submission": "DIAGNOSTIC ONLY; independent event completeness and overhead required",
+          "display": "DIAGNOSTIC ONLY",
+          "gpu": "DIAGNOSTIC ONLY",
+          "physicalDisplay": "UNAVAILABLE"
+        },
+        "captureCompleteness": "offline consistency only; row completeness requires independent evidence",
+        "independentCreationIdentityMatched": true,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "warnings": [
+          "short-only; no performance conclusion",
+          "Other runtime is not API-entry instrumentation",
+          "display estimates are not physical scanout",
+          "observer interference needs independent review"
+        ]
+      },
+      "originalDisplayReader": {
+        "artifactKind": "short-calibration",
+        "quality": "VALID WITH WARNINGS",
+        "targetKind": "minecraft",
+        "rawRows": 1889,
+        "unavailableDisplayRows": 0,
+        "unpairedDisplayRows": 0,
+        "metrics": {
+          "count": 1181,
+          "mean": 8.46067950889077,
+          "median": 8.332499999999854,
+          "p95": 10.439600000001548,
+          "p99": 12.51865999999886,
+          "p999": null,
+          "max": 14.025900000001812,
+          "variance": 1.7900956904355034,
+          "presentation_rate_hz": 118.19381634172125,
+          "stutter_frames_over_50ms": 0,
+          "stutter_events_over_50ms": 0,
+          "stutter_frames_per_minute": 0.0,
+          "long_gaps_over_1000ms": 0,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 707
+        },
+        "warnings": [
+          "etw-display-estimate-not-physical-display-proof",
+          "producer-loss-counters-unavailable",
+          "observer-overhead-unmeasured",
+          "short-calibration-not-performance-benchmark",
+          "unelevated-process-query-limitation"
+        ],
+        "fullMeasuredRunQuality": "INCOMPLETE"
+      },
+      "settings": {
+        "maxFps": "120",
+        "enableVsync": "false",
+        "inactivityFpsLimit": "\"minimized\"",
+        "renderDistance": "12",
+        "simulationDistance": "8",
+        "overrideWidth": "1920",
+        "overrideHeight": "1080",
+        "fullscreen": "false"
+      },
+      "warmupSeconds": 361.02964930000235,
+      "captureSecondsRequested": 16,
+      "innerWindowSeconds": 10,
+      "presentmonExitCode": 0,
+      "qpcFrequencyBeforeHz": 10000000,
+      "qpcFrequencyAfterHz": 10000000,
+      "processIdentityMatched": true,
+      "allForeground": true,
+      "focusSamples": 36,
+      "lossSnapshots": [
+        {
+          "statusCode": 0,
+          "qpcNs": 17396585510100,
+          "queryDurationNs": 54800,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 61
+        },
+        {
+          "statusCode": 0,
+          "qpcNs": 17409585804500,
+          "queryDurationNs": 25700,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 481
+        }
+      ],
+      "processTelemetry": {
+        "cpu_percent_one_core_mean": 16.249812675874097,
+        "cpu_percent_one_core_peak_sampled": 31.26962481653479,
+        "system_cpu_percent_machine_mean": 2.593417022870033,
+        "background_cpu_percent_one_core_estimate_mean": 56.092860210401966,
+        "rss_bytes_peak_sampled": 1183453184,
+        "peak_rss_bytes_os": 1194070016,
+        "system_available_bytes_min": 20562968576,
+        "sample_interval_seconds_max": 0.5005120000000005,
+        "covered_seconds": 10.0,
+        "boundary_coverage": true,
+        "boundary_method": "time-weighted counter intervals clipped at window edges; within-interval rate assumed uniform",
+        "heap_used_bytes": null,
+        "heap_committed_bytes": null,
+        "paging_bytes_per_second": null,
+        "gc_cpu_percent": null
+      },
+      "telemetryStatus": "complete",
+      "telemetrySamples": 41,
+      "telemetryReadMaxNs": 361200,
+      "telemetryErrors": [],
+      "rawHashes": {
+        "frames": "100fab40ce5bde044f850c92689747b34cec18b516876e96b381c4cc5b554ec2",
+        "diagnostics": "7bd31a7082b233def4721f421372e6e4916d7f224979ef56a577daecf669f100",
+        "manifest": "34d6fd86847932a9824ba3e4aace640f82daf1a4db983882afaddaf620f7f322",
+        "processCsv": "7152e005d03cedbc3ccf8c35f16081910b9ba94ef88deca1e846e9c0b5f4dbad",
+        "options": "55e4d8cd3ab741ca53f75b63eab27984b896d2529ce4e9acf5bea02a99961f71",
+        "execution": "a672c4fbb16eec8963d27d2eae3ba784c47c68ebfd553b3646f63ceb8396225f"
+      },
+      "gc": null
+    },
+    {
+      "label": "cap240",
+      "sampleKind": "actual-short-minecraft",
+      "fidelity": {
+        "artifactKind": "short-submission-fidelity",
+        "quality": "VALID WITH WARNINGS",
+        "semantic": "etw-application-submission-proxy",
+        "rawRows": 3695,
+        "submissionIntervals": {
+          "count": 2314,
+          "mean": 4.3188834917891095,
+          "median": 4.202349999999466,
+          "p95": 5.105109999999469,
+          "p99": 5.51749300000046,
+          "p999": null,
+          "max": 8.879399999999649,
+          "variance": 0.19406566209568296,
+          "presentation_rate_hz": 231.54132356224946,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 1380,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "unavailableDisplayRows": 47,
+        "unavailableDisplayFraction": 0.012719891745602166,
+        "displayEstimateIntervals": {
+          "count": 2283,
+          "mean": 4.3783288655278145,
+          "median": 4.169400000000323,
+          "p95": 6.8270600000000865,
+          "p99": 9.282635999999345,
+          "p999": null,
+          "max": 10.444200000000237,
+          "variance": 1.693248544296071,
+          "presentation_rate_hz": 228.3976445610027,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 1364,
+          "intervalsOver50Ms": 0,
+          "gapRunsOver50Ms": 0,
+          "intervalsOver1000Ms": 0
+        },
+        "displayInterpretation": "available estimates only; missingness is not optical drop evidence",
+        "fields": {
+          "SwapChainAddress": {
+            "0x0": 3695
+          },
+          "PresentRuntime": {
+            "Other": 3695
+          },
+          "SyncInterval": {
+            "-1": 3695
+          },
+          "PresentFlags": {
+            "0": 3695
+          },
+          "AllowsTearing": {
+            "0": 3695
+          },
+          "PresentMode": {
+            "Composed: Copy with GPU GDI": 3695
+          },
+          "MsBetweenSimulationStart": {
+            "unavailable": 3695,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenPresents": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 3695,
+              "mean": 4.323118673883626,
+              "median": 4.2034,
+              "p95": 5.106669999999999,
+              "p99": 5.582861999999999,
+              "p999": null,
+              "max": 8.8794,
+              "variance": 0.19730844838200326
+            }
+          },
+          "MsBetweenDisplayChange": {
+            "unavailable": 47,
+            "zero": 0,
+            "distribution": {
+              "count": 3648,
+              "mean": 4.379109018640351,
+              "median": 4.1692,
+              "p95": 6.8363249999999995,
+              "p99": 8.506955999999992,
+              "p999": null,
+              "max": 10.4442,
+              "variance": 1.6984893085014492
+            }
+          },
+          "MsInPresentAPI": {
+            "unavailable": 0,
+            "zero": 3695,
+            "distribution": {
+              "count": 3695,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": null,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsRenderPresentLatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 3695,
+              "mean": 0.24743142083897157,
+              "median": 0.202,
+              "p95": 0.58859,
+              "p99": 0.9126079999999999,
+              "p999": null,
+              "max": 1.0433,
+              "variance": 0.023430315069564438
+            }
+          },
+          "MsUntilDisplayed": {
+            "unavailable": 47,
+            "zero": 0,
+            "distribution": {
+              "count": 3648,
+              "mean": 6.2065664747807014,
+              "median": 6.1919,
+              "p95": 8.197449999999998,
+              "p99": 8.509789999999999,
+              "p999": null,
+              "max": 8.7024,
+              "variance": 1.7613487802274852
+            }
+          },
+          "MsPCLatency": {
+            "unavailable": 3695,
+            "zero": 0,
+            "distribution": null
+          },
+          "MsBetweenAppStart": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 3695,
+              "mean": 4.323118673883626,
+              "median": 4.2034,
+              "p95": 5.106669999999999,
+              "p99": 5.582861999999999,
+              "p999": null,
+              "max": 8.8794,
+              "variance": 0.19730844838200326
+            }
+          },
+          "MsCPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 3695,
+              "mean": 4.323118673883626,
+              "median": 4.2034,
+              "p95": 5.106669999999999,
+              "p99": 5.582861999999999,
+              "p999": null,
+              "max": 8.8794,
+              "variance": 0.19730844838200326
+            }
+          },
+          "MsCPUWait": {
+            "unavailable": 0,
+            "zero": 3695,
+            "distribution": {
+              "count": 3695,
+              "mean": 0.0,
+              "median": 0.0,
+              "p95": 0.0,
+              "p99": 0.0,
+              "p999": null,
+              "max": 0.0,
+              "variance": 0.0
+            }
+          },
+          "MsGPULatency": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 3695,
+              "mean": 0.2681838700947226,
+              "median": 0.2206,
+              "p95": 0.6263299999999999,
+              "p99": 0.9347759999999995,
+              "p999": null,
+              "max": 1.0704,
+              "variance": 0.024637763653222636
+            }
+          },
+          "MsGPUTime": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 3695,
+              "mean": 4.3023662246278755,
+              "median": 4.196,
+              "p95": 5.11672,
+              "p99": 5.623336,
+              "p999": null,
+              "max": 8.5308,
+              "variance": 0.22501112544650434
+            }
+          },
+          "MsGPUBusy": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 3695,
+              "mean": 0.4309213802435724,
+              "median": 0.3649,
+              "p95": 0.7674699999999998,
+              "p99": 1.0872339999999998,
+              "p999": null,
+              "max": 1.3505,
+              "variance": 0.024408043066565834
+            }
+          },
+          "MsGPUWait": {
+            "unavailable": 0,
+            "zero": 0,
+            "distribution": {
+              "count": 3695,
+              "mean": 3.8714448443843033,
+              "median": 3.8037,
+              "p95": 4.675729999999999,
+              "p99": 5.088204,
+              "p999": null,
+              "max": 7.8872,
+              "variance": 0.20917125425691083
+            }
+          },
+          "MsAnimationError": {
+            "unavailable": 47,
+            "zero": 1,
+            "distribution": {
+              "count": 3648,
+              "mean": -0.0006127192982456147,
+              "median": 0.04344999999999999,
+              "p95": 1.9479749999999978,
+              "p99": 2.736006999999999,
+              "p999": null,
+              "max": 6.371400000000001,
+              "variance": 1.761947422656202
+            }
+          },
+          "AnimationTime": {
+            "unavailable": 47,
+            "zero": 0,
+            "distribution": {
+              "count": 3648,
+              "mean": 7994.342072176535,
+              "median": 7988.7217,
+              "p95": 15178.230634999998,
+              "p99": 15820.829823999999,
+              "p999": null,
+              "max": 15978.5103,
+              "variance": 21278733.6051916
+            }
+          }
+        },
+        "exportedIntervalMaxDisagreementMs": 8.881784197001252e-16,
+        "lossStatus": "ZERO OBSERVED THROUGH WINDOW",
+        "uncertainty": {
+          "qpcTickMs": 0.0001,
+          "displayLatencyRoundingMs": 5e-05,
+          "etwToApiEntryMs": null,
+          "physicalScanoutMs": null,
+          "clockDriftPpm": null,
+          "shutdownTailLoss": "UNKNOWN"
+        },
+        "metricClassification": {
+          "submission": "DIAGNOSTIC ONLY; independent event completeness and overhead required",
+          "display": "DIAGNOSTIC ONLY",
+          "gpu": "DIAGNOSTIC ONLY",
+          "physicalDisplay": "UNAVAILABLE"
+        },
+        "captureCompleteness": "offline consistency only; row completeness requires independent evidence",
+        "independentCreationIdentityMatched": true,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "warnings": [
+          "short-only; no performance conclusion",
+          "Other runtime is not API-entry instrumentation",
+          "display estimates are not physical scanout",
+          "observer interference needs independent review"
+        ]
+      },
+      "originalDisplayReader": {
+        "artifactKind": "short-calibration",
+        "quality": "VALID WITH WARNINGS",
+        "targetKind": "minecraft",
+        "rawRows": 3695,
+        "unavailableDisplayRows": 47,
+        "unpairedDisplayRows": 0,
+        "metrics": {
+          "count": 2283,
+          "mean": 4.3783288655278145,
+          "median": 4.169400000000323,
+          "p95": 6.8270600000000865,
+          "p99": 9.282635999999345,
+          "p999": null,
+          "max": 10.444200000000237,
+          "variance": 1.693248544296071,
+          "presentation_rate_hz": 228.3976445610027,
+          "stutter_frames_over_50ms": 0,
+          "stutter_events_over_50ms": 0,
+          "stutter_frames_per_minute": 0.0,
+          "long_gaps_over_1000ms": 0,
+          "boundary_coverage": true,
+          "discarded_boundary_intervals": 1364
+        },
+        "warnings": [
+          "etw-display-estimate-not-physical-display-proof",
+          "producer-loss-counters-unavailable",
+          "observer-overhead-unmeasured",
+          "short-calibration-not-performance-benchmark",
+          "unavailable-display-rows-retained",
+          "unelevated-process-query-limitation"
+        ],
+        "fullMeasuredRunQuality": "INCOMPLETE"
+      },
+      "settings": {
+        "maxFps": "240",
+        "enableVsync": "false",
+        "inactivityFpsLimit": "\"minimized\"",
+        "renderDistance": "12",
+        "simulationDistance": "8",
+        "overrideWidth": "1920",
+        "overrideHeight": "1080",
+        "fullscreen": "false"
+      },
+      "warmupSeconds": 446.4750583000023,
+      "captureSecondsRequested": 16,
+      "innerWindowSeconds": 10,
+      "presentmonExitCode": 0,
+      "qpcFrequencyBeforeHz": 10000000,
+      "qpcFrequencyAfterHz": 10000000,
+      "processIdentityMatched": true,
+      "allForeground": true,
+      "focusSamples": 36,
+      "lossSnapshots": [
+        {
+          "statusCode": 0,
+          "qpcNs": 17482031088200,
+          "queryDurationNs": 31400,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 78
+        },
+        {
+          "statusCode": 0,
+          "qpcNs": 17495032233400,
+          "queryDurationNs": 24900,
+          "lossStatus": "COUNTER SNAPSHOT",
+          "eventsLost": 0,
+          "logBuffersLost": 0,
+          "realTimeBuffersLost": 0,
+          "buffersWritten": 598
+        }
+      ],
+      "processTelemetry": {
+        "cpu_percent_one_core_mean": 27.342332292589397,
+        "cpu_percent_one_core_peak_sampled": 40.64629052697802,
+        "system_cpu_percent_machine_mean": 3.309398317058579,
+        "background_cpu_percent_one_core_estimate_mean": 64.68711109229291,
+        "rss_bytes_peak_sampled": 1185357824,
+        "peak_rss_bytes_os": 1194070016,
+        "system_available_bytes_min": 20525359104,
+        "sample_interval_seconds_max": 0.5007592000000001,
+        "covered_seconds": 10.0,
+        "boundary_coverage": true,
+        "boundary_method": "time-weighted counter intervals clipped at window edges; within-interval rate assumed uniform",
+        "heap_used_bytes": null,
+        "heap_committed_bytes": null,
+        "paging_bytes_per_second": null,
+        "gc_cpu_percent": null
+      },
+      "telemetryStatus": "complete",
+      "telemetrySamples": 41,
+      "telemetryReadMaxNs": 1043700,
+      "telemetryErrors": [],
+      "rawHashes": {
+        "frames": "784b2f6c502f65a0d1069ba0e456ce2eaceadd1d11568bf594b49fbe6a4e6051",
+        "diagnostics": "7bd31a7082b233def4721f421372e6e4916d7f224979ef56a577daecf669f100",
+        "manifest": "2a9766dcb997ca94ace07c3f7c5fadc9ef13c1c338cc9e4f74a298d2d4250480",
+        "processCsv": "abc18005fef0082a669425b9114f1f833e65c632a8a7a72da271a69819218c5e",
+        "options": "91a40a8d2332bba0d30d309d362d5bf0f02523f693501716c5ae3f167804aef9",
+        "execution": "4eec52799fd3fc5b8f6eba132dbae788aa3c644d589c9755195ce33161ae7b2c"
+      },
+      "gc": null
+    }
+  ],
+  "configuration": {
+    "mode": "balanced",
+    "heapMiB": 2048,
+    "customJvmArguments": "",
+    "minecraft": "1.21.11",
+    "fabric": "0.19.5",
+    "java": "Microsoft OpenJDK 21.0.7+6-LTS"
+  },
+  "framebuffer": [
+    1920,
+    1080
+  ],
+  "camera": [
+    0.5,
+    66,
+    0.5,
+    0,
+    10
+  ],
+  "minecraftOverheadTrials": "not performed: controlled prerequisite failed",
+  "fullMeasuredRunQuality": "INCOMPLETE"
+}

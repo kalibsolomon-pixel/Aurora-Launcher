@@ -1,0 +1,216 @@
+{
+  "sampleKind": "actual-same-capture-channel-and-independent-marker-comparison",
+  "minecraft": [
+    {
+      "label": "unlimited",
+      "longDisplayEstimateGaps": [
+        {
+          "startSeconds": 4.0180675,
+          "endSeconds": 4.5119789,
+          "displayEstimateGapMs": 493.9114,
+          "submissionRowsDuringGap": 20,
+          "overlappingLongSubmissionGaps": [
+            {
+              "startSeconds": 4.0134111,
+              "endSeconds": 4.5060865,
+              "submissionGapMs": 492.6754000000004
+            }
+          ]
+        },
+        {
+          "startSeconds": 5.0222303,
+          "endSeconds": 5.5222515,
+          "displayEstimateGapMs": 500.02119999999996,
+          "submissionRowsDuringGap": 35,
+          "overlappingLongSubmissionGaps": [
+            {
+              "startSeconds": 5.0176198,
+              "endSeconds": 5.5135792,
+              "submissionGapMs": 495.9593999999994
+            }
+          ]
+        },
+        {
+          "startSeconds": 6.0263997,
+          "endSeconds": 6.5388963,
+          "displayEstimateGapMs": 512.4966000000004,
+          "submissionRowsDuringGap": 34,
+          "overlappingLongSubmissionGaps": [
+            {
+              "startSeconds": 6.0216309,
+              "endSeconds": 6.5302474,
+              "submissionGapMs": 508.6165000000005
+            }
+          ]
+        },
+        {
+          "startSeconds": 7.034371,
+          "endSeconds": 7.541639,
+          "displayEstimateGapMs": 507.2679999999998,
+          "submissionRowsDuringGap": 19,
+          "overlappingLongSubmissionGaps": [
+            {
+              "startSeconds": 7.0299522,
+              "endSeconds": 7.5366446,
+              "submissionGapMs": 506.6923999999995
+            }
+          ]
+        },
+        {
+          "startSeconds": 8.0389017,
+          "endSeconds": 8.5389062,
+          "displayEstimateGapMs": 500.0044999999993,
+          "submissionRowsDuringGap": 27,
+          "overlappingLongSubmissionGaps": [
+            {
+              "startSeconds": 8.0341433,
+              "endSeconds": 8.5323051,
+              "submissionGapMs": 498.1618000000001
+            }
+          ]
+        },
+        {
+          "startSeconds": 9.05556,
+          "endSeconds": 9.5555563,
+          "displayEstimateGapMs": 499.9962999999994,
+          "submissionRowsDuringGap": 27,
+          "overlappingLongSubmissionGaps": [
+            {
+              "startSeconds": 9.0509932,
+              "endSeconds": 9.5483723,
+              "submissionGapMs": 497.3790999999999
+            }
+          ]
+        },
+        {
+          "startSeconds": 10.0555669,
+          "endSeconds": 10.5388894,
+          "displayEstimateGapMs": 483.3224999999999,
+          "submissionRowsDuringGap": 27,
+          "overlappingLongSubmissionGaps": [
+            {
+              "startSeconds": 10.0507162,
+              "endSeconds": 10.5320022,
+              "submissionGapMs": 481.28600000000074
+            }
+          ]
+        },
+        {
+          "startSeconds": 11.0577024,
+          "endSeconds": 11.5264023,
+          "displayEstimateGapMs": 468.69990000000075,
+          "submissionRowsDuringGap": 24,
+          "overlappingLongSubmissionGaps": [
+            {
+              "startSeconds": 11.0550383,
+              "endSeconds": 11.5197395,
+              "submissionGapMs": 464.70120000000037
+            }
+          ]
+        },
+        {
+          "startSeconds": 12.0680565,
+          "endSeconds": 12.5514101,
+          "displayEstimateGapMs": 483.3535999999992,
+          "submissionRowsDuringGap": 26,
+          "overlappingLongSubmissionGaps": [
+            {
+              "startSeconds": 12.0633487,
+              "endSeconds": 12.5437537,
+              "submissionGapMs": 480.4049999999993
+            }
+          ]
+        },
+        {
+          "startSeconds": 13.0722236,
+          "endSeconds": 13.5638925,
+          "displayEstimateGapMs": 491.6689000000005,
+          "submissionRowsDuringGap": 26,
+          "overlappingLongSubmissionGaps": [
+            {
+              "startSeconds": 13.0676884,
+              "endSeconds": 13.5562892,
+              "submissionGapMs": 488.6008000000004
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "cap120",
+      "longDisplayEstimateGaps": []
+    },
+    {
+      "label": "cap240",
+      "longDisplayEstimateGaps": []
+    }
+  ],
+  "controlled": [
+    {
+      "label": "presentmon-1",
+      "gaps": [
+        {
+          "submissionRowGapMs": 756.9590000000001,
+          "independentSwapsDuringRowGap": 1354,
+          "maximumIndependentIntervalInsideGapMs": 1.4851
+        },
+        {
+          "submissionRowGapMs": 929.9746,
+          "independentSwapsDuringRowGap": 1663,
+          "maximumIndependentIntervalInsideGapMs": 1.4957
+        }
+      ]
+    },
+    {
+      "label": "both-1",
+      "gaps": [
+        {
+          "submissionRowGapMs": 701.8749,
+          "independentSwapsDuringRowGap": 1255,
+          "maximumIndependentIntervalInsideGapMs": 1.4455
+        },
+        {
+          "submissionRowGapMs": 937.5013,
+          "independentSwapsDuringRowGap": 1677,
+          "maximumIndependentIntervalInsideGapMs": 1.2724
+        }
+      ]
+    },
+    {
+      "label": "both-2",
+      "gaps": [
+        {
+          "submissionRowGapMs": 169.7384,
+          "independentSwapsDuringRowGap": 303,
+          "maximumIndependentIntervalInsideGapMs": 1.3186
+        },
+        {
+          "submissionRowGapMs": 562.8679,
+          "independentSwapsDuringRowGap": 1004,
+          "maximumIndependentIntervalInsideGapMs": 3.3394000000000004
+        },
+        {
+          "submissionRowGapMs": 1873.3517,
+          "independentSwapsDuringRowGap": 3356,
+          "maximumIndependentIntervalInsideGapMs": 1.7741
+        }
+      ]
+    },
+    {
+      "label": "presentmon-2",
+      "gaps": [
+        {
+          "submissionRowGapMs": 447.5626,
+          "independentSwapsDuringRowGap": 799,
+          "maximumIndependentIntervalInsideGapMs": 1.3812
+        },
+        {
+          "submissionRowGapMs": 1834.517,
+          "independentSwapsDuringRowGap": 3287,
+          "maximumIndependentIntervalInsideGapMs": 1.4783000000000002
+        }
+      ]
+    }
+  ],
+  "scope": "Shared gaps in ETW submission/display channels; independent controlled swaps continue during absent ETW records; physical scanout unknown"
+}

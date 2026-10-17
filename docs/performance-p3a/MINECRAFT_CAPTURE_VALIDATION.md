@@ -1,3 +1,33 @@
+# P3-A.4a three-condition Minecraft diagnostic — PARTIAL
+
+[Matrix and interpretation](OPENGL_PRESENTATION_INVESTIGATION.md),
+[actual captures](evidence/p3a4a/minecraft.json), [world integrity](evidence/p3a4a/world.json).
+One normally authenticated isolated A child used the exact locked Java, Minecraft
+1.21.11/Fabric 0.19.5, Balanced/2048 MiB/empty custom JVM text, stationary canonical
+scene, 1920x1080 windowed, 12/8 and Minimized limiting. No player motion or JVM tuning.
+
+After a corrected preflight and 300.120 seconds stationary warm-up, three 16-second
+traces used 10-second inner windows. Unlimited / cap120 / cap240 observed submission
+rows/sec are 1827.332 / 118.198 / 231.541; available display estimates/sec are
+122.354 / 118.194 / 228.398. Display NA fractions are 93.329% / 0% / 1.272%.
+All streams remain Other/Composed GPU-copy; all 36 focus samples/condition match.
+Producer exits 0 and observed session counters zero through each inner window;
+shutdown loss remains unknown. Full measured-run quality is INCOMPLETE.
+
+The high-rate controlled trial proves that long ETW row holes can occur while swaps
+continue. Minecraft also shows overlapping submission/display-estimate holes.
+Uncapped tails and rates are diagnostic ETW observations, not complete render counts,
+CPU-call stutters or physical display FPS. No primary uncapped metric is accepted.
+
+Only the disposable maxFps bytes changed. Canonical full options hash was restored
+after each cap and after normal exit; final F3 camera/framebuffer matches, saved
+scene has zero entities/block entities, frozen archive/restoration are intact.
+Game and retained-handle launcher exits are both 0. The initial preflight overlapped
+loading and is retained as invalid idle evidence; correctly ordered title preflight
+CPU is 2.650%, above the 2% screen. No favorable retry or unrelated-app termination.
+GPU/VRR/thermals and exact missing-record mechanism remain incomplete.
+P3-B NOT READY / NOT AUTHORIZED. Historical captures follow unchanged.
+
 # Minecraft P3-A.3 — restored scene validated, measurement confidence PARTIAL
 
 [Actual final capture](evidence/p3a3/final-capture.json),

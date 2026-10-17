@@ -1,3 +1,31 @@
+# PresentMon P3-A.4a — high-rate fidelity PARTIAL
+
+[Field semantics](PRESENTMON_FIELD_SEMANTICS.md), [OpenGL matrix](OPENGL_PRESENTATION_INVESTIGATION.md),
+[gap evidence](evidence/p3a4a/gap-review.json), [quality decisions](P3A4A_QUALITY_GATES.md).
+Three same-child stationary Minecraft traces show 93.329% unavailable display
+estimates uncapped, 0% at cap 120, and 1.272% at cap 240, all on Other/Composed:
+Copy with GPU GDI. Latest-copy/DWM association explains why many submissions need
+not yield distinct available display estimates. Exact physical drop/delivery counts
+remain unknown. The approximately 512 ms estimate gap is not a validated stutter.
+
+The uncapped submission stream also has roughly half-second holes. At representative
+WGL rates, 3356 independent swaps continued across one 1873.352 ms PresentMon row
+hole. Zero observed session loss counters do not certify driver/consumer event
+completeness. Both uncapped channels' tails are DIAGNOSTIC ONLY; no primary JVM
+comparison metric is accepted. Independent GPU completion/scanout is unavailable.
+
+All new producers exit 0, exact identities/focus match, QPC frequencies before/after
+are 10000000 Hz, and raw hashes/long gaps are preserved. The separately named short
+fidelity review reports offline consistency, null/zero, signed diagnostics and
+external counter/creation evidence; it never claims physical display or full-run
+quality. The original P3-A.3 actual short-reader result is exactly unchanged on
+reinspection. No old raw bytes or failed inspection was replaced.
+
+The representative-rate interference trial does not establish a defensible bound;
+Minecraft observer-off/on trials were gated off. Full measured schema, thresholds,
+300/600 seconds and source requirements are unchanged. P3-B NOT READY / NOT AUTHORIZED.
+Historical calibration reports follow unchanged.
+
 # PresentMon P3-A.3 — fixed cadences PASS, full calibration PARTIAL
 
 The exact 421312-byte 2.3.1 binary and Valid Intel signature were rechecked at

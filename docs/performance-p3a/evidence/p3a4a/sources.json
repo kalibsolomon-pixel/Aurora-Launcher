@@ -1,0 +1,32 @@
+[
+  {
+    "path": "README.md",
+    "url": "https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.3.1/README.md",
+    "sha256": "be63d86941169b48555f18ce5c0cb53aedfebeef632b70aa5888a6007ba7095d"
+  },
+  {
+    "path": "README-ConsoleApplication.md",
+    "url": "https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.3.1/README-ConsoleApplication.md",
+    "sha256": "faeacfe63d0fd87c75dab3367146e9a4b89d66da58ae8f25f4d362d55b091286"
+  },
+  {
+    "path": "PresentMon/CsvOutput.cpp",
+    "url": "https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.3.1/PresentMon/CsvOutput.cpp",
+    "sha256": "7955f00bdbdb2737566a3f01468307f7cd829f3f0aa206f3239df533e53696df"
+  },
+  {
+    "path": "PresentMon/OutputThread.cpp",
+    "url": "https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.3.1/PresentMon/OutputThread.cpp",
+    "sha256": "ec966006a51bb119d2e406e7d0961ceb9207c102a0e511897390bd96eb730aaf"
+  },
+  {
+    "path": "PresentData/PresentMonTraceConsumer.cpp",
+    "url": "https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.3.1/PresentData/PresentMonTraceConsumer.cpp",
+    "sha256": "aa26b8d4d5b8a2b04a2dbf68ee89356b243163eb4faf7e6902cfe971c3bb4d6a"
+  },
+  {
+    "path": "PresentData/PresentMonTraceConsumer.hpp",
+    "url": "https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.3.1/PresentData/PresentMonTraceConsumer.hpp",
+    "sha256": "696e687f5ac6221589e3e8194b0f97557ecc5986d0b0845f83c4011bf2b5cbc4"
+  }
+]

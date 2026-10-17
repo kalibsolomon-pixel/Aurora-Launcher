@@ -1,0 +1,61 @@
+{
+  "artifactKind": "reviewed-sanitized-evidence-inventory",
+  "artifacts": [
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a/environment.json",
+      "sizeBytes": 3782,
+      "sha256": "bc8ebfc95404befe3a102fda6a83318400c00d64b53b089e8ba27c4b866e1f0e",
+      "provenance": "actual-environment-and-isolation"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a/gap-review.json",
+      "sizeBytes": 6572,
+      "sha256": "00ad33b62cacb66170fcd9519b7bf9fe8b1653c310ab73f5e27e8ea535a03f96",
+      "provenance": "actual-same-capture-channel-and-independent-marker-comparison"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a/historical-reinspection.json",
+      "sizeBytes": 8833,
+      "sha256": "95c7aeb29ca02285555f63c3c8cc848165197c5df57d8e3dc9311a75d1ca5294",
+      "provenance": "actual-historical-capture-reinspection"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a/minecraft.json",
+      "sizeBytes": 41603,
+      "sha256": "182363f29b89ddc1a1834040e55e7d88673a113f72cab7fb3c7b6861b0cacd49",
+      "provenance": "actual-minecraft-diagnostic-matrix"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a/overhead.json",
+      "sizeBytes": 64515,
+      "sha256": "5386ae0c3ebf6f444be318e38ece8c08ddc5e9ae57ad7c09325b201d4b41b5ef",
+      "provenance": "actual-controlled-high-rate-overhead"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a/preservation.json",
+      "sizeBytes": 1248,
+      "sha256": "765fb7e597f9faa23a845fb4b775a36a294397d771b0faf4e8c738204dfdaeec",
+      "provenance": "actual-preservation-audit"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a/sources.json",
+      "sizeBytes": 1475,
+      "sha256": "c4eb0e5eeee05f389487a8270585604c1027b6bd9fed363eeb5a11c210a4465c",
+      "provenance": "official-version-pinned-source-provenance"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a/tests.json",
+      "sizeBytes": 1335,
+      "sha256": "aa73c2ebcbd216cc7db8569d24225093fad65c25cdc927af6701eef922ae75a2",
+      "provenance": "actual-test-execution"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a/world.json",
+      "sizeBytes": 3036,
+      "sha256": "407ea4182ef9abea4fde49303fef5e9ae83a8fcbb0ef064c11b8a771a9678176",
+      "provenance": "actual-post-exit-canonical-validation"
+    }
+  ],
+  "rawPrivateEvidenceRetained": true,
+  "secretsOrBinariesCommitted": false
+}

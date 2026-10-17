@@ -15,7 +15,7 @@ from process_capture import Reader
 from readiness_checks import plain, read_json
 
 
-def validate_plan(plan):
+def validate_plan(plan, high_rate=False):
     if not isinstance(plan, list) or not plan or len(plan) > 8:
         raise ValueError('phase plan')
     total = 0
@@ -24,7 +24,7 @@ def validate_plan(plan):
             raise ValueError('phase fields')
         if type(phase['seconds']) not in (int, float) or not 1 <= phase['seconds'] <= 30:
             raise ValueError('phase duration')
-        if type(phase['hz']) is not int or not 1 <= phase['hz'] <= 240:
+        if type(phase['hz']) is not int or not 1 <= phase['hz'] <= (4000 if high_rate else 240):
             raise ValueError('phase cadence')
         total += phase['seconds']
     if total > 90 or len({p['label'] for p in plan}) != len(plan):
@@ -32,8 +32,8 @@ def validate_plan(plan):
     return total
 
 
-def run(out, plan):
-    duration = validate_plan(plan)
+def run(out, plan, high_rate=False):
+    duration = validate_plan(plan, high_rate)
     out = Path(out).absolute()
     plain(out.parent)
     out.mkdir(exist_ok=False)
@@ -75,7 +75,7 @@ def run(out, plan):
     reader=Reader(os.getpid());identity=reader.creation_id;reader.close()
     freq=c.c_longlong();k.QueryPerformanceFrequency(c.byref(freq))
     
-    meta={'pid':os.getpid(),'creationId':identity,'qpcFrequencyHz':freq.value,'phases':plan,'durationSeconds':duration,'swapIntervalRequested':0,'source':'real native WGL SwapBuffers controlled stimulus'}
+    meta={'pid':os.getpid(),'creationId':identity,'qpcFrequencyHz':freq.value,'phases':plan,'durationSeconds':duration,'swapIntervalRequested':0,'highRateOptIn':high_rate,'source':'real native WGL SwapBuffers controlled stimulus'}
     (out/'identity.json').write_text(json.dumps(meta,indent=2),encoding='utf-8')
     print('Controlled native OpenGL ready',os.getpid(),flush=True)
     msg=w.MSG();rows=[];deadline=time.perf_counter()+60
@@ -113,5 +113,6 @@ if __name__ == '__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output',type=Path)
     parser.add_argument('plan',type=Path)
+    parser.add_argument('--high-rate',action='store_true',help='Explicit short diagnostic opt-in, up to 4000 Hz; observed markers remain authoritative')
     args=parser.parse_args()
-    run(args.output,read_json(args.plan.absolute()))
+    run(args.output,read_json(args.plan.absolute()),args.high_rate)

@@ -1,0 +1,39 @@
+{
+  "sampleKind": "actual-test-execution",
+  "benchmark": {
+    "passed": 74,
+    "existing": 65,
+    "newFocused": 9,
+    "failures": 0,
+    "logSha256": "210dbde79efe42aec7b101f60e17b9742bb18764cca4ebedc6fe7cd659af66f1"
+  },
+  "p1": {
+    "passed": 13,
+    "failures": 0,
+    "logSha256": "80f98ef0cf3dfb24c5315b3ec38b7328f90bdb63a2315bb8344cf1ea15bb5bf4"
+  },
+  "newTestProvenance": "synthetic mutations of retained real controlled CSV specimen; separate actual experiments in other reports",
+  "oldReaderActualResultUnchanged": true,
+  "productSourceChanged": false,
+  "rustFrontendBuildRerun": false,
+  "privateDevelopmentFailuresRetained": true,
+  "fullMeasuredRunQuality": "INCOMPLETE",
+  "actualFidelityCli": [
+    {
+      "condition": "unlimited",
+      "exitCode": 0,
+      "outputSha256": "da927f4328f0c906792af946466edb826a2130fa362c115991e210c1c367d6f2"
+    },
+    {
+      "condition": "cap120",
+      "exitCode": 0,
+      "outputSha256": "84fa538eb91eee5f4f42e0e50c5eea85a43a12205d5632519242bb2eede41e9c"
+    },
+    {
+      "condition": "cap240",
+      "exitCode": 0,
+      "outputSha256": "e119a1fdf8c4d4f907da1a9f9086d7b2378e418565bf565aff24594851cb84b1"
+    }
+  ],
+  "failingRegressionBeforeCorrectionSha256": "b12982a140a6378d69214e627675cdafa8f206e78db22a4d5090e21fa5762232"
+}

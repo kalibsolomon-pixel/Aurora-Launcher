@@ -1,0 +1,104 @@
+{
+  "sampleKind": "actual-environment-and-isolation",
+  "quiet": {
+    "quiet-controlled": {
+      "machineCpuMeanPercent": 0.6792340473044644,
+      "minimumAvailableBytes": 22331015168,
+      "samples": 121,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "GPU idle/VRR/thermals",
+        "background app workload stability"
+      ],
+      "quietCpuScreenPercent": 2,
+      "cpuScreenPassed": true,
+      "processCsvSha256": "fcd14e2fcbff7b731228a5d10bea558c9882ab1cbccebfe19ec1cde3e1fa5da8",
+      "captureMetadataSha256": "3e61271a3be8f0ebccff07dd91d0c43d8d7fa7358be652583c77166067aa3591"
+    },
+    "quiet-minecraft": {
+      "machineCpuMeanPercent": 9.829651589639694,
+      "minimumAvailableBytes": 20510343168,
+      "samples": 121,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "GPU idle/VRR/thermals",
+        "background app workload stability"
+      ],
+      "quietCpuScreenPercent": 2,
+      "cpuScreenPassed": false,
+      "processCsvSha256": "8939cb5c4bf91913d8b9067d87ae6b8826ec11237fb21a5f30ed84954afd09cb",
+      "captureMetadataSha256": "140bc2f80512f926dc2697a79efb8b5427ffaaf7c47eb597430dfb1dc7a7ea0f"
+    },
+    "quiet-minecraft-title": {
+      "machineCpuMeanPercent": 2.649511467271561,
+      "minimumAvailableBytes": 20106960896,
+      "samples": 121,
+      "ACLineStatus": 1,
+      "unknowns": [
+        "GPU idle/VRR/thermals",
+        "background app workload stability"
+      ],
+      "quietCpuScreenPercent": 2,
+      "cpuScreenPassed": false,
+      "processCsvSha256": "b3a081c8ed8c2681253df9305955abca99d9596ca1dd0e77a5f95361fbf6d446",
+      "captureMetadataSha256": "900b66392576e532e71e0125678df8f758594e7b4bf5b8442a1be16e2c6576da"
+    }
+  },
+  "quietInterpretation": {
+    "quiet-controlled": "correctly ordered before controlled trials",
+    "quiet-minecraft": "overlapped world loading; retained invalid idle observation",
+    "quiet-minecraft-title": "corrected preflight before reload; CPU screen failed; no favorable retry"
+  },
+  "display": {
+    "gpu": "AMD Radeon RX 9070 XT",
+    "driver": "32.0.31041.1004",
+    "desktop": [
+      2560,
+      1440,
+      240
+    ],
+    "gameFramebuffer": [
+      1920,
+      1080
+    ],
+    "VRR": null,
+    "hardwareScheduling": null,
+    "thermals": null,
+    "gpuEngineSampleMaximumPercent": 8.673013663264031,
+    "gpuIdleEstablished": false
+  },
+  "power": {
+    "ACLineStatus": 1,
+    "scheme": "Ultimate Performance",
+    "changed": false
+  },
+  "isolation": {
+    "markedDirectTempRoot": true,
+    "reparsePoints": 0,
+    "nativeReportedRootMatched": true,
+    "liveWebviewProfileMatched": true,
+    "startupRefreshOrdering": "previously approved exception; live check follows startup",
+    "sameUserCredentialContinuityRiskAccepted": true,
+    "interactiveSignInRequired": false,
+    "normalSessionStatus": "ready",
+    "javawSha256": "1ba6a4fb32a6a3d5c925fe837ae6717e2f75743a71e013e668e6dadb909245ba",
+    "presentmonSha256": "364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c",
+    "presentmonAuthenticode": "Valid / Intel Corporation",
+    "configuration": {
+      "mode": "balanced",
+      "memoryMib": 2048,
+      "additionalJvmArguments": "",
+      "window": null
+    }
+  },
+  "startupAttempt": {
+    "legacyShellScriptFile": "refused by pre-existing execution policy; no child launched",
+    "currentShellScriptFile": "permitted by pre-existing RemoteSigned policy",
+    "executionPolicyChanged": false
+  },
+  "limitations": [
+    "GPU sampling is a single per-engine observation, not aggregate GPU load or idle proof",
+    "VRR, thermals, scheduling and driver overrides not established",
+    "same-user refresh continuity not probed in production"
+  ]
+}

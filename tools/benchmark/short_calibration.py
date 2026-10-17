@@ -20,7 +20,8 @@ FIELDS = {'schemaVersion', 'artifactKind', 'targetKind', 'status', 'startUtc',
 TOOL_SHA256 = '364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c'
 
 
-def inspect(root, m):
+def read_capture(root, m):
+    """Shared strict input boundary; display quality is evaluated separately."""
     root = Path(root).absolute()
     q.require(isinstance(m, dict) and set(m) == FIELDS, 'short calibration fields')
     q.require(type(m['schemaVersion']) is int and m['schemaVersion'] == 1, 'unsupported short schema')
@@ -45,6 +46,17 @@ def inspect(root, m):
         q.require(q.sha256(path) == m[key], 'artifact digest mismatch')
     rows = q.read_rows(frames, ['ProcessID', 'SwapChainAddress', 'PresentRuntime',
                                'TimeInQPC', 'MsUntilDisplayed', 'MsBetweenDisplayChange'])
+    # Direct Windows console redirection emits UTF-16LE with BOM; text
+    # redirection may instead retain UTF-8. Decode strictly in either case.
+    raw_diagnostic = diagnostics.read_bytes()
+    diagnostic = raw_diagnostic.decode('utf-16' if raw_diagnostic.startswith(b'\xff\xfe') else 'utf-8-sig')
+    q.require(not re.search(r'\b(error|failed|denied|lost|dropped)\b', diagnostic, re.I), 'producer diagnostics need review')
+    return root, rows, diagnostic
+
+
+def inspect(root, m):
+    root, rows, diagnostic = read_capture(root, m)
+    offset = q.number(m['windowStartSeconds']); duration = q.number(m['windowSeconds'], True)
     ticks, displayed, unavailable, unpaired = [], [], 0, 0
     for r in rows:
         q.require(r['ProcessID'] == str(m['pid']) and r['SwapChainAddress'] == m['swapChain']
@@ -63,11 +75,6 @@ def inspect(root, m):
     q.strictly_increasing(ticks)
     metrics = q.frame_metrics(displayed, offset, duration, .25)
     q.require(metrics['count'] >= 10, 'insufficient short calibration samples')
-    # The Windows console producer emits UTF-16LE with BOM when its stderr is
-    # redirected directly; PowerShell's text redirection instead retained UTF-8.
-    raw_diagnostic = diagnostics.read_bytes()
-    diagnostic = raw_diagnostic.decode('utf-16' if raw_diagnostic.startswith(b'\xff\xfe') else 'utf-8-sig')
-    q.require(not re.search(r'\b(error|failed|denied|lost|dropped)\b', diagnostic, re.I), 'producer diagnostics need review')
     warnings = ['etw-display-estimate-not-physical-display-proof', 'producer-loss-counters-unavailable',
                 'observer-overhead-unmeasured', 'short-calibration-not-performance-benchmark']
     if unavailable: warnings.append('unavailable-display-rows-retained')

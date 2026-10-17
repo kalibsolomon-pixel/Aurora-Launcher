@@ -1,5 +1,16 @@
 # P3-A benchmark infrastructure
 
+P3-A.4a adds a separate offline short-stream review:
+`python -B tools/benchmark/presentation_fidelity.py <short-calibration.json> [--loss <loss.json>] [--identity <identity.json>]`.
+It reports submission and available-display channels independently, retains null
+versus zero and signed diagnostics, and refuses physical-display claims. Offline
+consistency never establishes event completeness; the actual high-rate WGL trial
+has fewer ETW rows than independent swaps despite observed zero session counters.
+See [quality decisions](../../docs/performance-p3a/P3A4A_QUALITY_GATES.md).
+`native_wgl.py --high-rate` explicitly permits up to 4000 Hz inside the same
+90-second bound; default cadence limits remain 240 Hz. Requested rate never
+substitutes for actual markers. No measured schema or product source changed.
+
 Python 3.12+, standard library only. No package installation. `quality.py` is
 offline; `process_capture.py` is an explicitly invoked bounded read-only Windows
 sampler. Nothing runs at launcher startup, downloads a tool, authenticates, launches

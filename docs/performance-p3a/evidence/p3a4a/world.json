@@ -1,0 +1,119 @@
+{
+  "sampleKind": "actual-post-exit-canonical-validation",
+  "canonicalArchiveSha256": "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f",
+  "canonicalManifestSha256": "5082795f0ac5987c1eb61412102a2be5bc7a29868842dd317f985f3193258c61",
+  "canonicalOptionsSha256": "efd1595619f579723159ed7bb0cbb1e06d7336dc9980662252162abd15f24ae1",
+  "liveOptionsSha256": "efd1595619f579723159ed7bb0cbb1e06d7336dc9980662252162abd15f24ae1",
+  "canonicalFullInventoryAndRestorationValid": true,
+  "freshCopyInventoryMatchedBeforeFirstLaunch": true,
+  "sceneConformingAfterExit": true,
+  "sceneAfterExit": {
+    "minecraftVersion": "1.21.11",
+    "seed": 123456789,
+    "generationSettings": {
+      "settings": {
+        "features": 0,
+        "biome": "minecraft:plains",
+        "layers": [
+          {
+            "block": "minecraft:bedrock",
+            "height": 1
+          },
+          {
+            "block": "minecraft:dirt",
+            "height": 128
+          },
+          {
+            "block": "minecraft:grass_block",
+            "height": 1
+          }
+        ],
+        "structure_overrides": [
+          "minecraft:strongholds",
+          "minecraft:villages"
+        ],
+        "lakes": 0
+      },
+      "type": "minecraft:flat"
+    },
+    "playerPosition": [
+      0.5,
+      66.0,
+      0.5
+    ],
+    "orientation": [
+      0.0,
+      10.0
+    ],
+    "gameMode": "creative",
+    "difficulty": "normal",
+    "weather": "clear",
+    "timeOfDay": 6000,
+    "renderDistance": 12,
+    "simulationDistance": 8,
+    "entityConditions": {
+      "nonPlayerEntityCount": 0,
+      "entityTypes": [],
+      "blockEntityCount": 0
+    },
+    "resourcePacks": [],
+    "shaders": [],
+    "gamerules": {
+      "advance_time": 0,
+      "advance_weather": 0,
+      "spawn_mobs": 0,
+      "random_tick_speed": 3
+    },
+    "generatedChunks": {
+      "totalRecordedChunks": 5329,
+      "requiredFullChunks": 1024,
+      "missingRequiredFullChunks": 0,
+      "requiredChunkRectangle": [
+        -16,
+        -16,
+        15,
+        15
+      ]
+    }
+  },
+  "restoredAfterEachCap": [
+    {
+      "optionsSha256": "efd1595619f579723159ed7bb0cbb1e06d7336dc9980662252162abd15f24ae1",
+      "canonicalByteIdentical": true
+    },
+    {
+      "optionsSha256": "efd1595619f579723159ed7bb0cbb1e06d7336dc9980662252162abd15f24ae1",
+      "canonicalByteIdentical": true
+    }
+  ],
+  "gameExit": {
+    "utc": "2026-10-17T03:29:33.402Z",
+    "status": "exited",
+    "exitCode": 0,
+    "diagnostic": null,
+    "processId": null
+  },
+  "finalF3": {
+    "framebuffer": [
+      1920,
+      1080
+    ],
+    "camera": [
+      0.5,
+      66,
+      0.5,
+      0,
+      10
+    ],
+    "java": "21.0.7",
+    "fpsWithNewF3Input": 3848
+  },
+  "frozenBytesUnchanged": true,
+  "liveCopyByteIdentityClaim": false,
+  "launcherExit": {
+    "handleRetained": true,
+    "exitCode": 0,
+    "endUtc": "2026-10-17T03:29:50.1406358Z",
+    "pid": 13540
+  }
+}

@@ -1,3 +1,14 @@
+# P3-A.4a authorization extension
+
+The owner explicitly authorizes bounded measurement-fidelity, capped/uncapped
+diagnostics and representative-rate overhead calibration using the established
+same-user isolated A environment and exact locked instruments. The accepted
+Credential Manager continuity risk and reviewed startup-refresh ordering exception
+continue. Temporary FPS options apply only to the disposable game copy and must
+be restored. Frozen canonical materials, production files and JVM settings are
+preserved. New external tools/system changes require separate authorization.
+P3-B remains NOT AUTHORIZED regardless of this phase's result.
+
 # P3-A.3 authorization extension
 
 The owner explicitly continues P3-A.2's same-user/account model for the corrective
