@@ -1,4 +1,20 @@
-# P3-A.4a.3 practical frame-source decision
+# P3-A.4a.4 practical frame-source decision
+
+Performance Overlay1.0.2 remains usable for coarse internal pacing screening:
+four coherent locked normal-terrain exports from fresh warmed processes, with
+new workload-specific B/C ranges in [acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md).
+This measures eligible HUD callbacks, not active rendering, submission, physical
+display or every Minecraft frame. No independent inactive timing reference exists.
+
+JFR remains optional aggregate GC/heap/pause diagnostics; reported DataLoss0 in
+two accepted exports, with unequal post-roll limits. C2r's resource coverage failure
+does not corrupt its Overlay CSV, but does exclude a combined resource repeat.
+Small CPU/RSS and isolated recorder-overhead claims remain inconclusive. Match
+observers in future comparisons and judge effects against the new observed ranges.
+Strict research contracts and failed historical captures remain unchanged.
+P3-B remains NOT AUTHORIZED; no JVM optimization was run.
+
+# P3-A.4a.3 practical frame-source decision (historical)
 
 Performance Overlay 1.0.2 now exports coherent **eligible HUD-callback intervals**:
 five real CSVs, complete matching row/footer counts, valid numeric columns and

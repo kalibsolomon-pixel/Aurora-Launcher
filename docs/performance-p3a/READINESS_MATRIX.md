@@ -1,4 +1,28 @@
-# P3-A.4a.3 practical readiness — PARTIAL
+# P3-A.4a.4 practical readiness — PARTIAL
+
+[Fresh-process acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md) and
+[actual evidence](evidence/p3a4a4/resources.json) supersede the prior practical
+next-action request. The bounded A–B–C–C–B–A sequence is finished with five eligible
+resource windows; C2r's delayed sampler makes that resource slot mixed-state and
+excluded. Both C failures are retained; no further C attempt was added.
+
+| Metric / gate | Result | Limit |
+| --- | --- | --- |
+| Practical normal-terrain stationary materials | LOCKED WITH LIMITS | Inventory-equal restores, live/saved camera checks; no canonical B promotion, traversal or memory pressure |
+| Internal pacing screening | READY WITH LIMITS | Four coherent exports; new B/C two-repeat ranges in acceptance; no inactive timing reference or physical display claim |
+| Aggregate heap/GC/pause diagnostics | READY WITH LIMITS | Two readable privacy-filtered JFR exports, reported DataLoss0; unequal post-roll prevents matched frequency comparison |
+| Fresh-process controls / Overlay resource repeats | COMPLETE | A/B pairs plus one eligible C; exact creation identities and >=300s warm-ups |
+| Combined resource repeatability | INCOMPLETE / INCONCLUSIVE | C2 procedural failure; C2r timing exclusion; retry budget exhausted |
+| Small CPU/RSS benefit | INCONCLUSIVE | Ordinary variation and unbounded observer effects prevent small-effect claims |
+| Coarse resource regression screening | LIMITED | Predeclare meaningful magnitude beyond observed state/control ranges; no confidence bound |
+| 2048→1536 MiB | DEFERRED | Baseline committed/live heap well below either ceiling; recommend memory-demanding representative workload first |
+| P3-B | NOT AUTHORIZED | Owner must approve a specific hypothesis/workload/observer scope; no candidate executed |
+
+Keep the existing tools; no broad instrumentation phase is recommended. Historical
+strict gates/results below are unchanged, and are not prerequisites imposed anew
+on every practical metric family.
+
+# P3-A.4a.3 practical readiness — PARTIAL (historical)
 
 Use the separate [Practical Performance Protocol](PRACTICAL_PROTOCOL.md).
 [Actual recordings and acceptance](../../PERFORMANCE_P3A4A3_ACCEPTANCE.md).

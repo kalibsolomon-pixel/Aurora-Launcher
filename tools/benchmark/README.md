@@ -1,3 +1,17 @@
+# P3-A.4a.4 workload extension
+
+The existing diagnostic CSV reader also recognizes the exact frozen
+`workload-b-normal-stationary-v1` archive
+`de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6`.
+Crossed/unreviewed workload identities still fail. This adds no capture framework,
+quality relaxation or metric promotion. The [predeclared fresh-process plan](../../docs/performance-p3a/P3A4A4_TRIAL_PLAN.md)
+is separate from both the historical within-session sequence and strict schema1.
+An equal saved snapshot does not prove the camera survived UI loading: reset and
+observe the live camera before warm-up and verify it again after normal exit.
+[P3-A.4a.4 acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md) records the actual
+resource timing exclusions, independent metric readiness and unchanged P3-B
+authorization boundary.
+
 # P3-A benchmark infrastructure
 
 P3-A.4a.3 adds the separate [Practical Performance Protocol](../../docs/performance-p3a/PRACTICAL_PROTOCOL.md).

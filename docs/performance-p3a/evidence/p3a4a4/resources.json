@@ -1,0 +1,5169 @@
+{
+  "kind": "actual-fresh-process-resource-and-scene-evidence",
+  "runs": [
+    {
+      "label": "a1r",
+      "condition": "A",
+      "identity": {
+        "utc": "2026-10-17T06:25:21.596Z",
+        "status": "running",
+        "pid": 12480,
+        "startedAtUnixSeconds": 1792218321,
+        "sessionStatus": "ready",
+        "creationId": "134366919215745703",
+        "label": "a1r",
+        "executableHashVerified": true
+      },
+      "warmup": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 601,
+        "elapsedSeconds": 300.000001,
+        "machineCpuMeanPercent": {
+          "game": 5.126964393392343,
+          "launcher": 0.00018611022191782861,
+          "sampler": 0.0,
+          "total": 8.455545712392707,
+          "residual": 3.3283952087784465
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            1.845018450184502,
+            20.971563981042653
+          ],
+          "launcher": [
+            0.0,
+            0.12269938650306748
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            4.681978798586573,
+            26.421800947867297
+          ],
+          "residual": [
+            1.4893617021276597,
+            11.990111248454882
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18143076352,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          1585987584,
+          1672151040
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T06:26:19.334723+00:00",
+        "endUtc": "2026-10-17T06:31:19.340335+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 12480,
+            "creationId": "134366919215745703"
+          },
+          "launcher": {
+            "pid": 5796,
+            "creationId": "134366909230654288"
+          },
+          "sampler": {
+            "pid": 16740,
+            "creationId": "134366919792245840"
+          }
+        },
+        "gameForegroundSamples": 601,
+        "maxReadOverheadNs": 3854600,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 1602400256,
+          "endBytes": 1659269120,
+          "deltaBytes": 56868864,
+          "meanBytes": 1642530580.7892215,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0002146,
+            "cpu": {
+              "game": 13.897229618718486,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 18.82612883122769,
+              "residual": 4.928899212509206
+            },
+            "rssStartBytes": 1602400256,
+            "rssEndBytes": 1602138112
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 9.9999431,
+            "cpu": {
+              "game": 5.066799711735684,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.309773269028216,
+              "residual": 3.2429735572925322
+            },
+            "rssStartBytes": 1602138112,
+            "rssEndBytes": 1616076800
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 10.0000302,
+            "cpu": {
+              "game": 5.162004984768762,
+              "launcher": 0.005538631957906397,
+              "sampler": 0.0,
+              "total": 8.313486568817503,
+              "residual": 3.1459429520908344
+            },
+            "rssStartBytes": 1616076800,
+            "rssEndBytes": 1631137792
+          },
+          {
+            "startSeconds": 30.0,
+            "elapsedSeconds": 9.9997085,
+            "cpu": {
+              "game": 5.322444381864264,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.985919459307237,
+              "residual": 4.663475077442973
+            },
+            "rssStartBytes": 1631137792,
+            "rssEndBytes": 1629224960
+          },
+          {
+            "startSeconds": 40.0,
+            "elapsedSeconds": 10.0001434,
+            "cpu": {
+              "game": 5.011123470522803,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.053392658509456,
+              "residual": 3.042269187986652
+            },
+            "rssStartBytes": 1629224960,
+            "rssEndBytes": 1630879744
+          },
+          {
+            "startSeconds": 50.0,
+            "elapsedSeconds": 10.0002465,
+            "cpu": {
+              "game": 5.126349771791161,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.482689524657687,
+              "residual": 3.3563397528665257
+            },
+            "rssStartBytes": 1630879744,
+            "rssEndBytes": 1632378880
+          },
+          {
+            "startSeconds": 60.0,
+            "elapsedSeconds": 10.0000086,
+            "cpu": {
+              "game": 5.044164213099272,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.777290150547191,
+              "residual": 3.7331259374479195
+            },
+            "rssStartBytes": 1632378880,
+            "rssEndBytes": 1633558528
+          },
+          {
+            "startSeconds": 70.0,
+            "elapsedSeconds": 10.0000118,
+            "cpu": {
+              "game": 5.123042505592841,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.260626398210292,
+              "residual": 3.1375838926174504
+            },
+            "rssStartBytes": 1633558528,
+            "rssEndBytes": 1634553856
+          },
+          {
+            "startSeconds": 80.0,
+            "elapsedSeconds": 9.9996784,
+            "cpu": {
+              "game": 5.089086859688196,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.207126948775056,
+              "residual": 3.1180400890868594
+            },
+            "rssStartBytes": 1634553856,
+            "rssEndBytes": 1635360768
+          },
+          {
+            "startSeconds": 90.0,
+            "elapsedSeconds": 10.0002839,
+            "cpu": {
+              "game": 5.2569897873765274,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.029521736704057,
+              "residual": 3.7725319493275293
+            },
+            "rssStartBytes": 1635360768,
+            "rssEndBytes": 1636048896
+          },
+          {
+            "startSeconds": 100.0,
+            "elapsedSeconds": 10.0001462,
+            "cpu": {
+              "game": 5.265834227922482,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.407254647155206,
+              "residual": 3.141420419232724
+            },
+            "rssStartBytes": 1636048896,
+            "rssEndBytes": 1637228544
+          },
+          {
+            "startSeconds": 110.0,
+            "elapsedSeconds": 9.9995424,
+            "cpu": {
+              "game": 5.384233463893639,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.396314889391515,
+              "residual": 3.0120814254978763
+            },
+            "rssStartBytes": 1637228544,
+            "rssEndBytes": 1638498304
+          },
+          {
+            "startSeconds": 120.0,
+            "elapsedSeconds": 9.9999647,
+            "cpu": {
+              "game": 5.488111888111888,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.632167832167832,
+              "residual": 3.1440559440559444
+            },
+            "rssStartBytes": 1638498304,
+            "rssEndBytes": 1640509440
+          },
+          {
+            "startSeconds": 130.0,
+            "elapsedSeconds": 10.0004645,
+            "cpu": {
+              "game": 5.407366071428571,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.582589285714286,
+              "residual": 3.1752232142857153
+            },
+            "rssStartBytes": 1640509440,
+            "rssEndBytes": 1643081728
+          },
+          {
+            "startSeconds": 140.0,
+            "elapsedSeconds": 9.9999808,
+            "cpu": {
+              "game": 5.461624026696329,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.565072302558399,
+              "residual": 3.1034482758620694
+            },
+            "rssStartBytes": 1643081728,
+            "rssEndBytes": 1644965888
+          },
+          {
+            "startSeconds": 150.0,
+            "elapsedSeconds": 9.9996716,
+            "cpu": {
+              "game": 5.1594851706771125,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.433128147733632,
+              "residual": 3.273642977056519
+            },
+            "rssStartBytes": 1644965888,
+            "rssEndBytes": 1645735936
+          },
+          {
+            "startSeconds": 160.0,
+            "elapsedSeconds": 9.9998648,
+            "cpu": {
+              "game": 4.906607192640089,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.118204627822694,
+              "residual": 3.211597435182605
+            },
+            "rssStartBytes": 1645735936,
+            "rssEndBytes": 1645793280
+          },
+          {
+            "startSeconds": 170.0,
+            "elapsedSeconds": 10.0001136,
+            "cpu": {
+              "game": 5.112622658340767,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.87042818911686,
+              "residual": 3.7578055307760927
+            },
+            "rssStartBytes": 1645793280,
+            "rssEndBytes": 1648345088
+          },
+          {
+            "startSeconds": 180.0,
+            "elapsedSeconds": 10.0003747,
+            "cpu": {
+              "game": 4.61856360996314,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.667820842175807,
+              "residual": 3.0492572322126668
+            },
+            "rssStartBytes": 1648345088,
+            "rssEndBytes": 1648648192
+          },
+          {
+            "startSeconds": 190.0,
+            "elapsedSeconds": 9.9998141,
+            "cpu": {
+              "game": 4.48581361444432,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.519345071212292,
+              "residual": 3.033531456767972
+            },
+            "rssStartBytes": 1648648192,
+            "rssEndBytes": 1648652288
+          },
+          {
+            "startSeconds": 200.0,
+            "elapsedSeconds": 9.9998131,
+            "cpu": {
+              "game": 4.80683836589698,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.98734458259325,
+              "residual": 3.18050621669627
+            },
+            "rssStartBytes": 1648652288,
+            "rssEndBytes": 1649078272
+          },
+          {
+            "startSeconds": 210.0,
+            "elapsedSeconds": 10.0002637,
+            "cpu": {
+              "game": 4.421217371862948,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.378011290593036,
+              "residual": 2.956793918730088
+            },
+            "rssStartBytes": 1649078272,
+            "rssEndBytes": 1650184192
+          },
+          {
+            "startSeconds": 220.0,
+            "elapsedSeconds": 9.9998637,
+            "cpu": {
+              "game": 4.681805438744043,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.614241659657976,
+              "residual": 2.9324362209139334
+            },
+            "rssStartBytes": 1650184192,
+            "rssEndBytes": 1650843648
+          },
+          {
+            "startSeconds": 230.0,
+            "elapsedSeconds": 9.9999457,
+            "cpu": {
+              "game": 4.355118242298876,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.815732095935596,
+              "residual": 3.46061385363672
+            },
+            "rssStartBytes": 1650843648,
+            "rssEndBytes": 1651249152
+          },
+          {
+            "startSeconds": 240.0,
+            "elapsedSeconds": 10.0000991,
+            "cpu": {
+              "game": 3.7141591940662018,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.062991254289826,
+              "residual": 3.348832060223624
+            },
+            "rssStartBytes": 1651249152,
+            "rssEndBytes": 1651724288
+          },
+          {
+            "startSeconds": 250.0,
+            "elapsedSeconds": 10.0000079,
+            "cpu": {
+              "game": 3.8684503901895204,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.224080267558528,
+              "residual": 3.3556298773690076
+            },
+            "rssStartBytes": 1651724288,
+            "rssEndBytes": 1651675136
+          },
+          {
+            "startSeconds": 260.0,
+            "elapsedSeconds": 9.9999675,
+            "cpu": {
+              "game": 4.446800200859231,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.82793059197679,
+              "residual": 3.3811303911175585
+            },
+            "rssStartBytes": 1651675136,
+            "rssEndBytes": 1665961984
+          },
+          {
+            "startSeconds": 270.0,
+            "elapsedSeconds": 9.9997562,
+            "cpu": {
+              "game": 4.073410922112802,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.240376007162041,
+              "residual": 3.166965085049239
+            },
+            "rssStartBytes": 1665961984,
+            "rssEndBytes": 1658806272
+          },
+          {
+            "startSeconds": 280.0,
+            "elapsedSeconds": 10.0004166,
+            "cpu": {
+              "game": 3.761825264329438,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 6.911519198664441,
+              "residual": 3.1496939343350028
+            },
+            "rssStartBytes": 1658806272,
+            "rssEndBytes": 1659072512
+          },
+          {
+            "startSeconds": 290.0,
+            "elapsedSeconds": 9.9996611,
+            "cpu": {
+              "game": 4.419105967778534,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.323576128885863,
+              "residual": 2.904470161107329
+            },
+            "rssStartBytes": 1659072512,
+            "rssEndBytes": 1659269120
+          }
+        ]
+      },
+      "resource": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 61,
+        "elapsedSeconds": 29.9999847,
+        "machineCpuMeanPercent": {
+          "game": 4.349768272935395,
+          "launcher": 0.0,
+          "sampler": 0.0,
+          "total": 7.320341727622983,
+          "residual": 2.970573454687588
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            2.5700934579439254,
+            12.546125461254613
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            4.730831973898858,
+            16.236162361623617
+          ],
+          "residual": [
+            1.639344262295082,
+            8.979206049149338
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18699550720,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          1659568128,
+          1660628992
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T06:31:27.703467+00:00",
+        "endUtc": "2026-10-17T06:31:57.705232+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 12480,
+            "creationId": "134366919215745703"
+          },
+          "launcher": {
+            "pid": 5796,
+            "creationId": "134366909230654288"
+          },
+          "sampler": {
+            "pid": 20832,
+            "creationId": "134366922876357123"
+          }
+        },
+        "gameForegroundSamples": 61,
+        "maxReadOverheadNs": 566200,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 1659568128,
+          "endBytes": 1660518400,
+          "deltaBytes": 950272,
+          "meanBytes": 1660287232.299214,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0004308,
+            "cpu": {
+              "game": 4.515190510826386,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.35187153807419,
+              "residual": 2.8366810272478036
+            },
+            "rssStartBytes": 1659568128,
+            "rssEndBytes": 1660542976
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 9.9999099,
+            "cpu": {
+              "game": 4.205764075067024,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.355898123324397,
+              "residual": 3.1501340482573728
+            },
+            "rssStartBytes": 1660542976,
+            "rssEndBytes": 1660608512
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 9.999644,
+            "cpu": {
+              "game": 4.328690807799443,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.2534818941504176,
+              "residual": 2.9247910863509743
+            },
+            "rssStartBytes": 1660608512,
+            "rssEndBytes": 1660518400
+          }
+        ]
+      },
+      "setupAfterWarmupSeconds": 8.363132,
+      "heapStart": {
+        "committedBytes": 786432000,
+        "usedBytes": 539602944,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "heapEnd": {
+        "committedBytes": 786432000,
+        "usedBytes": 683973632,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "physicalWindow": {
+        "pid": 12480,
+        "physicalClientWidth": 1920,
+        "physicalClientHeight": 1080,
+        "dpi": 120,
+        "framebufferObserved": false,
+        "scope": "read-only window geometry; calling thread DPI context only"
+      },
+      "restoration": {
+        "label": "a1r",
+        "preLaunchInventoryEqual": true,
+        "optionsSha256": "64cec45e976849b23c95fc3c0b7652d72c535167903b3716fef7e93820b6cf65",
+        "archiveSha256": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6"
+      },
+      "cameraStart": {
+        "utc": "2026-10-17T06:26:18.162Z",
+        "position": [
+          128.5,
+          96,
+          128.5
+        ],
+        "orientation": [
+          135,
+          15
+        ],
+        "liveF3Verified": true,
+        "forcedChunks": 0,
+        "loadedEntities": 13,
+        "renderDistance": 12,
+        "simulationDistance": 8,
+        "resetAfterLoad": true
+      },
+      "cameraEnd": {
+        "utc": "2026-10-17T06:32:15.018Z",
+        "position": [
+          128.5,
+          96,
+          128.5
+        ],
+        "orientation": [
+          135,
+          15
+        ],
+        "liveF3Verified": true,
+        "forcedChunks": 0,
+        "loadedEntities": 9
+      },
+      "sceneAfter": {
+        "minecraftVersion": "1.21.11",
+        "seed": 123456789,
+        "generationSettings": {
+          "bonus_chest": 0,
+          "seed": 123456789,
+          "generate_features": 1,
+          "dimensions": {
+            "minecraft:the_nether": {
+              "type": "minecraft:the_nether",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:multi_noise",
+                  "preset": "minecraft:nether"
+                },
+                "settings": "minecraft:nether"
+              }
+            },
+            "minecraft:overworld": {
+              "type": "minecraft:overworld",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:multi_noise",
+                  "preset": "minecraft:overworld"
+                },
+                "settings": "minecraft:overworld"
+              }
+            },
+            "minecraft:the_end": {
+              "type": "minecraft:the_end",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:the_end"
+                },
+                "settings": "minecraft:end"
+              }
+            }
+          }
+        },
+        "dimension": "minecraft:overworld",
+        "position": [
+          128.5,
+          96.0,
+          128.5
+        ],
+        "orientation": [
+          135.0,
+          15.0
+        ],
+        "playerGameMode": 1,
+        "worldGameMode": 1,
+        "abilities": {
+          "walkSpeed": 0.10000000149011612,
+          "instabuild": 1,
+          "flying": 1,
+          "flySpeed": 0.05000000074505806,
+          "mayfly": 1,
+          "invulnerable": 1,
+          "mayBuild": 1
+        },
+        "time": 6000,
+        "raining": 0,
+        "thundering": 0,
+        "difficulty": 2,
+        "gameRules": {
+          "minecraft:advance_weather": 0,
+          "minecraft:max_entity_cramming": 24,
+          "minecraft:command_block_output": 1,
+          "minecraft:fall_damage": 1,
+          "minecraft:spawn_wardens": 1,
+          "minecraft:respawn_radius": 10,
+          "minecraft:max_command_sequence_length": 65536,
+          "minecraft:drowning_damage": 1,
+          "minecraft:immediate_respawn": 0,
+          "minecraft:natural_health_regeneration": 1,
+          "minecraft:player_movement_check": 1,
+          "minecraft:tnt_explosion_drop_decay": 0,
+          "minecraft:spectators_generate_chunks": 1,
+          "minecraft:players_nether_portal_creative_delay": 0,
+          "minecraft:fire_damage": 1,
+          "minecraft:command_blocks_work": 1,
+          "minecraft:advance_time": 0,
+          "minecraft:keep_inventory": 0,
+          "minecraft:log_admin_commands": 1,
+          "minecraft:block_drops": 1,
+          "minecraft:limited_crafting": 0,
+          "minecraft:elytra_movement_check": 1,
+          "minecraft:global_sound_events": 1,
+          "minecraft:lava_source_conversion": 0,
+          "minecraft:spread_vines": 1,
+          "minecraft:players_nether_portal_default_delay": 80,
+          "minecraft:players_sleeping_percentage": 100,
+          "minecraft:entity_drops": 1,
+          "minecraft:spawn_phantoms": 1,
+          "minecraft:spawn_mobs": 0,
+          "minecraft:freeze_damage": 1,
+          "minecraft:forgive_dead_players": 1,
+          "minecraft:mob_drops": 1,
+          "minecraft:show_advancement_messages": 1,
+          "minecraft:water_source_conversion": 1,
+          "minecraft:max_command_forks": 65536,
+          "minecraft:allow_entering_nether_using_portals": 1,
+          "minecraft:show_death_messages": 1,
+          "minecraft:spawn_patrols": 1,
+          "minecraft:block_explosion_drop_decay": 1,
+          "minecraft:max_block_modifications": 32768,
+          "minecraft:mob_griefing": 1,
+          "minecraft:send_command_feedback": 1,
+          "minecraft:pvp": 1,
+          "minecraft:spawn_monsters": 1,
+          "minecraft:locator_bar": 1,
+          "minecraft:fire_spread_radius_around_player": 128,
+          "minecraft:random_tick_speed": 3,
+          "minecraft:ender_pearls_vanish_on_death": 1,
+          "minecraft:spawner_blocks_work": 1,
+          "minecraft:spawn_wandering_traders": 1,
+          "minecraft:mob_explosion_drop_decay": 1,
+          "minecraft:tnt_explodes": 1,
+          "minecraft:max_snow_accumulation_height": 1,
+          "minecraft:projectiles_can_break_blocks": 1,
+          "minecraft:reduced_debug_info": 0,
+          "minecraft:universal_anger": 0,
+          "minecraft:raids": 1
+        },
+        "totalRecordedChunks": 3772,
+        "requiredFullChunks": 1024,
+        "missingRequiredFullChunks": 0,
+        "chunkRectangle": [
+          -8,
+          -8,
+          23,
+          23
+        ],
+        "entityCount": 205,
+        "entityTypes": {
+          "minecraft:chest_minecart": 30,
+          "minecraft:bee": 9,
+          "minecraft:drowned": 12,
+          "minecraft:falling_block": 100,
+          "minecraft:item": 54
+        },
+        "blockEntityCount": 446,
+        "blockEntityTypes": {
+          "DUMMY": 6,
+          "minecraft:mob_spawner": 60,
+          "minecraft:sculk_catalyst": 1,
+          "minecraft:sculk_sensor": 1,
+          "minecraft:brushable_block": 53,
+          "minecraft:chest": 74,
+          "minecraft:beehive": 7,
+          "minecraft:vault": 38,
+          "minecraft:dispenser": 27,
+          "minecraft:hopper": 16,
+          "minecraft:barrel": 30,
+          "minecraft:trial_spawner": 36,
+          "minecraft:decorated_pot": 83,
+          "minecraft:bed": 14
+        }
+      },
+      "heapCommandBrackets": [
+        {
+          "command": "JFR.check",
+          "startUtc": "2026-10-17T06:31:27.241090+00:00",
+          "endUtc": "2026-10-17T06:31:27.424813+00:00",
+          "sha256": "daf60b205eb99a477c7232b496c24939f6f4812e948de8809209911a0b4f9489"
+        },
+        {
+          "command": "GC.heap_info",
+          "startUtc": "2026-10-17T06:31:27.425813+00:00",
+          "endUtc": "2026-10-17T06:31:27.597802+00:00",
+          "sha256": "baff5c1095693668b9744b753cbc744a159b5527a9ebc07edb1893dd2a18532d"
+        }
+      ],
+      "resourceEligible": true
+    },
+    {
+      "label": "b1",
+      "condition": "B",
+      "identity": {
+        "utc": "2026-10-17T06:33:13.543Z",
+        "status": "running",
+        "pid": 23168,
+        "startedAtUnixSeconds": 1792218793,
+        "sessionStatus": "ready",
+        "creationId": "134366923935211236",
+        "label": "b1",
+        "executableHashVerified": true
+      },
+      "warmup": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 601,
+        "elapsedSeconds": 300.0001984,
+        "machineCpuMeanPercent": {
+          "game": 5.063606652517388,
+          "launcher": 0.0,
+          "sampler": 0.0,
+          "total": 8.563972165230348,
+          "residual": 3.5003655127129605
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            1.829268292682927,
+            39.40809968847352
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            4.864864864864865,
+            44.85981308411215
+          ],
+          "residual": [
+            1.5590200445434297,
+            13.132694938440494
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18613297152,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          1485750272,
+          1615065088
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T06:34:43.724745+00:00",
+        "endUtc": "2026-10-17T06:39:43.730995+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 23168,
+            "creationId": "134366923935211236"
+          },
+          "launcher": {
+            "pid": 5796,
+            "creationId": "134366909230654288"
+          },
+          "sampler": {
+            "pid": 1924,
+            "creationId": "134366924836185512"
+          }
+        },
+        "gameForegroundSamples": 601,
+        "maxReadOverheadNs": 900500,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 1543270400,
+          "endBytes": 1603698688,
+          "deltaBytes": 60428288,
+          "meanBytes": 1592228475.6882896,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0004537,
+            "cpu": {
+              "game": 14.385319053993753,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 18.55756358768407,
+              "residual": 4.172244533690316
+            },
+            "rssStartBytes": 1543270400,
+            "rssEndBytes": 1551294464
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 9.9997396,
+            "cpu": {
+              "game": 6.418277287453916,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.51848955423975,
+              "residual": 3.1002122667858343
+            },
+            "rssStartBytes": 1551294464,
+            "rssEndBytes": 1582858240
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 10.0001159,
+            "cpu": {
+              "game": 4.844831435588301,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.260772493860237,
+              "residual": 3.4159410582719367
+            },
+            "rssStartBytes": 1582858240,
+            "rssEndBytes": 1583276032
+          },
+          {
+            "startSeconds": 30.0,
+            "elapsedSeconds": 10.0000563,
+            "cpu": {
+              "game": 5.3909258329147836,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.577487583012445,
+              "residual": 3.1865617500976615
+            },
+            "rssStartBytes": 1583276032,
+            "rssEndBytes": 1583009792
+          },
+          {
+            "startSeconds": 40.0,
+            "elapsedSeconds": 10.0000771,
+            "cpu": {
+              "game": 5.316893550546753,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.6420441865655,
+              "residual": 3.325150636018746
+            },
+            "rssStartBytes": 1583009792,
+            "rssEndBytes": 1582780416
+          },
+          {
+            "startSeconds": 50.0,
+            "elapsedSeconds": 9.9997433,
+            "cpu": {
+              "game": 5.1962533452274755,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.087867975022302,
+              "residual": 3.8916146297948266
+            },
+            "rssStartBytes": 1582780416,
+            "rssEndBytes": 1583009792
+          },
+          {
+            "startSeconds": 60.0,
+            "elapsedSeconds": 9.9999521,
+            "cpu": {
+              "game": 4.93854748603352,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.391061452513966,
+              "residual": 3.4525139664804465
+            },
+            "rssStartBytes": 1583009792,
+            "rssEndBytes": 1583398912
+          },
+          {
+            "startSeconds": 70.0,
+            "elapsedSeconds": 10.0002835,
+            "cpu": {
+              "game": 5.630266168182579,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.855532615367446,
+              "residual": 3.2252664471848673
+            },
+            "rssStartBytes": 1583398912,
+            "rssEndBytes": 1587777536
+          },
+          {
+            "startSeconds": 80.0,
+            "elapsedSeconds": 10.0000823,
+            "cpu": {
+              "game": 4.620020087043857,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.912063385782837,
+              "residual": 3.29204329873898
+            },
+            "rssStartBytes": 1587777536,
+            "rssEndBytes": 1588240384
+          },
+          {
+            "startSeconds": 90.0,
+            "elapsedSeconds": 9.9999877,
+            "cpu": {
+              "game": 4.726298755649796,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.029685843423916,
+              "residual": 3.3033870877741203
+            },
+            "rssStartBytes": 1588240384,
+            "rssEndBytes": 1588535296
+          },
+          {
+            "startSeconds": 100.0,
+            "elapsedSeconds": 10.0000791,
+            "cpu": {
+              "game": 4.844928751047779,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.315171835708298,
+              "residual": 3.4702430846605195
+            },
+            "rssStartBytes": 1588535296,
+            "rssEndBytes": 1589153792
+          },
+          {
+            "startSeconds": 110.0,
+            "elapsedSeconds": 9.9996362,
+            "cpu": {
+              "game": 4.693684151847929,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.160990021740343,
+              "residual": 3.4673058698924137
+            },
+            "rssStartBytes": 1589153792,
+            "rssEndBytes": 1589604352
+          },
+          {
+            "startSeconds": 120.0,
+            "elapsedSeconds": 9.9999711,
+            "cpu": {
+              "game": 5.262274913320658,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.333407896208477,
+              "residual": 4.0711329828878196
+            },
+            "rssStartBytes": 1589604352,
+            "rssEndBytes": 1592266752
+          },
+          {
+            "startSeconds": 130.0,
+            "elapsedSeconds": 10.0001999,
+            "cpu": {
+              "game": 4.321949048837468,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.8484814773612195,
+              "residual": 3.526532428523751
+            },
+            "rssStartBytes": 1592266752,
+            "rssEndBytes": 1592610816
+          },
+          {
+            "startSeconds": 140.0,
+            "elapsedSeconds": 9.9999982,
+            "cpu": {
+              "game": 4.104456746630879,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.013196890901973,
+              "residual": 3.9087401442710945
+            },
+            "rssStartBytes": 1592610816,
+            "rssEndBytes": 1593155584
+          },
+          {
+            "startSeconds": 150.0,
+            "elapsedSeconds": 10.0001084,
+            "cpu": {
+              "game": 4.477279063284081,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.324505157513242,
+              "residual": 3.8472260942291605
+            },
+            "rssStartBytes": 1593155584,
+            "rssEndBytes": 1593606144
+          },
+          {
+            "startSeconds": 160.0,
+            "elapsedSeconds": 10.000052,
+            "cpu": {
+              "game": 4.132231404958677,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.761894125530489,
+              "residual": 3.6296627205718117
+            },
+            "rssStartBytes": 1593606144,
+            "rssEndBytes": 1593925632
+          },
+          {
+            "startSeconds": 170.0,
+            "elapsedSeconds": 9.9998591,
+            "cpu": {
+              "game": 4.465727490394788,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.87905785400078,
+              "residual": 3.4133303636059917
+            },
+            "rssStartBytes": 1593925632,
+            "rssEndBytes": 1594310656
+          },
+          {
+            "startSeconds": 180.0,
+            "elapsedSeconds": 9.9996739,
+            "cpu": {
+              "game": 4.584944790090241,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.970405246342694,
+              "residual": 3.385460456252453
+            },
+            "rssStartBytes": 1594310656,
+            "rssEndBytes": 1594851328
+          },
+          {
+            "startSeconds": 190.0,
+            "elapsedSeconds": 10.0000018,
+            "cpu": {
+              "game": 4.155078429191234,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.904105017243297,
+              "residual": 3.749026588052063
+            },
+            "rssStartBytes": 1594851328,
+            "rssEndBytes": 1595146240
+          },
+          {
+            "startSeconds": 200.0,
+            "elapsedSeconds": 10.0001383,
+            "cpu": {
+              "game": 4.58168441001059,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.00958697954406,
+              "residual": 3.4279025695334706
+            },
+            "rssStartBytes": 1595146240,
+            "rssEndBytes": 1595850752
+          },
+          {
+            "startSeconds": 210.0,
+            "elapsedSeconds": 9.9998671,
+            "cpu": {
+              "game": 4.475438301685991,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.5617543270038645,
+              "residual": 3.086316025317873
+            },
+            "rssStartBytes": 1595850752,
+            "rssEndBytes": 1597190144
+          },
+          {
+            "startSeconds": 220.0,
+            "elapsedSeconds": 10.0001167,
+            "cpu": {
+              "game": 4.531050202924334,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.583254572746984,
+              "residual": 3.0522043698226504
+            },
+            "rssStartBytes": 1597190144,
+            "rssEndBytes": 1606221824
+          },
+          {
+            "startSeconds": 230.0,
+            "elapsedSeconds": 9.999978,
+            "cpu": {
+              "game": 4.375,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.6953125,
+              "residual": 3.3203125
+            },
+            "rssStartBytes": 1606221824,
+            "rssEndBytes": 1606529024
+          },
+          {
+            "startSeconds": 240.0,
+            "elapsedSeconds": 9.9997947,
+            "cpu": {
+              "game": 4.639955169515271,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.873353880638835,
+              "residual": 3.233398711123564
+            },
+            "rssStartBytes": 1606529024,
+            "rssEndBytes": 1606778880
+          },
+          {
+            "startSeconds": 250.0,
+            "elapsedSeconds": 10.0000896,
+            "cpu": {
+              "game": 4.54950439915358,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.169061142666221,
+              "residual": 3.619556743512641
+            },
+            "rssStartBytes": 1606778880,
+            "rssEndBytes": 1607335936
+          },
+          {
+            "startSeconds": 260.0,
+            "elapsedSeconds": 10.0003414,
+            "cpu": {
+              "game": 4.788983665049897,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.078273958855997,
+              "residual": 3.2892902938060997
+            },
+            "rssStartBytes": 1607335936,
+            "rssEndBytes": 1609629696
+          },
+          {
+            "startSeconds": 270.0,
+            "elapsedSeconds": 10.0000621,
+            "cpu": {
+              "game": 4.815310791206339,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.620689655172415,
+              "residual": 3.8053788639660757
+            },
+            "rssStartBytes": 1609629696,
+            "rssEndBytes": 1599057920
+          },
+          {
+            "startSeconds": 280.0,
+            "elapsedSeconds": 9.9997429,
+            "cpu": {
+              "game": 4.443948191156767,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.396605627512283,
+              "residual": 3.9526574363555165
+            },
+            "rssStartBytes": 1599057920,
+            "rssEndBytes": 1598791680
+          },
+          {
+            "startSeconds": 290.0,
+            "elapsedSeconds": 9.9999964,
+            "cpu": {
+              "game": 4.197558392329562,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.586822007915714,
+              "residual": 3.3892636155861524
+            },
+            "rssStartBytes": 1598791680,
+            "rssEndBytes": 1603698688
+          }
+        ]
+      },
+      "resource": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 61,
+        "elapsedSeconds": 30.0001471,
+        "machineCpuMeanPercent": {
+          "game": 4.559083713567372,
+          "launcher": 0.0,
+          "sampler": 0.0,
+          "total": 8.516621659372381,
+          "residual": 3.9575379458050097
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            2.1134593993325916,
+            8.192457737321197
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            5.499438832772166,
+            18.855656697009103
+          ],
+          "residual": [
+            2.2446689113355784,
+            10.663198959687906
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18420883456,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          1622495232,
+          1626943488
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T06:39:55.959301+00:00",
+        "endUtc": "2026-10-17T06:40:25.961065+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 23168,
+            "creationId": "134366923935211236"
+          },
+          "launcher": {
+            "pid": 5796,
+            "creationId": "134366909230654288"
+          },
+          "sampler": {
+            "pid": 16968,
+            "creationId": "134366927958896714"
+          }
+        },
+        "gameForegroundSamples": 61,
+        "maxReadOverheadNs": 1567200,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 1623678976,
+          "endBytes": 1626943488,
+          "deltaBytes": 3264512,
+          "meanBytes": 1625297951.6340482,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0002849,
+            "cpu": {
+              "game": 4.92619100872288,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 10.28293446656229,
+              "residual": 5.35674345783941
+            },
+            "rssStartBytes": 1623678976,
+            "rssEndBytes": 1626120192
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 10.0002824,
+            "cpu": {
+              "game": 4.187315552090873,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.416894036416282,
+              "residual": 3.2295784843254083
+            },
+            "rssStartBytes": 1626120192,
+            "rssEndBytes": 1625804800
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 9.9995798,
+            "cpu": {
+              "game": 4.5653148106654715,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.853461796997535,
+              "residual": 3.2881469863320634
+            },
+            "rssStartBytes": 1625804800,
+            "rssEndBytes": 1626943488
+          }
+        ]
+      },
+      "setupAfterWarmupSeconds": 12.228306,
+      "heapStart": {
+        "committedBytes": 743440384,
+        "usedBytes": 653490176,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "heapEnd": {
+        "committedBytes": 743440384,
+        "usedBytes": 703094784,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "physicalWindow": {
+        "pid": 23168,
+        "physicalClientWidth": 1920,
+        "physicalClientHeight": 1080,
+        "dpi": 120,
+        "framebufferObserved": false,
+        "scope": "read-only window geometry; calling thread DPI context only"
+      },
+      "restoration": {
+        "label": "b1",
+        "preLaunchInventoryEqual": true,
+        "optionsSha256": "64cec45e976849b23c95fc3c0b7652d72c535167903b3716fef7e93820b6cf65",
+        "archiveSha256": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6"
+      },
+      "cameraStart": {
+        "utc": "2026-10-17T06:34:42.633Z",
+        "position": [
+          128.5,
+          96,
+          128.5
+        ],
+        "orientation": [
+          135,
+          15
+        ],
+        "liveF3Verified": true,
+        "forcedChunks": 0,
+        "loadedEntities": 13,
+        "renderDistance": 12,
+        "simulationDistance": 8,
+        "resetAfterLoad": true
+      },
+      "cameraEnd": {
+        "utc": "2026-10-17T06:40:57.118Z",
+        "position": [
+          128.5,
+          96,
+          128.5
+        ],
+        "orientation": [
+          135,
+          15
+        ],
+        "liveF3Verified": true,
+        "forcedChunks": 0,
+        "loadedEntities": 10
+      },
+      "sceneAfter": {
+        "minecraftVersion": "1.21.11",
+        "seed": 123456789,
+        "generationSettings": {
+          "bonus_chest": 0,
+          "seed": 123456789,
+          "generate_features": 1,
+          "dimensions": {
+            "minecraft:the_nether": {
+              "type": "minecraft:the_nether",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:multi_noise",
+                  "preset": "minecraft:nether"
+                },
+                "settings": "minecraft:nether"
+              }
+            },
+            "minecraft:overworld": {
+              "type": "minecraft:overworld",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:multi_noise",
+                  "preset": "minecraft:overworld"
+                },
+                "settings": "minecraft:overworld"
+              }
+            },
+            "minecraft:the_end": {
+              "type": "minecraft:the_end",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:the_end"
+                },
+                "settings": "minecraft:end"
+              }
+            }
+          }
+        },
+        "dimension": "minecraft:overworld",
+        "position": [
+          128.5,
+          96.0,
+          128.5
+        ],
+        "orientation": [
+          135.0,
+          15.0
+        ],
+        "playerGameMode": 1,
+        "worldGameMode": 1,
+        "abilities": {
+          "walkSpeed": 0.10000000149011612,
+          "instabuild": 1,
+          "flying": 1,
+          "flySpeed": 0.05000000074505806,
+          "mayfly": 1,
+          "invulnerable": 1,
+          "mayBuild": 1
+        },
+        "time": 6000,
+        "raining": 0,
+        "thundering": 0,
+        "difficulty": 2,
+        "gameRules": {
+          "minecraft:advance_weather": 0,
+          "minecraft:max_entity_cramming": 24,
+          "minecraft:command_block_output": 1,
+          "minecraft:fall_damage": 1,
+          "minecraft:spawn_wardens": 1,
+          "minecraft:respawn_radius": 10,
+          "minecraft:max_command_sequence_length": 65536,
+          "minecraft:immediate_respawn": 0,
+          "minecraft:drowning_damage": 1,
+          "minecraft:natural_health_regeneration": 1,
+          "minecraft:player_movement_check": 1,
+          "minecraft:tnt_explosion_drop_decay": 0,
+          "minecraft:advance_time": 0,
+          "minecraft:players_nether_portal_creative_delay": 0,
+          "minecraft:fire_damage": 1,
+          "minecraft:spectators_generate_chunks": 1,
+          "minecraft:keep_inventory": 0,
+          "minecraft:command_blocks_work": 1,
+          "minecraft:log_admin_commands": 1,
+          "minecraft:block_drops": 1,
+          "minecraft:limited_crafting": 0,
+          "minecraft:elytra_movement_check": 1,
+          "minecraft:global_sound_events": 1,
+          "minecraft:spread_vines": 1,
+          "minecraft:lava_source_conversion": 0,
+          "minecraft:players_nether_portal_default_delay": 80,
+          "minecraft:players_sleeping_percentage": 100,
+          "minecraft:entity_drops": 1,
+          "minecraft:spawn_phantoms": 1,
+          "minecraft:spawn_mobs": 0,
+          "minecraft:freeze_damage": 1,
+          "minecraft:forgive_dead_players": 1,
+          "minecraft:mob_drops": 1,
+          "minecraft:max_command_forks": 65536,
+          "minecraft:show_advancement_messages": 1,
+          "minecraft:water_source_conversion": 1,
+          "minecraft:show_death_messages": 1,
+          "minecraft:allow_entering_nether_using_portals": 1,
+          "minecraft:spawn_patrols": 1,
+          "minecraft:block_explosion_drop_decay": 1,
+          "minecraft:send_command_feedback": 1,
+          "minecraft:max_block_modifications": 32768,
+          "minecraft:mob_griefing": 1,
+          "minecraft:pvp": 1,
+          "minecraft:spawn_monsters": 1,
+          "minecraft:locator_bar": 1,
+          "minecraft:fire_spread_radius_around_player": 128,
+          "minecraft:random_tick_speed": 3,
+          "minecraft:ender_pearls_vanish_on_death": 1,
+          "minecraft:spawner_blocks_work": 1,
+          "minecraft:spawn_wandering_traders": 1,
+          "minecraft:mob_explosion_drop_decay": 1,
+          "minecraft:tnt_explodes": 1,
+          "minecraft:max_snow_accumulation_height": 1,
+          "minecraft:projectiles_can_break_blocks": 1,
+          "minecraft:reduced_debug_info": 0,
+          "minecraft:universal_anger": 0,
+          "minecraft:raids": 1
+        },
+        "totalRecordedChunks": 3772,
+        "requiredFullChunks": 1024,
+        "missingRequiredFullChunks": 0,
+        "chunkRectangle": [
+          -8,
+          -8,
+          23,
+          23
+        ],
+        "entityCount": 206,
+        "entityTypes": {
+          "minecraft:chest_minecart": 30,
+          "minecraft:bee": 10,
+          "minecraft:drowned": 12,
+          "minecraft:falling_block": 100,
+          "minecraft:item": 54
+        },
+        "blockEntityCount": 446,
+        "blockEntityTypes": {
+          "DUMMY": 6,
+          "minecraft:mob_spawner": 60,
+          "minecraft:sculk_catalyst": 1,
+          "minecraft:sculk_sensor": 1,
+          "minecraft:brushable_block": 53,
+          "minecraft:chest": 74,
+          "minecraft:beehive": 7,
+          "minecraft:vault": 38,
+          "minecraft:dispenser": 27,
+          "minecraft:hopper": 16,
+          "minecraft:barrel": 30,
+          "minecraft:trial_spawner": 36,
+          "minecraft:decorated_pot": 83,
+          "minecraft:bed": 14
+        }
+      },
+      "heapCommandBrackets": [
+        {
+          "command": "JFR.check",
+          "startUtc": "2026-10-17T06:39:54.976284+00:00",
+          "endUtc": "2026-10-17T06:39:55.152070+00:00",
+          "sha256": "b12ebe28dee45dae817d5b1102a52b04d8e6fde73f2e74a311b8ce4b950c4533"
+        },
+        {
+          "command": "GC.heap_info",
+          "startUtc": "2026-10-17T06:39:55.153068+00:00",
+          "endUtc": "2026-10-17T06:39:55.341303+00:00",
+          "sha256": "4d4de849160a7fab42f5697549177f26765b9a957337b4167056d5f145d0d4ac"
+        }
+      ],
+      "resourceEligible": true,
+      "resourceStartAfterOverlayKeySeconds": 0.334301
+    },
+    {
+      "label": "c1",
+      "condition": "C",
+      "identity": {
+        "utc": "2026-10-17T06:41:54.692Z",
+        "status": "running",
+        "pid": 22536,
+        "startedAtUnixSeconds": 1792219314,
+        "sessionStatus": "ready",
+        "creationId": "134366929146717781",
+        "label": "c1",
+        "executableHashVerified": true
+      },
+      "warmup": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 601,
+        "elapsedSeconds": 300.0000404,
+        "machineCpuMeanPercent": {
+          "game": 5.075299860114884,
+          "launcher": 0.0,
+          "sampler": 0.0,
+          "total": 8.460259233905772,
+          "residual": 3.3849593737908874
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            2.229654403567447,
+            23.57920193470375
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            5.118110236220472,
+            28.174123337363966
+          ],
+          "residual": [
+            1.6042780748663095,
+            13.385826771653544
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18359156736,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          1537671168,
+          1692217344
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T06:43:01.467323+00:00",
+        "endUtc": "2026-10-17T06:48:01.473021+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 22536,
+            "creationId": "134366929146717781"
+          },
+          "launcher": {
+            "pid": 5796,
+            "creationId": "134366909230654288"
+          },
+          "sampler": {
+            "pid": 21432,
+            "creationId": "134366929813524087"
+          }
+        },
+        "gameForegroundSamples": 601,
+        "maxReadOverheadNs": 891700,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 1580486656,
+          "endBytes": 1692217344,
+          "deltaBytes": 111730688,
+          "meanBytes": 1638982073.905805,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0004227,
+            "cpu": {
+              "game": 13.043964024356182,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 17.222501536227025,
+              "residual": 4.178537511870843
+            },
+            "rssStartBytes": 1580486656,
+            "rssEndBytes": 1538928640
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 9.9995502,
+            "cpu": {
+              "game": 5.9302649930264995,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.126917712691771,
+              "residual": 3.1966527196652716
+            },
+            "rssStartBytes": 1538928640,
+            "rssEndBytes": 1616769024
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 10.0002359,
+            "cpu": {
+              "game": 5.118615685180017,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.238905944739045,
+              "residual": 3.1202902595590283
+            },
+            "rssStartBytes": 1616769024,
+            "rssEndBytes": 1618051072
+          },
+          {
+            "startSeconds": 30.0,
+            "elapsedSeconds": 10.0001317,
+            "cpu": {
+              "game": 5.038219048150421,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.50304078558277,
+              "residual": 3.4648217374323496
+            },
+            "rssStartBytes": 1618051072,
+            "rssEndBytes": 1614647296
+          },
+          {
+            "startSeconds": 40.0,
+            "elapsedSeconds": 10.0000478,
+            "cpu": {
+              "game": 4.6834877749246395,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.222619180529195,
+              "residual": 3.5391314056045555
+            },
+            "rssStartBytes": 1614647296,
+            "rssEndBytes": 1615581184
+          },
+          {
+            "startSeconds": 50.0,
+            "elapsedSeconds": 9.9997819,
+            "cpu": {
+              "game": 4.562949740614715,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.08835834216545,
+              "residual": 3.525408601550734
+            },
+            "rssStartBytes": 1615581184,
+            "rssEndBytes": 1616199680
+          },
+          {
+            "startSeconds": 60.0,
+            "elapsedSeconds": 10.0003074,
+            "cpu": {
+              "game": 4.74462740720067,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.976555958693832,
+              "residual": 3.231928551493162
+            },
+            "rssStartBytes": 1616199680,
+            "rssEndBytes": 1616654336
+          },
+          {
+            "startSeconds": 70.0,
+            "elapsedSeconds": 9.9998652,
+            "cpu": {
+              "game": 4.396094839609484,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.7154811715481175,
+              "residual": 3.3193863319386336
+            },
+            "rssStartBytes": 1616654336,
+            "rssEndBytes": 1618276352
+          },
+          {
+            "startSeconds": 80.0,
+            "elapsedSeconds": 9.9998454,
+            "cpu": {
+              "game": 4.437869822485207,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.485765323210897,
+              "residual": 3.04789550072569
+            },
+            "rssStartBytes": 1618276352,
+            "rssEndBytes": 1618759680
+          },
+          {
+            "startSeconds": 90.0,
+            "elapsedSeconds": 9.9999071,
+            "cpu": {
+              "game": 4.485355648535565,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.637377963737796,
+              "residual": 3.152022315202231
+            },
+            "rssStartBytes": 1618759680,
+            "rssEndBytes": 1619132416
+          },
+          {
+            "startSeconds": 100.0,
+            "elapsedSeconds": 10.0001914,
+            "cpu": {
+              "game": 4.84375,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.504464285714286,
+              "residual": 3.6607142857142865
+            },
+            "rssStartBytes": 1619132416,
+            "rssEndBytes": 1619906560
+          },
+          {
+            "startSeconds": 110.0,
+            "elapsedSeconds": 10.0000954,
+            "cpu": {
+              "game": 5.217633928571429,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.130580357142858,
+              "residual": 2.912946428571429
+            },
+            "rssStartBytes": 1619906560,
+            "rssEndBytes": 1621266432
+          },
+          {
+            "startSeconds": 120.0,
+            "elapsedSeconds": 9.9996153,
+            "cpu": {
+              "game": 4.921875,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.790178571428571,
+              "residual": 2.868303571428571
+            },
+            "rssStartBytes": 1621266432,
+            "rssEndBytes": 1625214976
+          },
+          {
+            "startSeconds": 130.0,
+            "elapsedSeconds": 10.00031,
+            "cpu": {
+              "game": 4.832589285714286,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.8515625,
+              "residual": 3.0189732142857144
+            },
+            "rssStartBytes": 1625214976,
+            "rssEndBytes": 1629732864
+          },
+          {
+            "startSeconds": 140.0,
+            "elapsedSeconds": 9.9999877,
+            "cpu": {
+              "game": 5.0,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.956473214285714,
+              "residual": 3.9564732142857135
+            },
+            "rssStartBytes": 1629732864,
+            "rssEndBytes": 1633366016
+          },
+          {
+            "startSeconds": 150.0,
+            "elapsedSeconds": 9.9999267,
+            "cpu": {
+              "game": 4.916294642857143,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.762276785714286,
+              "residual": 2.8459821428571423
+            },
+            "rssStartBytes": 1633366016,
+            "rssEndBytes": 1633841152
+          },
+          {
+            "startSeconds": 160.0,
+            "elapsedSeconds": 10.0002578,
+            "cpu": {
+              "game": 4.8046875,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.097098214285714,
+              "residual": 3.2924107142857135
+            },
+            "rssStartBytes": 1633841152,
+            "rssEndBytes": 1637007360
+          },
+          {
+            "startSeconds": 170.0,
+            "elapsedSeconds": 9.9997322,
+            "cpu": {
+              "game": 4.620020087043857,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.096194621136034,
+              "residual": 3.476174534092177
+            },
+            "rssStartBytes": 1637007360,
+            "rssEndBytes": 1639579648
+          },
+          {
+            "startSeconds": 180.0,
+            "elapsedSeconds": 10.0001408,
+            "cpu": {
+              "game": 4.855072463768116,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.90746934225195,
+              "residual": 4.052396878483834
+            },
+            "rssStartBytes": 1639579648,
+            "rssEndBytes": 1644576768
+          },
+          {
+            "startSeconds": 190.0,
+            "elapsedSeconds": 9.9997676,
+            "cpu": {
+              "game": 4.380824822813773,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.136614766449021,
+              "residual": 3.755789943635248
+            },
+            "rssStartBytes": 1644576768,
+            "rssEndBytes": 1647083520
+          },
+          {
+            "startSeconds": 200.0,
+            "elapsedSeconds": 10.0000284,
+            "cpu": {
+              "game": 4.687150837988827,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.921787709497207,
+              "residual": 3.23463687150838
+            },
+            "rssStartBytes": 1647083520,
+            "rssEndBytes": 1651417088
+          },
+          {
+            "startSeconds": 210.0,
+            "elapsedSeconds": 9.9999607,
+            "cpu": {
+              "game": 4.793794296556728,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.426809531781908,
+              "residual": 3.63301523522518
+            },
+            "rssStartBytes": 1651417088,
+            "rssEndBytes": 1656832000
+          },
+          {
+            "startSeconds": 220.0,
+            "elapsedSeconds": 9.9999266,
+            "cpu": {
+              "game": 4.714667855550602,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.907935800267499,
+              "residual": 3.1932679447168963
+            },
+            "rssStartBytes": 1656832000,
+            "rssEndBytes": 1661587456
+          },
+          {
+            "startSeconds": 230.0,
+            "elapsedSeconds": 10.00027,
+            "cpu": {
+              "game": 4.866465526874511,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.492569002123142,
+              "residual": 3.626103475248631
+            },
+            "rssStartBytes": 1661587456,
+            "rssEndBytes": 1665560576
+          },
+          {
+            "startSeconds": 240.0,
+            "elapsedSeconds": 9.9999167,
+            "cpu": {
+              "game": 4.330840495591025,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.768724187967407,
+              "residual": 3.4378836923763814
+            },
+            "rssStartBytes": 1665560576,
+            "rssEndBytes": 1669246976
+          },
+          {
+            "startSeconds": 250.0,
+            "elapsedSeconds": 10.0000206,
+            "cpu": {
+              "game": 4.7834338021879885,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.797499441839697,
+              "residual": 3.014065639651708
+            },
+            "rssStartBytes": 1669246976,
+            "rssEndBytes": 1673838592
+          },
+          {
+            "startSeconds": 260.0,
+            "elapsedSeconds": 10.0001883,
+            "cpu": {
+              "game": 4.602767239455479,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.112028565052444,
+              "residual": 3.509261325596966
+            },
+            "rssStartBytes": 1673838592,
+            "rssEndBytes": 1678139392
+          },
+          {
+            "startSeconds": 270.0,
+            "elapsedSeconds": 9.9996932,
+            "cpu": {
+              "game": 4.8828125,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.510044642857142,
+              "residual": 3.6272321428571423
+            },
+            "rssStartBytes": 1678139392,
+            "rssEndBytes": 1683730432
+          },
+          {
+            "startSeconds": 280.0,
+            "elapsedSeconds": 10.0001427,
+            "cpu": {
+              "game": 4.659598214285714,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.102678571428571,
+              "residual": 3.4430803571428568
+            },
+            "rssStartBytes": 1683730432,
+            "rssEndBytes": 1688195072
+          },
+          {
+            "startSeconds": 290.0,
+            "elapsedSeconds": 9.999773,
+            "cpu": {
+              "game": 5.111607142857143,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.325892857142858,
+              "residual": 3.2142857142857144
+            },
+            "rssStartBytes": 1688195072,
+            "rssEndBytes": 1692217344
+          }
+        ]
+      },
+      "resource": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 61,
+        "elapsedSeconds": 30.0000692,
+        "machineCpuMeanPercent": {
+          "game": 5.266587236577556,
+          "launcher": 0.0,
+          "sampler": 0.0,
+          "total": 8.84094124655596,
+          "residual": 3.5743540099784044
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            3.040173724212812,
+            7.945205479452055
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            6.510138740661686,
+            12.876712328767123
+          ],
+          "residual": [
+            2.236421725239617,
+            4.931506849315069
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18513866752,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          1705078784,
+          1712799744
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T06:48:12.880692+00:00",
+        "endUtc": "2026-10-17T06:48:42.882175+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 22536,
+            "creationId": "134366929146717781"
+          },
+          "launcher": {
+            "pid": 5796,
+            "creationId": "134366909230654288"
+          },
+          "sampler": {
+            "pid": 22908,
+            "creationId": "134366932928069304"
+          }
+        },
+        "gameForegroundSamples": 61,
+        "maxReadOverheadNs": 1253300,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 1712160768,
+          "endBytes": 1712799744,
+          "deltaBytes": 638976,
+          "meanBytes": 1708378711.5023253,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0001761,
+            "cpu": {
+              "game": 5.643176733780761,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.334451901565995,
+              "residual": 3.691275167785234
+            },
+            "rssStartBytes": 1712160768,
+            "rssEndBytes": 1707474944
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 10.0000726,
+            "cpu": {
+              "game": 5.11992876620847,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.614836663142079,
+              "residual": 3.4949078969336087
+            },
+            "rssStartBytes": 1707474944,
+            "rssEndBytes": 1709092864
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 9.9998205,
+            "cpu": {
+              "game": 5.037219454860916,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.57446689427436,
+              "residual": 3.537247439413444
+            },
+            "rssStartBytes": 1709092864,
+            "rssEndBytes": 1712799744
+          }
+        ]
+      },
+      "setupAfterWarmupSeconds": 11.407671,
+      "heapStart": {
+        "committedBytes": 778043392,
+        "usedBytes": 642993152,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "heapEnd": {
+        "committedBytes": 778043392,
+        "usedBytes": 613561344,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "physicalWindow": {
+        "pid": 22536,
+        "physicalClientWidth": 1920,
+        "physicalClientHeight": 1080,
+        "dpi": 120,
+        "framebufferObserved": false,
+        "scope": "read-only window geometry; calling thread DPI context only"
+      },
+      "restoration": {
+        "label": "c1",
+        "preLaunchInventoryEqual": true,
+        "optionsSha256": "64cec45e976849b23c95fc3c0b7652d72c535167903b3716fef7e93820b6cf65",
+        "archiveSha256": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6"
+      },
+      "cameraStart": {
+        "utc": "2026-10-17T06:43:00.323Z",
+        "position": [
+          128.5,
+          96,
+          128.5
+        ],
+        "orientation": [
+          135,
+          15
+        ],
+        "liveF3Verified": true,
+        "forcedChunks": 0,
+        "loadedEntities": 14,
+        "renderDistance": 12,
+        "simulationDistance": 8,
+        "resetAfterLoad": true
+      },
+      "cameraEnd": {
+        "utc": "2026-10-17T06:49:07.881Z",
+        "position": [
+          128.5,
+          96,
+          128.5
+        ],
+        "orientation": [
+          135,
+          15
+        ],
+        "liveF3Verified": true,
+        "forcedChunks": 0,
+        "loadedEntities": 9
+      },
+      "sceneAfter": {
+        "minecraftVersion": "1.21.11",
+        "seed": 123456789,
+        "generationSettings": {
+          "bonus_chest": 0,
+          "seed": 123456789,
+          "generate_features": 1,
+          "dimensions": {
+            "minecraft:the_nether": {
+              "type": "minecraft:the_nether",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:multi_noise",
+                  "preset": "minecraft:nether"
+                },
+                "settings": "minecraft:nether"
+              }
+            },
+            "minecraft:overworld": {
+              "type": "minecraft:overworld",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:multi_noise",
+                  "preset": "minecraft:overworld"
+                },
+                "settings": "minecraft:overworld"
+              }
+            },
+            "minecraft:the_end": {
+              "type": "minecraft:the_end",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:the_end"
+                },
+                "settings": "minecraft:end"
+              }
+            }
+          }
+        },
+        "dimension": "minecraft:overworld",
+        "position": [
+          128.5,
+          96.0,
+          128.5
+        ],
+        "orientation": [
+          135.0,
+          15.0
+        ],
+        "playerGameMode": 1,
+        "worldGameMode": 1,
+        "abilities": {
+          "walkSpeed": 0.10000000149011612,
+          "instabuild": 1,
+          "flying": 1,
+          "flySpeed": 0.05000000074505806,
+          "mayfly": 1,
+          "invulnerable": 1,
+          "mayBuild": 1
+        },
+        "time": 6000,
+        "raining": 0,
+        "thundering": 0,
+        "difficulty": 2,
+        "gameRules": {
+          "minecraft:advance_weather": 0,
+          "minecraft:max_entity_cramming": 24,
+          "minecraft:command_block_output": 1,
+          "minecraft:fall_damage": 1,
+          "minecraft:spawn_wardens": 1,
+          "minecraft:respawn_radius": 10,
+          "minecraft:max_command_sequence_length": 65536,
+          "minecraft:drowning_damage": 1,
+          "minecraft:immediate_respawn": 0,
+          "minecraft:tnt_explosion_drop_decay": 0,
+          "minecraft:player_movement_check": 1,
+          "minecraft:natural_health_regeneration": 1,
+          "minecraft:advance_time": 0,
+          "minecraft:players_nether_portal_creative_delay": 0,
+          "minecraft:fire_damage": 1,
+          "minecraft:spectators_generate_chunks": 1,
+          "minecraft:keep_inventory": 0,
+          "minecraft:command_blocks_work": 1,
+          "minecraft:log_admin_commands": 1,
+          "minecraft:block_drops": 1,
+          "minecraft:limited_crafting": 0,
+          "minecraft:elytra_movement_check": 1,
+          "minecraft:global_sound_events": 1,
+          "minecraft:spread_vines": 1,
+          "minecraft:lava_source_conversion": 0,
+          "minecraft:players_nether_portal_default_delay": 80,
+          "minecraft:players_sleeping_percentage": 100,
+          "minecraft:entity_drops": 1,
+          "minecraft:spawn_phantoms": 1,
+          "minecraft:spawn_mobs": 0,
+          "minecraft:freeze_damage": 1,
+          "minecraft:forgive_dead_players": 1,
+          "minecraft:mob_drops": 1,
+          "minecraft:water_source_conversion": 1,
+          "minecraft:show_advancement_messages": 1,
+          "minecraft:max_command_forks": 65536,
+          "minecraft:allow_entering_nether_using_portals": 1,
+          "minecraft:show_death_messages": 1,
+          "minecraft:spawn_patrols": 1,
+          "minecraft:block_explosion_drop_decay": 1,
+          "minecraft:mob_griefing": 1,
+          "minecraft:max_block_modifications": 32768,
+          "minecraft:send_command_feedback": 1,
+          "minecraft:pvp": 1,
+          "minecraft:locator_bar": 1,
+          "minecraft:spawn_monsters": 1,
+          "minecraft:fire_spread_radius_around_player": 128,
+          "minecraft:random_tick_speed": 3,
+          "minecraft:ender_pearls_vanish_on_death": 1,
+          "minecraft:spawner_blocks_work": 1,
+          "minecraft:spawn_wandering_traders": 1,
+          "minecraft:mob_explosion_drop_decay": 1,
+          "minecraft:tnt_explodes": 1,
+          "minecraft:max_snow_accumulation_height": 1,
+          "minecraft:projectiles_can_break_blocks": 1,
+          "minecraft:reduced_debug_info": 0,
+          "minecraft:universal_anger": 0,
+          "minecraft:raids": 1
+        },
+        "totalRecordedChunks": 3772,
+        "requiredFullChunks": 1024,
+        "missingRequiredFullChunks": 0,
+        "chunkRectangle": [
+          -8,
+          -8,
+          23,
+          23
+        ],
+        "entityCount": 205,
+        "entityTypes": {
+          "minecraft:chest_minecart": 30,
+          "minecraft:bee": 9,
+          "minecraft:drowned": 12,
+          "minecraft:falling_block": 100,
+          "minecraft:item": 54
+        },
+        "blockEntityCount": 446,
+        "blockEntityTypes": {
+          "DUMMY": 6,
+          "minecraft:mob_spawner": 60,
+          "minecraft:sculk_catalyst": 1,
+          "minecraft:sculk_sensor": 1,
+          "minecraft:brushable_block": 53,
+          "minecraft:chest": 74,
+          "minecraft:beehive": 7,
+          "minecraft:vault": 38,
+          "minecraft:dispenser": 27,
+          "minecraft:hopper": 16,
+          "minecraft:barrel": 30,
+          "minecraft:trial_spawner": 36,
+          "minecraft:decorated_pot": 83,
+          "minecraft:bed": 14
+        }
+      },
+      "heapCommandBrackets": [
+        {
+          "command": "JFR.check",
+          "startUtc": "2026-10-17T06:48:11.001189+00:00",
+          "endUtc": "2026-10-17T06:48:11.188203+00:00",
+          "sha256": "9bd80870e8747b550a835a95518e185206d8e835e6f1bada2b007bd2857f3ecd"
+        },
+        {
+          "command": "GC.heap_info",
+          "startUtc": "2026-10-17T06:48:11.190203+00:00",
+          "endUtc": "2026-10-17T06:48:11.360205+00:00",
+          "sha256": "6a8f5526e5553c61ffa9dfced556db83816acf20fa3c50e5c107c528f48577b7"
+        }
+      ],
+      "resourceEligible": true,
+      "resourceStartAfterOverlayKeySeconds": 0.327692
+    },
+    {
+      "label": "c2r",
+      "condition": "C",
+      "identity": {
+        "utc": "2026-10-17T06:59:23.770Z",
+        "status": "running",
+        "pid": 22756,
+        "startedAtUnixSeconds": 1792220363,
+        "sessionStatus": "ready",
+        "creationId": "134366939637498234",
+        "label": "c2r",
+        "executableHashVerified": true
+      },
+      "warmup": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 601,
+        "elapsedSeconds": 300.0002721,
+        "machineCpuMeanPercent": {
+          "game": 5.198180032440959,
+          "launcher": 0.0,
+          "sampler": 0.0,
+          "total": 9.03677882111341,
+          "residual": 3.838598788672451
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            2.3605150214592276,
+            23.969631236442517
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            4.828150572831424,
+            32.10412147505423
+          ],
+          "residual": [
+            1.6304347826086953,
+            16.630669546436287
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18374942720,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          1531138048,
+          1636548608
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T07:00:12.778129+00:00",
+        "endUtc": "2026-10-17T07:05:12.783137+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 22756,
+            "creationId": "134366939637498234"
+          },
+          "launcher": {
+            "pid": 5796,
+            "creationId": "134366909230654288"
+          },
+          "sampler": {
+            "pid": 15752,
+            "creationId": "134366940126679695"
+          }
+        },
+        "gameForegroundSamples": 601,
+        "maxReadOverheadNs": 3507700,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 1562894336,
+          "endBytes": 1634979840,
+          "deltaBytes": 72085504,
+          "meanBytes": 1614270906.9830003,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0003134,
+            "cpu": {
+              "game": 14.225005591590248,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 19.50905837620219,
+              "residual": 5.2840527846119425
+            },
+            "rssStartBytes": 1562894336,
+            "rssEndBytes": 1574731776
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 10.0001044,
+            "cpu": {
+              "game": 5.409324113316975,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 10.010037921035021,
+              "residual": 4.600713807718046
+            },
+            "rssStartBytes": 1574731776,
+            "rssEndBytes": 1611546624
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 9.9998842,
+            "cpu": {
+              "game": 5.055521455275933,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 10.75832821829139,
+              "residual": 5.702806763015458
+            },
+            "rssStartBytes": 1611546624,
+            "rssEndBytes": 1611087872
+          },
+          {
+            "startSeconds": 30.0,
+            "elapsedSeconds": 9.9999707,
+            "cpu": {
+              "game": 4.743854172473382,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.456435698756898,
+              "residual": 3.7125815262835165
+            },
+            "rssStartBytes": 1611087872,
+            "rssEndBytes": 1608552448
+          },
+          {
+            "startSeconds": 40.0,
+            "elapsedSeconds": 10.0000334,
+            "cpu": {
+              "game": 4.453260322959155,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 10.1525395317651,
+              "residual": 5.699279208805946
+            },
+            "rssStartBytes": 1608552448,
+            "rssEndBytes": 1607421952
+          },
+          {
+            "startSeconds": 50.0,
+            "elapsedSeconds": 9.999907,
+            "cpu": {
+              "game": 4.736959429335711,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.069549710209541,
+              "residual": 3.3325902808738306
+            },
+            "rssStartBytes": 1607421952,
+            "rssEndBytes": 1607884800
+          },
+          {
+            "startSeconds": 60.0,
+            "elapsedSeconds": 10.0004016,
+            "cpu": {
+              "game": 4.50148185427501,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.593804171559582,
+              "residual": 3.092322317284572
+            },
+            "rssStartBytes": 1607884800,
+            "rssEndBytes": 1608429568
+          },
+          {
+            "startSeconds": 70.0,
+            "elapsedSeconds": 9.9997077,
+            "cpu": {
+              "game": 4.370580702633483,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.410500528923779,
+              "residual": 3.039919826290296
+            },
+            "rssStartBytes": 1608429568,
+            "rssEndBytes": 1608736768
+          },
+          {
+            "startSeconds": 80.0,
+            "elapsedSeconds": 10.0000349,
+            "cpu": {
+              "game": 4.086538461538462,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.2171288014311274,
+              "residual": 3.1305903398926658
+            },
+            "rssStartBytes": 1608736768,
+            "rssEndBytes": 1609261056
+          },
+          {
+            "startSeconds": 90.0,
+            "elapsedSeconds": 9.9998512,
+            "cpu": {
+              "game": 4.146463802039793,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.267458061639637,
+              "residual": 3.1209942595998443
+            },
+            "rssStartBytes": 1609261056,
+            "rssEndBytes": 1609424896
+          },
+          {
+            "startSeconds": 100.0,
+            "elapsedSeconds": 10.0003572,
+            "cpu": {
+              "game": 4.5386032490370125,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.96628147155697,
+              "residual": 3.4276782225199574
+            },
+            "rssStartBytes": 1609424896,
+            "rssEndBytes": 1609760768
+          },
+          {
+            "startSeconds": 110.0,
+            "elapsedSeconds": 9.9994143,
+            "cpu": {
+              "game": 4.768278400535386,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.11443868161285,
+              "residual": 3.3461602810774638
+            },
+            "rssStartBytes": 1609760768,
+            "rssEndBytes": 1610309632
+          },
+          {
+            "startSeconds": 120.0,
+            "elapsedSeconds": 10.0005149,
+            "cpu": {
+              "game": 4.221576948849676,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.650212195666741,
+              "residual": 3.4286352468170653
+            },
+            "rssStartBytes": 1610309632,
+            "rssEndBytes": 1610948608
+          },
+          {
+            "startSeconds": 130.0,
+            "elapsedSeconds": 9.9995004,
+            "cpu": {
+              "game": 4.391797507962228,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.839302676426216,
+              "residual": 3.447505168463988
+            },
+            "rssStartBytes": 1610948608,
+            "rssEndBytes": 1610891264
+          },
+          {
+            "startSeconds": 140.0,
+            "elapsedSeconds": 9.9999983,
+            "cpu": {
+              "game": 4.68941675030668,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.921601427456228,
+              "residual": 4.232184677149547
+            },
+            "rssStartBytes": 1610891264,
+            "rssEndBytes": 1611309056
+          },
+          {
+            "startSeconds": 150.0,
+            "elapsedSeconds": 10.0005212,
+            "cpu": {
+              "game": 5.082003793372754,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 10.554501840901484,
+              "residual": 5.472498047528729
+            },
+            "rssStartBytes": 1611309056,
+            "rssEndBytes": 1611898880
+          },
+          {
+            "startSeconds": 160.0,
+            "elapsedSeconds": 10.00034,
+            "cpu": {
+              "game": 4.739865053253778,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.76596219260581,
+              "residual": 4.026097139352032
+            },
+            "rssStartBytes": 1611898880,
+            "rssEndBytes": 1612238848
+          },
+          {
+            "startSeconds": 170.0,
+            "elapsedSeconds": 9.9995439,
+            "cpu": {
+              "game": 4.928005357740819,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.705324254939168,
+              "residual": 4.777318897198349
+            },
+            "rssStartBytes": 1612238848,
+            "rssEndBytes": 1614790656
+          },
+          {
+            "startSeconds": 180.0,
+            "elapsedSeconds": 10.0001132,
+            "cpu": {
+              "game": 5.00473722342975,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.649612662319567,
+              "residual": 3.6448754388898177
+            },
+            "rssStartBytes": 1614790656,
+            "rssEndBytes": 1615249408
+          },
+          {
+            "startSeconds": 190.0,
+            "elapsedSeconds": 10.0000775,
+            "cpu": {
+              "game": 5.011453153807476,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.469746913235376,
+              "residual": 3.4582937594279004
+            },
+            "rssStartBytes": 1615249408,
+            "rssEndBytes": 1614573568
+          },
+          {
+            "startSeconds": 200.0,
+            "elapsedSeconds": 9.9995304,
+            "cpu": {
+              "game": 4.89451947762027,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.159392789373815,
+              "residual": 3.2648733117535444
+            },
+            "rssStartBytes": 1614573568,
+            "rssEndBytes": 1614741504
+          },
+          {
+            "startSeconds": 210.0,
+            "elapsedSeconds": 9.9999719,
+            "cpu": {
+              "game": 5.402991739227506,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.51194463049788,
+              "residual": 3.1089528912703734
+            },
+            "rssStartBytes": 1614741504,
+            "rssEndBytes": 1615355904
+          },
+          {
+            "startSeconds": 220.0,
+            "elapsedSeconds": 10.00022,
+            "cpu": {
+              "game": 5.3399686870946095,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.381793782151643,
+              "residual": 3.0418250950570336
+            },
+            "rssStartBytes": 1615355904,
+            "rssEndBytes": 1618030592
+          },
+          {
+            "startSeconds": 230.0,
+            "elapsedSeconds": 10.0003877,
+            "cpu": {
+              "game": 5.697467792092404,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 10.389826743669481,
+              "residual": 4.692358951577077
+            },
+            "rssStartBytes": 1618030592,
+            "rssEndBytes": 1623371776
+          },
+          {
+            "startSeconds": 240.0,
+            "elapsedSeconds": 9.9996776,
+            "cpu": {
+              "game": 6.1357921207041075,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 11.628946633137748,
+              "residual": 5.49315451243364
+            },
+            "rssStartBytes": 1623371776,
+            "rssEndBytes": 1623887872
+          },
+          {
+            "startSeconds": 250.0,
+            "elapsedSeconds": 9.999954,
+            "cpu": {
+              "game": 5.341378925019555,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.112638283607106,
+              "residual": 2.7712593585875513
+            },
+            "rssStartBytes": 1623887872,
+            "rssEndBytes": 1624457216
+          },
+          {
+            "startSeconds": 260.0,
+            "elapsedSeconds": 10.0000458,
+            "cpu": {
+              "game": 5.132920916234744,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.281781196009586,
+              "residual": 3.1488602797748424
+            },
+            "rssStartBytes": 1624457216,
+            "rssEndBytes": 1626292224
+          },
+          {
+            "startSeconds": 270.0,
+            "elapsedSeconds": 10.0001323,
+            "cpu": {
+              "game": 5.139402082633524,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.39211734408241,
+              "residual": 3.252715261448886
+            },
+            "rssStartBytes": 1626292224,
+            "rssEndBytes": 1630416896
+          },
+          {
+            "startSeconds": 280.0,
+            "elapsedSeconds": 9.9998075,
+            "cpu": {
+              "game": 4.745460621588504,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.014927035758049,
+              "residual": 3.2694664141695453
+            },
+            "rssStartBytes": 1630416896,
+            "rssEndBytes": 1632608256
+          },
+          {
+            "startSeconds": 290.0,
+            "elapsedSeconds": 9.9999555,
+            "cpu": {
+              "game": 5.027901785714286,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.1640625,
+              "residual": 3.1361607142857144
+            },
+            "rssStartBytes": 1632608256,
+            "rssEndBytes": 1634979840
+          }
+        ]
+      },
+      "resource": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 61,
+        "elapsedSeconds": 30.0005864,
+        "machineCpuMeanPercent": {
+          "game": 4.908522980812138,
+          "launcher": 0.0,
+          "sampler": 0.0,
+          "total": 8.138107987505578,
+          "residual": 3.2295850066934397
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            2.4498886414253898,
+            9.246575342465754
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            6.324972737186478,
+            12.053571428571429
+          ],
+          "residual": [
+            2.008928571428571,
+            5.298013245033113
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18927251456,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          1655726080,
+          1656778752
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T07:05:27.016122+00:00",
+        "endUtc": "2026-10-17T07:05:57.018532+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 22756,
+            "creationId": "134366939637498234"
+          },
+          "launcher": {
+            "pid": 5796,
+            "creationId": "134366909230654288"
+          },
+          "sampler": {
+            "pid": 18180,
+            "creationId": "134366943269460582"
+          }
+        },
+        "gameForegroundSamples": 61,
+        "maxReadOverheadNs": 1226800,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 1655726080,
+          "endBytes": 1656193024,
+          "deltaBytes": 466944,
+          "meanBytes": 1656314261.3336024,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0005248,
+            "cpu": {
+              "game": 5.206352756962309,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.304440219214852,
+              "residual": 3.0980874622525434
+            },
+            "rssStartBytes": 1655726080,
+            "rssEndBytes": 1656299520
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 9.9997494,
+            "cpu": {
+              "game": 4.494820095800379,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.892391667594965,
+              "residual": 3.397571571794586
+            },
+            "rssStartBytes": 1656299520,
+            "rssEndBytes": 1656688640
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 10.0003122,
+            "cpu": {
+              "game": 5.025629596612436,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.218185870291954,
+              "residual": 3.192556273679518
+            },
+            "rssStartBytes": 1656688640,
+            "rssEndBytes": 1656193024
+          }
+        ]
+      },
+      "setupAfterWarmupSeconds": 14.232985,
+      "heapStart": {
+        "committedBytes": 765460480,
+        "usedBytes": 507214848,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "heapEnd": {
+        "committedBytes": 765460480,
+        "usedBytes": 633485312,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "physicalWindow": {
+        "pid": 22756,
+        "physicalClientWidth": 1920,
+        "physicalClientHeight": 1080,
+        "dpi": 120,
+        "framebufferObserved": false,
+        "scope": "read-only window geometry; calling thread DPI context only"
+      },
+      "restoration": {
+        "label": "c2r",
+        "preLaunchInventoryEqual": true,
+        "optionsSha256": "64cec45e976849b23c95fc3c0b7652d72c535167903b3716fef7e93820b6cf65",
+        "archiveSha256": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6"
+      },
+      "cameraStart": {
+        "utc": "2026-10-17T07:00:11.541Z",
+        "position": [
+          128.5,
+          96,
+          128.5
+        ],
+        "orientation": [
+          135,
+          15
+        ],
+        "liveF3Verified": true,
+        "forcedChunks": 0,
+        "loadedEntities": 13,
+        "renderDistance": 12,
+        "simulationDistance": 8,
+        "resetAfterLoad": true
+      },
+      "cameraEnd": {
+        "utc": "2026-10-17T07:06:09.054Z",
+        "position": [
+          128.5,
+          96,
+          128.5
+        ],
+        "orientation": [
+          135,
+          15
+        ],
+        "liveF3Verified": true,
+        "forcedChunks": 0,
+        "loadedEntities": 9
+      },
+      "sceneAfter": {
+        "minecraftVersion": "1.21.11",
+        "seed": 123456789,
+        "generationSettings": {
+          "bonus_chest": 0,
+          "seed": 123456789,
+          "generate_features": 1,
+          "dimensions": {
+            "minecraft:the_nether": {
+              "type": "minecraft:the_nether",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:multi_noise",
+                  "preset": "minecraft:nether"
+                },
+                "settings": "minecraft:nether"
+              }
+            },
+            "minecraft:overworld": {
+              "type": "minecraft:overworld",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:multi_noise",
+                  "preset": "minecraft:overworld"
+                },
+                "settings": "minecraft:overworld"
+              }
+            },
+            "minecraft:the_end": {
+              "type": "minecraft:the_end",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:the_end"
+                },
+                "settings": "minecraft:end"
+              }
+            }
+          }
+        },
+        "dimension": "minecraft:overworld",
+        "position": [
+          128.5,
+          96.0,
+          128.5
+        ],
+        "orientation": [
+          135.0,
+          15.0
+        ],
+        "playerGameMode": 1,
+        "worldGameMode": 1,
+        "abilities": {
+          "walkSpeed": 0.10000000149011612,
+          "instabuild": 1,
+          "flying": 1,
+          "flySpeed": 0.05000000074505806,
+          "mayfly": 1,
+          "invulnerable": 1,
+          "mayBuild": 1
+        },
+        "time": 6000,
+        "raining": 0,
+        "thundering": 0,
+        "difficulty": 2,
+        "gameRules": {
+          "minecraft:advance_weather": 0,
+          "minecraft:max_entity_cramming": 24,
+          "minecraft:command_block_output": 1,
+          "minecraft:fall_damage": 1,
+          "minecraft:spawn_wardens": 1,
+          "minecraft:respawn_radius": 10,
+          "minecraft:max_command_sequence_length": 65536,
+          "minecraft:drowning_damage": 1,
+          "minecraft:immediate_respawn": 0,
+          "minecraft:natural_health_regeneration": 1,
+          "minecraft:player_movement_check": 1,
+          "minecraft:tnt_explosion_drop_decay": 0,
+          "minecraft:spectators_generate_chunks": 1,
+          "minecraft:players_nether_portal_creative_delay": 0,
+          "minecraft:fire_damage": 1,
+          "minecraft:command_blocks_work": 1,
+          "minecraft:advance_time": 0,
+          "minecraft:keep_inventory": 0,
+          "minecraft:log_admin_commands": 1,
+          "minecraft:block_drops": 1,
+          "minecraft:limited_crafting": 0,
+          "minecraft:elytra_movement_check": 1,
+          "minecraft:global_sound_events": 1,
+          "minecraft:lava_source_conversion": 0,
+          "minecraft:spread_vines": 1,
+          "minecraft:players_nether_portal_default_delay": 80,
+          "minecraft:players_sleeping_percentage": 100,
+          "minecraft:entity_drops": 1,
+          "minecraft:spawn_phantoms": 1,
+          "minecraft:spawn_mobs": 0,
+          "minecraft:freeze_damage": 1,
+          "minecraft:forgive_dead_players": 1,
+          "minecraft:mob_drops": 1,
+          "minecraft:show_advancement_messages": 1,
+          "minecraft:water_source_conversion": 1,
+          "minecraft:max_command_forks": 65536,
+          "minecraft:allow_entering_nether_using_portals": 1,
+          "minecraft:show_death_messages": 1,
+          "minecraft:spawn_patrols": 1,
+          "minecraft:block_explosion_drop_decay": 1,
+          "minecraft:max_block_modifications": 32768,
+          "minecraft:mob_griefing": 1,
+          "minecraft:send_command_feedback": 1,
+          "minecraft:pvp": 1,
+          "minecraft:spawn_monsters": 1,
+          "minecraft:locator_bar": 1,
+          "minecraft:fire_spread_radius_around_player": 128,
+          "minecraft:random_tick_speed": 3,
+          "minecraft:ender_pearls_vanish_on_death": 1,
+          "minecraft:spawner_blocks_work": 1,
+          "minecraft:spawn_wandering_traders": 1,
+          "minecraft:mob_explosion_drop_decay": 1,
+          "minecraft:tnt_explodes": 1,
+          "minecraft:max_snow_accumulation_height": 1,
+          "minecraft:projectiles_can_break_blocks": 1,
+          "minecraft:reduced_debug_info": 0,
+          "minecraft:universal_anger": 0,
+          "minecraft:raids": 1
+        },
+        "totalRecordedChunks": 3772,
+        "requiredFullChunks": 1024,
+        "missingRequiredFullChunks": 0,
+        "chunkRectangle": [
+          -8,
+          -8,
+          23,
+          23
+        ],
+        "entityCount": 205,
+        "entityTypes": {
+          "minecraft:chest_minecart": 30,
+          "minecraft:bee": 9,
+          "minecraft:drowned": 12,
+          "minecraft:falling_block": 100,
+          "minecraft:item": 54
+        },
+        "blockEntityCount": 446,
+        "blockEntityTypes": {
+          "DUMMY": 6,
+          "minecraft:mob_spawner": 60,
+          "minecraft:sculk_catalyst": 1,
+          "minecraft:sculk_sensor": 1,
+          "minecraft:brushable_block": 53,
+          "minecraft:chest": 74,
+          "minecraft:beehive": 7,
+          "minecraft:vault": 38,
+          "minecraft:dispenser": 27,
+          "minecraft:hopper": 16,
+          "minecraft:barrel": 30,
+          "minecraft:trial_spawner": 36,
+          "minecraft:decorated_pot": 83,
+          "minecraft:bed": 14
+        }
+      },
+      "heapCommandBrackets": [
+        {
+          "command": "JFR.check",
+          "startUtc": "2026-10-17T07:05:17.581446+00:00",
+          "endUtc": "2026-10-17T07:05:17.744939+00:00",
+          "sha256": "906da76aa9fcf388576ad1a70ac3b4e5a7feb1466d3441bdd52adb2d052c253b"
+        },
+        {
+          "command": "GC.heap_info",
+          "startUtc": "2026-10-17T07:05:17.746938+00:00",
+          "endUtc": "2026-10-17T07:05:17.932150+00:00",
+          "sha256": "546c58114f78ff4044f989e19d57b7b57a66a54fd3a103bbb8981ed930bff53a"
+        }
+      ],
+      "resourceEligible": false,
+      "resourceStartAfterOverlayKeySeconds": 4.952122,
+      "resourceExclusion": "Sampler began about5s after Overlay; final resource segment extends beyond Overlay auto-stop. Frame/JFR files remain diagnostic."
+    },
+    {
+      "label": "b2",
+      "condition": "B",
+      "identity": {
+        "utc": "2026-10-17T07:07:08.997Z",
+        "status": "running",
+        "pid": 16692,
+        "startedAtUnixSeconds": 1792220828,
+        "sessionStatus": "ready",
+        "creationId": "134366944289725209",
+        "label": "b2",
+        "executableHashVerified": true
+      },
+      "warmup": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 601,
+        "elapsedSeconds": 300.0000091,
+        "machineCpuMeanPercent": {
+          "game": 5.065313882408968,
+          "launcher": 0.0,
+          "sampler": 0.0031624494473154524,
+          "total": 8.735987558551821,
+          "residual": 3.667511226695538
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            2.05761316872428,
+            24.147339699863576
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.1267427122940431
+          ],
+          "total": [
+            5.054759898904802,
+            28.78581173260573
+          ],
+          "residual": [
+            1.6042780748663104,
+            12.65260821309656
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18379735040,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          1529212928,
+          1651744768
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T07:07:58.261086+00:00",
+        "endUtc": "2026-10-17T07:12:58.266937+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 16692,
+            "creationId": "134366944289725209"
+          },
+          "launcher": {
+            "pid": 5796,
+            "creationId": "134366909230654288"
+          },
+          "sampler": {
+            "pid": 19896,
+            "creationId": "134366944781532977"
+          }
+        },
+        "gameForegroundSamples": 601,
+        "maxReadOverheadNs": 3204300,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 1571880960,
+          "endBytes": 1650163712,
+          "deltaBytes": 78282752,
+          "meanBytes": 1631708965.6389978,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0002568,
+            "cpu": {
+              "game": 14.868821078707352,
+              "launcher": 0.0,
+              "sampler": 0.005629996622002027,
+              "total": 19.440378335772998,
+              "residual": 4.565927260443644
+            },
+            "rssStartBytes": 1571880960,
+            "rssEndBytes": 1629093888
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 10.0001174,
+            "cpu": {
+              "game": 4.569907381731462,
+              "launcher": 0.0,
+              "sampler": 0.01663801231212911,
+              "total": 8.296822139648384,
+              "residual": 3.7102767456047925
+            },
+            "rssStartBytes": 1629093888,
+            "rssEndBytes": 1623900160
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 9.9998717,
+            "cpu": {
+              "game": 4.57286432160804,
+              "launcher": 0.0,
+              "sampler": 0.005583472920156337,
+              "total": 8.386376326074819,
+              "residual": 3.807928531546623
+            },
+            "rssStartBytes": 1623900160,
+            "rssEndBytes": 1624051712
+          },
+          {
+            "startSeconds": 30.0,
+            "elapsedSeconds": 10.0001638,
+            "cpu": {
+              "game": 4.310105110950448,
+              "launcher": 0.0,
+              "sampler": 0.005561425949613481,
+              "total": 8.203103275679885,
+              "residual": 3.887436738779823
+            },
+            "rssStartBytes": 1624051712,
+            "rssEndBytes": 1623977984
+          },
+          {
+            "startSeconds": 40.0,
+            "elapsedSeconds": 9.9998311,
+            "cpu": {
+              "game": 4.06781557743957,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.219561324977619,
+              "residual": 4.151745747538048
+            },
+            "rssStartBytes": 1623977984,
+            "rssEndBytes": 1623293952
+          },
+          {
+            "startSeconds": 50.0,
+            "elapsedSeconds": 9.9998325,
+            "cpu": {
+              "game": 4.4748705960928365,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.947904491567875,
+              "residual": 3.473033895475038
+            },
+            "rssStartBytes": 1623293952,
+            "rssEndBytes": 1622704128
+          },
+          {
+            "startSeconds": 60.0,
+            "elapsedSeconds": 10.0005836,
+            "cpu": {
+              "game": 4.597058330071025,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.332867289301493,
+              "residual": 3.735808959230468
+            },
+            "rssStartBytes": 1622704128,
+            "rssEndBytes": 1623359488
+          },
+          {
+            "startSeconds": 70.0,
+            "elapsedSeconds": 9.9997584,
+            "cpu": {
+              "game": 4.409141583054627,
+              "launcher": 0.0,
+              "sampler": 0.005574136008918618,
+              "total": 8.177257525083611,
+              "residual": 3.7625418060200655
+            },
+            "rssStartBytes": 1623359488,
+            "rssEndBytes": 1624428544
+          },
+          {
+            "startSeconds": 80.0,
+            "elapsedSeconds": 9.9999633,
+            "cpu": {
+              "game": 4.368497594809263,
+              "launcher": 0.0,
+              "sampler": 0.005593466830741693,
+              "total": 8.172055039713614,
+              "residual": 3.79796397807361
+            },
+            "rssStartBytes": 1624428544,
+            "rssEndBytes": 1625747456
+          },
+          {
+            "startSeconds": 90.0,
+            "elapsedSeconds": 9.9998127,
+            "cpu": {
+              "game": 4.593482371260149,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.258258258258259,
+              "residual": 3.66477588699811
+            },
+            "rssStartBytes": 1625747456,
+            "rssEndBytes": 1625837568
+          },
+          {
+            "startSeconds": 100.0,
+            "elapsedSeconds": 10.0001947,
+            "cpu": {
+              "game": 4.419642857142857,
+              "launcher": 0.0,
+              "sampler": 0.005580357142857143,
+              "total": 8.130580357142858,
+              "residual": 3.705357142857144
+            },
+            "rssStartBytes": 1625837568,
+            "rssEndBytes": 1626431488
+          },
+          {
+            "startSeconds": 110.0,
+            "elapsedSeconds": 9.9997294,
+            "cpu": {
+              "game": 4.890208380013444,
+              "launcher": 0.0,
+              "sampler": 0.00560161326462021,
+              "total": 8.699305399955188,
+              "residual": 3.803495406677124
+            },
+            "rssStartBytes": 1626431488,
+            "rssEndBytes": 1629044736
+          },
+          {
+            "startSeconds": 120.0,
+            "elapsedSeconds": 10.0003256,
+            "cpu": {
+              "game": 4.987766903914591,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.535364768683275,
+              "residual": 3.547597864768684
+            },
+            "rssStartBytes": 1629044736,
+            "rssEndBytes": 1629761536
+          },
+          {
+            "startSeconds": 130.0,
+            "elapsedSeconds": 9.9998042,
+            "cpu": {
+              "game": 4.825467746439542,
+              "launcher": 0.0,
+              "sampler": 0.005585032113934655,
+              "total": 8.36079307456018,
+              "residual": 3.529740296006703
+            },
+            "rssStartBytes": 1629761536,
+            "rssEndBytes": 1630248960
+          },
+          {
+            "startSeconds": 140.0,
+            "elapsedSeconds": 10.0000966,
+            "cpu": {
+              "game": 4.932010699955417,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.33704859563085,
+              "residual": 3.4050378956754335
+            },
+            "rssStartBytes": 1630248960,
+            "rssEndBytes": 1630613504
+          },
+          {
+            "startSeconds": 150.0,
+            "elapsedSeconds": 9.9998778,
+            "cpu": {
+              "game": 5.476163894160991,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.875739644970414,
+              "residual": 3.399575750809423
+            },
+            "rssStartBytes": 1630613504,
+            "rssEndBytes": 1631158272
+          },
+          {
+            "startSeconds": 160.0,
+            "elapsedSeconds": 10.0000314,
+            "cpu": {
+              "game": 5.031832905171451,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.237462303138614,
+              "residual": 3.2056293979671624
+            },
+            "rssStartBytes": 1631158272,
+            "rssEndBytes": 1631518720
+          },
+          {
+            "startSeconds": 170.0,
+            "elapsedSeconds": 10.0002037,
+            "cpu": {
+              "game": 5.3250808520129365,
+              "launcher": 0.0,
+              "sampler": 0.005576000892160143,
+              "total": 8.99408943905431,
+              "residual": 3.663432586149214
+            },
+            "rssStartBytes": 1631518720,
+            "rssEndBytes": 1631752192
+          },
+          {
+            "startSeconds": 180.0,
+            "elapsedSeconds": 9.9998162,
+            "cpu": {
+              "game": 5.518973214285714,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.588169642857142,
+              "residual": 3.069196428571428
+            },
+            "rssStartBytes": 1631752192,
+            "rssEndBytes": 1632006144
+          },
+          {
+            "startSeconds": 190.0,
+            "elapsedSeconds": 9.999891,
+            "cpu": {
+              "game": 5.083421684057809,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.329836504659339,
+              "residual": 4.2464148206015295
+            },
+            "rssStartBytes": 1632006144,
+            "rssEndBytes": 1632571392
+          },
+          {
+            "startSeconds": 200.0,
+            "elapsedSeconds": 9.9999176,
+            "cpu": {
+              "game": 4.771471622300352,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.924549361013449,
+              "residual": 3.1530777387130975
+            },
+            "rssStartBytes": 1632571392,
+            "rssEndBytes": 1633157120
+          },
+          {
+            "startSeconds": 210.0,
+            "elapsedSeconds": 10.0002461,
+            "cpu": {
+              "game": 5.2734375,
+              "launcher": 0.0,
+              "sampler": 0.005580357142857143,
+              "total": 9.369419642857142,
+              "residual": 4.090401785714286
+            },
+            "rssStartBytes": 1633157120,
+            "rssEndBytes": 1633144832
+          },
+          {
+            "startSeconds": 220.0,
+            "elapsedSeconds": 10.000098,
+            "cpu": {
+              "game": 5.340349305866547,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.76063591580833,
+              "residual": 3.4202866099417824
+            },
+            "rssStartBytes": 1633144832,
+            "rssEndBytes": 1638215680
+          },
+          {
+            "startSeconds": 230.0,
+            "elapsedSeconds": 9.9999555,
+            "cpu": {
+              "game": 4.975124378109452,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.508593396653097,
+              "residual": 3.533469018543645
+            },
+            "rssStartBytes": 1638215680,
+            "rssEndBytes": 1641988096
+          },
+          {
+            "startSeconds": 240.0,
+            "elapsedSeconds": 9.9996426,
+            "cpu": {
+              "game": 4.885437320995814,
+              "launcher": 0.0,
+              "sampler": 0.0055078211059704785,
+              "total": 8.300286406697511,
+              "residual": 3.409341264595726
+            },
+            "rssStartBytes": 1641988096,
+            "rssEndBytes": 1642270720
+          },
+          {
+            "startSeconds": 250.0,
+            "elapsedSeconds": 10.0000679,
+            "cpu": {
+              "game": 4.415700267618198,
+              "launcher": 0.0,
+              "sampler": 0.005575379125780553,
+              "total": 7.794380017841213,
+              "residual": 3.3731043710972344
+            },
+            "rssStartBytes": 1642270720,
+            "rssEndBytes": 1644589056
+          },
+          {
+            "startSeconds": 260.0,
+            "elapsedSeconds": 10.0012195,
+            "cpu": {
+              "game": 4.169940509597037,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.722527780895724,
+              "residual": 3.5525872712986866
+            },
+            "rssStartBytes": 1644589056,
+            "rssEndBytes": 1645395968
+          },
+          {
+            "startSeconds": 270.0,
+            "elapsedSeconds": 9.9990183,
+            "cpu": {
+              "game": 4.730967849408629,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.31756344050197,
+              "residual": 4.586595591093341
+            },
+            "rssStartBytes": 1645395968,
+            "rssEndBytes": 1648644096
+          },
+          {
+            "startSeconds": 280.0,
+            "elapsedSeconds": 10.0000455,
+            "cpu": {
+              "game": 4.034999721339799,
+              "launcher": 0.0,
+              "sampler": 0.005573204034999721,
+              "total": 7.250738449534637,
+              "residual": 3.210165524159839
+            },
+            "rssStartBytes": 1648644096,
+            "rssEndBytes": 1649557504
+          },
+          {
+            "startSeconds": 290.0,
+            "elapsedSeconds": 9.9996362,
+            "cpu": {
+              "game": 4.128260991006089,
+              "launcher": 0.0,
+              "sampler": 0.005586280096084017,
+              "total": 7.70348025249986,
+              "residual": 3.569632981397687
+            },
+            "rssStartBytes": 1649557504,
+            "rssEndBytes": 1650163712
+          }
+        ]
+      },
+      "resource": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 61,
+        "elapsedSeconds": 30.0000504,
+        "machineCpuMeanPercent": {
+          "game": 4.43487500699066,
+          "launcher": 0.0,
+          "sampler": 0.0,
+          "total": 7.723281695654605,
+          "residual": 3.2884066886639447
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            2.2522522522522523,
+            7.717750826901875
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            5.616740088105727,
+            11.62528216704289
+          ],
+          "residual": [
+            1.8338727076591148,
+            5.3497942386831285
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18881101824,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          1653805056,
+          1659076608
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T07:13:16.007087+00:00",
+        "endUtc": "2026-10-17T07:13:46.008160+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 16692,
+            "creationId": "134366944289725209"
+          },
+          "launcher": {
+            "pid": 5796,
+            "creationId": "134366909230654288"
+          },
+          "sampler": {
+            "pid": 22744,
+            "creationId": "134366947959260265"
+          }
+        },
+        "gameForegroundSamples": 61,
+        "maxReadOverheadNs": 921000,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 1653923840,
+          "endBytes": 1659076608,
+          "deltaBytes": 5152768,
+          "meanBytes": 1657357534.4064872,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0004359,
+            "cpu": {
+              "game": 5.00479062165361,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.482218339626895,
+              "residual": 3.477427717973285
+            },
+            "rssStartBytes": 1653923840,
+            "rssEndBytes": 1657671680
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 10.000036,
+            "cpu": {
+              "game": 3.883226235320186,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.046310658098825,
+              "residual": 3.163084422778639
+            },
+            "rssStartBytes": 1657671680,
+            "rssEndBytes": 1658232832
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 9.9995785,
+            "cpu": {
+              "game": 4.4262662483191395,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.65351860152398,
+              "residual": 3.2272523532048405
+            },
+            "rssStartBytes": 1658232832,
+            "rssEndBytes": 1659076608
+          }
+        ]
+      },
+      "setupAfterWarmupSeconds": 17.74015,
+      "heapStart": {
+        "committedBytes": 781189120,
+        "usedBytes": 491256832,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "heapEnd": {
+        "committedBytes": 781189120,
+        "usedBytes": 676864000,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "physicalWindow": {
+        "pid": 16692,
+        "physicalClientWidth": 1920,
+        "physicalClientHeight": 1080,
+        "dpi": 120,
+        "framebufferObserved": false,
+        "scope": "read-only window geometry; calling thread DPI context only"
+      },
+      "restoration": {
+        "label": "b2",
+        "preLaunchInventoryEqual": true,
+        "optionsSha256": "64cec45e976849b23c95fc3c0b7652d72c535167903b3716fef7e93820b6cf65",
+        "archiveSha256": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6"
+      },
+      "cameraStart": {
+        "utc": "2026-10-17T07:07:57.016Z",
+        "position": [
+          128.5,
+          96,
+          128.5
+        ],
+        "orientation": [
+          135,
+          15
+        ],
+        "liveF3Verified": true,
+        "forcedChunks": 0,
+        "loadedEntities": 13,
+        "renderDistance": 12,
+        "simulationDistance": 8,
+        "resetAfterLoad": true
+      },
+      "cameraEnd": {
+        "utc": "2026-10-17T07:13:57.210Z",
+        "position": [
+          128.5,
+          96,
+          128.5
+        ],
+        "orientation": [
+          135,
+          15
+        ],
+        "liveF3Verified": true,
+        "forcedChunks": 0,
+        "loadedEntities": 10
+      },
+      "sceneAfter": {
+        "minecraftVersion": "1.21.11",
+        "seed": 123456789,
+        "generationSettings": {
+          "bonus_chest": 0,
+          "seed": 123456789,
+          "generate_features": 1,
+          "dimensions": {
+            "minecraft:the_nether": {
+              "type": "minecraft:the_nether",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:multi_noise",
+                  "preset": "minecraft:nether"
+                },
+                "settings": "minecraft:nether"
+              }
+            },
+            "minecraft:overworld": {
+              "type": "minecraft:overworld",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:multi_noise",
+                  "preset": "minecraft:overworld"
+                },
+                "settings": "minecraft:overworld"
+              }
+            },
+            "minecraft:the_end": {
+              "type": "minecraft:the_end",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:the_end"
+                },
+                "settings": "minecraft:end"
+              }
+            }
+          }
+        },
+        "dimension": "minecraft:overworld",
+        "position": [
+          128.5,
+          96.0,
+          128.5
+        ],
+        "orientation": [
+          135.0,
+          15.0
+        ],
+        "playerGameMode": 1,
+        "worldGameMode": 1,
+        "abilities": {
+          "walkSpeed": 0.10000000149011612,
+          "instabuild": 1,
+          "flying": 1,
+          "flySpeed": 0.05000000074505806,
+          "mayfly": 1,
+          "invulnerable": 1,
+          "mayBuild": 1
+        },
+        "time": 6000,
+        "raining": 0,
+        "thundering": 0,
+        "difficulty": 2,
+        "gameRules": {
+          "minecraft:advance_weather": 0,
+          "minecraft:max_entity_cramming": 24,
+          "minecraft:command_block_output": 1,
+          "minecraft:fall_damage": 1,
+          "minecraft:spawn_wardens": 1,
+          "minecraft:respawn_radius": 10,
+          "minecraft:max_command_sequence_length": 65536,
+          "minecraft:drowning_damage": 1,
+          "minecraft:immediate_respawn": 0,
+          "minecraft:natural_health_regeneration": 1,
+          "minecraft:player_movement_check": 1,
+          "minecraft:tnt_explosion_drop_decay": 0,
+          "minecraft:spectators_generate_chunks": 1,
+          "minecraft:players_nether_portal_creative_delay": 0,
+          "minecraft:fire_damage": 1,
+          "minecraft:command_blocks_work": 1,
+          "minecraft:advance_time": 0,
+          "minecraft:keep_inventory": 0,
+          "minecraft:log_admin_commands": 1,
+          "minecraft:block_drops": 1,
+          "minecraft:limited_crafting": 0,
+          "minecraft:elytra_movement_check": 1,
+          "minecraft:global_sound_events": 1,
+          "minecraft:lava_source_conversion": 0,
+          "minecraft:spread_vines": 1,
+          "minecraft:players_nether_portal_default_delay": 80,
+          "minecraft:players_sleeping_percentage": 100,
+          "minecraft:entity_drops": 1,
+          "minecraft:spawn_phantoms": 1,
+          "minecraft:spawn_mobs": 0,
+          "minecraft:freeze_damage": 1,
+          "minecraft:forgive_dead_players": 1,
+          "minecraft:mob_drops": 1,
+          "minecraft:show_advancement_messages": 1,
+          "minecraft:water_source_conversion": 1,
+          "minecraft:max_command_forks": 65536,
+          "minecraft:allow_entering_nether_using_portals": 1,
+          "minecraft:show_death_messages": 1,
+          "minecraft:spawn_patrols": 1,
+          "minecraft:block_explosion_drop_decay": 1,
+          "minecraft:max_block_modifications": 32768,
+          "minecraft:mob_griefing": 1,
+          "minecraft:send_command_feedback": 1,
+          "minecraft:pvp": 1,
+          "minecraft:spawn_monsters": 1,
+          "minecraft:locator_bar": 1,
+          "minecraft:fire_spread_radius_around_player": 128,
+          "minecraft:random_tick_speed": 3,
+          "minecraft:ender_pearls_vanish_on_death": 1,
+          "minecraft:spawner_blocks_work": 1,
+          "minecraft:spawn_wandering_traders": 1,
+          "minecraft:mob_explosion_drop_decay": 1,
+          "minecraft:tnt_explodes": 1,
+          "minecraft:max_snow_accumulation_height": 1,
+          "minecraft:projectiles_can_break_blocks": 1,
+          "minecraft:reduced_debug_info": 0,
+          "minecraft:universal_anger": 0,
+          "minecraft:raids": 1
+        },
+        "totalRecordedChunks": 3772,
+        "requiredFullChunks": 1024,
+        "missingRequiredFullChunks": 0,
+        "chunkRectangle": [
+          -8,
+          -8,
+          23,
+          23
+        ],
+        "entityCount": 206,
+        "entityTypes": {
+          "minecraft:chest_minecart": 30,
+          "minecraft:bee": 10,
+          "minecraft:drowned": 12,
+          "minecraft:falling_block": 100,
+          "minecraft:item": 54
+        },
+        "blockEntityCount": 446,
+        "blockEntityTypes": {
+          "DUMMY": 6,
+          "minecraft:mob_spawner": 60,
+          "minecraft:sculk_catalyst": 1,
+          "minecraft:sculk_sensor": 1,
+          "minecraft:brushable_block": 53,
+          "minecraft:chest": 74,
+          "minecraft:beehive": 7,
+          "minecraft:vault": 38,
+          "minecraft:dispenser": 27,
+          "minecraft:hopper": 16,
+          "minecraft:barrel": 30,
+          "minecraft:trial_spawner": 36,
+          "minecraft:decorated_pot": 83,
+          "minecraft:bed": 14
+        }
+      },
+      "heapCommandBrackets": [
+        {
+          "command": "JFR.check",
+          "startUtc": "2026-10-17T07:13:11.200878+00:00",
+          "endUtc": "2026-10-17T07:13:11.384438+00:00",
+          "sha256": "de701b68a6a08220091bee4241b26e5d109821ffe2177d095669df8e891ce255"
+        },
+        {
+          "command": "GC.heap_info",
+          "startUtc": "2026-10-17T07:13:11.386945+00:00",
+          "endUtc": "2026-10-17T07:13:11.573281+00:00",
+          "sha256": "f65484c81109f4017fba8c95728c7f47d8f0decf91c112b9aeca2a282a7e26d1"
+        }
+      ],
+      "resourceEligible": true,
+      "resourceStartAfterOverlayKeySeconds": 0.341087
+    },
+    {
+      "label": "a2",
+      "condition": "A",
+      "identity": {
+        "utc": "2026-10-17T07:14:41.300Z",
+        "status": "running",
+        "pid": 18192,
+        "startedAtUnixSeconds": 1792221281,
+        "sessionStatus": "ready",
+        "creationId": "134366948812796838",
+        "label": "a2",
+        "executableHashVerified": true
+      },
+      "warmup": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 601,
+        "elapsedSeconds": 300.0001585,
+        "machineCpuMeanPercent": {
+          "game": 5.380518593892133,
+          "launcher": 0.0,
+          "sampler": 0.0,
+          "total": 9.179472774657764,
+          "residual": 3.798954180765631
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            1.9693654266958425,
+            27.43362831858407
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            5.579868708971554,
+            33.6283185840708
+          ],
+          "residual": [
+            1.7773620205799814,
+            15.76026637069922
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18477780992,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          1506500608,
+          1663389696
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T07:15:33.522358+00:00",
+        "endUtc": "2026-10-17T07:20:33.529678+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 18192,
+            "creationId": "134366948812796838"
+          },
+          "launcher": {
+            "pid": 5796,
+            "creationId": "134366909230654288"
+          },
+          "sampler": {
+            "pid": 18180,
+            "creationId": "134366949334118892"
+          }
+        },
+        "gameForegroundSamples": 601,
+        "maxReadOverheadNs": 1709700,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 1544175616,
+          "endBytes": 1663389696,
+          "deltaBytes": 119214080,
+          "meanBytes": 1602744646.9857109,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.0005354,
+            "cpu": {
+              "game": 13.877573796105128,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 18.732213604151553,
+              "residual": 4.854639808046425
+            },
+            "rssStartBytes": 1544175616,
+            "rssEndBytes": 1527934976
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 9.9999565,
+            "cpu": {
+              "game": 4.644014753548675,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.080920979099139,
+              "residual": 3.436906225550463
+            },
+            "rssStartBytes": 1527934976,
+            "rssEndBytes": 1551212544
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 10.000072,
+            "cpu": {
+              "game": 5.109489051094891,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.383183819022678,
+              "residual": 4.273694767927787
+            },
+            "rssStartBytes": 1551212544,
+            "rssEndBytes": 1554735104
+          },
+          {
+            "startSeconds": 30.0,
+            "elapsedSeconds": 9.9995562,
+            "cpu": {
+              "game": 5.134501618484205,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.582542694497153,
+              "residual": 4.448041076012948
+            },
+            "rssStartBytes": 1554735104,
+            "rssEndBytes": 1558360064
+          },
+          {
+            "startSeconds": 40.0,
+            "elapsedSeconds": 10.0001479,
+            "cpu": {
+              "game": 5.078125,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.280133928571429,
+              "residual": 4.202008928571429
+            },
+            "rssStartBytes": 1558360064,
+            "rssEndBytes": 1560293376
+          },
+          {
+            "startSeconds": 50.0,
+            "elapsedSeconds": 10.0000042,
+            "cpu": {
+              "game": 5.257870060281313,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.35476668899308,
+              "residual": 4.096896628711766
+            },
+            "rssStartBytes": 1560293376,
+            "rssEndBytes": 1563426816
+          },
+          {
+            "startSeconds": 60.0,
+            "elapsedSeconds": 10.0000264,
+            "cpu": {
+              "game": 4.799150790546958,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.911112352645398,
+              "residual": 4.111961562098441
+            },
+            "rssStartBytes": 1563426816,
+            "rssEndBytes": 1568681984
+          },
+          {
+            "startSeconds": 70.0,
+            "elapsedSeconds": 10.0002049,
+            "cpu": {
+              "game": 4.927180402879304,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.52630991574131,
+              "residual": 3.5991295128620058
+            },
+            "rssStartBytes": 1568681984,
+            "rssEndBytes": 1569431552
+          },
+          {
+            "startSeconds": 80.0,
+            "elapsedSeconds": 9.9999494,
+            "cpu": {
+              "game": 4.817192296957857,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.411945297236953,
+              "residual": 3.5947530002790957
+            },
+            "rssStartBytes": 1569431552,
+            "rssEndBytes": 1572700160
+          },
+          {
+            "startSeconds": 90.0,
+            "elapsedSeconds": 9.9996993,
+            "cpu": {
+              "game": 5.059059505237352,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.641631379540897,
+              "residual": 3.582571874303545
+            },
+            "rssStartBytes": 1572700160,
+            "rssEndBytes": 1573359616
+          },
+          {
+            "startSeconds": 100.0,
+            "elapsedSeconds": 9.9999733,
+            "cpu": {
+              "game": 5.161830357142857,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.844866071428571,
+              "residual": 3.6830357142857144
+            },
+            "rssStartBytes": 1573359616,
+            "rssEndBytes": 1576452096
+          },
+          {
+            "startSeconds": 110.0,
+            "elapsedSeconds": 9.9999829,
+            "cpu": {
+              "game": 5.366017086381149,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.900050254062203,
+              "residual": 4.534033167681054
+            },
+            "rssStartBytes": 1576452096,
+            "rssEndBytes": 1584975872
+          },
+          {
+            "startSeconds": 120.0,
+            "elapsedSeconds": 9.9999476,
+            "cpu": {
+              "game": 5.366316729953094,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.559973196336832,
+              "residual": 4.193656466383739
+            },
+            "rssStartBytes": 1584975872,
+            "rssEndBytes": 1585971200
+          },
+          {
+            "startSeconds": 130.0,
+            "elapsedSeconds": 10.0001002,
+            "cpu": {
+              "game": 5.577555914998048,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.963132355401862,
+              "residual": 3.3855764404038142
+            },
+            "rssStartBytes": 1585971200,
+            "rssEndBytes": 1597599744
+          },
+          {
+            "startSeconds": 140.0,
+            "elapsedSeconds": 10.000172,
+            "cpu": {
+              "game": 5.259044216167932,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.412684234033051,
+              "residual": 4.153640017865119
+            },
+            "rssStartBytes": 1597599744,
+            "rssEndBytes": 1598423040
+          },
+          {
+            "startSeconds": 150.0,
+            "elapsedSeconds": 10.0006099,
+            "cpu": {
+              "game": 5.296645643801976,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.868672210749567,
+              "residual": 3.5720265669475912
+            },
+            "rssStartBytes": 1598423040,
+            "rssEndBytes": 1604493312
+          },
+          {
+            "startSeconds": 160.0,
+            "elapsedSeconds": 9.9995861,
+            "cpu": {
+              "game": 5.2657973921765295,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.910063523905048,
+              "residual": 3.6442661317285188
+            },
+            "rssStartBytes": 1604493312,
+            "rssEndBytes": 1613492224
+          },
+          {
+            "startSeconds": 170.0,
+            "elapsedSeconds": 10.0001285,
+            "cpu": {
+              "game": 5.149854618653545,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.666964884813241,
+              "residual": 3.5171102661596967
+            },
+            "rssStartBytes": 1613492224,
+            "rssEndBytes": 1617612800
+          },
+          {
+            "startSeconds": 180.0,
+            "elapsedSeconds": 9.9996333,
+            "cpu": {
+              "game": 5.08578431372549,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.37789661319073,
+              "residual": 3.2921122994652396
+            },
+            "rssStartBytes": 1617612800,
+            "rssEndBytes": 1621778432
+          },
+          {
+            "startSeconds": 190.0,
+            "elapsedSeconds": 9.9998408,
+            "cpu": {
+              "game": 5.437576841399352,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.10361014865318,
+              "residual": 3.6660333072538283
+            },
+            "rssStartBytes": 1621778432,
+            "rssEndBytes": 1626632192
+          },
+          {
+            "startSeconds": 200.0,
+            "elapsedSeconds": 10.0001775,
+            "cpu": {
+              "game": 5.282829409795827,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.31049871694745,
+              "residual": 4.027669307151623
+            },
+            "rssStartBytes": 1626632192,
+            "rssEndBytes": 1628905472
+          },
+          {
+            "startSeconds": 210.0,
+            "elapsedSeconds": 9.9998728,
+            "cpu": {
+              "game": 5.089853778323474,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.197455073110838,
+              "residual": 4.107601294787364
+            },
+            "rssStartBytes": 1628905472,
+            "rssEndBytes": 1633452032
+          },
+          {
+            "startSeconds": 220.0,
+            "elapsedSeconds": 10.0003786,
+            "cpu": {
+              "game": 5.514972397256455,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 9.00016728935482,
+              "residual": 3.4851948920983657
+            },
+            "rssStartBytes": 1633452032,
+            "rssEndBytes": 1639612416
+          },
+          {
+            "startSeconds": 230.0,
+            "elapsedSeconds": 9.999811,
+            "cpu": {
+              "game": 4.792457040839098,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.184557018522652,
+              "residual": 3.3920999776835536
+            },
+            "rssStartBytes": 1639612416,
+            "rssEndBytes": 1644236800
+          },
+          {
+            "startSeconds": 240.0,
+            "elapsedSeconds": 9.9998737,
+            "cpu": {
+              "game": 4.999720997712181,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.308688131242675,
+              "residual": 3.308967133530494
+            },
+            "rssStartBytes": 1644236800,
+            "rssEndBytes": 1646518272
+          },
+          {
+            "startSeconds": 250.0,
+            "elapsedSeconds": 10.0005021,
+            "cpu": {
+              "game": 5.020360350309589,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.651754337033525,
+              "residual": 3.6313939867239364
+            },
+            "rssStartBytes": 1646518272,
+            "rssEndBytes": 1650012160
+          },
+          {
+            "startSeconds": 260.0,
+            "elapsedSeconds": 9.9997575,
+            "cpu": {
+              "game": 5.24168762224085,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.74545962559374,
+              "residual": 3.503772003352891
+            },
+            "rssStartBytes": 1650012160,
+            "rssEndBytes": 1652973568
+          },
+          {
+            "startSeconds": 270.0,
+            "elapsedSeconds": 9.9998922,
+            "cpu": {
+              "game": 4.6082692522010475,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.862476317842416,
+              "residual": 3.254207065641369
+            },
+            "rssStartBytes": 1652973568,
+            "rssEndBytes": 1656135680
+          },
+          {
+            "startSeconds": 280.0,
+            "elapsedSeconds": 9.9998888,
+            "cpu": {
+              "game": 4.743303571428571,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.214285714285714,
+              "residual": 3.4709821428571423
+            },
+            "rssStartBytes": 1656135680,
+            "rssEndBytes": 1660575744
+          },
+          {
+            "startSeconds": 290.0,
+            "elapsedSeconds": 9.9998775,
+            "cpu": {
+              "game": 4.449661803342837,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.396221141483593,
+              "residual": 3.946559338140757
+            },
+            "rssStartBytes": 1660575744,
+            "rssEndBytes": 1663389696
+          }
+        ]
+      },
+      "resource": {
+        "protocol": "Practical Performance Protocol v1",
+        "samples": 61,
+        "elapsedSeconds": 30.0003605,
+        "machineCpuMeanPercent": {
+          "game": 4.654406158766759,
+          "launcher": 0.0,
+          "sampler": 0.0,
+          "total": 8.062926529929152,
+          "residual": 3.4085203711623935
+        },
+        "intervalCpuRangePercent": {
+          "game": [
+            2.197802197802198,
+            9.845288326300984
+          ],
+          "launcher": [
+            0.0,
+            0.0
+          ],
+          "sampler": [
+            0.0,
+            0.0
+          ],
+          "total": [
+            5.915178571428571,
+            16.76575505350773
+          ],
+          "residual": [
+            1.6574585635359114,
+            11.177170035671818
+          ]
+        },
+        "negativeResidualIntervals": 0,
+        "minimumAvailableBytes": 18902949888,
+        "memoryReservePassed": true,
+        "gameRssRangeBytes": [
+          1666191360,
+          1677475840
+        ],
+        "residualMeaning": "unattributed estimate: includes WebView, attach tools, OS work and sequential-read uncertainty",
+        "unrelatedCpuCertified": false,
+        "environmentComparable": null,
+        "startUtc": "2026-10-17T07:20:38.636954+00:00",
+        "endUtc": "2026-10-17T07:21:08.638705+00:00",
+        "logicalProcessors": 28,
+        "identities": {
+          "game": {
+            "pid": 18192,
+            "creationId": "134366948812796838"
+          },
+          "launcher": {
+            "pid": 5796,
+            "creationId": "134366909230654288"
+          },
+          "sampler": {
+            "pid": 22612,
+            "creationId": "134366952385641005"
+          }
+        },
+        "gameForegroundSamples": 61,
+        "maxReadOverheadNs": 594100,
+        "ACLineStatus": 1,
+        "unknowns": [
+          "continuous GPU utilization",
+          "thermals",
+          "effective core frequency",
+          "VRR",
+          "paging rate",
+          "WebView/attach CPU attribution"
+        ],
+        "rss": {
+          "startBytes": 1666191360,
+          "endBytes": 1677475840,
+          "deltaBytes": 11284480,
+          "meanBytes": 1672397552.8379107,
+          "meanSemantics": "time-weighted left endpoint working-set samples; not a true peak or committed memory"
+        },
+        "blocks": [
+          {
+            "startSeconds": 0.0,
+            "elapsedSeconds": 10.000254,
+            "cpu": {
+              "game": 4.738015607580825,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.34448160535117,
+              "residual": 3.6064659977703455
+            },
+            "rssStartBytes": 1666191360,
+            "rssEndBytes": 1670832128
+          },
+          {
+            "startSeconds": 10.0,
+            "elapsedSeconds": 10.0003216,
+            "cpu": {
+              "game": 4.580749678788894,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 8.24534942182001,
+              "residual": 3.664599743031115
+            },
+            "rssStartBytes": 1670832128,
+            "rssEndBytes": 1674256384
+          },
+          {
+            "startSeconds": 20.0,
+            "elapsedSeconds": 9.9997849,
+            "cpu": {
+              "game": 4.644290811775201,
+              "launcher": 0.0,
+              "sampler": 0.0,
+              "total": 7.599241748438894,
+              "residual": 2.9549509366636935
+            },
+            "rssStartBytes": 1674256384,
+            "rssEndBytes": 1677475840
+          }
+        ]
+      },
+      "setupAfterWarmupSeconds": 5.107276,
+      "heapStart": {
+        "committedBytes": 748683264,
+        "usedBytes": 461595648,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "heapEnd": {
+        "committedBytes": 748683264,
+        "usedBytes": 568711168,
+        "semantics": "one bounded heap-info observation outside primary window; use is GC-phase dependent"
+      },
+      "physicalWindow": {
+        "pid": 18192,
+        "physicalClientWidth": 1920,
+        "physicalClientHeight": 1080,
+        "dpi": 120,
+        "framebufferObserved": false,
+        "scope": "read-only window geometry; calling thread DPI context only"
+      },
+      "restoration": {
+        "label": "a2",
+        "preLaunchInventoryEqual": true,
+        "optionsSha256": "64cec45e976849b23c95fc3c0b7652d72c535167903b3716fef7e93820b6cf65",
+        "archiveSha256": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6"
+      },
+      "cameraStart": {
+        "utc": "2026-10-17T07:15:32.221Z",
+        "position": [
+          128.5,
+          96,
+          128.5
+        ],
+        "orientation": [
+          135,
+          15
+        ],
+        "liveF3Verified": true,
+        "forcedChunks": 0,
+        "loadedEntities": 13,
+        "renderDistance": 12,
+        "simulationDistance": 8,
+        "resetAfterLoad": true
+      },
+      "cameraEnd": {
+        "utc": "2026-10-17T07:21:19.154Z",
+        "position": [
+          128.5,
+          96,
+          128.5
+        ],
+        "orientation": [
+          135,
+          15
+        ],
+        "liveF3Verified": true,
+        "forcedChunks": 0,
+        "loadedEntities": 9
+      },
+      "sceneAfter": {
+        "minecraftVersion": "1.21.11",
+        "seed": 123456789,
+        "generationSettings": {
+          "bonus_chest": 0,
+          "seed": 123456789,
+          "generate_features": 1,
+          "dimensions": {
+            "minecraft:the_nether": {
+              "type": "minecraft:the_nether",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:multi_noise",
+                  "preset": "minecraft:nether"
+                },
+                "settings": "minecraft:nether"
+              }
+            },
+            "minecraft:overworld": {
+              "type": "minecraft:overworld",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:multi_noise",
+                  "preset": "minecraft:overworld"
+                },
+                "settings": "minecraft:overworld"
+              }
+            },
+            "minecraft:the_end": {
+              "type": "minecraft:the_end",
+              "generator": {
+                "type": "minecraft:noise",
+                "biome_source": {
+                  "type": "minecraft:the_end"
+                },
+                "settings": "minecraft:end"
+              }
+            }
+          }
+        },
+        "dimension": "minecraft:overworld",
+        "position": [
+          128.5,
+          96.0,
+          128.5
+        ],
+        "orientation": [
+          135.0,
+          15.0
+        ],
+        "playerGameMode": 1,
+        "worldGameMode": 1,
+        "abilities": {
+          "walkSpeed": 0.10000000149011612,
+          "instabuild": 1,
+          "flying": 1,
+          "flySpeed": 0.05000000074505806,
+          "mayfly": 1,
+          "invulnerable": 1,
+          "mayBuild": 1
+        },
+        "time": 6000,
+        "raining": 0,
+        "thundering": 0,
+        "difficulty": 2,
+        "gameRules": {
+          "minecraft:advance_weather": 0,
+          "minecraft:max_entity_cramming": 24,
+          "minecraft:fall_damage": 1,
+          "minecraft:command_block_output": 1,
+          "minecraft:spawn_wardens": 1,
+          "minecraft:respawn_radius": 10,
+          "minecraft:max_command_sequence_length": 65536,
+          "minecraft:drowning_damage": 1,
+          "minecraft:immediate_respawn": 0,
+          "minecraft:natural_health_regeneration": 1,
+          "minecraft:player_movement_check": 1,
+          "minecraft:tnt_explosion_drop_decay": 0,
+          "minecraft:players_nether_portal_creative_delay": 0,
+          "minecraft:command_blocks_work": 1,
+          "minecraft:fire_damage": 1,
+          "minecraft:keep_inventory": 0,
+          "minecraft:advance_time": 0,
+          "minecraft:spectators_generate_chunks": 1,
+          "minecraft:log_admin_commands": 1,
+          "minecraft:block_drops": 1,
+          "minecraft:limited_crafting": 0,
+          "minecraft:elytra_movement_check": 1,
+          "minecraft:global_sound_events": 1,
+          "minecraft:spread_vines": 1,
+          "minecraft:lava_source_conversion": 0,
+          "minecraft:players_nether_portal_default_delay": 80,
+          "minecraft:players_sleeping_percentage": 100,
+          "minecraft:entity_drops": 1,
+          "minecraft:spawn_phantoms": 1,
+          "minecraft:spawn_mobs": 0,
+          "minecraft:freeze_damage": 1,
+          "minecraft:forgive_dead_players": 1,
+          "minecraft:mob_drops": 1,
+          "minecraft:show_advancement_messages": 1,
+          "minecraft:max_command_forks": 65536,
+          "minecraft:water_source_conversion": 1,
+          "minecraft:show_death_messages": 1,
+          "minecraft:allow_entering_nether_using_portals": 1,
+          "minecraft:spawn_patrols": 1,
+          "minecraft:block_explosion_drop_decay": 1,
+          "minecraft:send_command_feedback": 1,
+          "minecraft:max_block_modifications": 32768,
+          "minecraft:mob_griefing": 1,
+          "minecraft:pvp": 1,
+          "minecraft:locator_bar": 1,
+          "minecraft:spawn_monsters": 1,
+          "minecraft:fire_spread_radius_around_player": 128,
+          "minecraft:random_tick_speed": 3,
+          "minecraft:ender_pearls_vanish_on_death": 1,
+          "minecraft:spawner_blocks_work": 1,
+          "minecraft:spawn_wandering_traders": 1,
+          "minecraft:mob_explosion_drop_decay": 1,
+          "minecraft:tnt_explodes": 1,
+          "minecraft:max_snow_accumulation_height": 1,
+          "minecraft:projectiles_can_break_blocks": 1,
+          "minecraft:universal_anger": 0,
+          "minecraft:reduced_debug_info": 0,
+          "minecraft:raids": 1
+        },
+        "totalRecordedChunks": 3772,
+        "requiredFullChunks": 1024,
+        "missingRequiredFullChunks": 0,
+        "chunkRectangle": [
+          -8,
+          -8,
+          23,
+          23
+        ],
+        "entityCount": 205,
+        "entityTypes": {
+          "minecraft:chest_minecart": 30,
+          "minecraft:bee": 9,
+          "minecraft:drowned": 12,
+          "minecraft:falling_block": 100,
+          "minecraft:item": 54
+        },
+        "blockEntityCount": 446,
+        "blockEntityTypes": {
+          "DUMMY": 6,
+          "minecraft:mob_spawner": 60,
+          "minecraft:sculk_catalyst": 1,
+          "minecraft:sculk_sensor": 1,
+          "minecraft:brushable_block": 53,
+          "minecraft:chest": 74,
+          "minecraft:beehive": 7,
+          "minecraft:vault": 38,
+          "minecraft:dispenser": 27,
+          "minecraft:hopper": 16,
+          "minecraft:barrel": 30,
+          "minecraft:trial_spawner": 36,
+          "minecraft:decorated_pot": 83,
+          "minecraft:bed": 14
+        }
+      },
+      "heapCommandBrackets": [
+        {
+          "command": "JFR.check",
+          "startUtc": "2026-10-17T07:20:38.167533+00:00",
+          "endUtc": "2026-10-17T07:20:38.353877+00:00",
+          "sha256": "743bc9c6851f1255afe08edf81b5b0e8496d0aaa725878cc6ade4432dfdd9c7e"
+        },
+        {
+          "command": "GC.heap_info",
+          "startUtc": "2026-10-17T07:20:38.355879+00:00",
+          "endUtc": "2026-10-17T07:20:38.526008+00:00",
+          "sha256": "52c9a6562807a96529fcffe7918a110bccbecf9f10132afe88120bef6b0c5085"
+        }
+      ],
+      "resourceEligible": true
+    }
+  ],
+  "withinCondition": {
+    "A": {
+      "gameCpuMachinePercent": {
+        "observations": [
+          4.349768272935395,
+          4.654406158766759
+        ],
+        "minimum": 4.349768272935395,
+        "maximum": 4.654406158766759,
+        "median": 4.502087215851077,
+        "range": 0.3046378858313634,
+        "rangePercentOfMedian": 6.7665922765508775,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      },
+      "rssMeanBytes": {
+        "observations": [
+          1660287232.299214,
+          1672397552.8379107
+        ],
+        "minimum": 1660287232.299214,
+        "maximum": 1672397552.8379107,
+        "median": 1666342392.5685623,
+        "range": 12110320.538696766,
+        "rangePercentOfMedian": 0.7267606341113045,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      },
+      "heapCommittedBeforeWindowBytes": {
+        "observations": [
+          786432000,
+          748683264
+        ],
+        "minimum": 748683264,
+        "maximum": 786432000,
+        "median": 767557632.0,
+        "range": 37748736,
+        "rangePercentOfMedian": 4.918032786885246,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      }
+    },
+    "B": {
+      "gameCpuMachinePercent": {
+        "observations": [
+          4.559083713567372,
+          4.43487500699066
+        ],
+        "minimum": 4.43487500699066,
+        "maximum": 4.559083713567372,
+        "median": 4.496979360279016,
+        "range": 0.12420870657671124,
+        "rangePercentOfMedian": 2.762047512911082,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      },
+      "rssMeanBytes": {
+        "observations": [
+          1625297951.6340482,
+          1657357534.4064872
+        ],
+        "minimum": 1625297951.6340482,
+        "maximum": 1657357534.4064872,
+        "median": 1641327743.0202677,
+        "range": 32059582.772439003,
+        "rangePercentOfMedian": 1.95327124084584,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      },
+      "heapCommittedBeforeWindowBytes": {
+        "observations": [
+          743440384,
+          781189120
+        ],
+        "minimum": 743440384,
+        "maximum": 781189120,
+        "median": 762314752.0,
+        "range": 37748736,
+        "rangePercentOfMedian": 4.951856946354883,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      }
+    },
+    "C": {}
+  },
+  "conditionMinusControl": {
+    "B": {
+      "gameCpuMachinePercent": {
+        "conditionMean": 4.496979360279016,
+        "controlMean": 4.502087215851077,
+        "difference": -0.005107855572060949,
+        "observedRangesDisjoint": false,
+        "semantics": "Descriptive state means/ranges, not isolated overhead or an optimization effect"
+      },
+      "rssMeanBytes": {
+        "conditionMean": 1641327743.0202677,
+        "controlMean": 1666342392.5685623,
+        "difference": -25014649.548294544,
+        "observedRangesDisjoint": true,
+        "semantics": "Descriptive state means/ranges, not isolated overhead or an optimization effect"
+      },
+      "heapCommittedBeforeWindowBytes": {
+        "conditionMean": 762314752.0,
+        "controlMean": 767557632.0,
+        "difference": -5242880.0,
+        "observedRangesDisjoint": false,
+        "semantics": "Descriptive state means/ranges, not isolated overhead or an optimization effect"
+      }
+    }
+  },
+  "display": {
+    "Name": "AMD Radeon RX 9070 XT",
+    "DriverVersion": "32.0.31041.1004",
+    "CurrentHorizontalResolution": 2560,
+    "CurrentVerticalResolution": 1440,
+    "CurrentRefreshRate": 240
+  },
+  "powerScheme": "Power Scheme GUID: 16cccdeb-b6f7-4a6b-9337-2ffb6adebbee  (Ultimate Performance)",
+  "limitations": [
+    "Residual is estimated unattributed CPU, not certified background-only CPU",
+    "CPU is total machine capacity; zero small-process counters are quantization, not zero cost",
+    "No continuous GPU/thermals/frequency/VRR/paging telemetry",
+    "300s sampled warm-ups plus recorded unequal setup/pre-roll; not cold starts",
+    "Same frozen initial entities can evolve differently; no generation observed from unchanged recorded chunk count"
+  ]
+}

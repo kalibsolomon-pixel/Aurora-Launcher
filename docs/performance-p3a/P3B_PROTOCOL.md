@@ -1,5 +1,14 @@
 # Practical first experiment — design only
 
+The latest [P3-A.4a.4 acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md)
+characterizes fresh-process variation by metric. Its partial readiness supersedes
+the older blanket practical blocker below. P3-B is still NOT AUTHORIZED. Do not
+execute the prepared 2048→1536 MiB candidate until an owner-approved scope names
+the workload, hypothesis, observer cohort, meaningful effect and regression rules.
+The present stationary scene is unlikely to exercise either heap ceiling; the
+shortest useful next action for that hypothesis is a bounded memory-demanding
+workload, using existing tools, rather than another instrumentation program.
+
 P3-A.4a.3 introduces a distinct [practical protocol](PRACTICAL_PROTOCOL.md) and
 [single maximum-heap experiment design](FIRST_JVM_EXPERIMENT.md). Its readiness
 decision is in [the current acceptance report](../../PERFORMANCE_P3A4A3_ACCEPTANCE.md).

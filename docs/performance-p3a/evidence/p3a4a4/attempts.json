@@ -1,0 +1,96 @@
+{
+  "kind": "actual-attempt-register",
+  "setupPilot": {
+    "label": "pilot",
+    "pid": 19028,
+    "nativeStartUtc": "2026-10-17T06:10:52.304Z",
+    "exactCreationFiletime": null,
+    "scope": "Normal-terrain construction only; no accepted measurement window",
+    "normalExitCode": 0
+  },
+  "excluded": [
+    {
+      "label": "a1",
+      "pid": 21920,
+      "creationId": "134366913918792009",
+      "status": "INVALID",
+      "reason": "Saved orientation differs from intended camera and no live boundary F3 proof was retained",
+      "expectedPosition": [
+        128.5,
+        96,
+        128.5
+      ],
+      "observedPosition": [
+        128.5,
+        96,
+        128.5
+      ],
+      "expectedOrientation": [
+        135,
+        15
+      ],
+      "observedOrientation": [
+        146.39984130859375,
+        13.050005912780762
+      ],
+      "onsetOfDifference": "Unknown; do not infer which input or loading interaction caused it",
+      "normalExitCode": 0,
+      "allOutputsRetained": true,
+      "includedInComparisons": false,
+      "retry": "a1r",
+      "retryReason": "One procedural retry for A; reset and verify live camera after loading, before warm-up"
+    },
+    {
+      "label": "c2",
+      "pid": 22680,
+      "creationId": "134366934723764700",
+      "status": "INVALID",
+      "reason": "F10 input rejected before key transmission; primary sampler started before warm-up completed",
+      "warmupEndUtc": "2026-10-17T06:58:06.512406+00:00",
+      "invalidPrimaryStartUtc": "2026-10-17T06:57:55.856655+00:00",
+      "overlapSeconds": 10.655751,
+      "overlayCsvCount": 0,
+      "jfrExportReadable": true,
+      "jfrSha256": "5ac860da1792654e43e1c08d2a1c93d97423b508bb54ba957bede33e1ade379a",
+      "normalExitCode": 0,
+      "allOutputsRetained": true,
+      "includedInComparisons": false,
+      "retry": "c2r",
+      "retryReason": "Single procedural C retry; require completed warm-up evidence and successful F10 before capture"
+    },
+    {
+      "label": "c2r",
+      "pid": 22756,
+      "creationId": "134366939637498234",
+      "status": "INVALID FOR FULL COMBINED RESOURCE WINDOW",
+      "reason": "Resource sampler starts4.952s after Overlay key completion and extends beyond auto-stop",
+      "overlayKeyEndUtc": "2026-10-17T07:05:22.064Z",
+      "resourceStartUtc": "2026-10-17T07:05:27.016122+00:00",
+      "resourceEndUtc": "2026-10-17T07:05:57.018532+00:00",
+      "overlayCsvCoherent": true,
+      "jfrExportReadable": true,
+      "frameAndJfrDiagnosticEligible": true,
+      "resourceComparisonEligible": false,
+      "includedInResourceComparisons": false,
+      "includedInFrameComparisons": true,
+      "normalExitCode": 0,
+      "allOutputsRetained": true,
+      "retry": null,
+      "retryReason": "C retry exhausted; no further attempt"
+    }
+  ],
+  "nonCaptureProceduralDiagnostics": [
+    "First restoration preflight stopped before mutation on tuple/list JSON comparison; inventory comparison corrected and hashes retained",
+    "Read-only physical-window helper initially failed on property spelling and IntPtr JSON representation; corrected before primary acceptance",
+    "One UI scroll call was rejected for a missing finite scrollX value; corrected without an app action",
+    "One immediate native exit query still reported Running during ordinary shutdown; subsequent query confirmed exited/0 before any restore"
+  ],
+  "conditionARetriesUsed": 1,
+  "conditionBRetriesUsed": 0,
+  "conditionCRetriesUsed": 1,
+  "jvmCandidateExecuted": false,
+  "plannedPrimaryWindows": 6,
+  "eligiblePrimaryResourceWindows": 5,
+  "eligibleFrameExports": 4,
+  "completedCombinedResourceRepeats": 1
+}

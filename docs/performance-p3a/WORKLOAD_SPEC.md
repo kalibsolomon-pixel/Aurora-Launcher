@@ -1,4 +1,22 @@
-# Current P3-A.3 Workload A lock
+# P3-A.4a.4 practical normal-terrain stationary subset
+
+[Workload evidence](evidence/p3a4a4/workload.json) freezes seed123456789 normal
+Overworld terrain and the exact B mod stack, plus diagnostic Overlay/Cloth.
+The archive SHA-256 is
+`de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6`.
+Fresh world/config/options inventories must equal the lock before every process;
+reset and verify the live camera after loading, then warm stationary for >=300s.
+See [trial plan](P3A4A4_TRIAL_PLAN.md) and
+[acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md).
+
+This is a reproducible forest/plains/water stationary view, more representative
+than the prior superflat collector scene. It excludes traversal, generation bursts,
+servers and memory pressure. Whole-world persisted entity/block-entity counts are
+not loaded counts; live F3 entities are boundary observations, loaded chunks and
+block entities remain UNKNOWN. Dynamic entities can evolve after identical restores.
+No strict canonical B promotion or canonical A mutation is implied.
+
+# Current P3-A.3 Workload A lock (historical)
 
 A now has a conforming, independently restored zero-entity canonical world.
 Exact archive/route/options identities are in [workloads.json](workloads.json) and

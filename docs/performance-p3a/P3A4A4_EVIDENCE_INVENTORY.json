@@ -1,0 +1,122 @@
+{
+  "kind": "reviewed-working-tree-byte-inventory-before-local-commit",
+  "startingHead": "bcda4b16f23480b4bd1d4c407ec9e2d66dcd9b3a",
+  "files": [
+    {
+      "path": "PERFORMANCE_P3A4A4_ACCEPTANCE.md",
+      "size": 24654,
+      "sha256": "83c94b775ddc6715ffe0101ae07899b8cca3418ea6cd860d8d5937b463fee34f"
+    },
+    {
+      "path": "docs/performance-p3a/AUTHORIZATION.md",
+      "size": 8480,
+      "sha256": "f6b4fc4ce4c9f2cedb3e1eb4e8a8bf7a4ebd8eb859a95fcea386376de72b8ed4"
+    },
+    {
+      "path": "docs/performance-p3a/FIRST_JVM_EXPERIMENT.md",
+      "size": 5987,
+      "sha256": "ef00d7a84d5c874b1ff436eece739fe3203306e6aef13e5e0a758f5e5095828e"
+    },
+    {
+      "path": "docs/performance-p3a/FRAME_CAPTURE_DECISION.md",
+      "size": 7070,
+      "sha256": "bd9723faed40f6b411fdc05db5a93aeaa69f6b334b207e95b6c0202b576fa3c8"
+    },
+    {
+      "path": "docs/performance-p3a/INSTRUMENTATION_OVERHEAD.md",
+      "size": 9035,
+      "sha256": "a040aba6d8c14923cd4916824c772c1f81005fa39c8ed51e711afbabe12165fa"
+    },
+    {
+      "path": "docs/performance-p3a/P3A4A4_CHANGED_FILES.txt",
+      "size": 1045,
+      "sha256": "da8c5f501e07e3a6aa44336492282bc59e38a72178d300c6f93aac0698886380"
+    },
+    {
+      "path": "docs/performance-p3a/P3A4A4_TRIAL_PLAN.md",
+      "size": 6619,
+      "sha256": "c24a9627be54a44e8b9e838676a685929f8f6e7017e4179b9af0ffcc999b6683"
+    },
+    {
+      "path": "docs/performance-p3a/P3B_PROTOCOL.md",
+      "size": 5083,
+      "sha256": "99026745c45b323009913c3df7bb2f8380b64c1f71300bf78744420f201de8fe"
+    },
+    {
+      "path": "docs/performance-p3a/PRACTICAL_PROTOCOL.md",
+      "size": 10324,
+      "sha256": "ea8a6580a3f9bd3d714c5ca3ce01e81b7dce26a3159cda551ae4b094c690aec3"
+    },
+    {
+      "path": "docs/performance-p3a/READINESS_MATRIX.md",
+      "size": 15594,
+      "sha256": "eaab040019a9a7fbb88b5a13f5a331d248f2d975c3ab271286dfc5159e738af8"
+    },
+    {
+      "path": "docs/performance-p3a/WORKLOAD_SPEC.md",
+      "size": 8938,
+      "sha256": "c1e331f6c34752d63372e9e10f4b3d8d6295e92f7e7e96ec61553ca16ea1f2f2"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a4/attempts.json",
+      "size": 3737,
+      "sha256": "05d26ea21598a46102ee02f4d9f829f9f58e288643fc9310b7396ce2ebe14a7a"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a4/frames.json",
+      "size": 18745,
+      "sha256": "d79d1e448ffd8eb2f66e1e3131f432cd394ba569bebc0b41f0733f60cef1e4ec"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a4/jfr.json",
+      "size": 20942,
+      "sha256": "9a2f962318f6c033b3f3bc40a77a5e3e7ce1f379516fb6c68eb93a1c1ce6c719"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a4/preservation.json",
+      "size": 2058,
+      "sha256": "482cef75dfecaf9afefd525691794c5f781965ce815a78366216422123fd55bb"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a4/raw-inventory.json",
+      "size": 150418,
+      "sha256": "e159efe4da74ea67e3a65830e57a6ad772fda58bd086a65cf2feb5ee7d940b36"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a4/resources.json",
+      "size": 169051,
+      "sha256": "ce09a9481d493790d07409ef19fb92c25d21c0b5642e994c047de8d58fdf2887"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a4/tests.json",
+      "size": 1501,
+      "sha256": "cc4fda2f4a4f360d9fb120b9fc99adb2dab1fde1e979100ac87331bc526b1240"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a4/workload.json",
+      "size": 10741,
+      "sha256": "5de00adf7ad2afb3f1f42f000611c3dd34427ed6240be1a38c21984987698a11"
+    },
+    {
+      "path": "tools/benchmark/README.md",
+      "size": 13369,
+      "sha256": "0cf88098052a3bce3f829ff2231f5da93f8d5a4e3453c20e9d79127225b6bed2"
+    },
+    {
+      "path": "tools/benchmark/collector_review.py",
+      "size": 8595,
+      "sha256": "16a684baf9084d91e38f7d803e6216587e019891ba5072b6c6fc92b2dae4ae00"
+    },
+    {
+      "path": "tools/benchmark/test_collector_review.py",
+      "size": 5176,
+      "sha256": "f2d96a506ee0fe5b3e1c8d674a16bede22aa349690b5d42eb6a60047ff21cec2"
+    }
+  ],
+  "selfExcluded": true,
+  "rawInventory": "evidence/p3a4a4/raw-inventory.json",
+  "rawExactLocalMap": ".git/p3a4a4/raw-inventory-private.json",
+  "deletions": [],
+  "renames": [],
+  "privacy": "No raw logs, world payloads, JFR, credentials or live launch arguments tracked"
+}

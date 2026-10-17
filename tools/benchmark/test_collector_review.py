@@ -62,6 +62,24 @@ class CollectorReviewTests(unittest.TestCase):
         self.meta["worldArchiveSha256"] = "0" * 64
         self.assertEqual(self.run_review()["status"], "INVALID")
 
+    def test_locked_normal_terrain_remains_diagnostic(self):
+        self.meta["workloadId"] = "workload-b-normal-stationary-v1"
+        self.meta["worldArchiveSha256"] = c.WORKLOAD_ARCHIVES[self.meta["workloadId"]]
+        result = self.run_review()
+        self.assertEqual(result["status"], "CONSISTENT DIAGNOSTIC")
+        self.assertEqual(result["metricRole"], "DIAGNOSTIC ONLY")
+        self.assertFalse(result["observerOverheadBounded"])
+
+    def test_crossed_snapshot_identity_refused(self):
+        self.meta["workloadId"] = "workload-b-normal-stationary-v1"
+        self.assertEqual(self.run_review()["status"], "INVALID")
+
+    def test_unreviewed_and_malformed_workload_refused(self):
+        for workload in ["unreviewed-world", None, [], {}]:
+            with self.subTest(workload=workload):
+                self.meta["workloadId"] = workload
+                self.assertEqual(self.run_review()["status"], "INVALID")
+
     def test_unsupported_format(self):
         self.meta["format"] = "presentmon"
         self.assertEqual(self.run_review()["status"], "INVALID")

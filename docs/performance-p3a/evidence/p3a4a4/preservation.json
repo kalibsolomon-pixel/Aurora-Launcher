@@ -1,0 +1,56 @@
+{
+  "status": "PASS",
+  "startingHead": "bcda4b16f23480b4bd1d4c407ec9e2d66dcd9b3a",
+  "originalTrackedFiles": 2568,
+  "originalTrackedFilesMissing": [],
+  "scopedOriginalModifications": [
+    "docs/performance-p3a/AUTHORIZATION.md",
+    "docs/performance-p3a/FIRST_JVM_EXPERIMENT.md",
+    "docs/performance-p3a/FRAME_CAPTURE_DECISION.md",
+    "docs/performance-p3a/INSTRUMENTATION_OVERHEAD.md",
+    "docs/performance-p3a/P3B_PROTOCOL.md",
+    "docs/performance-p3a/PRACTICAL_PROTOCOL.md",
+    "docs/performance-p3a/READINESS_MATRIX.md",
+    "docs/performance-p3a/WORKLOAD_SPEC.md",
+    "tools/benchmark/README.md",
+    "tools/benchmark/collector_review.py",
+    "tools/benchmark/test_collector_review.py"
+  ],
+  "protectedUntrackedFiles": 4,
+  "protectedFiles": [
+    {
+      "path": ".zcode-icon-diag.py",
+      "size": 2195,
+      "sha256": "5e6199883ece4cb38308d080aaf9d45612594acf0ade0660baeb95aea1200f16"
+    },
+    {
+      "path": ".zcodeignore",
+      "size": 794,
+      "sha256": "e7577714c5582301e11449a27731439051a29d035c4d2373595fb6c5042bcc3e"
+    },
+    {
+      "path": "UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt",
+      "size": 1463,
+      "sha256": "ad1790bff169f56025e6da2bc6f75b9434a046d478643f50ba0d68cbb25b5250"
+    },
+    {
+      "path": "docs/performance-p0-2/__pycache__/analyze.cpython-312.pyc",
+      "size": 17645,
+      "sha256": "76dc3497a710faf67fc16a0ecb3aaebe19c652bfbc266cc85c9c3480ec0e2ce3"
+    }
+  ],
+  "privateEvidenceFiles": 1063,
+  "privateEvidenceFailures": [],
+  "criticalFiles": 11,
+  "criticalFailures": [],
+  "productionFailures": [],
+  "productionAuditScope": "Launcher1.4.2 executable/config/registry hashes; no owner-world, credential or whole-runtime inventory",
+  "canonicalAUnchanged": true,
+  "worktrees": 7,
+  "otherWorktreeHeadsUnchanged": true,
+  "clientHead": "5bdf3aa30bc7bfa9a226170a9c54ca5ec3fd8e1d",
+  "clientTrackedFiles": 422,
+  "clientStateAndHashesUnchanged": true,
+  "deletions": [],
+  "renames": []
+}

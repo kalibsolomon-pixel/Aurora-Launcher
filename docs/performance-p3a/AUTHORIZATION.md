@@ -1,3 +1,22 @@
+# P3-A.4a.4 bounded validation authorization
+
+The owner authorizes one fixed fresh-process resource-control sequence, at most
+six valid30s primary windows (two each inactive/Overlay/Overlay+JFR), equivalent
+>=300s stationary warm-up, one short setup/compatibility pilot and at most one
+documented environmental/procedural retry per failed condition. Representative
+normal-terrain workload preparation, existing samplers/readers, focused necessary
+corrections/tests, preservation audits, readiness documentation and scoped reviewed
+local commits are authorized. The [trial plan](P3A4A4_TRIAL_PLAN.md) records order
+and the procedural amendments/exclusions. A and C each used their single retry;
+the C retry's resource timing failure remains excluded rather than authorizing
+another attempt. See the [final acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md).
+
+The established same-user isolated root/profile/native Play workflow and accepted
+shared credential refresh risk continue. Interactive login is owner-operated.
+No secret export/copy, direct game launch, production/default/limiter/Client change,
+2048→1536MiB candidate execution, alternative experiment, push/merge/tag/release or
+deployment. Stop after P3-A.4a.4. **P3-B requires separate explicit owner approval.**
+
 # P3-A.4a.3 practical validation authorization
 
 The owner authorizes the separate [Practical Performance Protocol](PRACTICAL_PROTOCOL.md),

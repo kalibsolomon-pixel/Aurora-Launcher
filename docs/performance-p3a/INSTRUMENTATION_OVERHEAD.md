@@ -1,4 +1,21 @@
-# P3-A.4a.3 practical observer review — INCONCLUSIVE for resource comparisons
+# P3-A.4a.4 fresh-process observer review — LIMITED / INCONCLUSIVE
+
+[Acceptance and numeric ranges](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md) report
+two fresh inactive controls, two Overlay resource windows and one eligible combined
+window on locked normal terrain. C2 failed procedure; its single retry C2r has a
+sampler delay extending beyond Overlay auto-stop, so that resource slot is excluded.
+Do not compute a two-repeat combined resource mean from it. Its coherent frame
+export and readable JFR remain separate diagnostics. No second retry was performed.
+
+A/B state/control ranges characterize practical noise; mean subtraction is not
+isolated recorder overhead. Small CPU/RSS claims remain inconclusive. JFR is optional
+diagnostics with identical settings in a future matched cohort; unequal C1/C2r
+whole-export post-roll does not establish matched GC-frequency variation. There is
+no inactive callback export to bound Overlay's own timing cost. No zero-cost claim,
+universal CPU tolerance or physical display inference. Preserve the historical
+within-session results below without attributing changed drift to restarts alone.
+
+# P3-A.4a.3 practical observer review — INCONCLUSIVE for resource comparisons (historical)
 
 Actual inactive / Overlay recording / JFR with inactive Overlay / combined subset
 is complete, with inactive controls before and after. Recording/export/stability

@@ -15,6 +15,11 @@ FORMAT = "performanceoverlay-1.0.2-csv"
 JAR_SHA256 = "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2"
 ARCHIVE_SHA256 = "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f"
 WORKLOAD = "workload-b-a-scene-diagnostic-v1"
+# Reviewed immutable snapshots only; a caller-supplied digest is not a workload lock.
+WORKLOAD_ARCHIVES = {
+    WORKLOAD: ARCHIVE_SHA256,
+    "workload-b-normal-stationary-v1": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6",
+}
 COLUMNS = "elapsed_ms,frame_ms,inst_fps,fps_smoothed,avg_fps,low1_fps,low01_fps,stutters,stutter_percent,max_spike_ms,gc_time_delta_ms,mem_used_mb,mem_max_mb".split(",")
 
 
@@ -38,11 +43,15 @@ def review(path, metadata):
         if not isinstance(metadata, dict):
             raise ValueError("missing source metadata")
         expected = {"format": FORMAT, "sourceJarSha256": JAR_SHA256,
-                    "workloadId": WORKLOAD, "worldArchiveSha256": ARCHIVE_SHA256,
                     "timestampUnit": "ms", "frameUnit": "ms"}
         for key, value in expected.items():
             if metadata.get(key) != value:
                 errors.append("missing or incorrect " + key)
+        workload = metadata.get("workloadId")
+        if not isinstance(workload, str) or workload not in WORKLOAD_ARCHIVES:
+            errors.append("missing or incorrect workloadId")
+        elif metadata.get("worldArchiveSha256") != WORKLOAD_ARCHIVES[workload]:
+            errors.append("missing or incorrect worldArchiveSha256")
         if metadata.get("requestedMetricRole", "diagnostic") != "diagnostic":
             errors.append("unjustified metric promotion")
         if metadata.get("jfrAlignment") is not None:

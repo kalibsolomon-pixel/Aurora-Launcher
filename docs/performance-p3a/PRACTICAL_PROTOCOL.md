@@ -1,4 +1,26 @@
-# Practical Performance Protocol v1 — P3-A.4a.3
+# Practical Performance Protocol — fresh-process supplement P3-A.4a.4
+
+The [bounded trial plan](P3A4A4_TRIAL_PLAN.md) replaces the earlier within-process
+validation sequence for this phase only: A–B–C–C–B–A, two fresh processes per
+observer condition, equal fresh world/configuration copies, >=300s stationary
+warm-up and one30s primary resource window per process. Historical within-session
+variation is context, not this workload's restart sensitivity. Retain warm-up
+resource series separately from the six primary windows.
+
+Classify each metric family independently: practical frame-loop screening, GC/heap
+diagnostics, CPU and RSS may have different readiness. Two repeats establish only
+an observed range. Effects comparable to repeated-control or within-condition drift
+remain unresolved; do not subtract an unrelated observer/control pair. A sufficiently
+large repeatable effect may be screenable even when smaller effects are not.
+No universal percentage threshold or statistical detection guarantee is implied.
+
+Controls have no active CSV recorder, so active/inactive internal timing overhead
+cannot be measured directly with Overlay itself. JFR remains optional for a primary
+pacing cohort when its resource effect is unresolved. Matching observers between
+future baseline/candidate treatments is mandatory. Preserve all strict-research
+contracts below; authorization is still a separate owner decision.
+
+# Practical Performance Protocol v1 — P3-A.4a.3 (historical sequence)
 
 This is a separate evidence class from the **Strict Research Protocol**. Historical
 reports, schema-1 measured-run importer, completeness requirements, 2% quiet screen

@@ -1,0 +1,44 @@
+{
+  "kind": "actual-offline-test-results",
+  "suites": [
+    {
+      "log": "baseline-benchmark-tests.txt",
+      "tests": 113,
+      "status": "PASS",
+      "bytes": 15091,
+      "sha256": "2e2b6dd9bfd7458fc5eabcda7e9942337f3d1f4c498ea576c7e6ca8e55d3b67a"
+    },
+    {
+      "log": "baseline-p1-tests.txt",
+      "tests": 13,
+      "status": "PASS",
+      "bytes": 1397,
+      "sha256": "d8e9326502c3232fd11b41d7d1e3175f75316cf8e6c14e30aaded789729a6e43"
+    },
+    {
+      "log": "final-benchmark-tests.txt",
+      "tests": 116,
+      "status": "PASS",
+      "bytes": 15514,
+      "sha256": "2839dd26bdf17ed8f7f43d09bccd735f5e59aca4dcd14447f6983fea4099a731"
+    },
+    {
+      "log": "final-p1-tests.txt",
+      "tests": 13,
+      "status": "PASS",
+      "bytes": 1397,
+      "sha256": "e8c75eafc5360b6e9b3aaa22ef79a60463b12f5abe5235b84b832d1ff016e5da"
+    },
+    {
+      "log": "focused-tests.txt",
+      "tests": 16,
+      "status": "PASS",
+      "bytes": 1994,
+      "sha256": "ad747e261acbdb77b80238170b824c8af2b6c2c574e25e1e8618c3d9a1fe4650"
+    }
+  ],
+  "productChange": false,
+  "newDependencies": false,
+  "scope": "Documentation plus exact diagnostic workload identity reader and three focused regression tests; no runtime/frontend/startup/native-boundary change",
+  "nativeVerification": "Existing reviewed executable booted normally; native authenticated readiness and supervised game launches exercised; Rust/frontend build suites not rerun"
+}

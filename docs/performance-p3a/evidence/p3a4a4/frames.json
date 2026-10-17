@@ -1,0 +1,545 @@
+{
+  "kind": "actual-eligible-HUD-callback-intervals",
+  "runs": [
+    {
+      "protocol": "Practical Performance Protocol v1",
+      "strictReview": {
+        "status": "CONSISTENT DIAGNOSTIC",
+        "metricRole": "DIAGNOSTIC ONLY",
+        "semantic": "eligible-hud-callback-interval",
+        "errors": [],
+        "incomplete": [],
+        "warnings": [
+          "integer-ms timestamps may tie; identical rows cannot prove duplication",
+          "0.001-ms rounded intervals; no absolute nanoTime or epoch anchor",
+          "footer reconciles exported rows, not all Minecraft frames",
+          "no independent observer-overhead or physical-display validation"
+        ],
+        "metrics": {
+          "frameCount": 43452,
+          "summedIntervalMs": 30036.829,
+          "elapsedTimestampSpanMs": 30033,
+          "internalIntervalRateHz": 1446.6240760634219,
+          "medianMs": 0.623,
+          "p95Ms": 1.12,
+          "p99Ms": 1.413979999999996,
+          "maximumMs": 8.38,
+          "intervalsAbove50Ms": 0
+        },
+        "missingOrDroppedSamples": null,
+        "independentCompleteness": false,
+        "jfrPreciseAlignment": false,
+        "observerOverheadBounded": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "rawSha256": "d3e8cf1b5fab4b453707b7d9148012911fbcb06aa84e36220a8895d65be56990",
+        "timestampTies": 14390,
+        "indistinguishableAdjacentRows": 6
+      },
+      "status": "COHERENT INTERNAL DIAGNOSTIC",
+      "producerSummaryConsistent": true,
+      "practicalTimingOverheadKnown": false,
+      "allRenderedFramesProven": false,
+      "producerReciprocalBounds": {
+        "AvgFPS": [
+          1445.5284707528838,
+          1447.721195065201
+        ],
+        "Low1FPS": [
+          706.4141459445426,
+          707.0135923750441
+        ],
+        "Low01FPS": [
+          460.0374156091557,
+          460.3491954764097
+        ]
+      },
+      "metrics": {
+        "frameCount": 43452,
+        "summedIntervalMs": 30036.829,
+        "elapsedTimestampSpanMs": 30033,
+        "internalIntervalRateHz": 1446.6240760634219,
+        "medianMs": 0.623,
+        "p95Ms": 1.12,
+        "p99Ms": 1.413979999999996,
+        "maximumMs": 8.38,
+        "intervalsAbove50Ms": 0
+      },
+      "stuttersAbove50PerMinute": 0.0,
+      "intervalsAmbiguousAt50Ms": 0,
+      "label": "b1",
+      "metadata": {
+        "format": "performanceoverlay-1.0.2-csv",
+        "sourceJarSha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2",
+        "workloadId": "workload-b-normal-stationary-v1",
+        "worldArchiveSha256": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6",
+        "timestampUnit": "ms",
+        "frameUnit": "ms",
+        "rawSha256": "d3e8cf1b5fab4b453707b7d9148012911fbcb06aa84e36220a8895d65be56990",
+        "recordingComplete": true,
+        "bufferOverflow": false,
+        "expectedWindowMs": [
+          0,
+          30000
+        ],
+        "warmupEvidenceVerified": true
+      },
+      "keyBracket": {
+        "beforeUtc": "2026-10-17T06:39:55.394Z",
+        "afterUtc": "2026-10-17T06:39:55.625Z",
+        "key": "F10",
+        "overlayHudHidden": true
+      },
+      "reportedWriterFailure": false,
+      "longTails": {
+        "thresholdMs": 50,
+        "intervalsAbove": 0,
+        "bursts": 0,
+        "thresholdSemantics": "strictly greater than50ms; rounded CSV threshold uncertainty retained"
+      },
+      "heapSamples": {
+        "usedMinimumMiB": 405.0,
+        "usedMaximumMiB": 667.0,
+        "maximumMiB": [
+          2048.0
+        ]
+      }
+    },
+    {
+      "protocol": "Practical Performance Protocol v1",
+      "strictReview": {
+        "status": "CONSISTENT DIAGNOSTIC",
+        "metricRole": "DIAGNOSTIC ONLY",
+        "semantic": "eligible-hud-callback-interval",
+        "errors": [],
+        "incomplete": [],
+        "warnings": [
+          "integer-ms timestamps may tie; identical rows cannot prove duplication",
+          "0.001-ms rounded intervals; no absolute nanoTime or epoch anchor",
+          "footer reconciles exported rows, not all Minecraft frames",
+          "no independent observer-overhead or physical-display validation"
+        ],
+        "metrics": {
+          "frameCount": 45031,
+          "summedIntervalMs": 30038.108,
+          "elapsedTimestampSpanMs": 30034,
+          "internalIntervalRateHz": 1499.1290396851891,
+          "medianMs": 0.609,
+          "p95Ms": 1.1205,
+          "p99Ms": 1.427,
+          "maximumMs": 6.979,
+          "intervalsAbove50Ms": 0
+        },
+        "missingOrDroppedSamples": null,
+        "independentCompleteness": false,
+        "jfrPreciseAlignment": false,
+        "observerOverheadBounded": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "rawSha256": "12413a8de4eac2488991d90fd22ed1cc3e7bc80c8a8067520f6f36450aa905d7",
+        "timestampTies": 15942,
+        "indistinguishableAdjacentRows": 7
+      },
+      "status": "COHERENT INTERNAL DIAGNOSTIC",
+      "producerSummaryConsistent": true,
+      "practicalTimingOverheadKnown": false,
+      "allRenderedFramesProven": false,
+      "producerReciprocalBounds": {
+        "AvgFPS": [
+          1497.956186396612,
+          1500.3035775369283
+        ],
+        "Low1FPS": [
+          700.4753930455342,
+          701.0664748871362
+        ],
+        "Low01FPS": [
+          452.95113150283123,
+          453.2564365313846
+        ]
+      },
+      "metrics": {
+        "frameCount": 45031,
+        "summedIntervalMs": 30038.108,
+        "elapsedTimestampSpanMs": 30034,
+        "internalIntervalRateHz": 1499.1290396851891,
+        "medianMs": 0.609,
+        "p95Ms": 1.1205,
+        "p99Ms": 1.427,
+        "maximumMs": 6.979,
+        "intervalsAbove50Ms": 0
+      },
+      "stuttersAbove50PerMinute": 0.0,
+      "intervalsAmbiguousAt50Ms": 0,
+      "label": "c1",
+      "metadata": {
+        "format": "performanceoverlay-1.0.2-csv",
+        "sourceJarSha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2",
+        "workloadId": "workload-b-normal-stationary-v1",
+        "worldArchiveSha256": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6",
+        "timestampUnit": "ms",
+        "frameUnit": "ms",
+        "rawSha256": "12413a8de4eac2488991d90fd22ed1cc3e7bc80c8a8067520f6f36450aa905d7",
+        "recordingComplete": true,
+        "bufferOverflow": false,
+        "expectedWindowMs": [
+          0,
+          30000
+        ],
+        "warmupEvidenceVerified": true
+      },
+      "keyBracket": {
+        "beforeUtc": "2026-10-17T06:48:12.521Z",
+        "afterUtc": "2026-10-17T06:48:12.553Z",
+        "key": "F10",
+        "overlayHudHidden": true
+      },
+      "reportedWriterFailure": false,
+      "longTails": {
+        "thresholdMs": 50,
+        "intervalsAbove": 0,
+        "bursts": 0,
+        "thresholdSemantics": "strictly greater than50ms; rounded CSV threshold uncertainty retained"
+      },
+      "heapSamples": {
+        "usedMinimumMiB": 405.0,
+        "usedMaximumMiB": 699.0,
+        "maximumMiB": [
+          2048.0
+        ]
+      }
+    },
+    {
+      "protocol": "Practical Performance Protocol v1",
+      "strictReview": {
+        "status": "CONSISTENT DIAGNOSTIC",
+        "metricRole": "DIAGNOSTIC ONLY",
+        "semantic": "eligible-hud-callback-interval",
+        "errors": [],
+        "incomplete": [],
+        "warnings": [
+          "integer-ms timestamps may tie; identical rows cannot prove duplication",
+          "0.001-ms rounded intervals; no absolute nanoTime or epoch anchor",
+          "footer reconciles exported rows, not all Minecraft frames",
+          "no independent observer-overhead or physical-display validation"
+        ],
+        "metrics": {
+          "frameCount": 43581,
+          "summedIntervalMs": 30038.799,
+          "elapsedTimestampSpanMs": 30035,
+          "internalIntervalRateHz": 1450.8236497737475,
+          "medianMs": 0.629,
+          "p95Ms": 1.111,
+          "p99Ms": 1.4483999999999941,
+          "maximumMs": 7.986,
+          "intervalsAbove50Ms": 0
+        },
+        "missingOrDroppedSamples": null,
+        "independentCompleteness": false,
+        "jfrPreciseAlignment": false,
+        "observerOverheadBounded": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "rawSha256": "e3aac49e8c82b5134cf489e9b4fea531ca5459a817f5e23b6d22c40d5ce7c6f5",
+        "timestampTies": 14381,
+        "indistinguishableAdjacentRows": 4
+      },
+      "status": "COHERENT INTERNAL DIAGNOSTIC",
+      "producerSummaryConsistent": true,
+      "practicalTimingOverheadKnown": false,
+      "allRenderedFramesProven": false,
+      "producerReciprocalBounds": {
+        "AvgFPS": [
+          1449.7219670447384,
+          1451.9268594151215
+        ],
+        "Low1FPS": [
+          689.3674412612893,
+          689.9430675746809
+        ],
+        "Low01FPS": [
+          425.21047103912395,
+          425.4913964477771
+        ]
+      },
+      "metrics": {
+        "frameCount": 43581,
+        "summedIntervalMs": 30038.799,
+        "elapsedTimestampSpanMs": 30035,
+        "internalIntervalRateHz": 1450.8236497737475,
+        "medianMs": 0.629,
+        "p95Ms": 1.111,
+        "p99Ms": 1.4483999999999941,
+        "maximumMs": 7.986,
+        "intervalsAbove50Ms": 0
+      },
+      "stuttersAbove50PerMinute": 0.0,
+      "intervalsAmbiguousAt50Ms": 0,
+      "label": "c2r",
+      "metadata": {
+        "format": "performanceoverlay-1.0.2-csv",
+        "sourceJarSha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2",
+        "workloadId": "workload-b-normal-stationary-v1",
+        "worldArchiveSha256": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6",
+        "timestampUnit": "ms",
+        "frameUnit": "ms",
+        "rawSha256": "e3aac49e8c82b5134cf489e9b4fea531ca5459a817f5e23b6d22c40d5ce7c6f5",
+        "recordingComplete": true,
+        "bufferOverflow": false,
+        "expectedWindowMs": [
+          0,
+          30000
+        ],
+        "warmupEvidenceVerified": true
+      },
+      "keyBracket": {
+        "beforeUtc": "2026-10-17T07:05:22.030Z",
+        "afterUtc": "2026-10-17T07:05:22.064Z",
+        "key": "F10",
+        "overlayHudHidden": true
+      },
+      "reportedWriterFailure": false,
+      "longTails": {
+        "thresholdMs": 50,
+        "intervalsAbove": 0,
+        "bursts": 0,
+        "thresholdSemantics": "strictly greater than50ms; rounded CSV threshold uncertainty retained"
+      },
+      "heapSamples": {
+        "usedMinimumMiB": 410.0,
+        "usedMaximumMiB": 689.0,
+        "maximumMiB": [
+          2048.0
+        ]
+      }
+    },
+    {
+      "protocol": "Practical Performance Protocol v1",
+      "strictReview": {
+        "status": "CONSISTENT DIAGNOSTIC",
+        "metricRole": "DIAGNOSTIC ONLY",
+        "semantic": "eligible-hud-callback-interval",
+        "errors": [],
+        "incomplete": [],
+        "warnings": [
+          "integer-ms timestamps may tie; identical rows cannot prove duplication",
+          "0.001-ms rounded intervals; no absolute nanoTime or epoch anchor",
+          "footer reconciles exported rows, not all Minecraft frames",
+          "no independent observer-overhead or physical-display validation"
+        ],
+        "metrics": {
+          "frameCount": 43952,
+          "summedIntervalMs": 30038.059,
+          "elapsedTimestampSpanMs": 30034,
+          "internalIntervalRateHz": 1463.2103891932563,
+          "medianMs": 0.618,
+          "p95Ms": 1.116,
+          "p99Ms": 1.387489999999998,
+          "maximumMs": 7.067,
+          "intervalsAbove50Ms": 0
+        },
+        "missingOrDroppedSamples": null,
+        "independentCompleteness": false,
+        "jfrPreciseAlignment": false,
+        "observerOverheadBounded": false,
+        "fullMeasuredRunQuality": "INCOMPLETE",
+        "rawSha256": "6d204e70509c2bd40229a75741203afa66f62068a29be6563c8a45a2c8734b05",
+        "timestampTies": 14634,
+        "indistinguishableAdjacentRows": 7
+      },
+      "status": "COHERENT INTERNAL DIAGNOSTIC",
+      "producerSummaryConsistent": true,
+      "practicalTimingOverheadKnown": false,
+      "allRenderedFramesProven": false,
+      "producerReciprocalBounds": {
+        "AvgFPS": [
+          1462.09067847692,
+          1464.3316662659174
+        ],
+        "Low1FPS": [
+          720.15165546381,
+          720.7707217207206
+        ],
+        "Low01FPS": [
+          464.31034262665423,
+          464.6260753321719
+        ]
+      },
+      "metrics": {
+        "frameCount": 43952,
+        "summedIntervalMs": 30038.059,
+        "elapsedTimestampSpanMs": 30034,
+        "internalIntervalRateHz": 1463.2103891932563,
+        "medianMs": 0.618,
+        "p95Ms": 1.116,
+        "p99Ms": 1.387489999999998,
+        "maximumMs": 7.067,
+        "intervalsAbove50Ms": 0
+      },
+      "stuttersAbove50PerMinute": 0.0,
+      "intervalsAmbiguousAt50Ms": 0,
+      "label": "b2",
+      "metadata": {
+        "format": "performanceoverlay-1.0.2-csv",
+        "sourceJarSha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2",
+        "workloadId": "workload-b-normal-stationary-v1",
+        "worldArchiveSha256": "de973b21dc49c5ea2a71d60f452b1c8f28e8383264892f021b38f5feb07892f6",
+        "timestampUnit": "ms",
+        "frameUnit": "ms",
+        "rawSha256": "6d204e70509c2bd40229a75741203afa66f62068a29be6563c8a45a2c8734b05",
+        "recordingComplete": true,
+        "bufferOverflow": false,
+        "expectedWindowMs": [
+          0,
+          30000
+        ],
+        "warmupEvidenceVerified": true
+      },
+      "keyBracket": {
+        "beforeUtc": "2026-10-17T07:13:15.633Z",
+        "afterUtc": "2026-10-17T07:13:15.666Z",
+        "key": "F10",
+        "overlayHudHidden": true
+      },
+      "reportedWriterFailure": false,
+      "longTails": {
+        "thresholdMs": 50,
+        "intervalsAbove": 0,
+        "bursts": 0,
+        "thresholdSemantics": "strictly greater than50ms; rounded CSV threshold uncertainty retained"
+      },
+      "heapSamples": {
+        "usedMinimumMiB": 407.0,
+        "usedMaximumMiB": 704.0,
+        "maximumMiB": [
+          2048.0
+        ]
+      }
+    }
+  ],
+  "withinCondition": {
+    "B": {
+      "internalIntervalRateHz": {
+        "observations": [
+          1446.6240760634219,
+          1463.2103891932563
+        ],
+        "minimum": 1446.6240760634219,
+        "maximum": 1463.2103891932563,
+        "median": 1454.9172326283392,
+        "range": 16.58631312983448,
+        "rangePercentOfMedian": 1.1400176420943855,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      },
+      "medianMs": {
+        "observations": [
+          0.623,
+          0.618
+        ],
+        "minimum": 0.618,
+        "maximum": 0.623,
+        "median": 0.6205,
+        "range": 0.0050000000000000044,
+        "rangePercentOfMedian": 0.8058017727639007,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      },
+      "p95Ms": {
+        "observations": [
+          1.12,
+          1.116
+        ],
+        "minimum": 1.116,
+        "maximum": 1.12,
+        "median": 1.118,
+        "range": 0.0040000000000000036,
+        "rangePercentOfMedian": 0.35778175313059063,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      },
+      "p99Ms": {
+        "observations": [
+          1.413979999999996,
+          1.387489999999998
+        ],
+        "minimum": 1.387489999999998,
+        "maximum": 1.413979999999996,
+        "median": 1.400734999999997,
+        "range": 0.026489999999998126,
+        "rangePercentOfMedian": 1.8911500033909472,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      },
+      "maximumMs": {
+        "observations": [
+          8.38,
+          7.067
+        ],
+        "minimum": 7.067,
+        "maximum": 8.38,
+        "median": 7.7235000000000005,
+        "range": 1.3130000000000006,
+        "rangePercentOfMedian": 17.000064737489488,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      }
+    },
+    "C": {
+      "internalIntervalRateHz": {
+        "observations": [
+          1499.1290396851891,
+          1450.8236497737475
+        ],
+        "minimum": 1450.8236497737475,
+        "maximum": 1499.1290396851891,
+        "median": 1474.9763447294683,
+        "range": 48.30538991144158,
+        "rangePercentOfMedian": 3.2749942115377775,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      },
+      "medianMs": {
+        "observations": [
+          0.609,
+          0.629
+        ],
+        "minimum": 0.609,
+        "maximum": 0.629,
+        "median": 0.619,
+        "range": 0.020000000000000018,
+        "rangePercentOfMedian": 3.231017770597741,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      },
+      "p95Ms": {
+        "observations": [
+          1.1205,
+          1.111
+        ],
+        "minimum": 1.111,
+        "maximum": 1.1205,
+        "median": 1.11575,
+        "range": 0.009500000000000064,
+        "rangePercentOfMedian": 0.8514452162222778,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      },
+      "p99Ms": {
+        "observations": [
+          1.427,
+          1.4483999999999941
+        ],
+        "minimum": 1.427,
+        "maximum": 1.4483999999999941,
+        "median": 1.437699999999997,
+        "range": 0.02139999999999409,
+        "rangePercentOfMedian": 1.4884885581132457,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      },
+      "maximumMs": {
+        "observations": [
+          6.979,
+          7.986
+        ],
+        "minimum": 6.979,
+        "maximum": 7.986,
+        "median": 7.4825,
+        "range": 1.0069999999999997,
+        "rangePercentOfMedian": 13.45806882726361,
+        "scope": "Two observed repeats only; no confidence interval or guaranteed detection threshold"
+      }
+    }
+  },
+  "inactiveReferenceAvailable": false,
+  "physicalDisplayMeasured": false
+}

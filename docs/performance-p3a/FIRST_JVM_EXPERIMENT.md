@@ -1,5 +1,18 @@
 # First JVM experiment — design only, separate P3-B authorization required
 
+P3-A.4a.4 assessment: see [fresh-process acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md).
+The normal-terrain stationary baseline is now frozen and restored independently;
+it is a practical subset, not canonical B or a memory-pressure workload. Its
+committed/live heap remains well below both proposed maxima. Do not expect changing
+only Xmx to reduce RSS, CPU or callback intervals. Prefer a bounded, more
+memory-demanding representative workload for this resource hypothesis before
+requesting the unchanged 2048→1536 comparison. Do not silently switch candidates.
+
+Use the metric-specific sensitivity and optional JFR rules in that acceptance,
+not the older within-session ranges below. Small CPU/RSS benefits and matched
+GC-frequency repeatability are unresolved. The existing three-pair design remains
+a proposal; no candidate was executed here and P3-B remains NOT AUTHORIZED.
+
 One change: saved `memoryMib` **2048 → 1536**, using the existing native instance
 configuration path. Baseline is Existing Configuration (`performanceMode: null`),
 2048 MiB, empty additional JVM text, null launcher window override. Candidate has
