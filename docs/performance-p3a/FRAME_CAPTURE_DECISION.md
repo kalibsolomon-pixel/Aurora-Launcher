@@ -1,3 +1,16 @@
+# P3-A.4a.2 current frame-source decision
+
+Performance Overlay 1.0.2 is the selected **PROVISIONAL** internal callback-interval
+collector after static/raw-format audit and real isolated Aurora/Sodium/Lithium
+startup/world/HUD coexistence. Recording/completeness/observer validation was deferred
+after the fresh title CPU screen failed. Valence 1.1.0 lacks raw chronological frame
+export and is rejected for this primary role; runtime compatibility remains unknown.
+No primary source or operating point accepted. JFR command availability is verified
+on the locked JDK, actual recording untested; precise frame alignment unsupported.
+PresentMon is optional external diagnostics, not a mandatory primary source or
+prerequisite. [Comparison](P3A4A2_CANDIDATES.md), [follow-up](P3A4A2_DECISION.md).
+P3-B remains NOT READY / NOT AUTHORIZED. Historical research follows unchanged.
+
 # Frame capture decision — candidate selected, validation BLOCKED
 
 Research date: 2026-10-16. Primary candidate: **PresentMon standalone console

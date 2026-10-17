@@ -1,3 +1,13 @@
+# P3-A.4a.2 separate diagnostic format
+
+`collector_review.py` reviews pinned Performance Overlay 1.0.2 CSV with an explicit
+sidecar, outside this authoritative measured schema. It never relabels callback
+intervals as physical/display/internal-render timestamps or promotes a primary
+metric. No real CSV recording was acquired in this phase; actual adapter validation
+is outstanding. [Source/timebase contract](P3A4A2_TIMEBASE_OVERHEAD.md).
+Any future authoritative source-contract change needs explicit review/authorization;
+schema 1, three-source requirements and full-run durations below remain unchanged.
+
 # Benchmark artifacts, schema 1
 
 Normative executable validation is `tools/benchmark/quality.py:validate_manifest`;

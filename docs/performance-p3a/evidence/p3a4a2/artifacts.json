@@ -1,0 +1,39 @@
+[
+  {
+    "project": "performance-overlay",
+    "version": "1.0.2+mc1.21.9-1.21.11-fabric",
+    "versionId": "qyzs7zWa",
+    "sha256": "46c9500f67824996cd81b00a4d3da2dc09d5c6d56495cff98276c961d74804c2",
+    "expectedPublisherHashes": {
+      "sha512": "31d58bd8684641e715683cc19c2ea2d63215a4519d3b613512f51f66314f6792060d015529e857e36325e25b06a557ae789625e4bca0dd48f38823e77d73fcd7",
+      "sha1": "b366532517a0c6a87cb27a279987a3e12986f9f5"
+    },
+    "size": 188784,
+    "installedThroughNativeVerifiedStore": true
+  },
+  {
+    "project": "cloth-config",
+    "version": "21.11.153+fabric",
+    "versionId": "xuX40TN5",
+    "sha256": "8a40c84e5ecde525acfb6c4e13b8002dacfca3ef9534d7faf6e8049656f423c8",
+    "expectedPublisherHashes": {
+      "sha512": "8f455489d4b71069e998568cf4e1450116f4360a4eb481cd89117f629c6883164886cf63ca08ac4fc929dd13d1112152755a6216d4a1498ee6406ef102093e51",
+      "sha1": "4c224606a963bce223db5b27edb4959ecf40d4ee"
+    },
+    "size": 1148427,
+    "installedThroughNativeVerifiedStore": true
+  },
+  {
+    "project": "valence-benchmark",
+    "version": "1.1.0",
+    "versionId": "K8qKDXKF",
+    "sha256": "aef9788dc393aefd07ddf4fab4cdbefc19301c5ed20c83b7b76a49cf0d38a3b0",
+    "expectedPublisherHashes": {
+      "sha512": "24f93135f0e0577c3152e001f2ba978fd491a1f37dac25b3f74a00c211e195e62b563add69dfcc828b63b472a048b69e497fb84a6530a8e7a36080d752d60d6e",
+      "sha1": "815c37033669b6fc2419a704e2167bcb11b2aacb"
+    },
+    "size": 152731,
+    "installed": false,
+    "sourceUrl": null
+  }
+]

@@ -1,5 +1,25 @@
 # P3-A benchmark infrastructure
 
+P3-A.4a.2 evaluates existing collectors. PresentMon is optional external diagnostics,
+not a mandatory primary source. Performance Overlay is PROVISIONAL after actual
+startup/world/HUD coexistence; recording and overhead were deferred for quiet CPU.
+Valence's aggregate export is unsuitable for required raw frame analysis. JFR
+exact-JVM command availability is verified; actual recording remains untested.
+[Evaluation and decision](../../docs/performance-p3a/P3A4A2_DECISION.md).
+
+`python -B tools/benchmark/collector_review.py <frames.csv> <metadata.json>` is a
+separate offline diagnostic reader for exact 1.0.2 CSV. Sidecar fields: format
+`performanceoverlay-1.0.2-csv`, sourceJarSha256, rawSha256, workloadId
+`workload-b-a-scene-diagnostic-v1`, worldArchiveSha256, timestampUnit/frameUnit
+`ms`, expectedWindowMs (two integer bounds within 0–30000), recordingComplete,
+bufferOverflow, optional warmupEvidenceVerified. Requested role can only be
+`diagnostic`; jfrAlignment must be absent/null. Declared source/workload hashes
+must match the audited identities. Never fabricate completion or absence of loss.
+Exit 0 means CONSISTENT DIAGNOSTIC only; invalid/incomplete inputs return 2. It
+reports tied/indistinguishable rows, null independent loss/overhead and unsupported
+precise JFR alignment. No actual Minecraft CSV validated yet; 13 added tests are
+synthetic. Full measured-run reader/schema/thresholds remain unchanged.
+
 P3-A.4a adds a separate offline short-stream review:
 `python -B tools/benchmark/presentation_fidelity.py <short-calibration.json> [--loss <loss.json>] [--identity <identity.json>]`.
 It reports submission and available-display channels independently, retains null

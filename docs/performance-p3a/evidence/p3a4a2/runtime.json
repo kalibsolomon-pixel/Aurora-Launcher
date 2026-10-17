@@ -1,0 +1,145 @@
+{
+  "kind": "actual-native-startup-world-and-overlay-toggle-compatibility-only",
+  "instanceId": "da666fe5790944a28105ecb5438b7598",
+  "canonicalArchiveSha256": "d385120835fd6b0ad0fb8757601de97b066d9e23023e32733f62e6bd56e13f4f",
+  "canonicalInventoryEquivalentBeforeLaunch": true,
+  "optionsSha256BeforeLaunch": "efd1595619f579723159ed7bb0cbb1e06d7336dc9980662252162abd15f24ae1",
+  "optionsSha256AfterExit": "64cec45e976849b23c95fc3c0b7652d72c535167903b3716fef7e93820b6cf65",
+  "configuration": {
+    "performanceMode": null,
+    "minecraftVersion": "1.21.11",
+    "auroraEnabled": true,
+    "loader": {
+      "kind": "fabric",
+      "policy": {
+        "type": "pinned",
+        "version": "0.19.5"
+      }
+    },
+    "memoryMib": 2048,
+    "additionalJvmArguments": "",
+    "window": null
+  },
+  "baseMods": [
+    {
+      "name": "aurora-3.0.0.jar",
+      "size": 3077377,
+      "sha256": "43f918207a86f91b01b35045309e89d2b040951722e5ac71d01d886beec9811c"
+    },
+    {
+      "name": "fabric-api-0.141.6+1.21.11.jar",
+      "size": 2426039,
+      "sha256": "bdff7fd7e220085cfad2ff9b1f40dde6534ae0b96cf378f97a374bc54cb9ed0f"
+    },
+    {
+      "name": "lithium-fabric-0.21.4+mc1.21.11.jar",
+      "size": 900462,
+      "sha256": "5135c41da5b43cbdcb29424bde65195143ac4084e23834c8eac065942201c78b"
+    },
+    {
+      "name": "sodium-fabric-0.8.14+mc1.21.11.jar",
+      "size": 1909150,
+      "sha256": "fd2619eff5da6b9ba6304b8b72ac3fe132c30e0bd5d675e4581eda417a272f5d"
+    }
+  ],
+  "normalAuthentication": true,
+  "sameUserCredentialContinuityRiskAccepted": true,
+  "nativeRootVerified": true,
+  "reparsePoints": 0,
+  "liveWebviewProfileVerified": true,
+  "startupRefreshOrderingApprovedException": true,
+  "nativeBinarySha256": "05b97f5be5517972863e2460738e36c1a92257853ec9f72809c610c81114e09a",
+  "noCollectorLaunch": {
+    "utc": "2026-10-17T05:06:15.548Z",
+    "status": "running",
+    "pid": 18792,
+    "startedAtUnixSeconds": 1792213575,
+    "sessionStatus": "ready"
+  },
+  "collectorLaunch": {
+    "utc": "2026-10-17T05:10:59.365Z",
+    "status": "running",
+    "pid": 13904,
+    "startedAtUnixSeconds": 1792213859,
+    "sessionStatus": "ready"
+  },
+  "noCollectorExit": {
+    "status": "exited",
+    "exitCode": 0,
+    "processId": null,
+    "utc": "2026-10-17T05:09:44.865Z"
+  },
+  "collectorExit": {
+    "status": "exited",
+    "exitCode": 0,
+    "processId": null,
+    "utc": "2026-10-17T05:13:48.345Z"
+  },
+  "launcherExit": {
+    "pid": 18944,
+    "handleRetained": true,
+    "exitCode": 0,
+    "endUtc": "2026-10-17T05:13:48.3862351Z"
+  },
+  "collectorWindow": {
+    "pid": 13904,
+    "physicalClientRectangles": [
+      {
+        "width": 1920,
+        "height": 1080,
+        "dpi": 120
+      }
+    ],
+    "dpiAwareQuery": true,
+    "framebufferNotIndependentlyObserved": true
+  },
+  "worldEntered": true,
+  "overlayDisplayed": true,
+  "overlayHideKeyWorked": true,
+  "recordingStarted": false,
+  "recordingStopped": false,
+  "recordingExports": [],
+  "recordingMetrics": null,
+  "reason": "Failed title quiet screen; no frame/JFR/overhead captures",
+  "auroraSettings": {
+    "smoothFramePacer": true,
+    "framePacingStrategy": "PARK",
+    "framePacerSpinThresholdMicros": 500,
+    "framePacerParkThresholdMicros": 2000,
+    "framePacerLowCpuMode": false,
+    "frameCapFps": 0,
+    "lowLatencyRender": true,
+    "disableVSync": false,
+    "adaptiveRenderSleeping": false,
+    "guiFpsLimit": 60
+  },
+  "options": {
+    "maxFps": "260",
+    "enableVsync": "false",
+    "inactivityFpsLimit": "\"minimized\"",
+    "renderDistance": "12",
+    "simulationDistance": "8",
+    "overrideWidth": "1920",
+    "overrideHeight": "1080",
+    "fullscreen": "false",
+    "resourcePacks": "[]"
+  },
+  "postExitScene": {
+    "position": [
+      0.5,
+      66.0,
+      0.5
+    ],
+    "rotation": [
+      0.0,
+      10.0
+    ],
+    "timeOfDay": 6000,
+    "raining": 0,
+    "thundering": 0,
+    "seed": 123456789
+  },
+  "sceneScope": "pre-launch full inventory; post-exit common NBT fields only; no complete B canonical lock",
+  "auroraPacingFieldsUnchanged": true,
+  "sourceIsolatedAuroraConfigSha256": "8794b5ddfdbdd7eeab9e37ca7a6846791cd1cba96f3f9c2cbd1932104e1620a7"
+}

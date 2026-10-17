@@ -1,0 +1,66 @@
+{
+  "kind": "actual-exact-isolated-Minecraft-attach-availability-only",
+  "pid": 18792,
+  "creationId": "134366871755334336",
+  "recordingStarted": false,
+  "recordingStopped": false,
+  "recordingDumped": false,
+  "recordingBytes": null,
+  "reason": "Quiet title CPU 2.9793565185% exceeds 2%; captures deferred",
+  "commands": [
+    {
+      "command": "check",
+      "exitCode": 0,
+      "startUtc": "2026-10-17T05:09:20.111752+00:00",
+      "endUtc": "2026-10-17T05:09:20.591688+00:00",
+      "sha256": "2de8f870091bd795b7f7ba9d4fb7a33c808e86b21ca61910c03e6fb5933e7051"
+    },
+    {
+      "command": "start-help",
+      "exitCode": 0,
+      "startUtc": "2026-10-17T05:09:20.592692+00:00",
+      "endUtc": "2026-10-17T05:09:20.840687+00:00",
+      "sha256": "fce8ae6674649d291f86b01d2e48dd88c6380b83c818c9ab7435cc64756d4e0b"
+    },
+    {
+      "command": "stop-help",
+      "exitCode": 0,
+      "startUtc": "2026-10-17T05:09:20.840687+00:00",
+      "endUtc": "2026-10-17T05:09:21.025941+00:00",
+      "sha256": "5054f465267fa58b97ae0ff12faea57d976e971b90eaee6ca6e927f819337942"
+    },
+    {
+      "command": "dump-help",
+      "exitCode": 0,
+      "startUtc": "2026-10-17T05:09:21.025941+00:00",
+      "endUtc": "2026-10-17T05:09:21.198057+00:00",
+      "sha256": "e25bd631aafd869996330abc6da4c779ecdee70676c2e8a2197c3b91636f47b6"
+    },
+    {
+      "command": "configure",
+      "exitCode": 0,
+      "startUtc": "2026-10-17T05:09:21.198057+00:00",
+      "endUtc": "2026-10-17T05:09:21.403781+00:00",
+      "sha256": "9af093be29c630e845b384279a2faa82f7486f79db9d97b84bce5295469ade6e"
+    }
+  ],
+  "tools": [
+    {
+      "name": "jcmd.exe",
+      "sha256": "0522de8be9e6928f98aabde45df0e035d947a9394adead00eb3068ba3bff7fba"
+    },
+    {
+      "name": "jfr.exe",
+      "sha256": "7995363b06961f6049b4d273046d295ea63adb4eb2919c4dd2e783cc1d5e13f4"
+    }
+  ],
+  "bufferConfiguration": {
+    "globalBufferCount": 20,
+    "globalBufferSizeBytes": 524288,
+    "threadBufferSizeBytes": 8192,
+    "memorySizeBytes": 10485760,
+    "maxChunkSizeBytes": 12582912,
+    "repositoryPathInsideIsolatedRoot": false,
+    "repositoryPathScope": "default temp path reported by read-only query; future recording must explicitly scope repository path"
+  }
+}

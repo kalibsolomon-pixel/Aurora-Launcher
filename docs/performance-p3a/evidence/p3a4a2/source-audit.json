@@ -1,0 +1,439 @@
+{
+  "kind": "static-source-and-distributed-bytecode",
+  "overlayCurrentCommit": "8490600d67a4694c1f7ab6325e1328eb99535615",
+  "overlayReleaseCommit": "9e923693ece057f84e2a0cd69e86f52ab3bce14b",
+  "officialSource": "https://github.com/itsgeorge22/performanceoverlay",
+  "valenceOfficialSourceLocated": false,
+  "files": [
+    {
+      "label": "BenchmarkCsvWriter-release.java",
+      "sha256": "627c4725b415ef98734cb368aca7f5f1880501ca9307b75762b056d5302b19d5",
+      "size": 7131
+    },
+    {
+      "label": "cloth-config-versions.json",
+      "sha256": "4c62f44ee9bcda142e028708c07d171cb84fdd6564b928f5d82dea081579034f",
+      "size": 138345
+    },
+    {
+      "label": "FpsTracker-release.java",
+      "sha256": "bd30afdc434862e833b302467e06947ec69cc93d312c511d68679e838b51feeb",
+      "size": 46949
+    },
+    {
+      "label": "jfr-event-metadata.txt",
+      "sha256": "24d72ffa8a3640bef1b30d475ea5571bc2409135b5d7f68788d30026f6715bdf",
+      "size": 6975
+    },
+    {
+      "label": "overlay-bytecode/assets_performanceoverlay_lang_en_us.json",
+      "sha256": "22dcd10e0ff4de4f732f9d5dd15aeffedcfd90b94bcabcbd244a7b03f2a8a98a",
+      "size": 339
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.BenchmarkCsvWriter$BenchmarkRow.txt",
+      "sha256": "13263b5302ea5eaecc8b15ac4649b3998a7352aa418c2324575b715cb6f2c866",
+      "size": 26999
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.BenchmarkCsvWriter$Command.txt",
+      "sha256": "b659deff87493c6d18976e56ce97a34057ad74f853c6c1c35527442ffa0c383e",
+      "size": 3347
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.BenchmarkCsvWriter$FooterCommand.txt",
+      "sha256": "9edc4fd4b248dc9c27f32954ab0430caf60e486246cc064924297ba08fe93aee",
+      "size": 18651
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.BenchmarkCsvWriter.txt",
+      "sha256": "8c19980bb4e5ac32f436c5bcc8047f8ca3ec59062a30d6ab756bc8438bf56614",
+      "size": 69823
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.ConfigIO.txt",
+      "sha256": "8c67e841eb8a045128e07a69e6d057d51a909259f016b5552bf4316eb8801772",
+      "size": 21359
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.FpsTracker$BenchmarkEndReason.txt",
+      "sha256": "520a82dee630d96ee58ffdde2049777d9486daefa74f526ead3e66269bf2e894",
+      "size": 14682
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.FpsTracker$BenchmarkOutput.txt",
+      "sha256": "e048e0982bc2443a8b39ab86abf54a2779a74cc6eb82cfd373d13f61182442b4",
+      "size": 13428
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.FpsTracker$BenchmarkSettings.txt",
+      "sha256": "206e002cf9ac67c10ae6038dc65b8ae6a0e8ade640b9b06ab8b87081dfba7a3f",
+      "size": 44514
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.FpsTracker$BenchmarkStatus.txt",
+      "sha256": "4a686a9f794c23bd06ad4037f0f1a2dc7fd1f717eadb739551a0d1ff3ba8aaf5",
+      "size": 17824
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.FpsTracker$BenchmarkSummary.txt",
+      "sha256": "aeb4bcc899e565e7bb219374b7bd9607dc8b5ac92ce515d825d9c08d30bae080",
+      "size": 16630
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.FpsTracker$Smoothed.txt",
+      "sha256": "f2c58202e2ca8c4dcaad8afc3f13db2db3068998c81f5003a37816522ce77e16",
+      "size": 11106
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.FpsTracker$Snapshot.txt",
+      "sha256": "c77ce1a7614005c2f14e347a82624412e641776dceb211c88c1d3d9f0e643cbb",
+      "size": 14669
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.FpsTracker$StutterStats.txt",
+      "sha256": "a2309a998a43d8f0cf6e9780e08b628c45acf623e96f1517c5d5f5ecfca302a1",
+      "size": 12633
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.FpsTracker$WindowStats.txt",
+      "sha256": "8b153fa7750a21c5c7d524667272f05a7daea947eb4f8396fdc79a5cb692a59b",
+      "size": 11283
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.FpsTracker.txt",
+      "sha256": "dbb2ee75a58f83fba5dae6700f35f666e76725b43951b71fece184fcc3e7bf52",
+      "size": 365352
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.OverlayConfig$ColorTarget.txt",
+      "sha256": "b5ed9701eb7d00d49712f594cac632bde117909187f92198d5676d020cdd7738",
+      "size": 14816
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.OverlayConfig$LowMethod.txt",
+      "sha256": "50da4f831382834c1bac5b962e8c56ee1f1a268dec83a64c5791376e1b99c7b5",
+      "size": 13428
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.OverlayConfig$OverlayPosition.txt",
+      "sha256": "50e1256494ac909b8721647c7d7b22f25058ee54a50bd35f58d55c9d8055631a",
+      "size": 20024
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.OverlayConfig$PauseHandling.txt",
+      "sha256": "bc7c4a89ced0c02e0f9d7759c57c9d8d8ae794b57ca93a6b5b5d67e75dc82922",
+      "size": 15047
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.OverlayConfig$Preset.txt",
+      "sha256": "70f2aa0429284bedaffce1564d5a5abf691505b8f1997fe166b7cacda6d4f9f8",
+      "size": 16081
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.OverlayConfig$TextLayout.txt",
+      "sha256": "8a9d3a624f67135e0013ad797119891498419e7af45e2625ed5ee0e906b1b9b1",
+      "size": 14942
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.OverlayConfig.txt",
+      "sha256": "23579427c1092c042083418f9d84a4f6bdf0f3c155e3da5f444208424f789391",
+      "size": 42318
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.OverlayRenderer$1.txt",
+      "sha256": "bfd0248218f45a4b8d971f71755105488c60d9700e13e63392429c794ad9d730",
+      "size": 12233
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.OverlayRenderer$WidthCache.txt",
+      "sha256": "5eac9c6b1c2d0c23db52f61ed022b41cbcd5006af9bb9d89faddb02085ef6927",
+      "size": 7501
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.OverlayRenderer.txt",
+      "sha256": "7d23ce808567d4c00ca95b304e8c249092ba29f11d734ca8e3ad115549a374c0",
+      "size": 35670
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.PerformanceOverlayConfigScreen.txt",
+      "sha256": "bd245a76539dd6155923cb9c711f27af3d806ef425682299c3aaa5903e3f53d6",
+      "size": 316949
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.client.PerformanceOverlayModMenu.txt",
+      "sha256": "130e36b109235e80ff4637339559a871ec4dd3efd0de3b5f8066d09c3abb3794",
+      "size": 8788
+    },
+    {
+      "label": "overlay-bytecode/com.itsgeorge.performanceoverlay.PerformanceOverlayClient.txt",
+      "sha256": "06c5dd4fd46a6bc4d3dc304a1e6df92cf9545ba753fb4b3853206eece560716c",
+      "size": 159919
+    },
+    {
+      "label": "overlay-bytecode/fabric.mod.json",
+      "sha256": "dcad00453094d315ee638eb33236afc43531518c397ca988ae6d6602b20a3701",
+      "size": 825
+    },
+    {
+      "label": "performance-overlay-project.json",
+      "sha256": "827bebeb7f28b54208b4855153432b26be6ce25b122dae4ce9d656910846a4dd",
+      "size": 6064
+    },
+    {
+      "label": "performance-overlay-versions.json",
+      "sha256": "e1b0755cf170719a86d466a66902eab7f947973273234fa62a67cd8d49c821ab",
+      "size": 7329
+    },
+    {
+      "label": "valence-benchmark-project.json",
+      "sha256": "aee3f37edf3cbcb307245e5cb5677d634b8f269f65795a0bbdb994c0fefbfdc1",
+      "size": 13726
+    },
+    {
+      "label": "valence-benchmark-versions.json",
+      "sha256": "deb418c1a9c0f330aadee98afe8e8e4545a34e818a9629026849f7ae3b1db7b7",
+      "size": 1151
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.analysis.FrameStats.txt",
+      "sha256": "a6c9fb0ad74480f46e869b785bb5b5c9baa6f6e17966c58f8559a329f0e5cf71",
+      "size": 90158
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.analysis.Stats.txt",
+      "sha256": "d2092bf597d94610f283bea30754bc2e292916c474536444957288508e5445a8",
+      "size": 26236
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.AllocationProbe.txt",
+      "sha256": "781798a449eff682ffbe93df8829adaebaf9ce9b2a56cb9cd67bdd93d5e923ba",
+      "size": 14010
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.CaptureClock.txt",
+      "sha256": "10e9de1970e32bf76a586cf60f86622abfd02762e6b177ae59fb7879c7dccf16",
+      "size": 6800
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.ChunkCapture.txt",
+      "sha256": "e124cf6b860d26215dbeb85221f175219c4df6191a025801bda36b270fd83c04",
+      "size": 12820
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.FrameCapture.txt",
+      "sha256": "2b5b7f9d8c294ca689b2a672592fafa3fbc22c1d6a1b3040b28c844fae95b487",
+      "size": 17640
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.GpuProbe$1.txt",
+      "sha256": "77e4a4dca1b62c39c146aad872a32890efd7c0aa89409bedaaf22059a8717714",
+      "size": 4792
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.GpuProbe.txt",
+      "sha256": "bcdf17643b35f566f607a9aa331ba50dd6fbd38051a7bf391d4d47f42a1efc3b",
+      "size": 15007
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.GpuSample.txt",
+      "sha256": "00dd5b20a6d17d0e949292cec73274f4bb8b12e0189e876b57015299e232aaae",
+      "size": 6033
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.NvidiaSmiProbe.txt",
+      "sha256": "475539325d54821f28c778f6fb3263ccef9be46275200661cf5edadcf0137525",
+      "size": 45027
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.OshiSupport.txt",
+      "sha256": "e43cc9582e9bb84158fe787266c69b1993b409bc7e946266fab06ded85395ce1",
+      "size": 60034
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.ServerCapture.txt",
+      "sha256": "7cf1673975daad61b83bbc2111b2709de7f1cc1e4fd9be66e8e5020fbc19a4ba",
+      "size": 30741
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.SysfsGpuProbe.txt",
+      "sha256": "b4002e27001c0d1b81de073d74dc8b15d1ec797188070d50928c6cc84fbe7106",
+      "size": 54150
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.SystemSampler.txt",
+      "sha256": "d64a51ca0f5ada96a946b8afb2f280926aaf7d8c7b7e2215c2363102b98e3698",
+      "size": 96088
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.SystemSnapshot.txt",
+      "sha256": "f2c148bcfeba580a2033085494eb8e720209c2557bc6f8c930c4fb7d9e9d63ef",
+      "size": 36004
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.TickCapture.txt",
+      "sha256": "dd823005951c3d81b2723a297368f87e6369de304105ca698defcfec7e6ef688",
+      "size": 20137
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.capture.WorldLoadTracker.txt",
+      "sha256": "04f170bc6ac0c514758d7f96bc104902384bebf8f94379595c6a6495109b3f78",
+      "size": 20104
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.client.BenchConfig.txt",
+      "sha256": "143c82a8f1e0ec01ba13733a0f15f2d5209e4e9c2a6e86f1856697b171a63644",
+      "size": 39004
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.client.BenchController$State.txt",
+      "sha256": "1afd7018a31278ebd0e5005d89e230341eec39788c1e9c0d6174d3fedbad6551",
+      "size": 12745
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.client.BenchController.txt",
+      "sha256": "f1e374f5b41bff745d7bd33287f985534ce7f9c24df570c383ff7248a3811ae3",
+      "size": 269708
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.client.Chat.txt",
+      "sha256": "15b5202833ecb720e1f128ad8932e8eb7e352b68da79b99f69bce14f4bfc165e",
+      "size": 9680
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.client.Platform$Unavailable.txt",
+      "sha256": "7d54616f9ffff2e6350613033657ed87de3950ff0c01166680317323cafaef1f",
+      "size": 19449
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.client.Platform.txt",
+      "sha256": "6a7ba667c465dc310fcc1cda16b769c51345a0b201d23dd8078667da2ac1f2e1",
+      "size": 5293
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.client.RunData.txt",
+      "sha256": "0715b6f5f31f61040e59a2bbce8b723e1021a43d13cd297f2cc130a94d222ddf",
+      "size": 15989
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.client.SceneBuilder.txt",
+      "sha256": "c8f64e8c24891f56a0a96752d41f93e4bf7cbadec3a7814fa7415d57bde5724c",
+      "size": 26598
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.game.Game.txt",
+      "sha256": "44a8d4c2562df97ed15b030162a1511a17cffcd406ba7efcd2c1c9b7e8ca8c5b",
+      "size": 5581
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.game.Msg$Level.txt",
+      "sha256": "f783f222aef031ef32b2bd92779c4fff2d95c37fd87c9a9ba38edd06b89f721e",
+      "size": 11597
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.game.Msg.txt",
+      "sha256": "561ba9397bd8a5a41166c3d3759b2d7885c9203e1129d07c46d87727134350df",
+      "size": 11182
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.mixin.ClientPlayNetworkHandlerMixin.txt",
+      "sha256": "6e739e5234516f78a390155545441438ea74868e5d18ad84893451c1dc651ed4",
+      "size": 8909
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.mixin.MinecraftClientMixin.txt",
+      "sha256": "919e3c137c566055603baa9d16a5a259d017e8d6d66dd51369a95c453f3df78f",
+      "size": 6803
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.platform.Compat.txt",
+      "sha256": "9a92de18b349d406f03fa097ddf2df8f1acf3019f235cd1def35dde4390f5e00",
+      "size": 44084
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.platform.GlInfo.txt",
+      "sha256": "047e273d2986e3434236b95a2d0212bc3bcffa5682897f4108507ae5b725c752",
+      "size": 17295
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.platform.RenderFallback$Source.txt",
+      "sha256": "304e8167ab1685388a2f09c89d8736bc16b78ebec04f925a6a1404f577d5b245",
+      "size": 10541
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.platform.RenderFallback.txt",
+      "sha256": "e0037dea45d4d79459fe869ff97b74748d7b97fd9ff7fa605b3ae4afba537cb5",
+      "size": 24274
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.platform.Screenshots.txt",
+      "sha256": "ad00912917eb95d62b5d7ecf0deb0f23ceb2e2e8bec579adfa9645eb69ae38a4",
+      "size": 17369
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.platform.ValenceBenchmarkClient.txt",
+      "sha256": "ab63936472dcf6b9d8bdc7df38a2c841bcbb76df0c78d939ab1c22d352abc430",
+      "size": 35306
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.platform.ValenceCommands.txt",
+      "sha256": "f1cb6ede77ff24cf551cab3d2ef1d17a0f2fb0ce25b256bf2917c1c86f28161d",
+      "size": 61496
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.platform.YarnGame$1.txt",
+      "sha256": "e97726c106e1ddebe9526c8962b232df4f4e588affba80b631b97a10e43517a6",
+      "size": 6781
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.platform.YarnGame.txt",
+      "sha256": "3e052ea66faf32af6d706a19591d91ea73f80542ebe30f4fcc327e9c61f6b730",
+      "size": 139116
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.report.Json.txt",
+      "sha256": "f3a842bf6385e1bce608290c69a90189f1ef9ec9d3827b69f53e0e4cd23ae183",
+      "size": 34717
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.report.ReportBuilder$Buckets.txt",
+      "sha256": "317f0289e10ef3674476cd29be6f6e1642236d46fc261649b553669c30377132",
+      "size": 4355
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.report.ReportBuilder.txt",
+      "sha256": "6c189c53e7c39a5e4e6ccfbd7c30ab9b4b96c5f85e7b810484aeeccbc5b3fc00",
+      "size": 363456
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.report.ReportText.txt",
+      "sha256": "7c8c1c1651d957dd2314ee3e414231991f291573b04742d68654073c7d002097",
+      "size": 269057
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.report.ReportWriter.txt",
+      "sha256": "bf40c4d900f95f1b60bfbae791b30210416d7962ff323c9187b902c8d3539d0c",
+      "size": 40234
+    },
+    {
+      "label": "valence-bytecode/dev.valence.benchmark.ValenceBenchmark.txt",
+      "sha256": "75d6f03b30ef9a60bd2c8a1303de951d9a67d2a03488abe5eac76f4ca37987e0",
+      "size": 4116
+    },
+    {
+      "label": "valence-bytecode/fabric.mod.json",
+      "sha256": "3e7197d4c06d83d674afd6e417a6adc496e61bbf3053363f84897394031d3a74",
+      "size": 954
+    },
+    {
+      "label": "valence-bytecode/valence-benchmark-mc1.19-1.21.11-refmap.json",
+      "sha256": "50b6eeb049269ebf5ec260824d683200698925631ffb80bfb182eb9e36f26927",
+      "size": 776
+    },
+    {
+      "label": "valence-bytecode/valence-benchmark.mixins.json",
+      "sha256": "2c6e31baa2ece86197deba8b68902defa8ab1cc2d4505316ab94aaf07c0b0795",
+      "size": 329
+    }
+  ]
+}

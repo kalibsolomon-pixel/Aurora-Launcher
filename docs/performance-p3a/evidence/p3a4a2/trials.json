@@ -1,0 +1,40 @@
+{
+  "kind": "attempt-and-deferral-register",
+  "trials": [
+    {
+      "condition": "no collector",
+      "status": "STARTUP VERIFIED; timing deferred"
+    },
+    {
+      "condition": "collector installed inactive",
+      "status": "WORLD/TOGGLE VERIFIED; timing deferred"
+    },
+    {
+      "condition": "collector actively recording",
+      "status": "DEFERRED"
+    },
+    {
+      "condition": "JFR alone",
+      "status": "COMMAND AVAILABILITY VERIFIED; recording deferred"
+    },
+    {
+      "condition": "collector plus JFR",
+      "status": "DEFERRED"
+    },
+    {
+      "condition": "Aurora PARK cap 240",
+      "status": "DEFERRED"
+    },
+    {
+      "condition": "Aurora PARK cap 1000",
+      "status": "DEFERRED"
+    }
+  ],
+  "overhead": {
+    "ratePercent": null,
+    "p99Ms": null,
+    "cpuPercentagePoints": null,
+    "accepted": false
+  },
+  "physicalDisplayedFPS": null
+}

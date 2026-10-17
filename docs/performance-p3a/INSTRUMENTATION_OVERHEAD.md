@@ -1,3 +1,12 @@
+# P3-A.4a.2 existing collector/JFR overhead — UNKNOWN
+
+Fresh title quiet CPU 2.979357% exceeds the unchanged 2% screen; all timing/on-off/
+240/1000 trials were deferred. Static allocations, self-cost claims and JFR's
+built-in status do not bound interference. Existing absolute 1% rate / 0.05 ms P99 /
+1pp machine CPU screens remain unchanged. [Current decision](P3A4A2_TIMEBASE_OVERHEAD.md).
+No primary acceptance, favorable retry or JVM recommendation change. Historical
+PresentMon evidence follows unchanged.
+
 # P3-A.4a representative-rate overhead — PARTIAL
 
 ## P3-A.4a.1 current interference gate

@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "originalTrackedFiles": 2525,
+  "scopedOriginalModifications": [
+    "docs/performance-p3a/ARTIFACT_FORMAT.md",
+    "docs/performance-p3a/AUTHORIZATION.md",
+    "docs/performance-p3a/FRAME_CAPTURE_DECISION.md",
+    "docs/performance-p3a/INSTRUMENTATION_OVERHEAD.md",
+    "docs/performance-p3a/MEASUREMENT_AUDIT.md",
+    "docs/performance-p3a/READINESS_MATRIX.md",
+    "tools/benchmark/README.md"
+  ],
+  "unmodifiedOriginalTrackedFiles": 2518,
+  "protectedUntrackedFiles": 4,
+  "protectedUntrackedHashFailures": [],
+  "missingOriginalFiles": [],
+  "unexpectedModifications": [],
+  "priorPrivateEvidenceFiles": 666,
+  "priorEvidenceHashFailures": [],
+  "criticalFiles": 11,
+  "criticalHashFailures": [],
+  "productionHashFailures": [],
+  "productionAuditScope": "Launcher 1.4.2 executable and config/registry only; not owner-world or credential inventory",
+  "worktreeCount": 7,
+  "otherWorktreeIdentitiesUnchanged": true,
+  "clientTrackedFiles": 422,
+  "clientHashFailures": [],
+  "clientHeadIndexStatusWorktreesUnchanged": true,
+  "canonicalLockUnchanged": true,
+  "deletions": "",
+  "stagedDeletions": "",
+  "startingHead": "133cdd7e9988c5e8cc70b45afa7535d04b9c750f"
+}

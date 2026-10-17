@@ -1,0 +1,32 @@
+{
+  "kind": "synthetic-regression-only",
+  "baselineBenchmarkTests": 84,
+  "baselineP1Tests": 13,
+  "finalBenchmarkTests": 97,
+  "finalP1Tests": 13,
+  "addedTests": 13,
+  "allPassed": true,
+  "logs": [
+    {
+      "label": "baseline-benchmark-tests.txt",
+      "sha256": "2c87848353e776c3687f7ab27d6bf67c8766ca304fd65ba4ffaae4ce1b8ba339"
+    },
+    {
+      "label": "baseline-p1-tests.txt",
+      "sha256": "14c291aaba9311b116f02bb0e091662523811fc1c29fc235f6a8ed0e4a224b09"
+    },
+    {
+      "label": "focused-tests.txt",
+      "sha256": "66dc0be710edfed07570145ae7805aaedae4395cab3063586a00a9a1c490d7fe"
+    },
+    {
+      "label": "final-benchmark-tests.txt",
+      "sha256": "e6ec1ea71d4f88bf8839678e40ca42c0db4aee1d86ef2bb0dd1167fda8f96922"
+    },
+    {
+      "label": "final-p1-tests.txt",
+      "sha256": "ba6f26fa5a1b42443861d9b4324045b49e6caca7e22c95b37a043ebfbff8a2ad"
+    }
+  ],
+  "actualMinecraftFrameMeasurements": false
+}

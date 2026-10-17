@@ -1,0 +1,33 @@
+{
+  "initial": {
+    "machineCpuMeanPercent": 0.8877887174524,
+    "minimumAvailableBytes": 21878607872,
+    "samples": 121,
+    "ACLineStatus": 1,
+    "quietCpuScreenPercent": 2,
+    "cpuScreenPassed": true,
+    "unknowns": [
+      "GPU idle",
+      "VRR",
+      "thermals",
+      "background workload stability"
+    ]
+  },
+  "title": {
+    "machineCpuMeanPercent": 2.9793565185047424,
+    "minimumAvailableBytes": 19796078592,
+    "samples": 121,
+    "quietCpuScreenPercent": 2,
+    "cpuScreenPassed": false,
+    "context": "Isolated B at title; no JFR or collector"
+  },
+  "display": {
+    "Name": "AMD Radeon RX 9070 XT",
+    "DriverVersion": "32.0.31041.1004",
+    "CurrentHorizontalResolution": 2560,
+    "CurrentVerticalResolution": 1440,
+    "CurrentRefreshRate": 240
+  },
+  "quietDecision": "DEFER further captures; no favorable retry",
+  "powerAndDriverSettingsChanged": false
+}

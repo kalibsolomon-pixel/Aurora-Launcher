@@ -1,0 +1,70 @@
+{
+  "kind": "sanitized-evaluation-evidence; no actual frame/JFR recording",
+  "files": [
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/artifacts.json",
+      "size": 1552,
+      "sha256": "f7ce9b4c951f889aab0c6bfa40b3c16915aa006db065b40c9ae39089b6b33721"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/collector-hidden.jpg",
+      "size": 144906,
+      "sha256": "ecc9032b6db1a3bfb1f3ea39f7d45f25770be2d622699dff7181d35463c4a1a2"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/collector-world.jpg",
+      "size": 151038,
+      "sha256": "83c28f9cacbf3a900a19b54b37120736e2a647e73aec3ea3fd08080d560e9397"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/environment.json",
+      "size": 922,
+      "sha256": "080844aa1432b2e61f69e5ec5c7ab9f2c758e57eda4ea3a3910c951903992400"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/jfr-availability.json",
+      "size": 2301,
+      "sha256": "337db7b2528b5dad6419bf7cb6e471f855a2bf474dd7d5c413d182959d069893"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/jfr-events.json",
+      "size": 9580,
+      "sha256": "27245f1b0cd9d5db1d20830ef7474287eed2a3be20546667cbf531894be45574"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/jfr-profile.json",
+      "size": 1056,
+      "sha256": "eaa1537ec41902b5cf02bba969a352160afb14c3521971a67495232c11ded3da"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/preservation.json",
+      "size": 1227,
+      "sha256": "0cb42898370809a24a53784c59d4aae0d4c9f981085b71514ed5c5065e72e87b"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/raw-inventory.json",
+      "size": 9028,
+      "sha256": "b6495a796c403cf264fd5c8341f3c71b20c2bb8bd7e2f490c6f5dd7477ff3681"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/runtime.json",
+      "size": 4313,
+      "sha256": "b297c9c676a45c29aba091e5e3d3c04020cf0aa1279926f70b35d66efc6d2994"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/source-audit.json",
+      "size": 18062,
+      "sha256": "1d95c309bf2bb1b59fbb2a41de4f439b48816bbde5fe579da7abf266579ff0c3"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/tests.json",
+      "size": 968,
+      "sha256": "a0af8fe7a04d590c085a9b1468aaf7c3d23c4b2b7cb26f2899d84d0d263c6da6"
+    },
+    {
+      "path": "docs/performance-p3a/evidence/p3a4a2/trials.json",
+      "size": 927,
+      "sha256": "50af1a99e78b31ae3a64711fa69ed6b8299af784249f964966a9a539742a016e"
+    }
+  ]
+}

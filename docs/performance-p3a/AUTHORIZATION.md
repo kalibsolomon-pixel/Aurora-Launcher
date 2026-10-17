@@ -1,3 +1,16 @@
+# P3-A.4a.2 authorization extension
+
+The owner explicitly requests released Valence/Performance Overlay source/artifact
+evaluation, disposable collector installation, bounded compatibility/recording and
+JFR feasibility using the locked JDK. This authorizes those named tools for this
+phase; older "new tools require separate authorization" text remains historical.
+Same-user normal authentication, accepted credential-continuity risk and approved
+startup-refresh ordering continue. Owner performs any interactive sign-in.
+Quiet-system failure defers further captures; no favorable retries or unrelated
+process termination. No candidate fork/custom mod, product/JVM/limiter change,
+production installation, push/release or P3-B. Scoped local commits authorized.
+[Predeclared protocol](P3A4A2_PROTOCOL.md), [actual scope](P3A4A2_RUNTIME.md).
+
 # P3-A.4a authorization extension
 
 The owner explicitly authorizes bounded measurement-fidelity, capped/uncapped

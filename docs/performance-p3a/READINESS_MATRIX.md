@@ -1,3 +1,27 @@
+# P3-A.4a.2 current readiness
+
+**PARTIAL. No accepted primary. P3-B NOT READY / NOT AUTHORIZED.**
+[Acceptance](../../PERFORMANCE_P3A4A2_ACCEPTANCE.md),
+[candidate comparison](P3A4A2_CANDIDATES.md), [next gates](P3A4A2_DECISION.md).
+
+| Gate | Current result | Evidence / remaining condition |
+| --- | --- | --- |
+| Static released-artifact audit | VERIFIED WITH LIMITS | Exact versions/publisher hashes/JAR metadata/source/bytecode; declarations distinct from runtime |
+| Valence primary role | REJECTED | No raw chronological frame export; not installed; runtime UNKNOWN |
+| Overlay coexistence | VERIFIED WITH LIMITS | Exact Aurora/API/Sodium/Lithium/Cloth startup/world/HUD/hide key; both game sessions and launcher exit 0 |
+| Overlay recording/CSV/completeness | UNTESTED / PROVISIONAL | Failed quiet screen deferred start/stop/export and 240/1000 captures |
+| JFR | PROVISIONAL | Exact-JVM attach/check/help/config query; default privacy profile prepared; no actual recording/export |
+| Timestamp / GC attribution | UNSUPPORTED precise alignment | Integer-ms CSV/no bounded epoch anchor; aggregate JFR remains a candidate |
+| Observer overhead | UNKNOWN | Unchanged 1% / 0.05 ms / 1pp budgets; no independent bound or on/off timing trials |
+| Quiet environment | FAILED title screen | Initial 0.887789%; fresh title 2.979357% >2%; further captures deferred without favorable retry |
+| Canonical A / production / worktrees | PRESERVED | Frozen archive/options, original evidence, seven worktrees; new disposable B copy only |
+| Offline tooling | PASS WITH LIMITS | 97 benchmark tests and 13 P1; 13 new synthetic gates are no empirical collector proof |
+| Full-run/representative B/other hardware | INCOMPLETE | Source schema/durations unchanged; no new canonical B lock or portability claim |
+| PresentMon role | OPTIONAL DIAGNOSTIC ONLY | Historical overflow/matching/overhead evidence retained; no mandatory prerequisite |
+| P3-B | NOT READY / NOT AUTHORIZED | Separate approval plus remaining measurement gates |
+
+Historical matrices follow unchanged.
+
 # P3-A.4a readiness matrix
 
 ## P3-A.4a.1 current decision

@@ -1,5 +1,16 @@
 # P3-A measurement audit
 
+Current P3-A.4a.2 evidence adds released Valence/Performance Overlay implementation
+audits and exact-JDK JFR command availability. Overlay's eligible HUD-callback
+interval is a distinct measurement quantity; no physical-display/render-start
+promotion. Actual Overlay startup/world/HUD coexistence succeeded. Fresh title
+CPU 2.979357% failed the unchanged 2% screen, so frame/JFR/observer recordings were
+deferred. No actual CSV or JFR recording metrics exist. PresentMon is optional
+diagnostics; full measured schema/gates unchanged. See
+[acceptance](../../PERFORMANCE_P3A4A2_ACCEPTANCE.md),
+[timebase/overhead](P3A4A2_TIMEBASE_OVERHEAD.md), [JFR coverage](P3A4A2_JFR.md).
+Historical audit below is preserved.
+
 Audited 2026-10-16 from `514fa088ee33ea99cccc63432adac1a40e5d99b4`.
 P1/P2 evidence and implementation are authority; earlier launcher-startup studies
 in similarly named directories measure a different subject. Gameplay remains NOT

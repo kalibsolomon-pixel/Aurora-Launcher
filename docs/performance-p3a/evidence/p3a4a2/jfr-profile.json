@@ -1,0 +1,39 @@
+{
+  "base": "default.jfc",
+  "baseSha256": "fd59ee591005be6d14f0786c4ec00447e56e7503219c6f679cddb07ba0f235a8",
+  "selectedSha256": "d48adb550887e5e4e0fd8c3aedbd05e5c234aef17ec5812bb06310a290af5a80",
+  "changes": [
+    {
+      "event": "jdk.InitialSystemProperty",
+      "setting": "enabled",
+      "before": "true",
+      "after": "false"
+    },
+    {
+      "event": "jdk.SystemProcess",
+      "setting": "enabled",
+      "before": "true",
+      "after": "false"
+    },
+    {
+      "event": "jdk.JVMInformation",
+      "setting": "enabled",
+      "before": "true",
+      "after": "false"
+    },
+    {
+      "event": "jdk.InitialEnvironmentVariable",
+      "setting": "enabled",
+      "before": "true",
+      "after": "false"
+    },
+    {
+      "event": "jdk.InitialSecurityProperty",
+      "setting": "enabled",
+      "before": "true",
+      "after": "false"
+    }
+  ],
+  "exitCode": 0,
+  "reason": "Exclude command lines, properties, environment and unrelated process command lines; no telemetry intensity change"
+}

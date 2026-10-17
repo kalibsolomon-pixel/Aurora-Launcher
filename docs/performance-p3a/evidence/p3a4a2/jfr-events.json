@@ -1,0 +1,447 @@
+{
+  "kind": "installed-JFC-static-configuration-not-recorded-event-counts",
+  "default": {
+    "jdk.GarbageCollection": {
+      "enabled": {
+        "value": "true",
+        "control": "gc-enabled-normal"
+      },
+      "threshold": {
+        "value": "0 ms",
+        "control": null
+      }
+    },
+    "jdk.GCPhasePause": {
+      "enabled": {
+        "value": "true",
+        "control": "gc-enabled-normal"
+      },
+      "threshold": {
+        "value": "0 ms",
+        "control": null
+      }
+    },
+    "jdk.GCPhasePauseLevel1": {
+      "enabled": {
+        "value": "true",
+        "control": "gc-enabled-normal"
+      },
+      "threshold": {
+        "value": "0 ms",
+        "control": null
+      }
+    },
+    "jdk.GCPhasePauseLevel2": {
+      "enabled": {
+        "value": "true",
+        "control": "gc-enabled-normal"
+      },
+      "threshold": {
+        "value": "0 ms",
+        "control": null
+      }
+    },
+    "jdk.GCHeapSummary": {
+      "enabled": {
+        "value": "true",
+        "control": "gc-enabled-normal"
+      }
+    },
+    "jdk.ObjectAllocationInNewTLAB": {
+      "enabled": {
+        "value": "false",
+        "control": "gc-enabled-high"
+      },
+      "stackTrace": {
+        "value": "true",
+        "control": null
+      }
+    },
+    "jdk.ObjectAllocationOutsideTLAB": {
+      "enabled": {
+        "value": "false",
+        "control": "gc-enabled-high"
+      },
+      "stackTrace": {
+        "value": "true",
+        "control": null
+      }
+    },
+    "jdk.ObjectAllocationSample": {
+      "enabled": {
+        "value": "true",
+        "control": "object-allocation-enabled"
+      },
+      "throttle": {
+        "value": "150/s",
+        "control": "allocation-profiling"
+      },
+      "stackTrace": {
+        "value": "true",
+        "control": null
+      }
+    },
+    "jdk.ThreadPark": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "stackTrace": {
+        "value": "true",
+        "control": null
+      },
+      "threshold": {
+        "value": "20 ms",
+        "control": "locking-threshold"
+      }
+    },
+    "jdk.ThreadSleep": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "stackTrace": {
+        "value": "true",
+        "control": null
+      },
+      "threshold": {
+        "value": "20 ms",
+        "control": "locking-threshold"
+      }
+    },
+    "jdk.ExecutionSample": {
+      "enabled": {
+        "value": "true",
+        "control": "method-sampling-enabled"
+      },
+      "period": {
+        "value": "20 ms",
+        "control": "method-sampling-java-interval"
+      }
+    },
+    "jdk.NativeMethodSample": {
+      "enabled": {
+        "value": "true",
+        "control": "method-sampling-enabled"
+      },
+      "period": {
+        "value": "20 ms",
+        "control": "method-sampling-native-interval"
+      }
+    },
+    "jdk.ThreadStart": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "stackTrace": {
+        "value": "true",
+        "control": null
+      }
+    },
+    "jdk.ThreadEnd": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      }
+    },
+    "jdk.ThreadCPULoad": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "period": {
+        "value": "10 s",
+        "control": null
+      }
+    },
+    "jdk.CPULoad": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "period": {
+        "value": "1000 ms",
+        "control": null
+      }
+    },
+    "jdk.ThreadAllocationStatistics": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "period": {
+        "value": "everyChunk",
+        "control": null
+      }
+    },
+    "jdk.SafepointBegin": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "threshold": {
+        "value": "10 ms",
+        "control": null
+      }
+    },
+    "jdk.SafepointEnd": {
+      "enabled": {
+        "value": "false",
+        "control": null
+      },
+      "threshold": {
+        "value": "10 ms",
+        "control": null
+      }
+    },
+    "jdk.SafepointStateSynchronization": {
+      "enabled": {
+        "value": "false",
+        "control": null
+      },
+      "threshold": {
+        "value": "10 ms",
+        "control": null
+      }
+    },
+    "jdk.SafepointCleanup": {
+      "enabled": {
+        "value": "false",
+        "control": null
+      },
+      "threshold": {
+        "value": "10 ms",
+        "control": null
+      }
+    },
+    "jdk.DataLoss": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      }
+    }
+  },
+  "profileComparison": {
+    "jdk.GarbageCollection": {
+      "enabled": {
+        "value": "true",
+        "control": "gc-enabled-normal"
+      },
+      "threshold": {
+        "value": "0 ms",
+        "control": null
+      }
+    },
+    "jdk.GCPhasePause": {
+      "enabled": {
+        "value": "true",
+        "control": "gc-enabled-normal"
+      },
+      "threshold": {
+        "value": "0 ms",
+        "control": null
+      }
+    },
+    "jdk.GCPhasePauseLevel1": {
+      "enabled": {
+        "value": "true",
+        "control": "gc-enabled-normal"
+      },
+      "threshold": {
+        "value": "0 ms",
+        "control": null
+      }
+    },
+    "jdk.GCPhasePauseLevel2": {
+      "enabled": {
+        "value": "true",
+        "control": "gc-enabled-normal"
+      },
+      "threshold": {
+        "value": "0 ms",
+        "control": null
+      }
+    },
+    "jdk.GCHeapSummary": {
+      "enabled": {
+        "value": "true",
+        "control": "gc-enabled-normal"
+      }
+    },
+    "jdk.ObjectAllocationInNewTLAB": {
+      "enabled": {
+        "value": "false",
+        "control": "gc-enabled-high"
+      },
+      "stackTrace": {
+        "value": "true",
+        "control": null
+      }
+    },
+    "jdk.ObjectAllocationOutsideTLAB": {
+      "enabled": {
+        "value": "false",
+        "control": "gc-enabled-high"
+      },
+      "stackTrace": {
+        "value": "true",
+        "control": null
+      }
+    },
+    "jdk.ObjectAllocationSample": {
+      "enabled": {
+        "value": "true",
+        "control": "object-allocation-enabled"
+      },
+      "throttle": {
+        "value": "300/s",
+        "control": "allocation-profiling"
+      },
+      "stackTrace": {
+        "value": "true",
+        "control": null
+      }
+    },
+    "jdk.ThreadPark": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "stackTrace": {
+        "value": "true",
+        "control": null
+      },
+      "threshold": {
+        "value": "10 ms",
+        "control": "locking-threshold"
+      }
+    },
+    "jdk.ThreadSleep": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "stackTrace": {
+        "value": "true",
+        "control": null
+      },
+      "threshold": {
+        "value": "10 ms",
+        "control": "locking-threshold"
+      }
+    },
+    "jdk.ExecutionSample": {
+      "enabled": {
+        "value": "true",
+        "control": "method-sampling-enabled"
+      },
+      "period": {
+        "value": "10 ms",
+        "control": "method-sampling-java-interval"
+      }
+    },
+    "jdk.NativeMethodSample": {
+      "enabled": {
+        "value": "true",
+        "control": "method-sampling-enabled"
+      },
+      "period": {
+        "value": "20 ms",
+        "control": "method-sampling-native-interval"
+      }
+    },
+    "jdk.ThreadStart": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "stackTrace": {
+        "value": "true",
+        "control": null
+      }
+    },
+    "jdk.ThreadEnd": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      }
+    },
+    "jdk.ThreadCPULoad": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "period": {
+        "value": "10 s",
+        "control": null
+      }
+    },
+    "jdk.CPULoad": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "period": {
+        "value": "1000 ms",
+        "control": null
+      }
+    },
+    "jdk.ThreadAllocationStatistics": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "period": {
+        "value": "everyChunk",
+        "control": null
+      }
+    },
+    "jdk.SafepointBegin": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      },
+      "threshold": {
+        "value": "0 ms",
+        "control": null
+      }
+    },
+    "jdk.SafepointEnd": {
+      "enabled": {
+        "value": "false",
+        "control": null
+      },
+      "threshold": {
+        "value": "0 ms",
+        "control": null
+      }
+    },
+    "jdk.SafepointStateSynchronization": {
+      "enabled": {
+        "value": "false",
+        "control": null
+      },
+      "threshold": {
+        "value": "0 ms",
+        "control": null
+      }
+    },
+    "jdk.SafepointCleanup": {
+      "enabled": {
+        "value": "false",
+        "control": null
+      },
+      "threshold": {
+        "value": "0 ms",
+        "control": null
+      }
+    },
+    "jdk.DataLoss": {
+      "enabled": {
+        "value": "true",
+        "control": null
+      }
+    }
+  }
+}

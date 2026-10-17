@@ -1,0 +1,255 @@
+{
+  "kind": "actual-output-hashes-not-frame-recordings",
+  "files": [
+    {
+      "label": "isolated-evidence/collector-hidden.jpg",
+      "sha256": "ecc9032b6db1a3bfb1f3ea39f7d45f25770be2d622699dff7181d35463c4a1a2",
+      "size": 144906
+    },
+    {
+      "label": "isolated-evidence/collector-world.jpg",
+      "sha256": "83c28f9cacbf3a900a19b54b37120736e2a647e73aec3ea3fd08080d560e9397",
+      "size": 151038
+    },
+    {
+      "label": "isolated-evidence/default-private.jfc",
+      "sha256": "d48adb550887e5e4e0fd8c3aedbd05e5c234aef17ec5812bb06310a290af5a80",
+      "size": 36789
+    },
+    {
+      "label": "isolated-evidence/jfr-availability/check.txt",
+      "sha256": "2de8f870091bd795b7f7ba9d4fb7a33c808e86b21ca61910c03e6fb5933e7051",
+      "size": 81
+    },
+    {
+      "label": "isolated-evidence/jfr-availability/configure.txt",
+      "sha256": "9af093be29c630e845b384279a2faa82f7486f79db9d97b84bce5295469ade6e",
+      "size": 423
+    },
+    {
+      "label": "isolated-evidence/jfr-availability/dump-help.txt",
+      "sha256": "e25bd631aafd869996330abc6da4c779ecdee70676c2e8a2197c3b91636f47b6",
+      "size": 3866
+    },
+    {
+      "label": "isolated-evidence/jfr-availability/review.json",
+      "sha256": "1cb26c8f612d724ee8f42d8fb4b8bdfe95fc508388a78d93cc1d2785cf2d90d5",
+      "size": 1911
+    },
+    {
+      "label": "isolated-evidence/jfr-availability/start-help.txt",
+      "sha256": "fce8ae6674649d291f86b01d2e48dd88c6380b83c818c9ab7435cc64756d4e0b",
+      "size": 7302
+    },
+    {
+      "label": "isolated-evidence/jfr-availability/stop-help.txt",
+      "sha256": "5054f465267fa58b97ae0ff12faea57d976e971b90eaee6ca6e927f819337942",
+      "size": 784
+    },
+    {
+      "label": "isolated-evidence/launcher-stderr.txt",
+      "sha256": "007d79f64f7e712235ef2a6f8c6633f60a794af4810b375ffa0727cd5945607b",
+      "size": 2102
+    },
+    {
+      "label": "isolated-evidence/launcher-stdout.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "label": "isolated-evidence/quiet-title/capture.json",
+      "sha256": "c3dd92d6df129ef89a0435799190d45dd5230c81f3784d03cb135e844b2e6c2e",
+      "size": 771
+    },
+    {
+      "label": "isolated-evidence/quiet-title/process.csv",
+      "sha256": "f504ab3679c27d521e4174cc0efcfc160819d79de5a3ba8dd8185a56b4424b98",
+      "size": 15023
+    },
+    {
+      "label": "isolated-evidence/quiet-title/review.json",
+      "sha256": "45fd8e47f46f1e93903f0ad4f4be07fa236c2f1380738f1f96ce736c89b1050b",
+      "size": 229
+    },
+    {
+      "label": "isolated-instance/logs/2026-10-17-1.log.gz",
+      "sha256": "57845817aa7493418c88e8293592d9c3df9072a4648a38ca1eee20453e7a4b3e",
+      "size": 3118
+    },
+    {
+      "label": "isolated-instance/logs/aurora-launch-1792213575-0.log",
+      "sha256": "14b028af728989d644425f0c4d1e018e0a134fc9d2782ce7aac14fe657bf1c06",
+      "size": 16665
+    },
+    {
+      "label": "isolated-instance/logs/aurora-launch-1792213859-1.log",
+      "sha256": "a88e725e22cd8e8028ff504287d5e3b439fc748980d8bec679af68335bd39a05",
+      "size": 25290
+    },
+    {
+      "label": "isolated-instance/logs/latest.log",
+      "sha256": "e6319e12004502ea86bb875ee9971ca18f1c4f59a684a1caa8569e26a8face27",
+      "size": 12530
+    },
+    {
+      "label": "private-phase/cloth-config-versions.json",
+      "size": 138345,
+      "sha256": "4c62f44ee9bcda142e028708c07d171cb84fdd6564b928f5d82dea081579034f"
+    },
+    {
+      "label": "private-phase/collector-install-private.json",
+      "size": 3032,
+      "sha256": "d0462fd932f547cba85f351d225388a094e5479b84c72cccac83f9414d265cb6"
+    },
+    {
+      "label": "private-phase/collector-physical-window.json",
+      "size": 210,
+      "sha256": "be96cc1c59c9137880504cfe0fe0bc6c7f8022ffd514b2e3d05328b57faba162"
+    },
+    {
+      "label": "private-phase/collector-window.json",
+      "size": 227,
+      "sha256": "9a505c20a42601b95374ff6821f623ffad5085d6e90dd644a2cd501c59874cfd"
+    },
+    {
+      "label": "private-phase/display.json",
+      "size": 188,
+      "sha256": "5d7a5b72d469be45593fb1f4a6fe14f2488be9ae880d1b158c5725a5f67caa1a"
+    },
+    {
+      "label": "private-phase/exit-collector.json",
+      "size": 99,
+      "sha256": "00f697587fbed0a9b7313c6eddad234011e7a6015e00e7931c0904ae5c4961f5"
+    },
+    {
+      "label": "private-phase/exit-no-collector.json",
+      "size": 99,
+      "sha256": "ac04f1ff062d69006d7dc2dee2e32ba20c65a285c87e4b0ce83c207129b6bb13"
+    },
+    {
+      "label": "private-phase/installed-collector-identities.json",
+      "size": 1046,
+      "sha256": "f515bcec08f56997aa12ae9e1860189661ef8abd5d46026b0070a4e8cc224ad4"
+    },
+    {
+      "label": "private-phase/instance.json",
+      "size": 366,
+      "sha256": "671e0193acb744ed62b4362689a6fb8a1667421115d762dda0ba4024902d089a"
+    },
+    {
+      "label": "private-phase/jfc-audit.json",
+      "size": 81717,
+      "sha256": "72c10ba9a9dc70b0a44056d1c884ffea94941ba0ab938752d18a69f31051e749"
+    },
+    {
+      "label": "private-phase/jfr-availability.json",
+      "size": 1911,
+      "sha256": "1cb26c8f612d724ee8f42d8fb4b8bdfe95fc508388a78d93cc1d2785cf2d90d5"
+    },
+    {
+      "label": "private-phase/jfr-selected-profile.json",
+      "size": 1054,
+      "sha256": "ab0569c4f21d4a63ace572fa57c944ea5f6dcf2bf828bf0dc9eac13079a756be"
+    },
+    {
+      "label": "private-phase/launch-collector.json",
+      "size": 144,
+      "sha256": "aa999b6fb6f2eb2934444d7d8d5951052981dad93edf45ccbdb8c06304baf4db"
+    },
+    {
+      "label": "private-phase/launch-no-collector.json",
+      "size": 144,
+      "sha256": "02eff23fafecca90836be4ba1bd22c9974da7cc27a123f9d4864daa46d43efe7"
+    },
+    {
+      "label": "private-phase/launcher-exit.json",
+      "size": 112,
+      "sha256": "0c200850dde29b6a51dda77304de0c28aa656bf2b32e72d8717e4a800936f748"
+    },
+    {
+      "label": "private-phase/launcher-session.json",
+      "size": 86,
+      "sha256": "caed077b37b514b16e4dfab34ef65c0712ffda5f28ce17703763a0903dbf30e4"
+    },
+    {
+      "label": "private-phase/materials-private.json",
+      "size": 1198,
+      "sha256": "f22d71e2b7eea20ab59455026a215ef6a9996c74356c1fd74ace04adb76755c6"
+    },
+    {
+      "label": "private-phase/performance-overlay-fabric.mod.json",
+      "size": 766,
+      "sha256": "28da911a6f9448dd1f18b69c726d4362e5d4f8952260668959b8f9cc7b9d097f"
+    },
+    {
+      "label": "private-phase/performance-overlay-project.json",
+      "size": 6064,
+      "sha256": "827bebeb7f28b54208b4855153432b26be6ce25b122dae4ce9d656910846a4dd"
+    },
+    {
+      "label": "private-phase/performance-overlay-versions.json",
+      "size": 7329,
+      "sha256": "e1b0755cf170719a86d466a66902eab7f947973273234fa62a67cd8d49c821ab"
+    },
+    {
+      "label": "private-phase/preview-1FTNnevw.json",
+      "size": 1859,
+      "sha256": "4ca20ba2e07ebcbca8601edc0ae2915da77ce25b700920bcee93844d0c9a2ad4"
+    },
+    {
+      "label": "private-phase/preview-9s6osm5g.json",
+      "size": 662,
+      "sha256": "d7afdd3eaab4e29731d99ba3372a2eee795bc4cf0b1c0ec8a957cafc1925aa85"
+    },
+    {
+      "label": "private-phase/quiet/capture.json",
+      "size": 771,
+      "sha256": "6bff2e3c4a6a52c93a8d0450bfc6a6a2f27aa351b3b4f8e38bde1d3e299769ed"
+    },
+    {
+      "label": "private-phase/quiet/process.csv",
+      "size": 15023,
+      "sha256": "9d89976a76ae78f001ceebcd06952645773f0b659a06fb5b856a9018de664f64"
+    },
+    {
+      "label": "private-phase/quiet/review.json",
+      "size": 295,
+      "sha256": "7d0d55b8c4a302cc99200859e7f1e770deca330d852a62d4f0491b2936ebcbf1"
+    },
+    {
+      "label": "private-phase/scene-provenance-private.json",
+      "size": 2263,
+      "sha256": "3da9b280e3345f5b97563ee50445d75c04b994a4fd222c7509691709559164ad"
+    },
+    {
+      "label": "private-phase/scoped-paths.json",
+      "size": 1767,
+      "sha256": "cb61f40e5fd3fd0940d0932abeb98a485bf9ebc0d3cc9fb07ec1e40455372934"
+    },
+    {
+      "label": "private-phase/session.json",
+      "size": 817,
+      "sha256": "01fe3d26ffa5bd8259ed6a2f576353719fcae970f4284208d6cc801ce3f07a6a"
+    },
+    {
+      "label": "private-phase/valence-benchmark-fabric.mod.json",
+      "size": 988,
+      "sha256": "d11582ce6087df05a4463895688f4c0d314135a78b8e8342a677d282e6b9fe08"
+    },
+    {
+      "label": "private-phase/valence-benchmark-project.json",
+      "size": 13726,
+      "sha256": "aee3f37edf3cbcb307245e5cb5677d634b8f269f65795a0bbdb994c0fefbfdc1"
+    },
+    {
+      "label": "private-phase/valence-benchmark-versions.json",
+      "size": 1151,
+      "sha256": "deb418c1a9c0f330aadee98afe8e8e4545a34e818a9629026849f7ae3b1db7b7"
+    },
+    {
+      "label": "private-phase/webview-private.json",
+      "size": 6344,
+      "sha256": "8aedd7833241f608c2833aa6a132ba5c14c0a5c2d6cabe8290fc721c98efbb40"
+    }
+  ]
+}
