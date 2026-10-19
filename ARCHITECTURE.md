@@ -7,7 +7,9 @@
 `runtime::install::validate_runtime_eligibility` verifies the exact normalized
 runtime plan, installed manifest and bytes, then runs the bounded `java -version`
 diagnostic. Explicit runtime status, Play readiness and final launch preparation
-share this boundary and timeout. Integrity-only installation checks remain
+share this boundary and timeout. Diagnostic JVM crash reports go to the platform
+null device and core dumps are disabled, so even Java path crashes cannot write
+beside the launcher executable. Integrity-only installation checks remain
 available but cannot authorize Play. Windows diagnostics use CREATE_NO_WINDOW.
 An intact Java installation can fail inside the published Java launcher under
 long or non-ASCII paths; these failures now block readiness and show actionable

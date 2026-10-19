@@ -3,7 +3,7 @@
 Build committed source with `powershell -ExecutionPolicy Bypass -File tools/release/private-candidate.ps1`.
 This uses the normal Tauri NSIS workflow and never runs publication tooling.
 The base production version stays 1.4.2. The private overlay identifies
-`1.4.2-private.20261019.1`, product **Aurora Launcher Private Test Candidate**,
+`1.4.2-private.20261019.2`, product **Aurora Launcher Private Test Candidate**,
 identifier `com.aurora.launcher.private-candidate`. It requires the paired Cargo
 feature; ordinary production configuration and identity are unchanged.
 

@@ -2,7 +2,7 @@ param([string]$OutputDirectory = '')
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 Set-Location -LiteralPath $repo
-if (!$OutputDirectory) { $OutputDirectory = Join-Path $repo 'private-test-builds/20261019-1' }
+if (!$OutputDirectory) { $OutputDirectory = Join-Path $repo 'private-test-builds/20261019-2' }
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'Choose a new output directory; existing candidates are preserved' }
 $trackedChanges = @(git status --porcelain --untracked-files=no)
 if ($trackedChanges.Count) { throw 'Commit the reviewed tracked source before packaging' }

@@ -719,7 +719,18 @@ async fn run_java_diagnostic(
     timeout: Duration,
 ) -> Result<JavaDiagnostic, String> {
     crate::performance::measure(crate::performance::Event::JavaDiagnostic, async {
-        let output = run_process(executable, &["-version"], timeout).await?;
+        // A failing JVM must not write hs_err/core files into the launcher's
+        // inherited working directory (which may be the installation folder).
+        #[cfg(windows)]
+        let error_file = "-XX:ErrorFile=NUL";
+        #[cfg(not(windows))]
+        let error_file = "-XX:ErrorFile=/dev/null";
+        let output = run_process(
+            executable,
+            &[error_file, "-XX:-CreateCoredumpOnCrash", "-version"],
+            timeout,
+        )
+        .await?;
         let combined = format!(
             "{}{}",
             String::from_utf8_lossy(&output.stdout),

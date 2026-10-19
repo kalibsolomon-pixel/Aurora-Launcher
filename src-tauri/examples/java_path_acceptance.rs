@@ -96,6 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let executable = plan.diagnostic_executable_path(&managed);
     let original = std::fs::read(&executable)?;
+    let permissions = std::fs::metadata(&executable)?.permissions();
     std::fs::remove_file(&executable)?;
     assert_eq!(
         runtime::install::validate_runtime_eligibility(&managed, &plan)
@@ -104,6 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         runtime::RuntimeValidationStatus::Damaged
     );
     std::fs::write(&executable, &original)?;
+    std::fs::set_permissions(&executable, permissions)?;
     let state_path = plan
         .installation_dir(&managed)
         .join("runtime-installed.json");
