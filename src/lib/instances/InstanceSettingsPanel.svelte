@@ -366,6 +366,8 @@
   .tool-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
   .danger-zone { border-color: color-mix(in srgb, var(--color-error) 45%, var(--f-edge)); }
   .maintenance .group-row { padding: var(--space-4) var(--space-5); }
+  /* Descriptions keep a readable measure; actions wrap below instead of squeezing them. */
+  .maintenance .group-row-main { flex: 1 1 14rem; }
   .tool-disclosure { display: block; }
   .tool-disclosure summary { cursor: pointer; color: var(--color-text); font-weight: 500; padding-block: 2px; }
   .tool-disclosure[open] summary { margin-bottom: var(--space-2); }

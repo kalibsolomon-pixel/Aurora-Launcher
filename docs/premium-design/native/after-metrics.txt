@@ -1,0 +1,144 @@
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-home.png
+1120x760 home
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-home-skin.png
+1120x760 home-skin
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-home-signed-out.png
+1120x760 home-signed-out
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-home-edit.png
+1120x760 home-edit
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-home-empty.png
+1120x760 home-empty
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-instances.png
+1120x760 instances
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-instances-none.png
+1120x760 instances-none
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-workspace-overview.png
+1120x760 workspace-overview
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-workspace-mods.png
+1120x760 workspace-mods
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-workspace-packs.png
+1120x760 workspace-packs
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-workspace-settings.png
+1120x760 workspace-settings
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-settings.png
+1120x760 settings
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-appearance.png
+1120x760 appearance
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-home-simple.png
+1120x760 home-simple
+{"result":{"type":"undefined"}}
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-accounts.png
+{"result":{"type":"undefined"}}
+{"w":1120,"h":760,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1120x760-mods-browse.png
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-home.png
+720x520 home
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-home-skin.png
+720x520 home-skin
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-home-signed-out.png
+720x520 home-signed-out
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-home-edit.png
+720x520 home-edit
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-home-empty.png
+720x520 home-empty
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-instances.png
+720x520 instances
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-instances-none.png
+720x520 instances-none
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-workspace-overview.png
+720x520 workspace-overview
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-workspace-mods.png
+720x520 workspace-mods
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-workspace-packs.png
+720x520 workspace-packs
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-workspace-settings.png
+720x520 workspace-settings
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-settings.png
+720x520 settings
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-appearance.png
+720x520 appearance
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-home-simple.png
+720x520 home-simple
+{"result":{"type":"undefined"}}
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-accounts.png
+{"result":{"type":"undefined"}}
+{"w":720,"h":520,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-720x520-mods-browse.png
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-home.png
+1600x1000 home
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-home-skin.png
+1600x1000 home-skin
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-home-signed-out.png
+1600x1000 home-signed-out
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-home-edit.png
+1600x1000 home-edit
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-home-empty.png
+1600x1000 home-empty
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-instances.png
+1600x1000 instances
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-instances-none.png
+1600x1000 instances-none
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-workspace-overview.png
+1600x1000 workspace-overview
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-workspace-mods.png
+1600x1000 workspace-mods
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-workspace-packs.png
+1600x1000 workspace-packs
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-workspace-settings.png
+1600x1000 workspace-settings
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-settings.png
+1600x1000 settings
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-appearance.png
+1600x1000 appearance
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-home-simple.png
+1600x1000 home-simple
+{"result":{"type":"undefined"}}
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-accounts.png
+{"result":{"type":"undefined"}}
+{"w":1600,"h":1000,"dpr":1.25,"overflowX":false}
+saved C:\Dev\aurora-launcher\docs\premium-design\native\after-1600x1000-mods-browse.png

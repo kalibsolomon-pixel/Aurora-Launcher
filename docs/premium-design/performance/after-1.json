@@ -1,0 +1,97 @@
+{
+  "label": "after",
+  "at": "2026-10-19T22:02:40.927Z",
+  "pages": {
+    "home": {
+      "idle": {
+        "frames": 721,
+        "p50": 6.9,
+        "p95": 7.1,
+        "p99": 7.1,
+        "max": 7.2,
+        "over33": 0
+      },
+      "heapMB": 15.95,
+      "nodes": 897,
+      "idleLayouts": 0,
+      "idleStyleRecalcs": 0,
+      "idleScriptMs": 6.93,
+      "idleTaskMs": 49.17
+    },
+    "home-simple": {
+      "idle": {
+        "frames": 721,
+        "p50": 6.9,
+        "p95": 7.1,
+        "p99": 7.1,
+        "max": 9,
+        "over33": 0
+      },
+      "heapMB": 15.93,
+      "nodes": 738,
+      "idleLayouts": 0,
+      "idleStyleRecalcs": 0,
+      "idleScriptMs": 6.24,
+      "idleTaskMs": 43.75
+    },
+    "instances": {
+      "idle": {
+        "frames": 722,
+        "p50": 6.9,
+        "p95": 7.1,
+        "p99": 7.1,
+        "max": 7.2,
+        "over33": 0
+      },
+      "heapMB": 15.66,
+      "nodes": 953,
+      "idleLayouts": 0,
+      "idleStyleRecalcs": 0,
+      "idleScriptMs": 6.95,
+      "idleTaskMs": 51.68
+    },
+    "mods": {
+      "idle": {
+        "frames": 722,
+        "p50": 6.9,
+        "p95": 7.1,
+        "p99": 7.3,
+        "max": 7.5,
+        "over33": 0
+      },
+      "heapMB": 15.87,
+      "nodes": 1442,
+      "idleLayouts": 0,
+      "idleStyleRecalcs": 0,
+      "idleScriptMs": 7.04,
+      "idleTaskMs": 50.31
+    },
+    "settings": {
+      "idle": {
+        "frames": 722,
+        "p50": 6.9,
+        "p95": 7.1,
+        "p99": 7.1,
+        "max": 7.2,
+        "over33": 0
+      },
+      "heapMB": 15.58,
+      "nodes": 588,
+      "idleLayouts": 0,
+      "idleStyleRecalcs": 0,
+      "idleScriptMs": 7.05,
+      "idleTaskMs": 49.8
+    }
+  },
+  "navigation": {
+    "samples": 32,
+    "p50": 13.4,
+    "p95": 13.7,
+    "max": 13.7
+  },
+  "dialog": {
+    "samples": 10,
+    "p50": 3,
+    "max": 12.8
+  }
+}
