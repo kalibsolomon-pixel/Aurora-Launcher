@@ -242,3 +242,7 @@
 .content-tools > .updates-card { margin-bottom: 0; }
 .content-tools .updates-head { min-height: 40px; }
 @media (max-width: 640px) { .content-tools { grid-template-columns: minmax(0, 1fr); } }
+
+/* One empty-state voice for every Home widget: same size, color and rhythm,
+   so neighbouring cards align instead of each inventing its own margins. */
+.home-widgets .widget .widget-empty { margin: 0; color: var(--color-text-secondary); font-size: var(--text-secondary); line-height: 1.5; }

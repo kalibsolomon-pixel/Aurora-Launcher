@@ -3,7 +3,7 @@
   import { launcher } from "$lib/launcher/store.svelte";
   import { navigation } from "$lib/launcher/navigation.svelte";
   import { INSTANCE_TABS, resolveWorkspace } from "$lib/launcher/navigation";
-  import { draftIsDirty, instanceContentStatus } from "$lib/launcher/instanceStatus";
+  import { draftIsDirty, instanceContentStatus, instanceProgressLabel, workspaceBadge } from "$lib/launcher/instanceStatus";
   import InstanceOverviewPanel from "$lib/instances/InstanceOverviewPanel.svelte";
   import InstanceModsPanel from "$lib/instances/InstanceModsPanel.svelte";
   import InstancePacksPanel from "$lib/instances/InstancePacksPanel.svelte";
@@ -23,12 +23,14 @@
   const validation = $derived(instance ? launcher.instanceValidations[instance.id] : undefined);
   const installingPhase = $derived(
     instance?.state === "installing" && launcher.createProgress
-      ? launcher.createProgress.phase
+      ? instanceProgressLabel(launcher.createProgress)
       : null,
   );
   const contentBadge = $derived(
     instance ? instanceContentStatus(instance, validation, installingPhase) : null,
   );
+
+  const headerBadge = $derived(contentBadge && instance ? workspaceBadge(contentBadge, launcher.playReadiness, instance.id) : null);
 
   const isSelected = $derived(
     launcher.launcherState?.config.selectedInstanceId === instanceId,
@@ -153,8 +155,8 @@
         </nav>
         <div class="workspace-title-line">
           <h2 class="page-title">{instance.displayName}</h2>
-          {#if contentBadge}
-            <span class="status-badge {contentBadge.tone}">{contentBadge.label}</span>
+          {#if headerBadge}
+            <span class="status-badge {headerBadge.tone}" title={headerBadge.detail ?? undefined}>{headerBadge.label}</span>
           {/if}
         </div>
         <p class="page-subtitle">

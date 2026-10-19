@@ -4,6 +4,9 @@
   import {
     instanceContentStatus,
     javaRuntimeStatus,
+    instanceProgressLabel,
+    runtimeProgressLabel,
+    launchProgressLabel,
   } from "$lib/launcher/instanceStatus";
   import type { InstanceSummary } from "$lib/backend";
 
@@ -32,7 +35,7 @@
 
   const installingPhase = $derived(
     instance.state === "installing" && launcher.createProgress
-      ? launcher.createProgress.phase
+      ? instanceProgressLabel(launcher.createProgress)
       : null,
   );
 
@@ -46,7 +49,7 @@
       launcher.runtimeBusy,
       launcher.runtimeError?.message ?? null,
       launcher.runtimeProgress
-        ? `${launcher.runtimeProgress.phase} ${launcher.runtimeProgress.completedItems}/${launcher.runtimeProgress.totalItems}`
+        ? runtimeProgressLabel(launcher.runtimeProgress)
         : null,
     ),
   );
@@ -73,7 +76,7 @@
     if (launcher.playBusy && !process && isSelected) {
       return {
         tone: "status-working" as const,
-        label: launcher.playProgress ? launcher.playProgress.phase : "Preparing…",
+        label: launchProgressLabel(launcher.playProgress) ?? "Preparing…",
         detail: null,
       };
     }
@@ -82,7 +85,7 @@
       return {
         tone: "status-working" as const,
         label: "Starting…",
-        detail: launcher.playProgress ? launcher.playProgress.phase : null,
+        detail: launchProgressLabel(launcher.playProgress),
       };
     }
     if (process.status === "running") {
@@ -138,6 +141,9 @@
       <span class="group-row-detail" class:is-error={javaStatus.tone === "status-error"}
         >{javaStatus.detail}</span
       >
+    {/if}
+    {#if javaStatus.technical}
+      <details class="technical"><summary>Technical details</summary><code>{javaStatus.technical}</code></details>
     {/if}
   </div>
   <div class="group-row-actions">
@@ -214,6 +220,9 @@
 {/if}
 
 <style>
+  .technical { font-size: var(--text-metadata); color: var(--color-text-secondary); }
+  .technical summary { cursor: pointer; }
+  .technical code { display: block; margin-top: var(--space-1); font-family: var(--font-mono); overflow-wrap: anywhere; white-space: pre-wrap; }
   .group-row-detail.is-error {
     color: var(--color-error);
   }

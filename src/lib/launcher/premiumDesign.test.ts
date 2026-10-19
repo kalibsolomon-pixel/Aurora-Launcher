@@ -95,3 +95,62 @@ it("shared controls use exact transition properties, press feedback and unoutlin
   const settings = readFileSync(new URL("./settings.css", import.meta.url), "utf8");
   assert.doesNotMatch(settings, /aria-current\] \{[^}]*accent-outline/);
 });
+
+it("install and Java progress use human wording with native counts only", async () => {
+  const { instanceProgressLabel, runtimeProgressLabel, instanceContentStatus } = await server.ssrLoadModule("/src/lib/launcher/instanceStatus.ts");
+  assert.equal(instanceProgressLabel(null), "Working");
+  assert.equal(instanceProgressLabel({ phase: "resolvingGame", game: null }), "Resolving Minecraft…");
+  assert.equal(instanceProgressLabel({ phase: "installingGame", game: { phase: "acquiring", completedItems: 126, totalItems: 4669, currentItem: null } }),
+    "Installing Minecraft: Downloading and verifying files · 126 of 4,669");
+  assert.doesNotMatch(instanceProgressLabel({ phase: "installingGame", game: { phase: "committing", completedItems: 0, totalItems: 0, currentItem: null } }), /installingGame|%|0 of 0/);
+  assert.equal(runtimeProgressLabel({ phase: "acquiring", completedItems: 3, totalItems: 120, currentItem: null }), "Downloading and verifying Java · 3 of 120");
+  // The lock held by this launcher's own creation reads as recovery "busy";
+  // live progress wins only for that installing instance.
+  const installing = { ...instance(), state: "installing", recovery: { status: "busy", message: "Installation or recovery is busy." } };
+  assert.equal(instanceContentStatus(installing, undefined, "Installing Minecraft…").label, "Installing");
+  assert.equal(instanceContentStatus(installing, undefined, null).label, "Installation busy");
+  assert.equal(instanceContentStatus({ ...installing, recovery: { status: "interrupted", message: "x" } }, undefined, "Installing…").label, "Installation interrupted");
+});
+
+it("Java failures summarize in words and keep raw native diagnostics behind a disclosure", async () => {
+  const { javaRuntimeStatus, launchProgressLabel, workspaceBadge } = await server.ssrLoadModule("/src/lib/launcher/instanceStatus.ts");
+  const failed = javaRuntimeStatus(null, false, "managed runtime validation failed: C:/private/path/jvm.dll", null);
+  assert.equal(failed.label, "Status failed");
+  assert.doesNotMatch(failed.detail, /private|jvm/);
+  assert.match(failed.technical, /jvm\.dll/);
+  assert.equal(launchProgressLabel({ phase: "restoringSession" }), "Restoring the Minecraft session…");
+  assert.equal(launchProgressLabel(null), null);
+  const ready = { tone: "status-success", label: "Ready", detail: null };
+  const blocked = { ...readiness(false), blockers: [{ code: "launch_runtime_not_ready", message: "The required managed Java runtime is not installed." }] };
+  assert.equal(workspaceBadge(ready, blocked, id).label, "Needs attention");
+  assert.equal(workspaceBadge(ready, blocked, "f".repeat(32)).label, "Ready");
+  assert.equal(workspaceBadge(ready, readiness(true), id).label, "Ready");
+  assert.equal(workspaceBadge(ready, { ...blocked, processStatus: "running" }, id).label, "Ready");
+  const installing = { tone: "status-working", label: "Installing", detail: null };
+  assert.equal(workspaceBadge(installing, blocked, id), installing);
+});
+
+it("first-run Home keeps the launch panel and Playtime hides range controls without data", async () => {
+  reset(); launcher.launcherState = { ...launcher.launcherState, instances: [], config: { schemaVersion: 1, selectedInstanceId: null } };
+  assert.match(html(Home), /class="home-composition home-empty[^"]*"[^]*No instances yet/);
+  const Playtime = (await server.ssrLoadModule("/src/lib/launcher/widgets/PlaytimeWidget.svelte")).default;
+  const empty = html(Playtime, { size: "small", testFixture: { summary: { todayMs: 0, last7DaysMs: 0, last30DaysMs: 0, allTimeMs: 0 }, daily: [] } });
+  assert.match(empty, /class="note widget-empty[^"]*"[^>]*>No playtime recorded yet/);
+  assert.doesNotMatch(empty, /Playtime range/);
+  const some = html(Playtime, { size: "small", testFixture: { summary: { todayMs: 0, last7DaysMs: 60000, last30DaysMs: 60000, allTimeMs: 60000 }, daily: [] } });
+  assert.match(some, /Playtime range/);
+});
+
+it("Home offers one existing command per known blocker and nothing for unknown codes", () => {
+  reset({ ready: false });
+  launcher.playReadiness.blockers = [
+    { code: "launch_runtime_not_ready", message: "The required managed Java runtime is not installed." },
+    { code: "launch_authentication_required", message: "Select a Minecraft account before playing." },
+    { code: "launch_instance_damaged", message: "The selected instance failed complete content validation." },
+    { code: "launch_unknown_future", message: "Something new." },
+  ];
+  const view = html(Home);
+  for (const label of ["Install Java", "Accounts", "Open instance"]) assert.match(view, new RegExp(`>${label}</button>`));
+  assert.equal((view.match(/<details/g) ?? []).length, 1);
+  assert.match(view, /Something new\.<\/span>\s*<!--\[-1--><!--\]--><\/li>/);
+});

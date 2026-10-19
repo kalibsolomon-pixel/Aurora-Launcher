@@ -4,6 +4,7 @@
   import {
     configurationLabel,
     instanceContentStatus,
+    instanceProgressLabel,
   } from "$lib/launcher/instanceStatus";
   import { getAuroraCompatibility, type AuroraCompatibility, type InstanceLoader, type InstanceSummary } from "$lib/backend";
   import { creationPlatforms, creationBlocked } from "$lib/instances/configurationChoices";
@@ -65,7 +66,7 @@
     const decision = instanceContentStatus(
       instance,
       launcher.instanceValidations[instance.id],
-      launcher.createBusy ? (launcher.createProgress?.phase ?? null) : null,
+      launcher.createBusy ? instanceProgressLabel(launcher.createProgress) : null,
     );
     // Installing rows keep the badge; otherwise a not-installed summary is
     // only meaningful with the validation detail beside it.
@@ -76,12 +77,11 @@
   }
 
   function statusDetail(instance: InstanceSummary): string | null {
+    if (instance.state === "installing" && launcher.createBusy) return instanceProgressLabel(launcher.createProgress);
     if (instance.recovery) return instance.recovery.message;
     const validation = launcher.instanceValidations[instance.id];
     if (instance.state === "installing") {
-      return launcher.createBusy && launcher.createProgress
-        ? launcher.createProgress.phase
-        : instance.pack
+      return instance.pack
           ? "This modpack did not finish installing and is unavailable. Review its files before recovery."
           : "This instance did not finish installing — retry below.";
     }
@@ -129,7 +129,7 @@
       </div>
       {#if launcher.createBusy}
         <span class="status-badge status-working">
-          {launcher.createProgress ? launcher.createProgress.phase : "Working"}
+          Installing
         </span>
       {/if}
     </div>
@@ -248,13 +248,8 @@
         >
           {launcher.createBusy ? "Creating…" : "Create instance"}
         </button>
-        {#if launcher.createBusy && launcher.createProgress}
-          <span class="group-row-detail">
-            {launcher.createProgress.phase}
-            {#if launcher.createProgress.game}
-              · {launcher.createProgress.game.completedItems}/{launcher.createProgress.game.totalItems}
-            {/if}
-          </span>
+        {#if launcher.createBusy}
+          <span class="group-row-detail" role="status">{instanceProgressLabel(launcher.createProgress)}</span>
         {/if}
       </div>
     </form>
@@ -350,7 +345,7 @@
                 Select
               </button>
             {/if}
-            {#if instance.state === "installing" && !instance.pack}
+            {#if instance.state === "installing" && !instance.pack && !launcher.createBusy}
               <button
                 type="button"
                 class="btn"
@@ -440,6 +435,8 @@
   /* Zero instances: creation is the primary task, centered as the page's
      single form, with only a compact instances note below it. */
   .instances-composition.creation-first { grid-template-columns: minmax(0, min(100%, 880px)); justify-content: center; }
+  /* The page header shares the centered creation column's edge. */
+  .instances-page:has(.creation-first) { max-width: 880px; }
   .instances-composition > .group { min-width: 0; margin: 0; }
   .instances-composition :global(.field-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .group-form { gap: var(--space-4); padding: var(--space-4) var(--space-5) var(--space-5); }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { launcher } from "$lib/launcher/store.svelte";
-  import { configurationRequiresInstall, draftIsDirty } from "$lib/launcher/instanceStatus";
+  import { configurationRequiresInstall, draftIsDirty, instanceProgressLabel, runtimeProgressLabel } from "$lib/launcher/instanceStatus";
   import { deleteInstance, type InstanceConfiguration, type InstanceSummary } from "$lib/backend";
   import { navigation } from "$lib/launcher/navigation.svelte";
   import { maintainInstallationBackups } from "$lib/backend";
@@ -72,7 +72,7 @@
     const status = launcher.runtimeStatus;
     if (launcher.runtimeBusy && status?.instanceId === instance.id) {
       return launcher.runtimeProgress
-        ? `${launcher.runtimeProgress.phase} ${launcher.runtimeProgress.completedItems}/${launcher.runtimeProgress.totalItems}`
+        ? runtimeProgressLabel(launcher.runtimeProgress)
         : null;
     }
     if (!status || status.instanceId !== instance.id) return null;
@@ -306,12 +306,7 @@
           </button>
         {/if}
         {#if launcher.detailInstallBusy === instance.id && launcher.createProgress}
-          <span class="group-row-detail">
-            {launcher.createProgress.phase}
-            {#if launcher.createProgress.game}
-              · {launcher.createProgress.game.completedItems}/{launcher.createProgress.game.totalItems}
-            {/if}
-          </span>
+          <span class="group-row-detail" role="status">{instanceProgressLabel(launcher.createProgress)}</span>
         {/if}
       </div>
     </form>

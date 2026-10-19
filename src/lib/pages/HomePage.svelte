@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { launcher } from "$lib/launcher/store.svelte";
   import { navigation } from "$lib/launcher/navigation.svelte";
+  import { accountManager } from "$lib/launcher/accountManager.svelte";
   import { updates } from "$lib/launcher/updates.svelte";
   import { isUpdateAvailable } from "$lib/launcher/updatePresentation";
   import InstanceSwitcher from "$lib/launcher/InstanceSwitcher.svelte";
@@ -25,6 +26,17 @@
 
   const launch = $derived(homeLaunchState(instance?.id ?? null, readiness, process,
     launcher.playBusy, launcher.playReadinessBusy, launcher.instanceBusy !== null || launcher.accountBusy !== null));
+
+  // The single next step for a Rust-reported blocker, reusing existing
+  // commands and destinations. Unknown codes offer only "Check again".
+  function blockerAction(code: string): { label: string; disabled: boolean; run: () => void } | null {
+    if (!instance) return null;
+    const id = instance.id;
+    if (code === "launch_runtime_not_ready") return { label: launcher.runtimeBusy ? "Installing Java…" : "Install Java", disabled: launcher.runtimeBusy || launcher.playBusy, run: () => void launcher.runEnsureRuntime(id) };
+    if (code === "launch_authentication_required") return { label: "Accounts", disabled: false, run: () => accountManager.show() };
+    if (code === "launch_instance_not_ready" || code === "launch_instance_damaged") return { label: "Open instance", disabled: false, run: () => navigation.openInstance(id) };
+    return null;
+  }
 
   const updateNotice = $derived(isUpdateAvailable(updates.overview?.launcher.availability) ||
     (updates.overview?.clientInstanceId === instance?.id && isUpdateAvailable(updates.overview?.client)));
@@ -91,21 +103,27 @@
       </div>
     </section>
   {:else if !instance}
+    <!-- The empty launch states keep Home's launch surface, so first run has
+         the same composition (one primary panel, widgets below) as daily use. -->
     {#if launcher.launcherState.instances.length === 0}
-      <section class="empty-state" aria-live="polite">
-        <h3 class="empty-title">No instances yet</h3>
-        <p class="empty-detail">
-          Create an isolated Minecraft installation to get started.
-        </p>
-        <button type="button" class="btn btn-primary" onclick={() => navigation.goTo("instances")}>
-          Create instance
-        </button>
+      <section class="home-composition home-empty" aria-live="polite">
+        <div class="empty-state">
+          <h3 class="empty-title">No instances yet</h3>
+          <p class="empty-detail">
+            Create an isolated Minecraft installation to get started.
+          </p>
+          <button type="button" class="btn btn-primary" onclick={() => navigation.goTo("instances")}>
+            Create instance
+          </button>
+        </div>
       </section>
     {:else}
-      <section class="empty-state" aria-live="polite">
-        <h3 class="empty-title">No instance selected</h3>
-        <p class="empty-detail">Choose an instance to launch from.</p>
-        <InstanceSwitcher />
+      <section class="home-composition home-empty" aria-live="polite">
+        <div class="empty-state">
+          <h3 class="empty-title">No instance selected</h3>
+          <p class="empty-detail">Choose an instance to launch from.</p>
+          <div class="empty-switcher"><InstanceSwitcher /></div>
+        </div>
       </section>
     {/if}
   {:else}
@@ -137,10 +155,18 @@
       {#if launch.blockers.length || launcher.playError || launch.failure}
         <div class="group-row">
           <div class="group-row-main">
-            {#each launch.blockers as blocker (blocker.code)}
-              <p class="group-row-detail">{blocker.message}</p>
-              <details><summary>Technical details</summary><code>{blocker.code}</code></details>
-            {/each}
+            {#if launch.blockers.length}
+              <ul class="blocker-list">
+                {#each launch.blockers as blocker, index (`${blocker.code}-${index}`)}
+                  {@const action = blockerAction(blocker.code)}
+                  <li>
+                    <span class="group-row-detail">{blocker.message}</span>
+                    {#if action}<button type="button" class="btn btn-quiet" disabled={action.disabled} onclick={action.run}>{action.label}</button>{/if}
+                  </li>
+                {/each}
+              </ul>
+              <details><summary>Technical details</summary>{#each launch.blockers as blocker, index (`${blocker.code}-${index}`)}<code>{blocker.code}</code> {/each}</details>
+            {/if}
             {#if launcher.playError}
               <p class="inline-message inline-message-error" role="alert">{launcher.playError.message}</p>
               <details><summary>Technical details</summary><code>{launcher.playError.code}</code></details>
@@ -171,9 +197,18 @@
   .instance-heading h1 { margin: 0; font-size: 2rem; line-height: 1.2; font-weight: 650; letter-spacing: -.035em; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .instance-metadata { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); margin: var(--space-3) 0 0; color: var(--color-text-secondary); font-size: var(--text-metadata); line-height: 1.6; overflow-wrap: anywhere; }
   .instance-metadata span + span::before { content: '·'; margin-right: var(--space-3); color: var(--color-text-muted); }
-  .instance-card { width: min(100%, 320px); aspect-ratio: 4 / 1; min-height: 4rem; min-width: 0; margin: 0; position: relative; z-index: 2; }
+  /* 400px keeps ordinary instance names whole beside "Launch"; height stays the original 80px. */
+  .instance-card { width: min(100%, 400px); height: 80px; min-height: 4rem; min-width: 0; margin: 0; position: relative; z-index: 2; }
+  .home-composition.home-empty { grid-template-columns: minmax(0, 1fr); min-height: 0; align-items: start; }
+  .home-empty .empty-state { padding: var(--space-3) var(--space-2); }
+  .home-empty .empty-title { font-size: 1.375rem; letter-spacing: -.02em; }
+  .empty-switcher { width: min(100%, 360px); }
   .launch-readiness { display: inline-flex; align-items: center; gap: var(--space-2); margin: calc(var(--space-2) * -1) 0 0; padding: 0; background: none; font-size: var(--text-secondary); font-weight: 500; }
   .launch-readiness::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .blocker-list { display: grid; gap: var(--space-2); margin: 0 0 var(--space-2); padding: 0; list-style: none; }
+  .blocker-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; min-height: 36px; }
+  .blocker-list .btn { padding-block: 6px; }
+  .launch-feedback details code { margin-right: var(--space-2); }
   .launch-feedback { grid-column: 1 / -1; width: 100%; min-width: 0; margin: 0; border-top: 1px solid var(--f-edge); overflow-wrap: anywhere; }
   .launch-feedback :global(.group-row), .launch-feedback :global(.group-footer) { padding: var(--space-4) 0 0; }
   @media (max-width: 800px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: var(--space-4); } .home-launch-column { gap: var(--space-4); padding-block: var(--space-2); } }

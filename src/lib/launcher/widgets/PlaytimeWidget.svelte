@@ -34,14 +34,17 @@
   onMount(() => { if (!initialFixture) void load(); });
 </script>
 
+<!-- Range choice only means something once any playtime exists. -->
+{#if !(summary && summary.allTimeMs === 0 && !loading && !error)}
 <div class="range" role="group" aria-label="Playtime range">
   <button type="button" class:active={range === "7d"} aria-pressed={range === "7d"} onclick={() => range = "7d"}>7D</button>
   <button type="button" class:active={range === "30d"} aria-pressed={range === "30d"} onclick={() => range = "30d"}>30D</button>
   <button type="button" class:active={range === "all"} aria-pressed={range === "all"} onclick={() => range = "all"}>All</button>
 </div>
+{/if}
 {#if error}<p role="alert" class="error">{error}</p>
 {:else if loading}<p class="note">Loading playtime…</p>
-{:else if !summary || summary.allTimeMs === 0}<p class="note">No playtime recorded yet.</p>
+{:else if !summary || summary.allTimeMs === 0}<p class="note widget-empty">No playtime recorded yet.</p>
 {:else}
   <p class="total">{formatPlaytime(total ?? 0)}</p>
   <p class="note">{range === "7d" ? "Past 7 days" : range === "30d" ? "Past 30 days" : "All recorded time"} · UTC</p>
