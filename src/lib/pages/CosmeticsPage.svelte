@@ -167,7 +167,7 @@
   </div>
 </div>
 
-<dialog class="cosmetic-dialog" bind:this={dialog} aria-labelledby="cosmetic-dialog-title" oncancel={event=>{if(cosmetics.localBusy)event.preventDefault();else mode=null;}} onclose={()=>mode=null}>
+<dialog class="cosmetic-dialog aurora-dialog" bind:this={dialog} aria-labelledby="cosmetic-dialog-title" oncancel={event=>{if(cosmetics.localBusy)event.preventDefault();else mode=null;}} onclose={()=>mode=null}>
   <form onsubmit={saveDialog}>
     <h3 id="cosmetic-dialog-title">{mode==='import'?'Import a skin':mode==='rename'?'Rename saved skin':mode==='apply'?'Apply skin to account?':mode==='cape'?'Change account cape?':'Remove saved skin?'}</h3>
     {#if mode==='import'}
@@ -251,8 +251,7 @@
   .service-message { padding:12px 14px; margin-bottom:14px; font-size:12px; line-height:1.6; color:var(--color-text); border:1px solid var(--color-border-strong); background:var(--color-surface-sunken); border-radius:12px; }
   .service-message p { margin:0; }
   .service-message span { color:var(--color-text-secondary); }
-  .cosmetic-dialog { width:min(460px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow-y:auto; box-sizing:border-box; padding:26px; border:1px solid var(--f-edge); border-radius:22px; background:var(--f-dialog-panel); backdrop-filter:var(--f-blur); color:var(--color-text); box-shadow:var(--f-shadow); }
-  .cosmetic-dialog::backdrop { background:var(--f-dialog-dim); }
+  .cosmetic-dialog { width:min(460px,calc(100vw - 32px)); }
   form { display:grid; gap:16px; }
   form p { font-size:13px; line-height:1.6; margin:0; color:var(--color-text-secondary); }
   form label { display:grid; gap:7px; font-size:12px; }

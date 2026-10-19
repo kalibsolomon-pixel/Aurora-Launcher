@@ -157,7 +157,7 @@
             onDraftChange();
           }} disabled={draft.auroraEnabled}>
             {#each launcher.launcherState?.platformCapabilities ?? [] as capability (capability.kind)}
-              {#if capability.canInstall}<option value={capability.kind}>{capability.kind === "fabric" ? "Fabric" : capability.kind === "neoForge" ? "NeoForge" : capability.kind === "forge" ? "Forge" : capability.kind}</option>{/if}
+              {#if capability.canInstall}<option value={capability.kind}>{capability.kind === "fabric" ? "Fabric" : capability.kind === "neoForge" ? "NeoForge" : capability.kind === "forge" ? "Forge" : capability.kind === "vanilla" ? "Vanilla" : capability.kind}</option>{/if}
             {/each}
           </select>
           <span class="field-hint">{draft.auroraEnabled ? "The original Aurora association requires Fabric. Manage Aurora content in Mods." : "Changing the platform requires installing new content."}</span>
@@ -347,9 +347,9 @@
   </section>
 </aside>
 </div>
-<dialog bind:this={deleteDialog} class="delete-dialog" oncancel={(event) => { if (deleting) event.preventDefault(); }} onclose={() => deleteTrigger?.focus()}>
+<dialog bind:this={deleteDialog} class="delete-dialog aurora-dialog" aria-labelledby="delete-instance-title" oncancel={(event) => { if (deleting) event.preventDefault(); }} onclose={() => deleteTrigger?.focus()}>
   <form onsubmit={(event) => { event.preventDefault(); void removeInstance(); }}>
-    <h3>Delete {instance.displayName}?</h3>
+    <h3 id="delete-instance-title">Delete {instance.displayName}?</h3>
     <p>All worlds, mods, packs, configuration and logs in this isolated instance will be permanently deleted. This cannot be undone.</p>
     <label class="field"><span class="field-label">Type {instance.displayName} to confirm</span><input bind:value={confirmation} autocomplete="off" disabled={deleting} /></label>
     {#if deletionError}<p role="alert" class="inline-message inline-message-error">{deletionError}</p>{/if}
@@ -370,8 +370,7 @@
   .tool-disclosure summary { cursor: pointer; color: var(--color-text); font-weight: 500; padding-block: 2px; }
   .tool-disclosure[open] summary { margin-bottom: var(--space-2); }
   .tool-disclosure .btn { margin-top: var(--space-3); }
-  .delete-dialog { max-width: 520px; width: calc(100vw - 64px); padding: var(--space-5); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); color: var(--color-text); background: var(--color-surface-raised); }
-  .delete-dialog::backdrop { background: #0009; }
+  .delete-dialog { max-width: 520px; width: calc(100vw - 64px); }
   .delete-dialog .tool-actions { margin-top: var(--space-4); justify-content: end; }
   @media (max-width: 1250px) { .instance-settings-composition { grid-template-columns: 1fr; } .settings-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); } }
   @media (max-width: 850px) { .settings-grid, .settings-tools { grid-template-columns: 1fr; } }

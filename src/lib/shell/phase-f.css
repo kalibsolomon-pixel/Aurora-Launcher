@@ -114,8 +114,8 @@
 .aurora-shell .content { min-width: 0; padding: 24px var(--f-space-stage) 40px; overflow: auto; scrollbar-gutter: stable; }
 .f-pilot .group, .f-surface { background: var(--f-panel); border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); box-shadow: var(--f-shadow); backdrop-filter: var(--f-blur); }
 .f-pilot.page { padding: 0; }
-.f-pilot .btn, .aurora-shell dialog .btn { border-radius: var(--f-radius-control); transition: background-color var(--f-fast) ease, border-color var(--f-fast) ease, color var(--f-fast) ease, transform 160ms var(--f-ease); }
-.f-pilot .btn:active:not(:disabled), .aurora-shell dialog .btn:active:not(:disabled), .f-icon-button:active:not(:disabled) { transform: scale(.97); }
+.f-pilot .btn, dialog .btn { border-radius: var(--f-radius-control); transition: background-color var(--f-fast) ease, border-color var(--f-fast) ease, color var(--f-fast) ease, transform 160ms var(--f-ease); }
+.f-pilot .btn:active:not(:disabled), dialog .btn:active:not(:disabled), .f-icon-button:active:not(:disabled) { transform: scale(.97); }
 .f-icon-button { width: 40px; height: 40px; padding: 0; display: inline-grid; place-items: center; flex: none; border: 1px solid var(--f-edge); border-radius: 12px; color: var(--color-text-secondary); background: rgb(13 19 29 / 65%); cursor: pointer; transition: background-color var(--f-fast) ease, color var(--f-fast) ease, transform 160ms var(--f-ease); }
 .f-icon-button:hover { background: var(--color-surface-hover); color: var(--color-text); }
 .aurora-shell button:focus-visible, .f-pilot input:focus-visible, .f-pilot select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
@@ -127,7 +127,7 @@
 .f-pilot .page-subtitle { margin-top: 6px; }
 .f-pilot .group-row-detail { line-height: 1.5; }
 @media (max-width: 800px) { :root { --f-rail-width: 96px; } .aurora-shell .content { padding: 16px 20px 28px; } .aurora-shell .sidebar { padding-inline: 6px; } }
-@media (prefers-reduced-motion: reduce) { .f-pilot *, .rail-link, .f-tooltip, .f-icon-button, .aurora-shell dialog .btn, .aurora-shell .account-chip { transition: none !important; } .f-pilot .btn:active:not(:disabled), .aurora-shell dialog .btn:active:not(:disabled), .f-icon-button:active:not(:disabled), .rail-link:active, .aurora-shell .account-chip:active { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .f-pilot *, .rail-link, .f-tooltip, .f-icon-button, dialog .btn, .aurora-shell .account-chip { transition: none !important; } .f-pilot .btn:active:not(:disabled), dialog .btn:active:not(:disabled), .f-icon-button:active:not(:disabled), .rail-link:active, .aurora-shell .account-chip:active { transform: none; } }
 @media (prefers-reduced-transparency: reduce) { :root[data-background="borealis"] { --f-panel: var(--color-surface); --f-content-panel: var(--color-surface); --f-blur: none; --f-dialog-panel: var(--color-background); --f-dialog-group: var(--color-surface); --f-accent-fill: var(--color-accent-strong); --f-accent-fill-hover: var(--color-accent-hover); --f-accent-fill-pressed: var(--color-accent-pressed); --f-accent-edge: var(--color-accent-strong); --f-accent-inset: none; --f-accent-shadow: none; --f-accent-blur: none; --f-logo-opacity: 1; --f-logo-ground: none; } }
 @media (prefers-reduced-transparency: reduce) { :root[data-background="borealis"] .home-page { --f-panel: var(--color-surface); --f-shadow: none; } }
 
@@ -246,3 +246,15 @@
 /* One empty-state voice for every Home widget: same size, color and rhythm,
    so neighbouring cards align instead of each inventing its own margins. */
 .home-widgets .widget .widget-empty { margin: 0; color: var(--color-text-secondary); font-size: var(--text-secondary); line-height: 1.5; }
+
+/* Shared modal dialog: the UI-4 Appearance dialog material, used by every
+   centered confirmation/edit dialog so they share one surface, radius,
+   backdrop and entrance. Modals scale from center (not trigger-anchored). */
+.aurora-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; margin: auto; padding: 26px; border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-dialog-panel); background-color: var(--color-surface-raised); backdrop-filter: var(--f-blur); color: var(--color-text); box-shadow: var(--f-shadow); }
+.aurora-dialog::backdrop { background: var(--f-dialog-dim); }
+.aurora-dialog[open] { animation: aurora-dialog-enter 180ms var(--f-ease); }
+.aurora-dialog h3 { margin: 0 0 12px; font-size: 1.0625rem; letter-spacing: -.01em; }
+.aurora-dialog p { color: var(--color-text-secondary); line-height: 1.6; }
+@keyframes aurora-dialog-enter { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes aurora-dialog-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .aurora-dialog[open] { animation: aurora-dialog-fade 120ms ease-out; } }

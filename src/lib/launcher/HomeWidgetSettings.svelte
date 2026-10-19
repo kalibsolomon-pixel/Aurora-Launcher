@@ -37,7 +37,7 @@
 </section>
 <SettingsFeedback busy={homeWidgets.busy && !!homeWidgets.layout} error={homeWidgets.error} {saved}
   retryLabel={retryOperation ? 'Retry save' : 'Retry loading'} retry={() => retryOperation ? void save(retryOperation) : void homeWidgets.load()} />
-<dialog bind:this={resetDialog} class="settings-dialog" aria-labelledby="reset-widgets-title" onclose={() => resetTrigger?.focus()}>
+<dialog bind:this={resetDialog} class="settings-dialog aurora-dialog" aria-labelledby="reset-widgets-title" onclose={() => resetTrigger?.focus()}>
   <h3 id="reset-widgets-title">Reset Home layout?</h3>
   <p>This restores default widget visibility, positions and sizes. It does not erase your play history or appearance library.</p>
   <div class="dialog-actions"><button bind:this={resetCancel} class="btn btn-quiet" type="button" onclick={() => resetDialog.close()}>Cancel</button>
