@@ -1,6 +1,7 @@
 {
   "productName": "Aurora Launcher Private Test Candidate",
-  "version": "1.4.2-private.20261019.2",
+  "mainBinaryName": "aurora-launcher-private-candidate",
+  "version": "1.4.2-private.20261019.3",
   "identifier": "com.aurora.launcher.private-candidate",
   "app": {
     "windows": [{

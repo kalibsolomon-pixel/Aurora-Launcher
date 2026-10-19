@@ -45,6 +45,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("acceptance root is too long")?,
         ),
     );
+    let near_long_root = long_base.data_root().join(
+        "a".repeat(
+            249usize
+                .checked_sub(base_length + 1)
+                .ok_or("acceptance root is too long")?,
+        ),
+    );
     let mut rows = Vec::new();
     for (name, target) in [
         ("short", managed.clone()),
@@ -57,6 +64,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ManagedPaths::from_app_local_data_dir(root.join("Java-é-日本語"))?,
         ),
         ("long", ManagedPaths::from_app_local_data_dir(long_root)?),
+        (
+            "near-long",
+            ManagedPaths::from_app_local_data_dir(near_long_root)?,
+        ),
     ] {
         if name != "short" {
             copy_tree(
@@ -71,6 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             runtime::install::DEFAULT_JAVA_DIAGNOSTIC_TIMEOUT,
         )
         .await?;
+        let reports_before = crash_reports()?;
         let explicit = runtime::validate_runtime(
             &target,
             &plan,
@@ -80,8 +92,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
         let eligibility = runtime::install::validate_runtime_eligibility(&target, &plan).await?;
         assert_eq!(explicit.status, eligibility.status);
+        assert_eq!(
+            crash_reports()?,
+            reports_before,
+            "diagnostics must not leave crash files in the launcher's working directory"
+        );
         let inherited = tokio::process::Command::new(plan.diagnostic_executable_path(&target))
             .arg("-version")
+            .current_dir(&root)
             .output()
             .await;
         let row = serde_json::json!({"scenario":name,"root":target.data_root(),
@@ -89,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "executable":plan.diagnostic_executable_path(&target),
             "executableUtf16Length":plan.diagnostic_executable_path(&target).to_string_lossy().encode_utf16().count(),
             "integrityOnly":bytes.status.as_str(),"explicit":explicit.status.as_str(),"launchEligibility":eligibility.status.as_str(),"problems":explicit.problems,
-            "diagnostic":explicit.diagnostic.map(|d|d.summary),"inheritedExit":inherited.as_ref().ok().and_then(|o|o.status.code()),
+            "diagnostic":explicit.diagnostic.map(|d|d.summary),"diagnosticCrashFilesCreated":0,"inheritedExit":inherited.as_ref().ok().and_then(|o|o.status.code()),
             "inheritedOutput":inherited.as_ref().map(|o|String::from_utf8_lossy(&o.stderr).into_owned()).unwrap_or_else(|e|e.to_string())});
         println!("{row}");
         rows.push(row);
@@ -127,6 +145,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     rows.push(serde_json::json!({"scenario":"missing executable, malformed metadata, then restored original bytes", "recovered":"ready"}));
     std::fs::write(root.join("results.json"), serde_json::to_vec_pretty(&rows)?)?;
     Ok(())
+}
+
+fn crash_reports() -> std::io::Result<std::collections::BTreeSet<std::ffi::OsString>> {
+    std::fs::read_dir(std::env::current_dir()?)?
+        .filter_map(|entry| match entry {
+            Ok(entry)
+                if entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("hs_err_pid")
+                    || entry.file_name().to_string_lossy().ends_with(".mdmp") =>
+            {
+                Some(Ok(entry.file_name()))
+            }
+            Ok(_) => None,
+            Err(error) => Some(Err(error)),
+        })
+        .collect()
 }
 
 fn copy_tree(source: &std::path::Path, target: &std::path::Path) -> std::io::Result<()> {

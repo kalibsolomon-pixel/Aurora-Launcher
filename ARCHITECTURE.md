@@ -17,7 +17,9 @@ path advice. No runtime fallback, version change or system-Java selection occurs
 
 The opt-in `private-candidate` feature and `tauri.private.conf.json` overlay must
 be used together. They select a distinct installer/application identity, shortcut
-name and OS credential namespace. Launcher updates remain unconfigured even on a
+name, executable filename and OS credential namespace. The distinct binary name
+also isolates NSIS's process-name-based running-app termination check. Launcher
+updates remain unconfigured even on a
 host with a production verification key; signature verification is unchanged in
 ordinary builds. Client authority is unchanged. Only the private package supports
 the explicit `AURORA_PRIVATE_DATA_ROOT` environment override for isolated path

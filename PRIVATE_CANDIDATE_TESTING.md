@@ -3,13 +3,15 @@
 Build committed source with `powershell -ExecutionPolicy Bypass -File tools/release/private-candidate.ps1`.
 This uses the normal Tauri NSIS workflow and never runs publication tooling.
 The base production version stays 1.4.2. The private overlay identifies
-`1.4.2-private.20261019.2`, product **Aurora Launcher Private Test Candidate**,
+`1.4.2-private.20261019.3`, product **Aurora Launcher Private Test Candidate**,
 identifier `com.aurora.launcher.private-candidate`. It requires the paired Cargo
 feature; ordinary production configuration and identity are unchanged.
 
 Install the private setup executable. Its default per-user installation folder,
 Start menu entry, optional Desktop shortcut, WebView profile and managed data are
 separate. Data defaults to `%LOCALAPPDATA%\com.aurora.launcher.private-candidate`.
+The installed executable is `aurora-launcher-private-candidate.exe`, so NSIS's
+process-name check cannot target the production `aurora-launcher.exe`.
 Secure refresh credentials use `com.aurora.launcher.private-candidate/account/…`
 in Windows Credential Manager. Sign in independently through the system browser;
 never copy the production account store or tokens. The portable executable uses
