@@ -26,13 +26,28 @@ remain ineligible for heap conclusions. Retain 2048 MiB, ergonomic initial heap,
 managed game-plan-authoritative Java and default G1 until new evidence justifies
 a change. The Efficient 1536 MiB advice is a heuristic, not measured superiority.
 
-Current dependency: execute Client C-PERF.2B, then profile Client attribution.
-Launcher phases D–J will audit current runtime/argument/readiness boundaries,
-evaluate a bounded justified JVM matrix, validate or retain presets, investigate
-Launcher process-family startup/idle overhead and test the combined system.
+Client Phase B is complete: two pairs rejected bounded re-parking after repeated
+deadline-tail regression; production PARK/500 is retained. Client commit `9513af4`
+adds a profile-attributed single-entry world-key cache; 548 tests pass and a
+six-process Java 21 diagnostic removes stable-call allocation (no FPS claim).
+
+Phase D audit is complete in `PERFORMANCE_CONFIGURATION_AUDIT.md`; retain existing
+authorities and controls. Phase E criteria were committed before preparation in
+`JVM_PERFORMANCE_INITIATIVE_PROTOCOL.md`: A/B/C/C/B/A = G1 2048 / G1 1536 /
+generational ZGC 2048 MiB, Java-chosen initial heap. Six fresh inputs are prepared
+under Client `run/jvm-initiative`. Run 1 is warming up. No primary results yet.
+Continue F–J: validate or retain advice policies, investigate Launcher process-family
+startup/idle overhead and test the combined system.
 No launch-time limiter belongs here. Existing tools under `tools/benchmark/` are
 reused read-only for the Client comparison. Physical presentation and input latency
 remain distinct from Overlay's internal HUD callback timing.
+
+Current checks: 986 Rust library + 6 integration tests passed (31 explicitly
+ignored), frontend check 0 errors/warnings, frontend build and current embedded
+debug native build passed. Parallel frontend run had Vite SSR module-loader
+timeouts; all 282 tests passed with `--test-concurrency=1`. Both logs are preserved
+under `.git/performance-initiative/validation`. This is a local test workaround,
+not an accepted production defect or a product change. No heavy work during captures.
 
 **AURORA CLIENT HANDOFF: NOT YET REQUIRED** — the Client work is already authorized
 and executing in its own repository; no additional Client source fix is established.
