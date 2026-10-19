@@ -357,8 +357,7 @@ impl InstanceConfiguration {
         validate_memory_mib(self.memory_mib)?;
         self.validated_jvm_arguments()?;
         if let Some(window) = self.window {
-            validate_window_dimension("width", window.width)?;
-            validate_window_dimension("height", window.height)?;
+            window.validate()?;
         }
         Ok(())
     }
@@ -458,6 +457,11 @@ impl WindowConfiguration {
 
     pub fn height(&self) -> u16 {
         self.height
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), InvalidInstanceConfiguration> {
+        validate_window_dimension("width", self.width)?;
+        validate_window_dimension("height", self.height)
     }
 }
 
@@ -1115,6 +1119,39 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<InstanceConfiguration>(&json).unwrap(),
             config
+        );
+    }
+
+    #[test]
+    fn optional_window_persistence_requires_a_complete_valid_pair() {
+        let mut value = serde_json::to_value(configuration()).unwrap();
+        for window in [
+            serde_json::Value::Null,
+            serde_json::json!({"width": 1024, "height": 576}),
+        ] {
+            value["window"] = window.clone();
+            let decoded: InstanceConfiguration = serde_json::from_value(value.clone()).unwrap();
+            decoded.validate().unwrap();
+            assert_eq!(serde_json::to_value(decoded).unwrap()["window"], window);
+        }
+        value.as_object_mut().unwrap().remove("window");
+        let absent: InstanceConfiguration = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(absent.window(), None);
+        for window in [
+            serde_json::json!({"width": 1280}),
+            serde_json::json!({"height": 720}),
+            serde_json::json!({"width": -1, "height": 720}),
+            serde_json::json!({"width": 1280, "height": 70000}),
+        ] {
+            value["window"] = window;
+            assert!(serde_json::from_value::<InstanceConfiguration>(value.clone()).is_err());
+        }
+        value["window"] = serde_json::json!({"width": 0, "height": 720});
+        assert!(
+            serde_json::from_value::<InstanceConfiguration>(value)
+                .unwrap()
+                .validate()
+                .is_err()
         );
     }
 

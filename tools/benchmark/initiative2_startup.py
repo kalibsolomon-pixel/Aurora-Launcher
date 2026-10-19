@@ -51,7 +51,7 @@ def visible(pid):
     return found
 
 
-def launch(root, name, variant, timeout=240):
+def launch(root, name, variant, timeout=240, expect_probes=True):
     assert (root / 'DISPOSABLE-RESEARCH.txt').is_file()
     assert variant in ['reference', 'candidate', 'final']
     assert 30 <= timeout <= 1800
@@ -68,6 +68,7 @@ def launch(root, name, variant, timeout=240):
         reader = Reader(process.pid)
         record = dict(pid=process.pid, creationId=reader.creation_id, beforeSpawnQpcNs=before,
                       afterSpawnQpcNs=after, variant=variant, cacheState='Warm OS caches; shared isolated WebView profile',
+                      researchProbesExpected=expect_probes,
                       utc=dt.datetime.now(dt.timezone.utc).isoformat())
         (directory / 'process.json').write_text(json.dumps(record, indent=2))
         print(json.dumps(record), flush=True)
@@ -90,7 +91,10 @@ def launch(root, name, variant, timeout=240):
         record.update(exitCode=process.returncode, firstVisibleWindow=window, timeout=timedout,
                       endQpcNs=time.perf_counter_ns())
         (directory / 'process.json').write_text(json.dumps(record, indent=2))
-        print(json.dumps(dict(exitCode=process.returncode, traceBytes=(directory / 'native-trace.json').stat().st_size)), flush=True)
+        trace = directory / 'native-trace.json'
+        if expect_probes: assert trace.is_file(), 'Expected research trace was not exported'
+        else: assert not trace.exists(), 'Ordinary build unexpectedly exported research probes'
+        print(json.dumps(dict(exitCode=process.returncode, traceBytes=trace.stat().st_size if trace.exists() else None)), flush=True)
 
 
 if __name__ == '__main__':
@@ -101,6 +105,8 @@ if __name__ == '__main__':
     run = sub.add_parser('run')
     run.add_argument('root', type=Path); run.add_argument('name'); run.add_argument('--variant', default='reference')
     run.add_argument('--timeout', type=int, default=240)
+    run.add_argument('--without-research-probes', action='store_true',
+                     help='Explicit ordinary-build validation; assert no research trace is emitted')
     args = parser.parse_args()
     if args.action == 'prepare': prepare(args.root.resolve(), args.source.resolve(), args.executable.resolve())
-    else: launch(args.root.resolve(), args.name, args.variant, args.timeout)
+    else: launch(args.root.resolve(), args.name, args.variant, args.timeout, not args.without_research_probes)
