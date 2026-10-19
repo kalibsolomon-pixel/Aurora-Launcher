@@ -4,7 +4,10 @@ import { invoke } from "@tauri-apps/api/core";
 const enabled = import.meta.env?.MODE === "performance-p0-2";
 type Event = "initialize" | "runtimeRequest" | "runtimeComplete" | "readinessRequest" |
   "readinessComplete" | "checking" | "ready" | "readinessDiscarded" | "playRequest" |
-  "playComplete" | "instanceGeneration" | "accountGeneration" | "ipcRequest" | "ipcComplete" | "frontendOverflow";
+  "playComplete" | "instanceGeneration" | "accountGeneration" | "ipcRequest" | "ipcComplete" | "frontendOverflow" |
+  "statusRequest" | "statusComplete" | "stateRequest" | "stateComplete" |
+  "releasesRequest" | "releasesComplete" | "accountsRequest" | "accountsComplete" |
+  "homePaint" | "readyPaint" | "homeUsable";
 export interface Probe { correlation: number; instanceGeneration: number; accountGeneration: number }
 let sequence = 0;
 let instanceGeneration = 0;

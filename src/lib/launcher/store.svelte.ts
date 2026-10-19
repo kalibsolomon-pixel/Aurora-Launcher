@@ -209,6 +209,7 @@ class LauncherStore {
 
   private initialized = false;
   private stateSerial = 0;
+  private pendingStateReload: Promise<void> | null = null;
   private unsubscribers: (() => void)[] = [];
 
   get selectedInstance(): InstanceSummary | null {
@@ -249,28 +250,42 @@ class LauncherStore {
       request: Promise<void>; serial: number; instanceId: string | null | undefined;
       accountId: string | null; revision: number; inputs: string;
     } | undefined;
+    mark("statusRequest");
     try {
       this.status = await getApplicationStatus();
     } catch (cause: unknown) {
       this.statusError = backendError(cause, "The launcher status could not be loaded.");
+    } finally {
+      mark("statusComplete");
     }
 
     const stateSerial = ++this.stateSerial;
+    mark("stateRequest");
     try {
       const state = await getLauncherState();
       if (stateSerial === this.stateSerial) { this.launcherState = state; this.stateError = null; }
-      const selected = this.selectedInstance;
-      if (selected?.state === "ready") runtimeCheck = this.refreshRuntimeStatus(selected.id);
     } catch (cause: unknown) {
       if (stateSerial === this.stateSerial) this.stateError = backendError(cause, "The launcher state could not be loaded.");
+    } finally {
+      mark("stateComplete");
     }
+    // Update discovery or a focus refresh can supersede the initial snapshot
+    // before it returns. Wait for the winning read before looking up selection;
+    // otherwise startup skips both runtime and readiness and never retries.
+    while (this.pendingStateReload) await this.pendingStateReload;
+    const selected = this.selectedInstance;
+    if (selected?.state === "ready") runtimeCheck = this.refreshRuntimeStatus(selected.id);
 
+    mark("releasesRequest");
     try {
       this.releases = await listAuroraReleases();
     } catch (cause: unknown) {
       this.releasesError = backendError(cause, "The Aurora release list failed.");
+    } finally {
+      mark("releasesComplete");
     }
 
+    mark("accountsRequest");
     try {
       this.accountsState = await getAccounts();
       this.hydrateCachedAvatars();
@@ -282,6 +297,8 @@ class LauncherStore {
         revision: this.readinessRevision, inputs: this.readinessInputs() };
     } catch (cause: unknown) {
       this.accountsError = backendError(cause, "The account list could not be loaded.");
+    } finally {
+      mark("accountsComplete");
     }
     // Runtime status is read-only. Readiness independently validates the
     // runtime, so completing status does not invalidate this request. Wait
@@ -360,7 +377,16 @@ class LauncherStore {
     });
   }
 
-  async refreshState(readinessMayHaveChanged = true): Promise<void> {
+  refreshState(readinessMayHaveChanged = true): Promise<void> {
+    const request = this.reloadState(readinessMayHaveChanged);
+    this.pendingStateReload = request;
+    void request.finally(() => {
+      if (this.pendingStateReload === request) this.pendingStateReload = null;
+    });
+    return request;
+  }
+
+  private async reloadState(readinessMayHaveChanged: boolean): Promise<void> {
     // Mutation callbacks use the conservative default, including when their
     // content change is absent from the summary DTO. Invalidate across the
     // entire reload, so a check started during it cannot survive completion.

@@ -211,6 +211,31 @@ it("equal read-only startup discovery reload does not invalidate in-flight readi
   readiness[0].resolve(decision()); runtime[0].resolve({ instanceId, status: "ready" }); await completion;
   assert.equal(readiness.length, 1); assert.equal(store.playReadiness.ready, true);
 });
+
+for (const first of ["startup", "discovery"] as const) {
+  it(`startup waits for a superseding initial-state read when ${first} completes first`, async () => {
+    const startup = deferred(), discovery = deferred();
+    const invoke = (globalThis as any).window.__TAURI_INTERNALS__.invoke;
+    let reads = 0;
+    (globalThis as any).window.__TAURI_INTERNALS__.invoke = (command: string) =>
+      command === "get_launcher_state" ? (++reads === 1 ? startup.promise : discovery.promise) : invoke(command);
+    const completion = store.loadInitialStatus();
+    await flush();
+    const competing = store.refreshState(false);
+    if (first === "startup") startup.resolve(state());
+    else discovery.resolve(state());
+    await flush();
+    assert.equal(readiness.length, 0);
+    if (first === "startup") discovery.resolve(state());
+    else startup.resolve(state());
+    await competing; await flush();
+    assert.equal(runtime.length, 1); assert.equal(readiness.length, 1);
+    readiness[0].resolve(decision()); runtime[0].resolve({ instanceId, status: "ready" });
+    await completion;
+    assert.equal(store.playReadiness.ready, true);
+    assert.equal(readiness.length, 1);
+  });
+}
 it("read-only reload with changed DTO inputs still requires fresh readiness", async () => {
   const { completion } = await start();
   store.launcherState.instances[0].configuration = { memoryMib: 4096 };

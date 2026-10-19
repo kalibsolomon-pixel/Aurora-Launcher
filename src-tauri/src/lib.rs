@@ -58,6 +58,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            let _setup = performance::scope(performance::Event::NativeSetup);
             if let Some(window) = app.get_webview_window("main") {
                 #[cfg(target_os = "windows")]
                 window.set_decorations(false)?;

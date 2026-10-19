@@ -2033,3 +2033,19 @@ The software cuboid player renderer is reused for full local previews, classic/s
 The shared cosmetic store separates local work from account requests, coalesces reads and rejects stale/wrong-account responses using request generations, including A→B→A switches during a pending mutation. Local records stay usable without a session or during service failure. Last fetched/cached state is labeled separately from a profile refreshed this session. Only explicit Apply/Equip/No Cape actions invoke native account mutations. Native authentication and selected-account checks remain authoritative; tokens and provider URLs never enter cosmetic DTOs. Skin upload confirmation matches the active skin identity and model from the upload response against a separate fresh matching-account profile GET. Cape changes recheck ownership and confirm the resulting profile. Incomplete confirmations remain errors, retaining the local collection.
 
 See `LAUNCHER_REFINEMENT_L3.md` for validation, schema rollback constraints, desktop evidence and the distinction between actual local native acceptance and synthetic account-service acceptance.
+
+## Performance Initiative II (2026-10-19)
+
+The frontend tracks the latest in-flight launcher-state reload. Initialization
+waits for that winning snapshot before looking up selection and requesting
+runtime status; an update-discovery read that supersedes the first startup read
+can no longer silently omit automatic readiness. It does not cache or weaken
+native integrity, runtime, account or final launch validation. Existing stale
+request guards still decide whether a readiness result may be presented.
+
+Opt-in performance-p0-2 probes add bounded numeric startup phases, native setup,
+Home paint, restored usable Home and Ready RAF markers. Windows QPC brackets
+correlate native processes without treating frontend performance.now as the
+native clock. Ordinary builds compile the probes away. Raw credentials, identity,
+arguments and log contents are excluded from numeric traces. See
+`PERFORMANCE_INITIATIVE_II_RESULTS.md` for the local native evidence.

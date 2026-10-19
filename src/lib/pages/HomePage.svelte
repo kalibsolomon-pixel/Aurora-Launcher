@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { launcher } from "$lib/launcher/store.svelte";
   import { navigation } from "$lib/launcher/navigation.svelte";
   import { updates } from "$lib/launcher/updates.svelte";
@@ -28,11 +29,31 @@
   const updateNotice = $derived(isUpdateAvailable(updates.overview?.launcher.availability) ||
     (updates.overview?.clientInstanceId === instance?.id && isUpdateAvailable(updates.overview?.client)));
   if (import.meta.env.MODE === "performance-p0-2") {
+    onMount(() => {
+      let second = 0;
+      const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => mark("homePaint")); });
+      return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+    });
+    $effect(() => {
+      // Initial Home paint can precede restored state. This separate marker
+      // requires both native instance/config and account discovery to finish.
+      if (!launcher.launcherState || !launcher.accountsState || launcher.stateError || launcher.accountsError) return;
+      let second = 0;
+      const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => mark("homeUsable")); });
+      return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+    });
     let previousLabel: string | undefined;
     $effect(() => {
       if (launch.label === previousLabel) return;
       previousLabel = launch.label;
-      if (launch.label === "Ready") mark("ready");
+      if (launch.label === "Ready") {
+        mark("ready");
+        let second = 0;
+        const first = requestAnimationFrame(() => {
+          second = requestAnimationFrame(() => mark("readyPaint"));
+        });
+        return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+      }
       else if (launch.label === "Checking…") mark("checking");
     });
   }

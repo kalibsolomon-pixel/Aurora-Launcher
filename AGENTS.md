@@ -149,3 +149,13 @@ Run checks proportional to the change. Native-boundary or startup changes requir
 - **Recommended Client development phase:** ...
 
 When no verified or technically justified Client-side change is recommended, state **AURORA CLIENT HANDOFF: NOT YET REQUIRED**. Preserve manual PARK mode, Sodium/OpenGL and existing features; Vulkan compatibility remains a separate concern. Roadmap recommendations do not authorize implementation or another experiment.
+
+## Performance Initiative II (2026-10-19)
+
+Startup waits for the winning in-flight launcher-state reload before selecting
+the instance and starting runtime checks. Update discovery can supersede the
+initial snapshot; never assume that snapshot was applied. Existing revision,
+account, instance and readiness checks remain authoritative. Research-only
+performance-p0-2 probes distinguish first Home paint, restored usable Home, Ready
+and Ready RAF checkpoints, with Windows QPC clock brackets. RAF is not physical
+visibility. See `PERFORMANCE_INITIATIVE_II_RESULTS.md` for acceptance and limits.
