@@ -16,8 +16,9 @@ impl From<io::Error> for LockError {
     }
 }
 
-/// Separate opens contend even in one process. The descriptor is never cloned
-/// or inherited by children, and closing it releases OS ownership after a crash.
+/// Exclusive opens contend even in one process; explicit shared readers may
+/// coexist. Descriptors are never cloned or inherited by children, and closing
+/// them releases OS ownership after a crash.
 #[derive(Debug)]
 pub(crate) struct TargetLock {
     _file: File,
@@ -26,23 +27,44 @@ pub(crate) struct TargetLock {
 
 impl TargetLock {
     pub(crate) fn acquire(root: &Path, parent: &Path, name: &str) -> Result<Self, LockError> {
-        Self::open(root, parent, name, true)
+        Self::open(root, parent, name, true, false)
     }
 
-    /// Read-only callers never materialize a directory or rendezvous file.
+    /// Observe existing exclusive ownership without creating a rendezvous file.
+    /// Lifecycle callers can perform recovery while holding this lock.
     pub(crate) fn existing(
         root: &Path,
         parent: &Path,
         name: &str,
     ) -> Result<Option<Self>, LockError> {
-        match Self::open(root, parent, name, false) {
+        match Self::open(root, parent, name, false, false) {
             Ok(guard) => Ok(Some(guard)),
             Err(LockError::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error),
         }
     }
 
-    fn open(root: &Path, parent: &Path, name: &str, create: bool) -> Result<Self, LockError> {
+    /// Only byte-validation readers use this mode. It excludes every writer
+    /// while allowing other read-only validations of the same installed tree.
+    pub(crate) fn existing_shared(
+        root: &Path,
+        parent: &Path,
+        name: &str,
+    ) -> Result<Option<Self>, LockError> {
+        match Self::open(root, parent, name, false, true) {
+            Ok(guard) => Ok(Some(guard)),
+            Err(LockError::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
+    fn open(
+        root: &Path,
+        parent: &Path,
+        name: &str,
+        create: bool,
+        shared: bool,
+    ) -> Result<Self, LockError> {
         let parent = if create {
             ensure_directory(root, parent)?
         } else {
@@ -81,7 +103,12 @@ impl TargetLock {
                 return Err(unsafe_path().into());
             }
         }
-        match file.try_lock() {
+        let locked = if shared {
+            file.try_lock_shared()
+        } else {
+            file.try_lock()
+        };
+        match locked {
             Ok(()) => Ok(Self {
                 _file: file,
                 parent,
@@ -228,7 +255,13 @@ mod tests {
             return;
         };
         let root = PathBuf::from(root);
-        let guard = TargetLock::acquire(&root, &root.join("target"), ".lock").unwrap();
+        let guard = if std::env::var_os("AURORA_F3R_LOCK_TEST_SHARED").is_some() {
+            TargetLock::existing_shared(&root, &root.join("target"), ".lock")
+                .unwrap()
+                .unwrap()
+        } else {
+            TargetLock::acquire(&root, &root.join("target"), ".lock").unwrap()
+        };
         std::fs::write(root.join("held"), std::process::id().to_string()).unwrap();
         // Parent kills this exact independent process, not its executable name.
         loop {
@@ -270,6 +303,86 @@ mod tests {
         drop(after_death);
         drop(other);
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn shared_readers_coexist_without_creating_paths_and_still_exclude_writers() {
+        let root =
+            std::env::temp_dir().join(format!("aurora-shared-read-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let target = root.join("target");
+        assert!(
+            TargetLock::existing_shared(&root, &target, ".lock")
+                .unwrap()
+                .is_none()
+        );
+        assert!(!target.exists());
+        let writer = TargetLock::acquire(&root, &target, ".lock").unwrap();
+        assert!(matches!(
+            TargetLock::existing_shared(&root, &target, ".lock"),
+            Err(LockError::Busy)
+        ));
+        drop(writer);
+        let first = TargetLock::existing_shared(&root, &target, ".lock")
+            .unwrap()
+            .unwrap();
+        let second = TargetLock::existing_shared(&root, &target, ".lock")
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            TargetLock::acquire(&root, &target, ".lock"),
+            Err(LockError::Busy)
+        ));
+        drop(first);
+        assert!(matches!(
+            TargetLock::acquire(&root, &target, ".lock"),
+            Err(LockError::Busy)
+        ));
+        drop(second);
+        drop(TargetLock::acquire(&root, &target, ".lock").unwrap());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn independent_shared_reader_releases_exclusion_after_process_death() {
+        let root =
+            std::env::temp_dir().join(format!("aurora-shared-process-{}", uuid::Uuid::new_v4()));
+        let target = root.join("target");
+        drop(TargetLock::acquire(&root, &target, ".lock").unwrap());
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "install::coordination::tests::process_lock_helper",
+                "--nocapture",
+            ])
+            .env("AURORA_F3R_LOCK_TEST_ROOT", &root)
+            .env("AURORA_F3R_LOCK_TEST_SHARED", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let start = Instant::now();
+        while !root.join("held").exists() && start.elapsed() < Duration::from_secs(10) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let held = root.join("held").exists();
+        let reader = TargetLock::existing_shared(&root, &target, ".lock");
+        let concurrent = matches!(reader, Ok(Some(_)));
+        let blocked = matches!(
+            TargetLock::acquire(&root, &target, ".lock"),
+            Err(LockError::Busy)
+        );
+        drop(reader);
+        let still_blocked = matches!(
+            TargetLock::acquire(&root, &target, ".lock"),
+            Err(LockError::Busy)
+        );
+        child.kill().unwrap();
+        child.wait().unwrap();
+        assert!(held && concurrent && blocked && still_blocked);
+        drop(TargetLock::acquire(&root, &target, ".lock").unwrap());
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

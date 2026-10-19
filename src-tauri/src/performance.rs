@@ -44,6 +44,8 @@ pub(crate) enum Event {
     ClientManifestHttp = 47,
     UpdatePublication = 48,
     NativeSetup = 49,
+    // Diagnostic only: distinguish temporary validation exclusion from damage.
+    ReadinessContention = 50,
 }
 
 /// Closed frontend vocabulary; numeric inputs carry only ephemeral counters.

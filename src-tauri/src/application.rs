@@ -5713,6 +5713,11 @@ async fn calculate_play_readiness(
             .await
             {
                 Ok((_, runtime_plan)) => (LaunchInstanceStatus::Ready, Some(runtime_plan)),
+                Err(InstanceError::GameInstall(InstallError::AlreadyInProgress { .. })) => {
+                    let _contention =
+                        crate::performance::scope(crate::performance::Event::ReadinessContention);
+                    (LaunchInstanceStatus::Damaged, None)
+                }
                 Err(
                     InstanceError::NotReady { .. }
                     | InstanceError::GameInstallState(_)

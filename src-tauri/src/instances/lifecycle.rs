@@ -2741,6 +2741,50 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
+    async fn concurrent_read_only_content_checks_remain_valid_and_exclude_writers() {
+        let world = SyntheticWorld::new("read-validation");
+        let record = world.create("Concurrent validation").await.unwrap();
+        let registry = world.load_registry();
+        let reader = crate::install::read_game_target(&world.managed, record.id()).unwrap();
+        assert_eq!(
+            validate_instance(&world.managed, &registry, record.id())
+                .unwrap()
+                .status,
+            InstanceStatus::Ready
+        );
+        assert!(matches!(
+            crate::install::lock_game_target(&world.managed, record.id()),
+            Err(InstallError::AlreadyInProgress { .. })
+        ));
+        drop(reader);
+        let writer = crate::install::lock_game_target(&world.managed, record.id()).unwrap();
+        assert!(matches!(
+            validate_instance(&world.managed, &registry, record.id()),
+            Err(InstanceError::GameInstall(
+                InstallError::AlreadyInProgress { .. }
+            ))
+        ));
+        drop(writer);
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        // Reader concurrency does not bypass byte verification.
+        let game = world
+            .managed
+            .instance_paths(record.id())
+            .game()
+            .to_path_buf();
+        let manifest = crate::install::state::load_installed_state(&game)
+            .unwrap()
+            .unwrap();
+        let client = manifest
+            .files()
+            .iter()
+            .find(|file| file.role() == crate::install::state::InstalledFileRole::Client)
+            .unwrap();
+        std::fs::write(game.join(client.path()), b"corrupt test fixture").unwrap();
+        assert_ne!(world.validate(record.id()).status, InstanceStatus::Ready);
+    }
+
+    #[tokio::test]
     async fn a_complete_instance_creates_validates_and_selects() {
         let world = SyntheticWorld::new("happy");
 

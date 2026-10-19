@@ -1677,7 +1677,7 @@ pub(crate) fn read_game_target(
     managed: &ManagedPaths,
     instance: &InstanceId,
 ) -> Result<Option<coordination::TargetLock>, InstallError> {
-    coordination::TargetLock::existing(
+    coordination::TargetLock::existing_shared(
         managed.data_root(),
         managed.instance_paths(instance).root(),
         ".game-install.lock",
