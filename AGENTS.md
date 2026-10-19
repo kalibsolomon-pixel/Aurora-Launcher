@@ -159,3 +159,17 @@ account, instance and readiness checks remain authoritative. Research-only
 performance-p0-2 probes distinguish first Home paint, restored usable Home, Ready
 and Ready RAF checkpoints, with Windows QPC clock brackets. RAF is not physical
 visibility. See `PERFORMANCE_INITIATIVE_II_RESULTS.md` for acceptance and limits.
+
+## Native resolution and validation readers (2026-10-19)
+
+The shared launch resolver substitutes `resolution_width`/`resolution_height`
+from validated optional window settings. Configuration and launch reuse the same
+100–7680 bounds; no window leaves Mojang's conditional group disabled. Tests must
+include the actual conditional group, not a fixture that omits it.
+
+`read_game_target` uses shared kernel ownership for byte-verification readers.
+Install/recovery/final launch writers remain exclusive. `TargetLock::existing`
+also remains exclusive because lifecycle state loading may replay recovery; do
+not replace it with shared ownership. Readiness still verifies bytes and rejects
+damage. See `NATIVE_RESOLUTION_READINESS_REPORT.md` for native acceptance, the
+reproduced false-damage race and the limits of historical n3 attribution.

@@ -1,0 +1,308 @@
+{
+  "date": "2026-10-19",
+  "startingCommit": "a083740eba2b48acaa484c590a5ae26a5ea513c9",
+  "branch": "codex/native-resolution-readiness",
+  "nativeCaptures": [
+    {
+      "capture": "r1",
+      "exitCode": 0,
+      "researchProbesExpected": true,
+      "contentionEvents": 1,
+      "readyEvents": 2,
+      "startupUpdateChecks": 1,
+      "dropped": 0
+    },
+    {
+      "capture": "r2",
+      "exitCode": 0,
+      "researchProbesExpected": true,
+      "contentionEvents": 1,
+      "readyEvents": 1,
+      "startupUpdateChecks": 1,
+      "dropped": 0
+    },
+    {
+      "capture": "c1",
+      "exitCode": 0,
+      "researchProbesExpected": true,
+      "contentionEvents": 0,
+      "readyEvents": 2,
+      "startupUpdateChecks": 1,
+      "dropped": 0
+    },
+    {
+      "capture": "c2",
+      "exitCode": 0,
+      "researchProbesExpected": true,
+      "contentionEvents": 0,
+      "readyEvents": 2,
+      "startupUpdateChecks": 1,
+      "dropped": 0
+    },
+    {
+      "capture": "c3",
+      "exitCode": 0,
+      "researchProbesExpected": false,
+      "ordinaryUi": {
+        "automaticReadyObserved": true,
+        "minimizeRestoreCycles": 2,
+        "readyAfterEachCycle": true,
+        "validationMode": "ordinary build, no research feature or frontend mode"
+      }
+    }
+  ],
+  "nativeGames": [
+    {
+      "capture": "game-custom-1",
+      "exitCode": 0,
+      "arguments": {
+        "width": 1280,
+        "height": 720,
+        "unresolvedResolution": false,
+        "managedHeap2048MiB": true,
+        "exactChildIdentityMatched": true,
+        "limitation": "Arguments only; framebuffer is observed separately"
+      },
+      "framebuffer": [
+        1280,
+        720
+      ],
+      "mainMenuReached": true,
+      "worldOpened": false
+    },
+    {
+      "capture": "game-custom-2",
+      "exitCode": 0,
+      "arguments": {
+        "width": 1024,
+        "height": 576,
+        "unresolvedResolution": false,
+        "managedHeap2048MiB": true,
+        "exactChildIdentityMatched": true,
+        "limitation": "Arguments only; framebuffer is observed separately"
+      },
+      "framebuffer": [
+        1024,
+        576
+      ],
+      "mainMenuReached": true,
+      "worldOpened": false
+    },
+    {
+      "capture": "game-default-1",
+      "exitCode": 0,
+      "arguments": {
+        "width": null,
+        "height": null,
+        "unresolvedResolution": false,
+        "managedHeap2048MiB": true,
+        "exactChildIdentityMatched": true,
+        "limitation": "Arguments only; framebuffer is observed separately"
+      },
+      "framebuffer": [
+        854,
+        480
+      ],
+      "mainMenuReached": true,
+      "worldOpened": false
+    }
+  ],
+  "binaries": [
+    {
+      "label": "resolution-fixed-exclusive-validation-reference",
+      "sha256": "d32210e1f6f663e8129253e934293c4ae0452b2f6cc20fd5eaeb0bd61305a862",
+      "bytes": 46324736
+    },
+    {
+      "label": "shared-validation-candidate",
+      "sha256": "9e5158556fb800cccd3c02a31e08f76f717b8b3ce7bef4f22ceced5a5beb1eb8",
+      "bytes": 46321152
+    },
+    {
+      "label": "ordinary-build",
+      "sha256": "7ca6ac06e6aa7c9a37fe4395c7edb282075a6542f5ff084e8d84716c9b6179d1",
+      "bytes": 46216192
+    }
+  ],
+  "negativeControl": {
+    "deliberateNegativeControl": true,
+    "needsAttentionObserved": true,
+    "launchDisabled": true,
+    "originalBytesRestored": true,
+    "freshRevalidationReturnedReady": true
+  },
+  "worldPreservation": {
+    "files": 170,
+    "match": true
+  },
+  "sourceFixturePreservation": {
+    "files": 10288,
+    "bytes": 1565494231,
+    "changed": [],
+    "missing": []
+  },
+  "tests": {
+    "rustPassed": 1004,
+    "rustIgnored": 31,
+    "frontendPassed": 284,
+    "frontendCheckErrors": 0,
+    "frontendCheckWarnings": 0
+  },
+  "artifactHashes": [
+    {
+      "capture": "r1",
+      "file": "native-trace.json",
+      "sha256": "e1805fcafb5081cc830861a13fad57aaf23f66bf59d54ffaf96ec76b03de440f",
+      "bytes": 32971
+    },
+    {
+      "capture": "r1",
+      "file": "process.json",
+      "sha256": "1895fd231915623e648c157ab651e5e1665751a41b661fe2ad67716d94733385",
+      "bytes": 546
+    },
+    {
+      "capture": "r2",
+      "file": "native-trace.json",
+      "sha256": "fdebc4462bd9a580ac7fb4b8404c088e6ee41f40c2a349991061131f6354b3d6",
+      "bytes": 20074
+    },
+    {
+      "capture": "r2",
+      "file": "process.json",
+      "sha256": "4b602ad1b172e6d71956e9365f069702eee3a9029bc9ed7ef68f9e49a6c5c918",
+      "bytes": 546
+    },
+    {
+      "capture": "c1",
+      "file": "native-trace.json",
+      "sha256": "5bb81822a5e440f1fec9e39ba2c60d1f0092ba3c1097643d5028c7a764406e77",
+      "bytes": 31307
+    },
+    {
+      "capture": "c1",
+      "file": "process.json",
+      "sha256": "67610d7893c36878e55dfc2d6085428ffcf8edc8184a0a08fe3fcd774d89dbdf",
+      "bytes": 530
+    },
+    {
+      "capture": "c2",
+      "file": "native-trace.json",
+      "sha256": "f1b13851b426963ad7356472db01324a8ee4bc5ce66dd431effe306b587c0fbe",
+      "bytes": 30697
+    },
+    {
+      "capture": "c2",
+      "file": "process.json",
+      "sha256": "4bca66e16d38bbaac69494a174bb982094dbc34a82f1482568971f2d7d5fff44",
+      "bytes": 582
+    },
+    {
+      "capture": "c3",
+      "file": "process.json",
+      "sha256": "2eccc7b6409f440de7edcdbe035e084af93a5cafb350efbc2d59c8a4ae53d853",
+      "bytes": 578
+    },
+    {
+      "capture": "game-custom-1",
+      "file": "run.json",
+      "sha256": "a0cf6197e575299957361e949bf57e88a13c41b8171a9f3b1fba8573480e69f1",
+      "bytes": 4017
+    },
+    {
+      "capture": "game-custom-1",
+      "file": "process.json",
+      "sha256": "a933447b86a62d854a18d53adc7b82fd9115e5acdd76241c7270e49c399291fc",
+      "bytes": 482
+    },
+    {
+      "capture": "game-custom-1",
+      "file": "profile.jfr",
+      "sha256": "935ddf0b952c29f1f13336bd097d106e57ac805b074980d2e5849d2743989f37",
+      "bytes": 124650
+    },
+    {
+      "capture": "game-custom-1",
+      "file": "numeric-argument-observation.json",
+      "sha256": "66f48fcab458e3b539d39620101f7af04a1b21c6cc7ceddb3da65ebf0dc86d0e",
+      "bytes": 213
+    },
+    {
+      "capture": "game-custom-1",
+      "file": "native-game-latest.log",
+      "sha256": "73437e5e7866fb6761b6615713535e96f02cecb39e4e1a5766c14392f1c518ef",
+      "bytes": 10345
+    },
+    {
+      "capture": "game-custom-2",
+      "file": "run.json",
+      "sha256": "a1604f45fad00107590c3fbfaa6fc07350dcbf6a9025bf61196244f55755bfdd",
+      "bytes": 4016
+    },
+    {
+      "capture": "game-custom-2",
+      "file": "process.json",
+      "sha256": "51c0566ef8123a6c89e2c6542fd7866b0735f306c202373240d66047c62d3885",
+      "bytes": 480
+    },
+    {
+      "capture": "game-custom-2",
+      "file": "profile.jfr",
+      "sha256": "744f64d8745063e57769ad7bfa89d818f77406eae4fce92ed57f5b3694ae9c70",
+      "bytes": 124276
+    },
+    {
+      "capture": "game-custom-2",
+      "file": "numeric-argument-observation.json",
+      "sha256": "51a1f7c0dd5e54cfef47dddaf78b6d055403eec0b60e809f4f0bb88572854012",
+      "bytes": 213
+    },
+    {
+      "capture": "game-custom-2",
+      "file": "native-game-latest.log",
+      "sha256": "6736c91859b433f974dd7527985fb09f37cbc8f779f321b6aeff4af7dffebd85",
+      "bytes": 10343
+    },
+    {
+      "capture": "game-default-1",
+      "file": "run.json",
+      "sha256": "7d5e6f052ad8c5fd1188a56b09d0f3b77a55bdd036f039433c8dbda8504cdd71",
+      "bytes": 4012
+    },
+    {
+      "capture": "game-default-1",
+      "file": "process.json",
+      "sha256": "b2743fc105f3354d22c5204c563c66d98219e741ddb9934f6b25ba981c2bfebe",
+      "bytes": 482
+    },
+    {
+      "capture": "game-default-1",
+      "file": "profile.jfr",
+      "sha256": "39607737bc4e631f88620230aebc0794c6574eb0a6e1557c2c8aa5ad198c29ae",
+      "bytes": 125131
+    },
+    {
+      "capture": "game-default-1",
+      "file": "numeric-argument-observation.json",
+      "sha256": "9048b02a38663e2ea9e5889e4d251dc24aee846a33d454ee53b4b323c8b9d4fd",
+      "bytes": 214
+    },
+    {
+      "capture": "game-default-1",
+      "file": "native-game-latest.log",
+      "sha256": "fff9a592732515fe3d549adb65f939a818c266e8ff9bdab22fe7632bd8ee1dc9",
+      "bytes": 10345
+    }
+  ],
+  "limitations": [
+    "Historical n3 exact trigger cannot be proven from its old trace",
+    "Reference already contains the resolution fix; it compares validation locking only",
+    "Unoptimized Windows native builds; Linux runtime not tested",
+    "c2 deliberately starts damaged as a negative control, not an intermittent reproduction",
+    "No new performance or latency claims"
+  ],
+  "implementationCommits": [
+    "e30c3b5d9dbe31c5fb07762ef9186ed860888612",
+    "25ae6b217f4f07446c235bf508b82fb047f8af0d"
+  ]
+}

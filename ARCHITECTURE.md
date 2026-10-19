@@ -2049,3 +2049,22 @@ correlate native processes without treating frontend performance.now as the
 native clock. Ordinary builds compile the probes away. Raw credentials, identity,
 arguments and log contents are excluded from numeric traces. See
 `PERFORMANCE_INITIATIVE_II_RESULTS.md` for the local native evidence.
+
+## Native resolution and readiness reliability (2026-10-19)
+
+Optional window settings enable Mojang's existing conditional resolution group;
+the single `launch::resolve` placeholder map now supplies both validated decimal
+dimensions. Configuration validation and final launch assembly share the same
+dimension bounds. Unspecified dimensions preserve metadata defaults; missing
+values in an active group and unknown placeholders remain hard failures. No
+parallel argument builder, persistence schema or process-spawn path is added.
+
+Read-only installed-game validation uses explicit shared kernel locks through
+`read_game_target`, allowing concurrent runtime/readiness checks to verify the
+same stable tree. Previously those readers excluded each other and a healthy
+check could become a false Damaged decision. All mutation/recovery/final-spawn
+locks stay exclusive, including lifecycle `TargetLock::existing`; its caller can
+replay recovery. Path and ownership checks remain common to both lock modes.
+The existing research-only numeric vocabulary adds contention event 50. Normal
+builds emit no probe data. See `NATIVE_RESOLUTION_READINESS_REPORT.md` for the
+original-failing regressions, native positive/negative controls and platform limits.
