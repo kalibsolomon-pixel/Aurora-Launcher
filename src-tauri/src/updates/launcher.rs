@@ -25,7 +25,12 @@ use crate::updates::{CheckDomain, LauncherPhase, UpdateAvailability, begin_check
 /// The minisign-style public verification key compiled into this build.
 /// `None` means this build was produced without updater trust material:
 /// every check reports unconfigured, and nothing is ever downloaded or run.
+#[cfg(not(feature = "private-candidate"))]
 pub const UPDATER_PUBKEY: Option<&str> = option_env!("AURORA_UPDATER_PUBKEY");
+// Private candidates cannot install a public build over their isolated identity,
+// even if the build host supplies production updater trust material.
+#[cfg(feature = "private-candidate")]
+pub const UPDATER_PUBKEY: Option<&str> = None;
 
 /// One authoritative production manifest, published only through the owner's
 /// manual release gate. No environment or runtime endpoint override exists.

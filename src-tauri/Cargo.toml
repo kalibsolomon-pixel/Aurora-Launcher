@@ -18,6 +18,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [features]
+# Local side-by-side candidate only; requires the matching Tauri overlay.
+private-candidate = []
 # Explicit research build only; absent from ordinary development/release builds.
 performance-p0-2 = []
 # Opt-in, debug-only real desktop fault acceptance; never enabled by normal builds.

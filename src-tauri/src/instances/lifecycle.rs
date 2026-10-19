@@ -1426,14 +1426,20 @@ pub async fn validate_instance_runtime(
         instance_id,
     )
     .await?;
-    crate::runtime::install::validate_runtime(
-        managed,
-        &plan,
-        execute_diagnostic,
-        crate::runtime::install::DEFAULT_JAVA_DIAGNOSTIC_TIMEOUT,
-    )
-    .await
-    .map_err(InstanceError::RuntimeInstall)
+    if execute_diagnostic {
+        crate::runtime::install::validate_runtime_eligibility(managed, &plan)
+            .await
+            .map_err(InstanceError::RuntimeInstall)
+    } else {
+        crate::runtime::install::validate_runtime(
+            managed,
+            &plan,
+            false,
+            crate::runtime::install::DEFAULT_JAVA_DIAGNOSTIC_TIMEOUT,
+        )
+        .await
+        .map_err(InstanceError::RuntimeInstall)
+    }
 }
 
 pub async fn ensure_instance_runtime(

@@ -3,7 +3,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 import {openSettings,settingsModules} from './ui5-fixture.mjs';
 const {chromium}=await import(process.env.AURORA_PLAYWRIGHT_MODULE||'file:///C:/Users/kalib/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs');
 const browser=await chromium.launch({headless:true}),page=await browser.newPage({reducedMotion:'reduce'});
-const out='docs/ui-5/browser';await mkdir(out,{recursive:true});
+const out=process.env.AURORA_UI5_OUTPUT || 'docs/ui-5/browser';await mkdir(out,{recursive:true});
 const checks=[],metrics=[],errors=[];page.on('pageerror',e=>errors.push(e.message));
 await page.route(/^https?:\/\/(?!127\.0\.0\.1:1422)/,r=>r.abort());
 const categories=['Appearance','Home','General','Minecraft & Java','Updates','Discord & privacy','Accessibility','About'];

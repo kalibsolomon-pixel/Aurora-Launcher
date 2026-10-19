@@ -1,5 +1,8 @@
 # Phase F review harness
 
+To preserve historical evidence, new acceptance runs may set `AURORA_UI2_OUTPUT`,
+`AURORA_UI3_OUTPUT`, `AURORA_UI4_OUTPUT` and `AURORA_UI5_OUTPUT` to new output folders.
+
 Run `node tools/visual/serve.mjs` from the repository root. The standalone Vite server listens only on `127.0.0.1:1422` and mounts the actual Shell, Home, Settings, Instances and individual instance components. It is not imported by the production app or production build.
 
 Only this server aliases the application invoke boundary to synthetic DTOs. No fixture Play action launches a process, and no fixture account action mutates real launcher state. Layout saves and browser appearance saves use tab session storage. When hosted in Tauri, appearance writes call the actual Rust command to verify its derived palette and persistence in the explicitly isolated review identifier; the returned state is also saved to session storage. Native window APIs remain real. The review label distinguishes fixtures from production data; the block player is the existing no-skin fallback.

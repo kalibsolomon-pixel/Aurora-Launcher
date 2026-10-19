@@ -175,7 +175,11 @@ pub struct OsCredentialStore;
 /// The credential-manager target name for one account. Fixed derivation from
 /// the validated account identifier only.
 fn entry_target(account_id: &str) -> String {
-    format!("com.aurora.launcher/account/{account_id}")
+    #[cfg(feature = "private-candidate")]
+    const NAMESPACE: &str = "com.aurora.launcher.private-candidate";
+    #[cfg(not(feature = "private-candidate"))]
+    const NAMESPACE: &str = "com.aurora.launcher";
+    format!("{NAMESPACE}/account/{account_id}")
 }
 
 impl CredentialStore for OsCredentialStore {
@@ -493,11 +497,21 @@ mod tests {
         ));
     }
 
+    #[cfg(not(feature = "private-candidate"))]
     #[test]
     fn entry_targets_derive_from_account_ids_only() {
         assert_eq!(
             entry_target("986dec87b7ec47ff89ff033fdb95c4b5"),
             "com.aurora.launcher/account/986dec87b7ec47ff89ff033fdb95c4b5"
+        );
+    }
+
+    #[cfg(feature = "private-candidate")]
+    #[test]
+    fn candidate_credentials_cannot_address_production() {
+        assert_eq!(
+            entry_target("account"),
+            "com.aurora.launcher.private-candidate/account/account"
         );
     }
 

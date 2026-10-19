@@ -382,6 +382,18 @@ async fn ensure_runtime_with_faults(
     Ok(installed_result(plan, managed, state, false))
 }
 
+/// Launch eligibility includes execution, not just an intact installation.
+/// Diagnostics, readiness and final launch preparation must use this boundary.
+pub async fn validate_runtime_eligibility(
+    managed: &ManagedPaths,
+    plan: &JavaRuntimePlan,
+) -> Result<RuntimeValidation, RuntimeInstallError> {
+    validate_runtime(managed, plan, true, DEFAULT_JAVA_DIAGNOSTIC_TIMEOUT).await
+}
+
+/// Integrity-only validation is also used while materializing fixtures and
+/// installation state. A Ready result with `execute_diagnostic = false` does
+/// not establish that the operating system can execute this runtime.
 pub async fn validate_runtime(
     managed: &ManagedPaths,
     plan: &JavaRuntimePlan,
@@ -442,7 +454,7 @@ pub async fn validate_runtime(
             .await
             {
                 Ok(diagnostic) => validation.diagnostic = Some(diagnostic),
-                Err(reason) => validation.problems.push(reason),
+                Err(reason) => validation.problems.push(diagnostic_problem(reason, &root)),
             }
         }
         validation.status = if validation.problems.is_empty() {
@@ -453,6 +465,35 @@ pub async fn validate_runtime(
         Ok(validation)
     })
     .await
+}
+
+fn diagnostic_problem(reason: String, root: &Path) -> String {
+    #[cfg(windows)]
+    if reason.contains("java.dll")
+        || reason.contains("jvm.dl")
+        || reason.contains("Path length exceeds")
+    {
+        use std::os::windows::ffi::OsStrExt;
+        let path = root.as_os_str().to_string_lossy();
+        // This Java launcher prepends the extended-length prefix internally,
+        // but still truncates its DLL buffer at MAX_PATH (including NUL).
+        if !path.is_ascii()
+            || root
+                .join("bin/server/jvm.dll")
+                .as_os_str()
+                .encode_wide()
+                .count()
+                + 5
+                >= 260
+        {
+            return format!(
+                "{reason} This Java build cannot start at this long or non-ASCII runtime location. Use a shorter ASCII-only application-data location; reinstalling the same runtime here will not fix this path limitation."
+            );
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = root;
+    reason
 }
 
 fn validate_root_against_state(
@@ -726,6 +767,8 @@ async fn run_process(
     };
     let mut command = tokio::process::Command::new(executable);
     command.args(arguments).env_clear();
+    #[cfg(windows)]
+    command.creation_flags(0x08000000); // CREATE_NO_WINDOW: readiness must not flash a console.
     #[cfg(windows)]
     for key in ["SYSTEMROOT", "WINDIR", "TEMP", "TMP"] {
         if let Some(value) = std::env::var_os(key) {
@@ -1407,6 +1450,168 @@ mod tests {
             .await
             .unwrap_err();
         assert!(error.contains("exited with status"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn intact_but_unexecutable_runtime_is_never_launch_eligible() {
+        let managed = managed("eligibility-spaces-é");
+        let plan = test_plan("http://127.0.0.1:1", b"not a PE executable", b"not javaw");
+        let root = plan.installation_dir(&managed);
+        std::fs::create_dir_all(root.join("bin")).unwrap();
+        std::fs::write(
+            plan.diagnostic_executable_path(&managed),
+            b"not a PE executable",
+        )
+        .unwrap();
+        std::fs::write(plan.launch_executable_path(&managed), b"not javaw").unwrap();
+        let state = RuntimeInstalledState::from_plan(&plan, 1);
+        std::fs::write(root.join(RUNTIME_STATE_FILE_NAME), state.to_json()).unwrap();
+        assert_eq!(
+            validate_runtime(&managed, &plan, false, Duration::from_secs(1))
+                .await
+                .unwrap()
+                .status,
+            RuntimeValidationStatus::Ready
+        );
+        let eligible = validate_runtime_eligibility(&managed, &plan).await.unwrap();
+        assert_eq!(eligible.status, RuntimeValidationStatus::Damaged);
+        assert!(
+            eligible
+                .problems
+                .iter()
+                .any(|p| p.contains("could not start"))
+        );
+        assert_eq!(
+            eligible,
+            validate_runtime(&managed, &plan, true, DEFAULT_JAVA_DIAGNOSTIC_TIMEOUT)
+                .await
+                .unwrap()
+        );
+        std::fs::remove_file(plan.diagnostic_executable_path(&managed)).unwrap();
+        assert_eq!(
+            validate_runtime_eligibility(&managed, &plan)
+                .await
+                .unwrap()
+                .status,
+            RuntimeValidationStatus::Damaged
+        );
+        std::fs::write(
+            plan.diagnostic_executable_path(&managed),
+            b"not a PE executable",
+        )
+        .unwrap();
+        std::fs::write(root.join(RUNTIME_STATE_FILE_NAME), "{broken").unwrap();
+        assert_eq!(
+            validate_runtime_eligibility(&managed, &plan)
+                .await
+                .unwrap()
+                .status,
+            RuntimeValidationStatus::Damaged
+        );
+        std::fs::write(root.join(RUNTIME_STATE_FILE_NAME), state.to_json()).unwrap();
+        // Correcting metadata restores integrity, but must not suppress startup failure.
+        assert_eq!(
+            validate_runtime_eligibility(&managed, &plan)
+                .await
+                .unwrap()
+                .status,
+            RuntimeValidationStatus::Damaged
+        );
+        std::fs::remove_dir_all(managed.data_root()).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn execution_eligibility_checks_version_and_recovers_in_unicode_space_paths() {
+        let managed = managed("eligibility with spaces 日本語");
+        for (body, expected) in [
+            (
+                "#!/bin/sh\necho 'openjdk version \"25.0.1\"' >&2\n",
+                RuntimeValidationStatus::Ready,
+            ),
+            (
+                "#!/bin/sh\necho 'openjdk version \"21.0.7\"' >&2\n",
+                RuntimeValidationStatus::Damaged,
+            ),
+            (
+                "#!/bin/sh\necho 'not a version' >&2\n",
+                RuntimeValidationStatus::Damaged,
+            ),
+            ("#!/bin/sh\nexit 3\n", RuntimeValidationStatus::Damaged),
+            (
+                "#!/bin/sh\necho 'openjdk version \"25.0.1\"' >&2\n",
+                RuntimeValidationStatus::Ready,
+            ),
+        ] {
+            let artifact = RuntimeDownload {
+                sha1: Sha1Digest::compute(body.as_bytes()).as_hex(),
+                size: body.len() as u64,
+                url: "http://127.0.0.1:1/java".into(),
+            };
+            let plan = JavaRuntimePlan::from_metadata(
+                "java-runtime-epsilon",
+                25,
+                RuntimePlatform::new(RuntimeOperatingSystem::Linux, RuntimeArchitecture::X86_64),
+                RuntimeSelection {
+                    version_name: "25.0.1".into(),
+                    released: "2025-10-12".into(),
+                    manifest_sha1: Sha1Digest::compute(b"eligibility"),
+                },
+                RuntimeFileDocument {
+                    files: BTreeMap::from([
+                        ("bin".into(), RuntimeFileKind::Directory),
+                        (
+                            "bin/java".into(),
+                            RuntimeFileKind::File {
+                                executable: true,
+                                downloads: RuntimeDownloads {
+                                    raw: artifact,
+                                    lzma: None,
+                                },
+                            },
+                        ),
+                    ]),
+                },
+            )
+            .unwrap();
+            let root = plan.installation_dir(&managed);
+            std::fs::create_dir_all(root.join("bin")).unwrap();
+            let executable = plan.diagnostic_executable_path(&managed);
+            std::fs::write(&executable, body).unwrap();
+            set_executable_if_needed(&executable, true).unwrap();
+            std::fs::write(
+                root.join(RUNTIME_STATE_FILE_NAME),
+                RuntimeInstalledState::from_plan(&plan, 1).to_json(),
+            )
+            .unwrap();
+            assert_eq!(
+                validate_runtime_eligibility(&managed, &plan)
+                    .await
+                    .unwrap()
+                    .status,
+                expected
+            );
+        }
+        std::fs::remove_dir_all(managed.data_root()).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn dll_path_failure_has_actionable_advice_only_when_evidenced() {
+        let long = PathBuf::from(r"C:\managed").join("a".repeat(245));
+        assert!(
+            diagnostic_problem("missing server jvm.dll".into(), &long)
+                .contains("shorter ASCII-only")
+        );
+        assert!(
+            diagnostic_problem("could not find java.dll".into(), Path::new(r"C:\日本語"))
+                .contains("shorter ASCII-only")
+        );
+        assert_eq!(diagnostic_problem("timeout".into(), &long), "timeout");
+        assert_eq!(
+            diagnostic_problem("missing server jvm.dll".into(), Path::new(r"C:\java")),
+            "missing server jvm.dll"
+        );
     }
 
     /// Controlled Phase 7 live verification. It resolves Minecraft 26.2's

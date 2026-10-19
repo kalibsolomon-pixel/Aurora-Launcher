@@ -257,7 +257,9 @@ export function javaRuntimeStatus(
     return {
       tone: "status-error",
       label: "Damaged",
-      detail: "The managed runtime failed validation. Repair Java to reinstall it.",
+      detail: runtime.problems.some(problem => problem.includes("This Java build cannot start"))
+        ? "Java cannot start at this data location. Use a shorter path with ASCII characters; reinstalling Java here will not help."
+        : "The managed runtime failed validation. Repair Java to reinstall it.",
       technical: runtime.problems.length ? runtime.problems.join(" · ") : null,
     };
   }

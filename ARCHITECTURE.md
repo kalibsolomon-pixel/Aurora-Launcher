@@ -2,6 +2,26 @@
 
 # Aurora Launcher architecture
 
+## Java execution eligibility and private candidates (2026-10-19)
+
+`runtime::install::validate_runtime_eligibility` verifies the exact normalized
+runtime plan, installed manifest and bytes, then runs the bounded `java -version`
+diagnostic. Explicit runtime status, Play readiness and final launch preparation
+share this boundary and timeout. Integrity-only installation checks remain
+available but cannot authorize Play. Windows diagnostics use CREATE_NO_WINDOW.
+An intact Java installation can fail inside the published Java launcher under
+long or non-ASCII paths; these failures now block readiness and show actionable
+path advice. No runtime fallback, version change or system-Java selection occurs.
+
+The opt-in `private-candidate` feature and `tauri.private.conf.json` overlay must
+be used together. They select a distinct installer/application identity, shortcut
+name and OS credential namespace. Launcher updates remain unconfigured even on a
+host with a production verification key; signature verification is unchanged in
+ordinary builds. Client authority is unchanged. Only the private package supports
+the explicit `AURORA_PRIVATE_DATA_ROOT` environment override for isolated path
+acceptance. It defaults to its separate platform application-data directory.
+See `tools/release/private-candidate.ps1` and `PRIVATE_CANDIDATE_TESTING.md`.
+
 ## Performance P2 — explicit JVM configuration modes (current)
 
 Instance registry schema **6** adds an optional performanceMode to the existing

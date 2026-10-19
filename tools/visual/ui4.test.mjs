@@ -3,7 +3,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 import {appearanceFixture,appearanceModules} from './ui4-fixture.mjs';
 const {chromium}=await import(process.env.AURORA_PLAYWRIGHT_MODULE||'playwright');
 const browser=await chromium.launch({headless:true}),page=await browser.newPage({reducedMotion:'reduce'});
-const out='docs/ui-4/browser';await mkdir(out,{recursive:true});
+const out=process.env.AURORA_UI4_OUTPUT || 'docs/ui-4/browser';await mkdir(out,{recursive:true});
 const errors=[],measurements=[],checks=[];page.on('pageerror',e=>errors.push(e.message));
 await page.route(/^https?:\/\/(?!127\.0\.0\.1:1422)/,r=>r.abort());
 const pass=message=>{checks.push(message);console.log('PASS',message);};

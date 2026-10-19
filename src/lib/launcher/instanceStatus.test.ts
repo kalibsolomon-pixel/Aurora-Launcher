@@ -271,6 +271,11 @@ describe("draft dirty derivation", () => {
 });
 
 describe("managed Java status decisions", () => {
+  it("explains a native DLL path limitation without promising repair will fix it", () => {
+    const decision = javaRuntimeStatus(runtime({ status: "damaged", problems: ["This Java build cannot start at this long or non-ASCII runtime location."] }), false, null, null);
+    assert.match(decision.detail!, /shorter path with ASCII/);
+    assert.match(decision.detail!, /reinstalling Java here will not help/);
+  });
   it("is unchecked before any status query", () => {
     assert.deepEqual(javaRuntimeStatus(null, false, null, null), {
       tone: "status-muted",

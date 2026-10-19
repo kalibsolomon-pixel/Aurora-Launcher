@@ -44,7 +44,10 @@ use std::path::{Path, PathBuf};
 ///
 /// This is the compatibility contract with the installers (both name their
 /// shortcuts after the product name) and with the Settings page copy.
+#[cfg(not(feature = "private-candidate"))]
 pub const PRODUCT_NAME: &str = "Aurora Launcher";
+#[cfg(feature = "private-candidate")]
+pub const PRODUCT_NAME: &str = "Aurora Launcher Private Test Candidate";
 
 /// The `.lnk` file name of every Aurora-managed shortcut slot.
 pub fn shortcut_file_name() -> String {
@@ -534,7 +537,7 @@ mod tests {
         let slot = desktop_slot(Path::new(r"C:\Users\user\Desktop"));
         assert_eq!(
             slot,
-            Path::new(r"C:\Users\user\Desktop\Aurora Launcher.lnk")
+            Path::new(r"C:\Users\user\Desktop").join(shortcut_file_name())
         );
     }
 
@@ -544,11 +547,13 @@ mod tests {
         assert_eq!(slots.len(), 2);
         assert_eq!(
             slots[0],
-            Path::new(r"C:\Users\user\Programs\Aurora Launcher.lnk")
+            Path::new(r"C:\Users\user\Programs").join(shortcut_file_name())
         );
         assert_eq!(
             slots[1],
-            Path::new(r"C:\Users\user\Programs\Aurora Launcher\Aurora Launcher.lnk")
+            Path::new(r"C:\Users\user\Programs")
+                .join(PRODUCT_NAME)
+                .join(shortcut_file_name())
         );
     }
 

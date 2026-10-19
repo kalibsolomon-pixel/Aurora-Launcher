@@ -5747,14 +5747,9 @@ async fn calculate_play_readiness(
         }
     }
     let runtime = if let Some(plan) = runtime_plan {
-        match crate::runtime::install::validate_runtime(
-            managed,
-            &plan,
-            false,
-            crate::runtime::install::DEFAULT_JAVA_DIAGNOSTIC_TIMEOUT,
-        )
-        .await?
-        .status
+        match crate::runtime::install::validate_runtime_eligibility(managed, &plan)
+            .await?
+            .status
         {
             RuntimeValidationStatus::Ready => LaunchRuntimeStatus::Ready,
             RuntimeValidationStatus::Missing => LaunchRuntimeStatus::Missing,
@@ -5932,13 +5927,8 @@ async fn play_instance_with_target(
         );
         let features = launch_options.feature_profile();
 
-        let runtime = crate::runtime::install::validate_runtime(
-            &managed,
-            &runtime_plan,
-            true,
-            crate::runtime::install::DEFAULT_JAVA_DIAGNOSTIC_TIMEOUT,
-        )
-        .await?;
+        let runtime =
+            crate::runtime::install::validate_runtime_eligibility(&managed, &runtime_plan).await?;
         if runtime.status != RuntimeValidationStatus::Ready {
             return Err(CommandError::new(
                 "launch_runtime_not_ready",
