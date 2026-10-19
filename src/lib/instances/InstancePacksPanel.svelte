@@ -180,8 +180,10 @@
 
   {#if running}<p class="packs-note">Changes made while Minecraft is running apply on the next launch.</p>{/if}
   {#if context?.modrinthAvailable}
-    <ContentRecognition {instance} {kind} onChanged={async () => { await refreshInstalled(instance.id, kind); }} />
-    <ContentUpdates instanceId={instance.id} {kind} names={providerNames} bind:report={updatesReport} onChanged={async () => { await refreshInstalled(instance.id, kind); await launcher.refreshState(); }} />
+    <div class="content-tools">
+      <ContentRecognition {instance} {kind} onChanged={async () => { await refreshInstalled(instance.id, kind); }} />
+      <ContentUpdates instanceId={instance.id} {kind} names={providerNames} bind:report={updatesReport} onChanged={async () => { await refreshInstalled(instance.id, kind); await launcher.refreshState(); }} />
+    </div>
   {/if}
   {#if launcher.contentError}<div class="packs-error" role="alert"><p class="inline-message inline-message-error">{launcher.contentError.message} <code>{launcher.contentError.code}</code></p><button type="button" class="btn btn-quiet" disabled={launcher.contentBusy === key} onclick={() => launcher.runLoadContent(instance.id, kind)}>Retry</button></div>{/if}
   {#if lifecycleError}<p class="inline-message inline-message-error" role="alert">{lifecycleError}</p>{/if}

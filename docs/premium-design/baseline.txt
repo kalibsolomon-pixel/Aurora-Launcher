@@ -1,0 +1,18 @@
+?? .zcode-icon-diag.py
+?? .zcodeignore
+?? UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt
+?? docs/performance-p0-2/__pycache__/
+?? docs/premium-design/
+?? tools/benchmark/__pycache__/
+ce77839726a009025e94bf25f8526fe4a153a26a
+2628
+C:/Dev/aurora-launcher                                                        ce77839 [codex/launcher-premium-design]
+C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/corrected-source         420f54c (detached HEAD)
+C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/fix-source               e4c25cb [codex/native-boot-updater-config]
+C:/Dev/Aurora-Launcher-Native-Boot-Evidence-20261007/old-source               4575a0e (detached HEAD)
+C:/Users/kalib/.codex/worktrees/f3rb1-acceptance/aurora-launcher              4f2ad56 [codex/f3rb1-acceptance]
+C:/Users/kalib/.codex/worktrees/installed-artwork-reliability/aurora-launcher f50a3b3 [codex/installed-artwork-reliability]
+C:/Users/kalib/.codex/worktrees/performance-p0-2-build/aurora-launcher        6cbabd3 (detached HEAD)
+5e6199883ece4cb38308d080aaf9d45612594acf0ade0660baeb95aea1200f16 *.zcode-icon-diag.py
+e7577714c5582301e11449a27731439051a29d035c4d2373595fb6c5042bcc3e *.zcodeignore
+ad1790bff169f56025e6da2bc6f75b9434a046d478643f50ba0d68cbb25b5250 *UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt

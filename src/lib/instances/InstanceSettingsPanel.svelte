@@ -110,19 +110,8 @@
         The saved configuration this instance launches with.
       </p>
     </div>
-    <div class="group-row-actions">
-      {#if dirty}<span class="status-badge status-warning">Unsaved changes</span>{/if}
-      <button
-        type="button"
-        class="btn btn-quiet"
-        onclick={() => {
-          launcher.beginRename(instance.id);
-        }}
-        disabled={launcher.detailBusy !== null}
-      >
-        Rename
-      </button>
-    </div>
+    <!-- Rename lives once, in the workspace header. -->
+    {#if dirty}<div class="group-row-actions"><span class="status-badge status-warning">Unsaved changes</span></div>{/if}
   </div>
 
   {#if !draft}
@@ -336,18 +325,26 @@
 
 </div>
 <aside class="settings-tools">
-  <section class="group"><div class="group-heading"><h3 class="group-title">Maintenance</h3></div>
-    <div class="group-form tool-actions"><button class="btn" type="button" onclick={() => launcher.runValidate(instance.id)}>Validate instance</button>
-    <details><summary>Recovery backup storage</summary>
+  <section class="group maintenance" aria-labelledby="maintenance-title"><div class="group-heading"><h3 class="group-title" id="maintenance-title">Maintenance</h3></div>
+    <div class="group-row">
+      <div class="group-row-main"><span class="group-row-title">Installation</span><span class="group-row-detail">Verify installed files against the saved configuration.</span></div>
+      <button class="btn" type="button" onclick={() => launcher.runValidate(instance.id)}>Validate instance</button>
+    </div>
+    <div class="group-row">
+      <div class="group-row-main"><span class="group-row-title">Managed Java</span><span class="group-row-detail">The exact runtime this instance requires.</span></div>
+      <div class="group-row-actions">
+        <button class="btn btn-quiet" type="button" onclick={() => launcher.runRuntimeStatus(instance.id)}>Check managed Java</button>
+        <button class="btn" type="button" onclick={() => launcher.runEnsureRuntime(instance.id)}>Install / repair Java</button>
+      </div>
+    </div>
+    <details class="group-row tool-disclosure"><summary>Reinstall / restore configured content</summary><p class="field-hint">Explicitly reinstalls the saved game configuration and restores its reviewed Aurora Client and Fabric API bootstrap files. Worlds, config and unrelated mods stay untouched. Re-enable disabled bootstrap mods in Mods first; file conflicts require inspection.</p>
+      <button class="btn" type="button" disabled={dirty || launcher.detailInstallBusy !== null} onclick={() => launcher.runInstallConfiguration(instance.id)}>Reinstall configured content</button>
+    </details>
+    <details class="group-row tool-disclosure"><summary>Recovery backup storage</summary>
       <p class="field-hint">Manage older installation backups. The newest backups, the last 30 days, and any uncertain recovery data stay protected. Worlds and mods are unaffected.</p>
       <button class="btn" type="button" disabled={backupBusy || instance.state !== "ready" || launcher.detailInstallBusy !== null} onclick={() => void maintainBackups()}>{backupBusy ? "Checking backups…" : "Manage recovery backups"}</button>
       {#if backupTarget === instance.id && backupMessage}<p class="field-hint" role="status">{backupMessage}</p>{/if}
     </details>
-    <button class="btn" type="button" onclick={() => launcher.runRuntimeStatus(instance.id)}>Check managed Java</button>
-    <button class="btn" type="button" onclick={() => launcher.runEnsureRuntime(instance.id)}>Install / repair Java</button>
-    <details><summary>Reinstall / restore configured content</summary><p class="field-hint">Explicitly reinstalls the saved game configuration and restores its reviewed Aurora Client and Fabric API bootstrap files. Worlds, config and unrelated mods stay untouched. Re-enable disabled bootstrap mods in Mods first; file conflicts require inspection.</p>
-      <button class="btn" type="button" disabled={dirty || launcher.detailInstallBusy !== null} onclick={() => launcher.runInstallConfiguration(instance.id)}>Reinstall configured content</button>
-    </details></div>
   </section>
   <section class="group danger-zone"><div class="group-heading"><h3 class="group-title">Delete instance</h3></div>
     <div class="group-form"><p class="field-hint">Permanently removes this instance's worlds, mods, packs, config and logs. Shared Java, cache and accounts stay available.</p>
@@ -372,7 +369,12 @@
   .settings-section { min-width: 0; }
   .settings-section :global(.field-grid) { grid-template-columns: 1fr; }
   .tool-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
-  .danger-zone { border-color: var(--color-error); }
+  .danger-zone { border-color: color-mix(in srgb, var(--color-error) 45%, var(--f-edge)); }
+  .maintenance .group-row { padding: var(--space-4) var(--space-5); }
+  .tool-disclosure { display: block; }
+  .tool-disclosure summary { cursor: pointer; color: var(--color-text); font-weight: 500; padding-block: 2px; }
+  .tool-disclosure[open] summary { margin-bottom: var(--space-2); }
+  .tool-disclosure .btn { margin-top: var(--space-3); }
   .delete-dialog { max-width: 520px; width: calc(100vw - 64px); padding: var(--space-5); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); color: var(--color-text); background: var(--color-surface-raised); }
   .delete-dialog::backdrop { background: #0009; }
   .delete-dialog .tool-actions { margin-top: var(--space-4); justify-content: end; }

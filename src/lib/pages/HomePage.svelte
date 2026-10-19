@@ -126,6 +126,10 @@
       <InstanceSwitcher compact status={{ ready: launch.tone === "status-success", label: launch.label }}
         launchAction={{ label: launch.playLabel, disabled: launch.disabled, run: () => launcher.runPlay(instance.id) }} />
     </section>
+    <!-- Ready stays the quiet dot inside Launch (owner decision, df5d9da);
+         Starting/Running are already the button's own label. Any state that
+         blocks or delays Play is also stated in words, never color alone. -->
+    {#if launch.label !== "Ready" && launch.playLabel === "Launch"}<p class="launch-readiness {launch.tone}" aria-hidden="true">{launch.label}</p>{/if}
     </div>
     <PlayerPreview />
     {#if launch.blockers.length || launcher.playError || launch.failure || launch.exitDetail}
@@ -160,7 +164,7 @@
   .home-page { max-width: 1280px; margin-inline: auto; width: 100%; }
   .aurora-update-notice { margin-bottom: 16px; }
   .home-composition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: center; padding: var(--space-5); border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: radial-gradient(ellipse at 85% 45%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 65%), var(--f-panel); box-shadow: var(--f-shadow); position: relative; }
-  .home-composition { min-height: 404px; }
+  .home-composition { min-height: clamp(320px, 52vh, 404px); }
   .home-composition:has(.launch-feedback) :global(.player-preview.has-skin) { display: none; }
   .home-launch-column { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-5); min-width: 0; padding-block: var(--space-3); }
   .instance-heading { min-width: 0; width: 100%; }
@@ -168,6 +172,8 @@
   .instance-metadata { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); margin: var(--space-3) 0 0; color: var(--color-text-secondary); font-size: var(--text-metadata); line-height: 1.6; overflow-wrap: anywhere; }
   .instance-metadata span + span::before { content: '·'; margin-right: var(--space-3); color: var(--color-text-muted); }
   .instance-card { width: min(100%, 320px); aspect-ratio: 4 / 1; min-height: 4rem; min-width: 0; margin: 0; position: relative; z-index: 2; }
+  .launch-readiness { display: inline-flex; align-items: center; gap: var(--space-2); margin: calc(var(--space-2) * -1) 0 0; padding: 0; background: none; font-size: var(--text-secondary); font-weight: 500; }
+  .launch-readiness::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
   .launch-feedback { grid-column: 1 / -1; width: 100%; min-width: 0; margin: 0; border-top: 1px solid var(--f-edge); overflow-wrap: anywhere; }
   .launch-feedback :global(.group-row), .launch-feedback :global(.group-footer) { padding: var(--space-4) 0 0; }
   @media (max-width: 800px) { .home-composition { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: var(--space-4); } .home-launch-column { gap: var(--space-4); padding-block: var(--space-2); } }

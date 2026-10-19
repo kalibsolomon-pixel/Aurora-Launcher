@@ -219,8 +219,10 @@
   {/if}
 
   {#if context?.modrinthAvailable && view === "installed"}
-    <ContentRecognition {instance} kind="mod" onChanged={async () => { await refreshInstalled(instance.id); }} />
-    <ContentUpdates instanceId={instance.id} kind="mod" names={providerNames} bind:report={updatesReport} onChanged={async () => { await refreshInstalled(instance.id); await launcher.refreshState(); await launcher.refreshPlayReadiness(); }} />
+    <div class="content-tools">
+      <ContentRecognition {instance} kind="mod" onChanged={async () => { await refreshInstalled(instance.id); }} />
+      <ContentUpdates instanceId={instance.id} kind="mod" names={providerNames} bind:report={updatesReport} onChanged={async () => { await refreshInstalled(instance.id); await launcher.refreshState(); await launcher.refreshPlayReadiness(); }} />
+    </div>
   {/if}
 
   {#if launcher.modError}
