@@ -1,0 +1,153 @@
+{
+  "frames": {
+    "file": "config\\performanceoverlay\\benchmarks\\benchmark_20261019_030025.csv",
+    "sha256": "ffd93b273edbbf154be7a80327a7167755cebafdd0a7e1d77cbd4824c763417d",
+    "rows": 14406,
+    "firstElapsedMs": 9,
+    "lastElapsedMs": 60034,
+    "fps": 239.99425852969182,
+    "medianMs": 4.162,
+    "p95Ms": 4.782,
+    "p99Ms": 5.146900000000001,
+    "maxMs": 8.443,
+    "over125T": 90,
+    "over2T": 2,
+    "over50ms": 0,
+    "maxOver2TInOneSecond": 1,
+    "gcTimeDeltaMs": 45.0,
+    "gcCounterSamples": 60,
+    "heapMaxMiB": [
+      "2048"
+    ]
+  },
+  "family": {
+    "status": "complete",
+    "rootPid": 26116,
+    "startUtc": "2026-10-19T07:00:26.305719+00:00",
+    "endUtc": "2026-10-19T07:01:26.307503+00:00",
+    "seconds": 60.0001361,
+    "samplesPerProcess": {
+      "1760": 121,
+      "2224": 121,
+      "14268": 121,
+      "16804": 121,
+      "21588": 121,
+      "21916": 121,
+      "22748": 121,
+      "24636": 121,
+      "26116": 121
+    },
+    "identities": [
+      {
+        "pid": 1760,
+        "creationId": "134368659028189552"
+      },
+      {
+        "pid": 2224,
+        "creationId": "134368659027956651"
+      },
+      {
+        "pid": 14268,
+        "creationId": "134368659028552006"
+      },
+      {
+        "pid": 16804,
+        "creationId": "134368659027278855"
+      },
+      {
+        "pid": 21588,
+        "creationId": "134368664522596987"
+      },
+      {
+        "pid": 21916,
+        "creationId": "134368659027168519"
+      },
+      {
+        "pid": 22748,
+        "creationId": "134368659027993288"
+      },
+      {
+        "pid": 24636,
+        "creationId": "134368659026579959"
+      },
+      {
+        "pid": 26116,
+        "creationId": "134368659026528606"
+      }
+    ],
+    "membersStart": [
+      1760,
+      2224,
+      14268,
+      16804,
+      21588,
+      21916,
+      22748,
+      24636,
+      26116
+    ],
+    "membersEnd": [
+      1760,
+      2224,
+      14268,
+      16804,
+      21588,
+      21916,
+      22748,
+      24636,
+      26116
+    ],
+    "errors": [],
+    "processCpuSeconds": 44.4375,
+    "processCpuPercentOneCore": 74.06233200194357,
+    "processCpuPercentMachine": 2.645083285783699,
+    "summedRssMiBMin": 1885.9609375,
+    "summedRssMiBMax": 1886.81640625,
+    "availableMiBMin": 17219.09375,
+    "systemBusyPercent": 4.947134474645936,
+    "maxFamilyReadOverheadNs": 1380700,
+    "limitations": [
+      "Summed RSS double-counts shared pages",
+      "Not Java heap or unique physical memory",
+      "Family snapshots at endpoints may miss transient children",
+      "Whole process CPU is not active render/GC CPU",
+      "Observer overhead uncalibrated"
+    ]
+  },
+  "components": {
+    "game": {
+      "cpuSeconds": 44.4375,
+      "cpuPercentOneCore": 74.06233200194357,
+      "rssMiBMin": 1399.19921875,
+      "rssMiBMax": 1399.94921875
+    },
+    "launcher": {
+      "cpuSeconds": 0.0,
+      "cpuPercentOneCore": 0.0,
+      "rssMiBMin": 486.76171875,
+      "rssMiBMax": 486.8671875
+    }
+  },
+  "vm": {
+    "InitialHeapSize": "534773760",
+    "MaxHeapSize": "2147483648",
+    "UseG1GC": true,
+    "UseZGC": false,
+    "ZGenerational": false
+  },
+  "warmupSeconds": 94.052,
+  "comparison": "Compatibility/resource observation; native route/Loader0.19.5/no startup JFR differ from dev heap comparison. No before/after FPS gain claimed.",
+  "cameraExactMatch": true,
+  "normalExitCode": 0,
+  "fullscreenPrimary": true,
+  "heapConflictPersistenceRecovery": true,
+  "modDependencyRejectionRecovery": true,
+  "recovery": {
+    "inducedExactChildExitCode": -1,
+    "worldFilesUnchanged": true,
+    "secondFullscreenTitleObservationAccepted": false,
+    "windowedRelaunchObserved": true,
+    "postAbnormalNormalExitCode": 0,
+    "workaround": "Computer Use accessibility helper exited 3221225477 and returned non-target fullscreen frames after reset; title checkpoint invalidated. No server-thread log and unchanged world hashes verified before exact child termination. Subsequent smoke only switches copied options to windowed; completed fullscreen primary evidence kept."
+  }
+}

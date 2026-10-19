@@ -1,0 +1,180 @@
+{
+  "build": "Current embedded frontend/native unoptimized debug Windows build",
+  "binarySha256": "FDBFFD3687E51394E6B84A3C75AEC148054E69D1E2B06F9DF00ED35459903970",
+  "idle": [
+    {
+      "status": "complete",
+      "rootPid": 16536,
+      "startUtc": "2026-10-19T06:43:24.909486+00:00",
+      "endUtc": "2026-10-19T06:44:24.910775+00:00",
+      "seconds": 60.0003334,
+      "samplesPerProcess": {
+        "632": 121,
+        "9096": 121,
+        "16536": 121,
+        "19272": 121,
+        "24440": 121,
+        "26828": 121,
+        "29292": 121,
+        "29384": 121
+      },
+      "identities": [
+        {
+          "pid": 632,
+          "creationId": "134368652510308949"
+        },
+        {
+          "pid": 9096,
+          "creationId": "134368652512660491"
+        },
+        {
+          "pid": 16536,
+          "creationId": "134368652510092957"
+        },
+        {
+          "pid": 19272,
+          "creationId": "134368652511918757"
+        },
+        {
+          "pid": 24440,
+          "creationId": "134368652511132601"
+        },
+        {
+          "pid": 26828,
+          "creationId": "134368652512102430"
+        },
+        {
+          "pid": 29292,
+          "creationId": "134368652511888925"
+        },
+        {
+          "pid": 29384,
+          "creationId": "134368652510936637"
+        }
+      ],
+      "membersStart": [
+        632,
+        9096,
+        16536,
+        19272,
+        24440,
+        26828,
+        29292,
+        29384
+      ],
+      "membersEnd": [
+        632,
+        9096,
+        16536,
+        19272,
+        24440,
+        26828,
+        29292,
+        29384
+      ],
+      "errors": [],
+      "processCpuSeconds": 0.046875,
+      "processCpuPercentOneCore": 0.07812456588782889,
+      "processCpuPercentMachine": 0.0027901630674224604,
+      "summedRssMiBMin": 502.19921875,
+      "summedRssMiBMax": 504.1484375,
+      "availableMiBMin": 18728.421875,
+      "systemBusyPercent": 2.3584159337335384,
+      "maxFamilyReadOverheadNs": 2031700,
+      "limitations": [
+        "Summed RSS double-counts shared pages",
+        "Not Java heap or unique physical memory",
+        "Family snapshots at endpoints may miss transient children",
+        "Whole process CPU is not active render/GC CPU",
+        "Observer overhead uncalibrated"
+      ]
+    },
+    {
+      "status": "complete",
+      "rootPid": 26116,
+      "startUtc": "2026-10-19T06:52:22.966195+00:00",
+      "endUtc": "2026-10-19T06:53:22.967282+00:00",
+      "seconds": 60.0003338,
+      "samplesPerProcess": {
+        "1760": 121,
+        "2224": 121,
+        "14268": 121,
+        "16804": 121,
+        "21916": 121,
+        "22748": 121,
+        "24636": 121,
+        "26116": 121
+      },
+      "identities": [
+        {
+          "pid": 1760,
+          "creationId": "134368659028189552"
+        },
+        {
+          "pid": 2224,
+          "creationId": "134368659027956651"
+        },
+        {
+          "pid": 14268,
+          "creationId": "134368659028552006"
+        },
+        {
+          "pid": 16804,
+          "creationId": "134368659027278855"
+        },
+        {
+          "pid": 21916,
+          "creationId": "134368659027168519"
+        },
+        {
+          "pid": 22748,
+          "creationId": "134368659027993288"
+        },
+        {
+          "pid": 24636,
+          "creationId": "134368659026579959"
+        },
+        {
+          "pid": 26116,
+          "creationId": "134368659026528606"
+        }
+      ],
+      "membersStart": [
+        1760,
+        2224,
+        14268,
+        16804,
+        21916,
+        22748,
+        24636,
+        26116
+      ],
+      "membersEnd": [
+        1760,
+        2224,
+        14268,
+        16804,
+        21916,
+        22748,
+        24636,
+        26116
+      ],
+      "errors": [],
+      "processCpuSeconds": 0.015625,
+      "processCpuPercentOneCore": 0.02604152178900045,
+      "processCpuPercentMachine": 0.0009300543496071589,
+      "summedRssMiBMin": 484.4453125,
+      "summedRssMiBMax": 485.2734375,
+      "availableMiBMin": 18693.63671875,
+      "systemBusyPercent": 2.1924720471451313,
+      "maxFamilyReadOverheadNs": 2690100,
+      "limitations": [
+        "Summed RSS double-counts shared pages",
+        "Not Java heap or unique physical memory",
+        "Family snapshots at endpoints may miss transient children",
+        "Whole process CPU is not active render/GC CPU",
+        "Observer overhead uncalibrated"
+      ]
+    }
+  ]
+}

@@ -1,53 +1,56 @@
-# Aurora performance initiative — Launcher execution record
+# Aurora performance initiative — Launcher completion record
 
-Owner authorization: end-to-end cross-repository initiative, 2026-10-18
-(America/New_York). Status ACTIVE; no performance acceptance or release yet.
+Completed 2026-10-19 under the owner's end-to-end cross-repository authorization.
+No release, push, merge, public artifact distribution or system-wide changes.
+Unified report: `C:/Dev/Aurora-Client/PERFORMANCE_FINAL_REPORT.md`.
 
-Unified roadmap and running record: `C:/Dev/Aurora-Client/PERFORMANCE_INITIATIVE.md`.
-The owner now authorizes both repositories; historical per-phase stop instructions
-remain historical records rather than restrictions on this new initiative.
+Baseline `4984010d5309e05ec923535bba066c4e7aa90a5b`, original branch
+`codex/client-3-production-authority`, local branch `codex/performance-initiative`.
+Original 3,268-file/740,990,316-byte identities and backups remain under
+`.git/performance-initiative/20261019T032535Z/`. Final checks found zero missing
+files and zero changes to those Launcher originals. Original untracked files and
+all historical performance evidence remain outside these commits.
 
-Baseline HEAD `4984010d5309e05ec923535bba066c4e7aa90a5b`, original branch
-`codex/client-3-production-authority`, current local branch
-`codex/performance-initiative`. Origin remains the owner's Aurora-Launcher repository.
-Private baseline/backup: `.git/performance-initiative/20261019T032535Z/`, 3,268
-file identities, including retained performance evidence and protected local files.
-No production files, accounts, runtime, instance, release or system setting changed.
+A: reviewed prior P0/P1/P2/P3 evidence and ownership; protected originals.
+B/C: Client rejected bounded re-parking on repeated deadline-tail regression and
+accepted only the profile-attributed stable world-key cache in Client `9513af4`.
+D: existing Rust authority audited in `PERFORMANCE_CONFIGURATION_AUDIT.md`.
+E: `JVM_PERFORMANCE_INITIATIVE_RESULTS.md` records four valid G1 processes; retain
+2048/default G1/no Xms. Interrupted/short-warmup ZGC data remain ineligible. No
+extra replacement or parameter sweep; no measured ZGC performance conclusion.
+F/G: `PERFORMANCE_POLICY_DECISION.md` retains the existing advice/manual system,
+without unsupported speed/efficiency claims. Native UI persistence, conflict and
+recovery checks passed against a fresh test-owned instance copy.
+H: `LAUNCHER_OVERHEAD_RESULTS.md` records two complete 60s native/WebView-family
+idle captures, 0.078/0.026% of one logical core. No material attributable idle CPU
+problem, no production rewrite; debug/working-set/startup limits are explicit.
+I: `INTEGRATED_PERFORMANCE_RESULTS.md` records native managed Java21/Fabric0.19.5/
+Sodium/OpenGL final Client launch, complete fullscreen gameplay capture and normal
+exit0. An induced exact test-child exit-1 was reported; windowed relaunch and
+normal exit0 succeeded. Original and copied saved-world preservation verified.
+J: unified measured report, local commits and final preservation checks complete.
 
-Phase A established that P1 already removes a redundant startup-readiness request;
-P2 already implements optional persisted Efficient/Balanced/Performance/Custom
-advice modes, explicit application, manual controls and bounded memory facts.
-Performance intentionally equals Balanced. Do not duplicate this architecture.
+Verification: 986 Rust library + 6 integration pass, 31 deliberately ignored;
+frontend check 0 errors/warnings, frontend/embedded native build pass; 282 frontend
+tests pass serially. Parallel frontend run had Vite SSR module-loader timeouts;
+failed/pass logs remain in `.git/performance-initiative/validation`. Client548 pass.
+No new production Launcher source was changed, so these suites were not repeatedly
+rerun for documentation/tooling edits. Tools were exercised on real captures.
 
-P3-B.1 is inconclusive: only one valid pair, a 20.50 MiB RSS reduction versus
-72.69 MiB candidate variation, and no demonstrated repeatable improvement.
-P3-B.1a camera checks passed but performance timing alignment failed; those runs
-remain ineligible for heap conclusions. Retain 2048 MiB, ergonomic initial heap,
-managed game-plan-authoritative Java and default G1 until new evidence justifies
-a change. The Efficient 1536 MiB advice is a heuristic, not measured superiority.
+Workarounds/limits: missing API in copied dev mods was correctly blocked and fixed
+in the new test root; first copy attempt hit MAX_PATH and was retained before a
+fresh shorter root; native first-Ready latency remains unaccepted/manual refresh;
+Computer Use helper failed second fullscreen targeting after reset, so that title
+checkpoint was invalidated and later smoke was windowed. Primary fullscreen data
+and options were preserved. No Linux/WSL environment, Vulkan or display-latency
+acceptance. Details are explicit in the individual reports; none is a hidden gain.
 
-Client Phase B is complete: two pairs rejected bounded re-parking after repeated
-deadline-tail regression; production PARK/500 is retained. Client commit `9513af4`
-adds a profile-attributed single-entry world-key cache; 548 tests pass and a
-six-process Java 21 diagnostic removes stable-call allocation (no FPS claim).
+Private integrated evidence copied under `.git/performance-initiative/integration-evidence/`;
+raw dev comparisons under Client `run/jvm-initiative/` (1,340-file capture manifest).
+No account/browser/world/private log contents enter tracked reports. The new test
+root is retained; all test game/Launcher processes are closed. Existing Gradle JVM
+was left alone. Original untracked local files plus generated Python caches stay
+uncommitted; no `git clean` or cleanup of owner data.
 
-Phase D audit is complete in `PERFORMANCE_CONFIGURATION_AUDIT.md`; retain existing
-authorities and controls. Phase E criteria were committed before preparation in
-`JVM_PERFORMANCE_INITIATIVE_PROTOCOL.md`: A/B/C/C/B/A = G1 2048 / G1 1536 /
-generational ZGC 2048 MiB, Java-chosen initial heap. Six fresh inputs are prepared
-under Client `run/jvm-initiative`. Run 1 is warming up. No primary results yet.
-Continue F–J: validate or retain advice policies, investigate Launcher process-family
-startup/idle overhead and test the combined system.
-No launch-time limiter belongs here. Existing tools under `tools/benchmark/` are
-reused read-only for the Client comparison. Physical presentation and input latency
-remain distinct from Overlay's internal HUD callback timing.
-
-Current checks: 986 Rust library + 6 integration tests passed (31 explicitly
-ignored), frontend check 0 errors/warnings, frontend build and current embedded
-debug native build passed. Parallel frontend run had Vite SSR module-loader
-timeouts; all 282 tests passed with `--test-concurrency=1`. Both logs are preserved
-under `.git/performance-initiative/validation`. This is a local test workaround,
-not an accepted production defect or a product change. No heavy work during captures.
-
-**AURORA CLIENT HANDOFF: NOT YET REQUIRED** — the Client work is already authorized
-and executing in its own repository; no additional Client source fix is established.
+**AURORA CLIENT HANDOFF: NOT YET REQUIRED** — authorized Client work is committed
+in its own repository; no additional justified Client fix follows from these data.
