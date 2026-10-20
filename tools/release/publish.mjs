@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { selectRelease, selectAsset, verifyBytes, verifyNotesIdentity } from "./release-state.mjs";
+import { selectRelease, selectAsset, verifyBytes, verifyNotesIdentity, publicationNotes } from "./release-state.mjs";
 import { verifyDirectory, repository as productionRepository } from "./updater-release.mjs";
 
 const [version, sourceSha, assetsDirectory, resumeIdText, mode] = process.argv.slice(2);
@@ -51,7 +51,7 @@ if (manifest.version !== version || manifest.sourceSha !== sourceSha || !Array.i
 const expected = [...manifest.artifacts, ...manifest.updater.signatures, { name: "release-assets.json", sizeBytes: manifestBytes.length, sha256: (await import("node:crypto")).createHash("sha256").update(manifestBytes).digest("hex") }];
 for (const entry of expected) verifyBytes(await readFile(join(directory, entry.name)), entry);
 const notesFile = join(import.meta.dirname, `../../RELEASE_${version.replaceAll(".", "_")}_NOTES.md`);
-const sourceNotes = (await readFile(notesFile, "utf8")).trim();
+const sourceNotes = publicationNotes(await readFile(notesFile, "utf8"), version);
 verifyNotesIdentity(sourceNotes, version);
 const notes = `${sourceNotes}\n\n## Installer artifacts\n\n| File | Architecture | Bytes | SHA-256 |\n| --- | --- | ---: | --- |\n${manifest.artifacts.map((a) => `| ${a.name} | ${a.architecture} | ${a.sizeBytes} | \`${a.sha256}\` |`).join("\n")}\n`;
 const normalized = (value) => value.replaceAll("\r\n", "\n").trim();

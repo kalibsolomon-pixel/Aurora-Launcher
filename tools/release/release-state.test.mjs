@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { selectRelease, selectAsset, verifyBytes, verifyNotesIdentity, expectedAssetName, productionClientIdentities, productionClientVersion } from "./release-state.mjs";
+import { selectRelease, selectAsset, verifyBytes, verifyNotesIdentity, expectedAssetName, productionClientIdentities, productionClientVersion, publicationNotes } from "./release-state.mjs";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 const sha = "a".repeat(40);
 const draft = { id: 9, tag_name: "v1.1.0", target_commitish: sha, draft: true, prerelease: false };
@@ -47,4 +48,30 @@ test("production Client ordering is semantic and independent of catalog order", 
     { schemaVersion: 1, releases: [{ auroraVersion: '3.0.0-fake', channel: 'stable' }] }]) {
     assert.throws(() => productionClientIdentities(catalog));
   }
+});
+
+test("1.5.0 publication notes omit only its exact preparation notices and preserve release facts", () => {
+  const source = readFileSync(new URL('../../RELEASE_1_5_0_NOTES.md', import.meta.url), 'utf8');
+  const notices = [
+    "Draft for the selected release candidate. Publication requires the remaining\nacceptance and owner gates in LAUNCHER_1_5_0_RELEASE_ACCEPTANCE.md.",
+    "Final signed-installer, authenticated gameplay, supported-mod-stack and upgrade\nacceptance are still pending. This draft is not a publication announcement.",
+  ];
+  const facts = 'Aurora Client 3.0.0.\n\n## Known limitations\n\nWindows Authenticode publisher signing remains unconfigured.';
+  const fixture = `# Aurora Launcher 1.5.0\n\n${notices[0]}\n\n${facts}\n\n${notices[1]}\n`;
+  assert.equal(publicationNotes(fixture, '1.5.0'), `# Aurora Launcher 1.5.0\n\n${facts}`);
+  const final = publicationNotes(source, '1.5.0');
+  assert(!final.includes('This draft is not a publication announcement.'));
+  assert(!final.includes('Draft for the selected release candidate.'));
+  assert.match(final, /Windows\s+Authenticode publisher signing remains unconfigured\./);
+  assert(final.includes('Aurora Client 3.0.0'));
+  assert(final.includes('## Known limitations'));
+  assert.equal(publicationNotes(final, '1.5.0'), final);
+  assert.equal(publicationNotes(source.replaceAll(/\r?\n/g, '\r\n'), '1.5.0'), final);
+  assert.equal(readFileSync(new URL('../../RELEASE_1_5_0_NOTES.md', import.meta.url), 'utf8'), source);
+});
+
+test("publication notes preserve historical versions and still reject a wrong source identity", () => {
+  const old = '# Aurora Launcher 1.4.2\n\nAurora Client 3.0.0.\n\nHistorical draft wording is retained.\n';
+  assert.equal(publicationNotes(old, '1.4.2'), old.trim());
+  assert.throws(() => publicationNotes(old, '1.5.0'));
 });

@@ -71,6 +71,17 @@ no ownership rule, test isolation, skip or assertion was weakened.
 
 ## Production requirements
 
+## Publication notes
+
+The release tools now prepare the same final notes for the private updater
+manifest and the gated GitHub publication. Only the two exact 1.5.0 preparation
+status paragraphs are omitted; feature facts, compatibility and limitations
+remain. Source draft notices stay in place until publication actually succeeds.
+This changes presentation copy only: signing, exact-byte/source checks,
+environment approvals and authority advancement retain their existing gates.
+The full release-tooling suite passes **118** tests, including real-source,
+CRLF, idempotence, historical-version and product-identity coverage.
+
 Release platform: **Windows x64 NSIS**. Linux packages and Linux secure account
 persistence are not part of 1.5.0. Updater minisign authentication remains
 mandatory; Windows Authenticode publisher signing remains unconfigured.

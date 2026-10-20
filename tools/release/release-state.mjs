@@ -53,6 +53,22 @@ export function verifyNotesIdentity(sourceNotes, version, clientVersion = produc
   }
 }
 
+// Source preparation status stays in Git until publication succeeds. Private
+// production outputs carry the reviewed feature/compatibility copy that will
+// become public only after the existing publication approval; no gate is waived.
+export function publicationNotes(sourceNotes, version) {
+  verifyNotesIdentity(sourceNotes, version);
+  if (version !== "1.5.0") return sourceNotes.trim();
+  const preparationNotices = [
+    "Draft for the selected release candidate. Publication requires the remaining\nacceptance and owner gates in LAUNCHER_1_5_0_RELEASE_ACCEPTANCE.md.",
+    "Final signed-installer, authenticated gameplay, supported-mod-stack and upgrade\nacceptance are still pending. This draft is not a publication announcement.",
+  ];
+  const paragraphs = sourceNotes.replaceAll("\r\n", "\n").trim().split(/\n\s*\n/);
+  const notes = paragraphs.filter((paragraph) => !preparationNotices.includes(paragraph)).join("\n\n");
+  verifyNotesIdentity(notes, version);
+  return notes;
+}
+
 export function selectAsset(assets, expected) {
   const expectedName = expectedAssetName(expected.name);
   const candidates = assets.filter((asset) => asset.name === expected.name || asset.name === expectedName);
