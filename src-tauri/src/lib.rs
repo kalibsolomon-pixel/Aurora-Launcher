@@ -107,6 +107,8 @@ pub fn run() {
             application::set_appearance,
             application::get_desktop_integration,
             application::create_desktop_shortcut,
+            application::create_start_menu_shortcut,
+            application::open_launcher_folder,
             application::remove_desktop_shortcut,
             application::acquire_artifact,
             application::plan_minecraft_install,

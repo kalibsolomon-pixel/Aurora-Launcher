@@ -18,21 +18,25 @@ before(async () => {
 });
 after(async () => { await server?.close(); });
 it('category keyboard movement wraps, supports Home/End, and ignores unrelated keys', () => {
-  assert.equal(settingsCategories.length, 8);
+  assert.equal(settingsCategories.length, 7);
   assert.equal(categoryAtKey('Appearance', 'ArrowLeft'), 'About');
   assert.equal(categoryAtKey('About', 'ArrowRight'), 'Appearance');
   assert.equal(categoryAtKey('General', 'Home'), 'Appearance');
   assert.equal(categoryAtKey('General', 'End'), 'About');
   assert.equal(categoryAtKey('General', 'Tab'), null);
 });
-it('instance access renders saved MiB and targets existing workspace, with no global memory control', () => {
-  navigation.settingsCategory = 'Minecraft & Java';
-  launcher.launcherState = { config: { selectedInstanceId: 'a' }, instances: [{ id: 'a', displayName: 'My game', configuration: { memoryMib: 3217 } }] };
+it('global settings keep game configuration in the instance workspace', () => {
+  navigation.settingsCategory = 'General';
   const html = render(Settings).body;
-  assert.match(html, /Saved memory: 3217 MiB/); assert.match(html, /Open instance Settings/);
-  assert.doesNotMatch(html, /type="number"|type="text"|type="range"/);
-  launcher.launcherState.config.selectedInstanceId = null;
-  assert.match(render(Settings).body, /Open Library/);
+  assert.doesNotMatch(html, /Minecraft &amp; Java|Minecraft & Java|Open instance Settings|Saved memory/);
+  for (const label of ['Add Desktop Shortcut', 'Add to Start Menu', 'Open Path']) assert.ok(html.includes(label));
+});
+it('Discord exposes exactly the five requested preferences', () => {
+  navigation.settingsCategory = 'Discord';
+  const html = render(Settings).body;
+  assert.equal((html.match(/type="checkbox"/g) ?? []).length, 5);
+  for (const label of ['Discord Rich Presence', 'Elapsed Play Time', 'Show World', 'Show Server', 'Show Server Address']) assert.ok(html.includes(label));
+  assert.doesNotMatch(html, /Discord &amp; privacy|Platform \/ loader|Aurora Client active state|Instance name/);
 });
 it('About renders only running native version/platform and truthfully handles unavailable values', () => {
   navigation.settingsCategory = 'About';
@@ -45,7 +49,7 @@ it('About renders only running native version/platform and truthfully handles un
 it('system accessibility is informational, without persisted override controls', () => {
   navigation.settingsCategory = 'Accessibility'; const html = render(Settings).body;
   assert.match(html, /Reduced motion/); assert.match(html, /Reduced transparency/);
-  assert.match(html, /operating system/); assert.doesNotMatch(html, /type="checkbox"|type="range"|<select/);
+  assert.match(html, /About Reduced motion/); assert.doesNotMatch(html, /type="checkbox"|type="range"|<select/);
 });
 it('save feedback never claims success while pending or failed', () => {
   const props = { busy: false, error: '', saved: true, retry: () => {} };

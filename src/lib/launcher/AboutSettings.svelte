@@ -2,7 +2,7 @@
   import { launcher } from './store.svelte';
   import SettingsRow from './SettingsRow.svelte';
 </script>
-<div class="section-intro"><h3>About Aurora</h3><p>A standalone launcher for Aurora Client and isolated Minecraft: Java Edition instances.</p></div>
+<div class="section-intro"><h3>About Aurora</h3></div>
 <section class="group" aria-label="Running application">
   <SettingsRow id="about-version" title="Launcher version" description="Reported by the running native application.">
     <span class="setting-state">{launcher.status?.launcherVersion ?? 'Version unavailable'}</span>
@@ -11,5 +11,5 @@
     <span class="setting-state">{launcher.status?.platform ? `${launcher.status.platform.os} · ${launcher.status.platform.architecture}` : 'Platform unavailable'}</span>
   </SettingsRow>
   <SettingsRow id="about-license" title="License" description="Aurora Launcher is MIT licensed. Minecraft requires your own entitled account." />
-  <p class="group-footer">Independent of Microsoft, Mojang Studios, Fabric, Forge and NeoForge. Account credentials remain managed by the native authentication system.</p>
+
 </section>

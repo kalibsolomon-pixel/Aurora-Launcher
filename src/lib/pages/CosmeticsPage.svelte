@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from '$lib/shell/Tooltip.svelte';
   import { tick, untrack } from 'svelte';
   import type { HeadAvatar, SkinModel } from '$lib/backend';
   import { launcher } from '$lib/launcher/store.svelte';
@@ -78,7 +79,7 @@
 
 <div class="page f-pilot cosmetics-page">
   <header class="page-header">
-    <div><h2 class="page-title">Appearance</h2><p class="page-subtitle">Your collection. Your character.</p></div>
+    <div><h2 class="page-title">Appearance</h2></div>
   </header>
   <div class="cosmetics-topbar">
     <div class="cosmetics-tabs" role="tablist" tabindex="-1" aria-label="Cosmetic library" onkeydown={tabsKey}>
@@ -112,16 +113,16 @@
           <label class="model-setting">Saved model <select aria-label="Saved skin model" value={selected.model} disabled={cosmetics.localBusy} onchange={event=>cosmetics.setModel(selected.id,event.currentTarget.value as SkinModel)}><option value="classic">Classic · 4px arms</option><option value="slim">Slim · 3px arms</option></select></label>
           <button class="btn btn-primary" disabled={!fresh || cosmetics.remoteBusy || cosmetics.localBusy || !texture || isCurrentSkin(selected,currentConfirmed)} onclick={apply}>{isCurrentSkin(selected,currentConfirmed)?'Current skin':cosmetics.remoteBusy?'Updating account…':`Apply to ${account?.minecraftName ?? 'Minecraft account'}`}</button>
           <div class="secondary-actions"><button class="btn btn-secondary" disabled={cosmetics.localBusy} onclick={()=>openDialog('rename')}>Rename</button><button class="btn btn-quiet" disabled={cosmetics.localBusy} onclick={()=>openDialog('delete')}>Remove from library</button></div>
-          <p class="detail-note">Model and name changes stay local. Apply uploads this saved skin to the selected account.</p>
+          <Tooltip label="About saved skin changes">Model and name changes stay local. Apply uploads this saved skin to the selected account.</Tooltip>
         {:else if tab==='skins'}
-          <button class="btn btn-secondary" disabled={!fresh || !remote?.hasCurrentSkin || cosmetics.localBusy} onclick={saveCurrent}>Save current skin to library</button><p class="detail-note">Select a saved skin to preview, rename or apply it.</p>
+          <button class="btn btn-secondary" disabled={!fresh || !remote?.hasCurrentSkin || cosmetics.localBusy} onclick={saveCurrent}>Save current skin to library</button>
         {:else}
-          <button class="btn btn-primary" disabled={!fresh || cosmetics.remoteBusy || capeIsActive} onclick={equipCape}>{capeIsActive&&fresh?'Currently active':cape?`Equip ${cape.name}`:'Use No Cape'}</button><p class="detail-note">Only your official owned capes can be equipped. No custom cape imports or unlocks.</p>
+          <button class="btn btn-primary" disabled={!fresh || cosmetics.remoteBusy || capeIsActive} onclick={equipCape}>{capeIsActive&&fresh?'Currently active':cape?`Equip ${cape.name}`:'Use No Cape'}</button>
         {/if}
       </div>
 
       {#if tab==='skins'}
-        <div class="section-heading"><div><h3>Skin Library</h3><p>Saved on this Launcher · shared across accounts</p></div><span class="count">{cosmetics.presets.length} / 256</span></div>
+        <div class="section-heading"><div><h3>Skin Library</h3></div><span class="count">{cosmetics.presets.length} / 256</span></div>
         <div class="library-controls">
           <input type="search" aria-label="Search saved skins" placeholder="Search your skins…" bind:value={cosmetics.query} />
           <button class="filter-button" aria-pressed={cosmetics.favoritesOnly} onclick={()=>cosmetics.favoritesOnly=!cosmetics.favoritesOnly}>★ Favorites</button>
@@ -132,7 +133,7 @@
         {/if}
         {#if cosmetics.libraryError}<div class="service-message" role="alert">{cosmetics.libraryError}<button class="btn btn-quiet" onclick={()=>cosmetics.loadPresets(true)}>Reload library</button></div>{/if}
         {#if cosmetics.libraryLoading && !cosmetics.presets.length}<p class="empty" role="status">Loading your saved skins…</p>
-        {:else if !cosmetics.presets.length}<div class="empty"><Icon name="cosmetics" size={38} /><h4>Make room for your favorites</h4><p>Import a Java skin to start your collection.<br />You can organize and preview it before applying.</p><button class="btn btn-secondary" onclick={()=>openDialog('import')}>Import your first skin</button></div>
+        {:else if !cosmetics.presets.length}<div class="empty"><Icon name="cosmetics" size={38} /><h4>Make room for your favorites</h4><p>Import a Java skin to start your collection.</p><button class="btn btn-secondary" onclick={()=>openDialog('import')}>Import your first skin</button></div>
         {:else if !entries.length}<div class="empty"><h4>No matching skins</h4><p>Try a different search or show all saved skins.</p><button class="btn btn-secondary" onclick={()=>{cosmetics.query='';cosmetics.favoritesOnly=false;}}>Clear filters</button></div>
         {:else}
           <!-- svelte-ignore a11y_no_noninteractive_tabindex (named scroll region supports keyboard scrolling) -->
@@ -147,7 +148,7 @@
         {/if}
       {:else}
         <div class="section-heading"><div><h3>Official capes</h3><p>{account ? `Owned by ${account.minecraftName}` : 'Your Minecraft account inventory'}</p></div>{#if remote}<span class="count">{capes.length} owned</span>{/if}</div>
-        <p class="cape-explanation">Preview any owned cape, then choose Equip. A preview never changes your account.</p>
+
         {#if !accountId}<div class="empty"><Icon name="cosmetics" size={38} /><h4>Your capes live with your account</h4><p>Connect a Minecraft account to see its official capes.</p><button class="btn btn-secondary" onclick={()=>accountManager.show()}>Connect account</button></div>
         {:else if cosmetics.loading && !remote}<p class="empty" role="status">Loading owned capes…</p>
         {:else if !remote}<div class="empty"><h4>Cape inventory unavailable</h4><p>Refresh your account when Minecraft Services is available.</p></div>
@@ -241,9 +242,8 @@
   .detail-actions>.btn { white-space:normal; overflow-wrap:anywhere; }
   .model-setting { display:flex; flex-direction:column; gap:8px; font-size:12px; color:var(--color-text-secondary); }
   .secondary-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
-  .detail-note,.cape-explanation,.no-capes { font-size:12px; line-height:1.6; color:var(--color-text-secondary); margin:0; }
+  .detail-note,.no-capes { font-size:12px; line-height:1.6; color:var(--color-text-secondary); margin:0; }
   .preview-skin-note { text-align:center; margin-top:12px; }
-  .cape-explanation { margin-bottom:20px; }
   .no-capes { padding:20px 0 0; }
   .cape-card,.no-cape { padding:14px; cursor:pointer; text-align:left; font:inherit; }
   .cape-art,.no-cape-art { height:160px; display:grid; place-items:center; background:radial-gradient(ellipse,var(--color-accent-soft),transparent 70%); }

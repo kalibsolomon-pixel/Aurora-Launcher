@@ -4,6 +4,7 @@
   import SettingsFeedback from './SettingsFeedback.svelte';
   import { getAppearance, LauncherBackendError } from '$lib/backend';
   import Icon from '$lib/shell/Icon.svelte';
+  import Tooltip from '$lib/shell/Tooltip.svelte';
   let motionSpeed = $state(untrack(() => appearance.auroraMotionSpeed));
   let customHex = $state(untrack(() => appearance.accent.type === 'custom' ? appearance.accent.hex : '#8b80ff'));
   let themeChoice = $state(untrack(() => appearance.theme)), backgroundChoice = $state(untrack(() => appearance.background));
@@ -28,7 +29,7 @@
   }
 </script>
 <section class="appearance-surface f-surface" aria-labelledby="appearance-title">
-          <div class="section-intro"><h3 id="appearance-title">Appearance</h3><p>Personalize the launcher's surfaces, background and selection color. Changes apply immediately after saving.</p></div>
+          <div class="section-intro"><h3 id="appearance-title">Appearance</h3></div>
           {#if !appearance.state && !appearance.error}<p role="status">Loading appearance…</p>{/if}
           <ul class="appearance-summary" aria-label="Current appearance"><li>Theme: {appearance.state?.themes.find(item => item.id === appearance.theme)?.label ?? appearance.theme}</li><li>Background: {appearance.background === 'borealis' ? 'Aurora Borealis' : 'Simple'}</li><li>Accent: {appearance.accent.type === 'custom' ? appearance.accent.hex : appearance.state?.accents.find(item => appearance.accent.type === 'preset' && item.id === appearance.accent.id)?.label ?? appearance.accent.id}</li></ul>
           <fieldset class="choice-section" disabled={!appearance.state}><legend>Theme</legend>
@@ -42,7 +43,7 @@
               {/each}
             </div>
           </fieldset>
-          <fieldset class="choice-section" disabled={!appearance.state} aria-describedby="background-description"><legend>Background</legend>
+          <fieldset class="choice-section" disabled={!appearance.state}><legend>Background <Tooltip label="About background">Borealis adds gentle motion and frosted surfaces. Motion rests when Aurora is inactive and follows your system’s reduced-motion setting.</Tooltip></legend>
             <div class="background-grid">
               {#each [{id:'simple',label:'Simple'},{id:'borealis',label:'Aurora Borealis'}] as background}
                 <label class="background-tile" class:chosen={appearance.background === background.id}>
@@ -51,16 +52,16 @@
                 </label>
               {/each}
             </div>
-            <p class="choice-note" id="background-description">Borealis adds gentle motion and frosted surfaces. Motion rests when Aurora is inactive and follows your system’s reduced-motion setting.</p>
+
           </fieldset>
           {#if appearance.background === 'borealis'}
             <div class="motion-setting">
-              <div class="motion-heading"><label for="aurora-motion">Aurora motion</label><output for="aurora-motion">{motionSpeed} / 100</output></div>
-              <div class="motion-scale"><span>Slow</span><input id="aurora-motion" type="range" min="0" max="100" step="1" bind:value={motionSpeed} disabled={appearance.busy} aria-valuetext={motionSpeed < 30 ? 'Slow' : motionSpeed > 70 ? 'Fast' : 'Balanced'} aria-describedby="motion-description" onchange={() => { const speed = motionSpeed; void save(() => appearance.setAuroraMotionSpeed(speed)); }} /><span>Fast</span></div>
-              <p class="choice-note" id="motion-description">Playback speed from slow to fast; 0 is the slowest speed. Pauses when Aurora is inactive. Reduced motion in your system keeps Borealis still.</p>
+              <div class="motion-heading"><span><label for="aurora-motion">Aurora motion</label> <Tooltip label="About Aurora motion">Playback speed from slow to fast; 0 is the slowest speed. Pauses when Aurora is inactive. Reduced motion in your system keeps Borealis still.</Tooltip></span><output for="aurora-motion">{motionSpeed} / 100</output></div>
+              <div class="motion-scale"><span>Slow</span><input id="aurora-motion" type="range" min="0" max="100" step="1" bind:value={motionSpeed} disabled={appearance.busy} aria-valuetext={motionSpeed < 30 ? 'Slow' : motionSpeed > 70 ? 'Fast' : 'Balanced'} onchange={() => { const speed = motionSpeed; void save(() => appearance.setAuroraMotionSpeed(speed)); }} /><span>Fast</span></div>
+
             </div>
           {/if}
-          <fieldset class="choice-section accent-section" disabled={!appearance.state} aria-describedby="accent-description"><legend>Accent</legend>
+          <fieldset class="choice-section accent-section" disabled={!appearance.state}><legend>Accent <Tooltip label="About accent">Selection, focus and primary actions follow your accent across the launcher. Status colors keep their meaning. Custom colors must stay visible on dark surfaces.</Tooltip></legend>
             <div class="accent-picker">
               {#each appearance.state?.accents ?? [] as accent}
                 {@const selected = appearance.accent.type === 'preset' && appearance.accent.id === accent.id}
@@ -73,11 +74,11 @@
                    choosing a color applies it immediately. No second row. -->
               <label class="accent-option" class:chosen={appearance.accent.type === 'custom'} title="Choose a custom accent color">
                 <input class="custom-picker-input" type="color" aria-label="Custom accent color" value={customHex} disabled={appearance.busy}
-                  aria-describedby="accent-description" onchange={(event) => { customHex = event.currentTarget.value; const hex = customHex; void save(() => appearance.setAccent({ type: 'custom', hex })); }} />
+                  onchange={(event) => { customHex = event.currentTarget.value; const hex = customHex; void save(() => appearance.setAccent({ type: 'custom', hex })); }} />
                 <span class="accent-swatch custom-swatch" style:background={customHex}>{#if appearance.accent.type === 'custom'}<span class="swatch-check">✓</span>{:else}+{/if}</span><span>Custom</span>
               </label>
             </div>
-            <p class="choice-note" id="accent-description">Selection, focus and primary actions follow your accent across the launcher. Status colors keep their meaning. Custom colors must stay visible on dark surfaces.</p>
+
           </fieldset>
           <SettingsFeedback busy={appearance.busy} error={appearance.error?.message ?? ''} {saved} retryLabel={appearance.state ? 'Retry save' : 'Retry loading'} retry={() => void save(retryOperation)} />
         </section>
@@ -91,7 +92,6 @@
 
 
   .section-intro h3 { font-size: 20px; font-weight: 600; letter-spacing: -.025em; margin: 0 0 6px; }
-  .section-intro p, .choice-note { margin: 0; color: var(--color-text-secondary); font-size: .8125rem; line-height: 1.6; }
   .choice-section { border: 0; border-bottom: 1px solid var(--f-edge); padding: 0 0 26px; margin: 0 0 26px; min-width: 0; }
   legend { font-size: .875rem; font-weight: 600; padding: 0; margin-bottom: 14px; }
   .theme-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
@@ -117,7 +117,6 @@
   .custom-swatch { color: #08090c; font-size: 20px; display: grid; place-items: center; }
   .custom-picker-input { position: absolute; width: 0; height: 0; opacity: 0; padding: 0; border: 0; pointer-events: none; }
   .accent-option:has(input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: 3px; }
-  .accent-section .choice-note { margin-top: 20px; }
   @media (max-width: 760px) { .theme-grid { grid-template-columns: 1fr; } .theme-tile { grid-template-columns: 80px minmax(0, 1fr); align-items: center; } .theme-preview { height: 55px; } .background-preview { height: 76px; } }
   .appearance-summary { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0 0 20px; padding: 0; list-style: none; color: var(--color-text-secondary); font-size: .8125rem; }
   .motion-setting output { font-variant-numeric: tabular-nums; font-size: .8125rem; color: var(--color-text-secondary); }

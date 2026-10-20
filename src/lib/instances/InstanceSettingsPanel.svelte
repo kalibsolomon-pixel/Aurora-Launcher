@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from '$lib/shell/Tooltip.svelte';
   import { untrack } from "svelte";
   import { launcher } from "$lib/launcher/store.svelte";
   import { configurationRequiresInstall, draftIsDirty, instanceProgressLabel, runtimeProgressLabel } from "$lib/launcher/instanceStatus";
@@ -111,9 +112,6 @@
   <div class="group-heading">
     <div>
       <h3 class="group-title" id="instance-settings-title">Settings</h3>
-      <p class="group-subtitle">
-        The saved configuration this instance launches with.
-      </p>
     </div>
     <!-- Rename lives once, in the workspace header. -->
     {#if dirty}<div class="group-row-actions"><span class="status-badge status-warning">Unsaved changes</span></div>{/if}
@@ -122,8 +120,7 @@
   <!-- The icon saves immediately and never waits for the configuration draft. -->
   <div class="group-row icon-field">
     <div class="group-row-main">
-      <span class="group-row-title">Icon</span>
-      <span class="group-row-detail">Shown on this instance's tile, on Home and in this header. Saved immediately.</span>
+      <span class="group-row-title">Icon <Tooltip label="About the instance icon">Shown on this instance’s tile and on Home. Saved immediately.</Tooltip></span>
       {#if instanceIcons.error}<span class="group-row-detail icon-error" role="alert">{instanceIcons.error}</span>{/if}
     </div>
     <IconPicker value={instanceIcons.iconFor(instance.id)} disabled={instanceIcons.busy === instance.id}
@@ -327,11 +324,6 @@
       </div>
     </form>
   {/if}
-
-  <p class="group-footer">
-    These settings belong to this instance. Launcher-wide preferences — appearance and
-    desktop integration — live in the sidebar's Settings destination.
-  </p>
 </section>
 
 </div>

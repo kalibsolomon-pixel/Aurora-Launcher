@@ -327,6 +327,26 @@ export async function removeDesktopShortcut(): Promise<DesktopIntegrationState> 
   }
 }
 
+/** Adds a Windows Programs shortcut; does not pin to the Start grid. */
+export async function createStartMenuShortcut(): Promise<DesktopIntegrationState> {
+  try {
+    return await invoke<DesktopIntegrationState>("create_start_menu_shortcut");
+  } catch (error: unknown) {
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    throw new LauncherBackendError("backend_unavailable", "The Start menu shortcut could not be created.");
+  }
+}
+
+/** Opens only the Rust-resolved managed launcher data folder. */
+export async function openLauncherFolder(): Promise<void> {
+  try {
+    await invoke<void>("open_launcher_folder");
+  } catch (error: unknown) {
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    throw new LauncherBackendError("backend_unavailable", "The launcher data folder could not be opened.");
+  }
+}
+
 export type AcquisitionOrigin = "downloaded" | "cacheHit";
 
 export interface AcquireArtifactRequest {

@@ -92,7 +92,7 @@ it("Discord describes automatic connection and shows native status without maint
 it("missing application configuration disables connection honestly without hiding privacy choices", () => {
   reset(); discord.state.configured = false; discord.state.connection = "configurationMissing";
   const view = html(DiscordSettings); assert.match(view, /Application setup required/); assert.doesNotMatch(view, /(?:Connect|Reconnect) to Discord/);
-  assert.match(view, /Enable Discord Rich Presence/); assert.match(view, /Display Instance name/); assert.match(view, /Display Show World/); assert.match(view, /Display Show Server/); assert.match(view, /Display Show Server Address/);
+  assert.match(view, /Enable Discord Rich Presence/); assert.match(view, /Display Elapsed Play Time/); assert.match(view, /Display Show World/); assert.match(view, /Display Show Server/); assert.match(view, /Display Show Server Address/);
 });
 it("Discord preferences and reconnect invoke only native commands and never disturb Play", async () => {
   reset(); const calls: string[] = []; const previous = JSON.stringify(launcher.launcherState);

@@ -191,6 +191,8 @@ it("Instances shows tile cards with icons, and the creation form offers an icon 
   assert.match(view, /material-symbols-outlined/);
   assert.match(view, /Instance icon: none\. Choose icon/);
   assert.doesNotMatch(view, /group-row-selected/);
+  assert.doesNotMatch(view, /tile-selected|tile-badges|>Validate<|>Selected<|>Ready<|Fabric \(release version\)/);
+  assert.match(view, /tile-config[^>]*>Minecraft 1\.21\.11/);
 });
 
 it("browsing modpacks inside an instance adds to that instance; only the standalone browser creates one", () => {

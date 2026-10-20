@@ -10,7 +10,7 @@
     return () => queries.forEach(query => query.removeEventListener('change', update));
   });
 </script>
-<div class="section-intro"><h3>Accessibility</h3><p>Visual comfort follows supported system preferences. Change these in your operating system; Aurora follows them automatically.</p></div>
+<div class="section-intro"><h3>Accessibility</h3></div>
 <section class="group" aria-label="System visual preferences">
   <SettingsRow id="system-motion" title="Reduced motion" description="Keeps Borealis still and removes nonessential control transitions when your system requests reduced motion.">
     <span class="setting-state" role="status">{motion === null ? 'Reading system…' : motion ? 'Following system · Reduced' : 'Following system · No reduction requested'}</span>

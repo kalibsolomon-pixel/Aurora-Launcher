@@ -92,7 +92,8 @@
   discord.state = {configured:true,connection:'connected',preferences:{enabled:false,instanceName:false,minecraftVersion:false,platform:false,auroraActive:false,elapsedTime:false,world:false,server:false,serverAddress:false}} as any;
   if (review.has('edit')) homeWidgets.editing = true;
   if (review.get('page') === 'settings') navigation.goTo('settings');
-  if (review.get('category') === 'General' || review.get('category') === 'Discord & privacy') navigation.settingsCategory = review.get('category') as 'General' | 'Discord & privacy';
+  if (review.get('category') === 'General') navigation.settingsCategory = 'General';
+  if (review.get('category') === 'Discord' || review.get('category') === 'Discord & privacy') navigation.settingsCategory = 'Discord';
   if (review.get('page') === 'instances') navigation.goTo('instances');
   if (l3 && review.get('page') === 'cosmetics') navigation.goTo('cosmetics');
   if (l3 && review.get('cosmetic-tab') === 'capes') navigation.cosmeticsTab='capes';

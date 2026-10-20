@@ -1261,6 +1261,55 @@ pub fn create_desktop_shortcut() -> Result<DesktopIntegrationDto, CommandError> 
     }
 }
 
+/// Adds the running installed launcher to the Start menu's app list.
+/// Windows grid pinning remains a user action; this is a real Programs link.
+#[tauri::command]
+pub fn create_start_menu_shortcut() -> Result<DesktopIntegrationDto, CommandError> {
+    #[cfg(windows)]
+    {
+        shortcut_context_for_management()?
+            .create_start_menu_shortcut()
+            .map_err(CommandError::from)?;
+        Ok(DesktopIntegrationDto::assess())
+    }
+    #[cfg(not(windows))]
+    {
+        Err(CommandError::from(
+            crate::shortcuts::ShortcutError::UnsupportedPlatform,
+        ))
+    }
+}
+
+/// Opens the platform-resolved launcher data folder. No frontend path is accepted.
+#[tauri::command]
+pub fn open_launcher_folder(app: AppHandle) -> Result<(), CommandError> {
+    #[cfg(windows)]
+    {
+        let managed = managed_paths(&app)?;
+        let folder = managed.data_root();
+        if !folder.is_dir() {
+            return Err(CommandError::new(
+                "launcher_folder_missing",
+                "The launcher data folder does not exist yet.",
+            ));
+        }
+        tauri_plugin_opener::open_path(folder, None::<&str>).map_err(|_| {
+            CommandError::new(
+                "launcher_folder_open_failure",
+                "The launcher data folder could not be opened in Explorer.",
+            )
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        Err(CommandError::new(
+            "launcher_folder_unsupported_platform",
+            "Opening the launcher data folder is currently supported only on Windows.",
+        ))
+    }
+}
+
 /// Removes the Aurora-owned desktop shortcut.
 ///
 /// Only a shortcut proven to target this executable is removed; anything

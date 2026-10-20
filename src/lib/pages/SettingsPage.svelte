@@ -5,7 +5,6 @@
   import GeneralSettings from '$lib/launcher/GeneralSettings.svelte';
   import HomeWidgetSettings from '$lib/launcher/HomeWidgetSettings.svelte';
   import AppearanceSettings from '$lib/launcher/AppearanceSettings.svelte';
-  import MinecraftSettings from '$lib/launcher/MinecraftSettings.svelte';
   import AccessibilitySettings from '$lib/launcher/AccessibilitySettings.svelte';
   import AboutSettings from '$lib/launcher/AboutSettings.svelte';
   import { navigation } from '$lib/launcher/navigation.svelte';
@@ -34,7 +33,7 @@
   }
 </script>
 <div class="page launcher-settings f-pilot">
-  <header class="page-header"><div><h2 class="page-title">Settings</h2><p class="page-subtitle">Personalize your launcher. Game settings belong to each instance.</p></div></header>
+  <header class="page-header"><div><h2 class="page-title">Settings</h2></div></header>
   <div class="settings-layout">
     <nav bind:this={categoryNav} class="settings-nav" aria-label="Settings categories">
       {#each settingsCategories as item}
@@ -44,21 +43,17 @@
     </nav>
     <section class="settings-body" id="settings-content" aria-label={`${settingsCategories.find(item => item.id === category)?.label ?? category} settings`}>
       {#if category === 'General'}
-        <div class="section-intro"><h3>Launcher</h3><p>Desktop integration for this computer. Shortcut status comes from Windows.</p></div>
+        <div class="section-intro"><h3>Launcher</h3></div>
         <GeneralSettings />
       {:else if category === 'Appearance'}
         <AppearanceSettings />
       {:else if category === 'Home'}
-        <div class="section-intro"><h3>Home &amp; Widgets</h3><p>Arrange widgets directly on Home.</p></div>
+        <div class="section-intro"><h3>Home &amp; Widgets</h3></div>
         <HomeWidgetSettings />
       {:else if category === 'Updates'}
-        <div class="section-intro"><p>Check the owner-published Launcher and Aurora Client releases. Installation starts only when you choose Update.</p></div>
         <UpdateSettings />
-      {:else if category === 'Discord & privacy'}
-        <div class="section-intro"><h3>Discord &amp; privacy</h3><p>You decide which activity details appear on your Discord profile.</p></div>
+      {:else if category === 'Discord'}
         <DiscordSettings />
-      {:else if category === 'Minecraft & Java'}
-        <MinecraftSettings />
       {:else if category === 'Accessibility'}
         <AccessibilitySettings openAppearance={() => void selectCategory('Appearance')} />
       {:else if category === 'About'}
@@ -66,5 +61,4 @@
       {/if}
     </section>
   </div>
-  <footer class="settings-footer">Preferences save as you change them. Game configuration uses Save changes in the instance workspace.</footer>
 </div>

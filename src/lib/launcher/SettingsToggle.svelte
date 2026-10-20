@@ -16,6 +16,6 @@
 </script>
 <SettingsRow {id} {title} {description} controlId={id}>
   <span class="setting-state" aria-hidden="true">{checked ? 'On' : 'Off'}</span>
-  <input type="checkbox" aria-label={label} {disabled} {id} aria-describedby={`${id}-description`}
+  <input type="checkbox" aria-label={label} {disabled} {id}
     bind:checked={draft} onchange={update} />
 </SettingsRow>

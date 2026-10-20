@@ -203,7 +203,7 @@ it("instance selection invokes only native selection and read-only status, prese
 });
 it("account dialog signed out leaves instance management available", () => {
   reset(); launcher.accountsState = { accounts: [], selectedAccountId: null };
-  assert.match(html(Accounts), /No account signed in/); assert.match(html(Accounts), /still browse and manage your instances/);
+  assert.match(html(Accounts), /No account signed in/); assert.match(html(Accounts), /Sign in with Microsoft/);
 });
 it("signed-out Home explains native authentication requirements without management clutter", () => {
   reset(); launcher.accountsState = { accounts: [], selectedAccountId: null };

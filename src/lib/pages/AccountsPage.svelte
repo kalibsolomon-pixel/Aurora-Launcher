@@ -32,7 +32,7 @@
   <header class="page-header">
     <div>
       <h2 class="page-title" id="account-dialog-title">Accounts</h2>
-      <p class="page-subtitle">The active account is used across your instances.</p>
+
     </div>
     {#if signedIn && !launcher.signInBusy}
       <div class="page-header-actions">
@@ -106,9 +106,6 @@
   {:else if !signedIn}
     <section class="empty-state" aria-live="polite">
       <h3 class="empty-title">No account signed in</h3>
-      <p class="empty-detail">
-        Sign in with Microsoft to play Minecraft: Java Edition. You can still browse and manage your instances while signed out.
-      </p>
       <button
         type="button"
         class="btn btn-primary"
@@ -216,10 +213,6 @@
         </p>
         <details class="group-row"><summary>Technical details</summary><code>{launcher.accountError.code}</code></details>
       {/if}
-
-      <p class="group-footer">
-        Removal signs the account out of this launcher. Your Microsoft account and Minecraft data stay intact.
-      </p>
     </section>
   {/if}
 </div>

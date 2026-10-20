@@ -3,9 +3,8 @@ export const settingsCategories = [
   { id: 'Appearance', label: 'Appearance', detail: 'Theme, Borealis and accent' },
   { id: 'Home', label: 'Home & Widgets', detail: 'Visibility and layout' },
   { id: 'General', label: 'Launcher', detail: 'Desktop integration' },
-  { id: 'Minecraft & Java', label: 'Minecraft & Java', detail: 'Per-instance configuration' },
   { id: 'Updates', label: 'Updates', detail: 'Launcher and Aurora Client' },
-  { id: 'Discord & privacy', label: 'Discord & privacy', detail: 'Activity and disclosure' },
+  { id: 'Discord', label: 'Discord', detail: 'Activity' },
   { id: 'Accessibility', label: 'Accessibility', detail: 'System visual preferences' },
   { id: 'About', label: 'About', detail: 'Version and platform' },
 ] as const;

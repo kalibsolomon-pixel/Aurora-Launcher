@@ -19,7 +19,7 @@
   onMount(() => { void homeWidgets.load(); });
 </script>
 <section class="group" aria-labelledby="home-widgets-title">
-  <div class="group-heading"><div><h3 id="home-widgets-title" class="group-title">Widget visibility</h3><p class="group-subtitle">Hiding a widget keeps its position and size for when you turn it back on.</p></div></div>
+  <div class="group-heading"><div><h3 id="home-widgets-title" class="group-title">Widget visibility</h3></div></div>
   {#if !homeWidgets.layout && !homeWidgets.error}<p class="group-footer" role="status">Loading widgets…</p>{/if}
   {#each widgetCatalog as widget (widget.id)}
     <SettingsToggle id={`show-${widget.id}`} title={widget.title} description={widget.description}

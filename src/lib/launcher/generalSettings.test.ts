@@ -20,19 +20,30 @@ after(async () => { await server?.close(); delete (globalThis as any).window; })
 it('General starts with live desktop conveniences, honoring native capability and conflicts', () => {
   assert.equal(navigation.settingsCategory, 'General');
   desktop.error = null; desktop.busy = false; desktop.state = state();
-  assert.match(render(general).body, /Remove shortcut/);
-  desktop.state = state('absent'); assert.match(render(general).body, /Create shortcut/);
-  desktop.state = state('conflict'); assert.doesNotMatch(render(general).body, /(?:Create|Remove) shortcut/);
+  assert.match(render(general).body, /Add Desktop Shortcut/);
+  assert.match(render(general).body, /Add to Start Menu/);
+  assert.match(render(general).body, /Open Path/);
+  desktop.state = state('conflict'); assert.match(render(general).body, /Another shortcut occupies this location/);
   desktop.state = state('present', false); assert.match(render(general).body, /installed production build/);
   assert.doesNotMatch(render(general).body, /Remove shortcut/);
-  desktop.state = { ...state(), supported: false }; assert.match(render(general).body, /available on Windows/);
 });
-it('refresh/create/remove use only the existing native boundary without saving preferences', async () => {
+it('desktop, Start menu and path actions use narrow native commands without frontend paths', async () => {
   const calls: string[] = [];
-  (globalThis as any).window = { __TAURI_INTERNALS__: { invoke: async (command: string) => {
+  (globalThis as any).window = { __TAURI_INTERNALS__: { invoke: async (command: string, args: unknown) => {
+    assert.deepEqual(args, {});
     calls.push(command); return state(command === 'remove_desktop_shortcut' ? 'absent' : 'present');
   } } };
-  await desktop.refresh(); await desktop.create(); await desktop.remove();
+  await desktop.refresh(); await desktop.create(); await desktop.addToStart(); await desktop.openPath(); await desktop.remove();
   assert.equal(desktop.state.desktopShortcut.state, 'absent');
-  assert.deepEqual(calls, ['get_desktop_integration', 'create_desktop_shortcut', 'remove_desktop_shortcut']);
+  assert.deepEqual(calls, ['get_desktop_integration', 'create_desktop_shortcut', 'create_start_menu_shortcut', 'open_launcher_folder', 'remove_desktop_shortcut']);
+});
+it('a native refusal remains visible and never reports success', async () => {
+  (globalThis as any).window = { __TAURI_INTERNALS__: { invoke: async (command: string) => {
+    if (command === 'get_desktop_integration') return state('conflict');
+    throw { code: 'shortcut_conflict', message: 'A different shortcut occupies this location.' };
+  } } };
+  await desktop.addToStart();
+  assert.equal(desktop.error.code, 'shortcut_conflict');
+  assert.equal(desktop.notice, '');
+  assert.match(render(general).body, /role="alert"/);
 });
