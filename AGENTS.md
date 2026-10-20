@@ -173,3 +173,14 @@ also remains exclusive because lifecycle state loading may replay recovery; do
 not replace it with shared ownership. Readiness still verifies bytes and rejects
 damage. See `NATIVE_RESOLUTION_READINESS_REPORT.md` for native acceptance, the
 reproduced false-damage race and the limits of historical n3 attribution.
+
+## Fabric mod resolution (owner decision, 2026-10-19)
+
+Mod identity and dependency checks follow Fabric Loader: only two top-level
+jars with one mod id conflict; bundled (jar-in-jar) copies and
+loader-supplied modules are alternatives (the newest satisfying copy wins),
+and `provides` aliases count at the provider's version. Launcher-protected
+mods (Aurora Client, bootstrap Fabric API) keep strict identity. Loader-supplied
+modules come only from the manifest-recorded, digest-verified installed loader
+jar and are validation-only. Do not reintroduce the stricter bundled-version
+rule. See `docs/instance-tiles-icons/README.md`.

@@ -43,12 +43,27 @@ Fabric `provides` aliases are now honored by mod metadata (e.g. Fabric API provi
   - Fabric 1.21.11 instance + *Wynncraft for Lunar Client*: 15 mods + 15 settings added in 58 s (debug build); instance stayed Ready, not pack-owned, deep validation ready; a planted user `options.txt` stayed byte-identical; records are direct and retained.
   - *Adrenaline*, *Remarkably Optimized*, *RealisticCraft*, *SkyBlock Plus*: preview names the exact blocker. Two earlier failures happened only at install time; both were rolled back with zero files written, and preview now reports them.
 
-## Limits for the owner
+## Fabric Loader resolution rules (owner-approved, 2026-10-19)
 
-Several popular packs cannot be added (and, for most of these reasons, cannot be installed as new instances either) because of existing, deliberate launcher compatibility rules that were **not** changed here:
+The owner approved matching Fabric Loader for bundled modules and loader-supplied mods:
 
-1. A top-level mod may duplicate another mod's bundled (jar-in-jar) module only at the same version (e.g. Adrenaline: ServerCore bundles a different `placeholder-api`). Fabric Loader itself would pick the newest.
-2. Fabric Loader's own bundled MixinExtras is not counted as installed (e.g. Remarkably Optimized: AsyncParticles needs MixinExtras ≥ 0.5.0; only ModernFix's bundled 0.4.1 is seen).
-3. Phase I's resolver rejects packs whose Modrinth-declared dependencies are absent from the pack snapshot, and certain override paths.
+- **Identity conflicts:** only two *top-level* jars with the same mod id conflict. A top-level mod that matches another mod's bundled (jar-in-jar) module, or two bundled copies at different versions, are alternatives Fabric Loader resolves (the mods-folder copy loads; among bundled and loader-supplied copies the newest one that satisfies every constraint wins). Applied consistently at install (`conflicting_mod_identity`), in recognition, and in the inventory scan's `duplicate_mod_id` warning.
+- **Exception kept:** launcher-protected mods (Aurora Client and its bootstrap Fabric API) keep strict identity. Nothing may bundle a different version of them.
+- **Loader-supplied modules:** modules Fabric Loader ships inside its own jar (Fabric Loader 0.19.5 embeds MixinExtras 0.5.5) count as installed. They're read from the instance's installed loader jar, located only through the installed-game manifest and re-verified against its recorded digest first; any doubt adds nothing. This is a validation-only entry, never shown in inventories, and is used by readiness, launch, install projections and the scan's dependency warnings.
+- **`provides` aliases** count at the providing mod's version, for top-level and nested jars.
 
-Relaxing 1–2 would change mod-compatibility authority and needs an owner decision.
+Real acceptance (isolated data root, live Modrinth, fresh Fabric 1.21.11 instances, debug build):
+
+| Pack | Before | After |
+| --- | --- | --- |
+| Adrenaline 26.5.1 | refused (`placeholder-api` bundled in ServerCore) | 27 mods merged, deep validation **ready**, no hard warnings |
+| Remarkably Optimized | refused (MixinExtras ≥ 0.5.0) | 27 mods merged, deep validation **ready**, no hard warnings |
+| Wynncraft for Lunar Client | merged | still **ready** |
+
+Not proven: an actual game launch with these packs (no account in the isolated root, and the long test path breaks the managed Java diagnostic). Fabric Loader's own resolution at launch remains the final authority.
+
+## Remaining limits
+
+1. Phase I's resolver still rejects packs whose Modrinth-declared dependencies are absent from the pack snapshot, and certain override paths (e.g. Fabulously Optimized, Vanilla Perfected), for new-instance and merge flows alike.
+2. A component Modrinth doesn't list for the instance's exact Minecraft version is refused when merging (a new pack instance trusts the pack's composition).
+3. Mods whose Mixin metadata the launcher can't read safely stay blocked (e.g. RealisticCraft's C2ME build).
