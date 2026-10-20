@@ -1,11 +1,10 @@
 //! Typed data model and resolution for Aurora release manifests.
 //!
 //! The model parses and validates release metadata locally; resolution
-//! selects exact releases from a manifest. Aurora release *distribution*
-//! is deliberately gated by the checked-in production manifest, embedded in
-//! the application. Development builds also offer the separate loopback
-//! fixture for new instances; existing fixture-pinned instances retain a
-//! compatibility path in release builds.
+//! selects exact releases from a normalized manifest. Public commands discover
+//! the Client through [`github`] independently of Launcher releases. Embedded
+//! entries retain historical pins and managed environment policy; they are not
+//! the authority for the latest Client. Existing fixture pins remain resolvable.
 //!
 //! Manifest authenticity, honestly stated: a manifest fetched over HTTPS
 //! would be HTTPS-authenticated release metadata, not independently
@@ -21,6 +20,8 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::downloads::is_loopback_host;
+
+pub mod github;
 
 /// The only release-manifest schema version this launcher understands.
 pub const MANIFEST_SCHEMA_VERSION: u32 = 1;
@@ -137,7 +138,8 @@ pub fn development_manifest() -> Result<ReleaseManifest, ManifestError> {
     ReleaseManifest::from_json(DEVELOPMENT_MANIFEST_JSON)
 }
 
-/// The manually curated production manifest shipped in this launcher build.
+/// Historical exact pins and managed environment policy. Latest Client
+/// discovery comes from GitHub, not this compatibility catalog.
 pub fn production_manifest() -> Result<ReleaseManifest, ManifestError> {
     ReleaseManifest::from_json(PRODUCTION_MANIFEST_JSON)
 }
@@ -153,8 +155,8 @@ pub fn operational_manifest() -> Result<ReleaseManifest, ManifestError> {
     )
 }
 
-/// Releases offered for new instance creation. Production builds show only
-/// reviewed entries; debug builds also offer explicit development fixtures.
+/// Synchronous environment/bootstrap catalog. Public creation commands replace
+/// this with verified GitHub discovery before selecting an Aurora Client pin.
 pub fn creation_manifest() -> Result<ReleaseManifest, ManifestError> {
     #[cfg(debug_assertions)]
     {

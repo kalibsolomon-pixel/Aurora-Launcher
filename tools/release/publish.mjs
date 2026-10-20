@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { selectRelease, selectAsset, verifyBytes, verifyNotesIdentity, publicationNotes } from "./release-state.mjs";
+import { randomUUID } from "node:crypto";
+import { selectRelease, selectAsset, verifyBytes, verifyNotesIdentity, publicationNotes, awaitCreatedDraft } from "./release-state.mjs";
 import { verifyDirectory, repository as productionRepository } from "./updater-release.mjs";
 
 const [version, sourceSha, assetsDirectory, resumeIdText, mode] = process.argv.slice(2);
@@ -15,30 +16,30 @@ const token = process.env.GH_TOKEN;
 if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? "") || !token) throw new Error("GitHub release environment is incomplete");
 const base = `https://api.github.com/repos/${repository}`;
 const tag = `v${version}`;
-const headers = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "aurora-launcher-release", "X-GitHub-Api-Version": "2022-11-28" };
+const headers = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "aurora-launcher-release", "X-GitHub-Api-Version": "2022-11-28", "Cache-Control": "no-cache" };
 async function api(url, options = {}) {
   const response = await fetch(url.startsWith("https://") ? url : `${base}${url}`, { ...options, headers: { ...headers, ...options.headers } });
   if (!response.ok) throw new Error(`GitHub API HTTP ${response.status}: ${options.method ?? "GET"} ${new URL(response.url).pathname}`);
   return response;
 }
-async function listReleases() {
+async function listReleases(snapshot = "") {
   const all = [];
   for (let page = 1; page <= 20; page++) {
-    const batch = await (await api(`/releases?per_page=100&page=${page}`)).json();
+    const batch = await (await api(`/releases?per_page=100&page=${page}${snapshot ? `&aurora_snapshot=${snapshot}` : ""}`)).json();
     all.push(...batch);
     if (batch.length < 100) return all;
   }
   throw new Error("Release listing exceeded safety bound");
 }
-async function tagSha() {
-  const response = await fetch(`${base}/git/ref/tags/${tag}`, { headers });
+async function tagSha(snapshot) {
+  const response = await fetch(`${base}/git/ref/tags/${tag}?aurora_snapshot=${snapshot}`, { headers });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Tag lookup failed: HTTP ${response.status}`);
   const ref = await response.json();
   if (ref.object.type !== "commit") throw new Error("Annotated tag requires independent resolution");
   return ref.object.sha;
 }
-async function state() { return selectRelease(await listReleases(), tag, sourceSha, resumeId, await tagSha()); }
+async function state(snapshot = randomUUID()) { return selectRelease(await listReleases(snapshot), tag, sourceSha, resumeId, await tagSha(snapshot)); }
 const directory = resolve(assetsDirectory);
 if (repository !== productionRepository) throw new Error("Unexpected production repository");
 await verifyDirectory(directory, version, sourceSha, process.env.AURORA_UPDATER_PUBKEY?.trim());
@@ -83,8 +84,7 @@ if (mode === "verify-only") {
 }
 if (selected.kind === "create") {
   const created = await (await api("/releases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tag_name: tag, target_commitish: sourceSha, name: `Aurora Launcher ${version}`, body: notes, draft: true, prerelease: false }) })).json();
-  selected = await state();
-  if (selected.kind !== "resume" || selected.release.id !== created.id) throw new Error("Created draft cannot be uniquely rediscovered");
+  selected = await awaitCreatedDraft((attempt) => state(`${created.id}-${attempt}`), created.id);
 }
 if (selected.kind === "resume") {
   let release = await (await api(`/releases/${selected.release.id}`)).json();

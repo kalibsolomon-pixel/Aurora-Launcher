@@ -156,6 +156,10 @@ impl InstanceEndpoints {
     pub fn release_manifest(&self) -> &ReleaseManifest {
         &self.release_manifest
     }
+    pub(crate) fn with_release_manifest(mut self, manifest: ReleaseManifest) -> Self {
+        self.release_manifest = manifest;
+        self
+    }
     pub(crate) fn download_options(&self) -> &crate::downloads::DownloadOptions {
         self.install.download_options()
     }
@@ -366,6 +370,25 @@ pub async fn create_instance(
     )?;
 
     let _operation = lock_instance_operation(managed, record.id())?;
+
+    // A discovered release must remain exactly resolvable after restart or an
+    // interrupted first install. This newly allocated identity owns this path;
+    // planning metadata is recorded before the registry/installation commits.
+    if let Some(pin) = &record.installed().aurora {
+        if crate::distribution::operational_manifest()
+            .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?
+            .resolve_exact(&pin.version, Some(pin.channel))
+            .is_none()
+        {
+            let release = endpoints
+                .release_manifest()
+                .resolve_exact(&pin.version, Some(pin.channel))
+                .ok_or_else(|| {
+                    InstanceError::ReleaseInvalid("Discovered Client metadata is missing.".into())
+                })?;
+            crate::aurora::write_instance_release(managed, record.id(), release)?;
+        }
+    }
 
     {
         let _guard = registry_lock();

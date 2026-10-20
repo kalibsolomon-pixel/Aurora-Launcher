@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { selectRelease, selectAsset, verifyBytes, verifyNotesIdentity, expectedAssetName, productionClientIdentities, productionClientVersion, publicationNotes } from "./release-state.mjs";
+import { selectRelease, selectAsset, verifyBytes, verifyNotesIdentity, expectedAssetName, productionClientIdentities, productionClientVersion, publicationNotes, awaitCreatedDraft } from "./release-state.mjs";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -11,6 +11,21 @@ const name = "Aurora Launcher_1.1.0_x64-setup.exe";
 const bytes = Buffer.from("installer fixture");
 const expected = { name, sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") };
 const asset = { id: 2, name: expectedAssetName(name), size: bytes.length, digest: `sha256:${expected.sha256}` };
+
+test("new draft visibility retries reads and preserves its exact identity", async () => {
+  let reads = 0, waits = 0;
+  const selected = { kind: "resume", release: draft };
+  assert.equal(await awaitCreatedDraft(async () => ++reads < 3 ? { kind: "create" } : selected, draft.id, async () => { waits++; }), selected);
+  assert.equal(reads, 3); assert.equal(waits, 2);
+});
+test("draft visibility exhaustion or conflicting/public state stops without another mutation", async () => {
+  let reads = 0;
+  await assert.rejects(awaitCreatedDraft(async () => { reads++; return { kind: "create" }; }, draft.id, async () => {}));
+  assert.equal(reads, 6);
+  for (const selected of [{ kind: "resume", release: { ...draft, id: 10 } }, { kind: "public", release: { ...draft, draft: false } }]) {
+    await assert.rejects(awaitCreatedDraft(async () => selected, draft.id, async () => { throw new Error("Unexpected wait after conflict"); }));
+  }
+});
 
 test("no release creates a draft", () => assert.equal(selectRelease([], "v1.1.0", sha).kind, "create"));
 test("matching draft is selected by exact ID", () => assert.equal(selectRelease([draft], "v1.1.0", sha, 9).kind, "resume"));

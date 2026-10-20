@@ -2,8 +2,8 @@
 //! verified transactional activation of one newer intentionally published
 //! release on one existing instance.
 //!
-//! Authority is the manually published public release manifest — never a
-//! commit, branch head, or CI build. The remote manifest is bootstrap
+//! Authority is the official published GitHub Client release — never a
+//! commit, branch head, or CI build. GitHub release metadata is bootstrap
 //! discovery metadata (HTTPS plus strict parsing, exactly like the official
 //! Mojang version manifest); the artifact it describes is acquired through
 //! the SHA-256 verified store and only then activated. Discovery and
@@ -32,9 +32,8 @@ use crate::integrity::{ArtifactDigest, verify_file};
 use crate::paths::ManagedPaths;
 use crate::updates::{UpdateAvailability, parse_release_version};
 
-/// The location the owner's manual publication gate exposes the Aurora
-/// Client release manifest at. It exists only when the owner has published
-/// it; before that, checks fail non-fatally as unavailable.
+/// Official independent Client discovery endpoint. Production uses
+/// `fetch_current_manifest`, which verifies the release JAR and compatibility.
 ///
 /// Diagnostic builds may compile a different endpoint (loopback) through
 /// `AURORA_CLIENT_MANIFEST_URL`; production builds never set it. The
@@ -42,9 +41,7 @@ use crate::updates::{UpdateAvailability, parse_release_version};
 /// the manifest and verify the acquired bytes.
 pub const PRODUCTION_MANIFEST_URL: &str = match option_env!("AURORA_CLIENT_MANIFEST_URL") {
     Some(diagnostic) => diagnostic,
-    None => {
-        "https://github.com/kalibsolomon-pixel/Aurora-Client/releases/download/release-manifest/aurora-releases.json"
-    }
+    None => crate::distribution::github::LATEST_RELEASE_URL,
 };
 
 /// Hard cap for the fetched manifest document. Manifests are small; a
@@ -994,6 +991,19 @@ fn atomic_write(path: &Path, bytes: Option<&[u8]>) -> Result<(), std::io::Error>
     }
 }
 
+/// Published Client metadata comes from the Client repository independently of
+/// the Launcher version. An explicit diagnostic override retains loopback tests.
+pub async fn fetch_current_manifest(
+    managed: &ManagedPaths,
+    options: &DownloadOptions,
+) -> Result<ReleaseManifest, ClientUpdateError> {
+    if let Some(endpoint) = option_env!("AURORA_CLIENT_MANIFEST_URL") {
+        fetch_published_manifest(endpoint, options).await
+    } else {
+        crate::distribution::github::discover(managed, options).await
+    }
+}
+
 /// The one-shot read-only Client update check for one instance. Discovery
 /// failures are honest unavailability, never instance invalidity.
 pub async fn check_client_update(
@@ -1001,12 +1011,30 @@ pub async fn check_client_update(
     endpoints: &lifecycle::InstanceEndpoints,
     id: &InstanceId,
 ) -> UpdateAvailability {
-    check_client_update_with_url(managed, endpoints, id, PRODUCTION_MANIFEST_URL).await
+    match fetch_current_manifest(managed, endpoints.download_options()).await {
+        Ok(remote) => match preview_update(managed, endpoints, id, &remote) {
+            Ok(preview) if preview.outcome == "updateAvailable" => {
+                let candidate = preview.candidate.expect("outcome carries candidate");
+                UpdateAvailability::UpdateAvailable {
+                    current: preview.installed_version,
+                    candidate: candidate.version,
+                    notes: candidate.notes,
+                }
+            }
+            Ok(_) => UpdateAvailability::UpToDate,
+            Err(ClientUpdateError::Inapplicable(reason)) => {
+                UpdateAvailability::NotApplicable { reason }
+            }
+            Err(error) => UpdateAvailability::unavailable(error.message()),
+        },
+        Err(error) => UpdateAvailability::unavailable(error.message()),
+    }
 }
 
 /// The same check against an explicit manifest URL; the production wrapper
 /// passes the compiled published endpoint. Crate-visible so deterministic
 /// tests exercise offline behavior against a dead loopback endpoint.
+#[cfg(test)]
 pub(crate) async fn check_client_update_with_url(
     managed: &ManagedPaths,
     endpoints: &lifecycle::InstanceEndpoints,

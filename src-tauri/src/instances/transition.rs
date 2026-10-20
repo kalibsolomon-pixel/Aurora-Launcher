@@ -615,6 +615,8 @@ fn commit(
     let retained_path = root.join(RETAINED_FILE);
     let old_state = optional_bytes(&state_path)?;
     let old_retained = optional_bytes(&retained_path)?;
+    let release_path = root.join(aurora::INSTANCE_RELEASE_FILE_NAME);
+    let old_release = optional_bytes(&release_path)?;
     let mut staged: Vec<(PathBuf, PathBuf)> = vec![];
     let mut backups: Vec<(PathBuf, PathBuf, PathBuf)> = vec![];
     let mut activated: Vec<PathBuf> = vec![];
@@ -705,6 +707,7 @@ fn commit(
             )
             .map_err(invalid)?;
             atomic_write(&state_path, Some(state.to_json().as_bytes()))?;
+            aurora::write_instance_release(managed, id, release).map_err(invalid)?;
         } else {
             atomic_write(&state_path, None)?;
         }
@@ -765,6 +768,7 @@ fn commit(
             if state_touched {
                 atomic_write(&state_path, old_state.as_deref())?;
                 atomic_write(&retained_path, old_retained.as_deref())?;
+                atomic_write(&release_path, old_release.as_deref())?;
             }
             if registry_touched {
                 atomic_write(&registry_path, Some(&old_registry))?;

@@ -45,6 +45,18 @@ export function expectedAssetName(name) {
   return name.replaceAll(" ", ".");
 }
 
+// GitHub can briefly omit a newly created draft from its release listing.
+// Retry reads only; never recreate a draft or retry a publication mutation.
+export async function awaitCreatedDraft(readState, createdId, wait = (ms) => new Promise((done) => setTimeout(done, ms))) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const selected = await readState(attempt);
+    if (selected.kind === "resume" && selected.release.id === createdId) return selected;
+    if (selected.kind !== "create") throw new Error("Created draft identity changed; inspect before recovery");
+    if (attempt < 5) await wait(2000);
+  }
+  throw new Error("Created draft is not visible; retain it and inspect before recovery");
+}
+
 export function verifyNotesIdentity(sourceNotes, version, clientVersion = productionClientVersion) {
   const heading = sourceNotes.split(/\r?\n/, 1)[0];
   const clientIdentities = [...sourceNotes.matchAll(/\bAurora Client ([0-9]+\.[0-9]+\.[0-9]+)(?![\w+-]|\.[\w])/g)].map((match) => match[1]);
