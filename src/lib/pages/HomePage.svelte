@@ -10,6 +10,10 @@
   import { homeLaunchState } from "$lib/launcher/home";
   import HomeWidgets from "$lib/launcher/HomeWidgets.svelte";
   import PlayerPreview from "$lib/launcher/PlayerPreview.svelte";
+  import InstanceIcon from "$lib/instances/InstanceIcon.svelte";
+  import { instanceIcons } from "$lib/instances/instanceIcons.svelte";
+  // One small read after Home mounts; icons are presentation and never gate launch.
+  onMount(() => { void instanceIcons.ensureLoaded(); });
 
   const instance = $derived(launcher.selectedInstance);
   const readiness = $derived(
@@ -133,12 +137,8 @@
     <div class="home-composition" aria-label="Launch workspace">
     <div class="home-launch-column">
     <header class="instance-heading">
+      <InstanceIcon icon={instanceIcons.iconFor(instance.id)} size={26} tile />
       <h1 title={instance.displayName}>{instance.displayName}</h1>
-      <p class="instance-metadata">
-        <span>Minecraft {instance.minecraftVersion}</span>
-        <span>{instance.platform.kind === "vanilla" ? "Vanilla" : instance.platform.kind === "neoForge" ? `NeoForge ${instance.platform.version}` : instance.platform.kind === "forge" ? `Forge ${instance.platform.version}` : `Fabric ${instance.platform.version}`}</span>
-        {#if instance.aurora}<span>Aurora {instance.aurora.version} · {instance.auroraContentState ?? "State unavailable"}</span>{/if}
-      </p>
     </header>
     <section class="instance-card" aria-label="Selected instance" aria-live="polite">
       <InstanceSwitcher compact status={{ ready: launch.tone === "status-success", label: launch.label }}
@@ -193,12 +193,11 @@
   .home-composition { min-height: clamp(320px, 52vh, 404px); }
   .home-composition:has(.launch-feedback) :global(.player-preview.has-skin) { display: none; }
   .home-launch-column { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-5); min-width: 0; padding-block: var(--space-3); }
-  .instance-heading { min-width: 0; width: 100%; }
+  .instance-heading { display: flex; align-items: center; gap: var(--space-4); min-width: 0; width: 100%; }
+  .instance-heading h1 { min-width: 0; }
   .instance-heading h1 { margin: 0; font-size: 2rem; line-height: 1.2; font-weight: 650; letter-spacing: -.035em; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
-  .instance-metadata { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); margin: var(--space-3) 0 0; color: var(--color-text-secondary); font-size: var(--text-metadata); line-height: 1.6; overflow-wrap: anywhere; }
-  .instance-metadata span + span::before { content: '·'; margin-right: var(--space-3); color: var(--color-text-muted); }
-  /* 400px keeps ordinary instance names whole beside "Launch"; height stays the original 80px. */
-  .instance-card { width: min(100%, 400px); height: 80px; min-height: 4rem; min-width: 0; margin: 0; position: relative; z-index: 2; }
+  /* Launch carries only the verb and readiness dot; the name is the heading above. */
+  .instance-card { width: min(100%, 300px); height: 80px; min-height: 4rem; min-width: 0; margin: 0; position: relative; z-index: 2; }
   .home-composition.home-empty { grid-template-columns: minmax(0, 1fr); min-height: 0; align-items: start; }
   .home-empty .empty-state { padding: var(--space-3) var(--space-2); }
   .home-empty .empty-title { font-size: 1.375rem; letter-spacing: -.02em; }

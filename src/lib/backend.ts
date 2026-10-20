@@ -2201,3 +2201,42 @@ export const launcherUpdateDownload = (version: string): Promise<LauncherUpdateS
   updateCommand<LauncherUpdateStatus>("launcher_update_download", { version });
 export const launcherUpdateInstall = (version: string): Promise<LauncherUpdateStatus> =>
   updateCommand<LauncherUpdateStatus>("launcher_update_install", { version });
+
+/** Display icons (Material Symbols names) keyed by instance id. Presentation only. */
+export async function getInstanceIcons(): Promise<Record<string, string>> {
+  try { return await invoke<Record<string, string>>("get_instance_icons"); }
+  catch (error: unknown) {
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    throw new LauncherBackendError("backend_unavailable", "Instance icons are unavailable.");
+  }
+}
+export function setInstanceIcon(instanceId: string, icon: string | null): Promise<Record<string, string>> {
+  return contentInvoke("set_instance_icon", { instanceId, icon });
+}
+
+/** Read-only review of merging an exact pack version into an existing instance. */
+export interface ModrinthPackMergePreview {
+  pack: ModrinthPackPreview;
+  instanceId: string;
+  instanceMinecraftVersion: string;
+  instanceFabricLoaderVersion: string | null;
+  added: string[];
+  alreadyPresent: string[];
+  keptExisting: string[];
+  overridesWritten: string[];
+  blockers: string[];
+  fingerprint: string;
+}
+export interface ModrinthPackMergeResult {
+  instanceId: string;
+  added: number;
+  alreadyPresent: number;
+  overridesWritten: number;
+  keptExisting: string[];
+}
+export function previewModrinthPackMerge(instanceId: string, projectId: string, versionId: string, selectedOptional: string[]): Promise<ModrinthPackMergePreview> {
+  return contentInvoke("preview_modrinth_pack_merge", { instanceId, projectId, versionId, selectedOptional, fingerprint: null });
+}
+export function installModrinthPackMerge(instanceId: string, projectId: string, versionId: string, selectedOptional: string[], fingerprint: string): Promise<ModrinthPackMergeResult> {
+  return contentInvoke("install_modrinth_pack_merge", { instanceId, projectId, versionId, selectedOptional, fingerprint });
+}

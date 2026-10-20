@@ -9,6 +9,7 @@ import {
   globalDestinations,
   goToGlobal,
   isGlobalPage,
+  isInstanceTab,
   openInstance,
   resolveWorkspace,
   selectInstanceTab,
@@ -68,12 +69,13 @@ describe("global navigation", () => {
 });
 
 describe("instance workspace navigation", () => {
-  it("opens a workspace on the Overview tab by default", () => {
+  it("opens a workspace on the Settings tab by default (Overview was removed)", () => {
     assert.deepEqual(openInstance(globalState("home"), "abc123"), {
       kind: "instance",
       instanceId: "abc123",
-      tab: "overview",
+      tab: "settings",
     });
+    assert.equal(isInstanceTab("overview"), false);
   });
 
   it("keeps the current tab when reopening the same instance", () => {
@@ -86,12 +88,12 @@ describe("instance workspace navigation", () => {
   });
 
   it("switches instances deliberately and never changes selection semantics", () => {
-    const first = openInstance(globalState("instances"), "first", "settings");
+    const first = openInstance(globalState("instances"), "first", "mods");
     const second = openInstance(first, "second");
     assert.deepEqual(second, {
       kind: "instance",
       instanceId: "second",
-      tab: "overview",
+      tab: "settings",
     });
   });
 
@@ -102,14 +104,14 @@ describe("instance workspace navigation", () => {
 
   it("switches workspace tabs without touching global state", () => {
     const state = openInstance(globalState("instances"), "abc123");
-    const switched = selectInstanceTab(state, "settings");
+    const switched = selectInstanceTab(state, "mods");
     assert.deepEqual(switched, {
       kind: "instance",
       instanceId: "abc123",
-      tab: "settings",
+      tab: "mods",
     });
-    assert.deepEqual(selectInstanceTab(switched, "settings"), switched);
-    assert.deepEqual(selectInstanceTab(globalState("instances"), "overview"), globalState("instances"));
+    assert.deepEqual(selectInstanceTab(switched, "mods"), switched);
+    assert.deepEqual(selectInstanceTab(globalState("instances"), "mods"), globalState("instances"));
   });
 
   it("opens each implemented content tab inside the same instance", () => {

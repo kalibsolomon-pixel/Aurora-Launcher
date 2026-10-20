@@ -9,6 +9,12 @@
   import { getAuroraCompatibility, type AuroraCompatibility, type InstanceLoader, type InstanceSummary } from "$lib/backend";
   import { creationPlatforms, creationBlocked } from "$lib/instances/configurationChoices";
   import ModrinthBrowse from "$lib/instances/ModrinthBrowse.svelte";
+  import InstanceIcon from "$lib/instances/InstanceIcon.svelte";
+  import IconPicker from "$lib/instances/IconPicker.svelte";
+  import { instanceIcons } from "$lib/instances/instanceIcons.svelte";
+  import { onMount } from "svelte";
+
+  onMount(() => { void instanceIcons.ensureLoaded(); });
   import { auroraCreationCopy } from '$lib/instances/creationCopy';
 
   let browsingPacks = $state(false);
@@ -142,16 +148,21 @@
       }}
     >
       <div class="field-grid">
-        <label class="field">
-          <span class="field-label">Name</span>
-          <input
-            type="text"
-            bind:value={launcher.createDisplayName}
-            placeholder="e.g. My Aurora Setup"
-            required
-            maxlength="80"
-          />
-        </label>
+        <div class="field field-span name-with-icon">
+          <label class="field-label" for="create-instance-name">Name</label>
+          <div class="name-row">
+            <IconPicker value={instanceIcons.pendingCreateIcon} disabled={launcher.createBusy}
+              onselect={(icon) => (instanceIcons.pendingCreateIcon = icon)} />
+            <input
+              id="create-instance-name"
+              type="text"
+              bind:value={launcher.createDisplayName}
+              placeholder="e.g. My Aurora Setup"
+              required
+              maxlength="80"
+            />
+          </div>
+        </div>
         <label class="field">
           <span class="field-label">Minecraft version</span>
           <select
@@ -286,26 +297,22 @@
   {/snippet}
 
   {#snippet instancesSection()}
-  <section class="group" aria-labelledby="list-title" aria-live="polite">
-    <div class="group-heading">
-      <div>
-        <h3 class="group-title" id="list-title">Your instances</h3>
-        <p class="group-subtitle">
-          {instances.length} {instances.length === 1 ? "instance" : "instances"} — open one to manage it; the selected one launches from Home.
-        </p>
-      </div>
-    </div>
+  <section class="instances-library" aria-labelledby="list-title" aria-live="polite">
+    <header class="library-heading">
+      <h3 class="group-title" id="list-title">Your instances</h3>
+      <p class="group-subtitle">
+        {instances.length} {instances.length === 1 ? "instance" : "instances"} · open one to manage it; the selected one launches from Home.
+      </p>
+    </header>
 
     {#if launcher.stateError}
-      <p class="inline-message inline-message-error group-row" role="alert">
+      <p class="inline-message inline-message-error" role="alert">
         {launcher.stateError.message}
       </p>
     {:else if launcher.launcherState === null}
-      <div class="group-row group-row-loading">
-        <span class="spinner" aria-hidden="true"></span>
-        <span class="group-row-detail">Loading instances…</span>
-      </div>
+      <p class="library-loading" role="status"><span class="spinner" aria-hidden="true"></span> Loading instances…</p>
     {:else}
+      <ul class="instance-tiles">
       {#each instances as instance (instance.id)}
         {@const selected = selectedId === instance.id}
         {@const busy = launcher.instanceBusy === instance.id}
@@ -315,69 +322,46 @@
           launcher.instanceValidations[instance.id]?.status === "damaged"
             ? "problem-line-error"
             : "problem-line-warning"}
-        <div class="group-row" class:group-row-selected={selected}>
-          <div class="group-row-main">
-            <span class="instance-name-line">
-              <span class="group-row-title">{instance.displayName}</span>
-              {#if selected}<span class="row-marker">Selected</span>{/if}
-            </span>
-            <span class="group-row-detail">{configurationLabel(instance)}</span>
-            {#if detail}<span class="group-row-detail {problemTone}">{detail}</span>{/if}
+        <li class="instance-tile" class:selected>
+          <div class="tile-top">
+            <InstanceIcon icon={instanceIcons.iconFor(instance.id)} size={26} tile />
+            <div class="tile-badges">
+              {#if selected}<span class="tile-selected">Selected</span>{/if}
+              {#if rowBadge}<span class="status-badge {rowBadge.tone}">{rowBadge.label}</span>{/if}
+            </div>
           </div>
-
-          <div class="group-row-actions">
-            {#if rowBadge}<span class="status-badge {rowBadge.tone}">{rowBadge.label}</span>{/if}
-            <button
-              type="button"
-              class="btn"
-              onclick={() => navigation.openInstance(instance.id)}
-              disabled={busy || launcher.createBusy}
-            >
-              Open
-            </button>
+          <!-- The name is the card's primary action; its hit area covers the tile. -->
+          <button type="button" class="tile-open" aria-label="Open {instance.displayName}"
+            onclick={() => navigation.openInstance(instance.id)} disabled={busy || launcher.createBusy}>
+            <span class="tile-name" title={instance.displayName}>{instance.displayName}</span>
+          </button>
+          <span class="tile-config">{configurationLabel(instance)}</span>
+          {#if detail}<span class="tile-detail {problemTone}">{detail}</span>{/if}
+          <div class="tile-actions">
             {#if !selected}
-              <button
-                type="button"
-                class="btn"
-                onclick={() => launcher.runSelect(instance.id)}
-                disabled={busy || launcher.createBusy}
-              >
-                Select
-              </button>
+              <button type="button" class="btn" onclick={() => launcher.runSelect(instance.id)} disabled={busy || launcher.createBusy}>Select</button>
             {/if}
             {#if instance.state === "installing" && !instance.pack && !launcher.createBusy}
-              <button
-                type="button"
-                class="btn"
-                onclick={() => launcher.runRetry(instance.id)}
-                disabled={busy || launcher.createBusy}
-              >
-                Retry install
-              </button>
+              <button type="button" class="btn" onclick={() => launcher.runRetry(instance.id)} disabled={busy || launcher.createBusy}>Retry install</button>
             {/if}
-            <button
-              type="button"
-              class="btn btn-quiet"
-              onclick={() => launcher.runValidate(instance.id)}
-              disabled={busy || launcher.createBusy}
-            >
+            <button type="button" class="btn btn-quiet" onclick={() => launcher.runValidate(instance.id)} disabled={busy || launcher.createBusy}>
               {busy ? "Validating…" : "Validate"}
             </button>
           </div>
-        </div>
+        </li>
       {/each}
+      </ul>
 
       {#if launcher.instanceError}
-        <p class="inline-message inline-message-error group-row" role="alert">
+        <p class="inline-message inline-message-error" role="alert">
           {launcher.instanceError.message}
         </p>
       {/if}
     {/if}
 
-    <p class="group-footer">
-      Instances are isolated Minecraft installations with the selected platform and optional
-      Aurora content, validated before they are reported ready. Open an instance to manage its
-      configuration, content and Java runtime. Delete an instance from its Settings after reviewing the data warning.
+    <p class="library-note">
+      Instances are isolated Minecraft installations, validated before they are reported ready.
+      Open one to manage its content, settings and Java runtime, or to delete it.
     </p>
   </section>
   {/snippet}
@@ -418,13 +402,38 @@
 <style>
   .modpack-browser { padding: 0 24px 24px; }
   .modpack-group { grid-column: 1 / -1; }
-  /* Recovery badges and retry actions must not squeeze their explanation
-     into a few characters at the desktop's supported narrow widths. */
-  .group-row-main { flex-basis: 200px; }
-  /* Rows keep identity left and the same action cluster right; the
-     selected row omits Select, so actions align to the trailing edge. */
-  .group-row-actions { justify-content: flex-end; margin-left: auto; }
-  .group-row-actions { max-width: 100%; }
+  /* Instance library: one tile per instance. Tiles are the surfaces (no
+     enclosing panel), so there is no card-on-card nesting. */
+  .instances-library { display: grid; gap: var(--space-4); min-width: 0; align-content: start; }
+  .library-heading { display: grid; gap: var(--space-1); }
+  .library-heading .group-subtitle { margin: 0; }
+  .library-loading { display: flex; align-items: center; gap: var(--space-3); margin: 0; color: var(--color-text-secondary); }
+  .library-note { margin: 0; color: var(--color-text-muted); font-size: var(--text-metadata); line-height: 1.55; }
+  .instance-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+  .instance-tile { position: relative; isolation: isolate; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 188px; padding: 18px; border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-content-panel); box-shadow: var(--f-shadow); transition: border-color var(--f-fast) ease, box-shadow var(--f-fast) ease, transform 160ms var(--f-ease); }
+  .instance-tile::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: rgb(255 255 255 / 3.5%); opacity: 0; transition: opacity var(--f-fast) ease; pointer-events: none; }
+  @media (hover: hover) and (pointer: fine) {
+    .instance-tile:has(.tile-open:hover:not(:disabled))::before { opacity: 1; }
+    .instance-tile:has(.tile-open:hover:not(:disabled)) { border-color: rgb(255 255 255 / 16%); }
+  }
+  .instance-tile:has(.tile-open:active:not(:disabled)) { transform: scale(.985); }
+  .instance-tile:has(.tile-open:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+  .instance-tile.selected { border-color: var(--color-accent-outline); box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%), 0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent), var(--f-shadow); }
+  .tile-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-3); }
+  .tile-badges { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-1); min-width: 0; }
+  .tile-selected { padding: 3px 8px; border-radius: 999px; color: var(--color-text); background: var(--color-accent-soft); font-size: var(--text-metadata); font-weight: 600; }
+  .tile-open { position: static; padding: 0; border: 0; background: none; color: var(--color-text); font: inherit; text-align: left; cursor: pointer; }
+  .tile-open::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+  .tile-open:focus-visible { outline: none; }
+  .tile-open:disabled { cursor: progress; }
+  .tile-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: 1.0625rem; font-weight: 600; letter-spacing: -.015em; line-height: 1.3; overflow-wrap: anywhere; }
+  .tile-config { color: var(--color-text-secondary); font-size: var(--text-metadata); overflow-wrap: anywhere; }
+  .tile-detail { font-size: var(--text-metadata); line-height: 1.45; overflow-wrap: anywhere; }
+  .tile-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: auto; padding-top: var(--space-3); }
+  .tile-actions .btn { padding-block: 6px; }
+  @media (prefers-reduced-motion: reduce) { .instance-tile, .instance-tile::before { transition: none; } .instance-tile:has(.tile-open:active:not(:disabled)) { transform: none; } }
+  .name-row { display: flex; align-items: center; gap: var(--space-2); }
+  .name-row input { flex: 1; min-width: 0; }
   .instances-page { --instance-panel-gap: var(--space-5); max-width: 1500px; width: 100%; margin-inline: auto; display: grid; gap: var(--instance-panel-gap); }
   .instances-page > .page-header { margin: 0; }
   .instances-composition { display: grid; gap: var(--instance-panel-gap); align-items: start; }
@@ -442,14 +451,6 @@
   .group-form { gap: var(--space-4); padding: var(--space-4) var(--space-5) var(--space-5); }
   .group-form > .group-footer { padding: 0; border: 0; }
   @media (max-width: 1250px) { .instances-composition.existing-first { grid-template-columns: minmax(0, 1fr); } }
-  .instance-name-line {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-2);
-    min-width: 0;
-    flex-wrap: wrap;
-  }
-
   .field-nested {
     margin-top: var(--space-2);
   }

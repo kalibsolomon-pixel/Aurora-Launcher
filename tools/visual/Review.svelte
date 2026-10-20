@@ -140,6 +140,14 @@
       if (command === 'get_launcher_state') launcher.launcherState = result as any;
       return result;
     }
+    // Instance icons: session-only fixture store (real names, no native write).
+    if (command === 'get_instance_icons') return JSON.parse(sessionStorage.getItem('review-instance-icons') ?? '{}');
+    if (command === 'set_instance_icon') { const icons = JSON.parse(sessionStorage.getItem('review-instance-icons') ?? '{}'); if (args.request.icon) icons[args.request.instanceId] = args.request.icon; else delete icons[args.request.instanceId]; sessionStorage.setItem('review-instance-icons', JSON.stringify(icons)); return icons; }
+    if (command === 'preview_modrinth_pack_merge') {
+      const pack = {provider:'modrinth',projectId:args.request.projectId,versionId:args.request.versionId,name:'Fixture Pack',packVersion:'1.0.0',minecraftVersion:'1.21.11',fabricLoaderVersion:'0.16.14',archiveSha512:'0'.repeat(128),recognized:[{path:'mods/sodium.jar',projectId:'AANobbMI',versionId:'abcdefgh',title:'Sodium'}],unresolved:[],optional:[],excluded:[],overrides:['config/sodium-options.json','options.txt'],fingerprint:'f'.repeat(64)};
+      return {pack,instanceId:args.request.instanceId,instanceMinecraftVersion:'1.21.11',instanceFabricLoaderVersion:'0.19.5',added:['mods/sodium.jar'],alreadyPresent:['mods/fabric-api.jar'],keptExisting:['options.txt'],overridesWritten:['config/sodium-options.json'],blockers:review.has('merge-blocked')?['This pack is for Minecraft 1.21.4; this instance has Minecraft 1.21.11.']:[],fingerprint:'e'.repeat(64)};
+    }
+    if (command === 'install_modrinth_pack_merge') return {instanceId:args.request.instanceId,added:1,alreadyPresent:1,overridesWritten:1,keptExisting:['options.txt']};
     if (command === 'list_minecraft_versions') return [{id:'1.21.11',versionType:'release'}];
     if (command === 'list_fabric_loader_versions') return [{version:'0.19.5',stable:true}];
     if (command === 'get_instance_content_context') return {instanceId:id,minecraftVersion:'1.21.11',loader:'fabric',loaderVersion:'0.19.5',auroraVersion:'2.1.5',environment:'client',modrinthAvailable:true,modsLoadable:true};

@@ -4,11 +4,14 @@
   import { navigation } from "$lib/launcher/navigation.svelte";
   import { INSTANCE_TABS, resolveWorkspace } from "$lib/launcher/navigation";
   import { draftIsDirty, instanceContentStatus, instanceProgressLabel, workspaceBadge } from "$lib/launcher/instanceStatus";
-  import InstanceOverviewPanel from "$lib/instances/InstanceOverviewPanel.svelte";
   import InstanceModsPanel from "$lib/instances/InstanceModsPanel.svelte";
   import InstancePacksPanel from "$lib/instances/InstancePacksPanel.svelte";
   import InstanceSettingsPanel from "$lib/instances/InstanceSettingsPanel.svelte";
   import InstanceRenameDialog from "$lib/instances/InstanceRenameDialog.svelte";
+  import InstanceIcon from "$lib/instances/InstanceIcon.svelte";
+  import { instanceIcons } from "$lib/instances/instanceIcons.svelte";
+  import { onMount as onWorkspaceMount } from "svelte";
+  onWorkspaceMount(() => { void instanceIcons.ensureLoaded(); });
   import type { InstanceTab } from "$lib/launcher/navigation";
 
   let { instanceId, tab }: { instanceId: string; tab: InstanceTab } = $props();
@@ -52,7 +55,6 @@
   );
 
   const tabLabels: Record<InstanceTab, string> = {
-    overview: "Overview",
     mods: "Mods",
     resourcePacks: "Resource Packs",
     shaders: "Shaders",
@@ -154,6 +156,7 @@
           <span class="breadcrumb-separator" aria-hidden="true">›</span>
         </nav>
         <div class="workspace-title-line">
+          <InstanceIcon icon={instanceIcons.iconFor(instance.id)} size={22} tile />
           <h2 class="page-title">{instance.displayName}</h2>
           {#if headerBadge}
             <span class="status-badge {headerBadge.tone}" title={headerBadge.detail ?? undefined}>{headerBadge.label}</span>
@@ -214,9 +217,7 @@
     </div>
 
     <div id="instance-tabpanel" role="tabpanel" aria-labelledby="instance-tab-{tab}">
-      {#if tab === "overview"}
-        <InstanceOverviewPanel {instance} />
-      {:else if tab === "mods"}
+      {#if tab === "mods"}
         <InstanceModsPanel {instance} />
       {:else if tab === "resourcePacks"}
         <InstancePacksPanel {instance} kind="resourcePack" />

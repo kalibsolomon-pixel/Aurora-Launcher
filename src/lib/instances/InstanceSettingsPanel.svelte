@@ -30,6 +30,11 @@
   }
   import AuroraUpdatePanel from "./AuroraUpdatePanel.svelte";
   import PerformanceSettings from "./PerformanceSettings.svelte";
+  import InstanceReadinessPanel from "./InstanceReadinessPanel.svelte";
+  import IconPicker from "./IconPicker.svelte";
+  import { instanceIcons } from "./instanceIcons.svelte";
+  import { onMount } from "svelte";
+  onMount(() => { void instanceIcons.ensureLoaded(); });
 
   let { instance }: { instance: InstanceSummary } = $props();
   const instanceId = $derived(instance.id);
@@ -112,6 +117,17 @@
     </div>
     <!-- Rename lives once, in the workspace header. -->
     {#if dirty}<div class="group-row-actions"><span class="status-badge status-warning">Unsaved changes</span></div>{/if}
+  </div>
+
+  <!-- The icon saves immediately and never waits for the configuration draft. -->
+  <div class="group-row icon-field">
+    <div class="group-row-main">
+      <span class="group-row-title">Icon</span>
+      <span class="group-row-detail">Shown on this instance's tile, on Home and in this header. Saved immediately.</span>
+      {#if instanceIcons.error}<span class="group-row-detail icon-error" role="alert">{instanceIcons.error}</span>{/if}
+    </div>
+    <IconPicker value={instanceIcons.iconFor(instance.id)} disabled={instanceIcons.busy === instance.id}
+      onselect={(icon) => void instanceIcons.set(instance.id, icon)} />
   </div>
 
   {#if !draft}
@@ -320,18 +336,8 @@
 
 </div>
 <aside class="settings-tools">
+  <div class="readiness-tool"><InstanceReadinessPanel {instance} /></div>
   <section class="group maintenance" aria-labelledby="maintenance-title"><div class="group-heading"><h3 class="group-title" id="maintenance-title">Maintenance</h3></div>
-    <div class="group-row">
-      <div class="group-row-main"><span class="group-row-title">Installation</span><span class="group-row-detail">Verify installed files against the saved configuration.</span></div>
-      <button class="btn" type="button" onclick={() => launcher.runValidate(instance.id)}>Validate instance</button>
-    </div>
-    <div class="group-row">
-      <div class="group-row-main"><span class="group-row-title">Managed Java</span><span class="group-row-detail">The exact runtime this instance requires.</span></div>
-      <div class="group-row-actions">
-        <button class="btn btn-quiet" type="button" onclick={() => launcher.runRuntimeStatus(instance.id)}>Check managed Java</button>
-        <button class="btn" type="button" onclick={() => launcher.runEnsureRuntime(instance.id)}>Install / repair Java</button>
-      </div>
-    </div>
     <details class="group-row tool-disclosure"><summary>Reinstall / restore configured content</summary><p class="field-hint">Explicitly reinstalls the saved game configuration and restores its reviewed Aurora Client and Fabric API bootstrap files. Worlds, config and unrelated mods stay untouched. Re-enable disabled bootstrap mods in Mods first; file conflicts require inspection.</p>
       <button class="btn" type="button" disabled={dirty || launcher.detailInstallBusy !== null} onclick={() => launcher.runInstallConfiguration(instance.id)}>Reinstall configured content</button>
     </details>
@@ -360,14 +366,16 @@
 <style>
   .instance-settings-composition { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr); gap: var(--space-5); align-items: start; }
   .settings-main, .settings-tools { min-width: 0; }
+  .settings-tools { display: grid; gap: var(--space-4); align-content: start; }
+  .settings-tools > :global(.group) { margin: 0; }
+  .icon-error { color: var(--color-error); }
+  .readiness-tool { grid-column: 1 / -1; min-width: 0; }
   .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
   .settings-section { min-width: 0; }
   .settings-section :global(.field-grid) { grid-template-columns: 1fr; }
   .tool-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
   .danger-zone { border-color: color-mix(in srgb, var(--color-error) 45%, var(--f-edge)); }
   .maintenance .group-row { padding: var(--space-4) var(--space-5); }
-  /* Descriptions keep a readable measure; actions wrap below instead of squeezing them. */
-  .maintenance .group-row-main { flex: 1 1 14rem; }
   .tool-disclosure { display: block; }
   .tool-disclosure summary { cursor: pointer; color: var(--color-text); font-weight: 500; padding-block: 2px; }
   .tool-disclosure[open] summary { margin-bottom: var(--space-2); }

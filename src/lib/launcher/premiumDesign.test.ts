@@ -74,11 +74,14 @@ it("account identity exposes its state so the rail can keep only actionable deta
   assert.match(css, /account-identity:not\(\[data-state="reauthenticationRequired"\]\) \.identity-detail \{ display: none; \}/);
 });
 
-it("instance Settings has one Rename (in the workspace header) and labeled maintenance rows", () => {
+it("instance Settings has one Rename, leads with readiness, and keeps Maintenance free of duplicates", () => {
   reset();
   const view = html(Settings, { instance: instance() });
   assert.doesNotMatch(view, />\s*Rename\s*</);
-  for (const label of ["Installation", "Managed Java", "Validate instance", "Check managed Java", "Install / repair Java", "Reinstall / restore configured content", "Recovery backup storage", "Delete instance"]) {
+  // Readiness (former Overview) owns Validate and Java checks; Maintenance no longer repeats them.
+  assert.ok(view.indexOf("Readiness") < view.indexOf("Maintenance"));
+  for (const duplicate of ["Validate instance", "Check managed Java", "Install / repair Java"]) assert.ok(!view.includes(duplicate), `duplicate ${duplicate}`);
+  for (const label of ["Readiness", "Java runtime", "Validate", "Reinstall / restore configured content", "Recovery backup storage", "Delete instance", "Instance icon"]) {
     assert.ok(view.includes(label), `missing ${label}`);
   }
   const workspace = readFileSync(new URL("../instances/InstanceWorkspace.svelte", import.meta.url), "utf8");
@@ -153,4 +156,58 @@ it("Home offers one existing command per known blocker and nothing for unknown c
   for (const label of ["Install Java", "Accounts", "Open instance"]) assert.match(view, new RegExp(`>${label}</button>`));
   assert.equal((view.match(/<details/g) ?? []).length, 1);
   assert.match(view, /Something new\.<\/span>\s*<!--\[-1--><!--\]--><\/li>/);
+});
+
+it("instance icons: every suggested icon is a real Material Symbol and search is bounded", async () => {
+  const { DEFAULT_INSTANCE_ICONS, FALLBACK_INSTANCE_ICON, isValidIconName, searchIcons, iconLabel } = await server.ssrLoadModule("/src/lib/instances/instanceIcons.ts");
+  const { materialSymbolNames } = await server.ssrLoadModule("/src/lib/instances/materialSymbolNames.ts");
+  assert.ok(materialSymbolNames.length > 3000);
+  assert.ok(DEFAULT_INSTANCE_ICONS.length >= 10 && DEFAULT_INSTANCE_ICONS.length <= 20);
+  for (const icon of [...DEFAULT_INSTANCE_ICONS, FALLBACK_INSTANCE_ICON]) assert.ok(materialSymbolNames.includes(icon), `${icon} is not a Material Symbol`);
+  for (const bad of ["", "Rocket", "rocket-launch", "../x", "a".repeat(65)]) assert.equal(isValidIconName(bad), false);
+  assert.equal(searchIcons(materialSymbolNames, "rocket launch")[0], "rocket_launch");
+  assert.ok(searchIcons(materialSymbolNames, "", 50).length === 50);
+  assert.equal(iconLabel("local_fire_department"), "Local fire department");
+});
+
+it("Home names the instance once: no metadata line and no name inside Launch", () => {
+  reset();
+  const view = html(Home);
+  assert.doesNotMatch(view, /instance-metadata/);
+  assert.doesNotMatch(view, /picker-name/);
+  assert.equal((view.match(/Design instance/g) ?? []).length >= 1, true);
+  assert.match(view, /<h1[^>]*>Design instance<\/h1>/);
+  assert.match(view, /class="btn btn-primary play-hero[^"]*"[^>]*aria-label="Launch"/);
+  assert.match(view, /readiness-dot/);
+});
+
+it("Instances shows tile cards with icons, and the creation form offers an icon picker", async () => {
+  reset();
+  const Instances = (await server.ssrLoadModule("/src/lib/pages/InstancesPage.svelte")).default;
+  const view = html(Instances);
+  assert.match(view, /class="instance-tiles[^"]*"/);
+  assert.match(view, /class="instance-tile[^"]*selected/);
+  assert.match(view, /aria-label="Open Design instance"/);
+  assert.match(view, /material-symbols-outlined/);
+  assert.match(view, /Instance icon: none\. Choose icon/);
+  assert.doesNotMatch(view, /group-row-selected/);
+});
+
+it("browsing modpacks inside an instance adds to that instance; only the standalone browser creates one", () => {
+  const source = readFileSync(new URL("../instances/ModrinthBrowse.svelte", import.meta.url), "utf8");
+  assert.match(source, /const packIntoInstance = \$derived\(!standalonePackBrowse && instanceId !== ""\)/);
+  assert.match(source, /previewModrinthPackMerge\(instanceId/);
+  assert.match(source, /installModrinthPackMerge\(instanceId/);
+  assert.match(source, /Add to \$\{instanceName\}/);
+  assert.match(source, /mergePreview\?\.blockers\.length/);
+});
+
+it("icon search understands everyday Minecraft words and browse-all starts with words, not numeric badges", async () => {
+  const { searchIcons } = await server.ssrLoadModule("/src/lib/instances/instanceIcons.ts");
+  const { materialSymbolNames } = await server.ssrLoadModule("/src/lib/instances/materialSymbolNames.ts");
+  const tree = searchIcons(materialSymbolNames, "tree");
+  assert.ok(tree.includes("forest") && tree.includes("park"), "tree finds forest and park");
+  assert.ok(searchIcons(materialSymbolNames, "sword").includes("swords"));
+  assert.match(materialSymbolNames[0], /^[a-z]/);
+  assert.match(materialSymbolNames[materialSymbolNames.length - 1], /^[0-9]/);
 });

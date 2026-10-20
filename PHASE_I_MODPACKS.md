@@ -1,5 +1,7 @@
 # Phase I: Modrinth modpack installation
 
+> **Update:** inside an instance workspace, a pack can now be added to that existing instance as ordinary content (no pack ownership). See [docs/instance-tiles-icons/README.md](docs/instance-tiles-icons/README.md). The standalone browser below still creates a new instance.
+
 Aurora accepts an exact Modrinth pack project and version ID from the UI. Rust resolves the version and its primary `.mrpack` through the official Modrinth API, verifies the published SHA-512 in the shared content-addressed cache, and parses only those verified bytes. A pack creates an independent Fabric instance; Aurora Client is never added.
 
 Acceptance results, live evidence and limitations are recorded in `PHASE_I_ACCEPTANCE.md`.

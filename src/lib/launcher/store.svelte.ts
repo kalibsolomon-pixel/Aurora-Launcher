@@ -1,4 +1,5 @@
 import { mark } from "./performance";
+import { instanceIcons } from "$lib/instances/instanceIcons.svelte";
 import { listen } from "@tauri-apps/api/event";
 import {
   acquireArtifact,
@@ -563,7 +564,7 @@ class LauncherStore {
     this.createError = null;
 
     try {
-      await createInstance({
+      const created = await createInstance({
         displayName: this.createDisplayName.trim(),
         minecraftVersion: this.createMinecraftVersion,
         loader:
@@ -576,6 +577,8 @@ class LauncherStore {
                 : {kind: "fabric", policy: this.createLoaderPolicy},
         auroraEnabled: this.createAuroraEnabled,
       });
+      // Presentation only: an icon write failure never fails creation.
+      await instanceIcons.applyPending(created.id);
       this.createDisplayName = "";
       this.createAuroraPreference = null;
       await this.refreshState();

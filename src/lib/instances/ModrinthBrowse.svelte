@@ -11,11 +11,11 @@
   import {
     BROWSE_KINDS, BROWSE_SORTS, browseKindLabel, browseKindNoun, browseModrinth, browseModrinthTags,
     browseSortLabel, getModrinthProjectBrowse, installModrinth, previewModrinthInstall, quickInstallModrinth,
-    installModrinthPack, previewModrinthPack,
+    installModrinthPack, previewModrinthPack, previewModrinthPackMerge, installModrinthPackMerge,
     LauncherBackendError,
     type BrowseKind, type BrowseSort, type ContentType, type ModrinthPreviewResponse,
     type ModrinthProjectDetails, type ModrinthSearchPage, type ProviderCategory,
-    type ProviderConflict, type ModrinthPackPreview,
+    type ProviderConflict, type ModrinthPackPreview, type ModrinthPackMergePreview,
   } from "$lib/backend";
   import InstallConflicts from "./InstallConflicts.svelte";
   import InstalledArtwork from './InstalledArtwork.svelte';
@@ -49,6 +49,10 @@
   let versionId = $state("");
   let preview = $state<ModrinthPreviewResponse | null>(null);
   let packPreview = $state<ModrinthPackPreview | null>(null);
+  // Inside an instance workspace a pack is added to that instance; only the
+  // standalone Instances browser creates a new instance from a pack.
+  const packIntoInstance = $derived(!standalonePackBrowse && instanceId !== "");
+  let mergePreview = $state<ModrinthPackMergePreview | null>(null);
   let selectedOptional = $state<string[]>([]);
   let previewOptional = $state<string[]>([]);
   let packPhase = $state("");
@@ -291,8 +295,14 @@
     busy = "preview";
     error = null;
     packPreview = null;
+    mergePreview = null;
     try {
-      packPreview = await previewModrinthPack(project.projectId, versionId, selectedOptional);
+      if (packIntoInstance) {
+        mergePreview = await previewModrinthPackMerge(instanceId, project.projectId, versionId, selectedOptional);
+        packPreview = mergePreview.pack;
+      } else {
+        packPreview = await previewModrinthPack(project.projectId, versionId, selectedOptional);
+      }
       previewOptional = [...selectedOptional];
     } catch (reason) { showError(reason); }
     finally { busy = null; }
@@ -303,8 +313,18 @@
     const selected = packPreview;
     busy = "install";
     error = null;
-    packPhase = "preparingInstance";
+    packPhase = packIntoInstance ? "resolvingPack" : "preparingInstance";
     try {
+      if (packIntoInstance) {
+        if (!mergePreview || mergePreview.blockers.length) return;
+        const result = await installModrinthPackMerge(instanceId, selected.projectId, selected.versionId, selectedOptional, mergePreview.fingerprint);
+        packPreview = null;
+        mergePreview = null;
+        project = null;
+        await onInstalled(instanceId, "mod");
+        notifications.show(`Added ${result.added} file${result.added === 1 ? "" : "s"} from ${selected.name} to ${instanceName}${result.keptExisting.length ? ` · kept ${result.keptExisting.length} of your existing settings files` : ""}.`);
+        return;
+      }
       const created = await installModrinthPack(selected.projectId, selected.versionId, selectedOptional, selected.fingerprint);
       await launcher.refreshState();
       await launcher.runSelect(created.id);
@@ -361,7 +381,7 @@
   <div class="browse-heading">
     <div>
       <h3 class="group-title">Discover {browseKindLabel(browseKind)}</h3>
-      <p class="group-subtitle">{browseKind === "modpack" ? "Review an exact Fabric pack version to create a new independent instance." : `Install into ${instanceName}. Compatibility and required dependencies are checked before installation.`}</p>
+      <p class="group-subtitle">{browseKind === "modpack" ? (packIntoInstance ? `Review an exact Fabric pack version to add its mods and settings to ${instanceName}. Your existing files are never overwritten.` : "Review an exact Fabric pack version to create a new independent instance.") : `Install into ${instanceName}. Compatibility and required dependencies are checked before installation.`}</p>
     </div>
     <span class="source">Source: Modrinth</span>
   </div>
@@ -437,7 +457,7 @@
     {#if categories.length || sort !== "relevance" || query.trim()}
       <button type="button" class="btn btn-quiet" onclick={clearFilters}>Clear filters</button>
     {/if}
-    <span class="filter-context">{browseKind === "modpack" ? "Fabric modpacks · new instance" : `Minecraft ${minecraftVersion}${browseKind === "mod" ? ` · ${loaderLabel}` : ""}`}</span>
+    <span class="filter-context">{browseKind === "modpack" ? (packIntoInstance ? `Fabric modpacks · into ${instanceName}` : "Fabric modpacks · new instance") : `Minecraft ${minecraftVersion}${browseKind === "mod" ? ` · ${loaderLabel}` : ""}`}</span>
   </div>
 
   {#if categories.length}
@@ -469,7 +489,9 @@
       <p>{project.summary}</p>
       <p class="browse-meta">License {project.license} · Modrinth project {project.projectId} · {project.loaders.join(", ") || "No loader listed"}</p>
       {#if browseKind === "shaderPack"}<p class="browse-note">The file can be installed. This instance may need a compatible shader loader before Minecraft can use it.</p>{/if}
-      {#if browseKind === "modpack"}<p class="browse-note">This pack will create its own Fabric instance with the Minecraft and loader versions declared by the selected pack. Aurora Client is not added.</p>{/if}
+      {#if browseKind === "modpack"}<p class="browse-note">{packIntoInstance
+        ? `This pack's mods and settings are added to ${instanceName}. Its Minecraft version must match this instance and its Fabric Loader can't be newer; your existing files are never overwritten.`
+        : "This pack will create its own Fabric instance with the Minecraft and loader versions declared by the selected pack. Aurora Client is not added."}</p>{/if}
       {#if project.versions.length}
         <label class="version-choice"><span class="field-label">Version</span>
           <select bind:value={versionId} onchange={() => { preview = null; packPreview = null; selectedOptional = []; }}>
@@ -508,7 +530,7 @@
                   {#if quickBusyProjectId === hit.projectId}<span class="spinner" aria-hidden="true"></span><span class="action-state">Installing…</span>{:else if installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Installed</span>{:else if blockedProjects[hit.projectId]}<span class="action-state">Blocked</span>{:else if dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Keep</span>{:else}<Icon name="download" size={18} /><span class="action-state">Install</span>{/if}
                 </button>
               {:else}
-                <span class="browse-only-badge">New instance</span>
+                <span class="browse-only-badge">{packIntoInstance ? "Adds to instance" : "New instance"}</span>
               {/if}
               <button type="button" class="btn" class:btn-quiet={browseKind !== "modpack"} aria-label={browseKind === "modpack" ? `Review ${hit.title} pack` : `Details for ${hit.title}`} disabled={busy !== null || quickBusyProjectId !== null} onclick={() => openProject(hit.projectId)}>{browseKind === "modpack" ? "Review pack" : "Details"}</button>
             </div>
@@ -555,7 +577,19 @@
   {#if packPreview}
     <div class="preview" role="group" aria-label="Modpack installation preview">
       <h4>{packPreview.name} · {packPreview.packVersion}</h4>
-      <p>Minecraft {packPreview.minecraftVersion} · Fabric Loader {packPreview.fabricLoaderVersion} · New independent instance</p>
+      <p>Minecraft {packPreview.minecraftVersion} · Fabric Loader {packPreview.fabricLoaderVersion} · {packIntoInstance ? `Adds to ${instanceName}` : "New independent instance"}</p>
+      {#if mergePreview}
+        {#if mergePreview.blockers.length}
+          <div class="merge-blockers" role="alert">
+            <strong>This pack can't be added to {instanceName}</strong>
+            <ul>{#each mergePreview.blockers as blocker}<li>{blocker}</li>{/each}</ul>
+          </div>
+        {:else}
+          <p class="merge-summary">Adds {mergePreview.added.length} file{mergePreview.added.length === 1 ? "" : "s"} and {mergePreview.overridesWritten.length} pack setting{mergePreview.overridesWritten.length === 1 ? "" : "s"}{mergePreview.alreadyPresent.length ? ` · ${mergePreview.alreadyPresent.length} already in this instance` : ""}. The pack's content becomes ordinary content of this instance; it won't follow pack updates.</p>
+        {/if}
+        {#if mergePreview.keptExisting.length}<details><summary>Your files kept as they are ({mergePreview.keptExisting.length})</summary><ul>{#each mergePreview.keptExisting as path}<li>{path}</li>{/each}</ul></details>{/if}
+        {#if mergePreview.alreadyPresent.length}<details><summary>Already in this instance ({mergePreview.alreadyPresent.length})</summary><ul>{#each mergePreview.alreadyPresent as path}<li>{path}</li>{/each}</ul></details>{/if}
+      {/if}
       <p>{packFileCounts.mods} mods · {packFileCounts.resourcePacks} resource packs · {packFileCounts.shaders} shader packs · {packFileCounts.other} other files · {packPreview.overrides.length} overrides.</p>
       <p>{packPreview.recognized.length} Modrinth-managed components · {packPreview.unresolved.length} external verified files.</p>
       {#if packPreview.recognized.length}
@@ -571,14 +605,17 @@
       {#if packPreview.excluded.length}<details><summary>Excluded for this client ({packPreview.excluded.length})</summary><ul>{#each packPreview.excluded as path}<li>{path}</li>{/each}</ul></details>{/if}
       {#if packPreview.overrides.length}<details><summary>Pack defaults ({packPreview.overrides.length})</summary><ul>{#each packPreview.overrides as path}<li>{path}</li>{/each}</ul></details>{/if}
       <div class="preview-actions">
-        <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => packPreview = null}>Cancel</button>
-        <button type="button" class="btn" disabled={busy !== null || optionalChanged} onclick={confirmPack}>Install exact version</button>
+        <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => { packPreview = null; mergePreview = null; }}>Cancel</button>
+        <button type="button" class="btn" class:btn-primary={packIntoInstance} disabled={busy !== null || optionalChanged || !!mergePreview?.blockers.length} onclick={confirmPack}>{packIntoInstance ? `Add to ${instanceName}` : "Install exact version"}</button>
       </div>
     </div>
   {/if}
 </section>
 
 <style>
+  .merge-blockers { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--color-warning-soft); color: var(--color-warning); }
+  .merge-blockers ul { margin: var(--space-2) 0 0; padding-left: 1.2em; color: var(--color-text); }
+  .merge-summary { color: var(--color-text); }
   .browse { min-width: 0; container-type: inline-size; }
   .browse-heading, .browse-search, .browse-row, .preview-actions, .browse-filters { display: flex; gap: var(--space-3); align-items: center; }
   .browse-heading { justify-content: space-between; margin-bottom: var(--space-3); }

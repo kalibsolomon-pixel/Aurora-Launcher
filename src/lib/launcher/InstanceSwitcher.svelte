@@ -61,7 +61,8 @@
       aria-describedby={status ? `${uid}-status` : undefined}
       disabled={launchAction.disabled} onclick={launchAction.run}>
       <strong class="launch-word">{launchAction.label}</strong>
-      <span class="picker-identity" title={selected?.displayName}><span class="picker-name">{selected?.displayName ?? "Choose an instance"}</span>{#if status}<span id={`${uid}-status`} class="readiness-dot" class:ready={status.ready} role="img" aria-label={status.label} title={status.label}></span>{/if}</span>
+      <!-- The instance name is the heading above this control; Launch carries only readiness. -->
+      {#if status}<span id={`${uid}-status`} class="readiness-dot" class:ready={status.ready} role="img" aria-label={status.label} title={status.label}></span>{/if}
     </button>
   {/if}
   <button bind:this={trigger} type="button" class="picker-trigger" aria-label="Select Play instance"

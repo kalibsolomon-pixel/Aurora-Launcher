@@ -11,8 +11,8 @@
     <SettingsRow id="instance-memory" title="Memory & game window" description={`Saved memory: ${instance.configuration.memoryMib} MiB. Memory, JVM arguments and window dimensions apply on the next game launch.`}>
       <button class="btn btn-primary" type="button" onclick={() => navigation.openInstance(instance.id, 'settings')}>Open instance Settings</button>
     </SettingsRow>
-    <SettingsRow id="instance-java" title="Managed Java" description="Aurora selects the required Java version from the installed game plan and validates it before launch. Check or install that runtime in Overview.">
-      <button class="btn" type="button" onclick={() => navigation.openInstance(instance.id, 'overview')}>Open instance Overview</button>
+    <SettingsRow id="instance-java" title="Managed Java" description="Aurora selects the required Java version from the installed game plan and validates it before launch. Check or install that runtime from the instance's Settings.">
+      <button class="btn" type="button" onclick={() => navigation.openInstance(instance.id, 'settings')}>Check Java in Settings</button>
     </SettingsRow>
     <p class="group-footer">Minecraft or loader changes require Save changes, then Install new configuration. They never change another instance.</p>
   {:else}
