@@ -5828,7 +5828,8 @@ async fn calculate_play_readiness(
         if matches!(loader_family, "fabric" | "neoForge")
             && managed.instance_paths(instance_id).mods().is_dir()
         {
-            let inventory = crate::instance_mods::scan(managed, instance_id)?;
+            let mut inventory = crate::instance_mods::scan(managed, instance_id)?;
+            crate::instance_mods::add_loader_builtins(managed, instance_id, &mut inventory);
             mod_issues = crate::mod_compatibility::validate(
                 &inventory,
                 &record.installed().minecraft_version,
@@ -5986,7 +5987,8 @@ async fn play_instance_with_target(
         if matches!(launch_loader_family, "fabric" | "neoForge")
             && managed.instance_paths(&instance).mods().is_dir()
         {
-            let inventory = crate::instance_mods::scan(&managed, &instance)?;
+            let mut inventory = crate::instance_mods::scan(&managed, &instance)?;
+            crate::instance_mods::add_loader_builtins(&managed, &instance, &mut inventory);
             if let Some(problem) = crate::mod_compatibility::validate(
                 &inventory,
                 &record.installed().minecraft_version,
@@ -6092,7 +6094,8 @@ async fn play_instance_with_target(
             if matches!(validated_loader_family, "fabric" | "neoForge")
                 && managed.instance_paths(&instance).mods().is_dir()
             {
-                let inventory = crate::instance_mods::scan(&managed, &instance)?;
+                let mut inventory = crate::instance_mods::scan(&managed, &instance)?;
+                crate::instance_mods::add_loader_builtins(&managed, &instance, &mut inventory);
                 if let Some(problem) = crate::mod_compatibility::validate(
                     &inventory,
                     &record.installed().minecraft_version,
