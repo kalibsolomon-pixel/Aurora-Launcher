@@ -1714,9 +1714,74 @@ pub(crate) async fn install_pack_provider_plans(
         instance,
         acquired,
         Some(&revision),
-        true,
+        ActivationMode::Pack,
         |state| state.save(managed, instance),
     )
+}
+
+/// Pack components merged into an existing instance as ordinary direct,
+/// retained content. Collisions and mod-ID conflicts fail before any write.
+pub(crate) async fn install_merged_provider_plans(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    plans: Vec<ProviderInstallPlan>,
+    revision: &str,
+) -> Result<Vec<ProviderRecord>, ContentError> {
+    let acquired = acquire_provider_plans(managed, plans).await?;
+    activate_provider_transaction_with_revision(
+        managed,
+        instance,
+        acquired,
+        Some(revision),
+        ActivationMode::Merged,
+        |state| state.save(managed, instance),
+    )
+}
+
+/// Read-only projection of a pack merge: the same whole-batch mod validation
+/// activation runs, reported as the first problem instead of an install error.
+pub(crate) async fn projected_merge_problem(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    plans: Vec<ProviderInstallPlan>,
+) -> Result<Option<String>, ContentError> {
+    if plans.is_empty() {
+        return Ok(None);
+    }
+    let acquired = acquire_provider_plans(managed, plans).await?;
+    match validate_projected_artifacts(managed, instance, &acquired, None) {
+        Ok(()) => Ok(None),
+        Err(ContentError::ModCollision(conflict)) => {
+            Ok(Some(format!("{}: {}", conflict.file_name, conflict.reason)))
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// Undo exactly the records a merge just activated: each file must still hash
+/// to its recorded digest before removal, and only those entries leave state.
+pub(crate) fn remove_merged_provider_records(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    records: &[ProviderRecord],
+) -> Result<(), ContentError> {
+    with_instance_lock(instance, || {
+        let mut state = ContentState::load(managed, instance)?;
+        let root = managed.instance_paths(instance).root().to_path_buf();
+        for record in records {
+            let path = root
+                .join(record.content_type.directory_name())
+                .join(&record.file_name);
+            let digest =
+                ArtifactDigest::parse(&record.sha256).map_err(|_| ContentError::HashMismatch)?;
+            verify_file(&path, &digest, None).map_err(|_| ContentError::HashMismatch)?;
+            std::fs::remove_file(&path).map_err(ContentError::Io)?;
+            state.entries.retain(|entry| {
+                !(entry.identity() == record.identity() && entry.file_name == record.file_name)
+            });
+        }
+        state.save(managed, instance)
+    })
 }
 
 pub(crate) async fn install_provider_plans_reviewed(
@@ -1731,7 +1796,7 @@ pub(crate) async fn install_provider_plans_reviewed(
         instance,
         acquired,
         revision,
-        false,
+        ActivationMode::Reviewed,
         |state| state.save(managed, instance),
     )
 }
@@ -2125,7 +2190,26 @@ fn activate_provider_transaction(
     acquired: Vec<(ProviderRecord, PathBuf, u64)>,
     commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
 ) -> Result<Vec<ProviderRecord>, ContentError> {
-    activate_provider_transaction_with_revision(managed, instance, acquired, None, false, commit)
+    activate_provider_transaction_with_revision(
+        managed,
+        instance,
+        acquired,
+        None,
+        ActivationMode::Reviewed,
+        commit,
+    )
+}
+
+/// How newly activated provider records are owned.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ActivationMode {
+    /// One reviewed direct install: the last plan is direct, others dependencies.
+    Reviewed,
+    /// Components of a pack-owned instance; ownership lives in pack state.
+    Pack,
+    /// A pack merged into an existing instance: every component is ordinary
+    /// direct, retained, removable content with no pack ownership.
+    Merged,
 }
 
 fn activate_provider_transaction_with_revision(
@@ -2133,7 +2217,7 @@ fn activate_provider_transaction_with_revision(
     instance: &InstanceId,
     mut acquired: Vec<(ProviderRecord, PathBuf, u64)>,
     revision: Option<&str>,
-    pack_install: bool,
+    mode: ActivationMode,
     commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
 ) -> Result<Vec<ProviderRecord>, ContentError> {
     with_instance_lock(instance, || {
@@ -2154,10 +2238,11 @@ fn activate_provider_transaction_with_revision(
             .chain(acquired.iter().map(|(record, _, _)| record.identity()))
             .collect();
         for (record, _, _) in &mut acquired {
-            record.explicitly_retained = pack_install || record.identity() == direct;
-            record.origin = if pack_install {
+            record.explicitly_retained =
+                mode != ActivationMode::Reviewed || record.identity() == direct;
+            record.origin = if mode == ActivationMode::Pack {
                 ProviderOrigin::Pack
-            } else if record.identity() == direct {
+            } else if mode == ActivationMode::Merged || record.identity() == direct {
                 ProviderOrigin::Direct
             } else {
                 ProviderOrigin::Dependency

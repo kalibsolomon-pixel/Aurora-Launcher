@@ -200,6 +200,31 @@ struct FabricMetadataDocument {
     jars: Vec<NestedJarDeclaration>,
     #[serde(default)]
     mixins: Vec<serde_json::Value>,
+    /// Alias ids this mod also satisfies (Fabric `provides`), e.g. Fabric API
+    /// provides `fabric`. Read leniently: a malformed shape yields no aliases.
+    #[serde(default)]
+    provides: serde_json::Value,
+}
+
+/// Bounded, validated `provides` aliases (Fabric mod-id shape, at most 64).
+fn provided_aliases(value: &serde_json::Value, own_id: &str) -> Vec<String> {
+    let Some(items) = value.as_array() else {
+        return Vec::new();
+    };
+    items
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|alias| {
+            (2..=64).contains(&alias.len())
+                && !alias.eq_ignore_ascii_case(own_id)
+                && alias
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
+        })
+        .take(64)
+        .map(str::to_owned)
+        .collect()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1370,6 +1395,14 @@ pub(crate) fn inspect_fabric_metadata(
         &mut mixin_java_requirements,
     );
     nested_warnings.append(&mut mixin_warnings);
+    // Fabric Loader resolves a dependency on a provided alias to the providing
+    // mod at its own version. Nested jars keep precedence for their own ids.
+    let own_version = clean_optional(document.version.clone());
+    for alias in provided_aliases(&document.provides, &id) {
+        nested_mod_versions
+            .entry(alias)
+            .or_insert_with(|| own_version.clone());
+    }
     let authors = document
         .authors
         .into_iter()
@@ -2552,6 +2585,45 @@ versionRange="[1,2)"
         );
     }
     use std::io::Write as _;
+
+    #[test]
+    fn provided_aliases_satisfy_dependencies_like_fabric_loader() {
+        // Fabric API's id is `fabric-api` but it provides `fabric`; mods such as
+        // fzzy_config depend on `fabric`. Without alias support a real pack
+        // (Adrenaline) failed with "requires fabric *. Installed: absent".
+        let fixture = Fixture::new("provides-alias");
+        jar(
+            &fixture.mods().join("api.jar"),
+            Some(br#"{"id":"fabric-api","version":"0.141.6","provides":["fabric"]}"#),
+        );
+        jar(
+            &fixture.mods().join("consumer.jar"),
+            Some(br#"{"id":"consumer","version":"1","depends":{"fabric":">=0.100"}}"#),
+        );
+        let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+        let problems =
+            crate::mod_compatibility::validate(&inventory, "1.21.11", "0.19.5", Some(21), "fabric");
+        assert!(
+            !problems.iter().any(|p| p.mod_id == "consumer"),
+            "provided alias must satisfy the dependency: {problems:?}"
+        );
+        // The alias carries the provider's version, so version predicates still apply.
+        jar(
+            &fixture.mods().join("strict.jar"),
+            Some(br#"{"id":"strict","version":"1","depends":{"fabric":">=0.200"}}"#),
+        );
+        let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+        let problems =
+            crate::mod_compatibility::validate(&inventory, "1.21.11", "0.19.5", Some(21), "fabric");
+        assert!(problems.iter().any(|p| p.mod_id == "strict"));
+        // Malformed or self-referential `provides` shapes add no aliases.
+        assert!(provided_aliases(&serde_json::json!("fabric"), "x").is_empty());
+        assert!(provided_aliases(&serde_json::json!(["x", "BAD ID", "a"]), "x").is_empty());
+        assert_eq!(
+            provided_aliases(&serde_json::json!(["fabric", 7]), "fabric-api"),
+            vec!["fabric"]
+        );
+    }
 
     #[test]
     fn disabling_known_dependency_is_blocked_and_changed_disabled_bytes_never_activate() {

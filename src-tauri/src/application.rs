@@ -2319,6 +2319,37 @@ pub fn rename_instance(
     Ok(InstanceSummary::from_record(&record))
 }
 
+fn icon_error(error: crate::instance_icons::IconError) -> CommandError {
+    CommandError::new(error.code(), error.to_string())
+}
+
+/// Display icons (Material Symbols names) for registered instances.
+#[tauri::command]
+pub fn get_instance_icons(
+    app: AppHandle,
+) -> Result<std::collections::BTreeMap<String, String>, CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::instance_icons::load(&managed).map_err(icon_error)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetInstanceIconRequest {
+    instance_id: String,
+    icon: Option<String>,
+}
+
+/// Sets or clears one instance's icon. Presentation metadata only.
+#[tauri::command]
+pub fn set_instance_icon(
+    app: AppHandle,
+    request: SetInstanceIconRequest,
+) -> Result<std::collections::BTreeMap<String, String>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    crate::instance_icons::set(&managed, &instance, request.icon.as_deref()).map_err(icon_error)
+}
+
 /// Typed request for atomically persisting a new desired configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -3415,6 +3446,67 @@ pub async fn install_modrinth_pack(
     .await
     .map_err(|error| CommandError::new(error.code, error.message))?;
     Ok(InstanceSummary::from_record(&record))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModrinthPackMergeRequest {
+    instance_id: String,
+    project_id: String,
+    version_id: String,
+    #[serde(default)]
+    selected_optional: Vec<String>,
+    fingerprint: Option<String>,
+}
+
+/// Read-only review of merging an exact pack version into an existing instance.
+#[tauri::command]
+pub async fn preview_modrinth_pack_merge(
+    app: AppHandle,
+    request: ModrinthPackMergeRequest,
+) -> Result<crate::pack_merge::PackMergePreview, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    crate::pack_merge::preview(
+        &managed,
+        &crate::modrinth::Client::official(),
+        &instance,
+        &request.project_id,
+        &request.version_id,
+        &request.selected_optional,
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
+}
+
+/// Adds the reviewed pack's content to the instance; never creates an instance.
+#[tauri::command]
+pub async fn install_modrinth_pack_merge(
+    app: AppHandle,
+    request: ModrinthPackMergeRequest,
+) -> Result<crate::pack_merge::PackMergeResult, CommandError> {
+    let fingerprint = request.fingerprint.ok_or_else(|| {
+        CommandError::new(
+            "pack_preview_required",
+            "Review the exact pack version before adding it.",
+        )
+    })?;
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    crate::pack_merge::install(
+        &managed,
+        &crate::modrinth::Client::official(),
+        &instance,
+        &request.project_id,
+        &request.version_id,
+        &request.selected_optional,
+        &fingerprint,
+        &mut |phase| {
+            let _ = app.emit("modpack-progress", serde_json::json!({ "phase": phase }));
+        },
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
 }
 
 #[derive(Deserialize)]

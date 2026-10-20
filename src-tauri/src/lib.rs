@@ -23,6 +23,7 @@ pub mod home_widgets;
 pub mod install;
 mod installed_artwork;
 pub mod instance_content;
+pub mod instance_icons;
 pub mod instance_mods;
 pub mod instances;
 pub mod integrity;
@@ -34,6 +35,7 @@ pub mod modrinth;
 pub mod mrpack;
 pub mod neoforge;
 pub mod pack_activation;
+pub mod pack_merge;
 pub mod pack_state;
 pub mod pack_update;
 pub mod paths;
@@ -119,6 +121,8 @@ pub fn run() {
             application::apply_aurora_transition,
             application::retry_instance_install,
             application::rename_instance,
+            application::get_instance_icons,
+            application::set_instance_icon,
             application::update_instance_configuration,
             application::get_instance_performance_advice,
             application::install_instance_configuration,
@@ -148,6 +152,8 @@ pub fn run() {
             application::get_installed_artwork_identities,
             application::preview_modrinth_pack,
             application::install_modrinth_pack,
+            application::preview_modrinth_pack_merge,
+            application::install_modrinth_pack_merge,
             application::check_modpack_update,
             application::preview_modpack_update,
             application::apply_modpack_update,
