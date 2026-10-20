@@ -36,6 +36,23 @@ The helper and wrapper emitted the required UNELEVATED verification/PASS lines.
 Exit 0; 1 passed, 0 failed. An independent 44-entry before/after snapshot matched.
 No elevation, security-setting change, cleanup or replacement fixture was used.
 
+## Refreshed technical verification
+
+The public integration's local verification passed with the existing test
+isolation rules unchanged: 301 frontend tests (16 suites), 116 release-tool
+tests, 1,003 Rust unit tests and six icon integration tests, frontend type
+checking with zero errors/warnings, production SPA build, version contract 1.5.0,
+Rust formatting and locked all-target checking. All underlying commands exited
+0. The 31 existing opt-in unit tests remain ignored in the ordinary suite and
+are not counted as passed. Four historical Rust test-helper warnings remain.
+
+The three audited wrapper regressions also passed. The final public source
+separately reran the exact real-file-symlink helper under ordinary privileges
+against the preserved fixture: exit 0, one passed, zero failed, two refusals,
+unchanged inventory/authority/sentinels and valid current game. This complements
+the release-profile verification above; fixture creation failure is not used
+as security evidence. No tests, assertions or isolation settings were weakened.
+
 The historical error-1314 result described fixture-creation privileges; it was
 not a passing refusal test. The newly completed ordinary-user verification closes
 that acceptance gate without changing a production security check.
