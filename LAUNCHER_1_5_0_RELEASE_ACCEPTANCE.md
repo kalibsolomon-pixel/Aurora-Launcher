@@ -57,6 +57,18 @@ The historical error-1314 result described fixture-creation privileges; it was
 not a passing refusal test. The newly completed ordinary-user verification closes
 that acceptance gate without changing a production security check.
 
+## Hosted Windows test-fixture correction
+
+The first protected CI run, 39374096182, stopped before signing because the
+shortcut lifecycle fixture used a short TEMP alias while ShellLink recorded the
+long path. The same failure was reproduced locally with a real 8.3 alias: the
+unchanged test failed with `Conflict`. Moving its existing fixture adjustment
+before the newly added Start-menu checks made that exact alias case pass.
+The test retains real shell creation, idempotence, foreign-link/file refusal,
+byte preservation, removal and installer-slot assertions. A new explicit
+Start-menu presence assertion was added. Production shortcut code is unchanged;
+no ownership rule, test isolation, skip or assertion was weakened.
+
 ## Production requirements
 
 Release platform: **Windows x64 NSIS**. Linux packages and Linux secure account

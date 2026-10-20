@@ -734,6 +734,13 @@ mod tests {
                 ShortcutPresence::Present
             );
             let start_slot = context.programs_dir.join(shortcut_file_name());
+            // Hosted runners may expose TEMP through an 8.3 alias
+            // (RUNNER~1), while ShellLink records the long account path.
+            // Normalize the fixture before either shortcut lifecycle checks
+            // exact ownership; production deliberately does not expand aliases.
+            context.target_exe = windows_impl::read_shortcut_target(&start_slot)
+                .expect("new shortcut must expose its target");
+            assert_eq!(context.start_menu_presence(), ShortcutPresence::Present);
             let original_start = std::fs::read(&start_slot)?;
             assert_eq!(
                 context.create_start_menu_shortcut()?,
@@ -754,12 +761,6 @@ mod tests {
                 context.create_desktop_shortcut()?,
                 ShortcutPresence::Present
             );
-            // Hosted runners may expose TEMP through an 8.3 alias
-            // (RUNNER~1), while ShellLink records the long account path.
-            // Exercise exact ownership using the target the shell recorded;
-            // alias expansion is not part of the production ownership rule.
-            context.target_exe = windows_impl::read_shortcut_target(&desktop_slot(&desktop))
-                .expect("new shortcut must expose its target");
             assert_eq!(
                 context.desktop_presence(),
                 ShortcutPresence::Present,
