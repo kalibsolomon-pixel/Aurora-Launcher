@@ -1714,9 +1714,74 @@ pub(crate) async fn install_pack_provider_plans(
         instance,
         acquired,
         Some(&revision),
-        true,
+        ActivationMode::Pack,
         |state| state.save(managed, instance),
     )
+}
+
+/// Pack components merged into an existing instance as ordinary direct,
+/// retained content. Collisions and mod-ID conflicts fail before any write.
+pub(crate) async fn install_merged_provider_plans(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    plans: Vec<ProviderInstallPlan>,
+    revision: &str,
+) -> Result<Vec<ProviderRecord>, ContentError> {
+    let acquired = acquire_provider_plans(managed, plans).await?;
+    activate_provider_transaction_with_revision(
+        managed,
+        instance,
+        acquired,
+        Some(revision),
+        ActivationMode::Merged,
+        |state| state.save(managed, instance),
+    )
+}
+
+/// Read-only projection of a pack merge: the same whole-batch mod validation
+/// activation runs, reported as the first problem instead of an install error.
+pub(crate) async fn projected_merge_problem(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    plans: Vec<ProviderInstallPlan>,
+) -> Result<Option<String>, ContentError> {
+    if plans.is_empty() {
+        return Ok(None);
+    }
+    let acquired = acquire_provider_plans(managed, plans).await?;
+    match validate_projected_artifacts(managed, instance, &acquired, None) {
+        Ok(()) => Ok(None),
+        Err(ContentError::ModCollision(conflict)) => {
+            Ok(Some(format!("{}: {}", conflict.file_name, conflict.reason)))
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// Undo exactly the records a merge just activated: each file must still hash
+/// to its recorded digest before removal, and only those entries leave state.
+pub(crate) fn remove_merged_provider_records(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    records: &[ProviderRecord],
+) -> Result<(), ContentError> {
+    with_instance_lock(instance, || {
+        let mut state = ContentState::load(managed, instance)?;
+        let root = managed.instance_paths(instance).root().to_path_buf();
+        for record in records {
+            let path = root
+                .join(record.content_type.directory_name())
+                .join(&record.file_name);
+            let digest =
+                ArtifactDigest::parse(&record.sha256).map_err(|_| ContentError::HashMismatch)?;
+            verify_file(&path, &digest, None).map_err(|_| ContentError::HashMismatch)?;
+            std::fs::remove_file(&path).map_err(ContentError::Io)?;
+            state.entries.retain(|entry| {
+                !(entry.identity() == record.identity() && entry.file_name == record.file_name)
+            });
+        }
+        state.save(managed, instance)
+    })
 }
 
 pub(crate) async fn install_provider_plans_reviewed(
@@ -1731,7 +1796,7 @@ pub(crate) async fn install_provider_plans_reviewed(
         instance,
         acquired,
         revision,
-        false,
+        ActivationMode::Reviewed,
         |state| state.save(managed, instance),
     )
 }
@@ -2125,7 +2190,26 @@ fn activate_provider_transaction(
     acquired: Vec<(ProviderRecord, PathBuf, u64)>,
     commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
 ) -> Result<Vec<ProviderRecord>, ContentError> {
-    activate_provider_transaction_with_revision(managed, instance, acquired, None, false, commit)
+    activate_provider_transaction_with_revision(
+        managed,
+        instance,
+        acquired,
+        None,
+        ActivationMode::Reviewed,
+        commit,
+    )
+}
+
+/// How newly activated provider records are owned.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ActivationMode {
+    /// One reviewed direct install: the last plan is direct, others dependencies.
+    Reviewed,
+    /// Components of a pack-owned instance; ownership lives in pack state.
+    Pack,
+    /// A pack merged into an existing instance: every component is ordinary
+    /// direct, retained, removable content with no pack ownership.
+    Merged,
 }
 
 fn activate_provider_transaction_with_revision(
@@ -2133,7 +2217,7 @@ fn activate_provider_transaction_with_revision(
     instance: &InstanceId,
     mut acquired: Vec<(ProviderRecord, PathBuf, u64)>,
     revision: Option<&str>,
-    pack_install: bool,
+    mode: ActivationMode,
     commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
 ) -> Result<Vec<ProviderRecord>, ContentError> {
     with_instance_lock(instance, || {
@@ -2154,10 +2238,11 @@ fn activate_provider_transaction_with_revision(
             .chain(acquired.iter().map(|(record, _, _)| record.identity()))
             .collect();
         for (record, _, _) in &mut acquired {
-            record.explicitly_retained = pack_install || record.identity() == direct;
-            record.origin = if pack_install {
+            record.explicitly_retained =
+                mode != ActivationMode::Reviewed || record.identity() == direct;
+            record.origin = if mode == ActivationMode::Pack {
                 ProviderOrigin::Pack
-            } else if record.identity() == direct {
+            } else if mode == ActivationMode::Merged || record.identity() == direct {
                 ProviderOrigin::Direct
             } else {
                 ProviderOrigin::Dependency
@@ -2343,6 +2428,8 @@ fn validate_projected_artifacts_scoped(
         _ => crate::instance_mods::scan(managed, instance)
             .map_err(|e| ContentError::StateMalformed(e.to_string()))?,
     };
+    // Modules Fabric Loader itself supplies satisfy dependencies (as at launch).
+    crate::instance_mods::add_loader_builtins(managed, instance, &mut inventory);
     // Retired managed files leave the projected inventory exactly as their
     // on-disk files leave the instance; the transaction proves the actual
     // bytes at retirement, so the file name identifies the leaving entry.
@@ -2980,7 +3067,23 @@ fn validate_provider_mod_artifact(
             if let Some(id) = conflicting_mod_identity(&metadata, existing) {
                 return Err(ContentError::ModCollision(ProviderConflict {
                     mod_id: Some(id.into()), file_name: entry.file_name.clone(), ownership: entry.ownership,
-                    reason: "A top-level mod identity would duplicate an installed mod or bundled module. Neither file will be replaced or adopted.".into(),
+                    reason: "A top-level mod identity would duplicate an installed mod. Neither file will be replaced or adopted.".into(),
+                }));
+            }
+            // Launcher-protected mods (Aurora Client, its bootstrap Fabric API)
+            // keep strict identity: nothing may bundle a different version of them.
+            let protected = matches!(
+                entry.ownership,
+                crate::instance_mods::ModOwnership::LauncherBootstrap
+                    | crate::instance_mods::ModOwnership::LauncherManagedRequired
+            );
+            if let Some(id) = protected
+                .then(|| bundled_version_mismatch(&metadata, existing))
+                .flatten()
+            {
+                return Err(ContentError::ModCollision(ProviderConflict {
+                    mod_id: Some(id.into()), file_name: entry.file_name.clone(), ownership: entry.ownership,
+                    reason: "This mod bundles a different version of a launcher-protected mod. Neither file will be replaced or adopted.".into(),
                 }));
             }
         }
@@ -2990,26 +3093,40 @@ fn validate_provider_mod_artifact(
     Ok(())
 }
 
+/// The one install-time identity conflict Fabric Loader also refuses: two
+/// top-level jars with the same mod id. A top-level mod matching another
+/// mod's bundled (jar-in-jar) module, or two bundled copies, are alternatives
+/// Fabric Loader resolves (the mods-folder copy is loaded; among bundled and
+/// loader-supplied copies the newest that satisfies every constraint wins), so
+/// dependency validation, not this check, decides whether they work.
 pub(crate) fn conflicting_mod_identity<'a>(
     incoming: &'a crate::instance_mods::ModMetadata,
     existing: &crate::instance_mods::ModMetadata,
 ) -> Option<&'a str> {
-    if incoming.id.eq_ignore_ascii_case(&existing.id) {
-        return Some(&incoming.id);
-    }
+    incoming
+        .id
+        .eq_ignore_ascii_case(&existing.id)
+        .then_some(incoming.id.as_str())
+}
+
+/// A bundled (jar-in-jar) module of one mod that is the other's top-level id
+/// at a different version. Allowed in general (Fabric Loader resolves it);
+/// refused only where a launcher-protected mod is involved.
+fn bundled_version_mismatch<'a>(
+    incoming: &'a crate::instance_mods::ModMetadata,
+    existing: &crate::instance_mods::ModMetadata,
+) -> Option<&'a str> {
+    let same =
+        |a: &str, b: &str| crate::fabric::versions::satisfies(a, &format!("={b}")) == Ok(true);
     if existing
         .nested_mod_ids
         .iter()
         .any(|id| id.eq_ignore_ascii_case(&incoming.id))
-    {
-        let same = crate::mod_compatibility::version_for(existing, &incoming.id)
+        && !crate::mod_compatibility::version_for(existing, &incoming.id)
             .zip(incoming.version.as_deref())
-            .is_some_and(|(a, b)| {
-                crate::fabric::versions::satisfies(a, &format!("={b}")) == Ok(true)
-            });
-        if !same {
-            return Some(&incoming.id);
-        }
+            .is_some_and(|(a, b)| same(a, b))
+    {
+        return Some(&incoming.id);
     }
     incoming
         .nested_mod_ids
@@ -3018,9 +3135,7 @@ pub(crate) fn conflicting_mod_identity<'a>(
             id.eq_ignore_ascii_case(&existing.id)
                 && !crate::mod_compatibility::version_for(incoming, id)
                     .zip(existing.version.as_deref())
-                    .is_some_and(|(a, b)| {
-                        crate::fabric::versions::satisfies(a, &format!("={b}")) == Ok(true)
-                    })
+                    .is_some_and(|(a, b)| same(a, b))
         })
         .map(String::as_str)
 }
@@ -4279,12 +4394,10 @@ mod tests {
     }
 
     #[test]
-    fn root_collisions_and_incompatible_bundled_versions_remain_blocked() {
+    fn bundled_module_versions_resolve_like_fabric_loader_for_user_mods() {
+        // Fabric Loader loads the mods-folder copy and treats bundled copies as
+        // alternatives, so a version mismatch with a user mod is not a collision.
         for (installed, incoming) in [
-            (
-                fabric_jar_with_id("ordinary"),
-                fabric_jar_with_id("ordinary"),
-            ),
             (
                 bundled_jar_version("parent", "module", "2.0"),
                 fabric_jar_with_id("module"),
@@ -4294,6 +4407,145 @@ mod tests {
                 bundled_jar_version("parent", "module", "2.0"),
             ),
         ] {
+            let fixture = no_aurora_fixture();
+            let local = fixture.dir(ContentType::Mod).join("local.jar");
+            std::fs::write(&local, &installed).unwrap();
+            let source = fixture.root.join("verified.jar");
+            std::fs::write(&source, &incoming).unwrap();
+            let record = transaction_record(ContentType::Mod, "different-name.jar", &incoming);
+            assert!(
+                validate_provider_mod_artifact(
+                    &fixture.managed,
+                    &fixture.instance,
+                    &record,
+                    &source,
+                    incoming.len() as u64,
+                )
+                .is_ok()
+            );
+            assert_eq!(std::fs::read(local).unwrap(), installed);
+        }
+    }
+
+    fn jar_nesting(parent: serde_json::Value, nested: &[u8]) -> Vec<u8> {
+        let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        writer
+            .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(parent.to_string().as_bytes()).unwrap();
+        writer
+            .start_file(
+                "META-INF/jars/nested.jar",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+        writer.write_all(nested).unwrap();
+        writer.finish().unwrap().into_inner()
+    }
+
+    #[test]
+    fn loader_supplied_mixinextras_satisfies_dependencies_from_the_verified_loader_jar() {
+        use crate::install::state::{
+            InstalledFile, InstalledFileRole, InstalledGameManifest, NativesRecord,
+        };
+        // Real case (Remarkably Optimized): a mod needs MixinExtras >= 0.5.0, a
+        // user mod bundles 0.4.1, and Fabric Loader 0.19.5 itself ships 0.5.5.
+        let fixture = no_aurora_fixture();
+        let game = fixture
+            .managed
+            .instance_paths(&fixture.instance)
+            .game()
+            .to_path_buf();
+        let relative = "libraries/net/fabricmc/fabric-loader/0.19.5/fabric-loader-0.19.5.jar";
+        let loader = jar_nesting(
+            serde_json::json!({"schemaVersion":1,"id":"fabricloader","version":"0.19.5","jars":[{"file":"META-INF/jars/nested.jar"}]}),
+            &fabric_jar_version("mixinextras", "0.5.5"),
+        );
+        std::fs::create_dir_all(game.join(relative).parent().unwrap()).unwrap();
+        std::fs::write(game.join(relative), &loader).unwrap();
+        let manifest = InstalledGameManifest::new(
+            "1.21.11",
+            "0.19.5",
+            "fixture",
+            1,
+            vec![InstalledFile::new(
+                InstalledFileRole::Library,
+                relative.into(),
+                crate::integrity::ArtifactTrust::SecureTransportObserved {
+                    observed_sha256: format!("{:x}", sha2::Sha256::digest(&loader)),
+                },
+                loader.len() as u64,
+            )],
+            NativesRecord::new("natives".into()),
+        );
+        std::fs::write(game.join("installed-game.json"), manifest.to_json()).unwrap();
+        let mods = fixture.dir(ContentType::Mod);
+        std::fs::write(
+            mods.join("modernfix.jar"),
+            jar_nesting(
+                serde_json::json!({"schemaVersion":1,"id":"modernfix","version":"5.0","jars":[{"file":"META-INF/jars/nested.jar"}]}),
+                &fabric_jar_version("mixinextras", "0.4.1"),
+            ),
+        )
+        .unwrap();
+        let consumer = serde_json::json!({"schemaVersion":1,"id":"asyncparticles","version":"1.0","depends":{"mixinextras":">=0.5.0"}});
+        let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        writer
+            .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(consumer.to_string().as_bytes()).unwrap();
+        std::fs::write(
+            mods.join("asyncparticles.jar"),
+            writer.finish().unwrap().into_inner(),
+        )
+        .unwrap();
+
+        let problems = |builtins: bool| {
+            let mut inventory =
+                crate::instance_mods::scan(&fixture.managed, &fixture.instance).unwrap();
+            if builtins {
+                crate::instance_mods::add_loader_builtins(
+                    &fixture.managed,
+                    &fixture.instance,
+                    &mut inventory,
+                );
+            }
+            crate::mod_compatibility::validate(&inventory, "1.21.11", "0.19.5", Some(21), "fabric")
+                .into_iter()
+                .filter(|issue| issue.mod_id == "asyncparticles")
+                .count()
+        };
+        assert_eq!(
+            problems(false),
+            1,
+            "only the bundled 0.4.1 is visible without loader builtins"
+        );
+        assert_eq!(
+            problems(true),
+            0,
+            "the loader's own MixinExtras 0.5.5 satisfies >=0.5.0"
+        );
+        // The synthetic loader entry never appears in a displayed inventory.
+        assert!(
+            crate::instance_mods::scan(&fixture.managed, &fixture.instance)
+                .unwrap()
+                .entries
+                .iter()
+                .all(|entry| entry.entry_id != "loader-builtin")
+        );
+        // Fail closed: changed loader bytes no longer match the recorded digest.
+        let mut tampered = loader.clone();
+        tampered.push(0);
+        std::fs::write(game.join(relative), &tampered).unwrap();
+        assert_eq!(problems(true), 1);
+    }
+
+    #[test]
+    fn root_collisions_remain_blocked() {
+        for (installed, incoming) in [(
+            fabric_jar_with_id("ordinary"),
+            fabric_jar_with_id("ordinary"),
+        )] {
             let fixture = no_aurora_fixture();
             let local = fixture.dir(ContentType::Mod).join("local.jar");
             std::fs::write(&local, &installed).unwrap();

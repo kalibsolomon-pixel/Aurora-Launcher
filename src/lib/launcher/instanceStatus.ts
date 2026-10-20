@@ -1,7 +1,11 @@
 import type {
   InstanceConfiguration,
+  InstanceProgressEvent,
   InstanceSummary,
   InstanceValidationDto,
+  LaunchProgressEvent,
+  PlayReadiness,
+  RuntimeProgressEvent,
   RuntimeStatusDto,
 } from "$lib/backend";
 
@@ -29,6 +33,8 @@ export interface InstanceStatusDecision {
   tone: InstanceStatusTone;
   label: string;
   detail: string | null;
+  /** Raw native diagnostic (may contain paths); shown only behind a disclosure. */
+  technical?: string | null;
 }
 
 /**
@@ -49,6 +55,80 @@ export function configurationRequiresInstall(instance: InstanceSummary): boolean
   );
 }
 
+const lifecyclePhaseLabels: Record<InstanceProgressEvent["phase"], string> = {
+  resolvingRelease: "Resolving the Aurora release",
+  resolvingGame: "Resolving Minecraft",
+  installingGame: "Installing Minecraft",
+  installingAurora: "Installing Aurora Client",
+  validating: "Validating the instance",
+  completing: "Finishing",
+};
+const gamePhaseLabels: Record<NonNullable<InstanceProgressEvent["game"]>["phase"], string> = {
+  acquiring: "Downloading and verifying files",
+  materializing: "Copying verified files",
+  extractingNatives: "Extracting native libraries",
+  processing: "Running loader processors",
+  validating: "Validating game files",
+  committing: "Committing the installation",
+};
+
+/**
+ * Human wording for one native lifecycle progress event. Counts are the
+ * native item counts verbatim; no percentage or estimate is derived.
+ */
+export function instanceProgressLabel(event: InstanceProgressEvent | null): string {
+  if (!event) return "Working";
+  const lifecycle = lifecyclePhaseLabels[event.phase] ?? "Working";
+  const game = event.game;
+  if (!game) return `${lifecycle}…`;
+  const step = gamePhaseLabels[game.phase] ?? lifecycle;
+  const count = game.totalItems > 0
+    ? ` · ${game.completedItems.toLocaleString("en-US")} of ${game.totalItems.toLocaleString("en-US")}`
+    : "";
+  return `${lifecycle}: ${step}${count}`;
+}
+
+const runtimePhaseLabels: Record<RuntimeProgressEvent["phase"], string> = {
+  acquiring: "Downloading and verifying Java",
+  materializing: "Copying verified Java files",
+  validating: "Validating Java",
+  executing: "Checking the Java executable",
+  committing: "Finishing the Java installation",
+};
+
+/** Human wording for managed-Java installation progress (native counts only). */
+export function runtimeProgressLabel(event: RuntimeProgressEvent): string {
+  const step = runtimePhaseLabels[event.phase] ?? "Installing Java";
+  return event.totalItems > 0
+    ? `${step} · ${event.completedItems.toLocaleString("en-US")} of ${event.totalItems.toLocaleString("en-US")}`
+    : `${step}…`;
+}
+
+const launchPhaseLabels: Record<LaunchProgressEvent["phase"], string> = {
+  checkingPreconditions: "Checking readiness…",
+  resolvingLaunch: "Preparing the game…",
+  restoringSession: "Restoring the Minecraft session…",
+  assemblingArguments: "Assembling the launch…",
+  startingProcess: "Starting Minecraft…",
+};
+
+/** Human wording for a native launch progress phase. */
+export function launchProgressLabel(event: LaunchProgressEvent | null): string | null {
+  return event ? launchPhaseLabels[event.phase] ?? "Preparing…" : null;
+}
+
+/**
+ * Header badge for an instance workspace: content status, except that when
+ * Rust has a play decision for this exact instance that blocks launch while
+ * content itself is fine, the badge says so instead of claiming "Ready".
+ */
+export function workspaceBadge(content: InstanceStatusDecision, readiness: PlayReadiness | null, instanceId: string): InstanceStatusDecision {
+  if (content.tone === "status-success" && readiness?.instanceId === instanceId && !readiness.ready && readiness.processStatus !== "running" && readiness.processStatus !== "starting") {
+    return { tone: "status-warning", label: "Needs attention", detail: readiness.blockers[0]?.message ?? null };
+  }
+  return content;
+}
+
 /**
  * The one content-status decision every surface shows for an instance.
  * Inputs are Rust-owned state only; the installing phase is the live native
@@ -59,6 +139,16 @@ export function instanceContentStatus(
   validation: InstanceValidationDto | undefined,
   installingPhase: string | null,
 ): InstanceStatusDecision {
+  // A held installation lock reads as recovery "busy"; while this launcher's
+  // own creation reports live progress, that busy lock is the creation itself.
+  const ownInstallation = instance.state === "installing" && installingPhase !== null;
+  if (instance.recovery && !(ownInstallation && instance.recovery.status === "busy")) {
+    const { status, message } = instance.recovery;
+    const labels = { checking: "Checking recovery…", busy: "Installation busy", interrupted: "Installation interrupted", previousRestored: "Previous installation restored", completed: "Recovery completed", manualRepair: "Recovery required" };
+    if (status !== "completed" || instance.state !== "ready") {
+      return { tone: status === "manualRepair" ? "status-error" : status === "checking" || status === "busy" ? "status-working" : "status-warning", label: labels[status], detail: message };
+    }
+  }
   if (instance.state === "installing") {
     return {
       tone: "status-working",
@@ -106,7 +196,7 @@ export function instanceContentStatus(
 
 /** Quiet one-line description of an instance's desired configuration. */
 export function configurationLabel(instance: InstanceSummary): string {
-  const kind = instance.configuration.loader.kind === "fabric" ? "Fabric" : instance.configuration.loader.kind === "vanilla" ? "Vanilla" : instance.configuration.loader.kind === "neoForge" ? "NeoForge" : instance.configuration.loader.kind;
+  const kind = instance.configuration.loader.kind === "fabric" ? "Fabric" : instance.configuration.loader.kind === "vanilla" ? "Vanilla" : instance.configuration.loader.kind === "neoForge" ? "NeoForge" : instance.configuration.loader.kind === "forge" ? "Forge" : instance.configuration.loader.kind;
   const loader = "policy" in instance.configuration.loader
     ? instance.configuration.loader.policy.type === "pinned"
       ? `${kind} ${instance.configuration.loader.policy.version}`
@@ -148,7 +238,7 @@ export function javaRuntimeStatus(
     };
   }
   if (error) {
-    return { tone: "status-error", label: "Status failed", detail: error };
+    return { tone: "status-error", label: "Status failed", detail: "Java could not be installed or verified. Try again; details are below.", technical: error };
   }
   if (!runtime) {
     return { tone: "status-muted", label: "Not checked", detail: null };
@@ -167,7 +257,10 @@ export function javaRuntimeStatus(
     return {
       tone: "status-error",
       label: "Damaged",
-      detail: runtime.problems[0] ?? "The managed runtime failed validation.",
+      detail: runtime.problems.some(problem => problem.includes("This Java build cannot start"))
+        ? "Java cannot start at this data location. Use a shorter path with ASCII characters; reinstalling Java here will not help."
+        : "The managed runtime failed validation. Repair Java to reinstall it.",
+      technical: runtime.problems.length ? runtime.problems.join(" · ") : null,
     };
   }
   return {
@@ -178,7 +271,7 @@ export function javaRuntimeStatus(
 }
 
 export function installedConfigurationLabel(instance: InstanceSummary): string {
-  const platform = instance.platform.kind === "fabric" ? "Fabric" : instance.platform.kind === "vanilla" ? "Vanilla" : instance.platform.kind === "neoForge" ? "NeoForge" : instance.platform.kind;
+  const platform = instance.platform.kind === "fabric" ? "Fabric" : instance.platform.kind === "vanilla" ? "Vanilla" : instance.platform.kind === "neoForge" ? "NeoForge" : instance.platform.kind === "forge" ? "Forge" : instance.platform.kind;
   const loader = "version" in instance.platform ? ` ${instance.platform.version}` : "";
   const aurora = instance.aurora ? ` · Aurora ${instance.aurora.version}${instance.auroraContentState && instance.auroraContentState !== "active" ? ` (${instance.auroraContentState})` : ""}` : " · Aurora Off";
   return `Minecraft ${instance.minecraftVersion} · ${platform}${loader}${aurora}`;

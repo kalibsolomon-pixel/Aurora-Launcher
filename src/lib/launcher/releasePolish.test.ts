@@ -40,7 +40,7 @@ const html = (component: any, props = {}) => render(component, { props }).body;
 it("default widgets sit below the unchanged primary card and 3D player", () => {
   reset(); const view = html(Home);
   assert.match(view, /Instance Details/); assert.match(view, /Content Summary/); assert.doesNotMatch(view, /Current launcher session only/);
-  assert(view.indexOf("home-widgets") > view.indexOf("instance-card")); assert.match(view, /Player skin loading/);
+  assert(view.indexOf("home-widgets") > view.indexOf("instance-card")); assert.match(view, /Sign in to preview your Minecraft skin/);
 });
 it("available session is real, hidden widgets disappear, and all-off retains the edit entry point", () => {
   reset(); homeWidgets.layout.widgets[2].enabled = true; assert.match(html(Home), /Current launcher session only/);
@@ -75,10 +75,12 @@ it("failed save retains the prior layout with an actionable error", async () => 
   reset(); (globalThis as any).window = { __TAURI_INTERNALS__: { invoke: async () => { throw { code: "config_malformed", message: "Repair config manually." }; } } };
   await homeWidgets.enable("instance-details", false); assert.equal(homeWidgets.layout.widgets[0].enabled, true); assert.match(homeWidgets.error, /Repair config/);
 });
-it("Home editor is deliberate, keyboard usable and responsive spans clamp on narrow screens", () => {
+it("Home editor keeps deliberate edit mode and keyboard size/order controls", () => {
   const source = readFileSync(new URL("./HomeWidgets.svelte", import.meta.url), "utf8");
   assert.match(source, /aria-pressed=\{editing\}/); assert.match(source, /\{#if editing\}/);
-  assert.match(source, /Move .* earlier/); assert.match(source, /<select aria-label/); assert.match(source, /max-width: 900px/);
+  assert.match(source, /Move .* earlier/); assert.match(source, /<select aria-label/);
+  // Responsive spans are exercised on rendered cards in ui2.test.mjs;
+  // a source-text assertion for the former viewport breakpoint cannot prove containment.
 });
 it("Discord describes automatic connection and shows native status without maintenance controls", () => {
   reset(); assert.match(html(DiscordSettings), /Rich Presence is off/);
@@ -90,7 +92,7 @@ it("Discord describes automatic connection and shows native status without maint
 it("missing application configuration disables connection honestly without hiding privacy choices", () => {
   reset(); discord.state.configured = false; discord.state.connection = "configurationMissing";
   const view = html(DiscordSettings); assert.match(view, /Application setup required/); assert.doesNotMatch(view, /(?:Connect|Reconnect) to Discord/);
-  assert.match(view, /Enable Discord Rich Presence/); assert.match(view, /Display Instance name/); assert.match(view, /Display Show World/); assert.match(view, /Display Show Server/); assert.match(view, /Display Show Server Address/);
+  assert.match(view, /Enable Discord Rich Presence/); assert.match(view, /Display Elapsed Play Time/); assert.match(view, /Display Show World/); assert.match(view, /Display Show Server/); assert.match(view, /Display Show Server Address/);
 });
 it("Discord preferences and reconnect invoke only native commands and never disturb Play", async () => {
   reset(); const calls: string[] = []; const previous = JSON.stringify(launcher.launcherState);
@@ -104,7 +106,7 @@ it("Discord preferences and reconnect invoke only native commands and never dist
 });
 it("Discord failure leaves Ready and Play available", async () => {
   reset(); (globalThis as any).window = { __TAURI_INTERNALS__: { invoke: async () => { throw new Error("Discord unavailable"); } } };
-  await discord.connect(); assert(discord.error); assert.match(html(Home), /class="btn btn-primary[^>]*>Play/);
+  await discord.connect(); assert(discord.error); assert.match(html(Home), /class="btn btn-primary[^>]*aria-label="Launch"/);
 });
 it("mod row preserves artwork and switch, promotes one trash, and excludes duplicate overflow removal", () => {
   reset(); launcher.modInventories[id].entries = [{ entryId: "entry", fileName: "fixture.jar", displayName: "Fixture", enabled: true, ownership: "userManaged", fileType: "enabledJar", metadata: null, provenance: null, warnings: [], canToggle: true, canRemove: true }];

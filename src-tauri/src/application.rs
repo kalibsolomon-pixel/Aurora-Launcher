@@ -133,6 +133,8 @@ pub struct InstanceSummary {
     /// `validate_instance` command, which performs the deep (hashing)
     /// validation on demand rather than on every state load.
     state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    recovery: Option<RecoverySummary>,
     aurora: Option<crate::instances::platform::AuroraPin>,
     aurora_content_state: Option<String>,
     minecraft_version: String,
@@ -149,6 +151,7 @@ impl InstanceSummary {
             id: record.id().to_string(),
             display_name: record.display_name().to_owned(),
             state: record.state().as_str().to_owned(),
+            recovery: None,
             aurora: record.installed().aurora.clone(),
             aurora_content_state: None,
             minecraft_version: record.installed().minecraft_version.clone(),
@@ -159,10 +162,41 @@ impl InstanceSummary {
     }
 }
 
+/// Non-secret recovery presentation; it grants no installation or launch authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RecoverySummary {
+    status: &'static str,
+    message: &'static str,
+}
+
+fn recovery_summary(status: &'static str) -> RecoverySummary {
+    RecoverySummary {
+        status,
+        message: match status {
+            "busy" => {
+                "Installation or recovery is busy. Wait for the current operation to finish, then retry."
+            }
+            "previousRestored" => {
+                "The previous installation was restored. Retry to finish the saved configuration."
+            }
+            "completed" => "Recovery completed. The committed game content was retained.",
+            "interrupted" => {
+                "An interrupted installation was recovered. Retry to finish the saved configuration."
+            }
+            _ => {
+                "Recovery requires manual inspection. All recovery trees and evidence were preserved."
+            }
+        },
+    }
+}
+
 /// The desired instance configuration as it crosses the command boundary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceConfigurationDto {
+    #[serde(default)]
+    pub performance_mode: Option<crate::instances::performance::PerformanceMode>,
     pub minecraft_version: String,
     pub aurora_enabled: bool,
     pub loader: crate::instances::settings::LoaderConfiguration,
@@ -184,6 +218,7 @@ impl InstanceConfigurationDto {
     ) -> Self {
         Self {
             minecraft_version: configuration.minecraft_version().to_owned(),
+            performance_mode: configuration.performance_mode(),
             aurora_enabled: configuration.aurora_enabled(),
             loader: configuration.loader().clone(),
             memory_mib: configuration.memory_mib(),
@@ -208,6 +243,7 @@ impl InstanceConfigurationDto {
             }),
         );
         configuration.set_aurora_enabled(self.aurora_enabled);
+        configuration.set_performance_mode(self.performance_mode);
         Ok(configuration)
     }
 }
@@ -546,9 +582,24 @@ pub fn get_application_status(app: AppHandle) -> Result<ApplicationStatus, Comma
 /// data root; malformed persisted files are reported as structured errors and
 /// left untouched.
 #[tauri::command]
-pub fn get_launcher_state(app: AppHandle) -> Result<LauncherState, CommandError> {
+pub async fn get_launcher_state(app: AppHandle) -> Result<LauncherState, CommandError> {
+    let paths = managed_paths(&app)?;
+    tauri::async_runtime::spawn_blocking(move || load_launcher_state(&paths))
+        .await
+        .map_err(|_| {
+            CommandError::new(
+                "launcher_state_unavailable",
+                "The installation recovery worker did not complete.",
+            )
+        })?
+}
+
+fn load_launcher_state(managed_paths: &ManagedPaths) -> Result<LauncherState, CommandError> {
+    // Startup and focus may overlap state requests. Serialize these readers
+    // so their temporary lifecycle observations never report each other busy.
+    static STATE_LOAD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _state_load = STATE_LOAD.lock().unwrap_or_else(|error| error.into_inner());
     let _performance = crate::performance::scope(crate::performance::Event::UnrelatedIpc);
-    let managed_paths = managed_paths(&app)?;
 
     let loaded = crate::config::load_or_initialize(&managed_paths.config_file())?;
     if let ConfigLoad::Initialized(_) = &loaded {
@@ -563,6 +614,67 @@ pub fn get_launcher_state(app: AppHandle) -> Result<LauncherState, CommandError>
     let mut state = LauncherState::from_parts(loaded.into_config(), registry)?;
     for summary in &mut state.instances {
         let id = crate::instances::InstanceId::new(summary.id.clone())?;
+        let recovery = (|| -> Result<Option<&'static str>, crate::install::InstallError> {
+            let paths = managed_paths.instance_paths(&id);
+            // Observe lifecycle ownership even before a journal exists. Hold
+            // it through replay, using the installer's lifecycle -> game order.
+            let _operation = crate::install::coordination::TargetLock::existing(
+                managed_paths.data_root(),
+                paths.root(),
+                ".instance-operation.lock",
+            )
+            .map_err(|error| match error {
+                crate::install::coordination::LockError::Busy => InstallError::AlreadyInProgress {
+                    instance_id: id.to_string(),
+                },
+                crate::install::coordination::LockError::Io(error) => InstallError::Storage(error),
+            })?;
+            // An installer may have completed while the initial registry was
+            // loaded; publish the record observed under its ownership lock.
+            let latest =
+                InstanceRegistry::load(&managed_paths.instance_registry_file()).map_err(|_| {
+                    InstallError::RecoveryRequired {
+                        reason: "instance registry could not be reloaded safely".into(),
+                    }
+                })?;
+            let record = latest
+                .find(&id)
+                .ok_or_else(|| InstallError::RecoveryRequired {
+                    reason: "instance registry changed during state loading; refresh".into(),
+                })?;
+            *summary = InstanceSummary::from_record(record);
+            if std::fs::symlink_metadata(paths.root()).is_ok() {
+                crate::install::coordination::checked_directory(
+                    managed_paths.data_root(),
+                    paths.root(),
+                )
+                .map_err(crate::install::InstallError::Storage)?;
+            }
+            if crate::install::journal::needs_recovery(paths.root(), &id)? {
+                crate::install::recover_installation(managed_paths, &id)?;
+            }
+            crate::install::journal::readiness_gate(paths.root(), &id)?;
+            crate::install::journal::recovery_status(
+                paths.root(),
+                &id,
+                summary.state == "installing",
+            )
+        })();
+        if let Err(error) = &recovery {
+            // Stored Ready is only a presentation hint. Keep this target
+            // unavailable without suppressing unrelated instances at startup.
+            summary.state = "installing".into();
+            summary.recovery = Some(recovery_summary(
+                if matches!(error, InstallError::AlreadyInProgress { .. }) {
+                    "busy"
+                } else {
+                    "manualRepair"
+                },
+            ));
+            eprintln!("[aurora-install] target={id} recovery-unavailable: {error}");
+        } else if let Ok(Some(status)) = recovery {
+            summary.recovery = Some(recovery_summary(status));
+        }
         summary.aurora_content_state = crate::instance_mods::bootstrap_status(&managed_paths, &id)?
             .or_else(|| summary.aurora.as_ref().map(|_| "missing".into()));
     }
@@ -1149,6 +1261,55 @@ pub fn create_desktop_shortcut() -> Result<DesktopIntegrationDto, CommandError> 
     }
 }
 
+/// Adds the running installed launcher to the Start menu's app list.
+/// Windows grid pinning remains a user action; this is a real Programs link.
+#[tauri::command]
+pub fn create_start_menu_shortcut() -> Result<DesktopIntegrationDto, CommandError> {
+    #[cfg(windows)]
+    {
+        shortcut_context_for_management()?
+            .create_start_menu_shortcut()
+            .map_err(CommandError::from)?;
+        Ok(DesktopIntegrationDto::assess())
+    }
+    #[cfg(not(windows))]
+    {
+        Err(CommandError::from(
+            crate::shortcuts::ShortcutError::UnsupportedPlatform,
+        ))
+    }
+}
+
+/// Opens the platform-resolved launcher data folder. No frontend path is accepted.
+#[tauri::command]
+pub fn open_launcher_folder(app: AppHandle) -> Result<(), CommandError> {
+    #[cfg(windows)]
+    {
+        let managed = managed_paths(&app)?;
+        let folder = managed.data_root();
+        if !folder.is_dir() {
+            return Err(CommandError::new(
+                "launcher_folder_missing",
+                "The launcher data folder does not exist yet.",
+            ));
+        }
+        tauri_plugin_opener::open_path(folder, None::<&str>).map_err(|_| {
+            CommandError::new(
+                "launcher_folder_open_failure",
+                "The launcher data folder could not be opened in Explorer.",
+            )
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        Err(CommandError::new(
+            "launcher_folder_unsupported_platform",
+            "Opening the launcher data folder is currently supported only on Windows.",
+        ))
+    }
+}
+
 /// Removes the Aurora-owned desktop shortcut.
 ///
 /// Only a shortcut proven to target this executable is removed; anything
@@ -1500,6 +1661,8 @@ impl From<InstallError> for CommandError {
             other => {
                 let code = match &other {
                     InstallError::AlreadyInProgress { .. } => "installation_already_in_progress",
+                    InstallError::RecoveryRequired { .. } => "installation_recovery_required",
+                    InstallError::Cancelled => "installation_cancelled",
                     InstallError::TargetConflict { .. } => "installation_target_conflict",
                     InstallError::State(_) => "installation_state_invalid",
                     InstallError::AssetIndexInvalid { .. } => "minecraft_asset_index_invalid",
@@ -1758,6 +1921,8 @@ impl From<InstanceError> for CommandError {
                     InstanceError::LoaderResolution { .. } => "fabric_loader_not_found",
                     InstanceError::NeoForgeMetadata(_) => "neoforge_metadata_unavailable",
                     InstanceError::NeoForgeResolution(_) => "neoforge_resolution_failed",
+                    InstanceError::ForgeMetadata(_) => "forge_metadata_unavailable",
+                    InstanceError::ForgeResolution(_) => "forge_resolution_failed",
                     InstanceError::Platform(_) => "minecraft_platform_unsupported",
                     InstanceError::GameInstallState(_) => "installation_state_invalid",
                     InstanceError::ValidationFailed { .. } => "instance_consistency_failure",
@@ -2203,6 +2368,37 @@ pub fn rename_instance(
     Ok(InstanceSummary::from_record(&record))
 }
 
+fn icon_error(error: crate::instance_icons::IconError) -> CommandError {
+    CommandError::new(error.code(), error.to_string())
+}
+
+/// Display icons (Material Symbols names) for registered instances.
+#[tauri::command]
+pub fn get_instance_icons(
+    app: AppHandle,
+) -> Result<std::collections::BTreeMap<String, String>, CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::instance_icons::load(&managed).map_err(icon_error)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetInstanceIconRequest {
+    instance_id: String,
+    icon: Option<String>,
+}
+
+/// Sets or clears one instance's icon. Presentation metadata only.
+#[tauri::command]
+pub fn set_instance_icon(
+    app: AppHandle,
+    request: SetInstanceIconRequest,
+) -> Result<std::collections::BTreeMap<String, String>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    crate::instance_icons::set(&managed, &instance, request.icon.as_deref()).map_err(icon_error)
+}
+
 /// Typed request for atomically persisting a new desired configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -2210,6 +2406,38 @@ pub struct UpdateInstanceConfigurationRequest {
     instance_id: String,
     configuration: InstanceConfigurationDto,
     expected_configuration: InstanceConfigurationDto,
+}
+
+/// Read-only advice for one registered instance; no runtime discovery or mutation.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PerformanceAdviceRequest {
+    instance_id: String,
+    mode: Option<crate::instances::performance::PerformanceMode>,
+}
+
+#[tauri::command]
+pub fn get_instance_performance_advice(
+    app: AppHandle,
+    request: PerformanceAdviceRequest,
+) -> Result<crate::instances::performance::MemoryAdvice, CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())?;
+    let record = registry.find(&id).ok_or_else(|| {
+        CommandError::new(
+            "instance_not_found",
+            "Open a registered instance to request memory advice.",
+        )
+    })?;
+    let mut advice = crate::instances::performance::recommend(
+        crate::instances::performance::host_facts(),
+        request.mode,
+    );
+    advice.argument_notices = crate::instances::performance::argument_notices(
+        record.configuration().additional_jvm_arguments(),
+    );
+    Ok(advice)
 }
 
 /// Atomically persists a new desired configuration for one ready instance.
@@ -3267,6 +3495,67 @@ pub async fn install_modrinth_pack(
     .await
     .map_err(|error| CommandError::new(error.code, error.message))?;
     Ok(InstanceSummary::from_record(&record))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModrinthPackMergeRequest {
+    instance_id: String,
+    project_id: String,
+    version_id: String,
+    #[serde(default)]
+    selected_optional: Vec<String>,
+    fingerprint: Option<String>,
+}
+
+/// Read-only review of merging an exact pack version into an existing instance.
+#[tauri::command]
+pub async fn preview_modrinth_pack_merge(
+    app: AppHandle,
+    request: ModrinthPackMergeRequest,
+) -> Result<crate::pack_merge::PackMergePreview, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    crate::pack_merge::preview(
+        &managed,
+        &crate::modrinth::Client::official(),
+        &instance,
+        &request.project_id,
+        &request.version_id,
+        &request.selected_optional,
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
+}
+
+/// Adds the reviewed pack's content to the instance; never creates an instance.
+#[tauri::command]
+pub async fn install_modrinth_pack_merge(
+    app: AppHandle,
+    request: ModrinthPackMergeRequest,
+) -> Result<crate::pack_merge::PackMergeResult, CommandError> {
+    let fingerprint = request.fingerprint.ok_or_else(|| {
+        CommandError::new(
+            "pack_preview_required",
+            "Review the exact pack version before adding it.",
+        )
+    })?;
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    crate::pack_merge::install(
+        &managed,
+        &crate::modrinth::Client::official(),
+        &instance,
+        &request.project_id,
+        &request.version_id,
+        &request.selected_optional,
+        &fingerprint,
+        &mut |phase| {
+            let _ = app.emit("modpack-progress", serde_json::json!({ "phase": phase }));
+        },
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
 }
 
 #[derive(Deserialize)]
@@ -4373,6 +4662,42 @@ pub struct NeoForgeVersionDto {
     pub stable: bool,
 }
 
+/// One Forge version available for a Minecraft version: the full combined
+/// upstream identity (`<minecraft>-<build>`), stable exactly when the
+/// official promotions document names that build as the recommended one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForgeVersionDto {
+    pub version: String,
+    pub stable: bool,
+}
+
+/// Lists every Forge version this launcher can install for one exact
+/// Minecraft version, newest build first.
+#[tauri::command]
+pub async fn list_forge_versions(
+    minecraft_version: String,
+) -> Result<Vec<ForgeVersionDto>, CommandError> {
+    let version = MinecraftVersionId::new(minecraft_version.trim())?;
+    let listing = crate::forge::metadata::fetch_forge_versions(
+        &crate::forge::metadata::ForgeMavenEndpoints::official(),
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|error| -> CommandError {
+        crate::instances::lifecycle::InstanceError::ForgeMetadata(error).into()
+    })?;
+
+    Ok(listing
+        .installable_for_minecraft(&version)
+        .into_iter()
+        .map(|entry| ForgeVersionDto {
+            version: entry.version().as_str().to_owned(),
+            stable: entry.stable(),
+        })
+        .collect())
+}
+
 impl From<crate::neoforge::metadata::NeoForgeMetadataError> for CommandError {
     fn from(error: crate::neoforge::metadata::NeoForgeMetadataError) -> Self {
         crate::instances::lifecycle::InstanceError::NeoForgeMetadata(error).into()
@@ -4431,6 +4756,27 @@ pub struct InstanceValidationDto {
 pub struct InstanceProblemDto {
     component: String,
     reason: String,
+}
+
+/// Explicit storage maintenance, on a worker and under the existing target locks.
+#[tauri::command]
+pub async fn maintain_installation_backups(
+    app: AppHandle,
+    request: ValidateInstalledGameRequest,
+) -> Result<crate::install::retention::RetentionReport, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::install::retention::maintain(&managed, &instance)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "storage_io_failure",
+            "Backup maintenance could not finish. Existing recovery data remains protected.",
+        )
+    })?
+    .map_err(CommandError::from)
 }
 
 /// Validates one instance completely â€” a read-only, download-free check
@@ -5508,6 +5854,11 @@ async fn calculate_play_readiness(
             .await
             {
                 Ok((_, runtime_plan)) => (LaunchInstanceStatus::Ready, Some(runtime_plan)),
+                Err(InstanceError::GameInstall(InstallError::AlreadyInProgress { .. })) => {
+                    let _contention =
+                        crate::performance::scope(crate::performance::Event::ReadinessContention);
+                    (LaunchInstanceStatus::Damaged, None)
+                }
                 Err(
                     InstanceError::NotReady { .. }
                     | InstanceError::GameInstallState(_)
@@ -5526,7 +5877,8 @@ async fn calculate_play_readiness(
         if matches!(loader_family, "fabric" | "neoForge")
             && managed.instance_paths(instance_id).mods().is_dir()
         {
-            let inventory = crate::instance_mods::scan(managed, instance_id)?;
+            let mut inventory = crate::instance_mods::scan(managed, instance_id)?;
+            crate::instance_mods::add_loader_builtins(managed, instance_id, &mut inventory);
             mod_issues = crate::mod_compatibility::validate(
                 &inventory,
                 &record.installed().minecraft_version,
@@ -5537,14 +5889,9 @@ async fn calculate_play_readiness(
         }
     }
     let runtime = if let Some(plan) = runtime_plan {
-        match crate::runtime::install::validate_runtime(
-            managed,
-            &plan,
-            false,
-            crate::runtime::install::DEFAULT_JAVA_DIAGNOSTIC_TIMEOUT,
-        )
-        .await?
-        .status
+        match crate::runtime::install::validate_runtime_eligibility(managed, &plan)
+            .await?
+            .status
         {
             RuntimeValidationStatus::Ready => LaunchRuntimeStatus::Ready,
             RuntimeValidationStatus::Missing => LaunchRuntimeStatus::Missing,
@@ -5689,7 +6036,8 @@ async fn play_instance_with_target(
         if matches!(launch_loader_family, "fabric" | "neoForge")
             && managed.instance_paths(&instance).mods().is_dir()
         {
-            let inventory = crate::instance_mods::scan(&managed, &instance)?;
+            let mut inventory = crate::instance_mods::scan(&managed, &instance)?;
+            crate::instance_mods::add_loader_builtins(&managed, &instance, &mut inventory);
             if let Some(problem) = crate::mod_compatibility::validate(
                 &inventory,
                 &record.installed().minecraft_version,
@@ -5709,10 +6057,10 @@ async fn play_instance_with_target(
         configuration
             .validate()
             .map_err(|error| CommandError::new("launch_metadata_invalid", error.to_string()))?;
-        let additional_jvm_arguments = crate::instances::settings::parse_jvm_arguments(
-            configuration.additional_jvm_arguments(),
-        )
-        .map_err(|error| CommandError::new("launch_jvm_arguments_invalid", error.to_string()))?;
+        let additional_jvm_arguments =
+            configuration.validated_jvm_arguments().map_err(|error| {
+                CommandError::new("launch_jvm_arguments_invalid", error.to_string())
+            })?;
         let launch_options = crate::launch::resolve::LaunchOptions::new(
             configuration.memory_mib(),
             additional_jvm_arguments,
@@ -5722,13 +6070,8 @@ async fn play_instance_with_target(
         );
         let features = launch_options.feature_profile();
 
-        let runtime = crate::runtime::install::validate_runtime(
-            &managed,
-            &runtime_plan,
-            true,
-            crate::runtime::install::DEFAULT_JAVA_DIAGNOSTIC_TIMEOUT,
-        )
-        .await?;
+        let runtime =
+            crate::runtime::install::validate_runtime_eligibility(&managed, &runtime_plan).await?;
         if runtime.status != RuntimeValidationStatus::Ready {
             return Err(CommandError::new(
                 "launch_runtime_not_ready",
@@ -5800,7 +6143,8 @@ async fn play_instance_with_target(
             if matches!(validated_loader_family, "fabric" | "neoForge")
                 && managed.instance_paths(&instance).mods().is_dir()
             {
-                let inventory = crate::instance_mods::scan(&managed, &instance)?;
+                let mut inventory = crate::instance_mods::scan(&managed, &instance)?;
+                crate::instance_mods::add_loader_builtins(&managed, &instance, &mut inventory);
                 if let Some(problem) = crate::mod_compatibility::validate(
                     &inventory,
                     &record.installed().minecraft_version,
@@ -6301,6 +6645,58 @@ pub async fn launcher_update_install(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn state_loading_exposes_recovery_errors_without_trusting_stored_ready() {
+        let root = std::env::temp_dir().join(format!("aurora-f3ra-state-{}", uuid::Uuid::new_v4()));
+        let managed = ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let mut registry = InstanceRegistry::empty();
+        for name in ["recover-target", "unrelated-target"] {
+            registry.instances_mut().push(
+                InstanceRecord::new(
+                    crate::instances::InstanceId::new(name).unwrap(),
+                    name,
+                    crate::instances::InstanceState::Ready,
+                    crate::instances::PinnedRelease::new(
+                        ReleaseChannel::Stable,
+                        "0.3.0",
+                        "26.2",
+                        "0.19.5",
+                    )
+                    .unwrap(),
+                    crate::instances::settings::InstanceConfiguration::for_minecraft_version(
+                        "26.2",
+                    ),
+                )
+                .unwrap(),
+            );
+        }
+        registry.save(&managed.instance_registry_file()).unwrap();
+        let target = managed.instance_paths(registry.instances()[0].id());
+        std::fs::create_dir_all(target.root()).unwrap();
+        let path = target.root().join(crate::install::journal::JOURNAL_FILE);
+        let owner = crate::instances::lifecycle::lock_instance_operation(
+            &managed,
+            registry.instances()[0].id(),
+        )
+        .unwrap();
+        let busy = load_launcher_state(&managed).unwrap();
+        assert_eq!(busy.instances[0].state, "installing");
+        assert_eq!(busy.instances[0].recovery.as_ref().unwrap().status, "busy");
+        drop(owner);
+        std::fs::write(&path, b"malformed evidence").unwrap();
+        let state = load_launcher_state(&managed).unwrap();
+        assert_eq!(state.instances[0].state, "installing");
+        assert_eq!(
+            state.instances[0].recovery.as_ref().unwrap().status,
+            "manualRepair"
+        );
+        assert_eq!(state.instances[1].state, "ready");
+        assert!(state.instances[1].recovery.is_none());
+        assert_eq!(std::fs::read(path).unwrap(), b"malformed evidence");
+        // Unique disposable root created by this test.
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn quick_world_requires_a_real_save_inside_the_owning_instance() {

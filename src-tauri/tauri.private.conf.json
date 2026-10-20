@@ -1,0 +1,17 @@
+{
+  "productName": "Aurora Launcher Private Test Candidate",
+  "mainBinaryName": "aurora-launcher-private-candidate",
+  "version": "1.4.2-private.20261019.3",
+  "identifier": "com.aurora.launcher.private-candidate",
+  "app": {
+    "windows": [{
+      "title": "Aurora Launcher — Private Test Candidate",
+      "width": 1120, "height": 760, "minWidth": 720, "minHeight": 520, "center": true
+    }]
+  },
+  "bundle": {
+    "targets": ["nsis"],
+    "createUpdaterArtifacts": false,
+    "windows": { "nsis": { "installMode": "currentUser" } }
+  }
+}

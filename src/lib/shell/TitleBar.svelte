@@ -6,6 +6,7 @@
   let custom = $state(false);
   let maximized = $state(false);
   let error = $state('');
+  let title = $state('Aurora Launcher');
   async function action(operation: 'minimize' | 'toggleMaximize' | 'close') {
     try { await getCurrentWindow()[operation](); error = ''; }
     catch { error = 'Window action unavailable. Use Alt+F4 to close.'; }
@@ -15,6 +16,7 @@
     let disposed = false;
     let stop: (() => void) | undefined;
     const window = getCurrentWindow();
+    void window.title().then(value => { if (!disposed) title = value; }).catch(() => {});
     // Rust removes decorations on Windows only. Keep OS chrome elsewhere.
     void window.isDecorated().then(value => { if (!disposed) custom = !value; }).catch(() => { if (!disposed) error = "Window controls unavailable. Use Alt+F4 to close."; });
     const update = async () => { try { const value = await window.isMaximized(); if (!disposed) maximized = value; } catch { /* A closing window no longer has queryable state. */ } };
@@ -26,7 +28,7 @@
 {#if custom}
   <header class="aurora-titlebar" aria-label="Window controls">
     <div class="titlebar-drag" data-tauri-drag-region>
-      <span>Aurora Launcher</span>
+      <span>{title}</span>
     </div>
     <button class="window-control" aria-label="Minimize" title="Minimize" onclick={() => action('minimize')}><Icon name="minimize" size={16} /></button>
     <button class="window-control" aria-label={maximized ? 'Restore' : 'Maximize'} title={maximized ? 'Restore' : 'Maximize'} onclick={() => action('toggleMaximize')}><Icon name={maximized ? 'restore' : 'maximize'} size={15} /></button>

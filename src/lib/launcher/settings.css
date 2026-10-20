@@ -1,0 +1,47 @@
+/* Scoped to global Settings; existing screens keep their approved treatment. */
+.launcher-settings { width: 100%; max-width: 1120px; margin-inline: auto; }
+.launcher-settings .page-header { margin-bottom: 26px; }
+.launcher-settings .settings-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 32px; align-items: start; }
+.launcher-settings .settings-nav { display: grid; gap: 4px; position: sticky; top: 0; }
+.launcher-settings .settings-nav button { border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; background: transparent; color: var(--color-text-secondary); text-align: left; font: inherit; font-size: .8125rem; cursor: pointer; overflow-wrap: anywhere; transition: background-color var(--f-fast) ease, color var(--f-fast) ease; }
+.launcher-settings .settings-nav button:hover { background: var(--color-surface-raised); color: var(--color-text); }
+/* Selection = accent fill + leading accent bar (owner-requested accent, c0c9342);
+   no additional outline, matching the neutral, unoutlined control language. */
+.launcher-settings .settings-nav button[aria-current] { background: var(--color-accent-soft); color: var(--color-text); box-shadow: inset 3px 0 var(--color-accent); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .launcher-settings .settings-nav button { transition: none; } }
+/* Over live Borealis the category labels sat on bright aurora bands with only a
+   text shadow. A quiet, unfiltered backing keeps them legible (no new blur). */
+:root[data-background="borealis"] .launcher-settings .settings-nav { padding: 6px; border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-content-panel); box-shadow: var(--f-shadow); text-shadow: none; }
+.launcher-settings .settings-body { min-width: 0; }
+.launcher-settings .section-intro { margin-bottom: 20px; }
+.launcher-settings .section-intro h3 { font-size: 1.25rem; font-weight: 600; letter-spacing: -.025em; margin: 0 0 6px; }
+.launcher-settings .section-intro p, .launcher-settings .choice-note { margin: 0; color: var(--color-text-secondary); font-size: .8125rem; line-height: 1.6; }
+.launcher-settings .group { margin-bottom: 16px; }
+.launcher-settings .group-heading { padding: 20px; }
+.launcher-settings .group-row { padding: 16px 20px; gap: 12px 20px; }
+.launcher-settings .group-footer { padding: 14px 20px; }
+.launcher-settings .group-row-main { flex-basis: 12rem; gap: 5px; }
+.launcher-settings .setting-control { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; max-width: 100%; }
+.launcher-settings .setting-state { color: var(--color-text-secondary); font-size: .75rem; }
+.launcher-settings .group-row-title { overflow-wrap: anywhere; }
+.launcher-settings .settings-feedback { color: var(--color-text-secondary); font-size: .8125rem; line-height: 1.6; overflow-wrap: anywhere; }
+.launcher-settings .settings-feedback:empty { display: none; }
+.launcher-settings .settings-save-error { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.launcher-settings .settings-save-error p { flex: 1 1 14rem; }
+.launcher-settings .settings-footer { margin-top: 28px; color: var(--color-text-secondary); font-size: .75rem; line-height: 1.6; }
+.launcher-settings .settings-dialog { width: min(480px, calc(100vw - 48px)); }
+.launcher-settings .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+.launcher-settings .btn { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
+@media (max-width: 1050px) {
+  .launcher-settings .settings-layout { grid-template-columns: 1fr; gap: 24px; }
+  .launcher-settings .settings-nav { display: flex; flex-wrap: wrap; position: static; gap: 6px; }
+  .launcher-settings .settings-nav button { padding: 9px 12px; }
+}
+@media (max-width: 760px) {
+  .launcher-settings .group-row, .launcher-settings .group-heading, .launcher-settings .group-footer { padding-inline: 16px; }
+}
+@media (forced-colors: active) {
+  .launcher-settings .settings-nav button[aria-current] { border-color: Highlight; }
+  .launcher-settings :is(.theme-tile,.background-tile).chosen { outline: 2px solid Highlight; }
+  .launcher-settings .accent-option.chosen { outline: 2px solid Highlight; }
+}

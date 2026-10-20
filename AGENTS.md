@@ -130,3 +130,57 @@ npm run tauri build
 ## Verification and Git
 
 Run checks proportional to the change. Native-boundary or startup changes require type checking, Rust format/check/test, a production build, and a real application boot when the host permits it. Keep documentation aligned with implemented behavior. Preserve user changes, inspect `git status`, make focused commits, and never push unless explicitly requested.
+
+## Performance investigation ownership
+
+- Future Launcher performance phases must prioritize measurable frame-time consistency, CPU efficiency, memory behavior and responsiveness; do not substitute exhaustive heap/flag sweeps for evidence. Keep phase authorization and historical classifications intact.
+- Follow the current [P3-B.1a continuity procedure](docs/performance-p3b1a/CONTINUITY_PROTOCOL.md) and [ownership roadmap](docs/performance-p3b1a/PERFORMANCE_ROADMAP.md) when relevant. Stationary captures require camera checks at phase boundaries; never reset drift during a measured window and keep it valid.
+- Assign the actual subsystem owner before proposing implementation. Launcher owns JVM configuration/runtime selection and its own overhead; Aurora Client owns pacing, rendering, allocations and feature hot paths. Investigate ambiguous interactions before assigning changes.
+- Whenever a justified recommendation requires Aurora Client source changes, prominently notify the owner in the final report using the exact format below and propose a separate scoped Client task. Never silently modify Client from a Launcher performance phase. Investigation topics are not verified defects.
+
+**AURORA CLIENT HANDOFF REQUIRED**
+
+- **Subsystem:** ...
+- **Evidence:** ...
+- **Proposed improvement:** ...
+- **Expected benefit:** ...
+- **Risks:** ...
+- **Launcher dependency:** ...
+- **Recommended Client development phase:** ...
+
+When no verified or technically justified Client-side change is recommended, state **AURORA CLIENT HANDOFF: NOT YET REQUIRED**. Preserve manual PARK mode, Sodium/OpenGL and existing features; Vulkan compatibility remains a separate concern. Roadmap recommendations do not authorize implementation or another experiment.
+
+## Performance Initiative II (2026-10-19)
+
+Startup waits for the winning in-flight launcher-state reload before selecting
+the instance and starting runtime checks. Update discovery can supersede the
+initial snapshot; never assume that snapshot was applied. Existing revision,
+account, instance and readiness checks remain authoritative. Research-only
+performance-p0-2 probes distinguish first Home paint, restored usable Home, Ready
+and Ready RAF checkpoints, with Windows QPC clock brackets. RAF is not physical
+visibility. See `PERFORMANCE_INITIATIVE_II_RESULTS.md` for acceptance and limits.
+
+## Native resolution and validation readers (2026-10-19)
+
+The shared launch resolver substitutes `resolution_width`/`resolution_height`
+from validated optional window settings. Configuration and launch reuse the same
+100–7680 bounds; no window leaves Mojang's conditional group disabled. Tests must
+include the actual conditional group, not a fixture that omits it.
+
+`read_game_target` uses shared kernel ownership for byte-verification readers.
+Install/recovery/final launch writers remain exclusive. `TargetLock::existing`
+also remains exclusive because lifecycle state loading may replay recovery; do
+not replace it with shared ownership. Readiness still verifies bytes and rejects
+damage. See `NATIVE_RESOLUTION_READINESS_REPORT.md` for native acceptance, the
+reproduced false-damage race and the limits of historical n3 attribution.
+
+## Fabric mod resolution (owner decision, 2026-10-19)
+
+Mod identity and dependency checks follow Fabric Loader: only two top-level
+jars with one mod id conflict; bundled (jar-in-jar) copies and
+loader-supplied modules are alternatives (the newest satisfying copy wins),
+and `provides` aliases count at the provider's version. Launcher-protected
+mods (Aurora Client, bootstrap Fabric API) keep strict identity. Loader-supplied
+modules come only from the manifest-recorded, digest-verified installed loader
+jar and are validation-only. Do not reintroduce the stricter bundled-version
+rule. See `docs/instance-tiles-icons/README.md`.

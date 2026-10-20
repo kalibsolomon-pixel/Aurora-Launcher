@@ -13,12 +13,14 @@
 //!   The Settings page may create and remove it. Creation and removal are
 //!   offered only for installed production builds: a development or build-
 //!   output executable must never become a permanent user shortcut.
-//! - **Start menu** — owned by the installers, never by the launcher. Both
-//!   Aurora installers create Start-menu shortcuts and remove them on
-//!   uninstall (WiX lays out `Programs\Aurora Launcher\Aurora Launcher.lnk`;
-//!   NSIS writes `Programs\Aurora Launcher.lnk` by default). The launcher
-//!   only *reports* presence for these slots and never duplicates or
-//!   competes with the installer.
+//! - **Start menu** — normally owned by the installers. Both Aurora
+//!   installers create Start-menu shortcuts and remove them on uninstall
+//!   (WiX lays out `Programs\Aurora Launcher\Aurora Launcher.lnk`; NSIS
+//!   writes `Programs\Aurora Launcher.lnk` by default). When no slot already
+//!   holds a shortcut to this executable, Settings may write the user's NSIS
+//!   slot (the same path the installer uses, so uninstall still removes it);
+//!   it never duplicates an installer shortcut and never overwrites or
+//!   removes anything it cannot prove is Aurora's.
 //!
 //! Shortcut status is always queried from the filesystem, never persisted:
 //! a user may delete a shortcut outside Aurora, and Settings must reflect
@@ -34,8 +36,10 @@
 //! directories, so redirected and localized profiles work; no path is
 //! derived from hard-coded English folder names.
 //!
-//! Taskbar pinning is intentionally absent: Windows deliberately restricts
-//! programmatic pinning and it stays a user choice.
+//! Pinning (to the Start grid or taskbar) is intentionally absent: Windows
+//! deliberately restricts programmatic pinning and it stays a user choice.
+//! A Programs shortcut is what makes Aurora appear in the Start menu's app
+//! list, from where the user can pin it.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -44,7 +48,10 @@ use std::path::{Path, PathBuf};
 ///
 /// This is the compatibility contract with the installers (both name their
 /// shortcuts after the product name) and with the Settings page copy.
+#[cfg(not(feature = "private-candidate"))]
 pub const PRODUCT_NAME: &str = "Aurora Launcher";
+#[cfg(feature = "private-candidate")]
+pub const PRODUCT_NAME: &str = "Aurora Launcher Private Test Candidate";
 
 /// The `.lnk` file name of every Aurora-managed shortcut slot.
 pub fn shortcut_file_name() -> String {
@@ -276,15 +283,48 @@ impl ShortcutContext {
         match self.desktop_presence() {
             ShortcutPresence::Conflict => Err(ShortcutError::Conflict),
             ShortcutPresence::Present | ShortcutPresence::Absent => {
-                let working_dir = self
-                    .target_exe
-                    .parent()
-                    .map(Path::to_path_buf)
-                    .unwrap_or_else(|| PathBuf::from("."));
-                windows_impl::write_shortcut(&slot, &self.target_exe, &working_dir, PRODUCT_NAME)?;
+                windows_impl::write_shortcut(
+                    &slot,
+                    &self.target_exe,
+                    &self.working_dir(),
+                    PRODUCT_NAME,
+                )?;
                 Ok(ShortcutPresence::Present)
             }
         }
+    }
+
+    /// Adds Aurora to the Start menu's app list.
+    ///
+    /// An existing shortcut to this executable (installer- or launcher-made)
+    /// is success with nothing written. Otherwise the user's NSIS slot is
+    /// written, unless something Aurora cannot prove it owns occupies it.
+    pub fn create_start_menu_shortcut(&self) -> Result<ShortcutPresence, ShortcutError> {
+        if self.start_menu_presence() == ShortcutPresence::Present {
+            return Ok(ShortcutPresence::Present);
+        }
+        let slot = self.programs_dir.join(shortcut_file_name());
+        match classify_shortcut(&self.evidence(&slot), &self.target_exe) {
+            ShortcutPresence::Conflict => Err(ShortcutError::Conflict),
+            ShortcutPresence::Present | ShortcutPresence::Absent => {
+                std::fs::create_dir_all(&self.programs_dir)
+                    .map_err(|error| ShortcutError::Io(error.to_string()))?;
+                windows_impl::write_shortcut(
+                    &slot,
+                    &self.target_exe,
+                    &self.working_dir(),
+                    PRODUCT_NAME,
+                )?;
+                Ok(ShortcutPresence::Present)
+            }
+        }
+    }
+
+    fn working_dir(&self) -> PathBuf {
+        self.target_exe
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."))
     }
 
     /// Removes the Aurora-owned desktop shortcut.
@@ -534,7 +574,7 @@ mod tests {
         let slot = desktop_slot(Path::new(r"C:\Users\user\Desktop"));
         assert_eq!(
             slot,
-            Path::new(r"C:\Users\user\Desktop\Aurora Launcher.lnk")
+            Path::new(r"C:\Users\user\Desktop").join(shortcut_file_name())
         );
     }
 
@@ -544,11 +584,13 @@ mod tests {
         assert_eq!(slots.len(), 2);
         assert_eq!(
             slots[0],
-            Path::new(r"C:\Users\user\Programs\Aurora Launcher.lnk")
+            Path::new(r"C:\Users\user\Programs").join(shortcut_file_name())
         );
         assert_eq!(
             slots[1],
-            Path::new(r"C:\Users\user\Programs\Aurora Launcher\Aurora Launcher.lnk")
+            Path::new(r"C:\Users\user\Programs")
+                .join(PRODUCT_NAME)
+                .join(shortcut_file_name())
         );
     }
 
@@ -685,6 +727,28 @@ mod tests {
             assert_eq!(context.desktop_presence(), ShortcutPresence::Absent);
             assert_eq!(context.start_menu_presence(), ShortcutPresence::Absent);
 
+            // Settings can create a real Programs link, repeat idempotently,
+            // and refuses a foreign occupant without changing its bytes.
+            assert_eq!(
+                context.create_start_menu_shortcut()?,
+                ShortcutPresence::Present
+            );
+            let start_slot = context.programs_dir.join(shortcut_file_name());
+            let original_start = std::fs::read(&start_slot)?;
+            assert_eq!(
+                context.create_start_menu_shortcut()?,
+                ShortcutPresence::Present
+            );
+            assert_eq!(std::fs::read(&start_slot)?, original_start);
+            std::fs::remove_file(&start_slot)?;
+            std::fs::write(&start_slot, b"user-owned file")?;
+            assert_eq!(
+                context.create_start_menu_shortcut(),
+                Err(ShortcutError::Conflict)
+            );
+            assert_eq!(std::fs::read(&start_slot)?, b"user-owned file");
+            std::fs::remove_file(&start_slot)?;
+
             // Create through the real shell API, then observe it.
             assert_eq!(
                 context.create_desktop_shortcut()?,
@@ -765,6 +829,14 @@ mod tests {
                 PRODUCT_NAME,
             )?;
             assert_eq!(context.start_menu_presence(), ShortcutPresence::Present);
+            assert_eq!(
+                context.create_start_menu_shortcut()?,
+                ShortcutPresence::Present
+            );
+            assert!(
+                !start_slot.exists(),
+                "an installer link must not be duplicated"
+            );
 
             // A Start-menu shortcut targeting something else is not ours and
             // never reports Present.

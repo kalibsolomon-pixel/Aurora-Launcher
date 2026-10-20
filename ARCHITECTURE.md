@@ -2,6 +2,276 @@
 
 # Aurora Launcher architecture
 
+## Java execution eligibility and private candidates (2026-10-19)
+
+`runtime::install::validate_runtime_eligibility` verifies the exact normalized
+runtime plan, installed manifest and bytes, then runs the bounded `java -version`
+diagnostic. Explicit runtime status, Play readiness and final launch preparation
+share this boundary and timeout. Diagnostic JVM crash reports go to the platform
+null device and core dumps are disabled, so even Java path crashes cannot write
+beside the launcher executable. Integrity-only installation checks remain
+available but cannot authorize Play. Windows diagnostics use CREATE_NO_WINDOW.
+An intact Java installation can fail inside the published Java launcher under
+long or non-ASCII paths; these failures now block readiness and show actionable
+path advice. No runtime fallback, version change or system-Java selection occurs.
+
+The opt-in `private-candidate` feature and `tauri.private.conf.json` overlay must
+be used together. They select a distinct installer/application identity, shortcut
+name, executable filename and OS credential namespace. The distinct binary name
+also isolates NSIS's process-name-based running-app termination check. Launcher
+updates remain unconfigured even on a
+host with a production verification key; signature verification is unchanged in
+ordinary builds. Client authority is unchanged. Only the private package supports
+the explicit `AURORA_PRIVATE_DATA_ROOT` environment override for isolated path
+acceptance. It defaults to its separate platform application-data directory.
+See `tools/release/private-candidate.ps1` and `PRIVATE_CANDIDATE_TESTING.md`.
+
+## Performance P2 — explicit JVM configuration modes (current)
+
+Instance registry schema **6** adds an optional performanceMode to the existing
+InstanceConfiguration. Efficient, Balanced, Performance and Custom are opt-in
+advice modes; missing/null remains Existing Configuration, including fresh instances.
+Known 2–5 migrations preserve heap/custom text and activate no mode. Legacy files
+already containing the new field, malformed state, unknown fields/modes/schemas
+fail deliberately. Config 7, game/runtime schemas and release authority are unchanged.
+
+Modes do not emit JVM flags or change memory automatically. Use recommendation
+changes the existing memoryMib draft; native atomic Save applies it. Efficient's
+heuristic target is at most 1536 MiB, Balanced/Performance/Custom advice at most
+2048 MiB, capped by total/available RAM reserves and architecture. Performance
+intentionally matches Balanced until measured workload evidence exists. No real
+Minecraft performance result or optimization claim is introduced.
+
+instances::performance queries bounded Windows memory status or Linux meminfo only
+on settings requests, caches facts for 30 seconds and reports unknowns/age. It never
+polls, scans mods/GPUs, selects Java, modifies power/priority/affinity, or clamps saved
+heaps. Explicit recommendation application refreshes facts and rejects stale draft
+or instance/mode generations. Svelte displays native advice in the existing instance
+Performance area, reached through global Minecraft & Java. Saved values, unsaved
+mode, recommendation and advanced text remain distinct. Errors survive a native
+registry refresh; editor initialization follows instance identity, not object replacement.
+
+The established launch order/spec/spawn pipeline and legacy parser remain unchanged.
+Opted-in modes support portable user properties/assertions, preserve duplicate order,
+and reject managed properties, indirection and unvalidated VM/collector options.
+Initial-heap and typed GC tuning remain unsupported pending exact-build validation.
+No user argument is executed as a validation command. Managed runtime selection and
+session/containment/final validation remain authoritative. P2 uses isolated native
+roots; no production migration, game launch, release or P3 work was performed.
+Details: docs/performance-p2/PROFILE_SPEC.md and PERFORMANCE_P2_ACCEPTANCE.md.
+
+## UI-5 Settings and personalization (current)
+
+Global Settings retains the existing Aurora shell and session-only category
+keys. A compact local sidebar wraps into section buttons at narrow widths;
+arrow keys, Home and End select categories and move focus. Reading positions
+are kept per category for the session. General is presented as Launcher and
+Home as Home & Widgets; existing Updates deep links remain compatible.
+
+The eight categories expose implemented behavior only: Appearance, Home &
+Widgets, Launcher, Minecraft & Java, Updates, Discord & privacy, Accessibility
+and About. Shared presentation rows associate control names and descriptions;
+checkboxes show textual On/Off state. Pending writes never claim success.
+Rejected writes restore authoritative selections and offer a retry for the
+requested operation; failed motion/color input remains available for retry.
+Appearance uses the same native-derived root tokens, direct color picker and
+Borealis renderer. Its numeric motion value is not an animation-off switch.
+
+Widget visibility uses the existing catalog and shared Home layout store.
+Hiding preserves order, size and unknown registrations. Edit Home opens the
+existing editor; global Settings reset now asks for confirmation of the
+existing native reset. No second widget renderer or persistence system exists.
+
+Minecraft & Java provides explicitly scoped links into the selected instance's
+Settings and Overview, or Library when none is selected. It introduces no global
+memory/runtime override. Instance drafts, atomic Save and deliberate installation
+remain unchanged. Discord keeps its native worker and privacy defaults, automatic
+connection and independent opt-ins; setup/unavailable/loading states stay distinct.
+Accessibility observes three supported media preferences while mounted and
+disposes listeners on departure, without persisted overrides. About reuses the
+running application's native version/platform and does not expose private paths.
+
+Launcher config remains schema 7; registry, cosmetics and widget schemas,
+defaults, migrations, native commands, error codes, release authority and native
+minimum are unchanged. There are no new dependencies, preview subscriptions,
+background polls, telemetry, cleanup operations or release changes. Audit:
+`docs/ui-5/SETTINGS_AUDIT.md`; results and browser/native evidence:
+`UI_5_SETTINGS_PERSONALIZATION_ACCEPTANCE.md`. UI-4 remains separately PARTIAL
+until its full-body/native library-sizing requirements are independently verified.
+
+## UI-4 Player Appearance (current)
+
+The existing instance-independent `cosmetics` destination is labeled **Appearance**.
+It keeps the authoritative bottom-left account manager and existing widget links.
+`CosmeticsPage.svelte` now leads with a full-body character stage; the compact side
+panel owns library controls and explicit account actions. Narrow layouts stack the
+stage above the panel in the shell's existing scroll region. The Home component,
+fixed three-quarter angle, scale, hero crop, widgets and account selection are unchanged.
+
+The existing dependency-free cuboid/software renderer accepts optional outer-layer
+visibility and pitch/zoom parameters. Defaults preserve Home's original pixels.
+Appearance exposes horizontal/vertical drag, keyboard arrows, +/− zoom and Home reset,
+front/back/reset buttons, bounded zoom (0.75–1.15), tilt (−0.35–0.4 radians), classic/slim
+preview geometry and local cape visibility. Legacy skins stay classic. Nearest texel
+sampling preserves artwork; the existing high-resolution canvas compositing smooths
+projected edges without new post-processing or dependencies. Draws coalesce into one
+animation frame on state changes only while intersecting and visible. Observers,
+listeners and pending frames are disposed on unmount; there is no idle animation.
+
+Authoritative profile state and cached fallback textures remain distinguishable.
+A fresh profile without decoded pixels never relabels a cached texture as current.
+Account UUIDs/generation guards own remote identity; an account switch clears cape
+choice and invalidates old requests while retaining the explicitly labeled local
+skin preview/library. Account confirmation dialogs close on selection change.
+Preview geometry/layers/camera remain transient and never replace Home's account skin.
+Restart returns to account appearance, preserving only the existing native library
+and launcher Theme/Background/Accent preferences.
+
+No native DTO, credential, storage schema, service endpoint or permission changes.
+Existing E3/L3 native skin upload and owned cape operations are reused only after
+explicit confirmation naming the account. Native upload identity/model confirmation,
+cape ownership recheck, profile refresh and sanitized failures stay authoritative.
+No new account capability requires approval in this phase. Custom/third-party cape
+upload and new authentication operations remain unsupported. Production mutations
+are not part of acceptance. Audit and verification: `docs/ui-4/APPEARANCE_AUDIT.md`
+and `UI_4_APPEARANCE_ACCEPTANCE.md`.
+
+## Phase F3R-B backup retention (current)
+
+F3R-B supersedes the no-retirement statements in the historical F3R/F3R-A
+sections below. Recovery authority and its state names/schemas are unchanged.
+Instance Settings -> Maintenance -> Recovery backup storage is an explicit
+native worker operation; startup, recovery and successful installation never
+delete history. The default keeps the current journal's backup, the newest
+fully eligible historical backup (all timestamp ties), and a 30-day grace
+period. Legacy/unsealed, uncertain, damaged, rejected and unresolved evidence
+remains protected without a space-pressure override.
+
+Private staging writes a separate schema-1 `.installation-ownership.json`
+before writing the completion manifest last. Its known output inventory comes
+from manifest files and exact native extraction observations, never adoption of
+enumerated history. A successful replacement can write a schema-1 retention
+receipt only when the previous sealed tree still matches its original archived
+Committed candidate. This prevents a later recovery snapshot blessing owner
+additions or an edited seal. Game/registry/journal schemas remain unchanged;
+missing receipts after commit interruption are preserved, never manufactured.
+
+Maintenance takes the existing lifecycle -> game kernel locks, classifies
+pending recovery without replay, and requires full instance Ready validation.
+It validates all history authority before mutation, verifies exact file/empty
+directory allowlists and bytes, persists deletion intent, atomically renames
+within the history slot to `retiring-game`, then removes only verified recorded
+leaves and empty recorded directories. Small journals/receipts survive. Resumed
+intent permits missing leaves but still refuses unknown or modified survivors.
+Failures affect storage diagnostics, never commit, repair or registry readiness.
+No recursive history deletion, destructive delete-all control, startup scan,
+cache/runtime GC, credentials or release behavior is introduced.
+
+Windows local-NTFS process termination is the acceptance model; power loss,
+malicious same-user namespace replacement and other filesystems retain F3R's
+existing limits. Policy, invariants, diagnostics, test and desktop evidence,
+measurements and deferred work: [FORGE_F3R_B_BACKUP_RETENTION.md](FORGE_F3R_B_BACKUP_RETENTION.md).
+
+F3R-B2a corrects the disposable acceptance helper, independently of production
+retention: exclusive fresh direct-temp roots, fixture-bound marker contents,
+strict schema/slot/digest and whole-inventory validation, and refusal of root
+or control-path reparse redirection. Only the two exact intentional file links
+are permitted observations. Gate fixtures are always preserved; no wrapper or
+helper cleanup interprets caller input as recursive-deletion authority. Verify
+queries the actual process token in both PowerShell and Rust and rejects
+an elevated or indeterminate context before retention. The real-link helper
+is explicitly ignored in ordinary suites; only its full verification evidence
+in an observed unelevated run closes that gate. Prepare also builds repository
+code and initializes synthetic game transactions, so privileged prepare needs
+separate authorization covering that scope. Installer-tool composition compares
+exact normalized repository paths (including extension) and agreeing published
+SHA-1, without changing launch-library merge policy. Details and historical
+claim corrections: [FORGE_F3R_B2A_REVIEW_CORRECTIONS.md](FORGE_F3R_B2A_REVIEW_CORRECTIONS.md).
+
+## Phase F3R durable game operations (current)
+
+F3R supersedes the historical Phase 5 replacement/concurrency descriptions below.
+The common executor still consumes normalized plans and verified cache objects.
+A permanent `.game-install.lock` rendezvous file now uses standard-library kernel
+locking (LockFileEx on Windows, flock on Unix). Independent processes fail busy
+for the same physical target; different targets do not share an installation
+lock. Closing or forcibly terminating a process releases ownership. Lock files
+are never unlinked to clear ownership. Root aliases converge; managed descendant
+symlinks/junctions/reparse points are refused.
+
+A separate schema-1 `.install-operation.json` survives disposable staging. It
+binds a UUID transaction, validated instance ID, previous/candidate manifest
+identities and SHA-256 observations of manifests and complete managed trees.
+Paths are fixed derivations, never journal-supplied strings. Installed-game stays
+schema 2 with schema 1 readable; registry 5, runtime state 1, config 7 and F1A
+receipt 1 keep their existing compatibility rules. No schema-3 migration exists.
+
+The game state machine is Prepared -> Replacing -> Promoting -> Promoted ->
+Committed. Before either rename the validated candidate and previous evidence
+are persisted. The previous game moves to `.install-history/<transaction>/previous-game`,
+outside `.install-staging`. Each rename is a separate failure boundary. Promoted
+content remains unavailable until the separate Committed transition. Terminal
+operation copies remain in history; previous/rejected trees are deliberately
+retained, with no garbage collection or backup retirement in this phase.
+
+Startup and explicit retry recover under the same target lock. A deeply valid,
+identity-matching old backup wins over an uncommitted candidate. Recovery records
+Restoring, quarantines a matching promoted candidate, restores the old tree, then
+records Restored. Repeating or interrupting these steps preserves authority.
+Committed replacement evidence stays authoritative; ordinary game validation
+still checks its bytes. Missing/conflicting/malformed/future evidence blocks
+Ready and preserves trees. Legacy staging backups restore only with a matching
+schema-1 receipt, missing current game and a deeply valid old manifest/tree.
+
+Lifecycle operation locks span create/retry/configuration installation. The final
+validation/Ready write and final validation/spawn hold the game lock. Registry
+writers use a short kernel lock and merge independently changed records against
+the loaded snapshot; same-record conflicts fail. Config writers use a separate
+short lock, unique synchronized temporary files and stale-snapshot refusal.
+Selection remains a convenience after installation; preferences never authorize
+launch. These locks do not claim cross-process exclusion for already-running
+game processes or all content/provider mutations.
+
+Shared Java installers lock the exact physical runtime identity. Already-valid
+runtimes are reused, not replaced. Transport-observed source pin publication has
+a per-source cache lock with a bounded wait; expected-digest stores retain
+verified publication and re-hashing. No metadata persistence or cache GC is added.
+Cancellation settles the bounded active acquisition/verification batch and checks
+between copies/extractions; F1A processor-tree cancellation remains supervised.
+Replacement and recovery are synchronous critical sections, without cancellation
+awaits between filesystem transitions.
+
+Journal/candidate files are synchronized before authority advances; Unix directory
+sync follows renames. Windows directory synchronization is not claimed, and neither
+platform has a universal power-loss guarantee. The supported acceptance target is
+process termination. Full evidence, limitations and the phase verdict are in
+[FORGE_F3R_DURABLE_OPERATIONS.md](FORGE_F3R_DURABLE_OPERATIONS.md). A restored game
+does not silently roll back desired configuration, optional Aurora content or the
+registry's attempted pin: an Installing/mismatched instance remains unavailable
+for explicit retry/review. Failed fresh pack component installation retains its
+unavailable record and game/recovery evidence after exact provider-file rollback.
+
+F3R-A state loading observes the lifecycle lock before replay and follows the
+lifecycle -> game ordering. It reloads each registry record under that ownership
+observation. The command runs on a blocking worker rather than the Tauri UI
+thread; process-local state readers serialize so they do not report each other
+busy. An optional recovery DTO distinguishes busy, interrupted, previous restored,
+completed and manual repair. A Committed game in an Installing instance retains
+its completed-recovery explanation across read-only reloads, without granting
+Ready. Initial/focus checks and installation preparation suppress cached Ready;
+coalesced focus requests and response generations prevent stale summaries from
+overwriting newer native authority. There is no background recovery poll.
+
+Opt-in installation diagnostics additionally separate tree enumeration, manifest
+parsing/deep validation, tree hashing, synchronization, journal writes, rename
+checks, actual renames, post-promotion verification and cleanup bookkeeping.
+They do not change verification/order. Debug-only desktop checkpoint observation
+requires an exact marked temporary root and validated target; no production IPC
+crash control exists. Actual Windows Tauri process-death results, measured costs
+and the still-unexecuted Linux gate are in
+[FORGE_F3R_ACCEPTANCE.md](FORGE_F3R_ACCEPTANCE.md). Backup retirement remains a
+proposal; no diagnostic evidence or protected previous tree is pruned.
+
 ## Owner correction source (unreleased)
 
 ### Startup presentation readiness (P1)
@@ -100,6 +370,69 @@ Aurora has **one public production release stream**, with two independent Rust e
 
 **One action and cadence.** Settings shows installed versions and one primary `Check For Updates` -> `Checking…` -> disabled `None Available` for 5 seconds or `Update`. Reset is a local cleared-on-destruction timer with no network. One Update performs Client first, then Launcher sequentially, with truthful real progress and Check/Update Failed — Retry errors. Client failure stops Launcher; Client success survives Launcher failure and retry only handles the remaining domain. Changed offers require fresh review. The controller shares duplicate actions; native aggregate checks and transactions exclude overlap. One silent bounded startup check per process supplies an unobtrusive Home notice only for real offers; there is no polling or automatic installation. Instance workspace View Updates opens the same canonical area. Release notes remain secondary escaped plain text. Availability never authorizes or blocks Play.
 
+## Phase F1C Forge 1.20.x compatibility (current)
+
+Normal Forge choices are limited to reviewed exact pins: Minecraft 1.20.1 /
+Forge 47.4.10, Minecraft 1.20.4 / Forge 49.2.0, and the F1B Minecraft
+1.21.11 / Forge 61.2.0. Official discovery remains broader than install
+eligibility; neither list order nor a new recommended promotion enables an
+unreviewed build. There are no silent substitutions or automatic upgrades.
+F1C is PARTIAL pending owner authenticated gameplay for both new pins;
+both passed isolated Windows x64 installation, deep Ready validation,
+managed Java17 validation and native-file launch assembly. See
+`FORGE_F1C_COMPATIBILITY_EXPANSION.md` for exact evidence and limitations.
+
+Forge remains `LoaderPlan::Forge` through F3 composition and F1A supervision.
+Spec-1 normalization now models whole processor argument literals, data
+tokens and Maven artifact inputs explicitly. Unknown nested mandatory
+fields, unresolved fragments and unsupported launch generations fail.
+The 1.20.1 chain has six client steps including jar splitting; 1.20.4 has
+five. Inline MCP ZIP inputs are validated managed paths, and tool-only
+libraries remain separate from game launch libraries. Published data hash
+expectations are retained even when an individual processor omits its
+outputs map. Mojang's normalized client-mappings SHA-1 supplies the missing
+expectation for 1.20.1's raw mapping downloader. Outputs are verified before
+dependent steps; intermediates without a publisher hash stay locally
+generated observations. Every resolved input is checked for modification.
+
+Both new games require Mojang `java-runtime-gamma` / Java17 for game and
+processors; system/custom Java is not introduced. The 1.20.1
+BootstrapLauncher / `forgeclient` module-path arguments stay distinct from
+1.20.4 ForgeBootstrap / `forge_client`. The managed vanilla `client.jar`
+basename is included in the older bootstrap ignore list while remaining
+last in the deterministic classpath. Native instance-root user content,
+credentials, existing loader behavior and schemas (registry5/game2/receipt1)
+remain unchanged. Archive reads are bounded and extraction refuses links,
+traversal and overwrites; Windows reparse ancestors fail before tool spawn.
+Processor supervision is not an operating-system sandbox. Tier2 generations
+remain deliberately unavailable; F3R durability work remains separate.
+
+## Phase F1B modern Forge support (completed checkpoint)
+
+Forge is a first-class loader family through the same normalized
+architecture (details: FORGE_F1B_MODERN_FORGE.md). `forge::metadata`
+owns discovery over the official MavenForge listing plus the promotions
+document — a build is stable exactly when it is that Minecraft
+version's recommended promotion; list order is never a policy. The
+verified installer (sidecar-SHA-1 store acquisition) is parsed through
+a strict DTO boundary covering the real spec-1 shapes, and
+`forge::plan::ForgePlan` composes through `game::plan` as the Forge
+`LoaderPlan` variant with Mojang's Java requirement authoritative.
+The client processor chain (mappings download, official rename, binary
+patch) executes under the unchanged F1A supervised boundary; each
+step's published outputs verify against Forge's own SHA-1 before the
+next step runs, and matched outputs are recorded as upstream-verified
+expectations rather than local observations. The patched client launch
+library intentionally has no upstream URL — it exists only as the
+chain's digest-verified generated output. The F1B checkpoint supported the
+modern ForgeBootstrap generation (verified on 1.21.11 + 61.2.0); F1C above
+adds only the reviewed 1.20.x mapping pipelines. LaunchWrapper and all
+unreviewed older combinations remain rejected explicitly.
+The owner subsequently confirmed authenticated Forge launch, working gameplay,
+normal exit and return to Ready with no further issues (2026-10-12). F1B is
+COMPLETE; this gameplay evidence is owner-reported, not independently observed
+by the agent. Original machine-generated installation evidence remains separate.
+
 ## Phase K NeoForge loader support (current)
 
 NeoForge is a first-class loader of ordinary instances inside the existing
@@ -108,16 +441,28 @@ details: `PHASE_K_NEOFORGE.md`.
 
 ### Loader-generic composed plan
 
-`GameInstallPlan` (still in `fabric::plan`, the historical home) carries
-`loader: Option<LoaderPlan>` with `Fabric(FabricPlan)` and
-`NeoForge(NeoForgePlan)` variants. Composed views (ordered library set with
+Since F3 the shared composition types — `GameInstallPlan`, `LoaderPlan`,
+`GameLibrary`, `GameJavaRequirement`, `CompositionError`, and the merge
+policy — live in the loader-neutral `game::plan` boundary;
+`fabric::plan` reexports them under their historical paths, and each
+family composer (Fabric's floor-raising derivation, NeoForge's
+floor-less Mojang-authoritative one) stays in its own adapter. The plan
+carries `loader: Option<LoaderPlan>` with `Fabric(FabricPlan)` and
+`NeoForge(NeoForgePlan)` variants; there is deliberately no fallback
+variant. Composed views (ordered library set with
 `LibraryProvenance::NeoForge`, effective Java requirement, final main
 class) stay loader-generic; per-loader plans stay independently meaningful
 boundaries. `effective_jvm_arguments()` / `effective_game_arguments()`
 return Mojang's groups followed by the loader's unconditional groups —
 NeoForge is the first loader contributing launch arguments; Fabric/Vanilla
 behavior is unchanged. `LaunchPlan::from_game_plan` consumes the effective
-views.
+views. Loader selection is exhaustive at every dispatch point: plan
+resolution, pack transitions, and the executable-configuration gate match
+every `PlatformPin`/`LoaderKind` variant with explicit refusals for
+represented-but-unimplemented families, and compatibility evaluation
+errors on families with no evaluator instead of applying Fabric
+predicates; those families' desired configurations stay persistable
+(shape-validated only) so existing records never become unloadable.
 
 ### NeoForge resolution and the bounded processor model
 
@@ -125,16 +470,34 @@ views.
 `maven.neoforged.net` release listing (bare versions; Minecraft mapping
 derived from the leading components and cross-checked against each
 installer's own `install_profile.json`), SHA-1 sidecar digests, and the
-installer-embedded `install_profile.json`/`version.json` DTOs. The
-installer jar is a verified SHA-1-store acquisition read as a metadata
-document — Aurora never runs the NeoForge installer. Client-side
-processors execute as narrowly modeled build steps (`neoforge::processors`):
-argument-vector-only substitution from the normalized plan, exact managed
-Java diagnostic executable, empty environment, bounded scratch/staging
-roots, before/after tree snapshots that record generated outputs and reject
-destruction, nonzero exit/timeout/missing-output failures, and honest
-`ArtifactTrust::LocallyGenerated` observations for generated artifacts
-(never official verifications). NeoForge publishes no loader Java floor;
+installer-embedded `install_profile.json`/`version.json` DTOs — including
+processor `outputs` expectations, which are preserved and verified rather
+than discarded. The installer jar is a verified SHA-1-store acquisition
+read as a metadata document — Aurora never runs the NeoForge installer.
+Client-side processors execute as narrowly modeled build steps
+(`neoforge::processors`): argument-vector-only substitution from the
+normalized plan, exact managed Java diagnostic executable, empty
+environment, and bounded scratch/staging roots. Since the F1 hardening
+pass, every tool subprocess runs through the shared supervised runner
+(`install::processors`): stdout and stderr are drained concurrently under
+a live per-stream retention cap with recorded truncation; a wall-clock
+timeout and cooperative cancellation terminate the whole process tree
+(a Windows Job Object with kill-on-close, a Linux process group) with a
+bounded shutdown grace; diagnostics are character-safe bounded tails. The
+shared verified store is never an argument or write surface of a tool
+process — tools see a private, SHA-1-re-verified copy of the installer.
+Every processor input (client jar, tool jars, classpath) is hashed before
+and after execution; the staging snapshot records size and link status,
+so destruction, in-place modification, and symlink/reparse outputs fail
+the pass; generated outputs are stream-hashed under a hard size bound and
+recorded as honest `ArtifactTrust::LocallyGenerated` observations (never
+official verifications); published output expectations verify against
+their official SHA-1. Each installation also writes a schema-1
+transaction receipt inside staging at every stage transition; the next
+attempt classifies interrupted receipts (and reports unknown evidence)
+before the derived-path staging disposal, so a crashed transaction is
+explained and deterministically rebuilt rather than mistaken for a
+completed installation. NeoForge publishes no loader Java floor;
 Mojang's requirement stays authoritative (26.x -> `java-runtime-epsilon`,
 major 25), and the managed runtime is ensured before game installation
 because processors need it at install time.
@@ -647,12 +1010,12 @@ The plan/execution boundary is preserved absolutely: the installer consumes only
 
 ### Atomicity and the staged/committed model
 
-Nothing is ever written into the final `game/` directory directly. The complete tree, including the `installed-game.json` manifest that marks completion, is built under `.install-staging/` and becomes visible through one directory rename. Therefore:
-
-- an interrupted installation always leaves the instance either without a game directory or with its previous complete one — a staging directory can never be mistaken for an installed game;
-- stale staging from a failed attempt is removed by the next attempt, only after proving the path is exactly the derived `<instance-root>/.install-staging`;
-- replacing an existing installation first moves the proven-managed previous `game/` into staging, then renames the new tree into place, then deletes the retired tree — if the process dies between the two renames the instance has *no* game directory (visibly incomplete, never a mixture) and the next attempt rebuilds from scratch;
-- an existing `game/` **without** a valid manifest is a hard `installation_target_conflict`: Aurora neither wipes nor guesses at unrecognizable trees, and a malformed manifest is a deliberate `installation_state_invalid` error that is never overwritten.
+Nothing is written directly into the final game directory. The manifest is
+written last in staging; promotion uses a directory rename. Replacement requires
+multiple separately journaled transitions, described in the current F3R section.
+The previous tree is protected in transaction history rather than disposable
+staging. Retry recovers before resetting staging; unresolved authority blocks
+Ready. Unknown or malformed game state remains a hard conflict and is preserved.
 
 ### Instance filesystem layout
 
@@ -724,7 +1087,12 @@ A deterministic, read-only, download-free validation of one instance's installed
 
 ### Concurrency
 
-One installation may run per instance at a time (an in-process per-instance async mutex; a second attempt fails immediately with `installation_already_in_progress`). The verified asset index is acquired first; independent composed libraries and deduplicated asset objects are then acquired in bounded batches of 16. Results retain plan order for classpath and installed state. A batch fully settles before an error returns, and no staged game or completion marker is promoted after any required acquisition fails. There is no global queue or cross-process lock. Artifact-store concurrency retains the Phase 2 "never corrupt, never coordinate" model.
+One installation may run per physical instance target across processes. A
+second writer fails immediately with `installation_already_in_progress`; there
+is no global install queue. Bounded acquisition batches preserve plan order and
+settle before errors/cancellation return. Exact runtime and observed-source cache
+locks protect shared mutable resources; expected-digest cache objects retain
+verified publication/race checks. See F3R above for lock lifetime and limitations.
 
 ### Progress
 
@@ -1465,11 +1833,11 @@ Staged game files are still individually re-hashed against their recorded trust 
 
 ## Explicitly deferred
 
-Linux/macOS secure credential stores; system-Java discovery or custom Java selection; any loader other than Vanilla/Fabric; fullscreen/window management beyond the official custom-resolution launch arguments; runtime garbage collection and cross-process installation/launch locks; a "follow system" theme mode and any light theme (Aurora is fundamentally dark; a fake System selector that always resolves to dark would be dishonest); a launcher-owned animation preference (the OS `prefers-reduced-motion` preference is respected unconditionally); Linux/macOS shortcut/desktop integration (the command and DTO shape is ready; no implementation ships until those platforms own it); taskbar pinning and any shell-hack pin forcing; file associations and URI/deep-link registration; production Aurora release infrastructure (manifest endpoint, artifact repository, signing) — today's production source is the bundled reviewed manifest; instance deletion (user-data retention policy deserves its own design); CurseForge integration and generic provider matching, and mod icon extraction; a full user-facing trust/pinning policy for transport-observed artifacts; generalized repair and automatic repair of damaged instances/installations (exact managed-runtime reinstall is the sole narrow exception); Aurora version updates and channel movement; persisted normalized launch metadata for network-independent cold Play; a Stop action; pause/resume and cancellation; retry, resume, bandwidth controls, and generalized queues; hard-link asset sharing and cache eviction/size policy; self-update; telemetry; social/news/cosmetic/cloud systems; and any custom backend service.
+Linux/macOS secure credential stores; system-Java discovery or custom Java selection; any loader other than Vanilla/Fabric; fullscreen/window management beyond the official custom-resolution launch arguments; runtime garbage collection and cross-process launch exclusion; a "follow system" theme mode and any light theme (Aurora is fundamentally dark; a fake System selector that always resolves to dark would be dishonest); a launcher-owned animation preference (the OS `prefers-reduced-motion` preference is respected unconditionally); Linux/macOS shortcut/desktop integration (the command and DTO shape is ready; no implementation ships until those platforms own it); taskbar pinning and any shell-hack pin forcing; file associations and URI/deep-link registration; production Aurora release infrastructure (manifest endpoint, artifact repository, signing) — today's production source is the bundled reviewed manifest; instance deletion (user-data retention policy deserves its own design); CurseForge integration and generic provider matching, and mod icon extraction; a full user-facing trust/pinning policy for transport-observed artifacts; generalized repair and automatic repair of damaged instances/installations (exact managed-runtime reinstall is the sole narrow exception); Aurora version updates and channel movement; persisted normalized launch metadata for network-independent cold Play; a Stop action; pause/resume and cancellation; retry, resume, bandwidth controls, and generalized queues; hard-link asset sharing and cache eviction/size policy; self-update; telemetry; social/news/cosmetic/cloud systems; and any custom backend service.
 
 ## Known limitations
 
-The launcher reports native status, persists configuration/instances/accounts, acquires verified artifacts, plans and installs modern Minecraft plus Fabric and Aurora, provisions exact shared official Java, implements authenticated launch assembly and process supervision, makes instances configurable — desired Minecraft/loader/memory/JVM-argument/window settings with atomic saves, honest stale-state invalidation, deliberate reconfiguration installs, and a deterministic schema-3 registry migration — carries a launcher-wide appearance system (three built-in dark themes plus validated accent customization, persisted in the schema-2 launcher configuration, applied live and restored before the first shell render), now carries a separate external application identity (the deterministic rounded-square icon for the executable, taskbar, installer, and shortcuts) plus live Windows desktop-integration status with ownership-proven desktop-shortcut management in Settings, and organizes its UI around a typed two-level navigation model: global sidebar destinations plus a contextual instance workspace (Overview/Mods/Resource Packs/Shaders/Settings tabs, breadcrumb header with derived Open folder and the shared-pipeline Play). Mods provides filesystem-authoritative local inventory and safe single-file management; Modrinth Browse supports compatibility-aware installation with durable provenance, while update checks and approvals are explicit. The full production authentication chain is live-verified; the first production Aurora release artifact is integrated as a reviewed bundled manifest entry. New production-build instances select only reviewed production releases; existing fixture-pinned instances remain resolvable. Minecraft, Fabric, and runtime discovery metadata are re-fetched on resolution; installed products and runtime files are reused. Historical Minecraft shapes and unsupported runtime platform/component pairs fail deliberately. Fullscreen management and custom Java are deliberately deferred. Independent artifact acquisition uses bounded concurrency, while instance and runtime mutation exclusion remains process-local with no cross-process lock. There is no Stop, pause/resume, runtime garbage collection, instance deletion, or generalized repair. Damaged content is detected but not automatically repaired; a manifest-proven damaged managed runtime is the sole narrow reinstall exception. The TypeScript DTOs still mirror Rust manually.
+The launcher reports native status, persists configuration/instances/accounts, acquires verified artifacts, plans and installs modern Minecraft plus Fabric and Aurora, provisions exact shared official Java, implements authenticated launch assembly and process supervision, makes instances configurable — desired Minecraft/loader/memory/JVM-argument/window settings with atomic saves, honest stale-state invalidation, deliberate reconfiguration installs, and a deterministic schema-3 registry migration — carries a launcher-wide appearance system (three built-in dark themes plus validated accent customization, persisted in the schema-2 launcher configuration, applied live and restored before the first shell render), now carries a separate external application identity (the deterministic rounded-square icon for the executable, taskbar, installer, and shortcuts) plus live Windows desktop-integration status with ownership-proven desktop-shortcut management in Settings, and organizes its UI around a typed two-level navigation model: global sidebar destinations plus a contextual instance workspace (Overview/Mods/Resource Packs/Shaders/Settings tabs, breadcrumb header with derived Open folder and the shared-pipeline Play). Mods provides filesystem-authoritative local inventory and safe single-file management; Modrinth Browse supports compatibility-aware installation with durable provenance, while update checks and approvals are explicit. The full production authentication chain is live-verified; the first production Aurora release artifact is integrated as a reviewed bundled manifest entry. New production-build instances select only reviewed production releases; existing fixture-pinned instances remain resolvable. Minecraft, Fabric, and runtime discovery metadata are re-fetched on resolution; installed products and runtime files are reused. Historical Minecraft shapes and unsupported runtime platform/component pairs fail deliberately. Fullscreen management and custom Java are deliberately deferred. Independent artifact acquisition uses bounded concurrency, while F3R now provides exact-target kernel installation locks (see the current section above). There is no Stop, pause/resume, runtime garbage collection, instance deletion, or generalized repair. Damaged content is detected but not automatically repaired; a manifest-proven damaged managed runtime is the sole narrow reinstall exception. The TypeScript DTOs still mirror Rust manually.
 
 
 ## Phase C1 — generalized instance identity (historical baseline)
@@ -1689,3 +2057,38 @@ The software cuboid player renderer is reused for full local previews, classic/s
 The shared cosmetic store separates local work from account requests, coalesces reads and rejects stale/wrong-account responses using request generations, including A→B→A switches during a pending mutation. Local records stay usable without a session or during service failure. Last fetched/cached state is labeled separately from a profile refreshed this session. Only explicit Apply/Equip/No Cape actions invoke native account mutations. Native authentication and selected-account checks remain authoritative; tokens and provider URLs never enter cosmetic DTOs. Skin upload confirmation matches the active skin identity and model from the upload response against a separate fresh matching-account profile GET. Cape changes recheck ownership and confirm the resulting profile. Incomplete confirmations remain errors, retaining the local collection.
 
 See `LAUNCHER_REFINEMENT_L3.md` for validation, schema rollback constraints, desktop evidence and the distinction between actual local native acceptance and synthetic account-service acceptance.
+
+## Performance Initiative II (2026-10-19)
+
+The frontend tracks the latest in-flight launcher-state reload. Initialization
+waits for that winning snapshot before looking up selection and requesting
+runtime status; an update-discovery read that supersedes the first startup read
+can no longer silently omit automatic readiness. It does not cache or weaken
+native integrity, runtime, account or final launch validation. Existing stale
+request guards still decide whether a readiness result may be presented.
+
+Opt-in performance-p0-2 probes add bounded numeric startup phases, native setup,
+Home paint, restored usable Home and Ready RAF markers. Windows QPC brackets
+correlate native processes without treating frontend performance.now as the
+native clock. Ordinary builds compile the probes away. Raw credentials, identity,
+arguments and log contents are excluded from numeric traces. See
+`PERFORMANCE_INITIATIVE_II_RESULTS.md` for the local native evidence.
+
+## Native resolution and readiness reliability (2026-10-19)
+
+Optional window settings enable Mojang's existing conditional resolution group;
+the single `launch::resolve` placeholder map now supplies both validated decimal
+dimensions. Configuration validation and final launch assembly share the same
+dimension bounds. Unspecified dimensions preserve metadata defaults; missing
+values in an active group and unknown placeholders remain hard failures. No
+parallel argument builder, persistence schema or process-spawn path is added.
+
+Read-only installed-game validation uses explicit shared kernel locks through
+`read_game_target`, allowing concurrent runtime/readiness checks to verify the
+same stable tree. Previously those readers excluded each other and a healthy
+check could become a false Damaged decision. All mutation/recovery/final-spawn
+locks stay exclusive, including lifecycle `TargetLock::existing`; its caller can
+replay recovery. Path and ownership checks remain common to both lock modes.
+The existing research-only numeric vocabulary adds contention event 50. Normal
+builds emit no probe data. See `NATIVE_RESOLUTION_READINESS_REPORT.md` for the
+original-failing regressions, native positive/negative controls and platform limits.

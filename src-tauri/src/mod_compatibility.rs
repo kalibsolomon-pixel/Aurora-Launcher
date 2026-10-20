@@ -5,16 +5,21 @@ use crate::neoforge::versions::satisfies as neoforge_satisfies;
 
 /// Evaluates one relation requirement in the semantics of the instance's
 /// loader family: Fabric predicates for Fabric instances, Maven ranges for
-/// NeoForge instances. Malformed requirements are errors, never matches.
+/// NeoForge instances. Malformed requirements are errors, never matches,
+/// and an unrecognized family is an error too — no family silently
+/// evaluates under another family's rules.
 pub(crate) fn satisfies_for_family(
     version: &str,
     requirement: &str,
     loader_family: &str,
 ) -> Result<bool, &'static str> {
-    if loader_family == "neoForge" {
-        neoforge_satisfies(version, requirement)
-    } else {
-        fabric_satisfies(version, requirement)
+    match loader_family {
+        "fabric" => fabric_satisfies(version, requirement),
+        "neoForge" => neoforge_satisfies(version, requirement),
+        // Forge's mods.toml declares loader dependencies with the same
+        // Maven-range grammar NeoForge uses.
+        "forge" => neoforge_satisfies(version, requirement),
+        _ => Err("this loader family has no compatibility evaluator in this build"),
     }
 }
 use crate::instance_mods::{ModEntry, ModInventory, ModMetadata, ModOwnership, ModRelation};
@@ -178,7 +183,8 @@ pub fn validate(
         for relation in &metadata.depends {
             let builtin = match relation.mod_id.as_str() {
                 "minecraft" => Some(minecraft.to_owned()),
-                "fabricloader" if loader_family != "neoForge" => Some(loader.to_owned()),
+                "fabricloader" if loader_family == "fabric" => Some(loader.to_owned()),
+                "forge" if loader_family == "forge" => Some(loader.to_owned()),
                 "neoforge" | "forge" if loader_family == "neoForge" => Some(loader.to_owned()),
                 "java" => {
                     if java_major.is_none() {
@@ -241,7 +247,8 @@ pub fn validate(
         for relation in &metadata.breaks {
             let builtin = match relation.mod_id.as_str() {
                 "minecraft" => Some(minecraft.to_owned()),
-                "fabricloader" if loader_family != "neoForge" => Some(loader.to_owned()),
+                "fabricloader" if loader_family == "fabric" => Some(loader.to_owned()),
+                "forge" if loader_family == "forge" => Some(loader.to_owned()),
                 "neoforge" | "forge" if loader_family == "neoForge" => Some(loader.to_owned()),
                 "java" => {
                     if java_major.is_none() {
@@ -329,6 +336,22 @@ pub fn validate(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unknown_loader_families_have_no_silent_evaluator() {
+        // A family without an evaluator is an error, never a match, and
+        // never a silent evaluation under Fabric's rules.
+        for family in ["vanilla", "forge", "quilt", ""] {
+            assert!(
+                satisfies_for_family("1.0.0", ">=1.0.0", family).is_err(),
+                "family '{family}' must not silently evaluate"
+            );
+        }
+        assert_eq!(
+            satisfies_for_family("1.0.0", ">=1.0.0", "fabric").unwrap(),
+            true
+        );
+    }
+
     use super::*;
     use crate::instance_mods::inspect_fabric_metadata;
     use std::io::{Cursor, Write};

@@ -14,3 +14,9 @@ node_modules
 !.env.example
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Local diagnostic evidence directories (.zcode-diag, .zcode-diag2..7, .zcode-perf) —
+# untracked investigation/acceptance data; never commit. Not a backup mechanism.
+/.zcode-diag*/
+/.zcode-perf/
+/private-test-builds/

@@ -15,6 +15,7 @@
 //! ordinary load and complete validation remain read-only.
 //! Schema 5 adds optional exact Modrinth pack identity; schema 4 migrates
 //! additively with every historical record remaining pack-free.
+//! Schema 6 adds opt-in performance intent; legacy effective JVM settings stay unchanged.
 //!
 //! Instance lifecycle orchestration (create/retry/rename/select/validate and
 //! configuration updates) lives in [`lifecycle`]; Aurora's own installed state
@@ -23,12 +24,13 @@
 
 pub mod deletion;
 pub mod lifecycle;
+pub mod performance;
 pub mod platform;
 pub mod settings;
 pub mod transition;
 
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -36,7 +38,7 @@ use crate::distribution::ReleaseChannel;
 use crate::instances::settings::InstanceConfiguration;
 
 /// Schema 5 adds an optional exact Modrinth pack identity to instance records.
-pub const INSTANCE_REGISTRY_SCHEMA_VERSION: u32 = 5;
+pub const INSTANCE_REGISTRY_SCHEMA_VERSION: u32 = 6;
 
 /// Oldest explicitly migratable schema. Schema 3 is also supported.
 const LEGACY_REGISTRY_SCHEMA_VERSION: u32 = 2;
@@ -376,7 +378,25 @@ impl InstanceRecord {
 pub struct InstanceRegistry {
     schema_version: u32,
     instances: Vec<InstanceRecord>,
+    /// In-memory read revision for record-level compare-and-merge. Not a
+    /// persisted schema field and not part of domain equality.
+    #[serde(skip)]
+    revision: RegistryRevision,
 }
+
+#[derive(Debug, Default)]
+struct RegistryRevision(std::sync::Mutex<Option<Vec<InstanceRecord>>>);
+impl Clone for RegistryRevision {
+    fn clone(&self) -> Self {
+        Self(std::sync::Mutex::new(self.0.lock().unwrap().clone()))
+    }
+}
+impl PartialEq for RegistryRevision {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+impl Eq for RegistryRevision {}
 
 impl InstanceRegistry {
     /// The registry schema version this loader enforces.
@@ -386,6 +406,7 @@ impl InstanceRegistry {
         Self {
             schema_version: Self::SCHEMA_VERSION,
             instances: Vec::new(),
+            revision: RegistryRevision::default(),
         }
     }
 
@@ -407,19 +428,27 @@ impl InstanceRegistry {
 
     /// Loads the registry from disk. A missing file loads as empty.
     pub fn load(path: &Path) -> Result<Self, InstanceRegistryError> {
+        crate::install::coordination::require_regular_or_missing(path)
+            .map_err(InstanceRegistryError::Read)?;
         let text = match std::fs::read_to_string(path) {
             Ok(text) => text,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(Self::empty());
+                let registry = Self::empty();
+                *registry.revision.0.lock().unwrap() = Some(Vec::new());
+                return Ok(registry);
             }
             Err(error) => return Err(InstanceRegistryError::Read(error)),
         };
 
-        Self::from_json(&text)
+        let registry = Self::from_json(&text)?;
+        *registry.revision.0.lock().unwrap() = Some(registry.instances.clone());
+        Ok(registry)
     }
 
     /// Startup migration is explicit and atomic; read-only validation uses load instead.
     pub fn load_and_migrate(path: &Path) -> Result<Self, InstanceRegistryError> {
+        crate::install::coordination::require_regular_or_missing(path)
+            .map_err(InstanceRegistryError::Read)?;
         let _guard = lifecycle::registry_lock();
         let text = match std::fs::read_to_string(path) {
             Ok(text) => text,
@@ -427,6 +456,7 @@ impl InstanceRegistry {
             Err(e) => return Err(InstanceRegistryError::Read(e)),
         };
         let registry = Self::from_json(&text)?;
+        *registry.revision.0.lock().unwrap() = Some(registry.instances.clone());
         if Self::parse_schema_version(&text)? != Self::SCHEMA_VERSION {
             registry.save(path)?;
         }
@@ -435,7 +465,7 @@ impl InstanceRegistry {
 
     /// Parses and validates registry data from JSON text.
     ///
-    /// Schema 5 parses directly. Schema 4 adds no pack identity; schemas 2
+    /// Schema 6 parses directly. Schemas 4/5 activate no performance mode; schemas 2
     /// and 3 — the Aurora-only shapes —
     /// migrates deterministically: identifiers, display names, lifecycle
     /// states, and release pins survive. Schema 2 derives desired settings
@@ -445,18 +475,34 @@ impl InstanceRegistry {
         let registry = match Self::parse_schema_version(text)? {
             Self::SCHEMA_VERSION => serde_json::from_str(text)
                 .map_err(|error| InstanceRegistryError::Malformed(error.to_string()))?,
-            4 => {
+            4 | 5 => {
                 let mut value: serde_json::Value = serde_json::from_str(text)
                     .map_err(|error| InstanceRegistryError::Malformed(error.to_string()))?;
-                if value
-                    .get("instances")
-                    .and_then(serde_json::Value::as_array)
-                    .is_some_and(|instances| {
-                        instances.iter().any(|record| record.get("pack").is_some())
-                    })
+                if Self::parse_schema_version(text)? == 4
+                    && value
+                        .get("instances")
+                        .and_then(serde_json::Value::as_array)
+                        .is_some_and(|instances| {
+                            instances.iter().any(|record| record.get("pack").is_some())
+                        })
                 {
                     return Err(InstanceRegistryError::Malformed(
                         "schema 4 cannot contain a pack identity".into(),
+                    ));
+                }
+                if value
+                    .get("instances")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|records| {
+                        records.iter().any(|record| {
+                            record
+                                .get("configuration")
+                                .is_some_and(|c| c.get("performanceMode").is_some())
+                        })
+                    })
+                {
+                    return Err(InstanceRegistryError::Malformed(
+                        "legacy registry cannot contain performanceMode".into(),
                     ));
                 }
                 value["schemaVersion"] = serde_json::json!(Self::SCHEMA_VERSION);
@@ -597,6 +643,7 @@ impl InstanceRegistry {
         Ok(Self {
             schema_version: Self::SCHEMA_VERSION,
             instances,
+            revision: RegistryRevision::default(),
         })
     }
 
@@ -604,7 +651,26 @@ impl InstanceRegistry {
     /// then rename over the target. Duplicate identifiers are rejected
     /// before anything touches disk.
     pub fn save(&self, path: &Path) -> Result<(), InstanceRegistryError> {
-        Self::load(path)?;
+        let parent = path.parent().ok_or_else(|| {
+            InstanceRegistryError::Write(std::io::Error::other("registry has no parent"))
+        })?;
+        let lock_root = parent.parent().unwrap_or(parent);
+        let writer = crate::install::coordination::TargetLock::acquire(
+            lock_root,
+            parent,
+            ".instances-write.lock",
+        )
+        .map_err(|error| {
+            InstanceRegistryError::Write(match error {
+                crate::install::coordination::LockError::Busy => std::io::Error::new(
+                    std::io::ErrorKind::WouldBlock,
+                    "another process is updating the instance registry; retry",
+                ),
+                crate::install::coordination::LockError::Io(error) => error,
+            })
+        })?;
+        let existed = path.exists();
+        let mut current = Self::load(path)?;
         Self::from_json(&serde_json::to_string(self).expect("registry serializes"))?;
         if let Some(duplicate) = find_duplicate_id(&self.instances) {
             return Err(InstanceRegistryError::Malformed(format!(
@@ -612,25 +678,63 @@ impl InstanceRegistry {
             )));
         }
 
-        let mut json = serde_json::to_string_pretty(self)
+        let base = self.revision.0.lock().unwrap().clone().filter(|_| existed);
+        if let Some(base) = base {
+            let conflict = || {
+                InstanceRegistryError::Write(std::io::Error::new(
+                    std::io::ErrorKind::WouldBlock,
+                    "this instance record changed in another process; refresh and retry",
+                ))
+            };
+            // Merge only independently changed records. Same-record races fail
+            // explicitly; unrelated instances are never silently overwritten.
+            for old in &base {
+                let proposed = self.find(old.id());
+                if proposed == Some(old) {
+                    continue;
+                }
+                if current.find(old.id()) != Some(old) {
+                    return Err(conflict());
+                }
+                if let Some(proposed) = proposed {
+                    *current.find_mut(old.id()).expect("matched current record") = proposed.clone();
+                } else {
+                    current.instances.retain(|record| record.id() != old.id());
+                }
+            }
+            for added in &self.instances {
+                if base.iter().any(|old| old.id() == added.id()) {
+                    continue;
+                }
+                if current.find(added.id()).is_some() {
+                    return Err(conflict());
+                }
+                current.instances.push(added.clone());
+            }
+        } else {
+            if !current.instances.is_empty() && current.instances != self.instances {
+                return Err(InstanceRegistryError::Write(std::io::Error::new(
+                    std::io::ErrorKind::WouldBlock,
+                    "registry replacement has no read revision; load the current registry before updating it",
+                )));
+            }
+            current.instances = self.instances.clone();
+        }
+        Self::from_json(&serde_json::to_string(&current).expect("registry serializes"))?;
+        let mut json = serde_json::to_string_pretty(&current)
             .expect("instance registry serialization cannot fail");
         json.push('\n');
 
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(InstanceRegistryError::Write)?;
         }
-        let temporary_path = temporary_sibling(path);
-        std::fs::write(&temporary_path, json).map_err(|error| {
-            let _ = std::fs::remove_file(&temporary_path);
-            InstanceRegistryError::Write(error)
-        })?;
-        match std::fs::rename(&temporary_path, path) {
-            Ok(()) => Ok(()),
-            Err(error) => {
-                let _ = std::fs::remove_file(&temporary_path);
-                Err(InstanceRegistryError::Write(error))
-            }
-        }
+        writer
+            .recheck(lock_root, parent)
+            .map_err(InstanceRegistryError::Write)?;
+        crate::install::journal::atomic_write(path, json.as_bytes())
+            .map_err(InstanceRegistryError::Write)?;
+        *self.revision.0.lock().unwrap() = Some(self.instances.clone());
+        Ok(())
     }
 }
 
@@ -645,12 +749,6 @@ impl InstanceRegistry {
 pub fn generate_instance_id() -> InstanceId {
     let simple = uuid::Uuid::new_v4().simple().to_string();
     InstanceId::new(simple).expect("a UUIDv4 in simple form is always a valid identifier")
-}
-
-fn temporary_sibling(path: &Path) -> PathBuf {
-    let mut temporary = path.as_os_str().to_owned();
-    temporary.push(".tmp");
-    PathBuf::from(temporary)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1224,7 +1322,7 @@ mod tests {
         registry.save(&saved).unwrap();
         assert_eq!(InstanceRegistry::load(&saved).unwrap(), registry);
         let persisted = std::fs::read_to_string(&saved).unwrap();
-        assert!(persisted.contains("\"schemaVersion\": 5"));
+        assert!(persisted.contains("\"schemaVersion\": 6"));
         assert!(persisted.contains("\"configuration\""));
     }
 
@@ -1275,6 +1373,50 @@ mod tests {
     }
 
     #[test]
+    fn independently_loaded_registry_changes_merge_and_same_record_races_fail() {
+        let root =
+            std::env::temp_dir().join(format!("aurora-f3r-registry-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("instances.json");
+        let mut original = InstanceRegistry::empty();
+        for id in ["first", "second"] {
+            original.instances_mut().push(
+                InstanceRecord::new(
+                    InstanceId::new(id).unwrap(),
+                    id,
+                    InstanceState::Installing,
+                    sample_pin(),
+                    sample_configuration(),
+                )
+                .unwrap(),
+            );
+        }
+        original.save(&path).unwrap();
+        let mut first = InstanceRegistry::load(&path).unwrap();
+        let mut second = InstanceRegistry::load(&path).unwrap();
+        let mut stale = InstanceRegistry::load(&path).unwrap();
+        first.instances_mut()[0]
+            .set_display_name("first updated")
+            .unwrap();
+        second.instances_mut()[1]
+            .set_display_name("second updated")
+            .unwrap();
+        stale.instances_mut()[0]
+            .set_display_name("stale overwrite")
+            .unwrap();
+        first.save(&path).unwrap();
+        second.save(&path).unwrap();
+        let merged = InstanceRegistry::load(&path).unwrap();
+        assert_eq!(merged.instances()[0].display_name(), "first updated");
+        assert_eq!(merged.instances()[1].display_name(), "second updated");
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(stale.save(&path).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        // This root and every file beneath it were created by this test.
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn invalid_registry_data_fails_deliberately() {
         let schema_3_record = |release: &str, configuration: &str| {
             format!(
@@ -1288,8 +1430,8 @@ mod tests {
             ("{ not json".to_owned(), "malformed"),
             ("{}".to_owned(), "schema version"),
             (
-                r#"{ "schemaVersion": 6, "instances": [] }"#.to_owned(),
-                "schema version 6",
+                r#"{ "schemaVersion": 7, "instances": [] }"#.to_owned(),
+                "schema version 7",
             ),
             (
                 r#"{ "schemaVersion": 1, "instances": [] }"#.to_owned(),
@@ -1391,13 +1533,14 @@ mod tests {
         assert_eq!(InstanceRegistry::load(&path).unwrap(), registry);
         let persisted: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        assert_eq!(persisted["schemaVersion"], 5);
+        assert_eq!(persisted["schemaVersion"], 6);
         assert!(persisted["instances"][0].get("release").is_none());
         assert_eq!(
             persisted["instances"][0]["installed"]["platform"],
             serde_json::json!({"kind":"fabric","version":"0.19.5"})
         );
         std::fs::remove_file(&path).unwrap();
+        std::fs::remove_file(root.join(".instances-write.lock")).unwrap();
         std::fs::remove_dir(&root).unwrap();
     }
 
@@ -1472,6 +1615,7 @@ mod tests {
             assert!(InstanceRegistry::empty().save(&path).is_err());
             assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
             std::fs::remove_file(&path).unwrap();
+            std::fs::remove_file(root.join(".instances-write.lock")).unwrap();
             std::fs::remove_dir(&root).unwrap();
         }
     }
@@ -1480,7 +1624,7 @@ mod tests {
         for platform in [
             platform::PlatformPin::Vanilla {},
             platform::PlatformPin::Forge {
-                version: "1".into(),
+                version: "1.21.11-61.2.0".into(),
             },
             platform::PlatformPin::NeoForge {
                 version: "1".into(),
@@ -1497,10 +1641,14 @@ mod tests {
                 platform::PlatformPin::NeoForge { .. } => settings::LoaderKind::NeoForge,
                 _ => settings::LoaderKind::Quilt,
             };
+            let pinned_version = match platform {
+                platform::PlatformPin::Forge { .. } => "1.21.11-61.2.0",
+                _ => "1",
+            };
             configuration.set_loader(settings::LoaderConfiguration::from_parts(
                 kind,
                 settings::LoaderPolicy::Pinned {
-                    version: "1".into(),
+                    version: pinned_version.into(),
                 },
             ));
             let installed = platform::InstalledConfiguration {

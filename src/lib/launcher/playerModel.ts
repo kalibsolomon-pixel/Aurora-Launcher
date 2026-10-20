@@ -5,7 +5,7 @@ export type SkinFace = { points: Point[]; uv: [number, number, number, number]; 
 export type PlayerModel = { pixels: number[]; height: number; faces: SkinFace[]; fallback: boolean };
 
 /** Static textured cuboids, in Minecraft pixel units. No network, WebGL or animation. */
-export function playerModel(avatar: HeadAvatar | null | undefined, cape?: CapePreview | null): PlayerModel {
+export function playerModel(avatar: HeadAvatar | null | undefined, cape?: CapePreview | null, outerLayers = true): PlayerModel {
   const valid = !!avatar && [32, 64].includes(avatar.skinHeight) && ["classic", "slim"].includes(avatar.model) &&
     avatar.skinRgba?.length === 64 * avatar.skinHeight * 4 && avatar.skinRgba.every(n => Number.isInteger(n) && n >= 0 && n <= 255);
   const pixels = valid ? avatar.skinRgba : defaultSkin();
@@ -31,13 +31,13 @@ export function playerModel(avatar: HeadAvatar | null | undefined, cape?: CapePr
     q([point(-x, bottom, -z), point(x, bottom, -z), point(x, bottom, z), point(-x, bottom, z)], [u+d+w,v,w,d], .65);
   }
   box(8,8,8,[0,-16,0],0,0,0,-8);
-  box(8,8,8,[0,-16,0],32,0,0,-8,false,.45);
+  if (outerLayers) box(8,8,8,[0,-16,0],32,0,0,-8,false,.45);
   box(8,12,4,[0,-8,0],16,16);
   box(arm,12,4,[-4-arm/2,-8,0],40,16,10);
   box(arm,12,4,[4+arm/2,-8,0],modern?32:40,modern?48:16,-10,0,!modern);
   box(4,12,4,[-2,4,0],0,16,-8);
   box(4,12,4,[2,4,0],modern?16:0,modern?48:16,8,0,!modern);
-  if (modern) {
+  if (modern && outerLayers) {
     box(8,12,4,[0,-8,0],16,32,0,0,false,.25);
     box(arm,12,4,[-4-arm/2,-8,0],40,32,10,0,false,.25);
     box(arm,12,4,[4+arm/2,-8,0],48,48,-10,0,false,.25);
@@ -88,13 +88,13 @@ export function arrowYawDelta(arrow: "left" | "right"): number {
 }
 
 /** Painter's-order rasterization of visible faces; nearest texels preserve skin detail. */
-export function renderPlayer(context: CanvasRenderingContext2D, model: PlayerModel, yaw = PLAYER_DEFAULT_YAW, width = PLAYER_RENDER_WIDTH, height = PLAYER_RENDER_HEIGHT): void {
+export function renderPlayer(context: CanvasRenderingContext2D, model: PlayerModel, yaw = PLAYER_DEFAULT_YAW, width = PLAYER_RENDER_WIDTH, height = PLAYER_RENDER_HEIGHT, view = { pitch: .10, zoom: 1 }): void {
   const image = context.createImageData(width,height);
-  const tilt = .10;
+  const tilt = view.pitch;
   function project([x,y,z]: Point) {
     const px=x*Math.cos(yaw)+z*Math.sin(yaw), pz=-x*Math.sin(yaw)+z*Math.cos(yaw);
     const py=y*Math.cos(tilt)-pz*Math.sin(tilt), depth=y*Math.sin(tilt)+pz*Math.cos(tilt);
-    const scale=(height/40)/(1+depth/120);
+    const scale=(height/40)*view.zoom/(1+depth/120);
     return { x:width/2+px*scale,y:height/2+py*scale,z:depth };
   }
   const visible = model.faces.map(face=>({face,p:face.points.map(project)})).filter(({p})=>

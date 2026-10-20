@@ -25,7 +25,12 @@ use crate::updates::{CheckDomain, LauncherPhase, UpdateAvailability, begin_check
 /// The minisign-style public verification key compiled into this build.
 /// `None` means this build was produced without updater trust material:
 /// every check reports unconfigured, and nothing is ever downloaded or run.
+#[cfg(not(feature = "private-candidate"))]
 pub const UPDATER_PUBKEY: Option<&str> = option_env!("AURORA_UPDATER_PUBKEY");
+// Private candidates cannot install a public build over their isolated identity,
+// even if the build host supplies production updater trust material.
+#[cfg(feature = "private-candidate")]
+pub const UPDATER_PUBKEY: Option<&str> = None;
 
 /// One authoritative production manifest, published only through the owner's
 /// manual release gate. No environment or runtime endpoint override exists.
@@ -432,6 +437,33 @@ fn redirect_allowed(previous: &[url::Url], next: &url::Url) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bundled_updater_configuration_initializes_without_release_overrides() {
+        // Tauri deserializes plugin configuration before our Rust builder can
+        // supply the compiled key. A missing entry is null and aborts startup.
+        // Plain local builds carry no trust material; release tooling merges
+        // the owner's public key, and build_updater still requires that key.
+        let config: tauri::Config =
+            serde_json::from_str(include_str!("../../tauri.conf.json")).unwrap();
+        let updater: tauri_plugin_updater::Config =
+            serde_json::from_value(config.plugins.0.get("updater").unwrap().clone()).unwrap();
+        assert!(updater.pubkey.is_empty());
+        assert!(updater.endpoints.is_empty());
+        assert!(!updater.dangerous_insecure_transport_protocol);
+        assert!(!updater.dangerous_accept_invalid_certs);
+        assert!(!updater.dangerous_accept_invalid_hostnames);
+        assert!(!updater.allow_downgrades);
+    }
+    #[test]
+    fn missing_updater_configuration_reproduces_startup_rejection() {
+        let mut config: tauri::Config =
+            serde_json::from_str(include_str!("../../tauri.conf.json")).unwrap();
+        config.plugins.0.remove("updater");
+        // Match the null configuration delivered to an unconfigured plugin,
+        // without modifying the bundled source or launching a failing app.
+        let missing = config.plugins.0.get("updater").cloned().unwrap_or_default();
+        assert!(serde_json::from_value::<tauri_plugin_updater::Config>(missing).is_err());
+    }
     #[test]
     fn one_production_manifest_is_the_only_launcher_source() {
         assert_eq!(

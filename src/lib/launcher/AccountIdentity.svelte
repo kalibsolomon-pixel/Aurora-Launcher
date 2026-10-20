@@ -12,7 +12,7 @@
   });
 </script>
 
-<span class="account-identity" class:small>
+<span class="account-identity" class:small data-state={account?.status ?? "signedOut"}>
   {#if valid}
     <span role="img" aria-label="Minecraft head for {account?.minecraftName}"><canvas bind:this={canvas} width="8" height="8" aria-hidden="true"></canvas></span>
   {:else}

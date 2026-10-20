@@ -36,7 +36,7 @@
 {#if homeWidgets.error}<p class="inline-message inline-message-error" role="alert">{homeWidgets.error}</p>{/if}
   <section class="home-widgets" aria-label="Home widgets">
     <div class="widgets-heading" class:editing>
-      <span class="edit-status" role="status">{editing ? 'Editing Home' : ''}</span>
+      <h3 class="edit-status" aria-live="polite">{editing ? 'Editing Home' : 'Home widgets'}</h3>
       <button bind:this={editorButton} type="button" class={editing ? 'btn btn-primary' : 'f-icon-button'} aria-label={editing ? 'Finish editing Home' : 'Edit Home widgets'} title={editing ? 'Finish editing' : 'Edit Home widgets'} aria-pressed={editing} disabled={!homeWidgets.layout} onclick={() => editing ? finish() : homeWidgets.editing = true}>{#if editing}<Icon name="check" size={16} /> Done{:else}<Icon name="pencil" size={18} />{/if}</button>
     </div>
     {#if editing}
@@ -77,28 +77,29 @@
   </section>
 
 <style>
-  .home-widgets { margin-top: var(--space-4); }
-  .widgets-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
-  .widgets-heading.editing { position: sticky; top: 0; z-index: 5; padding: 8px 12px; border: 1px solid var(--f-edge); border-radius: 14px; background: var(--color-surface); }
-  .edit-status { margin: 0; font-size: var(--text-body); color: var(--color-text-secondary); font-weight: 500; }
-  .widget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
-  .widget { min-width: 0; margin: 0; padding: var(--space-4); min-height: 156px; }
+  .home-widgets { margin-top: var(--space-5); container-type: inline-size; }
+  .widgets-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); }
+  .widgets-heading.editing { position: sticky; top: 0; z-index: 5; padding: 8px 8px 8px 20px; border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); background: color-mix(in srgb, var(--color-surface) 92%, transparent); box-shadow: var(--f-shadow); }
+  .edit-status { margin: 0; font-size: 1rem; color: var(--color-text); font-weight: 600; letter-spacing: -.015em; }
+  .widget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
+  .widget { min-width: 0; margin: 0; padding: var(--space-5); min-height: 156px; }
+  .widget:only-child { grid-column: 1 / -1; }
   .widget-wide { grid-column: span 2; }
   .widget-large { min-height: 240px; }
-  .widget-heading { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
-  .widget-tray { padding: 20px; margin-bottom: 20px; }
-  .tray-intro { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; margin-bottom: 14px; }
-  .tray-intro strong { font-size: 14px; }
-  .tray-intro span { font-size: 12px; color: var(--color-text-secondary); }
-  .tray-options { display: flex; flex-wrap: wrap; gap: 6px; }
-  .tray-options .btn { font-size: 12px; }
+  .widget-heading { display: flex; align-items: start; justify-content: space-between; gap: var(--space-2); }
+  .widget-tray { padding: var(--space-5); margin-bottom: var(--space-5); }
+  .tray-intro { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); align-items: baseline; margin-bottom: var(--space-3); }
+  .tray-intro strong { font-size: var(--text-body); }
+  .tray-intro span { font-size: var(--text-metadata); color: var(--color-text-secondary); }
+  .tray-options { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .tray-options .btn { font-size: var(--text-metadata); }
   .widget-editing { outline: 1px dashed var(--color-accent-outline); outline-offset: 3px; }
   .widget-dragged { opacity: .5; }
   .drag-handle { touch-action: none; cursor: grab; width: 28px; height: 28px; margin-top: -6px; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .widget-heading h4 { margin: 0 0 var(--space-3); font-size: var(--text-body); font-weight: 600; }
+  .widget-heading h4 { margin: 0 0 var(--space-4); font-size: var(--text-body); font-weight: 600; overflow-wrap: anywhere; }
   .widget-editor { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; padding-top: var(--space-3); margin-top: var(--space-3); border-top: 1px solid var(--color-border); }
   .widget-editor label { display: flex; align-items: center; gap: var(--space-2); color: var(--color-text-secondary); font-size: var(--text-metadata); }
   select { font: inherit; color: var(--color-text); background: var(--color-surface-sunken); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); padding: var(--space-2); }
-  @media (max-width: 900px) { .widget-grid { grid-template-columns: minmax(0, 1fr); } .widget-wide { grid-column: span 1; } .widget-large { min-height: 200px; } }
+  @container (max-width: 640px) { .widget-grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); } .widget { padding: var(--space-4); } .widget-wide { grid-column: span 1; } .widget-large { min-height: 200px; } }
 </style>

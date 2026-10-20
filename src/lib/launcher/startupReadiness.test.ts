@@ -211,6 +211,31 @@ it("equal read-only startup discovery reload does not invalidate in-flight readi
   readiness[0].resolve(decision()); runtime[0].resolve({ instanceId, status: "ready" }); await completion;
   assert.equal(readiness.length, 1); assert.equal(store.playReadiness.ready, true);
 });
+
+for (const first of ["startup", "discovery"] as const) {
+  it(`startup waits for a superseding initial-state read when ${first} completes first`, async () => {
+    const startup = deferred(), discovery = deferred();
+    const invoke = (globalThis as any).window.__TAURI_INTERNALS__.invoke;
+    let reads = 0;
+    (globalThis as any).window.__TAURI_INTERNALS__.invoke = (command: string) =>
+      command === "get_launcher_state" ? (++reads === 1 ? startup.promise : discovery.promise) : invoke(command);
+    const completion = store.loadInitialStatus();
+    await flush();
+    const competing = store.refreshState(false);
+    if (first === "startup") startup.resolve(state());
+    else discovery.resolve(state());
+    await flush();
+    assert.equal(readiness.length, 0);
+    if (first === "startup") discovery.resolve(state());
+    else startup.resolve(state());
+    await competing; await flush();
+    assert.equal(runtime.length, 1); assert.equal(readiness.length, 1);
+    readiness[0].resolve(decision()); runtime[0].resolve({ instanceId, status: "ready" });
+    await completion;
+    assert.equal(store.playReadiness.ready, true);
+    assert.equal(readiness.length, 1);
+  });
+}
 it("read-only reload with changed DTO inputs still requires fresh readiness", async () => {
   const { completion } = await start();
   store.launcherState.instances[0].configuration = { memoryMib: 4096 };
@@ -230,4 +255,38 @@ it("a mutation reload invalidates checks started during the reload as well as be
   assert.equal(store.playReadiness, null);
   const fresh = store.refreshPlayReadiness(); readiness[1].resolve(decision()); await fresh;
   assert.equal(store.playReadiness.ready, true);
+});
+
+it("desktop focus hides cached Ready, coalesces checks, and accepts native busy status", async () => {
+  store.launcherState = state();
+  const pending = deferred();
+  (globalThis as any).window.__TAURI_INTERNALS__.invoke = () => pending.promise;
+  const first = store.refreshDesktopState();
+  assert.equal(store.launcherState.instances[0].recovery.status, "checking");
+  assert.equal(store.refreshDesktopState(), first);
+  const result = state();
+  (result.instances[0] as any).recovery = { status: "busy", message: "Another launcher owns installation" };
+  pending.resolve(result); await first;
+  assert.equal(store.launcherState.instances[0].recovery.status, "busy");
+  assert.equal(store.desktopRefresh, null);
+});
+
+it("a failed focus check never leaves an indefinite spinner or cached Ready", async () => {
+  store.launcherState = state();
+  (globalThis as any).window.__TAURI_INTERNALS__.invoke = () => Promise.reject({ code: "unavailable", message: "Cannot read state" });
+  await store.refreshDesktopState();
+  assert.equal(store.launcherState.instances[0].recovery.status, "manualRepair");
+  assert.equal(store.stateError.code, "unavailable");
+  assert.equal(store.desktopRefresh, null);
+});
+
+it("an older state response cannot replace newer native recovery authority", async () => {
+  store.launcherState = state();
+  const old = deferred(), current = deferred(); let count = 0;
+  (globalThis as any).window.__TAURI_INTERNALS__.invoke = () => ++count === 1 ? old.promise : current.promise;
+  const first = store.refreshState(); const second = store.refreshState();
+  const latest = state(); (latest.instances[0] as any).recovery = { status: "manualRepair", message: "Conflicting journal" };
+  current.resolve(latest); await second;
+  old.resolve(state()); await first;
+  assert.equal(store.launcherState.instances[0].recovery.status, "manualRepair");
 });

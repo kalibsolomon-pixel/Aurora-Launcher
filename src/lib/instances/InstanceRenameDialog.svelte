@@ -16,7 +16,7 @@
   function cancel() { if (!launcher.renameBusy) launcher.renaming = null; }
 </script>
 
-<dialog bind:this={dialog} class="rename-dialog" aria-labelledby="rename-title" oncancel={event => { event.preventDefault(); cancel(); }} onclose={() => returnFocus?.focus()}>
+<dialog bind:this={dialog} class="rename-dialog aurora-dialog" aria-labelledby="rename-title" oncancel={event => { event.preventDefault(); cancel(); }} onclose={() => returnFocus?.focus()}>
   <form onsubmit={event => { event.preventDefault(); if (!invalid) void launcher.runRename(); }}>
     <h3 id="rename-title">Rename instance</h3>
     <p class="field-hint">Choose the name shown throughout Aurora.</p>
@@ -28,8 +28,6 @@
 </dialog>
 
 <style>
-  .rename-dialog { width: min(440px, calc(100vw - 48px)); padding: var(--space-5); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); background: var(--color-surface-raised); color: var(--color-text); box-shadow: var(--shadow-lg); }
-  .rename-dialog::backdrop { background: #0009; backdrop-filter: blur(5px); }
-  h3 { margin-top: 0; }
+  .rename-dialog { width: min(440px, calc(100vw - 48px)); }
   .actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
 </style>

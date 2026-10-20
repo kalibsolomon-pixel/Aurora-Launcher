@@ -73,6 +73,8 @@ const MAX_JVM_ARGUMENTS_TEXT_LENGTH: usize = 8_192;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstanceConfiguration {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    performance_mode: Option<super::performance::PerformanceMode>,
     minecraft_version: String,
     aurora_enabled: bool,
     loader: LoaderConfiguration,
@@ -127,6 +129,23 @@ impl fmt::Display for LoaderKind {
     }
 }
 
+/// Validates a pinned loader version against one family's identifier rules
+/// (shape and whitespace policy are family-independent).
+fn validate_pinned_version(
+    policy: &LoaderPolicy,
+    is_valid_identifier: impl Fn(&str) -> bool,
+) -> Result<(), InvalidInstanceConfiguration> {
+    if let LoaderPolicy::Pinned { version } = policy {
+        if version.trim() != version || version.is_empty() {
+            return Err(InvalidInstanceConfiguration::LoaderVersionInvalid);
+        }
+        if !is_valid_identifier(version) {
+            return Err(InvalidInstanceConfiguration::LoaderVersionInvalid);
+        }
+    }
+    Ok(())
+}
+
 /// How the concrete loader version is chosen when content is installed.
 ///
 /// `Automatic` resolves the newest *stable* loader the official Fabric Meta
@@ -153,6 +172,7 @@ pub struct WindowConfiguration {
 impl Default for InstanceConfiguration {
     fn default() -> Self {
         Self {
+            performance_mode: None,
             minecraft_version: String::new(),
             aurora_enabled: true,
             loader: LoaderConfiguration::Fabric {
@@ -185,6 +205,7 @@ impl InstanceConfiguration {
         window: Option<WindowConfiguration>,
     ) -> Self {
         Self {
+            performance_mode: None,
             minecraft_version: minecraft_version.into(),
             aurora_enabled: true,
             loader,
@@ -239,6 +260,20 @@ impl InstanceConfiguration {
         self.memory_mib
     }
 
+    pub fn performance_mode(&self) -> Option<super::performance::PerformanceMode> {
+        self.performance_mode
+    }
+    pub fn set_performance_mode(&mut self, mode: Option<super::performance::PerformanceMode>) {
+        self.performance_mode = mode;
+    }
+    pub fn validated_jvm_arguments(&self) -> Result<Vec<String>, InvalidJvmArguments> {
+        if self.performance_mode.is_some() {
+            super::performance::validate_arguments(&self.additional_jvm_arguments)
+        } else {
+            parse_jvm_arguments(&self.additional_jvm_arguments)
+        }
+    }
+
     pub fn additional_jvm_arguments(&self) -> &str {
         &self.additional_jvm_arguments
     }
@@ -288,26 +323,41 @@ impl InstanceConfiguration {
         if self.aurora_enabled && self.loader.kind() != LoaderKind::Fabric {
             return Err(InvalidInstanceConfiguration::UnsupportedLoaderKind);
         }
-        if let LoaderPolicy::Pinned { version } = self.loader.policy() {
-            if version.trim() != version || version.is_empty() {
-                return Err(InvalidInstanceConfiguration::LoaderVersionInvalid);
+        // Pinned-version shape validation, exhaustive per family. Implemented
+        // families use their own identifier rules. Represented-but-
+        // unimplemented families (Forge, Quilt) keep the generic version
+        // shape only: their configurations must stay persistable and
+        // loadable — the executable gate in the lifecycle is what refuses
+        // them, and their adapters will own real identifier rules when
+        // implemented.
+        match &self.loader {
+            LoaderConfiguration::Vanilla {} => {}
+            LoaderConfiguration::Fabric { policy } => {
+                validate_pinned_version(policy, |version| {
+                    crate::fabric::metadata::LoaderVersionId::new(version).is_ok()
+                })?;
             }
-            match self.loader.kind() {
-                LoaderKind::NeoForge => {
-                    crate::neoforge::metadata::NeoForgeVersionId::new(version)
-                        .map_err(|_| InvalidInstanceConfiguration::LoaderVersionInvalid)?;
-                }
-                _ => {
-                    crate::fabric::metadata::LoaderVersionId::new(version)
-                        .map_err(|_| InvalidInstanceConfiguration::LoaderVersionInvalid)?;
-                }
+            LoaderConfiguration::NeoForge { policy } => {
+                validate_pinned_version(policy, |version| {
+                    crate::neoforge::metadata::NeoForgeVersionId::new(version).is_ok()
+                })?;
+            }
+            LoaderConfiguration::Forge { policy } => {
+                validate_pinned_version(policy, |version| {
+                    crate::forge::metadata::ForgeVersionId::new(version).is_ok()
+                })?;
+            }
+            LoaderConfiguration::Quilt { policy } => {
+                validate_pinned_version(policy, |version| {
+                    crate::fabric::metadata::LoaderVersionId::new(version).is_ok()
+                        || crate::neoforge::metadata::NeoForgeVersionId::new(version).is_ok()
+                })?;
             }
         }
         validate_memory_mib(self.memory_mib)?;
-        parse_jvm_arguments(&self.additional_jvm_arguments)?;
+        self.validated_jvm_arguments()?;
         if let Some(window) = self.window {
-            validate_window_dimension("width", window.width)?;
-            validate_window_dimension("height", window.height)?;
+            window.validate()?;
         }
         Ok(())
     }
@@ -407,6 +457,11 @@ impl WindowConfiguration {
 
     pub fn height(&self) -> u16 {
         self.height
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), InvalidInstanceConfiguration> {
+        validate_window_dimension("width", self.width)?;
+        validate_window_dimension("height", self.height)
     }
 }
 
@@ -639,6 +694,7 @@ impl From<InvalidJvmArguments> for InvalidInstanceConfiguration {
 /// Custom JVM argument text that failed parsing or validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InvalidJvmArguments {
+    PerformancePolicy(&'static str),
     UnterminatedQuote,
     ControlCharacter,
     TextTooLong { limit: usize },
@@ -650,6 +706,7 @@ pub enum InvalidJvmArguments {
 impl fmt::Display for InvalidJvmArguments {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::PerformancePolicy(message) => formatter.write_str(message),
             Self::UnterminatedQuote => write!(
                 formatter,
                 "additional JVM arguments have an unterminated quote"
@@ -682,6 +739,78 @@ impl std::error::Error for InvalidJvmArguments {}
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unimplemented_family_configurations_stay_persistable_but_are_marked_unsupported() {
+        // The persistence contract: a represented-but-unimplemented family
+        // keeps a loadable desired configuration (shape-validated version
+        // only), while Aurora remains Fabric-exclusive. The executable
+        // gate in the lifecycle — not configuration validation — refuses
+        // these families.
+        // Quilt stays shape-persistable; Forge is implemented since F1B
+        // and validates against the real combined identifier rules.
+        for loader in [
+            LoaderConfiguration::Quilt {
+                policy: LoaderPolicy::Automatic {},
+            },
+            LoaderConfiguration::Quilt {
+                policy: LoaderPolicy::Pinned {
+                    version: "0.31.0-beta.4".to_owned(),
+                },
+            },
+        ] {
+            let mut configuration =
+                InstanceConfiguration::from_parts("26.2", loader, 2048, "", None);
+            configuration.aurora_enabled = false;
+            assert!(
+                configuration.validate().is_ok(),
+                "the configuration stays persistable for forward compatibility"
+            );
+            let serialized = serde_json::to_string(&configuration).unwrap();
+            assert_eq!(
+                serde_json::from_str::<InstanceConfiguration>(&serialized).unwrap(),
+                configuration
+            );
+        }
+        let mut forge = InstanceConfiguration::from_parts(
+            "1.21.11",
+            LoaderConfiguration::Forge {
+                policy: LoaderPolicy::Pinned {
+                    version: "1.21.11-61.2.0".to_owned(),
+                },
+            },
+            2048,
+            "",
+            None,
+        );
+        forge.aurora_enabled = false;
+        assert!(forge.validate().is_ok());
+        let mut wrong_shape = forge.clone();
+        wrong_shape.loader = LoaderConfiguration::Forge {
+            policy: LoaderPolicy::Pinned {
+                version: "61.2.0".to_owned(),
+            },
+        };
+        assert!(matches!(
+            wrong_shape.validate(),
+            Err(InvalidInstanceConfiguration::LoaderVersionInvalid)
+        ));
+        // Aurora still refuses every non-Fabric family explicitly.
+        let mut configuration = InstanceConfiguration::from_parts(
+            "26.2",
+            LoaderConfiguration::Forge {
+                policy: LoaderPolicy::Automatic {},
+            },
+            2048,
+            "",
+            None,
+        );
+        configuration.aurora_enabled = true;
+        assert!(matches!(
+            configuration.validate(),
+            Err(InvalidInstanceConfiguration::UnsupportedLoaderKind)
+        ));
+    }
+
     use super::*;
 
     #[test]
@@ -990,6 +1119,39 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<InstanceConfiguration>(&json).unwrap(),
             config
+        );
+    }
+
+    #[test]
+    fn optional_window_persistence_requires_a_complete_valid_pair() {
+        let mut value = serde_json::to_value(configuration()).unwrap();
+        for window in [
+            serde_json::Value::Null,
+            serde_json::json!({"width": 1024, "height": 576}),
+        ] {
+            value["window"] = window.clone();
+            let decoded: InstanceConfiguration = serde_json::from_value(value.clone()).unwrap();
+            decoded.validate().unwrap();
+            assert_eq!(serde_json::to_value(decoded).unwrap()["window"], window);
+        }
+        value.as_object_mut().unwrap().remove("window");
+        let absent: InstanceConfiguration = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(absent.window(), None);
+        for window in [
+            serde_json::json!({"width": 1280}),
+            serde_json::json!({"height": 720}),
+            serde_json::json!({"width": -1, "height": 720}),
+            serde_json::json!({"width": 1280, "height": 70000}),
+        ] {
+            value["window"] = window;
+            assert!(serde_json::from_value::<InstanceConfiguration>(value.clone()).is_err());
+        }
+        value["window"] = serde_json::json!({"width": 0, "height": 720});
+        assert!(
+            serde_json::from_value::<InstanceConfiguration>(value)
+                .unwrap()
+                .validate()
+                .is_err()
         );
     }
 

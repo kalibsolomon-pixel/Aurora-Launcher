@@ -324,6 +324,17 @@ pub fn resolve_launch_spec(
     features: &FeatureProfile,
     options: &LaunchOptions,
 ) -> Result<LaunchSpec, LaunchResolveError> {
+    // LaunchOptions can also be constructed by native callers. Reuse the
+    // saved-configuration bounds before substituting any metadata argument.
+    let window = options
+        .window
+        .map(|(width, height)| {
+            crate::instances::settings::WindowConfiguration::new(width, height)
+                .validate()
+                .map_err(|error| LaunchResolveError::Metadata(error.to_string()))?;
+            Ok::<_, LaunchResolveError>((width.to_string(), height.to_string()))
+        })
+        .transpose()?;
     let paths = managed.instance_paths(instance_id);
     let instance_root = paths.root().to_path_buf();
     let game_root = paths.game().to_path_buf();
@@ -503,6 +514,7 @@ pub fn resolve_launch_spec(
         library_directory: path_text(&libraries_root, "library directory")?,
         classpath: &classpath_value,
         classpath_separator: separator,
+        window,
         logging_path: logging_config
             .as_deref()
             .map(|path| path_text(path, "logging configuration"))
@@ -586,6 +598,7 @@ struct PlaceholderValues<'a> {
     library_directory: &'a str,
     classpath: &'a str,
     classpath_separator: &'a str,
+    window: Option<(String, String)>,
     logging_path: Option<&'a str>,
 }
 
@@ -651,6 +664,24 @@ fn substitute_argument(
             "classpath" => values.classpath,
             "classpath_separator" => values.classpath_separator,
             "library_directory" => values.library_directory,
+            "resolution_width" => values
+                .window
+                .as_ref()
+                .map(|window| window.0.as_str())
+                .ok_or_else(|| {
+                    LaunchResolveError::Placeholder(
+                        "resolution width requested without a custom window".into(),
+                    )
+                })?,
+            "resolution_height" => values
+                .window
+                .as_ref()
+                .map(|window| window.1.as_str())
+                .ok_or_else(|| {
+                    LaunchResolveError::Placeholder(
+                        "resolution height requested without a custom window".into(),
+                    )
+                })?,
             "path" => values.logging_path.ok_or_else(|| {
                 LaunchResolveError::Logging(
                     "the logging argument requested a path without a logging file".to_owned(),
@@ -1140,6 +1171,7 @@ mod tests {
             classpath: "a;b",
             classpath_separator: ";",
             logging_path: Some("log.xml"),
+            window: None,
         };
         let resolved = substitute_argument("--path=${game_directory}", &values).unwrap();
         assert_eq!(resolved.expose(), "--path=C:\\Aurora World\\雪 \"quoted\"");
@@ -1162,6 +1194,7 @@ mod tests {
             classpath: "c",
             classpath_separator: ";",
             logging_path: Some("p"),
+            window: None,
         };
         assert!(matches!(
             substitute_argument("${unknown}", &values),
@@ -1330,25 +1363,156 @@ mod tests {
     }
 
     #[test]
+    fn performance_modes_keep_the_one_native_argument_order_and_heap_authority() {
+        use crate::instances::{performance::PerformanceMode, settings::InstanceConfiguration};
+        let fixture = Fixture::new();
+        let mut configuration = InstanceConfiguration::for_minecraft_version("1.21.11");
+        configuration.set_memory_mib(3217);
+        configuration.set_additional_jvm_arguments(r#"-Dlabel="two words" -Dlabel=last -ea -ea"#);
+        let mut baseline = None;
+        for mode in [
+            None,
+            Some(PerformanceMode::Balanced),
+            Some(PerformanceMode::Efficient),
+            Some(PerformanceMode::Performance),
+            Some(PerformanceMode::Custom),
+        ] {
+            configuration.set_performance_mode(mode);
+            configuration.validate().unwrap();
+            let options = LaunchOptions::new(
+                configuration.memory_mib(),
+                configuration.validated_jvm_arguments().unwrap(),
+                None,
+            );
+            let spec = fixture
+                .resolve_with_options(&options.feature_profile(), options)
+                .unwrap();
+            let args = spec
+                .jvm_arguments()
+                .iter()
+                .map(|a| a.expose().to_owned())
+                .collect::<Vec<_>>();
+            assert_eq!(args[0], "-Xmx3217m");
+            assert_eq!(
+                &args[args.len() - 4..],
+                &["-Dlabel=two words", "-Dlabel=last", "-ea", "-ea"]
+            );
+            if let Some(previous) = &baseline {
+                assert_eq!(&args, previous);
+            } else {
+                baseline = Some(args);
+            }
+        }
+        configuration.set_performance_mode(Some(PerformanceMode::Custom));
+        configuration.set_additional_jvm_arguments("-XX:+UseZGC");
+        assert!(configuration.validate().is_err());
+        configuration.set_performance_mode(None);
+        assert!(
+            configuration.validate().is_ok(),
+            "Legacy compatibility stays explicit"
+        );
+    }
+
+    #[test]
     fn a_custom_window_enables_minecrafts_own_resolution_arguments() {
         let fixture = Fixture::new();
         let options = LaunchOptions::new(2048, Vec::new(), Some((1280, 720)));
         let profile = options.feature_profile();
         assert!(profile.is_enabled(FeatureFlag::HasCustomResolution));
-
-        // With the feature enabled, the version document's official
-        // `--width`/`--height` argument group participates; the launch plan
-        // fixture carries no such group, so the spec simply resolves without
-        // it — the substitution mechanics are what must hold.
-        let spec = fixture.resolve_with_options(&profile, options).unwrap();
+        let spec = resolve_official_resolution_groups(&fixture, &profile, &options).unwrap();
+        let args: Vec<_> = spec.game_arguments().iter().map(|a| a.expose()).collect();
+        assert_eq!(
+            &args[args.len() - 4..],
+            ["--width", "1280", "--height", "720"]
+        );
+        assert!(args.iter().all(|arg| !arg.contains("${")));
+        assert_eq!(args.iter().filter(|arg| **arg == "--width").count(), 1);
+        assert_eq!(args.iter().filter(|arg| **arg == "--height").count(), 1);
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == ["--username", "LaunchTester"])
+        );
+        assert!(args.windows(2).any(|pair| pair == ["--version", "26.2"]));
         assert!(
             spec.game_arguments()
                 .iter()
-                .all(|argument| !argument.expose().contains("${"))
+                .any(ResolvedArgument::is_sensitive)
         );
+        assert_eq!(spec.jvm_arguments()[0].expose(), "-Xmx2048m");
+    }
 
-        let plain = fixture.resolve_with_options(&FeatureProfile::none(), LaunchOptions::default());
-        assert!(plain.is_ok());
+    // Normalize the complete, hash-verified Mojang 1.21.11 fixture through
+    // the real rules/planning pipeline, keeping the tiny installed fixture.
+    fn resolve_official_resolution_groups(
+        fixture: &Fixture,
+        features: &FeatureProfile,
+        options: &LaunchOptions,
+    ) -> Result<LaunchSpec, LaunchResolveError> {
+        let document = crate::minecraft::metadata::VersionDocument::from_json(include_str!(
+            "../forge/fixtures/1.21.11-mojang.json"
+        ))
+        .unwrap();
+        let mut launch = plan();
+        let normalized =
+            crate::minecraft::plan::plan_version_document(&document, launch.platform).unwrap();
+        launch.game_arguments = normalized.launch().game_arguments().to_vec();
+        resolve_launch_spec(
+            &fixture.managed,
+            &fixture.id,
+            &launch,
+            &fixture.manifest,
+            &fixture.java,
+            &session(),
+            features,
+            options,
+        )
+    }
+
+    #[test]
+    fn unspecified_window_omits_only_the_official_resolution_group() {
+        let fixture = Fixture::new();
+        let options = LaunchOptions::new(2048, Vec::new(), None);
+        let spec =
+            resolve_official_resolution_groups(&fixture, &options.feature_profile(), &options)
+                .unwrap();
+        let args: Vec<_> = spec.game_arguments().iter().map(|a| a.expose()).collect();
+        assert!(!args.contains(&"--width") && !args.contains(&"--height"));
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == ["--username", "LaunchTester"])
+        );
+        assert!(args.iter().all(|arg| !arg.contains("${")));
+        assert_eq!(spec.jvm_arguments()[0].expose(), "-Xmx2048m");
+    }
+
+    #[test]
+    fn resolution_placeholders_without_dimensions_fail_closed() {
+        let fixture = Fixture::new();
+        let mut profile = FeatureProfile::none();
+        profile.enable(FeatureFlag::HasCustomResolution);
+        assert!(matches!(
+            resolve_official_resolution_groups(&fixture, &profile, &LaunchOptions::default()),
+            Err(LaunchResolveError::Placeholder(_))
+        ));
+    }
+
+    #[test]
+    fn resolution_bounds_are_rechecked_at_launch_even_when_the_group_is_disabled() {
+        let fixture = Fixture::new();
+        for window in [(0, 720), (99, 720), (1280, 99), (7681, 720), (1280, 7681)] {
+            let options = LaunchOptions::new(2048, Vec::new(), Some(window));
+            assert!(
+                resolve_official_resolution_groups(&fixture, &FeatureProfile::none(), &options)
+                    .is_err()
+            );
+        }
+        for window in [(100, 100), (7680, 7680)] {
+            let options = LaunchOptions::new(2048, Vec::new(), Some(window));
+            assert!(
+                resolve_official_resolution_groups(&fixture, &options.feature_profile(), &options)
+                    .is_ok()
+            );
+        }
     }
 
     #[test]

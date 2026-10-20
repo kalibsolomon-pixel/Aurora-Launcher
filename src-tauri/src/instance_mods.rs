@@ -200,6 +200,31 @@ struct FabricMetadataDocument {
     jars: Vec<NestedJarDeclaration>,
     #[serde(default)]
     mixins: Vec<serde_json::Value>,
+    /// Alias ids this mod also satisfies (Fabric `provides`), e.g. Fabric API
+    /// provides `fabric`. Read leniently: a malformed shape yields no aliases.
+    #[serde(default)]
+    provides: serde_json::Value,
+}
+
+/// Bounded, validated `provides` aliases (Fabric mod-id shape, at most 64).
+fn provided_aliases(value: &serde_json::Value, own_id: &str) -> Vec<String> {
+    let Some(items) = value.as_array() else {
+        return Vec::new();
+    };
+    items
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|alias| {
+            (2..=64).contains(&alias.len())
+                && !alias.eq_ignore_ascii_case(own_id)
+                && alias
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
+        })
+        .take(64)
+        .map(str::to_owned)
+        .collect()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -351,7 +376,11 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
             entry.action_blocked_reason = (!matches).then_some(file.reason);
         }
     }
-    derive_local_warnings(&mut entries, &platform_kind);
+    let loader_modules: Vec<String> = loader_builtin_entry(managed, instance)
+        .and_then(|entry| entry.metadata)
+        .map(|metadata| metadata.nested_mod_versions.into_keys().collect())
+        .unwrap_or_default();
+    derive_local_warnings(&mut entries, &platform_kind, &loader_modules);
     let active_providers: HashSet<_> = entries
         .iter()
         .filter(|entry| entry.enabled)
@@ -944,6 +973,99 @@ fn unavailable_entry(file_name: String, reason: String) -> ModEntry {
 
 /// The platform kind of one instance's installed pin, for loader-family
 /// aware metadata inspection.
+/// Mods Fabric Loader itself supplies (jar-in-jar modules inside the installed
+/// loader jar, e.g. MixinExtras), as Fabric Loader treats them: alternatives
+/// that satisfy dependencies alongside bundled copies in other mods.
+///
+/// Validation-only: appends one synthetic `fabricloader` entry carrying just
+/// the loader's nested module ids/versions (its own relations are dropped). It
+/// is never part of a displayed inventory. The jar is located only through the
+/// installed-game manifest and its bytes are re-verified against the recorded
+/// digest first; any doubt adds nothing, leaving the stricter behavior.
+pub(crate) fn add_loader_builtins(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    inventory: &mut ModInventory,
+) {
+    if let Some(entry) = loader_builtin_entry(managed, instance) {
+        inventory.entries.push(entry);
+    }
+}
+
+fn loader_builtin_entry(managed: &ManagedPaths, instance: &InstanceId) -> Option<ModEntry> {
+    use crate::instances::platform::PlatformPin;
+    use crate::integrity::{ArtifactTrust, DigestAlgorithm};
+    let registry =
+        crate::instances::InstanceRegistry::load(&managed.instance_registry_file()).ok()?;
+    let PlatformPin::Fabric { version } = &registry.find(instance)?.installed().platform else {
+        return None;
+    };
+    if version.is_empty()
+        || version.len() > 64
+        || !version
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+'))
+    {
+        return None;
+    }
+    let game = managed.instance_paths(instance).game().to_path_buf();
+    let manifest = crate::install::state::load_installed_state(&game).ok()??;
+    let relative =
+        format!("libraries/net/fabricmc/fabric-loader/{version}/fabric-loader-{version}.jar");
+    let recorded = manifest.files().iter().find(|file| {
+        file.role() == crate::install::state::InstalledFileRole::Library && file.path() == relative
+    })?;
+    let path = game.join(&relative);
+    let digest = match recorded.trust() {
+        ArtifactTrust::SecureTransportObserved { observed_sha256 }
+        | ArtifactTrust::LocallyGenerated { observed_sha256 } => {
+            ArtifactDigest::parse(observed_sha256).ok()?
+        }
+        ArtifactTrust::ExpectedDigestVerified {
+            algorithm: DigestAlgorithm::Sha256,
+            digest,
+        } => ArtifactDigest::parse(digest).ok()?,
+        ArtifactTrust::ExpectedDigestVerified { .. } => return None,
+    };
+    verify_file(&path, &digest, Some(recorded.size_bytes())).ok()?;
+    let (metadata, warnings) = inspect_mod_metadata(&path, recorded.size_bytes(), "fabric");
+    let metadata = metadata?;
+    if metadata.id != "fabricloader"
+        || metadata.version.as_deref() != Some(version.as_str())
+        || warnings
+            .iter()
+            .any(|w| w.code.starts_with("nested_") || w.code.starts_with("fabric_metadata_"))
+    {
+        return None;
+    }
+    Some(ModEntry {
+        entry_id: "loader-builtin".into(),
+        file_name: format!("Fabric Loader {version}"),
+        display_name: "Fabric Loader".into(),
+        enabled: true,
+        file_type: ModFileType::EnabledJar,
+        size_bytes: None,
+        modified_unix_millis: None,
+        ownership: ModOwnership::LauncherManagedRequired,
+        sha256: Some(digest.as_hex()),
+        provenance: None,
+        metadata: Some(ModMetadata {
+            depends: Vec::new(),
+            recommends: Vec::new(),
+            suggests: Vec::new(),
+            conflicts: Vec::new(),
+            breaks: Vec::new(),
+            mixin_java_requirements: Vec::new(),
+            ..metadata
+        }),
+        warnings: Vec::new(),
+        can_toggle: false,
+        can_remove: false,
+        removal_blocked_reason: None,
+        action_blocked_reason: None,
+    })
+}
+
 pub(crate) fn platform_kind_of(managed: &ManagedPaths, instance: &InstanceId) -> String {
     crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
         .ok()
@@ -1370,6 +1492,14 @@ pub(crate) fn inspect_fabric_metadata(
         &mut mixin_java_requirements,
     );
     nested_warnings.append(&mut mixin_warnings);
+    // Fabric Loader resolves a dependency on a provided alias to the providing
+    // mod at its own version. Nested jars keep precedence for their own ids.
+    let own_version = clean_optional(document.version.clone());
+    for alias in provided_aliases(&document.provides, &id) {
+        nested_mod_versions
+            .entry(alias)
+            .or_insert_with(|| own_version.clone());
+    }
     let authors = document
         .authors
         .into_iter()
@@ -1585,8 +1715,16 @@ fn inspect_declared_nested_jars<R: Read + Seek>(
                 "Nested Fabric metadata declares a duplicate mod ID.",
             ));
         } else {
+            let version = clean_optional(document.version.clone());
+            // Nested `provides` aliases resolve to the nested mod's version, as
+            // Fabric Loader does (e.g. MixinExtras provides an alias id).
+            for alias in provided_aliases(&document.provides, &id) {
+                found_versions
+                    .entry(alias.to_lowercase())
+                    .or_insert_with(|| version.clone());
+            }
             found_ids.push(id);
-            found_versions.insert(normalized_id, clean_optional(document.version));
+            found_versions.insert(normalized_id, version);
         }
         inspect_declared_nested_jars(
             &mut nested,
@@ -1835,7 +1973,9 @@ fn relations(fields: serde_json::Map<String, serde_json::Value>) -> Vec<ModRelat
     relations
 }
 
-fn derive_local_warnings(entries: &mut [ModEntry], platform_kind: &str) {
+/// `loader_modules` are module ids Fabric Loader itself supplies (see
+/// `add_loader_builtins`); they count as present for dependency warnings.
+fn derive_local_warnings(entries: &mut [ModEntry], platform_kind: &str, loader_modules: &[String]) {
     let module_versions: Vec<_> = entries
         .iter()
         .filter(|e| e.enabled)
@@ -1845,8 +1985,28 @@ fn derive_local_warnings(entries: &mut [ModEntry], platform_kind: &str) {
         .iter()
         .filter(|entry| entry.enabled)
         .filter_map(|entry| entry.metadata.as_ref())
-        .flat_map(|metadata| std::iter::once(&metadata.id).chain(metadata.nested_mod_ids.iter()))
+        // Nested modules and `provides` aliases (both keys of the version map)
+        // satisfy dependencies, as in Fabric Loader.
+        .flat_map(|metadata| {
+            std::iter::once(&metadata.id)
+                .chain(metadata.nested_mod_ids.iter())
+                .chain(metadata.nested_mod_versions.keys())
+        })
+        .chain(loader_modules.iter())
         .map(|id| id.to_lowercase())
+        .collect();
+    // Launcher-protected mods keep strict identity: a bundled copy of one at a
+    // different version is still flagged. Other bundled/top-level overlaps
+    // are alternatives Fabric Loader resolves.
+    let protected_ids: HashSet<String> = entries
+        .iter()
+        .filter(|entry| {
+            matches!(
+                entry.ownership,
+                ModOwnership::LauncherBootstrap | ModOwnership::LauncherManagedRequired
+            )
+        })
+        .filter_map(|entry| entry.metadata.as_ref().map(|m| m.id.to_lowercase()))
         .collect();
     let mut declarations = HashMap::<String, (usize, usize)>::new();
     for metadata in entries.iter().filter_map(|entry| entry.metadata.as_ref()) {
@@ -1877,6 +2037,7 @@ fn derive_local_warnings(entries: &mut [ModEntry], platform_kind: &str) {
                         *roots > 1
                             || (*roots > 0
                                 && *nested > 0
+                                && protected_ids.contains(&id.to_lowercase())
                                 && module_versions
                                     .iter()
                                     .filter_map(|m| crate::mod_compatibility::version_for(m, id))
@@ -1970,7 +2131,15 @@ fn set_enabled_with_commit(
                 .find(|candidate| candidate.entry_id == entry.entry_id)
                 .expect("resolved entry")
                 .enabled = true;
-            derive_local_warnings(&mut proposed, &platform_kind_of(managed, instance));
+            let loader_modules: Vec<String> = loader_builtin_entry(managed, instance)
+                .and_then(|entry| entry.metadata)
+                .map(|metadata| metadata.nested_mod_versions.into_keys().collect())
+                .unwrap_or_default();
+            derive_local_warnings(
+                &mut proposed,
+                &platform_kind_of(managed, instance),
+                &loader_modules,
+            );
             let candidate = proposed
                 .iter()
                 .find(|candidate| candidate.entry_id == entry.entry_id)
@@ -2552,6 +2721,45 @@ versionRange="[1,2)"
         );
     }
     use std::io::Write as _;
+
+    #[test]
+    fn provided_aliases_satisfy_dependencies_like_fabric_loader() {
+        // Fabric API's id is `fabric-api` but it provides `fabric`; mods such as
+        // fzzy_config depend on `fabric`. Without alias support a real pack
+        // (Adrenaline) failed with "requires fabric *. Installed: absent".
+        let fixture = Fixture::new("provides-alias");
+        jar(
+            &fixture.mods().join("api.jar"),
+            Some(br#"{"id":"fabric-api","version":"0.141.6","provides":["fabric"]}"#),
+        );
+        jar(
+            &fixture.mods().join("consumer.jar"),
+            Some(br#"{"id":"consumer","version":"1","depends":{"fabric":">=0.100"}}"#),
+        );
+        let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+        let problems =
+            crate::mod_compatibility::validate(&inventory, "1.21.11", "0.19.5", Some(21), "fabric");
+        assert!(
+            !problems.iter().any(|p| p.mod_id == "consumer"),
+            "provided alias must satisfy the dependency: {problems:?}"
+        );
+        // The alias carries the provider's version, so version predicates still apply.
+        jar(
+            &fixture.mods().join("strict.jar"),
+            Some(br#"{"id":"strict","version":"1","depends":{"fabric":">=0.200"}}"#),
+        );
+        let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+        let problems =
+            crate::mod_compatibility::validate(&inventory, "1.21.11", "0.19.5", Some(21), "fabric");
+        assert!(problems.iter().any(|p| p.mod_id == "strict"));
+        // Malformed or self-referential `provides` shapes add no aliases.
+        assert!(provided_aliases(&serde_json::json!("fabric"), "x").is_empty());
+        assert!(provided_aliases(&serde_json::json!(["x", "BAD ID", "a"]), "x").is_empty());
+        assert_eq!(
+            provided_aliases(&serde_json::json!(["fabric", 7]), "fabric-api"),
+            vec!["fabric"]
+        );
+    }
 
     #[test]
     fn disabling_known_dependency_is_blocked_and_changed_disabled_bytes_never_activate() {
@@ -3529,8 +3737,29 @@ versionRange="[1,2)"
             &root_copy,
             Some(br#"{"schemaVersion":1,"id":"fabric-resource-loader-v1","version":"2.0"}"#),
         );
+        // A user's top-level copy alongside bundled copies at other versions is
+        // what Fabric Loader resolves (mods-folder copy loads): not a duplicate.
         let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
         for name in ["root-copy.jar", "divergent.jar"] {
+            assert!(
+                !inventory
+                    .entries
+                    .iter()
+                    .find(|entry| entry.file_name == name)
+                    .unwrap()
+                    .warnings
+                    .iter()
+                    .any(|warning| warning.code == "duplicate_mod_id")
+            );
+        }
+        // Two top-level copies of one id remain a duplicate, as in Fabric Loader.
+        let second_root = fixture.mods().join("root-copy-2.jar");
+        jar(
+            &second_root,
+            Some(br#"{"schemaVersion":1,"id":"fabric-resource-loader-v1","version":"2.1"}"#),
+        );
+        let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+        for name in ["root-copy.jar", "root-copy-2.jar"] {
             assert!(
                 inventory
                     .entries
@@ -3542,6 +3771,7 @@ versionRange="[1,2)"
                     .any(|warning| warning.code == "duplicate_mod_id")
             );
         }
+        std::fs::remove_file(&second_root).unwrap();
 
         let missing = fixture.mods().join("missing-nested.jar");
         jar(&missing, Some(br#"{"schemaVersion":1,"id":"missing-nested","version":"1.0","jars":[{"file":"nested/absent.jar"}]}"#));

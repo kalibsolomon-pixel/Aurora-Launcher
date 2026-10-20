@@ -40,10 +40,10 @@ use crate::aurora::{
 use crate::config::{self, ConfigError, LauncherConfig};
 use crate::distribution::{ManifestError, ReleaseChannel, ReleaseManifest};
 use crate::fabric::metadata::FabricMetaEndpoints;
+use crate::forge::metadata::ForgeMavenEndpoints;
 use crate::install::{
     InstallContext, InstallError, InstallProgress, ValidationOutcome as GameValidationOutcome,
     ValidationStatus as GameValidationStatus, install_game as execute_game_install,
-    validate_installed_game as validate_game_install,
 };
 use crate::instances::settings::{
     InstanceConfiguration, InvalidInstanceConfiguration, LoaderCandidate, LoaderPolicy,
@@ -72,6 +72,7 @@ pub struct InstanceEndpoints {
     minecraft: MetadataEndpoints,
     fabric: FabricMetaEndpoints,
     neoforge: NeoForgeMavenEndpoints,
+    forge: ForgeMavenEndpoints,
     runtime: RuntimeMetadataEndpoints,
     install: InstallContext,
 }
@@ -84,6 +85,7 @@ impl InstanceEndpoints {
             minecraft: MetadataEndpoints::official(),
             fabric: FabricMetaEndpoints::official(),
             neoforge: NeoForgeMavenEndpoints::official(),
+            forge: ForgeMavenEndpoints::official(),
             runtime: RuntimeMetadataEndpoints::official(),
             install: InstallContext::official(),
         })
@@ -97,6 +99,7 @@ impl InstanceEndpoints {
             minecraft: MetadataEndpoints::official(),
             fabric: FabricMetaEndpoints::official(),
             neoforge: NeoForgeMavenEndpoints::official(),
+            forge: ForgeMavenEndpoints::official(),
             runtime: RuntimeMetadataEndpoints::official(),
             install: InstallContext::official(),
         })
@@ -110,6 +113,7 @@ impl InstanceEndpoints {
             minecraft: MetadataEndpoints::official(),
             fabric: FabricMetaEndpoints::official(),
             neoforge: NeoForgeMavenEndpoints::official(),
+            forge: ForgeMavenEndpoints::official(),
             runtime: RuntimeMetadataEndpoints::official(),
             install: InstallContext::official(),
         })
@@ -121,6 +125,7 @@ impl InstanceEndpoints {
         minecraft: MetadataEndpoints,
         fabric: FabricMetaEndpoints,
         neoforge: NeoForgeMavenEndpoints,
+        forge: ForgeMavenEndpoints,
         runtime: RuntimeMetadataEndpoints,
         install: InstallContext,
     ) -> Self {
@@ -129,6 +134,7 @@ impl InstanceEndpoints {
             minecraft,
             fabric,
             neoforge,
+            forge,
             runtime,
             install,
         }
@@ -136,6 +142,11 @@ impl InstanceEndpoints {
 
     pub fn neoforge(&self) -> &NeoForgeMavenEndpoints {
         &self.neoforge
+    }
+
+    /// The pinned official Forge endpoints of this environment.
+    pub fn forge(&self) -> &ForgeMavenEndpoints {
+        &self.forge
     }
 
     pub fn runtime(&self) -> &RuntimeMetadataEndpoints {
@@ -156,6 +167,9 @@ impl InstanceEndpoints {
 /// Resolve the composed game plan for an Aurora-free installed configuration.
 /// Pack updates use this to stage a Minecraft/loader transition for an
 /// existing instance through the ordinary verified installation pipeline.
+/// Pack transitions are deliberately scoped to Vanilla and Fabric today:
+/// every other family fails explicitly rather than falling through the
+/// Fabric resolver.
 pub(crate) async fn resolve_packed_game_plan(
     endpoints: &InstanceEndpoints,
     installed: &super::platform::InstalledConfiguration,
@@ -163,35 +177,47 @@ pub(crate) async fn resolve_packed_game_plan(
     let game_version =
         crate::minecraft::metadata::MinecraftVersionId::new(&installed.minecraft_version)
             .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-    if installed.platform == (super::platform::PlatformPin::Vanilla {}) {
-        let minecraft = crate::minecraft::resolve_install_plan(
-            &endpoints.minecraft,
-            &game_version,
-            PlatformProfile::current().map_err(InstanceError::Platform)?,
-            endpoints.install.download_options(),
-        )
-        .await
-        .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-        return Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft));
+    match &installed.platform {
+        super::platform::PlatformPin::Vanilla {} => {
+            let minecraft = crate::minecraft::resolve_install_plan(
+                &endpoints.minecraft,
+                &game_version,
+                PlatformProfile::current().map_err(InstanceError::Platform)?,
+                endpoints.install.download_options(),
+            )
+            .await
+            .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+            Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft))
+        }
+        super::platform::PlatformPin::Fabric { .. } => {
+            let loader_version = crate::fabric::metadata::LoaderVersionId::new(
+                installed
+                    .platform
+                    .require_fabric()
+                    .map_err(InstanceError::ReleaseInvalid)?,
+            )
+            .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+            let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
+            crate::fabric::resolve_game_plan(
+                &endpoints.minecraft,
+                &endpoints.fabric,
+                &game_version,
+                &loader_version,
+                platform,
+                endpoints.install.download_options(),
+            )
+            .await
+            .map_err(InstanceError::from)
+        }
+        unsupported @ (super::platform::PlatformPin::NeoForge { .. }
+        | super::platform::PlatformPin::Forge { .. }
+        | super::platform::PlatformPin::Quilt { .. }) => {
+            Err(InstanceError::ReleaseInvalid(format!(
+                "pack transitions do not support {} installations in this build",
+                unsupported.kind()
+            )))
+        }
     }
-    let loader_version = crate::fabric::metadata::LoaderVersionId::new(
-        installed
-            .platform
-            .require_fabric()
-            .map_err(InstanceError::ReleaseInvalid)?,
-    )
-    .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-    let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
-    crate::fabric::resolve_game_plan(
-        &endpoints.minecraft,
-        &endpoints.fabric,
-        &game_version,
-        &loader_version,
-        platform,
-        endpoints.install.download_options(),
-    )
-    .await
-    .map_err(InstanceError::from)
 }
 
 /// A typed instance-creation request.
@@ -339,6 +365,8 @@ pub async fn create_instance(
         request.configuration,
     )?;
 
+    let _operation = lock_instance_operation(managed, record.id())?;
+
     {
         let _guard = registry_lock();
         let mut registry = InstanceRegistry::load(registry_path)?;
@@ -400,6 +428,7 @@ pub async fn begin_pack_instance(
         request.configuration,
     )?;
     record.set_pack(pack_identity)?;
+    let _operation = lock_instance_operation(managed, record.id())?;
     {
         let _guard = registry_lock();
         let mut registry = InstanceRegistry::load(registry_path)?;
@@ -427,6 +456,8 @@ pub fn complete_pack_instance(
     config_path: &Path,
     instance: &InstanceId,
 ) -> Result<InstanceRecord, InstanceError> {
+    let _operation = lock_instance_operation(managed, instance)?;
+    let _game_guard = crate::install::lock_game_target(managed, instance)?;
     let pack = crate::pack_state::InstalledPack::load(managed, instance)
         .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?
         .ok_or_else(|| InstanceError::ReleaseInvalid("pack installed state is missing".into()))?;
@@ -446,7 +477,7 @@ pub fn complete_pack_instance(
                 reason: "pack creation is no longer in the installing state".into(),
             });
         }
-        let validation = validate_instance(managed, &registry, instance)?;
+        let validation = validate_instance_under_game_lock(managed, &registry, instance)?;
         if !validation.problems.is_empty() {
             return Err(InstanceError::ValidationFailed {
                 instance_id: instance.to_string(),
@@ -470,32 +501,6 @@ pub fn complete_pack_instance(
     Ok(record)
 }
 
-/// Remove only the Installing registration of a newly created pack after its
-/// exact transaction-owned files have been cleaned up. Never removes files.
-pub(crate) fn abandon_pack_instance(
-    registry_path: &Path,
-    instance: &InstanceId,
-) -> Result<(), InstanceError> {
-    let _guard = registry_lock();
-    let mut registry = InstanceRegistry::load(registry_path)?;
-    let record = registry
-        .find(instance)
-        .ok_or_else(|| InstanceError::NotFound {
-            instance_id: instance.to_string(),
-        })?;
-    if record.state() != InstanceState::Installing || record.pack().is_none() {
-        return Err(InstanceError::NotReady {
-            instance_id: instance.to_string(),
-            reason: "only a pending pack registration can be abandoned".into(),
-        });
-    }
-    registry
-        .instances_mut()
-        .retain(|record| record.id() != instance);
-    registry.save(registry_path)?;
-    Ok(())
-}
-
 /// Retries the installation of an instance whose creation did not finish.
 ///
 /// The record must be in the `installing` state. Re-running reuses the
@@ -511,6 +516,8 @@ pub async fn retry_instance_install(
     progress: &mut (dyn FnMut(InstanceProgress) + Send),
     faults: InstanceFaults,
 ) -> Result<InstanceRecord, InstanceError> {
+    let _operation = lock_instance_operation(managed, instance_id)?;
+    crate::install::recover_installation(managed, instance_id)?;
     let record = {
         let _guard = registry_lock();
         let registry = InstanceRegistry::load(registry_path)?;
@@ -563,17 +570,18 @@ pub async fn retry_instance_install(
 fn require_executable_configuration(
     configuration: &InstanceConfiguration,
 ) -> Result<(), InstanceError> {
-    if !matches!(
-        configuration.loader().kind(),
-        super::settings::LoaderKind::Fabric
-            | super::settings::LoaderKind::Vanilla
-            | super::settings::LoaderKind::NeoForge
-    ) {
-        return Err(InstanceError::ReleaseInvalid(
-            "this platform has no installation/launch implementation in this build".into(),
-        ));
+    // Exhaustive over the loader vocabulary: implemented kinds pass, every
+    // other kind names itself in the refusal. A new family must extend this
+    // match (and its adapter) rather than slipping through a fallback.
+    match configuration.loader().kind() {
+        super::settings::LoaderKind::Vanilla
+        | super::settings::LoaderKind::Fabric
+        | super::settings::LoaderKind::NeoForge
+        | super::settings::LoaderKind::Forge => Ok(()),
+        unimplemented => Err(InstanceError::ReleaseInvalid(format!(
+            "{unimplemented} has no installation/launch implementation in this build"
+        ))),
     }
-    Ok(())
 }
 
 /// Resolve the exact installed configuration for an independent (Aurora-free)
@@ -664,6 +672,47 @@ async fn resolve_installed_configuration(
         return Ok(super::platform::InstalledConfiguration {
             minecraft_version: configuration.minecraft_version().into(),
             platform: super::platform::PlatformPin::NeoForge {
+                version: version.into(),
+            },
+            aurora: None,
+        });
+    }
+    if configuration.loader().kind() == super::settings::LoaderKind::Forge {
+        if configuration.aurora_enabled() {
+            return Err(InstanceError::ReleaseInvalid(
+                "the Aurora client requires Fabric Loader".into(),
+            ));
+        }
+        configuration.validate()?;
+        let game =
+            crate::minecraft::metadata::MinecraftVersionId::new(configuration.minecraft_version())
+                .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+        let listing = crate::forge::metadata::fetch_forge_versions(
+            endpoints.forge(),
+            endpoints.install.download_options(),
+        )
+        .await
+        .map_err(InstanceError::ForgeMetadata)?;
+        let entries = listing.installable_for_minecraft(&game);
+        let candidates: Vec<_> = entries
+            .iter()
+            .map(|entry| LoaderCandidate {
+                version: entry.version().as_str().to_owned(),
+                stable: entry.stable(),
+            })
+            .collect();
+        let version = configuration
+            .loader()
+            .policy()
+            .resolve(&candidates)
+            .ok_or_else(|| InstanceError::LoaderResolution {
+                game: game.to_string(),
+                reason: "the requested Forge policy has no compatible version for this Minecraft version"
+                    .into(),
+            })?;
+        return Ok(super::platform::InstalledConfiguration {
+            minecraft_version: configuration.minecraft_version().into(),
+            platform: super::platform::PlatformPin::Forge {
                 version: version.into(),
             },
             aurora: None,
@@ -926,6 +975,8 @@ pub async fn install_instance_configuration(
     progress: &mut (dyn FnMut(InstanceProgress) + Send),
     faults: InstanceFaults,
 ) -> Result<InstanceRecord, InstanceError> {
+    let _operation = lock_instance_operation(managed, instance_id)?;
+    crate::install::recover_installation(managed, instance_id)?;
     let configuration = {
         let _guard = registry_lock();
         let registry = InstanceRegistry::load(registry_path)?;
@@ -1021,36 +1072,40 @@ async fn install_instance_components(
     let plan = resolve_record_game_plan(managed, endpoints, record, release.as_ref()).await?;
     let metadata_finished = std::time::Instant::now();
 
-    // A NeoForge plan executes bounded installer processors during game
-    // installation, so the managed Java runtime is resolved and ensured
-    // first — the same runtime pipeline launch later revalidates.
+    // A NeoForge or Forge plan executes bounded installer processors
+    // during game installation, so the managed Java runtime is resolved
+    // and ensured first — the same runtime pipeline launch later
+    // revalidates.
     let mut install_context = endpoints.install.clone();
-    if let Some(neoforge) = plan.neoforge_loader() {
-        if neoforge.requires_install_time_java() {
-            let runtime_platform =
-                RuntimePlatform::current().map_err(RuntimeMetadataError::Plan)?;
-            let runtime_plan = crate::runtime::metadata::resolve_runtime_plan(
-                managed,
-                endpoints.runtime(),
-                plan.java().component(),
-                plan.java().major_version(),
-                runtime_platform,
-                endpoints.install.download_options(),
-            )
-            .await
-            .map_err(InstanceError::RuntimeMetadata)?;
-            let installed_runtime = crate::runtime::install::ensure_runtime(
-                managed,
-                &runtime_plan,
-                endpoints.install.download_options(),
-                false,
-                &mut |_| {},
-            )
-            .await
-            .map_err(InstanceError::RuntimeInstall)?;
-            install_context = install_context
-                .with_processor_java(installed_runtime.diagnostic_executable().to_path_buf());
-        }
+    let processors_need_java = plan
+        .neoforge_loader()
+        .is_some_and(crate::neoforge::plan::NeoForgePlan::requires_install_time_java)
+        || plan
+            .forge_loader()
+            .is_some_and(crate::forge::plan::ForgePlan::requires_install_time_java);
+    if processors_need_java {
+        let runtime_platform = RuntimePlatform::current().map_err(RuntimeMetadataError::Plan)?;
+        let runtime_plan = crate::runtime::metadata::resolve_runtime_plan(
+            managed,
+            endpoints.runtime(),
+            plan.java().component(),
+            plan.java().major_version(),
+            runtime_platform,
+            endpoints.install.download_options(),
+        )
+        .await
+        .map_err(InstanceError::RuntimeMetadata)?;
+        let installed_runtime = crate::runtime::install::ensure_runtime(
+            managed,
+            &runtime_plan,
+            endpoints.install.download_options(),
+            false,
+            &mut |_| {},
+        )
+        .await
+        .map_err(InstanceError::RuntimeInstall)?;
+        install_context = install_context
+            .with_processor_java(installed_runtime.diagnostic_executable().to_path_buf());
     }
 
     progress(report(InstancePhase::InstallingGame, None));
@@ -1098,8 +1153,9 @@ async fn install_instance_components(
     }
 
     progress(report(InstancePhase::Validating, None));
+    let _game_guard = crate::install::lock_game_target(managed, record.id())?;
     let registry = InstanceRegistry::load(registry_path)?;
-    let validation = validate_instance(managed, &registry, record.id())?;
+    let validation = validate_instance_under_game_lock(managed, &registry, record.id())?;
     // The record is deliberately still `installing` at this point, so the
     // gate is component completeness: a non-empty problem list is the only
     // thing that can fail creation here. (An installing record with a fully
@@ -1127,6 +1183,11 @@ async fn install_instance_components(
         let _guard = registry_lock();
         let mut registry = InstanceRegistry::load(registry_path)?;
         if let Some(stored) = registry.find_mut(record.id()) {
+            if stored != record {
+                return Err(InstanceError::ReleaseInvalid(
+                    "the instance changed while installing; refresh and retry before Ready".into(),
+                ));
+            }
             stored.set_state(InstanceState::Ready);
         }
         registry.save(registry_path)?;
@@ -1165,57 +1226,86 @@ pub(crate) async fn resolve_record_game_plan(
         let game_version =
             crate::minecraft::metadata::MinecraftVersionId::new(&installed.minecraft_version)
                 .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-        if installed.platform == (super::platform::PlatformPin::Vanilla {}) {
-            let minecraft = crate::minecraft::resolve_install_plan(
-                &endpoints.minecraft,
-                &game_version,
-                PlatformProfile::current().map_err(InstanceError::Platform)?,
-                endpoints.install.download_options(),
-            )
-            .await
-            .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-            return Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft));
-        }
-        if let super::platform::PlatformPin::NeoForge { version } = &installed.platform {
-            let loader_version = crate::neoforge::metadata::NeoForgeVersionId::new(version)
+        // Exhaustive family dispatch: every known pin resolves through its
+        // own adapter, and represented-but-unimplemented families fail
+        // explicitly. No family ever falls through another's resolver.
+        match &installed.platform {
+            super::platform::PlatformPin::Vanilla {} => {
+                let minecraft = crate::minecraft::resolve_install_plan(
+                    &endpoints.minecraft,
+                    &game_version,
+                    PlatformProfile::current().map_err(InstanceError::Platform)?,
+                    endpoints.install.download_options(),
+                )
+                .await
                 .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-            let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
-            return crate::neoforge::resolve_neoforge_game_plan(
-                managed,
-                &endpoints.minecraft,
-                endpoints.neoforge(),
-                &game_version,
-                &loader_version,
-                platform,
-                endpoints.install.download_options(),
-            )
-            .await
-            .map_err(InstanceError::NeoForgeResolution);
+                Ok(crate::fabric::plan::GameInstallPlan::vanilla(minecraft))
+            }
+            super::platform::PlatformPin::Fabric { .. } => {
+                let loader_version = crate::fabric::metadata::LoaderVersionId::new(
+                    installed
+                        .platform
+                        .require_fabric()
+                        .map_err(InstanceError::ReleaseInvalid)?,
+                )
+                .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+                let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
+                let plan = crate::fabric::resolve_game_plan(
+                    &endpoints.minecraft,
+                    &endpoints.fabric,
+                    &game_version,
+                    &loader_version,
+                    platform,
+                    endpoints.install.download_options(),
+                )
+                .await?;
+                if let Some(release) = release {
+                    validate_release_java_major(
+                        release.java().major_version(),
+                        plan.java().major_version(),
+                    )?;
+                }
+                Ok(plan)
+            }
+            super::platform::PlatformPin::NeoForge { version } => {
+                let loader_version = crate::neoforge::metadata::NeoForgeVersionId::new(version)
+                    .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+                let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
+                crate::neoforge::resolve_neoforge_game_plan(
+                    managed,
+                    &endpoints.minecraft,
+                    endpoints.neoforge(),
+                    &game_version,
+                    &loader_version,
+                    platform,
+                    endpoints.install.download_options(),
+                )
+                .await
+                .map_err(InstanceError::NeoForgeResolution)
+            }
+            super::platform::PlatformPin::Forge { version } => {
+                let loader_version = crate::forge::metadata::ForgeVersionId::new(version)
+                    .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
+                let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
+                crate::forge::resolve_forge_game_plan(
+                    managed,
+                    &endpoints.minecraft,
+                    endpoints.forge(),
+                    &game_version,
+                    &loader_version,
+                    platform,
+                    endpoints.install.download_options(),
+                )
+                .await
+                .map_err(InstanceError::ForgeResolution)
+            }
+            unsupported @ super::platform::PlatformPin::Quilt { .. } => {
+                Err(InstanceError::ReleaseInvalid(format!(
+                    "{} installation and launch are not implemented in this build",
+                    unsupported.kind()
+                )))
+            }
         }
-        let loader_version = crate::fabric::metadata::LoaderVersionId::new(
-            installed
-                .platform
-                .require_fabric()
-                .map_err(InstanceError::ReleaseInvalid)?,
-        )
-        .map_err(|e| InstanceError::ReleaseInvalid(e.to_string()))?;
-        let platform = PlatformProfile::current().map_err(InstanceError::Platform)?;
-        let plan = crate::fabric::resolve_game_plan(
-            &endpoints.minecraft,
-            &endpoints.fabric,
-            &game_version,
-            &loader_version,
-            platform,
-            endpoints.install.download_options(),
-        )
-        .await?;
-        if let Some(release) = release {
-            validate_release_java_major(
-                release.java().major_version(),
-                plan.java().major_version(),
-            )?;
-        }
-        Ok(plan)
     })
     .await
 }
@@ -1336,14 +1426,20 @@ pub async fn validate_instance_runtime(
         instance_id,
     )
     .await?;
-    crate::runtime::install::validate_runtime(
-        managed,
-        &plan,
-        execute_diagnostic,
-        crate::runtime::install::DEFAULT_JAVA_DIAGNOSTIC_TIMEOUT,
-    )
-    .await
-    .map_err(InstanceError::RuntimeInstall)
+    if execute_diagnostic {
+        crate::runtime::install::validate_runtime_eligibility(managed, &plan)
+            .await
+            .map_err(InstanceError::RuntimeInstall)
+    } else {
+        crate::runtime::install::validate_runtime(
+            managed,
+            &plan,
+            false,
+            crate::runtime::install::DEFAULT_JAVA_DIAGNOSTIC_TIMEOUT,
+        )
+        .await
+        .map_err(InstanceError::RuntimeInstall)
+    }
 }
 
 pub async fn ensure_instance_runtime(
@@ -1448,7 +1544,7 @@ fn select_instance_if_unselected(
 }
 
 fn load_config(config_path: &Path) -> Result<LauncherConfig, InstanceError> {
-    Ok(crate::config::load(config_path)?.unwrap_or_default())
+    Ok(crate::config::load_or_initialize(config_path)?.into_config())
 }
 
 /// Allocates a fresh, registry-unique instance identifier whose instance
@@ -1479,6 +1575,15 @@ pub fn validate_instance(
     registry: &InstanceRegistry,
     instance_id: &InstanceId,
 ) -> Result<InstanceValidation, InstanceError> {
+    let _game_guard = crate::install::read_game_target(managed, instance_id)?;
+    validate_instance_under_game_lock(managed, registry, instance_id)
+}
+
+pub(crate) fn validate_instance_under_game_lock(
+    managed: &ManagedPaths,
+    registry: &InstanceRegistry,
+    instance_id: &InstanceId,
+) -> Result<InstanceValidation, InstanceError> {
     let _performance = crate::performance::scope(crate::performance::Event::InstanceValidation);
     let Some(record) = registry.find(instance_id) else {
         return Ok(InstanceValidation {
@@ -1500,6 +1605,7 @@ pub fn validate_instance(
         super::platform::PlatformPin::Fabric { .. }
             | super::platform::PlatformPin::Vanilla {}
             | super::platform::PlatformPin::NeoForge { .. }
+            | super::platform::PlatformPin::Forge { .. }
     ) {
         problems.push(InstanceProblem {
             component: "platform",
@@ -1517,7 +1623,18 @@ pub fn validate_instance(
     }
     // Game installation.
     let game_root = managed.instance_paths(record.id()).game().to_path_buf();
-    let game_manifest = match validate_game_install(managed, record.id())? {
+    let game_outcome =
+        match crate::install::validate_installed_game_under_lock(managed, record.id()) {
+            Err(InstallError::RecoveryRequired { reason }) => {
+                problems.push(InstanceProblem {
+                    component: "recovery",
+                    reason,
+                });
+                GameValidationOutcome::NotInstalled
+            }
+            other => other?,
+        };
+    let game_manifest = match game_outcome {
         GameValidationOutcome::Installed(validation) => match validation.status {
             GameValidationStatus::Valid => Some(
                 crate::install::state::load_installed_state(&game_root)
@@ -1808,6 +1925,23 @@ pub fn validate_instance(
 /// The process-wide registry mutation lock: registry read-modify-write
 /// windows are serialized so concurrent operations cannot lose updates.
 /// Long installations run outside it.
+pub(crate) fn lock_instance_operation(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<crate::install::coordination::TargetLock, InstallError> {
+    crate::install::coordination::TargetLock::acquire(
+        managed.data_root(),
+        managed.instance_paths(instance).root(),
+        ".instance-operation.lock",
+    )
+    .map_err(|error| match error {
+        crate::install::coordination::LockError::Busy => InstallError::AlreadyInProgress {
+            instance_id: instance.to_string(),
+        },
+        crate::install::coordination::LockError::Io(error) => InstallError::Storage(error),
+    })
+}
+
 pub(crate) fn registry_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     let lock = LOCK.get_or_init(|| Mutex::new(()));
@@ -1862,6 +1996,10 @@ pub enum InstanceError {
     /// A NeoForge metadata document failed to fetch or parse while
     /// selecting a loader version.
     NeoForgeMetadata(crate::neoforge::metadata::NeoForgeMetadataError),
+    /// Official Forge discovery metadata was unusable.
+    ForgeMetadata(crate::forge::metadata::ForgeMetadataError),
+    /// The Forge half of a game plan could not be resolved.
+    ForgeResolution(crate::forge::ForgeGameResolutionError),
     /// A Minecraft + NeoForge plan failed to resolve.
     NeoForgeResolution(crate::neoforge::NeoForgeGameResolutionError),
     GameInstall(InstallError),
@@ -1928,6 +2066,8 @@ impl fmt::Display for InstanceError {
             Self::GameResolution(error) => write!(formatter, "{error}"),
             Self::FabricMetadata(error) => write!(formatter, "{error}"),
             Self::NeoForgeMetadata(error) => write!(formatter, "{error}"),
+            Self::ForgeMetadata(error) => write!(formatter, "{error}"),
+            Self::ForgeResolution(error) => write!(formatter, "{error}"),
             Self::NeoForgeResolution(error) => write!(formatter, "{error}"),
 
             Self::GameInstall(error) => write!(formatter, "{error}"),
@@ -2496,6 +2636,11 @@ pub(crate) mod tests {
                 crate::neoforge::metadata::NeoForgeMavenEndpoints::loopback_for_testing(
                     self.server.base_url(),
                 ),
+                crate::forge::metadata::ForgeMavenEndpoints::loopback_for_testing(
+                    &format!("{}/forge-maven/", self.server.base_url()),
+                    &format!("{}/forge-promotions.json", self.server.base_url()),
+                )
+                .unwrap(),
                 crate::runtime::metadata::RuntimeMetadataEndpoints::loopback_for_testing(
                     self.server.base_url(),
                 ),
@@ -2599,6 +2744,50 @@ pub(crate) mod tests {
             let registry = self.load_registry();
             validate_instance(&self.managed, &registry, id).unwrap()
         }
+    }
+
+    #[tokio::test]
+    async fn concurrent_read_only_content_checks_remain_valid_and_exclude_writers() {
+        let world = SyntheticWorld::new("read-validation");
+        let record = world.create("Concurrent validation").await.unwrap();
+        let registry = world.load_registry();
+        let reader = crate::install::read_game_target(&world.managed, record.id()).unwrap();
+        assert_eq!(
+            validate_instance(&world.managed, &registry, record.id())
+                .unwrap()
+                .status,
+            InstanceStatus::Ready
+        );
+        assert!(matches!(
+            crate::install::lock_game_target(&world.managed, record.id()),
+            Err(InstallError::AlreadyInProgress { .. })
+        ));
+        drop(reader);
+        let writer = crate::install::lock_game_target(&world.managed, record.id()).unwrap();
+        assert!(matches!(
+            validate_instance(&world.managed, &registry, record.id()),
+            Err(InstanceError::GameInstall(
+                InstallError::AlreadyInProgress { .. }
+            ))
+        ));
+        drop(writer);
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        // Reader concurrency does not bypass byte verification.
+        let game = world
+            .managed
+            .instance_paths(record.id())
+            .game()
+            .to_path_buf();
+        let manifest = crate::install::state::load_installed_state(&game)
+            .unwrap()
+            .unwrap();
+        let client = manifest
+            .files()
+            .iter()
+            .find(|file| file.role() == crate::install::state::InstalledFileRole::Client)
+            .unwrap();
+        std::fs::write(game.join(client.path()), b"corrupt test fixture").unwrap();
+        assert_ne!(world.validate(record.id()).status, InstanceStatus::Ready);
     }
 
     #[tokio::test]
@@ -3028,14 +3217,17 @@ pub(crate) mod tests {
         .await
         .unwrap_err();
         assert_eq!(error.code, "pack_component_install_failed");
-        // The transaction is retired wholesale: no registry record, no
-        // instance tree, nothing half-ready, no selection, and unrelated
-        // owner state untouched.
-        assert_eq!(world.load_registry().instances().len(), 0);
-        let leftovers = std::fs::read_dir(world.managed.instances_dir())
-            .map(|list| list.count())
-            .unwrap_or(0);
-        assert_eq!(leftovers, 0);
+        // F3R preserves the game and recovery evidence under an explicit
+        // unavailable pack record. A corrected request gets a new identity.
+        let retained = world.load_registry();
+        assert_eq!(retained.instances().len(), 1);
+        let failed = &retained.instances()[0];
+        assert_eq!(failed.state(), InstanceState::Installing);
+        assert_eq!(
+            world.validate(failed.id()).status,
+            InstanceStatus::Installing
+        );
+        assert!(world.managed.instance_paths(failed.id()).game().is_dir());
         assert!(world.load_config().selected_instance_id().is_none());
         assert_eq!(std::fs::read(&unrelated).unwrap(), b"owner state");
         let after_rollback = cache_files(&world.managed.cache_dir());
@@ -5108,5 +5300,385 @@ pub(crate) mod tests {
             .is_err()
         );
         assert_eq!(std::fs::read(world.registry_path()).unwrap(), before);
+    }
+
+    #[tokio::test]
+    async fn represented_but_unimplemented_platforms_fail_plan_resolution_explicitly() {
+        let world = SyntheticWorld::new("unimplemented-platform-resolution");
+        let endpoints = world.endpoints();
+        // Forge is implemented since F1B; the deliberately unimplemented
+        // representation is Quilt.
+        for platform in [super::super::platform::PlatformPin::Quilt {
+            version: "0.31.0-beta.4".to_owned(),
+        }] {
+            let record = InstanceRecord::from_installed(
+                InstanceId::new(uuid::Uuid::new_v4().simple().to_string()).unwrap(),
+                "Represented Only",
+                InstanceState::Ready,
+                super::super::platform::InstalledConfiguration {
+                    minecraft_version: "26.2".to_owned(),
+                    platform: platform.clone(),
+                    aurora: None,
+                },
+                InstanceConfiguration::for_minecraft_version("26.2"),
+            )
+            .unwrap();
+            let error = resolve_record_game_plan(&world.managed, &endpoints, &record, None)
+                .await
+                .expect_err("an unimplemented family must fail resolution explicitly");
+            let message = error.to_string();
+            assert!(
+                message.contains(platform.kind()),
+                "the refusal must name the family: {message}"
+            );
+            assert!(
+                !message.contains("Fabric plan"),
+                "no family may fail under another family's vocabulary: {message}"
+            );
+        }
+        let invalid_forge = super::super::platform::PlatformPin::Forge {
+            version: "47.4.26".to_owned(),
+        };
+        let record = InstanceRecord::from_installed(
+            InstanceId::new(uuid::Uuid::new_v4().simple().to_string()).unwrap(),
+            "Invalid Forge Pin",
+            InstanceState::Ready,
+            super::super::platform::InstalledConfiguration {
+                minecraft_version: "1.21.11".to_owned(),
+                platform: invalid_forge,
+                aurora: None,
+            },
+            InstanceConfiguration::for_minecraft_version("1.21.11"),
+        )
+        .unwrap();
+        let error = resolve_record_game_plan(&world.managed, &endpoints, &record, None)
+            .await
+            .expect_err("a Forge pin that is not a combined id fails resolution");
+        assert!(
+            error.to_string().contains("Forge version"),
+            "the refusal names the Forge identity rule: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn pack_plan_resolution_is_scoped_to_vanilla_and_fabric() {
+        let world = SyntheticWorld::new("pack-resolution-scope");
+        let endpoints = world.endpoints();
+        for platform in [
+            super::super::platform::PlatformPin::NeoForge {
+                version: "26.2.0.88".to_owned(),
+            },
+            super::super::platform::PlatformPin::Forge {
+                version: "47.4.26".to_owned(),
+            },
+            super::super::platform::PlatformPin::Quilt {
+                version: "0.31.0-beta.4".to_owned(),
+            },
+        ] {
+            let installed = super::super::platform::InstalledConfiguration {
+                minecraft_version: "26.2".to_owned(),
+                platform: platform.clone(),
+                aurora: None,
+            };
+            let error = resolve_packed_game_plan(&endpoints, &installed)
+                .await
+                .expect_err("pack transitions must refuse non-Vanilla/Fabric families");
+            let message = error.to_string();
+            assert!(
+                message.contains(platform.kind()),
+                "the refusal must name the family: {message}"
+            );
+            assert!(
+                message.contains("pack"),
+                "the refusal must name the pack scope: {message}"
+            );
+        }
+    }
+    /// Explicit live acceptance; never runs in the deterministic suite and
+    /// retains its freshly created isolated root for owner gameplay testing.
+    #[tokio::test]
+    #[ignore = "F1C real official installs in an isolated, retained temp root"]
+    async fn forge_f1c_native_acceptance() {
+        use super::super::settings::LoaderConfiguration;
+        use std::time::Instant;
+        let root = match std::env::var_os("F1C_ACCEPTANCE_ROOT") {
+            Some(value) => {
+                let path = std::path::PathBuf::from(value);
+                assert_eq!(path.parent(), Some(std::env::temp_dir().as_path()));
+                assert!(
+                    path.file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .starts_with("aurora-f1c-acceptance-")
+                );
+                assert!(path.join("f1c-owned-root").is_file());
+                path
+            }
+            None => {
+                let path = std::env::temp_dir()
+                    .join(format!("aurora-f1c-acceptance-{}", uuid::Uuid::new_v4()));
+                std::fs::create_dir(&path).unwrap();
+                std::fs::write(
+                    path.join("f1c-owned-root"),
+                    b"F1C isolated native acceptance",
+                )
+                .unwrap();
+                path
+            }
+        };
+        println!("F1C_ROOT={}", root.display());
+        let managed = ManagedPaths::from_app_local_data_dir(root.join("managed")).unwrap();
+        let endpoints = InstanceEndpoints::creation().unwrap();
+        let registry_path = managed.instance_registry_file();
+        let config_path = managed.config_file();
+        let cases = [
+            (
+                "1.20.1",
+                LoaderConfiguration::Forge {
+                    policy: LoaderPolicy::Pinned {
+                        version: "1.20.1-47.4.10".into(),
+                    },
+                },
+                false,
+            ),
+            (
+                "1.20.4",
+                LoaderConfiguration::Forge {
+                    policy: LoaderPolicy::Pinned {
+                        version: "1.20.4-49.2.0".into(),
+                    },
+                },
+                false,
+            ),
+            (
+                "1.21.11",
+                LoaderConfiguration::Forge {
+                    policy: LoaderPolicy::Pinned {
+                        version: "1.21.11-61.2.0".into(),
+                    },
+                },
+                false,
+            ),
+            ("1.21.11", LoaderConfiguration::Vanilla {}, false),
+            (
+                "1.21.11",
+                LoaderConfiguration::Fabric {
+                    policy: LoaderPolicy::Pinned {
+                        version: "0.19.5".into(),
+                    },
+                },
+                false,
+            ),
+            (
+                "26.2",
+                LoaderConfiguration::NeoForge {
+                    policy: LoaderPolicy::Pinned {
+                        version: "26.2.0.88".into(),
+                    },
+                },
+                false,
+            ),
+            (
+                "1.21.11",
+                LoaderConfiguration::Fabric {
+                    policy: LoaderPolicy::Pinned {
+                        version: "0.19.5".into(),
+                    },
+                },
+                true,
+            ),
+        ];
+        for (mc, loader, aurora) in cases {
+            let name = format!(
+                "F1C {mc} {}{}",
+                loader.kind().as_str(),
+                if aurora { " Aurora" } else { "" }
+            );
+            let started = Instant::now();
+            let mut last = String::new();
+            let mut progress = |event: InstanceProgress| {
+                let phase = match event.game {
+                    Some(ref game) if game.phase == crate::install::InstallPhase::Processing => {
+                        format!("processing {:?}", game.current_item)
+                    }
+                    Some(ref game) => game.phase.as_str().to_owned(),
+                    None => event.phase.as_str().to_owned(),
+                };
+                if phase != last {
+                    println!("F1C {name} {}ms {phase}", started.elapsed().as_millis());
+                    last = phase;
+                }
+            };
+            let existing = InstanceRegistry::load(&registry_path)
+                .unwrap()
+                .instances()
+                .iter()
+                .find(|r| r.display_name() == name)
+                .cloned();
+            let record = if let Some(record) = existing {
+                if record.state() != InstanceState::Ready {
+                    retry_instance_install(
+                        &managed,
+                        &registry_path,
+                        &config_path,
+                        &endpoints,
+                        record.id(),
+                        &mut progress,
+                        InstanceFaults::default(),
+                    )
+                    .await
+                    .unwrap();
+                }
+                record
+            } else {
+                let mut config = InstanceConfiguration::for_minecraft_version(mc);
+                config.set_loader(loader);
+                config.set_aurora_enabled(aurora);
+                create_instance(
+                    &managed,
+                    &registry_path,
+                    &config_path,
+                    &endpoints,
+                    CreateInstanceRequest::new(&name, config),
+                    &mut progress,
+                    InstanceFaults::default(),
+                )
+                .await
+                .unwrap()
+            };
+            println!(
+                "F1C {name} install_ms={} id={}",
+                started.elapsed().as_millis(),
+                record.id()
+            );
+            let validation = validate_instance(
+                &managed,
+                &InstanceRegistry::load(&registry_path).unwrap(),
+                record.id(),
+            )
+            .unwrap();
+            assert_eq!(
+                validation.status,
+                InstanceStatus::Ready,
+                "{:?}",
+                validation.problems
+            );
+            if mc == "1.20.1" || mc == "1.20.4" {
+                let plan =
+                    resolve_instance_game_plan(&managed, &registry_path, &endpoints, record.id())
+                        .await
+                        .unwrap();
+                assert_eq!(plan.java().major_version(), 17);
+                assert_eq!(plan.java().component(), "java-runtime-gamma");
+                let runtime = validate_instance_runtime(
+                    &managed,
+                    &registry_path,
+                    &endpoints,
+                    &RuntimeMetadataEndpoints::official(),
+                    record.id(),
+                    true,
+                )
+                .await
+                .unwrap();
+                assert_eq!(
+                    runtime.status,
+                    crate::runtime::RuntimeValidationStatus::Ready
+                );
+                println!("F1C {name} Java17 validated");
+                let launch_started = Instant::now();
+                let installed_runtime = ensure_instance_runtime(
+                    &managed,
+                    &registry_path,
+                    &endpoints,
+                    &RuntimeMetadataEndpoints::official(),
+                    record.id(),
+                    &mut |_| {},
+                )
+                .await
+                .unwrap();
+                assert!(installed_runtime.reused());
+                let manifest = crate::install::state::load_installed_state(
+                    &managed.instance_paths(record.id()).game(),
+                )
+                .unwrap()
+                .unwrap();
+                // Assembly only: a fixture session never authorizes/spawns
+                // Minecraft and never enters production authentication state.
+                let session = crate::auth::MinecraftSession::new(
+                    "986dec87b7ec47ff89ff033fdb95c4b5",
+                    crate::auth::MinecraftProfile::new(
+                        "986dec87b7ec47ff89ff033fdb95c4b5",
+                        "FixtureUser",
+                    ),
+                    crate::auth::credentials::SecretString::new("F1C-ASSEMBLY-FIXTURE"),
+                    std::time::Duration::from_secs(3600),
+                );
+                let launch_plan = crate::launch::resolve::LaunchPlan::from_game_plan(
+                    &plan,
+                    PlatformProfile::current().unwrap(),
+                );
+                let spec = crate::launch::resolve::resolve_launch_spec(
+                    &managed,
+                    record.id(),
+                    &launch_plan,
+                    &manifest,
+                    installed_runtime.launch_executable(),
+                    &session,
+                    &crate::minecraft::rules::FeatureProfile::none(),
+                    &crate::launch::resolve::LaunchOptions::default(),
+                )
+                .unwrap();
+                assert_eq!(spec.main_class(), plan.main_class());
+                assert_eq!(
+                    spec.java_executable(),
+                    installed_runtime.launch_executable()
+                );
+                assert!(!format!("{spec:?}").contains("F1C-ASSEMBLY-FIXTURE"));
+                println!(
+                    "F1C {name} native-file launch assembly_ms={} runtime_reused=true (not gameplay)",
+                    launch_started.elapsed().as_millis()
+                );
+                let sentinel = managed
+                    .instance_paths(record.id())
+                    .root()
+                    .join("f1c-user-content.txt");
+                std::fs::write(&sentinel, b"preserve user content").unwrap();
+                let warm = Instant::now();
+                let mut warm_progress = |event: InstanceProgress| {
+                    if let Some(game) = event.game {
+                        if game.phase == crate::install::InstallPhase::Processing {
+                            println!("F1C {name} warm-processing {:?}", game.current_item);
+                        }
+                    }
+                };
+                install_instance_configuration(
+                    &managed,
+                    &registry_path,
+                    &config_path,
+                    &endpoints,
+                    record.id(),
+                    &mut warm_progress,
+                    InstanceFaults::default(),
+                )
+                .await
+                .unwrap();
+                assert_eq!(std::fs::read(sentinel).unwrap(), b"preserve user content");
+                println!(
+                    "F1C {name} warm_reinstall_ms={}",
+                    warm.elapsed().as_millis()
+                );
+                assert_eq!(
+                    validate_instance(
+                        &managed,
+                        &InstanceRegistry::load(&registry_path).unwrap(),
+                        record.id()
+                    )
+                    .unwrap()
+                    .status,
+                    InstanceStatus::Ready
+                );
+            }
+            println!("F1C {name} deep-validated Ready");
+        }
     }
 }

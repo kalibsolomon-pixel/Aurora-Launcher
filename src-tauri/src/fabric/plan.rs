@@ -1,13 +1,19 @@
-//! The normalized Fabric plan and the composed game install plan.
+//! The normalized Fabric plan and the Fabric family composer.
 //!
 //! This module converts a validated loader profile document into Aurora's own
 //! Fabric representation (`FabricPlan`), then composes that plan with a
 //! vanilla `MinecraftInstallPlan` into the complete software requirement set
-//! for an Aurora/Fabric installation (`GameInstallPlan`).
+//! for a Fabric installation.
 //!
 //! Both outputs are *plans*: no library is downloaded, nothing is installed or
 //! extracted, and no process is launched. A future installer consumes the
 //! composed plan and never re-parses Fabric Meta JSON.
+//!
+//! The shared composed-plan types (`GameInstallPlan`, `LoaderPlan`,
+//! `GameLibrary`, `GameJavaRequirement`, `CompositionError`) live in
+//! [`crate::game::plan`] — the loader-neutral composition boundary — and are
+//! reexported here so existing `fabric::plan` paths keep resolving during
+//! and after the F3 move.
 //!
 //! ## Library composition policy (deliberate)
 //!
@@ -20,7 +26,8 @@
 //! set after the Mojang libraries of the vanilla plan, producing the
 //! deterministic classpath order launchers use.
 //!
-//! Collisions are never silently resolved:
+//! Collisions are never silently resolved (the shared policy in
+//! `game::plan::merge_library_sets`):
 //!
 //! - an *exact* duplicate coordinate (same group, artifact, version, and
 //!   classifier) collapses to one requirement — the earlier entry wins, so a
@@ -38,9 +45,17 @@ use crate::fabric::maven::{MavenCoordinate, MavenRepository};
 use crate::fabric::metadata::{
     LoaderProfileDocument, LoaderVersionId, MetaLibraryDocument, NOOP_INTERMEDIARY_VERSION,
 };
+// The shared composition types, reexported under their established
+// `fabric::plan` paths so existing consumers compile unchanged; the types
+// are also in scope for this module's own composer below.
+use crate::game::plan::merge_library_sets;
+pub use crate::game::plan::{
+    CompositionError, GameInstallPlan, GameJavaRequirement, GameLibrary, LibraryProvenance,
+    LoaderPlan,
+};
 use crate::integrity::ArtifactDigest;
 use crate::minecraft::metadata::MinecraftVersionId;
-use crate::minecraft::plan::{LibraryCoordinate, MinecraftInstallPlan, PlannedLibrary};
+use crate::minecraft::plan::MinecraftInstallPlan;
 
 /// One Fabric-provided artifact requirement.
 ///
@@ -323,452 +338,14 @@ fn plan_meta_library(
     })
 }
 
-/// The effective Java requirement of a composed installation.
-///
-/// Minecraft's runtime component stays the runtime family a future installer
-/// obtains; the effective minimum major version is the stricter of Mojang's
-/// requirement and the loader's declared floor. `raised_by_loader` records
-/// the (so far unobserved) case where Fabric demands more than Mojang.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GameJavaRequirement {
-    component: String,
-    major_version: u32,
-    loader_min_major_version: u32,
-    raised_by_loader: bool,
-}
-
-impl GameJavaRequirement {
-    /// A requirement with no loader floor: Mojang's component and major
-    /// stay authoritative (used by loaders that publish no Java floor of
-    /// their own, currently NeoForge).
-    pub fn without_loader_floor(component: &str, major_version: u32) -> Self {
-        Self {
-            component: component.to_owned(),
-            major_version,
-            loader_min_major_version: 0,
-            raised_by_loader: false,
-        }
-    }
-
-    pub fn component(&self) -> &str {
-        &self.component
-    }
-
-    pub fn major_version(&self) -> u32 {
-        self.major_version
-    }
-
-    pub fn loader_min_major_version(&self) -> u32 {
-        self.loader_min_major_version
-    }
-
-    pub fn raised_by_loader(&self) -> bool {
-        self.raised_by_loader
-    }
-}
-
-/// One entry of the composed library set, with its provenance.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GameLibrary {
-    Minecraft(PlannedLibrary),
-    Fabric(FabricLibrary),
-    NeoForge(crate::neoforge::plan::NeoForgeLibrary),
-}
-
-/// Which metadata source contributed a composed library.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum LibraryProvenance {
-    Mojang,
-    Fabric,
-    NeoForge,
-}
-
-/// The loader half of a composed plan. The container is loader-generic on
-/// purpose — installation, validation, and launch consume the composed
-/// views, not loader-specific branching — while each loader's plan stays an
-/// independently meaningful boundary inside its variant.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LoaderPlan {
-    Fabric(FabricPlan),
-    NeoForge(crate::neoforge::plan::NeoForgePlan),
-}
-
-impl LoaderPlan {
-    /// The exact loader version this contribution pins.
-    pub fn loader_version(&self) -> &str {
-        match self {
-            Self::Fabric(plan) => plan.loader_version(),
-            Self::NeoForge(plan) => plan.neoforge_version(),
-        }
-    }
-}
-
-impl GameLibrary {
-    pub fn provenance(&self) -> LibraryProvenance {
-        match self {
-            Self::Minecraft(_) => LibraryProvenance::Mojang,
-            Self::Fabric(_) => LibraryProvenance::Fabric,
-            Self::NeoForge(_) => LibraryProvenance::NeoForge,
-        }
-    }
-
-    /// The canonical Maven coordinate string of this library.
-    pub fn coordinate_string(&self) -> String {
-        match self {
-            Self::Minecraft(library) => library.coordinate().as_maven_string(),
-            Self::Fabric(library) => library.coordinate().as_maven_string(),
-            Self::NeoForge(library) => library.coordinate().as_maven_string(),
-        }
-    }
-
-    /// The repository-relative Maven layout path of this library.
-    pub fn repository_path(&self) -> String {
-        match self {
-            Self::Minecraft(library) => library.path().to_owned(),
-            Self::Fabric(library) => library.path(),
-            Self::NeoForge(library) => library.path().to_owned(),
-        }
-    }
-
-    /// Whether this artifact belongs on Java's classpath. Mojang native
-    /// classifier jars are installation/extraction inputs, not classpath
-    /// entries; every Fabric launcherMeta library is an ordinary classpath
-    /// dependency, as are NeoForge's launch libraries (its universal and
-    /// processor-generated artifacts are library-directory discoveries,
-    /// planned separately and never placed on the classpath).
-    pub fn is_classpath_entry(&self) -> bool {
-        match self {
-            Self::Minecraft(library) => {
-                library.kind() == crate::minecraft::plan::LibraryKind::PlatformLibrary
-            }
-            Self::Fabric(_) => true,
-            Self::NeoForge(library) => library.is_classpath_entry(),
-        }
-    }
-}
-
-/// The complete, deterministic plan for one Aurora installation.
-///
-/// Composition is explicit containment: the vanilla plan and the loader plan
-/// remain independently meaningful parts (provenance is preserved for
-/// diagnostics and repair), while the derived views — the ordered composed
-/// library set, the effective Java requirement, and the final entry point —
-/// are what a future installer consumes.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GameInstallPlan {
-    minecraft: MinecraftInstallPlan,
-    loader: Option<LoaderPlan>,
-    libraries: Vec<GameLibrary>,
-    java: GameJavaRequirement,
-    main_class: String,
-}
-
-impl GameInstallPlan {
-    /// The vanilla Minecraft half, unchanged by composition.
-    pub fn minecraft(&self) -> &MinecraftInstallPlan {
-        &self.minecraft
-    }
-
-    /// The loader half, unchanged by composition.
-    pub fn loader(&self) -> Option<&LoaderPlan> {
-        self.loader.as_ref()
-    }
-
-    /// The Fabric half, when the contribution is Fabric.
-    pub fn fabric_loader(&self) -> Option<&FabricPlan> {
-        match &self.loader {
-            Some(LoaderPlan::Fabric(plan)) => Some(plan),
-            _ => None,
-        }
-    }
-
-    /// The NeoForge half, when the contribution is NeoForge.
-    pub fn neoforge_loader(&self) -> Option<&crate::neoforge::plan::NeoForgePlan> {
-        match &self.loader {
-            Some(LoaderPlan::NeoForge(plan)) => Some(plan),
-            _ => None,
-        }
-    }
-
-    pub fn platform(&self) -> crate::instances::platform::PlatformPin {
-        match &self.loader {
-            Some(LoaderPlan::Fabric(plan)) => crate::instances::platform::PlatformPin::Fabric {
-                version: plan.loader_version().to_owned(),
-            },
-            Some(LoaderPlan::NeoForge(plan)) => crate::instances::platform::PlatformPin::NeoForge {
-                version: plan.neoforge_version().to_owned(),
-            },
-            None => crate::instances::platform::PlatformPin::Vanilla {},
-        }
-    }
-
-    /// A complete Vanilla plan contains only Mojang contributions.
-    pub fn vanilla(minecraft: MinecraftInstallPlan) -> Self {
-        let java = GameJavaRequirement {
-            component: minecraft.java().component().to_owned(),
-            major_version: minecraft.java().major_version(),
-            loader_min_major_version: 0,
-            raised_by_loader: false,
-        };
-        Self {
-            libraries: minecraft
-                .libraries()
-                .iter()
-                .cloned()
-                .map(GameLibrary::Minecraft)
-                .collect(),
-            main_class: minecraft.launch().main_class().to_owned(),
-            minecraft,
-            loader: None,
-            java,
-        }
-    }
-
-    /// The composed library set in deterministic classpath order: Mojang
-    /// libraries in official document order, then the Fabric libraries in
-    /// official composition order, with exact duplicates collapsed.
-    pub fn libraries(&self) -> &[GameLibrary] {
-        &self.libraries
-    }
-
-    /// The effective Java requirement.
-    pub fn java(&self) -> &GameJavaRequirement {
-        &self.java
-    }
-
-    /// The final launch entry point: the Fabric client main class.
-    pub fn main_class(&self) -> &str {
-        &self.main_class
-    }
-
-    pub fn vanilla_library_count(&self) -> usize {
-        self.libraries
-            .iter()
-            .filter(|library| library.provenance() == LibraryProvenance::Mojang)
-            .count()
-    }
-
-    pub fn fabric_library_count(&self) -> usize {
-        self.libraries
-            .iter()
-            .filter(|library| library.provenance() == LibraryProvenance::Fabric)
-            .count()
-    }
-
-    pub fn neoforge_library_count(&self) -> usize {
-        self.libraries
-            .iter()
-            .filter(|library| library.provenance() == LibraryProvenance::NeoForge)
-            .count()
-    }
-
-    /// The effective JVM arguments in deterministic order: Mojang's planned
-    /// arguments, then the loader's contributions appended (NeoForge is the
-    /// first loader that contributes JVM arguments; Fabric contributes
-    /// none). Returned as feature-unconditional groups — loader arguments
-    /// carry no rule conditions.
-    pub fn effective_jvm_arguments(&self) -> Vec<crate::minecraft::plan::LaunchArgument> {
-        let mut arguments = self.minecraft.launch().jvm_arguments().to_vec();
-        if let Some(LoaderPlan::NeoForge(plan)) = &self.loader {
-            if !plan.jvm_arguments().is_empty() {
-                arguments.push(crate::minecraft::plan::LaunchArgument {
-                    features: Vec::new(),
-                    values: plan.jvm_arguments().to_vec(),
-                });
-            }
-        }
-        arguments
-    }
-
-    /// The effective game arguments in deterministic order: Mojang's, then
-    /// the loader's appended.
-    pub fn effective_game_arguments(&self) -> Vec<crate::minecraft::plan::LaunchArgument> {
-        let mut arguments = self.minecraft.launch().game_arguments().to_vec();
-        if let Some(LoaderPlan::NeoForge(plan)) = &self.loader {
-            if !plan.game_arguments().is_empty() {
-                arguments.push(crate::minecraft::plan::LaunchArgument {
-                    features: Vec::new(),
-                    values: plan.game_arguments().to_vec(),
-                });
-            }
-        }
-        arguments
-    }
-
-    /// Assembles a composed plan from already-validated parts. Only loader
-    /// composition boundaries call this; the parts must already agree.
-    pub(crate) fn from_composed_parts(
-        minecraft: MinecraftInstallPlan,
-        loader: LoaderPlan,
-        libraries: Vec<GameLibrary>,
-        java: GameJavaRequirement,
-        main_class: String,
-    ) -> Self {
-        Self {
-            minecraft,
-            loader: Some(loader),
-            libraries,
-            java,
-            main_class,
-        }
-    }
-}
-
-/// A failure while composing the vanilla and Fabric plans.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CompositionError {
-    /// The two plans describe different Minecraft versions.
-    VersionMismatch {
-        minecraft_version: String,
-        fabric_version: String,
-    },
-    /// Two requirements claim the same library identity at different
-    /// versions; Aurora resolves no winner.
-    LibraryConflict {
-        existing: String,
-        conflicting: String,
-    },
-}
-
-impl fmt::Display for CompositionError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::VersionMismatch {
-                minecraft_version,
-                fabric_version,
-            } => write!(
-                formatter,
-                "the Minecraft plan describes '{minecraft_version}' but the Fabric plan describes '{fabric_version}'"
-            ),
-            Self::LibraryConflict {
-                existing,
-                conflicting,
-            } => write!(
-                formatter,
-                "library identity conflict: '{conflicting}' conflicts with the already-planned '{existing}'"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for CompositionError {}
-
-/// The identity two library requirements must share to be the *same*
-/// artifact: group, artifact, and classifier (version decides duplicate
-/// versus conflict). Different classifiers of one group and artifact are
-/// genuinely different artifacts — that is how Mojang publishes natives.
-type LibraryIdentity<'a> = (&'a str, &'a str, Option<&'a str>);
-
-fn mojang_identity(coordinate: &LibraryCoordinate) -> LibraryIdentity<'_> {
-    (
-        coordinate.group(),
-        coordinate.artifact(),
-        coordinate.classifier(),
-    )
-}
-
-fn fabric_identity(coordinate: &MavenCoordinate) -> LibraryIdentity<'_> {
-    (
-        coordinate.group(),
-        coordinate.artifact(),
-        coordinate.classifier(),
-    )
-}
-
-fn neoforge_identity(
-    coordinate: &crate::neoforge::metadata::NeoForgeCoordinate,
-) -> LibraryIdentity<'_> {
-    (
-        coordinate.group(),
-        coordinate.artifact(),
-        coordinate.classifier(),
-    )
-}
-
-/// Merges Mojang's libraries (document order) with a loader's libraries
-/// (contribution order): exact duplicates collapse to the earlier (Mojang)
-/// entry, and a same identity at a different version is a hard conflict.
-pub(crate) fn merge_library_sets(
-    minecraft: &MinecraftInstallPlan,
-    loader_libraries: Vec<GameLibrary>,
-) -> Result<Vec<GameLibrary>, CompositionError> {
-    let mut libraries: Vec<GameLibrary> =
-        Vec::with_capacity(minecraft.libraries().len() + loader_libraries.len());
-
-    let mut push = |library: GameLibrary,
-                    identity: LibraryIdentity<'_>,
-                    version: &str|
-     -> Result<(), CompositionError> {
-        for planned in &libraries {
-            let (existing_identity, existing_version) = match planned {
-                GameLibrary::Minecraft(entry) => (
-                    mojang_identity(entry.coordinate()),
-                    entry.coordinate().version(),
-                ),
-                GameLibrary::Fabric(entry) => (
-                    fabric_identity(entry.coordinate()),
-                    entry.coordinate().version(),
-                ),
-                GameLibrary::NeoForge(entry) => (
-                    neoforge_identity(entry.coordinate()),
-                    entry.coordinate().version(),
-                ),
-            };
-            if existing_identity == identity {
-                if existing_version == version {
-                    return Ok(()); // exact duplicate: one requirement suffices
-                }
-                return Err(CompositionError::LibraryConflict {
-                    existing: planned.coordinate_string(),
-                    conflicting: library.coordinate_string(),
-                });
-            }
-        }
-        libraries.push(library);
-        Ok(())
-    };
-
-    for entry in minecraft.libraries() {
-        let identity = mojang_identity(entry.coordinate());
-        let version = entry.coordinate().version().to_owned();
-        push(GameLibrary::Minecraft(entry.clone()), identity, &version)?;
-    }
-    for library in loader_libraries {
-        let (identity, version) = match &library {
-            GameLibrary::Minecraft(entry) => (
-                mojang_identity(entry.coordinate()),
-                entry.coordinate().version().to_owned(),
-            ),
-            GameLibrary::Fabric(entry) => (
-                fabric_identity(entry.coordinate()),
-                entry.coordinate().version().to_owned(),
-            ),
-            GameLibrary::NeoForge(entry) => (
-                neoforge_identity(entry.coordinate()),
-                entry.coordinate().version().to_owned(),
-            ),
-        };
-        let identity = (
-            identity.0.to_owned(),
-            identity.1.to_owned(),
-            identity.2.map(str::to_owned),
-        );
-        push(
-            library,
-            (&identity.0, &identity.1, identity.2.as_deref()),
-            &version,
-        )?;
-    }
-
-    Ok(libraries)
-}
-
 /// Composes a vanilla Minecraft plan and a Fabric plan into the complete
 /// game install plan.
 ///
-/// The inputs are not mutated; composition validates version agreement and
-/// library-identity collisions, then derives the ordered library set, the
-/// effective Java requirement, and the final main class.
+/// This is the Fabric family composer: it owns Fabric's genuinely specific
+/// derivation (the loader's Java floor raising the effective requirement,
+/// the Fabric client entry point) and delegates the shared merge and plan
+/// assembly to `game::plan`. The inputs are not mutated; composition
+/// validates version agreement and library-identity collisions.
 pub fn compose_game_plan(
     minecraft: MinecraftInstallPlan,
     fabric: FabricPlan,
@@ -776,7 +353,8 @@ pub fn compose_game_plan(
     if minecraft.minecraft_version() != fabric.minecraft_version() {
         return Err(CompositionError::VersionMismatch {
             minecraft_version: minecraft.minecraft_version().to_owned(),
-            fabric_version: fabric.minecraft_version().to_owned(),
+            loader_version: fabric.minecraft_version().to_owned(),
+            loader_family: "Fabric",
         });
     }
 
@@ -789,24 +367,21 @@ pub fn compose_game_plan(
     let libraries = merge_library_sets(&minecraft, loader_libraries)?;
 
     let minecraft_java = minecraft.java();
-    let loader_min = fabric.min_java_major_version();
-    let raised_by_loader = loader_min > minecraft_java.major_version();
-    let java = GameJavaRequirement {
-        component: minecraft_java.component().to_owned(),
-        major_version: minecraft_java.major_version().max(loader_min),
-        loader_min_major_version: loader_min,
-        raised_by_loader,
-    };
+    let java = GameJavaRequirement::with_loader_floor(
+        minecraft_java.component(),
+        minecraft_java.major_version(),
+        fabric.min_java_major_version(),
+    );
 
     let main_class = fabric.main_class().to_owned();
 
-    Ok(GameInstallPlan {
+    Ok(GameInstallPlan::from_composed_parts(
         minecraft,
-        loader: Some(LoaderPlan::Fabric(fabric)),
+        LoaderPlan::Fabric(fabric),
         libraries,
         java,
         main_class,
-    })
+    ))
 }
 
 #[cfg(test)]

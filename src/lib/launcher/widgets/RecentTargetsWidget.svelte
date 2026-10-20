@@ -97,8 +97,8 @@
   </div>
 {/if}
 {#if loading}<p class="note">Loading recent {mode === "world" ? "worlds" : "servers"}…</p>
-{:else if !entries.length}<p class="note">No recently played {mode === "world" ? "worlds" : "servers"}.</p>
-{:else}
+{:else if !entries.length && !error}<p class="note widget-empty">No recently played {mode === "world" ? "worlds" : "servers"}.</p>
+{:else if entries.length}
   {#if favoritesOnly && !shown.length}<p class="note">Star a server to keep it in Favorites.</p>{/if}
   <!-- A scroll region needs its own focus stop so PageDown/Arrow keys can scroll without activating a row. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->

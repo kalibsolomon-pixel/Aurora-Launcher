@@ -24,7 +24,8 @@ export const GLOBAL_PAGES = [
 export type GlobalPage = (typeof GLOBAL_PAGES)[number];
 
 /** Instance-local workspace tabs with real implemented functionality. */
-export const INSTANCE_TABS = ["overview", "mods", "resourcePacks", "shaders", "settings"] as const;
+/** Settings leads: it holds readiness and the editable configuration (the former Overview). */
+export const INSTANCE_TABS = ["settings", "mods", "resourcePacks", "shaders"] as const;
 
 export type InstanceTab = (typeof INSTANCE_TABS)[number];
 
@@ -56,7 +57,7 @@ export function globalDestinations(development: boolean): GlobalDestination[] {
   const labels: Record<GlobalPage, string> = {
     home: "Home",
     instances: "Instances",
-    cosmetics: "Skins & Capes",
+    cosmetics: "Appearance",
     settings: "Settings",
     developer: "Developer",
   };
@@ -98,7 +99,7 @@ export function openInstance(
   ) {
     return state;
   }
-  return { kind: "instance", instanceId: trimmed, tab: tab ?? "overview" };
+  return { kind: "instance", instanceId: trimmed, tab: tab ?? "settings" };
 }
 
 /**

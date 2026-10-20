@@ -12,9 +12,7 @@
   <header class="page-header">
     <div>
       <h2 class="page-title">Developer</h2>
-      <p class="page-subtitle">
-        Launcher diagnostics and development-only proofs of the native pipeline boundaries.
-      </p>
+
     </div>
   </header>
 
@@ -22,7 +20,7 @@
     <div class="group-heading">
       <div>
         <h3 class="group-title">Application</h3>
-        <p class="group-subtitle">Native backend status and managed paths.</p>
+
       </div>
       {#if launcher.status}
         <span class="status-badge status-success">Ready</span>
@@ -67,7 +65,7 @@
     <div class="group-heading">
       <div>
         <h3 class="group-title">Persisted launcher state</h3>
-        <p class="group-subtitle">Versioned documents under the managed root.</p>
+
       </div>
       {#if launcher.launcherState}
         <span class="status-badge status-success">Loaded</span>
@@ -121,7 +119,7 @@
     <div class="group-heading">
       <div>
         <h3 class="group-title">Artifact acquisition</h3>
-        <p class="group-subtitle">Download, hash-verification, and promotion pipeline.</p>
+
       </div>
       {#if launcher.acquisitionBusy}
         <span class="status-badge status-working">Acquiring</span>
@@ -196,16 +194,16 @@
       </p>
     {/if}
 
-    <p class="group-footer">
+    <details class="group-footer"><summary>Details</summary>
       Development-only proof of the native download, verification, and promotion pipeline.
-    </p>
+    </details>
   </section>
 
   <section class="group" aria-live="polite">
     <div class="group-heading">
       <div>
         <h3 class="group-title">Minecraft install planning</h3>
-        <p class="group-subtitle">Official metadata resolution into a platform-aware plan.</p>
+
       </div>
       {#if launcher.planningBusy}
         <span class="status-badge status-working">Resolving</span>
@@ -289,18 +287,18 @@
       </p>
     {/if}
 
-    <p class="group-footer">
+    <details class="group-footer"><summary>Details</summary>
       Development-only proof of the native metadata-resolution layer: official discovery, a
       SHA-1-verified version document, and platform-aware planning. Nothing is installed and no
       game artifact is downloaded.
-    </p>
+    </details>
   </section>
 
   <section class="group" aria-live="polite">
     <div class="group-heading">
       <div>
         <h3 class="group-title">Fabric install planning</h3>
-        <p class="group-subtitle">Fabric Meta resolution and composition with the vanilla plan.</p>
+
       </div>
       {#if launcher.fabricPlanningBusy}
         <span class="status-badge status-working">Composing</span>
@@ -391,20 +389,18 @@
       </p>
     {/if}
 
-    <p class="group-footer">
+    <details class="group-footer"><summary>Details</summary>
       Development-only proof of the native Fabric layer: official loader discovery, exact profile
       resolution, and composition with the vanilla plan. Nothing is installed and no Minecraft or
       Fabric artifact is downloaded.
-    </p>
+    </details>
   </section>
 
   <section class="group" aria-live="polite">
     <div class="group-heading">
       <div>
         <h3 class="group-title">Game installation</h3>
-        <p class="group-subtitle">
-          Staged installation executor into launcher-managed instance storage.
-        </p>
+
       </div>
       {#if launcher.installBusy}
         <span class="status-badge status-working">
@@ -554,11 +550,11 @@
       </p>
     {/if}
 
-    <p class="group-footer">
+    <details class="group-footer"><summary>Details</summary>
       Development-only proof of the native installation executor: verified acquisition, staged
       materialization, native extraction, validation, and atomic commit into launcher-managed
       instance storage. Nothing is launched; no Java runtime is installed; the user's .minecraft is
       never touched.
-    </p>
+    </details>
   </section>
 </div>

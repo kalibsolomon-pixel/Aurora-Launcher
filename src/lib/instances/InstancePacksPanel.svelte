@@ -4,6 +4,7 @@
   import { launcher } from "$lib/launcher/store.svelte";
   import { visiblePacks, packRemovalPlan, packStateLabel, packToggleUnavailableReason, packSourceLabel, formatPackSize, confirmedLocalRemoval, type PackFilter, type PackRemovalCandidate } from "./packs";
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
+  import ContentViewSwitch from "./ContentViewSwitch.svelte";
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
   import InstalledArtwork from "./InstalledArtwork.svelte";
   import { installedArtworkIdentities } from './installedArtwork';
@@ -148,7 +149,9 @@
   }
 
   function cancelRemove(): void {
+    const triggerId = removal?.entryId;
     removal = null;
+    void tick().then(() => document.getElementById(`remove-${triggerId}`)?.focus());
   }
 
   function onConfirmationKeydown(event: KeyboardEvent): void {
@@ -160,16 +163,13 @@
 </script>
 
 <section class="packs-panel" aria-label={title}>
-  <div class="content-view-tabs" role="group" aria-label={`${title} view`}>
-    <button type="button" class="btn btn-quiet" aria-pressed={view === "installed"} onclick={() => view = "installed"}>Installed</button>
-    {#if context?.modrinthAvailable}<button type="button" class="btn btn-quiet" aria-pressed={view === "browse"} onclick={() => view = "browse"}>Browse Modrinth</button>{/if}
-  </div>
+  <ContentViewSwitch bind:view label={`${title} view`} canBrowse={context?.modrinthAvailable ?? false} />
   {#if view === "browse"}
     <ModrinthBrowse instanceId={instance.id} instanceName={instance.displayName} minecraftVersion={instance.minecraftVersion} {kind} installedProjectIds={entries.filter((entry) => entry.provenance?.provider === "modrinth").map((entry) => entry.provenance!.projectId)} dependencyOnlyProjectIds={lifecycleEntries.filter((entry) => entry.record.contentType === kind && !entry.record.explicitlyRetained).map((entry) => entry.record.projectId)} onInstalled={async (targetId, targetKind) => { if (targetKind === "mod") { await launcher.runLoadMods(targetId); } else { await refreshInstalled(targetId, targetKind); } await launcher.refreshState(); }} />
   {:else}
   <div class="packs-heading">
     <div>
-      <h3 class="group-title">{title}</h3>
+      <h3 class="group-title">Installed {title}</h3>
       <p class="group-subtitle">Files for {instance.displayName}, in its {directoryName} folder.{kind === "shaderPack" ? " Shaders require a compatible in-game shader loader; activation happens in the game." : ""}</p>
     </div>
     <div class="packs-heading-actions">
@@ -180,10 +180,12 @@
 
   {#if running}<p class="packs-note">Changes made while Minecraft is running apply on the next launch.</p>{/if}
   {#if context?.modrinthAvailable}
-    <ContentRecognition {instance} {kind} onChanged={async () => { await refreshInstalled(instance.id, kind); }} />
-    <ContentUpdates instanceId={instance.id} {kind} names={providerNames} bind:report={updatesReport} onChanged={async () => { await refreshInstalled(instance.id, kind); await launcher.refreshState(); }} />
+    <div class="content-tools">
+      <ContentRecognition {instance} {kind} onChanged={async () => { await refreshInstalled(instance.id, kind); }} />
+      <ContentUpdates instanceId={instance.id} {kind} names={providerNames} bind:report={updatesReport} onChanged={async () => { await refreshInstalled(instance.id, kind); await launcher.refreshState(); }} />
+    </div>
   {/if}
-  {#if launcher.contentError}<p class="inline-message inline-message-error" role="alert">{launcher.contentError.message} <code>{launcher.contentError.code}</code></p>{/if}
+  {#if launcher.contentError}<div class="packs-error" role="alert"><p class="inline-message inline-message-error">{launcher.contentError.message} <code>{launcher.contentError.code}</code></p><button type="button" class="btn btn-quiet" disabled={launcher.contentBusy === key} onclick={() => launcher.runLoadContent(instance.id, kind)}>Retry</button></div>{/if}
   {#if lifecycleError}<p class="inline-message inline-message-error" role="alert">{lifecycleError}</p>{/if}
   {#if inventory?.missingManaged.length}
     <p class="packs-note" role="status">{inventory.missingManaged.length} managed {kind === "resourcePack" ? "resource pack" : "shader pack"} file{inventory.missingManaged.length === 1 ? " is" : "s are"} missing. Aurora will not recreate files automatically.</p>
@@ -200,6 +202,7 @@
         <option value="managed">Managed</option>
       </select></label>
     </div>
+    <p class="library-count" role="status">{shown.length} of {entries.length} {title.toLowerCase()} entries</p>
     {#if entries.length === 0}
       <div class="empty-state"><h4 class="empty-title">No local {title.toLowerCase()} found</h4><p class="empty-detail">Add ZIP files or pack folders to this instance's {directoryName} folder, then Refresh.</p></div>
     {:else if shown.length === 0}
@@ -211,16 +214,16 @@
           {@const toggleReason = packToggleUnavailableReason(entry)}
           <article class="pack-row">
             <div class="pack-main">
-              <InstalledArtwork compact projectId={entry.ownership === 'providerManaged' && entry.provenance?.provider === "modrinth" ? entry.provenance.projectId : artworkProjects[entry.entryId] ?? null} fallback={kind === "resourcePack" ? "R" : "S"} />
+              <InstalledArtwork projectId={entry.ownership === 'providerManaged' && entry.provenance?.provider === "modrinth" ? entry.provenance.projectId : artworkProjects[entry.entryId] ?? null} fallback={kind === "resourcePack" ? "R" : "S"} />
               <div class="pack-identity">
-                <h4>{entry.displayName}</h4>
+                <h4 title={entry.displayName}>{entry.displayName}</h4>
                 <p class="pack-meta">{packSourceLabel(entry)}{formatPackSize(entry.sizeBytes) ? ` · ${formatPackSize(entry.sizeBytes)}` : ""}</p>
                 {#if entry.description}<p class="pack-description">{entry.description}</p>{/if}
                 {#if entry.warnings.length}<p class="pack-warning">⚠ {entry.warnings[0]?.message}{entry.warnings.length > 1 ? ` (+${entry.warnings.length - 1} more)` : ""}</p>{/if}
               </div>
             </div>
             <div class="pack-actions">
-              <span class="pack-state" class:pack-state-on={entry.management.active === true} title={toggleReason ?? undefined}>{packStateLabel(entry)}</span>
+              <span class="pack-state" class:pack-state-on={entry.management.active === true} title={toggleReason ?? undefined} aria-live="polite">{packStateLabel(entry)}</span>
               {#if entry.provenance?.provider === "modrinth"}
                 {@const update = updatesReport?.entries.find((item) => item.contentType === kind && item.projectId === entry.provenance?.projectId)}
                 {#if update?.status === "updateAvailable"}
@@ -270,7 +273,9 @@
 
             {#if expanded === entry.entryId}<div class="pack-details" id="pack-details-{entry.entryId}">
               <dl>
+                <div><dt>Name</dt><dd>{entry.displayName}</dd></div>
                 <div><dt>File</dt><dd>{entry.fileName}</dd></div>
+                {#if entry.description}<div><dt>Description</dt><dd>{entry.description}</dd></div>{/if}
                 {#if entry.provenance}<div><dt>Provider</dt><dd>Modrinth · {entry.provenance.displayVersion ?? entry.provenance.versionId}</dd></div><div><dt>Origin</dt><dd>{providerOriginLabel(entry.provenance.origin)}</dd></div>{/if}
                 {#if entry.packFormat !== null}<div><dt>Pack format</dt><dd>{entry.packFormat}</dd></div>{/if}
                 {#if entry.management.removalBlockedReason}<div><dt>Removal</dt><dd>{entry.management.removalBlockedReason}</dd></div>{/if}
@@ -315,53 +320,58 @@
 </section>
 
 <style>
-  .content-view-tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
-  .content-view-tabs [aria-pressed="true"] { color: var(--color-text); background: var(--color-surface-raised); }
   .packs-panel { min-width: 0; }
   .packs-heading, .packs-heading-actions, .packs-toolbar, .pack-main, .pack-actions { display: flex; align-items: center; gap: var(--space-3); }
   .packs-heading { justify-content: space-between; margin-bottom: var(--space-4); }
   .packs-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
   .packs-note { padding: var(--space-2) var(--space-3); background: var(--color-working-soft); border-radius: var(--radius-sm); color: var(--color-working); }
-  .packs-toolbar { align-items: end; margin-bottom: var(--space-4); flex-wrap: wrap; }
+  .packs-toolbar { align-items: end; margin-bottom: var(--space-3); flex-wrap: wrap; }
+  .library-count { margin: 0 0 var(--space-3); color: var(--color-text-secondary); font-size: var(--text-metadata); }
+  .packs-error { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-3); }
+  .packs-error p { flex: 1 1 20em; margin: 0; overflow-wrap: anywhere; }
   .packs-toolbar label { display: grid; gap: var(--space-1); }
   .packs-toolbar label:first-child { flex: 1; min-width: 180px; }
-  .packs-toolbar select { min-width: 128px; }
-  .packs-toolbar input, .packs-toolbar select { padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; }
+  .packs-toolbar select { width: max(128px, 9em); max-width: 100%; }
+  .packs-toolbar input, .packs-toolbar select { width: 100%; min-height: 40px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--f-radius-control); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; font-size: var(--text-body); }
   .packs-list { border: 1px solid var(--color-surface-edge); border-radius: var(--radius-lg); background: var(--f-panel); box-shadow: var(--f-shadow); }
   .row-update-badge { padding: 1px var(--space-2); border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent); font-size: var(--text-metadata); font-weight: 600; white-space: nowrap; }
   .row-update-badge.badge-pinned { background: var(--color-working-soft); color: var(--color-working); }
   .row-update-badge.badge-blocked { background: var(--color-error-soft); color: var(--color-error); }
   .pack-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); }
   .pack-row:last-child { border-bottom: none; }
-  .pack-main { min-width: 0; align-items: flex-start; }
+  .pack-main { min-width: 0; align-items: center; }
   .pack-identity { min-width: 0; }
-  .pack-identity h4 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-body); }
+  .pack-identity h4 { margin: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-size: var(--text-body); }
   .pack-meta, .pack-description, .pack-warning { margin: 2px 0 0; font-size: var(--text-metadata); }
   .pack-meta { color: var(--color-text-secondary); }
-  .pack-description { color: var(--color-text-muted); }
+  .pack-description { color: var(--color-text-secondary); }
+  .pack-description, .pack-warning { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
   .pack-warning { color: var(--color-warning); }
   .pack-actions { flex-wrap: wrap; justify-content: flex-end; }
-  .pack-state { font-size: var(--text-metadata); color: var(--color-text-muted); cursor: default; }
-  .pack-state-on { color: var(--color-accent); }
-  .pack-switch { position: relative; width: 34px; height: 19px; border-radius: 999px; border: 1px solid var(--color-border-strong); background: var(--color-surface-sunken); cursor: pointer; padding: 0; transition: background var(--f-fast); }
-  .pack-switch span { position: absolute; top: 1px; left: 1px; width: 15px; height: 15px; border-radius: 50%; background: var(--color-text-secondary); transition: transform var(--f-fast), background var(--f-fast); }
-  .pack-switch[aria-checked="true"] { background: var(--color-accent); border-color: var(--color-accent); }
-  .pack-switch[aria-checked="true"] span { transform: translateX(15px); background: #fff; }
+  .pack-state { font-size: var(--text-metadata); color: var(--color-text-secondary); cursor: default; overflow-wrap: anywhere; }
+  .pack-state-on { color: var(--color-text-secondary); }
+  .pack-switch { position: relative; width: 44px; height: 40px; border: none; border-radius: var(--radius-sm); background: transparent; cursor: pointer; padding: 0; flex: none; }
+  .pack-switch::before { content: ''; position: absolute; inset: 9px 3px; border: 1px solid var(--color-border-strong); border-radius: 999px; background: var(--color-surface-sunken); }
+  .pack-switch span { position: absolute; top: 12px; left: 6px; width: 16px; height: 16px; border-radius: 50%; background: var(--color-text-muted); transition: transform var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease); }
+  .pack-switch[aria-checked="true"]::before { background: var(--color-accent-soft); border-color: var(--color-accent); }
+  .pack-switch[aria-checked="true"] span { transform: translateX(16px); background: var(--color-accent); }
   .pack-switch:disabled { opacity: .55; cursor: default; }
-  .pack-trash, .pack-details-toggle { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
-  .pack-trash:hover:not(:disabled), .pack-details-toggle:hover { background: rgb(255 255 255 / 8%); color: var(--color-text); }
+  .pack-trash, .pack-details-toggle { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--radius-sm); border: none; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+  .pack-trash:hover:not(:disabled) { background: var(--color-error-soft); color: var(--color-error); }
+  .pack-details-toggle:hover { background: var(--color-surface-raised); color: var(--color-text); }
   .pack-trash:disabled { opacity: .4; cursor: default; }
   .pack-details-chevron { display: inline-flex; transition: transform var(--f-fast); }
   .pack-details-chevron.open { transform: rotate(180deg); }
   .pack-details, .pack-confirm { grid-column: 1 / -1; font-size: var(--text-metadata); }
   .pack-details { padding-top: var(--space-2); border-top: 1px dashed var(--color-border); }
   .pack-details dl { margin: var(--space-2) 0; }
-  .pack-details dl div { display: flex; gap: var(--space-3); padding: 2px 0; }
-  .pack-details dt { min-width: 100px; color: var(--color-text-muted); }
+  .pack-details dl div { display: grid; grid-template-columns: minmax(0, 100px) minmax(0, 1fr); gap: var(--space-3); padding: 2px 0; }
+  .pack-details dt { color: var(--color-text-muted); }
   .pack-details dd { margin: 0; overflow-wrap: anywhere; }
   .pack-confirm { flex-wrap: wrap; padding: var(--space-3); background: var(--color-error-soft); border-radius: var(--radius-sm); align-items: center; display: flex; gap: var(--space-3); }
   .pack-confirm p { margin: 0; flex: 1; }
-  .pack-confirm-actions { display: flex; gap: var(--space-2); }
+  .pack-confirm-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
   .missing-details { margin: 0 0 var(--space-4); font-size: var(--text-metadata); color: var(--color-text-secondary); }
   @media (max-width: 760px) { .packs-heading { align-items: flex-start; flex-wrap: wrap; } .pack-row { grid-template-columns: 1fr; } .pack-actions { justify-content: flex-start; } }
+  @media (prefers-reduced-motion: reduce) { .pack-switch span, .pack-details-chevron { transition: none; } }
 </style>

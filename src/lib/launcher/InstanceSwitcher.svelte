@@ -2,7 +2,11 @@
   import { tick } from "svelte";
   import { launcher } from "./store.svelte";
   import Icon from '$lib/shell/Icon.svelte';
-  let { compact = false }: { compact?: boolean } = $props();
+  let { compact = false, status, launchAction }: {
+    compact?: boolean;
+    status?: { ready: boolean; label: string };
+    launchAction?: { label: string; disabled: boolean; run: () => void };
+  } = $props();
   const uid = $props.id();
   const instances = $derived(launcher.launcherState?.instances ?? []);
   const selectedId = $derived(launcher.launcherState?.config.selectedInstanceId ?? "");
@@ -10,11 +14,23 @@
   const busy = $derived(launcher.instanceBusy !== null || launcher.playBusy || launcher.createBusy);
   let open = $state(false);
   let current = $state(0);
+  let menuAbove = $state(false);
+  let menuMaxHeight = $state<number>();
   let root: HTMLDivElement;
   let trigger: HTMLButtonElement;
   function close(restore = false) { open = false; if (restore) trigger?.focus(); }
+  function positionMenu() {
+    if (!launchAction || !root) return;
+    // Read geometry only on opening/resizing, never on an animation loop.
+    const bounds = root.getBoundingClientRect();
+    const below = window.innerHeight - bounds.bottom - 16;
+    const above = bounds.top - 16;
+    menuAbove = below < 160 && above > below;
+    menuMaxHeight = Math.max(0, Math.min(240, window.innerHeight * .3, menuAbove ? above : below));
+  }
   async function reveal(index = instances.findIndex(instance => instance.id === selectedId)) {
     current = Math.max(0, index); open = true; await tick();
+    positionMenu(); await tick();
     document.getElementById(`${uid}-${current}`)?.focus();
   }
   async function choose(id: string) {
@@ -38,15 +54,25 @@
     }
   }
 </script>
-<svelte:window onpointerdown={(event) => { if (open && !root?.contains(event.target as Node)) close(); }} />
-<div class="instance-switcher" class:compact bind:this={root}>
+<svelte:window onpointerdown={(event) => { if (open && !root?.contains(event.target as Node)) close(); }} onresize={() => { if (open) positionMenu(); }} />
+<div class="instance-switcher" class:compact class:launch-control={!!launchAction} bind:this={root}>
+  {#if launchAction}
+    <button type="button" class="btn btn-primary play-hero" aria-label={launchAction.label}
+      aria-describedby={status ? `${uid}-status` : undefined}
+      disabled={launchAction.disabled} onclick={launchAction.run}>
+      <strong class="launch-word">{launchAction.label}</strong>
+      <!-- The instance name is the heading above this control; Launch carries only readiness. -->
+      {#if status}<span id={`${uid}-status`} class="readiness-dot" class:ready={status.ready} role="img" aria-label={status.label} title={status.label}></span>{/if}
+    </button>
+  {/if}
   <button bind:this={trigger} type="button" class="picker-trigger" aria-label="Select Play instance"
+    aria-describedby={status ? `${uid}-status` : undefined}
     aria-haspopup="listbox" aria-expanded={open} aria-controls={`${uid}-list`} disabled={busy || !instances.length}
     onclick={() => open ? close() : void reveal()}
     onkeydown={(event) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); void reveal(); } }}>
-    <span>{selected?.displayName ?? "Choose an instance"}</span><span class="chevron" class:expanded={open}><Icon name="chevron" size={24} /></span>
+    {#if !launchAction}<span class="picker-identity"><span class="picker-name">{selected?.displayName ?? "Choose an instance"}</span>{#if status}<span id={`${uid}-status`} class="readiness-dot" class:ready={status.ready} role="img" aria-label={status.label} title={status.label}></span>{/if}</span>{/if}<span class="chevron" class:expanded={open}><Icon name="chevron" size={24} /></span>
   </button>
-  <div id={`${uid}-list`} class="picker-menu" role="listbox" tabindex="-1" aria-label="Play instances" hidden={!open} onkeydown={key}>
+  <div id={`${uid}-list`} class="picker-menu" class:menu-above={menuAbove} style:max-height={menuMaxHeight === undefined ? undefined : `${menuMaxHeight}px`} role="listbox" tabindex="-1" aria-label="Play instances" hidden={!open} onkeydown={key}>
     {#each instances as instance, index (instance.id)}
       <button id={`${uid}-${index}`} type="button" role="option" aria-selected={instance.id === selectedId}
         tabindex={open && current === index ? 0 : -1} class="picker-option" disabled={busy}
@@ -61,7 +87,10 @@
 <style>
   .instance-switcher { position: relative; min-width: 0; }
   .picker-trigger { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); width: 100%; min-width: 0; min-height: 48px; border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); padding: 8px 12px; background: rgb(255 255 255 / 3%); color: var(--color-text); font: inherit; font-size: 16px; font-weight: 600; text-align: left; cursor: pointer; transition: background var(--f-fast), border-color var(--f-fast); }
-  .picker-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .picker-identity { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+  .picker-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .readiness-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--color-error); }
+  .readiness-dot.ready { background: var(--color-success); }
   .picker-trigger:hover:not(:disabled), .picker-trigger[aria-expanded="true"] { background: rgb(255 255 255 / 7%); border-color: var(--f-edge); }
   .picker-trigger:disabled { opacity: .55; cursor: default; }
   .chevron { display: grid; place-items: center; width: 32px; height: 32px; flex: none; color: var(--color-text-secondary); transition: transform var(--f-duration) var(--f-ease); }
@@ -77,5 +106,16 @@
   .option-identity small { color: var(--color-text-secondary); font-size: 12px; line-height: 1.5; }
   .selected-marker { display: flex; align-items: center; gap: 5px; color: var(--color-accent); font-size: 11px; white-space: nowrap; }
   .picker-option:focus-visible, .picker-trigger:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  .launch-control { display: flex; height: 100%; border: 1px solid var(--f-accent-edge); border-radius: var(--f-radius-control); background: var(--f-accent-fill); backdrop-filter: var(--f-blur); box-shadow: var(--f-accent-inset), var(--f-accent-shadow); }
+  .launch-control .play-hero { display: flex; flex: 1; justify-content: center; align-items: center; gap: var(--space-3); min-width: 0; padding: var(--space-4); border: 0; border-radius: var(--f-radius-control) 0 0 var(--f-radius-control); background: transparent !important; box-shadow: none; }
+  .launch-control .play-hero:hover:not(:disabled) { background: var(--f-accent-fill-hover) !important; }
+  .launch-control .play-hero:active:not(:disabled) { background: var(--f-accent-fill-pressed) !important; }
+  .launch-word { font-size: 1.5rem; font-weight: 700; letter-spacing: -.03em; }
+  .launch-control .picker-identity { font-size: 1.125rem; font-weight: 400; }
+  .launch-control .picker-trigger { flex: none; width: 52px; min-height: 0; align-self: stretch; justify-content: center; padding: 0; border: 0; border-left: 1px solid var(--f-accent-edge); border-radius: 0 var(--f-radius-control) var(--f-radius-control) 0; color: var(--color-accent-contrast); background: transparent; }
+  .launch-control .picker-trigger:hover:not(:disabled), .launch-control .picker-trigger[aria-expanded="true"] { background: rgb(255 255 255 / 10%); }
+  .launch-control .chevron { color: inherit; }
+  .launch-control .picker-menu { max-height: min(240px, 30dvh); text-align: left; }
+  .launch-control .picker-menu.menu-above { top: auto; bottom: calc(100% + var(--space-2)); }
   @media (prefers-reduced-motion: reduce) { .chevron, .picker-trigger, .picker-option { transition: none; } }
 </style>

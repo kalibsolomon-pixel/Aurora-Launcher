@@ -57,6 +57,7 @@ impl PlatformPin {
         match self {
             Self::Fabric { .. } => Ok("fabric"),
             Self::NeoForge { .. } => Ok("neoforge"),
+            Self::Forge { .. } => Ok("forge"),
             other => Err(format!(
                 "{} content has no provider compatibility identity",
                 other.kind()
@@ -171,6 +172,14 @@ pub fn capabilities() -> Vec<PlatformCapability> {
             can_launch: true,
             aurora_supported: false,
         },
+        PlatformCapability {
+            kind: "forge",
+            can_create: true,
+            can_install: true,
+            can_validate: true,
+            can_launch: true,
+            aurora_supported: false,
+        },
     ]
 }
 
@@ -242,11 +251,15 @@ mod tests {
     }
     #[test]
     fn unimplemented_platforms_are_not_executable_or_provider_compatible() {
+        // Forge is executable since F1B and carries the provider identity
+        // of its family; it still has no Fabric identity.
+        let forge = PlatformPin::Forge {
+            version: "1.21.11-61.2.0".into(),
+        };
+        assert!(forge.require_fabric().is_err());
+        assert_eq!(forge.provider_loader().unwrap(), "forge");
         for platform in [
             PlatformPin::Vanilla {},
-            PlatformPin::Forge {
-                version: "1".into(),
-            },
             PlatformPin::Quilt {
                 version: "1".into(),
             },
@@ -262,8 +275,12 @@ mod tests {
         assert_eq!(neoforge.provider_loader().unwrap(), "neoforge");
         assert_eq!(
             capabilities().iter().map(|c| c.kind).collect::<Vec<_>>(),
-            vec!["vanilla", "fabric", "neoForge"]
+            vec!["vanilla", "fabric", "neoForge", "forge"]
         );
+        let forge = PlatformPin::Forge {
+            version: "1".into(),
+        };
+        assert!(forge.provider_loader().is_ok());
         assert!(
             capabilities()
                 .iter()

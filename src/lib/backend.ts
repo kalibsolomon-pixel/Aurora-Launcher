@@ -4,6 +4,26 @@ import { startProbe, endProbe } from "./launcher/performance.ts";
 
 export type BackendStatus = "ready";
 
+export type BackupRetentionOutcome = "retainedByPolicy" | "retainedActiveTransaction" | "retainedRecovery" | "retainedManualRepair" | "retainedUnknownOwnership" | "retiredSuccessfully" | "cleanupInterrupted" | "cleanupFailedSafely";
+export interface BackupRetentionReport {
+  entries: { transactionId: string; outcome: BackupRetentionOutcome }[];
+  eligibleBackups: number;
+  protectedBackups: number;
+  retiredBackups: number;
+  verifiedBackupBytesBefore: number;
+  reclaimedBytes: number;
+  verifiedBackupBytesAfter: number;
+  validationMs: number;
+  elapsedMs: number;
+  skipped: BackupRetentionOutcome | null;
+}
+export async function maintainInstallationBackups(instanceId: string): Promise<BackupRetentionReport> {
+  return invoke<BackupRetentionReport>("maintain_installation_backups", { request: { instanceId } }).catch((cause: unknown) => {
+    if (isBackendCommandError(cause)) throw new LauncherBackendError(cause.code, cause.message);
+    throw new LauncherBackendError("backend_unavailable", "Backup maintenance is unavailable. Recovery data remains protected.");
+  });
+}
+
 export interface PlatformInfo {
   os: string;
   architecture: string;
@@ -307,6 +327,26 @@ export async function removeDesktopShortcut(): Promise<DesktopIntegrationState> 
   }
 }
 
+/** Adds a Windows Programs shortcut; does not pin to the Start grid. */
+export async function createStartMenuShortcut(): Promise<DesktopIntegrationState> {
+  try {
+    return await invoke<DesktopIntegrationState>("create_start_menu_shortcut");
+  } catch (error: unknown) {
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    throw new LauncherBackendError("backend_unavailable", "The Start menu shortcut could not be created.");
+  }
+}
+
+/** Opens only the Rust-resolved managed launcher data folder. */
+export async function openLauncherFolder(): Promise<void> {
+  try {
+    await invoke<void>("open_launcher_folder");
+  } catch (error: unknown) {
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    throw new LauncherBackendError("backend_unavailable", "The launcher data folder could not be opened.");
+  }
+}
+
 export type AcquisitionOrigin = "downloaded" | "cacheHit";
 
 export interface AcquireArtifactRequest {
@@ -547,12 +587,29 @@ export interface InstanceWindow {
 
 /** The desired configuration of one instance: what the user wants it to be. */
 export interface InstanceConfiguration {
+  performanceMode?: PerformanceMode | null;
   minecraftVersion: string;
   auroraEnabled: boolean;
   loader: InstanceLoader;
   memoryMib: number;
   additionalJvmArguments: string;
   window: InstanceWindow | null;
+}
+
+export type PerformanceMode = "efficient" | "balanced" | "performance" | "custom";
+export interface MemoryAdvice {
+  facts: { totalMib: number | null; availableMib: number | null; architecture: string; source: string; ageSeconds: number };
+  recommendedMib: number | null;
+  explanation: string;
+  unknowns: string[];
+  argumentNotices: string[];
+}
+export async function getInstancePerformanceAdvice(instanceId: string, mode: PerformanceMode | null): Promise<MemoryAdvice> {
+  try { return await invoke<MemoryAdvice>("get_instance_performance_advice", { request: { instanceId, mode } }); }
+  catch (error: unknown) {
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    throw error;
+  }
 }
 
 export type InstancePlatform =
@@ -569,6 +626,7 @@ export interface PlatformCapability {
 }
 
 export interface InstanceSummary {
+  recovery?: { status: "checking" | "busy" | "interrupted" | "previousRestored" | "completed" | "manualRepair"; message: string } | null;
   auroraContentState?: string | null;
   id: string;
   displayName: string;
@@ -768,6 +826,15 @@ export async function listFabricLoaderVersions(
  */
 export async function listNeoforgeVersions(minecraftVersion: string): Promise<NeoForgeVersion[]> {
   return invoke("list_neoforge_versions", { minecraftVersion });
+}
+
+export interface ForgeVersion {
+  version: string;
+  stable: boolean;
+}
+
+export async function listForgeVersions(minecraftVersion: string): Promise<ForgeVersion[]> {
+  return invoke("list_forge_versions", { minecraftVersion });
 }
 
 
@@ -2154,3 +2221,42 @@ export const launcherUpdateDownload = (version: string): Promise<LauncherUpdateS
   updateCommand<LauncherUpdateStatus>("launcher_update_download", { version });
 export const launcherUpdateInstall = (version: string): Promise<LauncherUpdateStatus> =>
   updateCommand<LauncherUpdateStatus>("launcher_update_install", { version });
+
+/** Display icons (Material Symbols names) keyed by instance id. Presentation only. */
+export async function getInstanceIcons(): Promise<Record<string, string>> {
+  try { return await invoke<Record<string, string>>("get_instance_icons"); }
+  catch (error: unknown) {
+    if (isBackendCommandError(error)) throw new LauncherBackendError(error.code, error.message);
+    throw new LauncherBackendError("backend_unavailable", "Instance icons are unavailable.");
+  }
+}
+export function setInstanceIcon(instanceId: string, icon: string | null): Promise<Record<string, string>> {
+  return contentInvoke("set_instance_icon", { instanceId, icon });
+}
+
+/** Read-only review of merging an exact pack version into an existing instance. */
+export interface ModrinthPackMergePreview {
+  pack: ModrinthPackPreview;
+  instanceId: string;
+  instanceMinecraftVersion: string;
+  instanceFabricLoaderVersion: string | null;
+  added: string[];
+  alreadyPresent: string[];
+  keptExisting: string[];
+  overridesWritten: string[];
+  blockers: string[];
+  fingerprint: string;
+}
+export interface ModrinthPackMergeResult {
+  instanceId: string;
+  added: number;
+  alreadyPresent: number;
+  overridesWritten: number;
+  keptExisting: string[];
+}
+export function previewModrinthPackMerge(instanceId: string, projectId: string, versionId: string, selectedOptional: string[]): Promise<ModrinthPackMergePreview> {
+  return contentInvoke("preview_modrinth_pack_merge", { instanceId, projectId, versionId, selectedOptional, fingerprint: null });
+}
+export function installModrinthPackMerge(instanceId: string, projectId: string, versionId: string, selectedOptional: string[], fingerprint: string): Promise<ModrinthPackMergeResult> {
+  return contentInvoke("install_modrinth_pack_merge", { instanceId, projectId, versionId, selectedOptional, fingerprint });
+}

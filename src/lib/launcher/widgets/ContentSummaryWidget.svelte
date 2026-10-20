@@ -23,7 +23,7 @@
     <div><strong>{shaders?.entries.length ?? "—"}</strong><span>Shader packs</span></div>
   </div>
   <p>Local inventory · pack counts do not imply activation.</p>
-{:else}<p>Select an instance to see its local content.</p>{/if}
+{:else}<p class="widget-empty">Select an instance to see its local content.</p>{/if}
 <style>
   .counts { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: var(--space-3); }
   .counts div { display: grid; gap: var(--space-1); } strong { font-size: 24px; font-weight: 500; }

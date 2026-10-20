@@ -12,6 +12,7 @@
   } from "$lib/instances/mods";
   import { applyProviderRemoval, previewProviderRemoval, type ProviderRemovalPreview, getInstanceContentContext, getProviderLifecycle, providerOriginLabel, type InstanceContentContext, type InstanceSummary, type ModEntry, type ProviderLifecycleEntry, type UpdatesReport } from "$lib/backend";
   import ModrinthBrowse from "./ModrinthBrowse.svelte";
+  import ContentViewSwitch from "./ContentViewSwitch.svelte";
   import ProviderLifecycleActions from "./ProviderLifecycleActions.svelte";
   import InstalledArtwork from "./InstalledArtwork.svelte";
   import { artworkProject } from "./projectArtwork";
@@ -167,8 +168,8 @@
   function stateLabel(entry: ModEntry): string {
     if (entry.ownership === "launcherManagedRequired") return "Required";
     if (entry.ownership === "launcherManagedRetained") return "Retained";
-    if (entry.ownership === "launcherBootstrap") return entry.enabled ? "" : "Disabled";
-    if (entry.ownership === "providerManaged") return entry.enabled ? "" : "Disabled";
+    if (entry.ownership === "launcherBootstrap") return entry.enabled ? "Enabled" : "Disabled";
+    if (entry.ownership === "providerManaged") return entry.enabled ? "Enabled" : "Disabled";
     if (entry.fileType === "enabledJar") return "Enabled";
     if (entry.fileType === "disabledJar") return "Disabled";
     if (entry.fileType === "link") return "Link";
@@ -177,11 +178,8 @@
   }
 </script>
 
-<section class="mods-panel" aria-labelledby="mods-title">
-  <div class="content-view-tabs" role="group" aria-label="Mods view">
-    <button type="button" class="btn btn-quiet" aria-pressed={view === "installed"} onclick={() => view = "installed"}>Installed</button>
-    {#if context?.modrinthAvailable}<button type="button" class="btn btn-quiet" aria-pressed={view === "browse"} onclick={() => view = "browse"}>Browse Modrinth</button>{/if}
-  </div>
+<section class="mods-panel" aria-label={`Mods for ${instance.displayName}`}>
+  <ContentViewSwitch bind:view label="Mods view" canBrowse={context?.modrinthAvailable ?? false} />
   {#if view === "browse"}
     <ModrinthBrowse instanceId={instance.id} instanceName={instance.displayName} minecraftVersion={instance.minecraftVersion} loaderLabel={instance.platform.kind === "neoForge" ? "NeoForge" : "Fabric"} kind="mod" installedProjectIds={entries.filter((entry) => entry.provenance?.provider === "modrinth").map((entry) => entry.provenance!.projectId)} dependencyOnlyProjectIds={lifecycleEntries.filter((entry) => entry.record.contentType === "mod" && !entry.record.explicitlyRetained).map((entry) => entry.record.projectId)} onInstalled={async (targetId, targetKind) => { await refreshInstalled(targetId); if (targetKind !== "mod") await launcher.runLoadContent(targetId, targetKind); await launcher.refreshState(); }} />
   {:else}
@@ -191,7 +189,7 @@
   {/if}
   <div class="mods-heading">
     <div>
-      <h3 id="mods-title" class="group-title">Mods</h3>
+      <h3 id="mods-title" class="group-title">Installed Mods</h3>
       <p class="group-subtitle">Files for {instance.displayName}.{context?.modsLoadable ? " Browse compatible mods on Modrinth." : context ? " This platform does not load mods. Files here are only stored locally." : ""}</p>
     </div>
     <div class="mods-heading-actions">
@@ -221,8 +219,10 @@
   {/if}
 
   {#if context?.modrinthAvailable && view === "installed"}
-    <ContentRecognition {instance} kind="mod" onChanged={async () => { await refreshInstalled(instance.id); }} />
-    <ContentUpdates instanceId={instance.id} kind="mod" names={providerNames} bind:report={updatesReport} onChanged={async () => { await refreshInstalled(instance.id); await launcher.refreshState(); await launcher.refreshPlayReadiness(); }} />
+    <div class="content-tools">
+      <ContentRecognition {instance} kind="mod" onChanged={async () => { await refreshInstalled(instance.id); }} />
+      <ContentUpdates instanceId={instance.id} kind="mod" names={providerNames} bind:report={updatesReport} onChanged={async () => { await refreshInstalled(instance.id); await launcher.refreshState(); await launcher.refreshPlayReadiness(); }} />
+    </div>
   {/if}
 
   {#if launcher.modError}
@@ -261,6 +261,8 @@
       </label>
     </div>
 
+    <p class="library-count" role="status">{shown.length} of {entries.length} mod entries</p>
+
     {#if entries.length === 0}
       <div class="empty-state mods-empty">
         <h4 class="empty-title">No local mods found</h4>
@@ -281,7 +283,7 @@
               <InstalledArtwork projectId={artworkProject(entry) ?? artworkProjects[entry.entryId] ?? null} fallback={entry.metadata ? "M" : "J"} />
               <div class="mod-identity">
                 <div class="mod-title-line">
-                  <h4>{entry.displayName}</h4>
+                  <h4 title={entry.displayName}>{entry.displayName}</h4>
                   {#if entry.metadata?.version}
                     <span class="mod-version-line"><span class="mod-version">{entry.metadata.version}</span>
                       {#if entry.warnings.length}
@@ -299,7 +301,7 @@
                   {/if}
                 </div>
                 <p class="mod-meta">
-                  {entry.metadata ? (instance.platform.kind === "neoForge" ? "NeoForge" : "Fabric") : "Metadata unavailable"}
+                  {entry.provenance?.provider === "modrinth" ? "Modrinth" : entry.ownership === "launcherBootstrap" ? "Aurora install" : "Local"} · {entry.metadata ? (instance.platform.kind === "neoForge" ? "NeoForge" : "Fabric") : "Metadata unavailable"}
                   {#if entry.metadata?.authors.length}
                     · By {entry.metadata.authors.slice(0, 2).join(", ")}{entry.metadata.authors.length > 2 ? "…" : ""}
                   {/if}
@@ -308,7 +310,7 @@
             </div>
 
             <div class="mod-row-actions">
-              <span class="mod-state" class:mod-state-required={entry.ownership === "launcherManagedRequired"}>
+              <span class="mod-state" class:mod-state-required={entry.ownership === "launcherManagedRequired"} aria-live="polite">
                 {launcher.modMutationBusy === entry.entryId ? "Changing…" : stateLabel(entry)}
               </span>
               {#if entry.provenance?.provider === "modrinth"}
@@ -361,10 +363,13 @@
 
             {#if expanded === entry.entryId}<div class="mod-details" id="mod-details-{entry.entryId}">
               <dl>
+                <div><dt>Name</dt><dd>{entry.displayName}</dd></div>
                 <div><dt>File</dt><dd>{entry.fileName}</dd></div>
                 <div><dt>Source</dt><dd>{entry.ownership === "launcherManagedRequired" ? "Aurora · required" : entry.ownership === "providerManaged" ? `Modrinth${entry.provenance ? ` · ${entry.provenance.displayVersion ?? entry.provenance.versionId}` : ""}` : entry.ownership === "launcherBootstrap" ? "Installed initially by Aurora; user controlled" : entry.ownership === "userManaged" ? "Local mod" : "Unclassified"}</dd></div>
                 {#if entry.provenance}<div><dt>Origin</dt><dd>{providerOriginLabel(entry.provenance.origin)}</dd></div>{/if}
                 {#if entry.metadata}
+                  {#if entry.metadata.description}<div><dt>Description</dt><dd>{entry.metadata.description}</dd></div>{/if}
+                  {#if entry.metadata.version}<div><dt>Version</dt><dd>{entry.metadata.version}</dd></div>{/if}
                   <div><dt>Mod ID</dt><dd>{entry.metadata.id}</dd></div>
                   {#if entry.metadata.environment}<div><dt>Environment</dt><dd>{entry.metadata.environment}</dd></div>{/if}
                   {#if entry.metadata.depends.length}<div><dt>Requires</dt><dd>{entry.metadata.depends.map((item) => `${item.modId} ${item.requirement}`).join(", ")}</dd></div>{/if}
@@ -439,12 +444,10 @@
 <style>
   .mod-identity .mod-meta { margin-bottom: 0; }
   .mod-row-main { min-height: 52px; }
-  .mod-details-toggle { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+  .mod-details-toggle { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
   .mod-details-toggle:hover { background: var(--color-surface-raised); color: var(--color-text); }
   .mod-details-chevron { display: grid; place-items: center; transition: transform var(--motion-fast) var(--motion-ease); }
   .mod-details-chevron.open { transform: rotate(180deg); }
-  .content-view-tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
-  .content-view-tabs [aria-pressed="true"] { color: var(--color-text); background: var(--color-surface-raised); }
   .mods-panel { min-width: 0; }
   .mods-heading, .mods-heading-actions, .mods-toolbar, .mod-title-line, .mod-row-actions, .remove-actions {
     display: flex;
@@ -457,39 +460,41 @@
   .mods-error { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); padding: var(--space-3); border-radius: var(--radius-sm); background: var(--color-error-soft); color: var(--color-error); font-size: var(--text-secondary); flex-wrap: wrap; }
   .mods-error p { margin: 0; flex: 1; }
   .mods-error code { color: var(--color-text-muted); font-size: var(--text-metadata); }
-  .mods-toolbar { align-items: end; gap: var(--space-3); margin-bottom: var(--space-4); }
+  .mods-toolbar { align-items: end; gap: var(--space-3); margin-bottom: var(--space-3); flex-wrap: wrap; }
+  .library-count { margin: 0 0 var(--space-3); color: var(--color-text-secondary); font-size: var(--text-metadata); }
   .mods-search, .mods-control { display: grid; gap: var(--space-1); }
   .mods-search { flex: 1; min-width: 180px; }
-  .mods-control { width: 128px; }
-  .mods-toolbar input, .mods-toolbar select { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; font-size: var(--text-body); }
+  .mods-control { width: max(128px, 9em); max-width: 100%; }
+  .mods-toolbar input, .mods-toolbar select { width: 100%; min-height: 40px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--f-radius-control); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; font-size: var(--text-body); }
   .mod-list { overflow: visible; border: 1px solid var(--color-surface-edge); border-radius: var(--radius-lg); background: var(--f-panel); box-shadow: var(--f-shadow); }
   .mod-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2) var(--space-4); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border); min-width: 0; }
   .mod-row:last-child { border-bottom: none; }
   .mod-row-disabled .mod-identity { opacity: 0.7; }
-  .mod-row-main { display: flex; gap: var(--space-3); min-width: 0; }
+  .mod-row-main { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
   .mod-identity { min-width: 0; }
   .mod-title-line { gap: 0 var(--space-2); min-width: 0; flex-wrap: wrap; }
-  .mod-title-line h4 { margin: 0; overflow-wrap: anywhere; color: var(--color-text); font-size: var(--text-body); font-weight: 600; }
+  .mod-title-line h4 { margin: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; color: var(--color-text); font-size: var(--text-body); font-weight: 600; }
   .mod-version-line { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
-  .mod-version { color: var(--color-text-muted); font-size: var(--text-metadata); }
+  .mod-version { color: var(--color-text-secondary); font-size: var(--text-metadata); }
   .mod-version { overflow-wrap: anywhere; }
   .metadata-warning-list { margin: var(--space-2) 0 0; padding-left: var(--space-4); }
   .metadata-warning-list li + li { margin-top: var(--space-2); }
   .mod-meta { margin: 2px 0 0; }
   .mod-meta { color: var(--color-text-secondary); font-size: var(--text-secondary); }
-  .mod-row-actions { align-self: start; justify-content: flex-end; gap: var(--space-2); }
+  .mod-row-actions { align-self: center; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap; }
   .mod-state, .protected-marker { color: var(--color-text-secondary); font-size: var(--text-metadata); font-weight: 500; white-space: nowrap; }
   .row-update-badge { padding: 1px var(--space-2); border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent); font-size: var(--text-metadata); font-weight: 600; white-space: nowrap; }
   .row-update-badge.badge-pinned { background: var(--color-working-soft); color: var(--color-working); }
   .row-update-badge.badge-blocked { background: var(--color-error-soft); color: var(--color-error); }
   .mod-state-required { color: var(--color-working); }
   .protected-marker { color: var(--color-text-muted); }
-  .mod-switch { position: relative; width: 38px; height: 22px; padding: 2px; border: 1px solid var(--color-border-strong); border-radius: 999px; background: var(--color-surface-sunken); cursor: pointer; }
-  .mod-switch span { display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--color-text-muted); transition: transform var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease); }
-  .mod-switch[aria-checked="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); }
+  .mod-switch { position: relative; width: 44px; height: 40px; padding: 0; border: none; border-radius: var(--radius-sm); background: transparent; cursor: pointer; flex: none; }
+  .mod-switch::before { content: ''; position: absolute; inset: 9px 3px; border: 1px solid var(--color-border-strong); border-radius: 999px; background: var(--color-surface-sunken); }
+  .mod-switch span { position: absolute; top: 12px; left: 6px; display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--color-text-muted); transition: transform var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease); }
+  .mod-switch[aria-checked="true"]::before { border-color: var(--color-accent); background: var(--color-accent-soft); }
   .mod-switch[aria-checked="true"] span { transform: translateX(16px); background: var(--color-accent); }
   .mod-switch:disabled { opacity: 0.5; cursor: progress; }
-  .mod-trash { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+  .mod-trash { width: 40px; height: 40px; padding: 0; display: grid; place-items: center; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
   .mod-trash:hover { background: var(--color-error-soft); color: var(--color-error); }
   .mod-trash:disabled { opacity: .45; cursor: default; }
 

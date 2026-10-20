@@ -28,9 +28,9 @@
 //! complete tree — including the manifest that marks completion — is built
 //! under `.install-staging/` and becomes visible through one directory
 //! rename. An interrupted installation therefore always leaves the instance
-//! either without a game directory or with its previous complete one; a
-//! staging directory is never mistaken for an installed game, and the next
-//! attempt removes it (after proving it is the fixed, derived staging path).
+//! recoverable through its durable operation journal; a
+//! staging directory is never mistaken for an installed game. A durable
+//! journal protects the previous tree outside staging and controls recovery.
 //!
 //! ## User-data boundary
 //!
@@ -44,17 +44,21 @@
 //!
 //! One installation may run per instance at a time; a second attempt fails
 //! immediately with `installation_already_in_progress`. There is no global
-//! queue and no cross-process locking.
+//! queue; kernel file locks coordinate independent launcher processes.
 
 pub mod assets;
+pub(crate) mod coordination;
+pub mod journal;
 pub mod natives;
+pub mod processors;
+pub mod receipt;
+pub mod retention;
 pub mod state;
 
 use futures_util::future::join_all;
-use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::cache::{
@@ -105,6 +109,11 @@ pub struct InstallContext {
     /// processors. Required by NeoForge plans; `None` for Vanilla and
     /// Fabric, whose installations execute no build steps.
     processor_java: Option<PathBuf>,
+    /// The per-step wall-clock bound for installer processors.
+    processor_timeout: std::time::Duration,
+    /// Cooperative cancellation for installer processors. The default
+    /// never fires; wiring a live signal is a caller decision.
+    processor_cancel: processors::CancelSignal,
 }
 
 impl InstallContext {
@@ -116,6 +125,8 @@ impl InstallContext {
             asset_endpoints: AssetObjectEndpoints::official(),
             small_artifact_concurrency: SMALL_ARTIFACT_CONCURRENCY,
             processor_java: None,
+            processor_timeout: processors::SupervisorLimits::default().timeout,
+            processor_cancel: processors::CancelSignal::default(),
         }
     }
 
@@ -130,12 +141,26 @@ impl InstallContext {
             asset_endpoints,
             small_artifact_concurrency: SMALL_ARTIFACT_CONCURRENCY,
             processor_java: None,
+            processor_timeout: processors::SupervisorLimits::default().timeout,
+            processor_cancel: processors::CancelSignal::default(),
         }
     }
 
     /// Sets the managed Java executable used for installer processors.
     pub fn with_processor_java(mut self, executable: PathBuf) -> Self {
         self.processor_java = Some(executable);
+        self
+    }
+
+    /// Overrides the per-step processor timeout (tests use short values).
+    pub fn with_processor_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.processor_timeout = timeout;
+        self
+    }
+
+    /// Attaches cooperative processor cancellation.
+    pub fn with_processor_cancel(mut self, cancel: processors::CancelSignal) -> Self {
+        self.processor_cancel = cancel;
         self
     }
 
@@ -196,11 +221,21 @@ pub struct InstallProgress {
 /// passes the default (no injected failures).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct InstallFaults {
+    /// Stop at one durable transition, leaving on-disk evidence for replay.
+    pub stop_at: Option<journal::TransactionPoint>,
+    /// Rust-only observer used by opt-in native process-kill acceptance.
+    pub transition_observer: Option<fn(journal::TransactionPoint)>,
     /// Fail immediately before the staged tree is promoted, after the
     /// manifest is written into staging.
     pub fail_before_commit: bool,
     /// Fail partway through materialization, after the first staged copy.
     pub fail_during_materialization: bool,
+    /// Fail after the processing receipt is written but before any
+    /// processor runs (crash-before-processing window).
+    pub fail_after_processing_receipt: bool,
+    /// Fail after the previous game tree is reserved in staging but before
+    /// the new tree is promoted (crash-between-renames window).
+    pub fail_between_renames: bool,
 }
 
 /// The result of a committed installation.
@@ -251,25 +286,94 @@ pub async fn install_game(
     progress: &mut (dyn FnMut(InstallProgress) + Send),
     faults: InstallFaults,
 ) -> Result<InstalledGame, InstallError> {
+    check_cancel(context)?;
     let started = Instant::now();
-    let lock = instance_installation_lock(instance);
-    let _guard = lock
-        .try_lock()
-        .map_err(|_| InstallError::AlreadyInProgress {
-            instance_id: instance.as_str().to_owned(),
-        })?;
-
     let instance_paths = managed.instance_paths(instance);
     let instance_root = instance_paths.root().to_path_buf();
+    let _guard = lock_game_target(managed, instance)?;
+    if std::env::var_os("AURORA_INSTALL_DIAGNOSTICS").is_some() {
+        eprintln!(
+            "[aurora-install] target={instance} lock_acquire_us={}",
+            started.elapsed().as_micros()
+        );
+    }
     let game_directory = instance_paths.game().to_path_buf();
     let staging_directory = instance_root.join(STAGING_DIR_NAME);
     let staging_game = staging_directory.join("game");
 
+    let recovery = journal::recover_locked(&instance_root, instance, InstallFaults::default())?;
+    if recovery != journal::RecoveryOutcome::None {
+        eprintln!("[aurora-install] target={instance} recovery={recovery:?}");
+        progress(InstallProgress {
+            phase: InstallPhase::Validating,
+            completed_items: 0,
+            total_items: 0,
+            current_item: Some(
+                match recovery {
+                    journal::RecoveryOutcome::PreviousRestored => {
+                        "Previous installation restored; preparing the requested retry"
+                    }
+                    journal::RecoveryOutcome::Completed => {
+                        "Previous installation operation completed; preparing the requested retry"
+                    }
+                    _ => "Interrupted installation recovered; preparing the requested retry",
+                }
+                .into(),
+            ),
+        });
+    }
     let replacing = decide_replacement(&game_directory)?;
+    let minecraft = plan.minecraft();
 
+    // An existing receipt names an interrupted Aurora transaction (or is
+    // honestly unknown evidence); staging disposal below stays governed by
+    // the derived-path proof either way.
+    match receipt::classify_existing(&staging_directory) {
+        receipt::Disposition::NoReceipt => {}
+        receipt::Disposition::Interrupted {
+            transaction_id,
+            instance_id,
+            last_stage,
+        } => {
+            eprintln!(
+                "[aurora-launcher] recovering interrupted installation transaction {transaction_id} for instance {instance_id}, last completed stage '{last_stage}'; disposing its staging"
+            );
+        }
+        receipt::Disposition::Unknown { reason } => {
+            eprintln!(
+                "[aurora-launcher] found unknown staging receipt evidence at {} ({reason}); disposing staging after the derived-path proof",
+                staging_directory.display()
+            );
+        }
+    }
+
+    let mut durable_operation = journal::Journal::begin(&instance_root, instance)?;
+    journal::checkpoint(&instance_root, faults, journal::TransactionPoint::Prepared)?;
     prepare_staging(&instance_root, &staging_directory, &staging_game)?;
 
-    let minecraft = plan.minecraft();
+    // The durable transaction receipt: written before any long work, at
+    // every stage transition, and before each promotion rename. Its
+    // presence after a crash distinguishes an interrupted Aurora
+    // transaction from any other staging content.
+    let installation_id = durable_operation.transaction_id().to_owned();
+    let platform_kind = serde_json::to_value(plan.platform())
+        .ok()
+        .and_then(|value| {
+            value
+                .get("kind")
+                .and_then(|kind| kind.as_str())
+                .map(str::to_owned)
+        })
+        .unwrap_or_else(|| "unknown".to_owned());
+    let mut transaction_receipt = receipt::TransactionReceipt::begin(
+        &staging_directory,
+        installation_id.clone(),
+        instance.as_str().to_owned(),
+        platform_kind,
+        minecraft.minecraft_version().to_owned(),
+    )
+    .map_err(InstallError::Storage)?;
+
     let cache = ArtifactCache::new(managed.clone());
 
     // ---- Acquisition: everything flows through the verified stores first.
@@ -291,6 +395,7 @@ pub async fn install_game(
     );
 
     let index_artifact = acquire_mojang(&cache, index_requirement.artifact(), context).await?;
+    check_cancel(context)?;
     let index_document = parse_verified_asset_index(&index_artifact, index_requirement)?;
     let objects = assets::plan_asset_objects(&index_document).map_err(|error| {
         InstallError::AssetInvalid {
@@ -312,6 +417,7 @@ pub async fn install_game(
         Some(format!("{} client", minecraft.minecraft_version())),
     );
     let client = acquire_mojang(&cache, minecraft.client(), context).await?;
+    check_cancel(context)?;
     let client_finished = Instant::now();
     completed += 1;
     files.push(PlannedFile {
@@ -325,6 +431,7 @@ pub async fn install_game(
 
     // Logging configuration, when the version requires one.
     if let Some(logging) = minecraft.logging() {
+        check_cancel(context)?;
         report(
             InstallPhase::Acquiring,
             completed,
@@ -364,13 +471,27 @@ pub async fn install_game(
     // Preserve classpath order even when independent acquisitions complete
     // out of order. A failed batch is fully settled before returning, so no
     // download task is abandoned with an open untrusted staging file.
-    for batch in plan.libraries().chunks(context.small_artifact_concurrency) {
+    for batch in plan
+        .libraries()
+        .iter()
+        .filter(|library| match library {
+            // The generated patched client has no upstream URL; the
+            // processor chain materializes and verifies it later in this
+            // installation.
+            GameLibrary::Forge(entry) => entry.artifact().is_downloadable(),
+            _ => true,
+        })
+        .collect::<Vec<_>>()
+        .chunks(context.small_artifact_concurrency)
+    {
+        check_cancel(context)?;
         let acquired = join_all(
             batch
                 .iter()
                 .map(|library| async { acquire_library(&cache, library, context).await }),
         )
         .await;
+        check_cancel(context)?;
         for (library, result) in batch.iter().zip(acquired) {
             let (source, trust, size, role, origin) = result?;
             completed += 1;
@@ -424,6 +545,7 @@ pub async fn install_game(
         );
 
         for library in neoforge.installer_libraries() {
+            check_cancel(context)?;
             let artifact = acquire_neoforge_library(&cache, library, context).await?;
             completed += 1;
             files.push(PlannedFile {
@@ -444,8 +566,60 @@ pub async fn install_game(
         installer_path = Some(installer.path);
     }
 
+    // ---- Forge-specific artifacts: the verified installer (kept for
+    // the processor pass, never an installed file) and the
+    // installer-tool libraries processors run from. The generated
+    // patched client is not acquired here — the processor chain
+    // produces and digest-verifies it.
+    let mut forge_installer_path: Option<PathBuf> = None;
+    if let Some(forge) = plan.forge_loader() {
+        let source = Sha1ArtifactSource::https_or_loopback(
+            forge
+                .installer()
+                .url()
+                .expect("the Forge installer always carries its repository URL")
+                .as_str(),
+            &forge.installer().sha1().as_hex(),
+            forge.installer().size_bytes(),
+        )
+        .map_err(|error| InstallError::InvalidSource(error.to_string()))?;
+        let installer = cache
+            .acquire_sha1(&source, context.download_options())
+            .await
+            .map_err(InstallError::Acquisition)?;
+        completed += 1;
+        report(
+            InstallPhase::Acquiring,
+            completed,
+            total_items,
+            Some(format!("forge {}", forge.forge_version())),
+        );
+
+        for library in forge.installer_libraries() {
+            check_cancel(context)?;
+            let artifact = acquire_forge_library(&cache, library, context).await?;
+            completed += 1;
+            files.push(PlannedFile {
+                source: artifact.path.clone(),
+                relative: format!("libraries/{}", library.path()),
+                trust: artifact.trust(),
+                size_bytes: artifact.bytes,
+                role: InstalledFileRole::Library,
+                origin: artifact.origin,
+            });
+            report(
+                InstallPhase::Acquiring,
+                completed,
+                total_items,
+                Some(library.coordinate().as_maven_string()),
+            );
+        }
+        forge_installer_path = Some(installer.path);
+    }
+
     // Asset objects, deduplicated by hash.
     for batch in objects.chunks(context.small_artifact_concurrency) {
+        check_cancel(context)?;
         let acquired = join_all(batch.iter().map(|object| async {
             let hex = object.sha1().as_hex();
             let source = Sha1ArtifactSource::https_or_loopback(
@@ -460,6 +634,7 @@ pub async fn install_game(
                 .map_err(InstallError::Acquisition)
         }))
         .await;
+        check_cancel(context)?;
         for (object, result) in batch.iter().zip(acquired) {
             let artifact = result?;
             completed += 1;
@@ -480,10 +655,15 @@ pub async fn install_game(
         }
     }
     let assets_finished = Instant::now();
+    check_cancel(context)?;
+    transaction_receipt
+        .record(receipt::Stage::Acquired)
+        .map_err(InstallError::Storage)?;
 
     // ---- Materialization: verified cache objects are copied into staging.
     let total_files = files.len() as u32;
     for (index, file) in files.iter().enumerate() {
+        check_cancel(context)?;
         report(
             InstallPhase::Materializing,
             index as u32,
@@ -501,6 +681,7 @@ pub async fn install_game(
         }
     }
     let materialization_finished = Instant::now();
+    check_cancel(context)?;
 
     // ---- Native extraction from the verified native archives. Modern
     // Minecraft documents append a subdirectory to their own
@@ -521,7 +702,9 @@ pub async fn install_game(
                 GameLibrary::Minecraft(entry) if entry.kind() == LibraryKind::NativeArtifact)
         })
         .collect();
+    let mut native_ownership = Vec::new();
     for (index, library) in native_libraries.iter().enumerate() {
+        check_cancel(context)?;
         report(
             InstallPhase::ExtractingNatives,
             index as u32,
@@ -536,12 +719,16 @@ pub async fn install_game(
             .find(|file| file.relative == format!("libraries/{}", entry.path()))
             .map(|file| file.source.clone())
             .expect("every planned library was acquired and materialized");
-        natives::extract_native_archive(
+        let extracted = natives::extract_native_archive(
             &archive_path,
             &entry.coordinate().as_maven_string(),
             &natives_root,
         )
         .map_err(InstallError::Native)?;
+        native_ownership.extend(extracted.files.into_iter().map(|mut file| {
+            file.path = format!("{extraction_relative}/{}", file.path);
+            file
+        }));
     }
     if native_libraries.is_empty() {
         return Err(InstallError::Validation {
@@ -564,19 +751,36 @@ pub async fn install_game(
                     "the NeoForge plan requires the managed Java runtime, which was not provided"
                         .to_owned(),
             })?;
-            let processor_context = crate::neoforge::processors::ProcessorContext {
-                staging_game: staging_game.clone(),
-                scratch_directory: staging_directory.join("processor-inputs"),
-                installer_path: installer_path
+            let processor_context = crate::neoforge::processors::ProcessorContext::new(
+                staging_game.clone(),
+                staging_directory.join("processor-inputs"),
+                installer_path
                     .clone()
                     .expect("a NeoForge plan acquired its installer above"),
-                java_executable: java_executable.to_path_buf(),
-                client_jar: staging_game.join(format!(
+                *neoforge.installer().sha1(),
+                java_executable.to_path_buf(),
+                staging_game.join(format!(
                     "versions/{}/client.jar",
                     minecraft.minecraft_version()
                 )),
-                minecraft_version: minecraft.minecraft_version().to_owned(),
-            };
+                minecraft.minecraft_version().to_owned(),
+            )
+            .with_timeout(context.processor_timeout)
+            .with_cancel(context.processor_cancel.clone());
+            transaction_receipt
+                .record_processing(
+                    neoforge
+                        .processors()
+                        .iter()
+                        .map(|step| step.jar().as_maven_string())
+                        .collect(),
+                )
+                .map_err(InstallError::Storage)?;
+            if faults.fail_after_processing_receipt {
+                return Err(InstallError::Processing {
+                    reason: "deterministic fault injected after the processing receipt".to_owned(),
+                });
+            }
             let outcome = run_client_processors(neoforge, &processor_context, &mut |item| {
                 report(InstallPhase::Processing, 0, 0, Some(item.to_owned()));
             })
@@ -584,6 +788,19 @@ pub async fn install_game(
             .map_err(|error| InstallError::Processing {
                 reason: error.to_string(),
             })?;
+            transaction_receipt
+                .record_processed(
+                    outcome
+                        .generated
+                        .iter()
+                        .map(|artifact| receipt::GeneratedObservation {
+                            relative: artifact.relative.clone(),
+                            observed_sha256: artifact.observed_sha256.clone(),
+                            size_bytes: artifact.size_bytes,
+                        })
+                        .collect(),
+                )
+                .map_err(InstallError::Storage)?;
             for artifact in outcome.generated {
                 let staged = staging_game.join(artifact.relative.split('/').collect::<PathBuf>());
                 files.push(PlannedFile {
@@ -599,24 +816,116 @@ pub async fn install_game(
             }
         }
     }
+    if let Some(forge) = plan.forge_loader() {
+        if forge.requires_install_time_java() {
+            let java_executable =
+                context
+                    .processor_java
+                    .as_deref()
+                    .ok_or(InstallError::Processing {
+                    reason:
+                        "the Forge plan requires the managed Java runtime, which was not provided"
+                            .to_owned(),
+                })?;
+            let processor_context = crate::forge::processors::ProcessorContext::new(
+                staging_game.clone(),
+                staging_directory.join("processor-inputs"),
+                forge_installer_path
+                    .clone()
+                    .expect("a Forge plan acquired its installer above"),
+                *forge.installer().sha1(),
+                java_executable.to_path_buf(),
+                staging_game.join(format!(
+                    "versions/{}/client.jar",
+                    minecraft.minecraft_version()
+                )),
+                minecraft.minecraft_version().to_owned(),
+            )
+            .with_timeout(context.processor_timeout)
+            .with_cancel(context.processor_cancel.clone());
+            transaction_receipt
+                .record_processing(
+                    forge
+                        .processors()
+                        .iter()
+                        .map(|step| step.jar().as_maven_string())
+                        .collect(),
+                )
+                .map_err(InstallError::Storage)?;
+            if faults.fail_after_processing_receipt {
+                return Err(InstallError::Processing {
+                    reason: "deterministic fault injected after the processing receipt".to_owned(),
+                });
+            }
+            let outcome = crate::forge::processors::run_client_processors(
+                forge,
+                &processor_context,
+                &mut |item| {
+                    report(InstallPhase::Processing, 0, 0, Some(item.to_owned()));
+                },
+            )
+            .await
+            .map_err(|error| InstallError::Processing {
+                reason: error.to_string(),
+            })?;
+            transaction_receipt
+                .record_processed(
+                    outcome
+                        .generated
+                        .iter()
+                        .map(|artifact| receipt::GeneratedObservation {
+                            relative: artifact.relative.clone(),
+                            observed_sha256: artifact.observed_sha256.clone(),
+                            size_bytes: artifact.size_bytes,
+                        })
+                        .collect(),
+                )
+                .map_err(InstallError::Storage)?;
+            for artifact in outcome.generated {
+                let staged = staging_game.join(artifact.relative.split('/').collect::<PathBuf>());
+                // An output that matched its published SHA-1 keeps the
+                // stronger, honest upstream expectation (the digest was
+                // known in trusted metadata before the step ran and the
+                // generated bytes verified against it); every other
+                // generated file is a locally generated observation.
+                let trust = match outcome.published_sha1.get(&artifact.relative) {
+                    Some(sha1) => ArtifactTrust::verified_sha1(sha1),
+                    None => ArtifactTrust::LocallyGenerated {
+                        observed_sha256: artifact.observed_sha256,
+                    },
+                };
+                files.push(PlannedFile {
+                    source: staged,
+                    relative: artifact.relative.clone(),
+                    trust,
+                    size_bytes: artifact.size_bytes,
+                    role: InstalledFileRole::Library,
+                    origin: ArtifactOrigin::CacheHit,
+                });
+            }
+        }
+    }
     let processing_finished = Instant::now();
     let _ = processing_finished;
 
     // ---- Staged validation: every file re-verified before completion.
+    transaction_receipt
+        .record(receipt::Stage::Verifying)
+        .map_err(InstallError::Storage)?;
     report(InstallPhase::Validating, 0, total_files, None);
-    let installed_files =
-        validate_staged_files(&staging_game, &files, &extraction_relative).await?;
+    let installed_files = validate_staged_files(
+        &staging_game,
+        &files,
+        &extraction_relative,
+        &context.processor_cancel,
+    )
+    .await?;
     let staged_validation_finished = Instant::now();
+    transaction_receipt
+        .record(receipt::Stage::Verified)
+        .map_err(InstallError::Storage)?;
 
     // ---- Completion record, written last inside staging.
-    let installation_id = format!(
-        "install-{}-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|since| since.as_millis())
-            .unwrap_or_default(),
-        std::process::id()
-    );
     let installed_at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|since| since.as_secs())
@@ -630,11 +939,37 @@ pub async fn install_game(
         NativesRecord::with_subdirectory(natives_relative, natives_subdirectory),
     );
     let manifest_path = staging_game.join(INSTALLED_GAME_FILE_NAME);
+    // Optional forward-only ownership evidence. Failure protects the backup;
+    // it cannot turn a successful installation into a failure.
+    if retention::seal_staging(&staging_game, &manifest, native_ownership).is_err() {
+        eprintln!("[aurora-retention] outcome=retainedUnknownOwnership reason=sealUnavailable");
+    }
+    let ownership_finished = Instant::now();
+    // The completion manifest remains the final staged file, as before F3R-B.
     std::fs::write(&manifest_path, manifest.to_json()).map_err(|error| InstallError::Commit {
         context: "writing the installed-state manifest".to_owned(),
         source: error,
     })?;
     let state_finished = Instant::now();
+    if std::env::var_os("AURORA_INSTALL_DIAGNOSTICS").is_some() {
+        eprintln!(
+            "[aurora-durability] phase=ownership_seal elapsed_us={} files={} bytes=0",
+            ownership_finished
+                .duration_since(staged_validation_finished)
+                .as_micros(),
+            manifest.files().len()
+        );
+        eprintln!(
+            "[aurora-durability] phase=installed_state_write elapsed_us={} files=1 bytes={}",
+            state_finished
+                .duration_since(ownership_finished)
+                .as_micros(),
+            manifest_path
+                .metadata()
+                .map(|value| value.len())
+                .unwrap_or_default()
+        );
+    }
 
     if faults.fail_before_commit {
         return Err(InstallError::Commit {
@@ -645,13 +980,22 @@ pub async fn install_game(
 
     // ---- Commit: promote the staged tree with one rename.
     report(InstallPhase::Committing, 0, 1, None);
-    promote_staged_game(
-        &instance_root,
-        &game_directory,
-        &staging_directory,
-        &staging_game,
-        replacing,
-    )?;
+    if context.processor_cancel.is_cancelled() {
+        return Err(InstallError::Cancelled);
+    }
+    _guard
+        .recheck(managed.data_root(), &instance_root)
+        .map_err(InstallError::Storage)?;
+    if replacing {
+        transaction_receipt
+            .record_replacing()
+            .map_err(InstallError::Storage)?;
+    } else {
+        transaction_receipt
+            .record(receipt::Stage::Committing)
+            .map_err(InstallError::Storage)?;
+    }
+    durable_operation.promote(&instance_root, faults)?;
 
     if std::env::var_os("AURORA_INSTALL_DIAGNOSTICS").is_some() {
         let hits = files
@@ -685,7 +1029,7 @@ pub async fn install_game(
                 .duration_since(natives_finished)
                 .as_millis(),
             state_finished
-                .duration_since(staged_validation_finished)
+                .duration_since(ownership_finished)
                 .as_millis(),
             Instant::now().duration_since(state_finished).as_millis(),
             files.len(),
@@ -750,10 +1094,67 @@ pub fn validate_installed_game(
     managed: &ManagedPaths,
     instance: &InstanceId,
 ) -> Result<ValidationOutcome, InstallError> {
+    let _guard = read_game_target(managed, instance)?;
+    validate_installed_game_under_lock(managed, instance)
+}
+
+pub(crate) fn validate_installed_game_under_lock(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<ValidationOutcome, InstallError> {
     let _performance = crate::performance::scope(crate::performance::Event::GameIntegrity);
     let game_directory = managed.instance_paths(instance).game().to_path_buf();
+    let instance_root = managed.instance_paths(instance).root().to_path_buf();
+    if instance_root.exists() {
+        coordination::checked_directory(managed.data_root(), &instance_root)
+            .map_err(InstallError::Storage)?;
+    }
+    if std::fs::symlink_metadata(&game_directory).is_ok() {
+        coordination::checked_directory(managed.data_root(), &game_directory)
+            .map_err(InstallError::Storage)?;
+    }
+    journal::readiness_gate(&instance_root, instance)?;
+    validate_game_directory(&game_directory)
+}
+
+/// Network-free restoration under the same kernel lock as game installation.
+pub fn recover_installation(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<journal::RecoveryOutcome, InstallError> {
+    recover_installation_with_faults(managed, instance, InstallFaults::default())
+}
+
+/// Rust-only fault harness; ordinary callers use `recover_installation`.
+pub fn recover_installation_with_faults(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    faults: InstallFaults,
+) -> Result<journal::RecoveryOutcome, InstallError> {
+    let paths = managed.instance_paths(instance);
+    if !paths.root().exists() {
+        return Ok(journal::RecoveryOutcome::None);
+    }
+    let guard = lock_game_target(managed, instance)?;
+    guard
+        .recheck(managed.data_root(), paths.root())
+        .map_err(InstallError::Storage)?;
+    let result = journal::recover_locked(paths.root(), instance, faults)?;
+    if result != journal::RecoveryOutcome::None {
+        eprintln!("[aurora-install] target={instance} recovery={result:?}");
+    }
+    Ok(result)
+}
+
+pub(crate) fn validate_game_directory(
+    game_directory: &Path,
+) -> Result<ValidationOutcome, InstallError> {
     if !game_directory.is_dir() {
         return Ok(ValidationOutcome::NotInstalled);
+    }
+    let metadata = std::fs::symlink_metadata(game_directory).map_err(InstallError::Storage)?;
+    if coordination::redirected(&metadata) {
+        return Err(InstallError::Storage(coordination::unsafe_path()));
     }
 
     let Some(manifest) = load_installed_state(&game_directory).map_err(InstallError::State)? else {
@@ -774,6 +1175,10 @@ pub fn validate_installed_game(
     }
 
     let natives_directory = game_directory.join(manifest.natives().directory());
+    if natives_directory.exists() {
+        coordination::checked_directory(game_directory, &natives_directory)
+            .map_err(InstallError::Storage)?;
+    }
     let natives_ok = natives_directory.is_dir()
         && std::fs::read_dir(&natives_directory)
             .map(|entries| entries.filter_map(Result::ok).count() > 0)
@@ -805,6 +1210,14 @@ pub fn validate_installed_game(
 /// Re-verifies one installed file against its recorded trust and size.
 fn verify_managed_file(game_root: &Path, file: &InstalledFile) -> Result<u64, String> {
     let path = game_root.join(file.path());
+    let parent = path
+        .parent()
+        .ok_or_else(|| "installed file has no parent".to_owned())?;
+    coordination::checked_directory(game_root, parent).map_err(|error| error.to_string())?;
+    let metadata = std::fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+    if !metadata.is_file() || coordination::redirected(&metadata) {
+        return Err("installed file is not a contained regular file".to_owned());
+    }
     match file.trust() {
         ArtifactTrust::ExpectedDigestVerified { algorithm, digest } => match algorithm {
             DigestAlgorithm::Sha256 => {
@@ -837,11 +1250,25 @@ fn acquisition_total(plan: &GameInstallPlan, objects: &UnknownObjects) -> u32 {
     if plan.minecraft().logging().is_some() {
         total += 1;
     }
-    total += plan.libraries().len() as u32;
+    let downloadable = plan
+        .libraries()
+        .iter()
+        .filter(|library| match library {
+            // The processor-generated patched client is not an
+            // acquisition: the processor chain produces it.
+            GameLibrary::Forge(entry) => entry.artifact().is_downloadable(),
+            _ => true,
+        })
+        .count();
+    total += downloadable as u32;
     if let Some(neoforge) = plan.neoforge_loader() {
         // The installer jar itself plus the universal artifact and the
         // installer-tool libraries.
         total += 2 + neoforge.installer_libraries().len() as u32;
+    }
+    if let Some(forge) = plan.forge_loader() {
+        // The installer jar itself plus the installer-tool libraries.
+        total += 1 + forge.installer_libraries().len() as u32;
     }
     if let UnknownObjects::Known(count) = objects {
         total += *count as u32;
@@ -887,9 +1314,7 @@ fn prepare_staging(
 ) -> Result<(), InstallError> {
     prove_staging_path(instance_root, staging_directory)?;
 
-    if staging_directory.exists() {
-        std::fs::remove_dir_all(staging_directory).map_err(InstallError::Storage)?;
-    }
+    journal::cleanup_staging(instance_root)?;
     std::fs::create_dir_all(staging_game).map_err(InstallError::Storage)?;
     Ok(())
 }
@@ -905,63 +1330,6 @@ fn prove_staging_path(instance_root: &Path, staging_directory: &Path) -> Result<
             staging_directory.display()
         ))));
     }
-    Ok(())
-}
-
-/// Promotes the staged game tree onto the final location.
-///
-/// Fresh install: one rename of `staging/game` onto `game`. Replacement: the
-/// proven-managed existing `game` is moved into staging first, the new tree
-/// is renamed into place, and staging (now holding the old tree) is removed.
-/// If the process dies between the two renames the instance has *no* game
-/// directory — visibly incomplete, never a mixture — and the next attempt
-/// rebuilds from scratch.
-fn promote_staged_game(
-    instance_root: &Path,
-    game_directory: &Path,
-    staging_directory: &Path,
-    staging_game: &Path,
-    replacing: bool,
-) -> Result<(), InstallError> {
-    std::fs::create_dir_all(instance_root).map_err(|error| InstallError::Commit {
-        context: "creating the instance directory".to_owned(),
-        source: error,
-    })?;
-
-    if replacing {
-        let retired = staging_directory.join(REPLACED_GAME_DIR_NAME);
-        std::fs::rename(game_directory, &retired).map_err(|error| InstallError::Commit {
-            context: "moving the previous installation aside".to_owned(),
-            source: error,
-        })?;
-        if let Err(error) = std::fs::rename(staging_game, game_directory) {
-            // Put the proven-managed previous installation back before
-            // failing; the instance must not lose its game because the new
-            // promotion could not complete.
-            let _ = std::fs::rename(&retired, game_directory);
-            return Err(InstallError::Commit {
-                context: "promoting the staged installation".to_owned(),
-                source: error,
-            });
-        }
-        prove_staging_path(instance_root, staging_directory)?;
-        // The installation is already committed at this point; a cleanup
-        // failure is reported but must not fail the committed install.
-        if let Err(error) = std::fs::remove_dir_all(staging_directory) {
-            eprintln!(
-                "[aurora-launcher] committed installation but could not remove the retired previous tree at {}: {error}",
-                staging_directory.display()
-            );
-        }
-    } else {
-        std::fs::rename(staging_game, game_directory).map_err(|error| InstallError::Commit {
-            context: "promoting the staged installation".to_owned(),
-            source: error,
-        })?;
-        // Staging is now an empty husk; keep the instance tidy.
-        let _ = std::fs::remove_dir_all(staging_directory);
-    }
-
     Ok(())
 }
 
@@ -1052,6 +1420,16 @@ async fn acquire_library(
                 artifact.origin,
             ))
         }
+        GameLibrary::Forge(entry) => {
+            let artifact = acquire_forge_library(cache, entry, context).await?;
+            Ok((
+                artifact.path.clone(),
+                artifact.trust(),
+                artifact.bytes,
+                InstalledFileRole::Library,
+                artifact.origin,
+            ))
+        }
         GameLibrary::Fabric(entry) => {
             let artifact = entry.artifact();
             if let Some(sha256) = artifact.sha256() {
@@ -1098,6 +1476,30 @@ async fn acquire_neoforge_library(
     context: &InstallContext,
 ) -> Result<VerifiedSha1Artifact, InstallError> {
     acquire_neoforge_artifact(cache, library.artifact(), context).await
+}
+
+/// Acquires one SHA-1-verified Forge library. Only downloadable artifacts
+/// reach this boundary: the generated patched client is filtered out
+/// before acquisition and produced by the processor chain.
+async fn acquire_forge_library(
+    cache: &ArtifactCache,
+    library: &crate::forge::plan::ForgeLibrary,
+    context: &InstallContext,
+) -> Result<VerifiedSha1Artifact, InstallError> {
+    let artifact = library.artifact();
+    let url = artifact
+        .url()
+        .expect("downloadable Forge libraries carry their repository URL");
+    let source = Sha1ArtifactSource::https_or_loopback(
+        url.as_str(),
+        &artifact.sha1().as_hex(),
+        artifact.size_bytes(),
+    )
+    .map_err(|error| InstallError::InvalidSource(error.to_string()))?;
+    cache
+        .acquire_sha1(&source, context.download_options())
+        .await
+        .map_err(InstallError::Acquisition)
 }
 
 /// Acquires one SHA-1-verified NeoForge artifact (library, universal, or
@@ -1181,10 +1583,14 @@ async fn validate_staged_files(
     staging_game: &Path,
     files: &[PlannedFile],
     natives_relative: &str,
+    cancel: &processors::CancelSignal,
 ) -> Result<Vec<InstalledFile>, InstallError> {
     let mut installed = Vec::with_capacity(files.len());
     let root = Arc::new(staging_game.to_path_buf());
     for batch in files.chunks(STAGED_VALIDATION_CONCURRENCY) {
+        if cancel.is_cancelled() {
+            return Err(InstallError::Cancelled);
+        }
         let tasks = batch.iter().map(|file| {
             let root = Arc::clone(&root);
             let record = InstalledFile::new(
@@ -1207,6 +1613,9 @@ async fn validate_staged_files(
                 reason: format!("a staged verification worker failed: {error}"),
             })??;
             installed.push(record);
+        }
+        if cancel.is_cancelled() {
+            return Err(InstallError::Cancelled);
         }
     }
 
@@ -1243,34 +1652,77 @@ fn validated_index_file_stem(requirement: &AssetIndexRequirement) -> Result<Stri
     Ok(id.to_owned())
 }
 
-/// The per-instance installation exclusion: one shared async mutex per
-/// instance id, held for the duration of an installation.
-fn instance_installation_lock(instance: &InstanceId) -> Arc<tokio::sync::Mutex<()>> {
-    static LOCKS: OnceLock<std::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> =
-        OnceLock::new();
-    let registry = LOCKS.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+fn check_cancel(context: &InstallContext) -> Result<(), InstallError> {
+    if context.processor_cancel.is_cancelled() {
+        Err(InstallError::Cancelled)
+    } else {
+        Ok(())
+    }
+}
 
-    let mut guards = registry.lock().expect("the lock registry is not poisoned");
-    guards
-        .entry(instance.as_str().to_owned())
-        .or_default()
-        .clone()
+/// Kernel-owned per-target exclusion, held through publication or recovery.
+pub(crate) fn lock_game_target(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<coordination::TargetLock, InstallError> {
+    coordination::TargetLock::acquire(
+        managed.data_root(),
+        managed.instance_paths(instance).root(),
+        ".game-install.lock",
+    )
+    .map_err(|error| game_lock_error(error, instance))
+}
+
+pub(crate) fn read_game_target(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<Option<coordination::TargetLock>, InstallError> {
+    coordination::TargetLock::existing_shared(
+        managed.data_root(),
+        managed.instance_paths(instance).root(),
+        ".game-install.lock",
+    )
+    .map_err(|error| game_lock_error(error, instance))
+}
+
+fn game_lock_error(error: coordination::LockError, instance: &InstanceId) -> InstallError {
+    match error {
+        coordination::LockError::Busy => InstallError::AlreadyInProgress {
+            instance_id: instance.to_string(),
+        },
+        coordination::LockError::Io(error) => InstallError::Storage(error),
+    }
 }
 
 /// A failed installation. Every variant fails closed: the instance never
 /// ends up with a complete-looking installation it did not earn.
 #[derive(Debug)]
 pub enum InstallError {
+    /// Unresolved or conflicting durable evidence must be preserved.
+    RecoveryRequired {
+        reason: String,
+    },
+    Cancelled,
     /// Another installation is already running for this instance.
-    AlreadyInProgress { instance_id: String },
+    AlreadyInProgress {
+        instance_id: String,
+    },
     /// Existing state at the target cannot be replaced safely.
-    TargetConflict { path: String, reason: String },
+    TargetConflict {
+        path: String,
+        reason: String,
+    },
     /// The persisted installed state is malformed or unsupported.
     State(InstalledStateError),
     /// The verified asset-index document is unusable.
-    AssetIndexInvalid { reason: String },
+    AssetIndexInvalid {
+        reason: String,
+    },
     /// One asset-object entry is unusable.
-    AssetInvalid { name: String, reason: String },
+    AssetInvalid {
+        name: String,
+        reason: String,
+    },
     /// An artifact acquisition failed (transport, integrity, or cache).
     Acquisition(AcquisitionError),
     /// Plan-supplied artifact metadata could not become a valid source.
@@ -1283,9 +1735,14 @@ pub enum InstallError {
     /// Native extraction failed (unsafe, conflicting, or unreadable).
     Native(NativeExtractionError),
     /// A bounded installer-processor step failed.
-    Processing { reason: String },
+    Processing {
+        reason: String,
+    },
     /// Staged content failed validation before commit.
-    Validation { path: String, reason: String },
+    Validation {
+        path: String,
+        reason: String,
+    },
     /// The staged installation could not be committed.
     Commit {
         context: String,
@@ -1298,6 +1755,12 @@ pub enum InstallError {
 impl fmt::Display for InstallError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::RecoveryRequired { reason } => write!(
+                formatter,
+                "installation recovery requires attention: {reason}"
+            ),
+            Self::Cancelled => formatter
+                .write_str("installation cancelled before commit; previous installation preserved"),
             Self::AlreadyInProgress { instance_id } => write!(
                 formatter,
                 "an installation is already in progress for instance '{instance_id}'"
@@ -1641,6 +2104,8 @@ mod tests {
     fn test_context(server_base: &str) -> InstallContext {
         InstallContext {
             processor_java: None,
+            processor_timeout: processors::SupervisorLimits::default().timeout,
+            processor_cancel: processors::CancelSignal::default(),
             download_options: crate::downloads::DownloadOptions {
                 connect_timeout: Duration::from_secs(5),
                 idle_read_timeout: Duration::from_secs(5),
@@ -2120,6 +2585,52 @@ mod tests {
             validate_installed_game(&env.managed, &env.instance).unwrap(),
             ValidationOutcome::NotInstalled
         );
+    }
+
+    #[tokio::test]
+    async fn cancellation_at_acquisition_copy_and_validation_preserves_the_previous_game() {
+        for phase in [
+            InstallPhase::Acquiring,
+            InstallPhase::Materializing,
+            InstallPhase::Validating,
+        ] {
+            let (fixture, plan) = synthetic_game();
+            let env = TestEnv::new(&format!("f3r-cancel-{}", phase.as_str()));
+            env.plant_user_data();
+            install(&env, &fixture, &plan, Default::default())
+                .await
+                .unwrap();
+            let before = std::fs::read(env.game().join(INSTALLED_GAME_FILE_NAME)).unwrap();
+            let (cancel, signal) = processors::cancellation_channel();
+            let context = test_context(fixture.server.base_url()).with_processor_cancel(signal);
+            let error = install_game(
+                &env.managed,
+                &env.instance,
+                &plan,
+                &context,
+                &mut |event| {
+                    if event.phase == phase {
+                        cancel.cancel();
+                    }
+                },
+                Default::default(),
+            )
+            .await
+            .unwrap_err();
+            assert!(
+                matches!(error, InstallError::Cancelled),
+                "{phase:?}: {error}"
+            );
+            assert_eq!(
+                std::fs::read(env.game().join(INSTALLED_GAME_FILE_NAME)).unwrap(),
+                before
+            );
+            recover_installation(&env.managed, &env.instance).unwrap();
+            assert!(
+                matches!(validate_installed_game(&env.managed, &env.instance).unwrap(), ValidationOutcome::Installed(validation) if validation.status == ValidationStatus::Valid)
+            );
+            env.assert_user_data_intact();
+        }
     }
 
     #[tokio::test]
@@ -2981,6 +3492,458 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// Builds a synthetic-but-faithful Forge world over the loopback
+    /// fixture: the real official document shapes (side-mapped data,
+    /// brace-wrapped output expectations, the URL-less generated client
+    /// library) with tool jars served from the fixture server. The
+    /// processor chain uses the real JDK and the shared synthetic Java
+    /// tool; each step consumes the previous step's output as its input,
+    /// and every output carries its published SHA-1.
+    fn synthetic_forge_game() -> (Fixture, GameInstallPlan) {
+        synthetic_forge_game_with_chain_mode("write")
+    }
+
+    /// `chain_mode` selects the synthetic tool's behavior for the client
+    /// chain steps ("write" or "fail").
+    fn synthetic_forge_game_with_chain_mode(chain_mode: &str) -> (Fixture, GameInstallPlan) {
+        let Some((tool, _java)) = crate::neoforge::processors::test_tools::tool_and_java() else {
+            panic!("this synthetic world requires the compiled processor tool");
+        };
+        let tool_bytes = std::fs::read(&tool).unwrap();
+        let tool_sha1 = sha1_hex(&tool_bytes);
+        let tool_path =
+            "net/minecraftforge/installertools/1.4.3/installertools-1.4.3.jar".to_owned();
+
+        // The synthetic tool writes fixed bytes for every output; every
+        // published digest is the digest of those exact bytes.
+        let chain_output = b"patched client artifact bytes".to_vec();
+        let chain_sha1 = sha1_hex(&chain_output);
+
+        let client = b"synthetic client jar bytes".to_vec();
+        let logging = b"<Configuration status=\"WARN\"></Configuration>".to_vec();
+        let mojang_library = b"synthetic mojang library jar".to_vec();
+        let native_archive = native_zip_bytes();
+        let universal = b"synthetic forge universal jar".to_vec();
+        let bootstrap = b"synthetic bootstraplauncher jar".to_vec();
+
+        let asset_a = b"tiny png bytes a".to_vec();
+        let asset_b = b"tiny png bytes b".to_vec();
+        let asset_a_hash = sha1_hex(&asset_a);
+        let asset_b_hash = sha1_hex(&asset_b);
+        let asset_index_body = format!(
+            r#"{{"objects": {{
+                "icons/icon_16x16.png": {{"hash": "{asset_a_hash}", "size": {}}},
+                "minecraft/sounds/click.ogg": {{"hash": "{asset_b_hash}", "size": {}}}
+            }}}}"#,
+            asset_a.len(),
+            asset_b.len(),
+        )
+        .into_bytes();
+
+        let mut bodies: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        bodies.insert("/mojang/client.jar".to_owned(), client.clone());
+        bodies.insert(
+            "/mojang/logging/client-1.21.2.xml".to_owned(),
+            logging.clone(),
+        );
+        bodies.insert(
+            "/mojang/libraries/com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar".to_owned(),
+            mojang_library.clone(),
+        );
+        bodies.insert(
+            "/mojang/libraries/org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-natives-windows.jar".to_owned(),
+            native_archive.clone(),
+        );
+        bodies.insert(
+            "/mojang/asset-index/32.json".to_owned(),
+            asset_index_body.clone(),
+        );
+        bodies.insert(
+            format!("/assets/{}/{}", &asset_a_hash[..2], asset_a_hash),
+            asset_a.clone(),
+        );
+        bodies.insert(
+            format!("/assets/{}/{}", &asset_b_hash[..2], asset_b_hash),
+            asset_b.clone(),
+        );
+        bodies.insert(format!("/forge-maven/{tool_path}"), tool_bytes.clone());
+        bodies.insert(
+            "/forge-maven/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar"
+                .to_owned(),
+            universal.clone(),
+        );
+        bodies.insert(
+            "/forge-maven/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar".to_owned(),
+            bootstrap.clone(),
+        );
+
+        let broken = Arc::new(Mutex::new(HashSet::new()));
+        // The installer documents embed the server base, and the installer
+        // bytes embed the documents: serve from a shared mutable body map
+        // so the installer can be published once the base is known.
+        let shared_bodies = Arc::new(Mutex::new(bodies.clone()));
+        let bodies_for_handler = Arc::clone(&shared_bodies);
+        let broken_for_handler = Arc::clone(&broken);
+        let server = TestServer::spawn(Arc::new(move |request| {
+            if broken_for_handler.lock().unwrap().contains(&request.path) {
+                return TestResponse::status(404);
+            }
+            match bodies_for_handler.lock().unwrap().get(&request.path) {
+                Some(body) => TestResponse::ok(body),
+                None => TestResponse::status(404),
+            }
+        }));
+        let base = server.base_url().to_owned();
+
+        // The version document (Mojang half) for Minecraft 1.21.11.
+        let version_document_json = format!(
+            r#"{{
+                "id": "1.21.11",
+                "type": "release",
+                "mainClass": "net.minecraft.client.main.Main",
+                "javaVersion": {{ "component": "java-runtime-delta", "majorVersion": 21 }},
+                "assetIndex": {{
+                    "id": "32",
+                    "sha1": "{}",
+                    "size": {},
+                    "totalSize": 999999,
+                    "url": "{base}/mojang/asset-index/32.json"
+                }},
+                "downloads": {{
+                    "client": {{
+                        "sha1": "{}",
+                        "size": {},
+                        "url": "{base}/mojang/client.jar"
+                    }}
+                }},
+                "logging": {{
+                    "client": {{
+                        "argument": "-Dlog4j.configurationFile=${{path}}",
+                        "file": {{
+                            "id": "client-1.21.2.xml",
+                            "sha1": "{}",
+                            "size": {},
+                            "url": "{base}/mojang/logging/client-1.21.2.xml"
+                        }},
+                        "type": "log4j2-xml"
+                    }}
+                }},
+                "libraries": [
+                    {{
+                        "downloads": {{ "artifact": {{
+                            "path": "com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar",
+                            "sha1": "{}",
+                            "size": {},
+                            "url": "{base}/mojang/libraries/com/mojang/brigadier/1.0.18/brigadier-1.0.18.jar"
+                        }} }},
+                        "name": "com.mojang:brigadier:1.0.18"
+                    }},
+                    {{
+                        "downloads": {{ "artifact": {{
+                            "path": "org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-natives-windows.jar",
+                            "sha1": "{}",
+                            "size": {},
+                            "url": "{base}/mojang/libraries/org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-natives-windows.jar"
+                        }} }},
+                        "name": "org.lwjgl:lwjgl:3.4.1:natives-windows"
+                    }}
+                ],
+                "arguments": {{
+                    "game": ["--username", "${{auth_player_name}}"],
+                    "jvm": ["-Djava.library.path=${{natives_directory}}"]
+                }}
+            }}"#,
+            sha1_hex(&asset_index_body),
+            asset_index_body.len(),
+            sha1_hex(&client),
+            client.len(),
+            sha1_hex(&logging),
+            logging.len(),
+            sha1_hex(&mojang_library),
+            mojang_library.len(),
+            sha1_hex(&native_archive),
+            native_archive.len(),
+        );
+        let document = VersionDocument::from_json(&version_document_json).unwrap();
+        let minecraft =
+            plan_version_document(&document, PlatformProfile::current().unwrap()).unwrap();
+
+        // The install profile (Forge half), faithful to the real document:
+        // side-mapped data, brace-wrapped output keys, URL-less generated
+        // client, and a three-step client chain whose inputs chain from
+        // the previous step's outputs.
+        let tool_coordinate = "net.minecraftforge:installertools:1.4.3";
+        let profile = format!(
+            r#"{{
+              "spec": 1, "profile": "forge", "version": "1.21.11-forge-61.2.0",
+              "minecraft": "1.21.11", "json": "/version.json",
+              "data": {{
+                "MOJMAPS": {{"client": "[net.minecraft:client:1.21.11:mappings@tsrg]", "server": "[net.minecraft:server:1.21.11:mappings@tsrg]"}},
+                "MOJMAPS_SHA": {{"client": "'{chain_sha1}'", "server": "'{chain_sha1}'"}},
+                "MC_OFF": {{"client": "[net.minecraft:client:1.21.11:official]", "server": "[net.minecraft:server:1.21.11:official]"}},
+                "MC_OFF_SHA": {{"client": "'{chain_sha1}'", "server": "'{chain_sha1}'"}},
+                "BINPATCH": {{"client": "/data/client.lzma", "server": "/data/server.lzma"}},
+                "PATCHED": {{"client": "[net.minecraftforge:forge:1.21.11-61.2.0:client]", "server": "[net.minecraftforge:forge:1.21.11-61.2.0:server]"}},
+                "PATCHED_SHA": {{"client": "'{chain_sha1}'", "server": "'{chain_sha1}'"}}
+              }},
+              "processors": [
+                {{"jar": "{tool_coordinate}", "classpath": ["{tool_coordinate}"], "args": ["--mode", "{chain_mode}", "--output", "{{MOJMAPS}}"], "outputs": {{"{{MOJMAPS}}": "{{MOJMAPS_SHA}}"}}}},
+                {{"sides": ["client"], "jar": "{tool_coordinate}", "classpath": ["{tool_coordinate}"], "args": ["--mode", "{chain_mode}", "--input", "{{MOJMAPS}}", "--output", "{{MC_OFF}}"], "outputs": {{"{{MC_OFF}}": "{{MC_OFF_SHA}}"}}}},
+                {{"sides": ["server"], "jar": "{tool_coordinate}", "classpath": [], "args": ["--mode", "write"], "outputs": {{}}}},
+                {{"jar": "{tool_coordinate}", "classpath": ["{tool_coordinate}"], "args": ["--mode", "{chain_mode}", "--input", "{{MC_OFF}}", "--output", "{{PATCHED}}", "--extra", "{{BINPATCH}}"], "outputs": {{"{{PATCHED}}": "{{PATCHED_SHA}}"}}}}
+              ],
+              "libraries": [
+                {{"name": "{tool_coordinate}", "downloads": {{"artifact": {{"path": "{tool_path}", "url": "{base}/forge-maven/{tool_path}", "sha1": "{tool_sha1}", "size": {tool_len}}}}}}}
+              ]
+            }}"#,
+            tool_len = tool_bytes.len(),
+        );
+        // The version profile (launch metadata) with the generated client.
+        let version = format!(
+            r#"{{
+              "id": "1.21.11-forge-61.2.0", "inheritsFrom": "1.21.11",
+              "mainClass": "net.minecraftforge.bootstrap.ForgeBootstrap",
+              "logging": {{}},
+              "arguments": {{"jvm": ["-Djava.net.preferIPv6Addresses=system"], "game": ["--launchTarget", "forge_client"]}},
+              "libraries": [
+                {{"name": "net.minecraftforge:forge:1.21.11-61.2.0:universal", "downloads": {{"artifact": {{"path": "net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar", "url": "{base}/forge-maven/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar", "sha1": "{}", "size": {}}}}}}},
+                {{"name": "net.minecraftforge:forge:1.21.11-61.2.0:client", "downloads": {{"artifact": {{"path": "net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-client.jar", "url": "", "sha1": "{chain_sha1}", "size": {}}}}}}},
+                {{"name": "cpw.mods:bootstraplauncher:2.0.2", "downloads": {{"artifact": {{"path": "cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar", "url": "{base}/forge-maven/cpw/mods/bootstraplauncher/2.0.2/bootstraplauncher-2.0.2.jar", "sha1": "{}", "size": {}}}}}}}
+              ]
+            }}"#,
+            sha1_hex(&universal),
+            universal.len(),
+            chain_output.len(),
+            sha1_hex(&bootstrap),
+            bootstrap.len(),
+        );
+
+        // The synthetic installer jar embeds both documents plus the
+        // binpatch entry, and is itself served with a sidecar digest.
+        let installer = {
+            use std::io::Write as _;
+            let mut cursor = std::io::Cursor::new(Vec::new());
+            {
+                let mut writer = zip::ZipWriter::new(&mut cursor);
+                for (name, bytes) in [
+                    ("install_profile.json", profile.into_bytes()),
+                    ("version.json", version.into_bytes()),
+                    ("data/client.lzma", b"synthetic binpatch bundle".to_vec()),
+                ] {
+                    writer
+                        .start_file(name, zip::write::SimpleFileOptions::default())
+                        .unwrap();
+                    writer.write_all(&bytes).unwrap();
+                }
+                writer.finish().unwrap();
+            }
+            cursor.into_inner()
+        };
+        let installer_url_path = "/forge-maven/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-installer.jar";
+        shared_bodies
+            .lock()
+            .unwrap()
+            .insert(installer_url_path.to_owned(), installer.clone());
+        shared_bodies.lock().unwrap().insert(
+            format!("{installer_url_path}.sha1"),
+            sha1_hex(&installer).into_bytes(),
+        );
+
+        let (profile, version) = {
+            let document_bytes = &installer;
+            let _ = document_bytes;
+            let mut cursor = std::io::Cursor::new(&installer);
+            let mut archive = zip::ZipArchive::new(&mut cursor).unwrap();
+            let mut read_entry = |name: &str| -> String {
+                use std::io::Read as _;
+                let mut entry = archive.by_name(name).unwrap();
+                let mut text = String::new();
+                entry.read_to_string(&mut text).unwrap();
+                text
+            };
+            (
+                read_entry("install_profile.json"),
+                read_entry("version.json"),
+            )
+        };
+        let forge = crate::forge::plan::ForgePlan::from_documents(
+            &crate::forge::metadata::InstallProfileDocument::from_json(&profile).unwrap(),
+            &crate::forge::metadata::VersionProfileDocument::from_json(&version).unwrap(),
+            &crate::minecraft::metadata::MinecraftVersionId::new("1.21.11").unwrap(),
+            &crate::forge::metadata::ForgeVersionId::new("1.21.11-61.2.0").unwrap(),
+            &crate::forge::metadata::ForgeMavenEndpoints::loopback_for_testing(
+                &format!("{base}/forge-maven/"),
+                &format!("{base}/forge-promotions.json"),
+            )
+            .unwrap(),
+            crate::integrity::Sha1Digest::parse(&sha1_hex(&installer)).unwrap(),
+        )
+        .unwrap();
+        let plan = crate::forge::plan::compose_forge_game_plan(minecraft, forge).unwrap();
+        let bodies = shared_bodies.lock().unwrap().clone();
+        let fixture = Fixture {
+            server,
+            bodies,
+            broken,
+        };
+        (fixture, plan)
+    }
+
+    #[tokio::test]
+    async fn a_forge_install_runs_the_client_chain_and_verifies_published_outputs() {
+        let Some((_tool, java)) = crate::neoforge::processors::test_tools::tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let (fixture, plan) = synthetic_forge_game();
+        let forge = plan.forge_loader().unwrap();
+        // Server-only step dropped; the client chain is three steps whose
+        // inputs chain from earlier outputs.
+        assert_eq!(forge.processors().len(), 3);
+        let context = test_context(fixture.server.base_url()).with_processor_java(java);
+
+        let root = std::env::temp_dir()
+            .join("aurora-forge-install-tests")
+            .join(std::process::id().to_string())
+            .join("chain");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let managed = crate::paths::ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let instance = InstanceId::new("66666666-6666-4666-8666-666666666666").unwrap();
+        let installed = install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_| {},
+            InstallFaults::default(),
+        )
+        .await
+        .unwrap();
+
+        // The patched client is recorded as upstream-verified: its
+        // published SHA-1 was known before the chain ran and the
+        // generated bytes verified against it.
+        let patched_relative =
+            "net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-client.jar";
+        let file = installed
+            .manifest()
+            .files()
+            .iter()
+            .find(|file| file.path() == format!("libraries/{patched_relative}"))
+            .expect("the generated patched client is recorded");
+        assert!(
+            matches!(
+                file.trust(),
+                crate::integrity::ArtifactTrust::ExpectedDigestVerified { .. }
+            ),
+            "the patched client keeps its published upstream expectation: {:?}",
+            file.trust()
+        );
+
+        // Forge publishes SHA-1s for every chain output, so the chained
+        // intermediates (mappings, official rename) are upstream-digest-
+        // verified too — never mere local observations.
+        for relative in [
+            "net/minecraft/client/1.21.11/client-1.21.11-mappings.tsrg",
+            "net/minecraft/client/1.21.11/client-1.21.11-official.jar",
+        ] {
+            let file = installed
+                .manifest()
+                .files()
+                .iter()
+                .find(|file| file.path() == format!("libraries/{relative}"))
+                .unwrap_or_else(|| panic!("chained intermediate {relative} is recorded"));
+            assert!(
+                matches!(
+                    file.trust(),
+                    crate::integrity::ArtifactTrust::ExpectedDigestVerified { .. }
+                ),
+                "the chained intermediate keeps its published expectation: {:?}",
+                file.trust()
+            );
+        }
+
+        // The whole installation validates read-only.
+        match validate_installed_game(&managed, &instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the installation must validate"),
+        }
+        assert!(
+            !managed
+                .instance_paths(&instance)
+                .root()
+                .join(STAGING_DIR_NAME)
+                .exists()
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn a_forge_chain_failure_never_commits_and_recovers_by_retry() {
+        let Some((_tool, java)) = crate::neoforge::processors::test_tools::tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let (fixture, plan) = synthetic_forge_game_with_chain_mode("fail");
+        let context = test_context(fixture.server.base_url()).with_processor_java(java.clone());
+
+        let root = std::env::temp_dir()
+            .join("aurora-forge-install-tests")
+            .join(std::process::id().to_string())
+            .join("chain-failure");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let managed = crate::paths::ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let instance = InstanceId::new("77777777-7777-4777-8777-777777777777").unwrap();
+
+        // A chain whose second step fails (nonzero exit) never commits;
+        // the third step never runs against partial output.
+        let _ = fixture;
+        let error = install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_| {},
+            InstallFaults::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(error, InstallError::Processing { .. }), "{error}");
+        assert!(
+            !managed
+                .instance_paths(&instance)
+                .game()
+                .join(INSTALLED_GAME_FILE_NAME)
+                .exists(),
+            "no complete-looking installation may exist"
+        );
+
+        // A retry against an unbroken fixture commits.
+        let (fixture, plan) = synthetic_forge_game();
+        let context = test_context(fixture.server.base_url()).with_processor_java(java.clone());
+        install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_| {},
+            InstallFaults::default(),
+        )
+        .await
+        .expect("the honest retry completes");
+        match validate_installed_game(&managed, &instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the retried installation must validate"),
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[tokio::test]
     async fn a_processing_neoforge_install_records_generated_artifacts() {
         let Some((_tool, java)) = crate::neoforge::processors::test_tools::tool_and_java() else {
@@ -3079,5 +4042,323 @@ mod tests {
                 .is_file()
         );
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn an_interrupted_installation_writes_a_recovery_receipt() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("receipt-interrupted");
+        env.plant_user_data();
+
+        let error = install(
+            &env,
+            &fixture,
+            &plan,
+            InstallFaults {
+                fail_during_materialization: true,
+                ..InstallFaults::default()
+            },
+        )
+        .await
+        .expect_err("the injected fault must interrupt the installation");
+
+        assert!(matches!(error, InstallError::Materialization { .. }));
+        // The staging tree carries a schema-1 receipt whose last stage is
+        // 'acquired': an interrupted Aurora transaction, never mistakable
+        // for a completed installation.
+        match receipt::classify_existing(&env.staging()) {
+            receipt::Disposition::Interrupted { last_stage, .. } => {
+                assert_eq!(last_stage, "acquired");
+            }
+            other => panic!("unexpected receipt disposition: {other:?}"),
+        }
+        assert!(!env.game().exists());
+        assert!(
+            matches!(
+                validate_installed_game(&env.managed, &env.instance),
+                Err(InstallError::RecoveryRequired { .. })
+            ),
+            "interrupted authority must block readiness"
+        );
+
+        // The next attempt recovers deterministically: it detects the
+        // interrupted transaction, disposes staging after the path proof,
+        // rebuilds, and leaves no receipt behind.
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("the retry completes");
+        assert!(!env.staging().exists());
+        assert!(
+            !env.staging().join(receipt::RECEIPT_FILE_NAME).exists(),
+            "a committed installation leaves no receipt"
+        );
+        env.assert_user_data_intact();
+    }
+
+    #[tokio::test]
+    async fn a_crash_after_verification_is_recorded_and_retryable() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("receipt-verified-crash");
+        env.plant_user_data();
+
+        let error = install(
+            &env,
+            &fixture,
+            &plan,
+            InstallFaults {
+                fail_before_commit: true,
+                ..InstallFaults::default()
+            },
+        )
+        .await
+        .expect_err("the injected pre-commit fault must fail");
+
+        assert!(matches!(error, InstallError::Commit { .. }));
+        match receipt::classify_existing(&env.staging()) {
+            receipt::Disposition::Interrupted { last_stage, .. } => {
+                assert_eq!(last_stage, "verified");
+            }
+            other => panic!("unexpected receipt disposition: {other:?}"),
+        }
+        assert!(!env.game().exists(), "no incomplete tree was promoted");
+
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("the retry completes");
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the retried installation must validate"),
+        }
+        env.assert_user_data_intact();
+    }
+
+    #[tokio::test]
+    async fn a_crash_after_the_processing_receipt_leaves_interrupted_evidence() {
+        let Some((_tool, java)) = crate::neoforge::processors::test_tools::tool_and_java() else {
+            eprintln!("SKIP: no JDK on this host for processor execution");
+            return;
+        };
+        let (fixture, plan) = synthetic_neoforge_game(Some("write"));
+        let context = test_context(fixture.server.base_url()).with_processor_java(java);
+
+        let (managed, root) = neoforge_managed_root("receipt-processing-crash");
+        let instance = InstanceId::new("55555555-5555-4555-8555-555555555555").unwrap();
+        let staging = managed
+            .instance_paths(&instance)
+            .root()
+            .join(STAGING_DIR_NAME);
+        let error = install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_| {},
+            InstallFaults {
+                fail_after_processing_receipt: true,
+                ..InstallFaults::default()
+            },
+        )
+        .await
+        .expect_err("the injected processing fault must fail");
+
+        assert!(matches!(error, InstallError::Processing { .. }), "{error}");
+        match receipt::classify_existing(&staging) {
+            receipt::Disposition::Interrupted {
+                last_stage,
+                transaction_id,
+                ..
+            } => {
+                assert_eq!(last_stage, "processing");
+                assert!(!transaction_id.is_empty());
+            }
+            other => panic!("unexpected receipt disposition: {other:?}"),
+        }
+        assert!(
+            !managed
+                .instance_paths(&instance)
+                .game()
+                .join(INSTALLED_GAME_FILE_NAME)
+                .exists()
+        );
+
+        // Retry runs the processors for real and commits.
+        install_game(
+            &managed,
+            &instance,
+            &plan,
+            &context,
+            &mut |_| {},
+            InstallFaults::default(),
+        )
+        .await
+        .expect("the retry completes");
+        match validate_installed_game(&managed, &instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the retried installation must validate"),
+        }
+        assert!(!staging.exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn a_crash_between_renames_leaves_recovery_evidence_and_rebuilds() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("receipt-between-renames");
+        env.plant_user_data();
+
+        // A first, successful installation becomes the replacement target.
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("the first installation completes");
+
+        let error = install(
+            &env,
+            &fixture,
+            &plan,
+            InstallFaults {
+                fail_between_renames: true,
+                ..InstallFaults::default()
+            },
+        )
+        .await
+        .expect_err("the injected between-renames fault must fail");
+
+        assert!(matches!(error, InstallError::RecoveryRequired { .. }));
+        // The crash window: no game directory exists, the retired tree and
+        // the receipt wait in staging, and the receipt names 'replacing'.
+        assert!(!env.game().exists());
+        match receipt::classify_existing(&env.staging()) {
+            receipt::Disposition::Interrupted { last_stage, .. } => {
+                assert_eq!(last_stage, "replacing");
+            }
+            other => panic!("unexpected receipt disposition: {other:?}"),
+        }
+        let journal = journal::Journal::load(
+            env.managed.instance_paths(&env.instance).root(),
+            &env.instance,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            env.managed
+                .instance_paths(&env.instance)
+                .root()
+                .join(journal::HISTORY_DIR)
+                .join(journal.transaction_id())
+                .join("previous-game")
+                .is_dir()
+        );
+        assert!(!env.staging().join(REPLACED_GAME_DIR_NAME).exists());
+
+        // The next attempt recovers by rebuilding from verified caches; no
+        // mixture of old and new trees can be observed, and user data was
+        // never touched.
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("the retry completes");
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the rebuilt installation must validate"),
+        }
+        assert!(!env.staging().exists());
+        env.assert_user_data_intact();
+    }
+
+    #[tokio::test]
+    async fn a_corrupt_receipt_is_reported_and_staging_is_rebuilt_safely() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("receipt-corrupt");
+        env.plant_user_data();
+        // Pre-plant a corrupt receipt as the crash evidence of a previous
+        // attempt; the next attempt must classify it as unknown evidence
+        // and still recover through the derived-path staging proof.
+        receipt::write_test_receipt(&env.staging(), "{ definitely not json");
+        assert!(matches!(
+            receipt::classify_existing(&env.staging()),
+            receipt::Disposition::Unknown { .. }
+        ));
+
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("the unknown receipt cannot wedge the install");
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the installation must commit"),
+        }
+        assert!(!env.staging().exists());
+        env.assert_user_data_intact();
+    }
+
+    #[tokio::test]
+    async fn an_unknown_schema_receipt_is_not_interpreted() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("receipt-future-schema");
+        env.plant_user_data();
+        receipt::write_test_receipt(
+            &env.staging(),
+            r#"{"schemaVersion": 2, "transactionId": "t", "instanceId": "i", "stages": []}"#,
+        );
+        assert!(matches!(
+            receipt::classify_existing(&env.staging()),
+            receipt::Disposition::Unknown { .. }
+        ));
+
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("an unknown receipt is reported, never obeyed");
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the installation must commit"),
+        }
+        assert!(!env.staging().exists());
+        env.assert_user_data_intact();
+    }
+
+    #[tokio::test]
+    async fn repeated_recovery_invocations_settle_identically() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("receipt-repeated");
+        env.plant_user_data();
+
+        // Two interrupted attempts in a row, then recovery: classification
+        // is idempotent and disposal never wedges.
+        for _ in 0..2 {
+            let error = install(
+                &env,
+                &fixture,
+                &plan,
+                InstallFaults {
+                    fail_during_materialization: true,
+                    ..InstallFaults::default()
+                },
+            )
+            .await
+            .expect_err("the injected fault interrupts");
+            assert!(matches!(error, InstallError::Materialization { .. }));
+            assert!(matches!(
+                receipt::classify_existing(&env.staging()),
+                receipt::Disposition::Interrupted { .. }
+            ));
+        }
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .expect("the final attempt recovers");
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the recovered installation must validate"),
+        }
+        env.assert_user_data_intact();
     }
 }

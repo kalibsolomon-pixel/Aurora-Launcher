@@ -103,11 +103,11 @@ it('AG: no pointer-drag rotation handlers or drag affordances exist in the previ
   }
 });
 
-it('AI/AH: the three controls keep their accessible labels and the canvas stays decorative', () => {
+it('Home removes rotation controls while retaining a descriptive image and decorative canvas', () => {
   const source = readFileSync(fileURLToPath(new URL('./PlayerPreview.svelte', import.meta.url)), 'utf8');
-  assert.ok(source.includes('aria-label="Rotate player left"'));
-  assert.ok(source.includes('aria-label="Reset player view"'));
-  assert.ok(source.includes('aria-label="Rotate player right"'));
+  assert.ok(!source.includes('aria-label="Rotate player left"'));
+  assert.ok(!source.includes('aria-label="Reset player view"'));
+  assert.ok(!source.includes('aria-label="Rotate player right"'));
   // The model region is a passive image; the canvas is decorative and must
   // never become a tab stop or interactive surface.
   assert.ok(source.includes('role="img"'));

@@ -43,6 +43,9 @@ pub(crate) enum Event {
     LauncherUpdateDiscovery = 46,
     ClientManifestHttp = 47,
     UpdatePublication = 48,
+    NativeSetup = 49,
+    // Diagnostic only: distinguish temporary validation exclusion from damage.
+    ReadinessContention = 50,
 }
 
 /// Closed frontend vocabulary; numeric inputs carry only ephemeral counters.
@@ -64,6 +67,17 @@ pub(crate) enum FrontendEvent {
     IpcRequest,
     IpcComplete,
     FrontendOverflow,
+    StatusRequest,
+    StatusComplete,
+    StateRequest,
+    StateComplete,
+    ReleasesRequest,
+    ReleasesComplete,
+    AccountsRequest,
+    AccountsComplete,
+    HomePaint,
+    ReadyPaint,
+    HomeUsable,
 }
 
 #[cfg_attr(not(feature = "performance-p0-2"), allow(dead_code))]
@@ -232,6 +246,43 @@ mod enabled {
     struct Buffer {
         records: Vec<Record>,
         dropped: u64,
+        // Windows QPC brackets the Instant origin; absent on unmeasured platforms.
+        clock: Option<Clock>,
+    }
+    #[derive(serde::Serialize)]
+    struct Clock {
+        qpc_before: i64,
+        qpc_after: i64,
+        frequency: i64,
+    }
+    fn clock_origin() -> (Instant, Option<Clock>) {
+        #[cfg(windows)]
+        {
+            #[link(name = "kernel32")]
+            unsafe extern "system" {
+                fn QueryPerformanceCounter(value: *mut i64) -> i32;
+                fn QueryPerformanceFrequency(value: *mut i64) -> i32;
+            }
+            let (mut before, mut after, mut frequency) = (0, 0, 0);
+            // All pointers reference initialized, writable i64s. The calls have
+            // no retained pointers and need no privilege or system mutation.
+            let first = unsafe { QueryPerformanceCounter(&mut before) };
+            let start = Instant::now();
+            let second = unsafe { QueryPerformanceCounter(&mut after) };
+            let freq = unsafe { QueryPerformanceFrequency(&mut frequency) };
+            let clock =
+                (first != 0 && second != 0 && freq != 0 && frequency > 0 && after >= before)
+                    .then_some(Clock {
+                        qpc_before: before,
+                        qpc_after: after,
+                        frequency,
+                    });
+            (start, clock)
+        }
+        #[cfg(not(windows))]
+        {
+            (Instant::now(), None)
+        }
     }
     impl Buffer {
         fn push(&mut self, record: Record) {
@@ -266,12 +317,14 @@ mod enabled {
                     .create_new(true)
                     .open(root.join("native-trace.json"))
                     .ok()?;
+                let (start, clock) = clock_origin();
                 Some(State {
-                    start: Instant::now(),
+                    start,
                     next: AtomicU64::new(1),
                     buffer: Mutex::new(Buffer {
                         records: Vec::with_capacity(LIMIT),
                         dropped: 0,
+                        clock,
                     }),
                     output: Mutex::new(output),
                 })
@@ -507,6 +560,15 @@ mod enabled {
     #[cfg(test)]
     mod tests {
         use super::*;
+        #[cfg(windows)]
+        #[test]
+        fn monotonic_origin_has_a_valid_windows_qpc_bracket() {
+            let (start, clock) = clock_origin();
+            let clock = clock.expect("Windows QPC must be available for correlation");
+            assert!(clock.frequency > 0);
+            assert!(clock.qpc_after >= clock.qpc_before);
+            assert!(start.elapsed().as_secs() < 1);
+        }
         fn record() -> Record {
             Record {
                 event: 20,

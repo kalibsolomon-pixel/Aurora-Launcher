@@ -2,12 +2,18 @@
   import { launcher } from "$lib/launcher/store.svelte";
   import { navigation } from "$lib/launcher/navigation.svelte";
   import {
-    configurationLabel,
-    instanceContentStatus,
+    instanceProgressLabel,
   } from "$lib/launcher/instanceStatus";
   import { getAuroraCompatibility, type AuroraCompatibility, type InstanceLoader, type InstanceSummary } from "$lib/backend";
   import { creationPlatforms, creationBlocked } from "$lib/instances/configurationChoices";
   import ModrinthBrowse from "$lib/instances/ModrinthBrowse.svelte";
+  import InstanceIcon from "$lib/instances/InstanceIcon.svelte";
+  import IconPicker from "$lib/instances/IconPicker.svelte";
+  import { instanceIcons } from "$lib/instances/instanceIcons.svelte";
+  import { onMount } from "svelte";
+  import Tooltip from "$lib/shell/Tooltip.svelte";
+
+  onMount(() => { void instanceIcons.ensureLoaded(); });
   import { auroraCreationCopy } from '$lib/instances/creationCopy';
 
   let browsingPacks = $state(false);
@@ -17,13 +23,21 @@
   let compatibility = $state<AuroraCompatibility | null>(null);
   let compatibilityError = $state("");
   const platformLabel = (kind: string): string =>
-    kind === "vanilla" ? "Vanilla" : kind === "neoForge" ? "NeoForge" : "Fabric";
+    kind === "vanilla"
+      ? "Vanilla"
+      : kind === "neoForge"
+        ? "NeoForge"
+        : kind === "forge"
+          ? "Forge"
+          : "Fabric";
   const loader = $derived<InstanceLoader>(
     launcher.createPlatform === "vanilla"
       ? {kind: "vanilla"}
       : launcher.createPlatform === "neoForge"
         ? {kind: "neoForge", policy: launcher.createLoaderPolicy}
-        : {kind: "fabric", policy: launcher.createLoaderPolicy},
+        : launcher.createPlatform === "forge"
+          ? {kind: "forge", policy: launcher.createLoaderPolicy}
+          : {kind: "fabric", policy: launcher.createLoaderPolicy},
   );
   $effect(() => {
     const version = launcher.createMinecraftVersion;
@@ -53,26 +67,12 @@
     }
   });
 
-  function badge(instance: InstanceSummary): { tone: string; label: string } | null {
-    const decision = instanceContentStatus(
-      instance,
-      launcher.instanceValidations[instance.id],
-      launcher.createBusy ? (launcher.createProgress?.phase ?? null) : null,
-    );
-    // Installing rows keep the badge; otherwise a not-installed summary is
-    // only meaningful with the validation detail beside it.
-    if (instance.state !== "installing" && decision.tone === "status-muted") {
-      return null;
-    }
-    return { tone: decision.tone, label: decision.label };
-  }
-
   function statusDetail(instance: InstanceSummary): string | null {
+    if (instance.state === "installing" && launcher.createBusy) return instanceProgressLabel(launcher.createProgress);
+    if (instance.recovery) return instance.recovery.message;
     const validation = launcher.instanceValidations[instance.id];
     if (instance.state === "installing") {
-      return launcher.createBusy && launcher.createProgress
-        ? launcher.createProgress.phase
-        : instance.pack
+      return instance.pack
           ? "This modpack did not finish installing and is unavailable. Review its files before recovery."
           : "This instance did not finish installing — retry below.";
     }
@@ -84,52 +84,39 @@
     if (validation?.status === "stale") {
       return "The saved configuration differs from the installed content — open the instance and install the new configuration.";
     }
-    if (validation?.status === "ready") {
-      return "Deep validation passed.";
-    }
     return null;
   }
 </script>
 
 <!--
-  Instance selection and creation. Compact rows: identity, concise state,
-  and the actions that belong to the list (open, select, validate, retry).
+  Instance identity and creation. Cards open the instance workspace;
+  only interrupted installations need an inline recovery action.
   The full configuration editor and Java lifecycle live in each instance's
   workspace, so this page never duplicates the Settings editor.
 -->
 <div class="page instances-page f-pilot">
+  {#if launcher.launcherState === null && !launcher.stateError}
+    <p role="status">Checking saved installation state and recovering interrupted installations…</p>
+  {/if}
   <header class="page-header">
     <div>
       <h2 class="page-title">Instances</h2>
-      <p class="page-subtitle">Isolated Minecraft installations Aurora launches from.</p>
     </div>
   </header>
-
-  <section class="group modpack-group" aria-label="Modrinth modpacks">
-    <div class="group-heading">
-      <div><h3 class="group-title">Modrinth modpacks</h3><p class="group-subtitle">Choose a published pack version to create its own Fabric instance.</p></div>
-      <button type="button" class="btn" aria-expanded={browsingPacks} onclick={() => browsingPacks = !browsingPacks}>{browsingPacks ? "Close Modpacks" : "Browse Modpacks"}</button>
-    </div>
-    {#if browsingPacks}
-      <div class="modpack-browser">
-      <ModrinthBrowse instanceId="" instanceName="" minecraftVersion="" kind="mod" installedProjectIds={[]} dependencyOnlyProjectIds={[]} onInstalled={async () => {}} standalonePackBrowse />
-      </div>
-    {/if}
-  </section>
 
   {#snippet createSection()}
   <section class="group" aria-labelledby="create-title">
     <div class="group-heading">
       <div>
-        <h3 class="group-title" id="create-title">Create instance</h3>
-        <p class="group-subtitle">
-          Choose a name, a Minecraft version, and a loader — everything else can be
-          configured later.
-        </p>
+        <h3 class="group-title" id="create-title">Create instance
+          {#if launcher.releases.some((release) => release.source === "development-fixture")}
+            <Tooltip label="Development release source" tone="warning">Development releases are available in this debug build. Serve <code>src-tauri/development</code> on 127.0.0.1:8765 to install those fixtures.</Tooltip>
+          {/if}
+        </h3>
       </div>
       {#if launcher.createBusy}
         <span class="status-badge status-working">
-          {launcher.createProgress ? launcher.createProgress.phase : "Working"}
+          Installing
         </span>
       {/if}
     </div>
@@ -142,16 +129,21 @@
       }}
     >
       <div class="field-grid">
-        <label class="field">
-          <span class="field-label">Name</span>
-          <input
-            type="text"
-            bind:value={launcher.createDisplayName}
-            placeholder="e.g. My Aurora Setup"
-            required
-            maxlength="80"
-          />
-        </label>
+        <div class="field field-span name-with-icon">
+          <label class="field-label" for="create-instance-name">Name</label>
+          <div class="name-row">
+            <IconPicker value={instanceIcons.pendingCreateIcon} disabled={launcher.createBusy}
+              onselect={(icon) => (instanceIcons.pendingCreateIcon = icon)} />
+            <input
+              id="create-instance-name"
+              type="text"
+              bind:value={launcher.createDisplayName}
+              placeholder="e.g. My Aurora Setup"
+              required
+              maxlength="80"
+            />
+          </div>
+        </div>
         <label class="field">
           <span class="field-label">Minecraft version</span>
           <select
@@ -183,7 +175,7 @@
         </label>
         {#if launcher.createPlatform !== "vanilla"}
         <label class="field">
-          <span class="field-label">{launcher.createPlatform === "neoForge" ? "NeoForge version" : "Fabric Loader version"}</span>
+          <span class="field-label">{platformLabel(launcher.createPlatform)} version</span>
           <select
             value={launcher.createLoaderPolicy.type === "automatic" ? "" : "pinned"}
             onchange={(event) => {
@@ -202,8 +194,8 @@
               }
             }}
           >
-              <option value="">Newest stable compatible version</option>
-              <option value="pinned">{launcher.createPlatform === "neoForge" ? "NeoForge" : "Fabric"} — choose version</option>
+              <option value="">Automatic (stable)</option>
+              <option value="pinned">{platformLabel(launcher.createPlatform)} — choose version</option>
           </select>
           {#if launcher.createLoaderPolicy.type === "pinned"}
             <select
@@ -225,11 +217,12 @@
         </label>
         {/if}
       </div>
-      <label class="check-field">
+      <div class="check-with-info"><label class="check-field">
         <input type="checkbox" bind:checked={launcher.createAuroraEnabled} onchange={() => { launcher.createAuroraPreference = launcher.createAuroraEnabled; }} disabled={!selectedCapability?.auroraSupported || !compatibility?.available || launcher.createBusy} />
         <span>Aurora Client</span>
       </label>
-      <p class="group-footer">{compatibilityError || auroraCreationCopy(compatibility)} {launcher.createAuroraEnabled && compatibility?.loaderVersion ? `Required Fabric Loader: ${compatibility.loaderVersion}.` : ""}</p>
+      <Tooltip label="Aurora Client compatibility">{auroraCreationCopy(compatibility)} {launcher.createAuroraEnabled && compatibility?.loaderVersion ? `Required Fabric Loader: ${compatibility.loaderVersion}.` : ""}</Tooltip></div>
+      {#if compatibilityError}<p class="inline-message inline-message-error" role="alert">{compatibilityError}</p>{/if}
       <label class="check-field">
         <input
           type="checkbox"
@@ -248,13 +241,8 @@
         >
           {launcher.createBusy ? "Creating…" : "Create instance"}
         </button>
-        {#if launcher.createBusy && launcher.createProgress}
-          <span class="group-row-detail">
-            {launcher.createProgress.phase}
-            {#if launcher.createProgress.game}
-              · {launcher.createProgress.game.completedItems}/{launcher.createProgress.game.totalItems}
-            {/if}
-          </span>
+        {#if launcher.createBusy}
+          <span class="group-row-detail" role="status">{instanceProgressLabel(launcher.createProgress)}</span>
         {/if}
       </div>
     </form>
@@ -275,146 +263,126 @@
       </p>
     {/if}
 
-    {#if launcher.releases.some((release) => release.source === "production-bundled")}
-      <p class="group-footer">
-        Production releases are reviewed and bundled with this launcher build. Instances keep
-        their installed versions until you choose an update or configuration change.
-      </p>
-    {/if}
-    {#if launcher.releases.some((release) => release.source === "development-fixture")}
-      <p class="group-footer">
-        Development releases are available in this debug build. Serve
-        <code>src-tauri/development</code> on 127.0.0.1:8765 to install those fixtures.
-      </p>
-    {/if}
   </section>
   {/snippet}
 
   {#snippet instancesSection()}
-  <section class="group" aria-labelledby="list-title" aria-live="polite">
-    <div class="group-heading">
-      <div>
-        <h3 class="group-title" id="list-title">Your instances</h3>
-        <p class="group-subtitle">
-          {instances.length} {instances.length === 1 ? "instance" : "instances"} — open one to manage it; the selected one launches from Home.
-        </p>
-      </div>
-    </div>
+  <section class="instances-library" aria-labelledby="list-title" aria-live="polite">
+    <header class="library-heading">
+      <h3 class="group-title" id="list-title">Your instances</h3>
+    </header>
 
     {#if launcher.stateError}
-      <p class="inline-message inline-message-error group-row" role="alert">
+      <p class="inline-message inline-message-error" role="alert">
         {launcher.stateError.message}
       </p>
     {:else if launcher.launcherState === null}
-      <div class="group-row group-row-loading">
-        <span class="spinner" aria-hidden="true"></span>
-        <span class="group-row-detail">Loading instances…</span>
-      </div>
+      <p class="library-loading" role="status"><span class="spinner" aria-hidden="true"></span> Loading instances…</p>
     {:else}
+      <ul class="instance-tiles">
       {#each instances as instance (instance.id)}
         {@const selected = selectedId === instance.id}
         {@const busy = launcher.instanceBusy === instance.id}
         {@const detail = statusDetail(instance)}
-        {@const rowBadge = badge(instance)}
         {@const problemTone =
           launcher.instanceValidations[instance.id]?.status === "damaged"
             ? "problem-line-error"
             : "problem-line-warning"}
-        <div class="group-row" class:group-row-selected={selected}>
-          <div class="group-row-main">
-            <span class="instance-name-line">
-              <span class="group-row-title">{instance.displayName}</span>
-              {#if selected}<span class="row-marker">Selected</span>{/if}
-            </span>
-            <span class="group-row-detail">{configurationLabel(instance)}</span>
-            {#if detail}<span class="group-row-detail {problemTone}">{detail}</span>{/if}
+        <li class="instance-tile" class:selected>
+          <div class="tile-top">
+            <InstanceIcon icon={instanceIcons.iconFor(instance.id)} size={42} tile />
           </div>
-
-          <div class="group-row-actions">
-            {#if rowBadge}<span class="status-badge {rowBadge.tone}">{rowBadge.label}</span>{/if}
-            <button
-              type="button"
-              class="btn"
-              onclick={() => navigation.openInstance(instance.id)}
-              disabled={busy || launcher.createBusy}
-            >
-              Open
-            </button>
-            {#if !selected}
-              <button
-                type="button"
-                class="btn"
-                onclick={() => launcher.runSelect(instance.id)}
-                disabled={busy || launcher.createBusy}
-              >
-                Select
-              </button>
-            {/if}
-            {#if instance.state === "installing" && !instance.pack}
-              <button
-                type="button"
-                class="btn"
-                onclick={() => launcher.runRetry(instance.id)}
-                disabled={busy || launcher.createBusy}
-              >
-                Retry install
-              </button>
-            {/if}
-            <button
-              type="button"
-              class="btn"
-              onclick={() => launcher.runValidate(instance.id)}
-              disabled={busy || launcher.createBusy}
-            >
-              {busy ? "Validating…" : "Validate"}
-            </button>
-          </div>
-        </div>
+          <!-- The name is the card's primary action; its hit area covers the tile. -->
+          <button type="button" class="tile-open" aria-label="Open {instance.displayName}" aria-current={selected ? 'true' : undefined}
+            onclick={() => navigation.openInstance(instance.id)} disabled={busy || launcher.createBusy}>
+            <span class="tile-name" title={instance.displayName}>{instance.displayName}</span>
+          </button>
+          <span class="tile-config">Minecraft {instance.minecraftVersion}</span>
+          {#if detail}<span class="tile-detail {problemTone}">{detail}</span>{/if}
+          {#if instance.state === "installing" && !instance.pack && !launcher.createBusy}
+            <div class="tile-actions">
+              <button type="button" class="btn" onclick={() => launcher.runRetry(instance.id)} disabled={busy || launcher.createBusy}>Retry install</button>
+            </div>
+          {/if}
+        </li>
       {/each}
+      </ul>
 
       {#if launcher.instanceError}
-        <p class="inline-message inline-message-error group-row" role="alert">
+        <p class="inline-message inline-message-error" role="alert">
           {launcher.instanceError.message}
         </p>
       {/if}
     {/if}
 
-    <p class="group-footer">
-      Instances are isolated Minecraft installations with the selected platform and optional
-      Aurora content, validated before they are reported ready. Open an instance to manage its
-      configuration, content and Java runtime. Delete an instance from its Settings after reviewing the data warning.
-    </p>
   </section>
   {/snippet}
 
   <!-- DOM order, reading order and keyboard order all follow the rendered
        branch: the instance list precedes creation whenever instances exist,
        and creation leads only in the intentional zero-instance empty state. -->
+  <div class="instances-composition" class:existing-first={existingFirst} class:creation-first={!existingFirst}>
+    <section class="group modpack-group" aria-label="Modrinth modpacks">
+      <div class="group-heading">
+        <div><h3 class="group-title">Modrinth modpacks</h3></div>
+        <button type="button" class="btn" aria-expanded={browsingPacks} onclick={() => browsingPacks = !browsingPacks}>{browsingPacks ? "Close Modpacks" : "Browse Modpacks"}</button>
+      </div>
+      {#if browsingPacks}
+        <div class="modpack-browser">
+        <ModrinthBrowse instanceId="" instanceName="" minecraftVersion="" kind="mod" installedProjectIds={[]} dependencyOnlyProjectIds={[]} onInstalled={async () => {}} standalonePackBrowse />
+        </div>
+      {/if}
+    </section>
   {#if existingFirst}
-    <div class="instances-composition existing-first">
       {@render instancesSection()}
       {@render createSection()}
-    </div>
   {:else}
-    <div class="instances-composition creation-first">
       {@render createSection()}
       <section class="group" aria-labelledby="list-title">
         <div class="group-heading">
           <div>
             <h3 class="group-title" id="list-title">Your instances</h3>
-            <p class="group-subtitle">Nothing here yet.</p>
           </div>
         </div>
-        <p class="group-footer">No instances yet — create the first one above; every instance you create appears here.</p>
+        <p class="group-footer">No instances yet.</p>
       </section>
-    </div>
   {/if}
+  </div>
 </div>
 
 <style>
   .modpack-browser { padding: 0 24px 24px; }
+  .modpack-group { grid-column: 1 / -1; }
+  /* Instance library: one tile per instance. Tiles are the surfaces (no
+     enclosing panel), so there is no card-on-card nesting. */
+  .instances-library { display: grid; gap: var(--space-4); min-width: 0; align-content: start; }
+  .library-heading { display: grid; gap: var(--space-1); }
+  .library-loading { display: flex; align-items: center; gap: var(--space-3); margin: 0; color: var(--color-text-secondary); }
+  .instance-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+  .instance-tile { position: relative; isolation: isolate; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 188px; padding: 18px; border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-content-panel); box-shadow: var(--f-shadow); transition: border-color var(--f-fast) ease, box-shadow var(--f-fast) ease, transform 160ms var(--f-ease); }
+  .instance-tile::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: rgb(255 255 255 / 3.5%); opacity: 0; transition: opacity var(--f-fast) ease; pointer-events: none; }
+  @media (hover: hover) and (pointer: fine) {
+    .instance-tile:has(.tile-open:hover:not(:disabled))::before { opacity: 1; }
+    .instance-tile:has(.tile-open:hover:not(:disabled)) { border-color: rgb(255 255 255 / 16%); }
+  }
+  .instance-tile:has(.tile-open:active:not(:disabled)) { transform: scale(.985); }
+  .instance-tile:has(.tile-open:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+  .instance-tile.selected { border-color: var(--color-accent-outline); box-shadow: inset 2px 0 0 var(--color-accent), var(--f-shadow); }
+  .tile-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-3); }
+  .tile-open { position: static; padding: 0; border: 0; background: none; color: var(--color-text); font: inherit; text-align: left; cursor: pointer; }
+  .tile-open::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+  .tile-open:focus-visible { outline: none; }
+  .tile-open:disabled { cursor: progress; }
+  .tile-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: 1.0625rem; font-weight: 600; letter-spacing: -.015em; line-height: 1.3; overflow-wrap: anywhere; }
+  .tile-config { color: var(--color-text-secondary); font-size: var(--text-metadata); overflow-wrap: anywhere; }
+  .tile-detail { font-size: var(--text-metadata); line-height: 1.45; overflow-wrap: anywhere; }
+  .tile-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: auto; padding-top: var(--space-3); }
+  .tile-actions .btn { padding-block: 6px; }
+  @media (prefers-reduced-motion: reduce) { .instance-tile, .instance-tile::before { transition: none; } .instance-tile:has(.tile-open:active:not(:disabled)) { transform: none; } }
+  .name-row { display: flex; align-items: center; gap: var(--space-2); }
+  .name-row input { flex: 1; min-width: 0; }
   .instances-page { --instance-panel-gap: var(--space-5); max-width: 1500px; width: 100%; margin-inline: auto; display: grid; gap: var(--instance-panel-gap); }
-  .instances-page > .page-header, .instances-page > .group { margin: 0; }
+  .instances-page > .page-header { margin: 0; }
   .instances-composition { display: grid; gap: var(--instance-panel-gap); align-items: start; }
   /* The existing-instance collection is the primary region: left column and
      at least as wide as the creation form. Stacking keeps DOM order, so the
@@ -423,19 +391,12 @@
   /* Zero instances: creation is the primary task, centered as the page's
      single form, with only a compact instances note below it. */
   .instances-composition.creation-first { grid-template-columns: minmax(0, min(100%, 880px)); justify-content: center; }
+  /* The page header shares the centered creation column's edge. */
+  .instances-page:has(.creation-first) { max-width: 880px; }
   .instances-composition > .group { min-width: 0; margin: 0; }
   .instances-composition :global(.field-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .group-form { gap: var(--space-4); padding: var(--space-4) var(--space-5) var(--space-5); }
-  .group-form > .group-footer { padding: 0; border: 0; }
   @media (max-width: 1250px) { .instances-composition.existing-first { grid-template-columns: minmax(0, 1fr); } }
-  .instance-name-line {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-2);
-    min-width: 0;
-    flex-wrap: wrap;
-  }
-
   .field-nested {
     margin-top: var(--space-2);
   }
@@ -448,6 +409,7 @@
     font-size: var(--text-body);
     cursor: pointer;
   }
+  .check-with-info { display: flex; align-items: center; gap: var(--space-1); }
 
   .problem-line-warning {
     color: var(--color-warning);
@@ -457,8 +419,4 @@
     color: var(--color-error);
   }
 
-  .group-footer code {
-    font-family: var(--font-mono);
-    font-size: var(--text-metadata);
-  }
 </style>

@@ -1,4 +1,5 @@
 import { mark } from "./performance";
+import { instanceIcons } from "$lib/instances/instanceIcons.svelte";
 import { listen } from "@tauri-apps/api/event";
 import {
   acquireArtifact,
@@ -19,6 +20,7 @@ import {
   installInstanceConfiguration,
   listAuroraReleases,
   listFabricLoaderVersions,
+  listForgeVersions,
   listNeoforgeVersions,
   listMinecraftVersions,
   openInstanceFolder,
@@ -96,7 +98,7 @@ class LauncherStore {
   // Instance management. All state comes from Rust.
   createDisplayName = $state("");
   createMinecraftVersion = $state("");
-  createPlatform = $state<"vanilla" | "fabric" | "neoForge">("fabric");
+  createPlatform = $state<"vanilla" | "fabric" | "neoForge" | "forge">("fabric");
   createAuroraEnabled = $state(false);
   createAuroraPreference = $state<boolean | null>(null);
   createLoaderPolicy = $state<{ type: "automatic" | "pinned"; version?: string }>({
@@ -207,6 +209,8 @@ class LauncherStore {
   validationError = $state<LauncherBackendError | null>(null);
 
   private initialized = false;
+  private stateSerial = 0;
+  private pendingStateReload: Promise<void> | null = null;
   private unsubscribers: (() => void)[] = [];
 
   get selectedInstance(): InstanceSummary | null {
@@ -235,6 +239,7 @@ class LauncherStore {
     for (const stop of this.unsubscribers) stop();
     this.unsubscribers = [];
     this.initialized = false;
+    this.stateSerial++;
     // Discard in-flight readiness/runtime responses on disposal.
     this.readinessSerial++;
     this.runtimeSerial++;
@@ -246,26 +251,42 @@ class LauncherStore {
       request: Promise<void>; serial: number; instanceId: string | null | undefined;
       accountId: string | null; revision: number; inputs: string;
     } | undefined;
+    mark("statusRequest");
     try {
       this.status = await getApplicationStatus();
     } catch (cause: unknown) {
       this.statusError = backendError(cause, "The launcher status could not be loaded.");
+    } finally {
+      mark("statusComplete");
     }
 
+    const stateSerial = ++this.stateSerial;
+    mark("stateRequest");
     try {
-      this.launcherState = await getLauncherState();
-      const selected = this.selectedInstance;
-      if (selected?.state === "ready") runtimeCheck = this.refreshRuntimeStatus(selected.id);
+      const state = await getLauncherState();
+      if (stateSerial === this.stateSerial) { this.launcherState = state; this.stateError = null; }
     } catch (cause: unknown) {
-      this.stateError = backendError(cause, "The launcher state could not be loaded.");
+      if (stateSerial === this.stateSerial) this.stateError = backendError(cause, "The launcher state could not be loaded.");
+    } finally {
+      mark("stateComplete");
     }
+    // Update discovery or a focus refresh can supersede the initial snapshot
+    // before it returns. Wait for the winning read before looking up selection;
+    // otherwise startup skips both runtime and readiness and never retries.
+    while (this.pendingStateReload) await this.pendingStateReload;
+    const selected = this.selectedInstance;
+    if (selected?.state === "ready") runtimeCheck = this.refreshRuntimeStatus(selected.id);
 
+    mark("releasesRequest");
     try {
       this.releases = await listAuroraReleases();
     } catch (cause: unknown) {
       this.releasesError = backendError(cause, "The Aurora release list failed.");
+    } finally {
+      mark("releasesComplete");
     }
 
+    mark("accountsRequest");
     try {
       this.accountsState = await getAccounts();
       this.hydrateCachedAvatars();
@@ -277,6 +298,8 @@ class LauncherStore {
         revision: this.readinessRevision, inputs: this.readinessInputs() };
     } catch (cause: unknown) {
       this.accountsError = backendError(cause, "The account list could not be loaded.");
+    } finally {
+      mark("accountsComplete");
     }
     // Runtime status is read-only. Readiness independently validates the
     // runtime, so completing status does not invalidate this request. Wait
@@ -355,19 +378,51 @@ class LauncherStore {
     });
   }
 
-  async refreshState(readinessMayHaveChanged = true): Promise<void> {
+  refreshState(readinessMayHaveChanged = true): Promise<void> {
+    const request = this.reloadState(readinessMayHaveChanged);
+    this.pendingStateReload = request;
+    void request.finally(() => {
+      if (this.pendingStateReload === request) this.pendingStateReload = null;
+    });
+    return request;
+  }
+
+  private async reloadState(readinessMayHaveChanged: boolean): Promise<void> {
     // Mutation callbacks use the conservative default, including when their
     // content change is absent from the summary DTO. Invalidate across the
     // entire reload, so a check started during it cannot survive completion.
     if (readinessMayHaveChanged) this.readinessRevision++;
+    const serial = ++this.stateSerial;
     try {
-      this.launcherState = await getLauncherState();
-    } catch {
+      const state = await getLauncherState();
+      if (serial === this.stateSerial) { this.launcherState = state; this.stateError = null; }
+    } catch (cause: unknown) {
       // State refresh is best-effort after mutations; load errors surface
       // through the dedicated state card.
+      if (serial !== this.stateSerial) return;
+      this.stateError = backendError(cause, "The launcher state could not be loaded.");
+      for (const instance of this.launcherState?.instances ?? []) {
+        instance.recovery = { status: "manualRepair", message: "Saved installation state could not be checked. Focus the launcher again to retry." };
+      }
     } finally {
       if (readinessMayHaveChanged) this.readinessRevision++;
     }
+  }
+
+  private desktopRefresh: Promise<void> | null = null;
+  private markInstallationPending(id: string): void {
+    this.stateSerial++;
+    const instance = this.launcherState?.instances.find(entry => entry.id === id);
+    if (instance) instance.recovery = { status: "busy", message: "Preparing or installing this instance. Readiness will be checked after completion." };
+  }
+  /** Recheck cross-process installation authority when this desktop regains focus. */
+  refreshDesktopState(): Promise<void> {
+    if (!this.launcherState || this.desktopRefresh) return this.desktopRefresh ?? Promise.resolve();
+    for (const instance of this.launcherState.instances) {
+      instance.recovery = { status: "checking", message: "Checking saved installation state and recovering interrupted installations…" };
+    }
+    this.desktopRefresh = this.refreshState().finally(() => { this.desktopRefresh = null; });
+    return this.desktopRefresh;
   }
 
   private readinessInputs(): string {
@@ -480,7 +535,12 @@ class LauncherStore {
               version: entry.version,
               stable: entry.stable,
             }))
-          : await listFabricLoaderVersions(minecraftVersion.trim());
+          : platform === "forge"
+            ? (await listForgeVersions(minecraftVersion.trim())).map((entry) => ({
+                version: entry.version,
+                stable: entry.stable,
+              }))
+            : await listFabricLoaderVersions(minecraftVersion.trim());
       if (this.loaderVersionsKey === key) this.loaderVersions = versions;
     } catch (cause: unknown) {
       if (this.loaderVersionsKey !== key) return;
@@ -489,7 +549,9 @@ class LauncherStore {
         cause,
         platform === "neoForge"
           ? "The NeoForge versions could not be loaded."
-          : "The Fabric Loader versions could not be loaded.",
+          : platform === "forge"
+            ? "The Forge versions could not be loaded."
+            : "The Fabric Loader versions could not be loaded.",
       );
     } finally {
       if (this.loaderVersionsKey === key) this.loaderVersionsBusy = false;
@@ -502,7 +564,7 @@ class LauncherStore {
     this.createError = null;
 
     try {
-      await createInstance({
+      const created = await createInstance({
         displayName: this.createDisplayName.trim(),
         minecraftVersion: this.createMinecraftVersion,
         loader:
@@ -510,9 +572,13 @@ class LauncherStore {
             ? {kind: "vanilla"}
             : this.createPlatform === "neoForge"
               ? {kind: "neoForge", policy: this.createLoaderPolicy}
-              : {kind: "fabric", policy: this.createLoaderPolicy},
+              : this.createPlatform === "forge"
+                ? {kind: "forge", policy: this.createLoaderPolicy}
+                : {kind: "fabric", policy: this.createLoaderPolicy},
         auroraEnabled: this.createAuroraEnabled,
       });
+      // Presentation only: an icon write failure never fails creation.
+      await instanceIcons.applyPending(created.id);
       this.createDisplayName = "";
       this.createAuroraPreference = null;
       await this.refreshState();
@@ -588,6 +654,7 @@ class LauncherStore {
     if (this.detailInstallBusy !== null) return;
     this.detailInstallBusy = id;
     this.detailError = null;
+    this.markInstallationPending(id);
     try {
       await installInstanceConfiguration(id);
       await this.refreshState();
@@ -787,6 +854,7 @@ class LauncherStore {
     this.instanceBusy = id;
     this.instanceError = null;
     this.createProgress = null;
+    this.markInstallationPending(id);
     try {
       await retryInstanceInstall(id);
       await this.refreshState();

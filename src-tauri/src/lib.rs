@@ -8,17 +8,22 @@ pub mod config;
 pub mod content_recognition;
 pub mod content_updates;
 mod cosmetic_image;
+#[cfg(all(debug_assertions, feature = "f3ra-desktop-acceptance"))]
+mod desktop_acceptance;
 pub use cosmetic_image::run_artwork_decoder_if_requested;
 pub mod cosmetics;
 pub mod discord;
 pub mod distribution;
 pub mod downloads;
 pub mod fabric;
+pub mod forge;
+pub mod game;
 pub mod gameplay_history;
 pub mod home_widgets;
 pub mod install;
 mod installed_artwork;
 pub mod instance_content;
+pub mod instance_icons;
 pub mod instance_mods;
 pub mod instances;
 pub mod integrity;
@@ -30,6 +35,7 @@ pub mod modrinth;
 pub mod mrpack;
 pub mod neoforge;
 pub mod pack_activation;
+pub mod pack_merge;
 pub mod pack_state;
 pub mod pack_update;
 pub mod paths;
@@ -45,6 +51,8 @@ mod test_support;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(all(debug_assertions, feature = "f3ra-desktop-acceptance"))]
+    desktop_acceptance::authorize().expect("desktop acceptance requires a marked disposable root");
     let initialization = performance::scope(performance::Event::Initialization);
     eprintln!("[aurora-launcher] starting native backend");
 
@@ -52,6 +60,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            let _setup = performance::scope(performance::Event::NativeSetup);
             if let Some(window) = app.get_webview_window("main") {
                 #[cfg(target_os = "windows")]
                 window.set_decorations(false)?;
@@ -79,6 +88,7 @@ pub fn run() {
             performance::performance_runtime_status,
             performance::performance_play,
             application::get_application_status,
+            application::maintain_installation_backups,
             application::get_launcher_state,
             application::get_home_widgets,
             application::get_playtime_summary,
@@ -97,6 +107,8 @@ pub fn run() {
             application::set_appearance,
             application::get_desktop_integration,
             application::create_desktop_shortcut,
+            application::create_start_menu_shortcut,
+            application::open_launcher_folder,
             application::remove_desktop_shortcut,
             application::acquire_artifact,
             application::plan_minecraft_install,
@@ -111,11 +123,15 @@ pub fn run() {
             application::apply_aurora_transition,
             application::retry_instance_install,
             application::rename_instance,
+            application::get_instance_icons,
+            application::set_instance_icon,
             application::update_instance_configuration,
+            application::get_instance_performance_advice,
             application::install_instance_configuration,
             application::list_minecraft_versions,
             application::list_fabric_loader_versions,
             application::list_neoforge_versions,
+            application::list_forge_versions,
             application::select_instance,
             application::open_instance_folder,
             application::get_instance_mods,
@@ -138,6 +154,8 @@ pub fn run() {
             application::get_installed_artwork_identities,
             application::preview_modrinth_pack,
             application::install_modrinth_pack,
+            application::preview_modrinth_pack_merge,
+            application::install_modrinth_pack_merge,
             application::check_modpack_update,
             application::preview_modpack_update,
             application::apply_modpack_update,

@@ -708,23 +708,24 @@ p {
   color: var(--color-text);
 }
 
-/* Destructive secondary action: quiet outline and error-tinted text —
-   unmistakably not a primary action, but clearly the risky one. */
+/* Destructive secondary action: error-tinted text on a neutral, unoutlined
+   button — unmistakably not a primary action, but clearly the risky one.
+   Owner preference: neutral buttons carry no decorative outline. */
 .btn-danger {
-  border-color: var(--color-border);
-  background: transparent;
+  border-color: transparent;
+  background: var(--color-error-soft);
   color: var(--color-error);
   font-weight: 500;
 }
 
 .btn-danger:hover:not(:disabled) {
   border-color: transparent;
-  background: var(--color-error-soft);
+  background: color-mix(in srgb, var(--color-error) 22%, transparent);
 }
 
 .btn-danger:active:not(:disabled) {
   border-color: transparent;
-  background: var(--color-error-soft);
+  background: color-mix(in srgb, var(--color-error) 16%, transparent);
   color: var(--color-error);
 }
 

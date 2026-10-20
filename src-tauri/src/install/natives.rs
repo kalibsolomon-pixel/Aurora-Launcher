@@ -43,12 +43,13 @@ const MAX_ARCHIVE_TOTAL_BYTES: u64 = 1024 * 1024 * 1024;
 const META_INF_PREFIX: &str = "META-INF/";
 
 /// The outcome of one successful extraction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExtractedNative {
     /// How many entries were written (duplicates that matched earlier
     /// content are not re-written).
     pub written_entries: usize,
     pub total_bytes: u64,
+    pub(crate) files: Vec<super::retention::OwnedFile>,
 }
 
 /// Extracts one verified native archive into `destination_root`.
@@ -74,6 +75,7 @@ pub fn extract_native_archive(
     let mut written_entries = 0usize;
     let mut extractable_entries = 0usize;
     let mut total_bytes = 0u64;
+    let mut files = Vec::new();
 
     for index in 0..archive.len() {
         let mut entry =
@@ -120,6 +122,7 @@ pub fn extract_native_archive(
             });
         }
         extractable_entries += 1;
+        files.push(super::retention::OwnedFile::observed(name.clone(), &bytes));
 
         let mut target = destination_root.to_path_buf();
         for segment in &segments {
@@ -178,6 +181,7 @@ pub fn extract_native_archive(
     Ok(ExtractedNative {
         written_entries,
         total_bytes,
+        files,
     })
 }
 

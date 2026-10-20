@@ -11,11 +11,11 @@
   import {
     BROWSE_KINDS, BROWSE_SORTS, browseKindLabel, browseKindNoun, browseModrinth, browseModrinthTags,
     browseSortLabel, getModrinthProjectBrowse, installModrinth, previewModrinthInstall, quickInstallModrinth,
-    installModrinthPack, previewModrinthPack,
+    installModrinthPack, previewModrinthPack, previewModrinthPackMerge, installModrinthPackMerge,
     LauncherBackendError,
     type BrowseKind, type BrowseSort, type ContentType, type ModrinthPreviewResponse,
     type ModrinthProjectDetails, type ModrinthSearchPage, type ProviderCategory,
-    type ProviderConflict, type ModrinthPackPreview,
+    type ProviderConflict, type ModrinthPackPreview, type ModrinthPackMergePreview,
   } from "$lib/backend";
   import InstallConflicts from "./InstallConflicts.svelte";
   import InstalledArtwork from './InstalledArtwork.svelte';
@@ -41,6 +41,7 @@
   // svelte-ignore state_referenced_locally
   let browseKind = $state<BrowseKind>(standalonePackBrowse ? "modpack" : kind);
   let query = $state("");
+  let resultQuery = $state("");
   let categories = $state<string[]>([]);
   let sort = $state<BrowseSort>("relevance");
   let page = $state<ModrinthSearchPage | null>(null);
@@ -48,6 +49,10 @@
   let versionId = $state("");
   let preview = $state<ModrinthPreviewResponse | null>(null);
   let packPreview = $state<ModrinthPackPreview | null>(null);
+  // Inside an instance workspace a pack is added to that instance; only the
+  // standalone Instances browser creates a new instance from a pack.
+  const packIntoInstance = $derived(!standalonePackBrowse && instanceId !== "");
+  let mergePreview = $state<ModrinthPackMergePreview | null>(null);
   let selectedOptional = $state<string[]>([]);
   let previewOptional = $state<string[]>([]);
   let packPhase = $state("");
@@ -61,6 +66,7 @@
   let blockedProjects = $state<Record<string, { message: string; conflict: ProviderConflict | null }>>({});
   let categoryPickerOpen = $state(false);
   let categoryTrigger: HTMLButtonElement | undefined = $state();
+  let searchInput: HTMLInputElement | undefined = $state();
   let allCategories = $state<ProviderCategory[]>([]);
   let categoriesError = $state("");
   let requestSerial = 0;
@@ -126,6 +132,7 @@
       });
       if (serial !== requestSerial) return;
       page = appendBrowsePage(page, result, offset);
+      resultQuery = term;
       nextOffset = result.offset + 20;
       if (offset === 0 && !term.trim() && !categories.length && sort === "relevance") {
         defaultPages.put(instanceId, browseKind, minecraftVersion, result);
@@ -168,6 +175,12 @@
     categories = [];
     sort = "relevance";
     query = "";
+    void search(0, "");
+  }
+
+  function clearSearch(): void {
+    query = "";
+    searchInput?.focus();
     void search(0, "");
   }
 
@@ -222,7 +235,7 @@
   }
 
   async function quickInstall(projectId: string, title: string): Promise<void> {
-    if (!installable || quickBusyProjectId || (installedProjectIds.includes(projectId) && !dependencyOnlyProjectIds.includes(projectId))) return;
+    if (!installable || busy !== null || quickBusyProjectId || (installedProjectIds.includes(projectId) && !dependencyOnlyProjectIds.includes(projectId))) return;
     const targetInstanceId = instanceId;
     const targetKind = installContentType();
     quickBusyProjectId = projectId;
@@ -282,20 +295,36 @@
     busy = "preview";
     error = null;
     packPreview = null;
+    mergePreview = null;
     try {
-      packPreview = await previewModrinthPack(project.projectId, versionId, selectedOptional);
+      if (packIntoInstance) {
+        mergePreview = await previewModrinthPackMerge(instanceId, project.projectId, versionId, selectedOptional);
+        packPreview = mergePreview.pack;
+      } else {
+        packPreview = await previewModrinthPack(project.projectId, versionId, selectedOptional);
+      }
       previewOptional = [...selectedOptional];
     } catch (reason) { showError(reason); }
     finally { busy = null; }
   }
 
   async function confirmPack(): Promise<void> {
-    if (!packPreview || optionalChanged) return;
+    if (!packPreview || optionalChanged || busy !== null) return;
     const selected = packPreview;
     busy = "install";
     error = null;
-    packPhase = "preparingInstance";
+    packPhase = packIntoInstance ? "resolvingPack" : "preparingInstance";
     try {
+      if (packIntoInstance) {
+        if (!mergePreview || mergePreview.blockers.length) return;
+        const result = await installModrinthPackMerge(instanceId, selected.projectId, selected.versionId, selectedOptional, mergePreview.fingerprint);
+        packPreview = null;
+        mergePreview = null;
+        project = null;
+        await onInstalled(instanceId, "mod");
+        notifications.show(`Added ${result.added} file${result.added === 1 ? "" : "s"} from ${selected.name} to ${instanceName}${result.keptExisting.length ? ` · kept ${result.keptExisting.length} of your existing settings files` : ""}.`);
+        return;
+      }
       const created = await installModrinthPack(selected.projectId, selected.versionId, selectedOptional, selected.fingerprint);
       await launcher.refreshState();
       await launcher.runSelect(created.id);
@@ -322,7 +351,7 @@
   } as Record<string, string>)[packPhase] ?? "Installing modpack…");
 
   async function confirmInstall(): Promise<void> {
-    if (!project || !preview) return;
+    if (!project || !preview || busy !== null) return;
     const targetInstanceId = instanceId;
     const targetKind = installContentType();
     busy = "install";
@@ -348,11 +377,11 @@
 
 <svelte:window onkeydown={onWindowKeydown} />
 
-<section class="browse" aria-label="Browse Modrinth">
+<section class="browse" class:browse-mods={browseKind === "mod"} class:browse-modpacks={browseKind === "modpack"} class:browse-resource-packs={browseKind === "resourcePack"} aria-label="Browse Modrinth">
   <div class="browse-heading">
     <div>
-      <h3 class="group-title">Browse Modrinth</h3>
-      <p class="group-subtitle">{browseKind === "modpack" ? "Choose an exact Fabric pack version. Its declared Minecraft and loader versions determine the new instance." : `Results are filtered for this instance's Minecraft ${minecraftVersion}${browseKind === "mod" ? ` and ${loaderLabel}` : ""}. Compatibility is checked before installation.`}</p>
+      <h3 class="group-title">Discover {browseKindLabel(browseKind)}</h3>
+      <p class="group-subtitle">{browseKind === "modpack" ? (packIntoInstance ? `Review an exact Fabric pack version to add its mods and settings to ${instanceName}. Your existing files are never overwritten.` : "Review an exact Fabric pack version to create a new independent instance.") : `Install into ${instanceName}. Compatibility and required dependencies are checked before installation.`}</p>
     </div>
     <span class="source">Source: Modrinth</span>
   </div>
@@ -366,10 +395,13 @@
   {/if}
 
   <form class="browse-search" onsubmit={(event) => { event.preventDefault(); void search(); }}>
-    <label>
-      <span class="field-label">Find {browseKindNoun(browseKind)}</span>
-      <input type="search" bind:value={query} oninput={(event) => { if (!event.currentTarget.value.trim()) void search(0, ""); }} maxlength="160" placeholder="Search Modrinth" />
-    </label>
+    <div class="search-control">
+      <label class="field-label" for="browse-search-input">Find {browseKindNoun(browseKind)}</label>
+      <span class="search-field">
+        <input id="browse-search-input" type="search" bind:this={searchInput} bind:value={query} oninput={(event) => { if (!event.currentTarget.value.trim()) void search(0, ""); }} maxlength="160" placeholder={`Search ${browseKindNoun(browseKind)} on Modrinth`} />
+        {#if query}<button type="button" class="clear-search" aria-label="Clear search" onclick={clearSearch}>×</button>{/if}
+      </span>
+    </div>
     <button type="submit" class="btn" disabled={busy !== null}>{busy === "search" ? "Searching…" : "Search"}</button>
   </form>
 
@@ -425,7 +457,7 @@
     {#if categories.length || sort !== "relevance" || query.trim()}
       <button type="button" class="btn btn-quiet" onclick={clearFilters}>Clear filters</button>
     {/if}
-    <span class="filter-context">{browseKind === "modpack" ? "Fabric modpacks · new instance" : `Minecraft ${minecraftVersion}${browseKind === "mod" ? " · Fabric" : ""}`}</span>
+    <span class="filter-context">{browseKind === "modpack" ? (packIntoInstance ? `Fabric modpacks · into ${instanceName}` : "Fabric modpacks · new instance") : `Minecraft ${minecraftVersion}${browseKind === "mod" ? ` · ${loaderLabel}` : ""}`}</span>
   </div>
 
   {#if categories.length}
@@ -437,10 +469,14 @@
   {/if}
 
   {#if error}
-    <p class="inline-message inline-message-error" role="alert">{error.message} <code>{error.code}</code></p>
+    <div class="browse-error" role="alert">
+      <p class="inline-message inline-message-error">{error.message} <code>{error.code}</code></p>
+      {#if !project}<button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => search(page ? nextOffset : 0)}>Retry search</button>{/if}
+    </div>
   {/if}
   {#if busy && busy !== "install"}<p class="browse-status" class:browse-loading={busy === "search" && !page} role="status"><span class="spinner" aria-hidden="true"></span> {busy === "search" ? "Loading Modrinth projects…" : busy === "details" ? "Loading versions…" : "Resolving dependencies…"}</p>{/if}
   {#if busy === "install"}<p class="browse-status" role="status"><span class="spinner" aria-hidden="true"></span> {browseKind === "modpack" ? packPhaseLabel : "Downloading and verifying content…"}</p>{/if}
+  {#if quickBusyProjectId}<p class="browse-status" role="status"><span class="spinner" aria-hidden="true"></span> Installing {page?.hits.find(hit => hit.projectId === quickBusyProjectId)?.title ?? "content"} into {instanceName}…</p>{/if}
 
   {#if project}
     <div class="project">
@@ -453,7 +489,9 @@
       <p>{project.summary}</p>
       <p class="browse-meta">License {project.license} · Modrinth project {project.projectId} · {project.loaders.join(", ") || "No loader listed"}</p>
       {#if browseKind === "shaderPack"}<p class="browse-note">The file can be installed. This instance may need a compatible shader loader before Minecraft can use it.</p>{/if}
-      {#if browseKind === "modpack"}<p class="browse-note">This pack will create its own Fabric instance with the Minecraft and loader versions declared by the selected pack. Aurora Client is not added.</p>{/if}
+      {#if browseKind === "modpack"}<p class="browse-note">{packIntoInstance
+        ? `This pack's mods and settings are added to ${instanceName}. Its Minecraft version must match this instance and its Fabric Loader can't be newer; your existing files are never overwritten.`
+        : "This pack will create its own Fabric instance with the Minecraft and loader versions declared by the selected pack. Aurora Client is not added."}</p>{/if}
       {#if project.versions.length}
         <label class="version-choice"><span class="field-label">Version</span>
           <select bind:value={versionId} onchange={() => { preview = null; packPreview = null; selectedOptional = []; }}>
@@ -468,16 +506,17 @@
           <button type="button" class="btn" disabled={busy !== null || !versionId} onclick={inspectPack}>Review pack installation</button>
         {/if}
       {:else}
-        <p class="browse-note">No Fabric pack version is available.</p>
+        <p class="browse-note">{browseKind === "modpack" ? "No supported Fabric pack version is available." : "No compatible version is available for this instance."}</p>
       {/if}
     </div>
   {:else if page}
+    <p class="result-count" role="status">{page.hits.length.toLocaleString()} of {page.totalHits.toLocaleString()} {browseKindNoun(browseKind)}{resultQuery.trim() ? ` matching “${resultQuery.trim()}”` : ""}</p>
     {#if page.hits.length}
       <div class="browse-list">
         {#each page.hits as hit (hit.projectId)}
           <article class="browse-row">
             <div class="browse-glyph" aria-hidden="true">
-              <InstalledArtwork projectId={hit.projectId} fallback={browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"} />
+              <InstalledArtwork projectId={hit.projectId} size={browseKind === "resourcePack" ? 64 : 44} fallback={browseKind === "mod" ? "M" : browseKind === "resourcePack" ? "R" : browseKind === "modpack" ? "P" : "S"} />
             </div>
             <div class="browse-copy">
               <h4>{hit.title}</h4>
@@ -487,22 +526,26 @@
             </div>
             <div class="browse-actions">
               {#if installable}
-                <button type="button" class="btn btn-quiet install-action" title={blockedProjects[hit.projectId]?.message ?? (installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : `Install newest eligible version of ${hit.title}`)} aria-label={blockedProjects[hit.projectId] ? `${hit.title} installation blocked; review Details` : dependencyOnlyProjectIds.includes(hit.projectId) ? `Keep ${hit.title} installed directly` : installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : quickBusyProjectId === hit.projectId ? `Installing ${hit.title}` : `Install newest eligible version of ${hit.title}`} disabled={quickBusyProjectId !== null || !!blockedProjects[hit.projectId] || (installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId))} onclick={() => quickInstall(hit.projectId, hit.title)}>
-                  {#if quickBusyProjectId === hit.projectId}<span class="spinner" aria-hidden="true"></span><span class="action-state">Installing…</span>{:else if installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Installed</span>{:else if blockedProjects[hit.projectId]}<span class="action-state">Blocked</span>{:else if dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Keep</span>{:else}<Icon name="download" size={18} />{/if}
+                <button type="button" class="btn install-action" title={blockedProjects[hit.projectId]?.message ?? (installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : `Install newest eligible version of ${hit.title}`)} aria-label={blockedProjects[hit.projectId] ? `${hit.title} installation blocked; review Details` : quickBusyProjectId === hit.projectId ? `Installing ${hit.title}` : dependencyOnlyProjectIds.includes(hit.projectId) ? `Keep ${hit.title} installed directly` : installedProjectIds.includes(hit.projectId) ? `${hit.title} is installed` : `Install newest eligible version of ${hit.title}`} disabled={busy !== null || quickBusyProjectId !== null || !!blockedProjects[hit.projectId] || (installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId))} onclick={() => quickInstall(hit.projectId, hit.title)}>
+                  {#if quickBusyProjectId === hit.projectId}<span class="spinner" aria-hidden="true"></span><span class="action-state">Installing…</span>{:else if installedProjectIds.includes(hit.projectId) && !dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Installed</span>{:else if blockedProjects[hit.projectId]}<span class="action-state">Blocked</span>{:else if dependencyOnlyProjectIds.includes(hit.projectId)}<span class="action-state">Keep</span>{:else}<Icon name="download" size={18} /><span class="action-state">Install</span>{/if}
                 </button>
               {:else}
-                <span class="browse-only-badge">New instance</span>
+                <span class="browse-only-badge">{packIntoInstance ? "Adds to instance" : "New instance"}</span>
               {/if}
-              <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => openProject(hit.projectId)}>Details</button>
+              <button type="button" class="btn" class:btn-quiet={browseKind !== "modpack"} aria-label={browseKind === "modpack" ? `Review ${hit.title} pack` : `Details for ${hit.title}`} disabled={busy !== null || quickBusyProjectId !== null} onclick={() => openProject(hit.projectId)}>{browseKind === "modpack" ? "Review pack" : "Details"}</button>
             </div>
           </article>
         {/each}
       </div>
     {:else}
-      <p class="browse-note">{page.totalHits > 0 ? "No matching projects on this page." : "No matching projects for this instance."}</p>
+      <div class="browse-empty" role="status">
+        <h4>{page.totalHits > 0 ? "No projects on this page" : query.trim() || categories.length ? "No matching results" : browseKind === "modpack" ? "No Fabric modpacks found" : "No compatible content found"}</h4>
+        <p>{query.trim() || categories.length ? "Try another search or clear your filters." : browseKind === "modpack" ? "Try again later or search for a specific pack." : `No ${browseKindNoun(browseKind)} were found for this instance's current compatibility filters.`}</p>
+        {#if query.trim() || categories.length}<button type="button" class="btn btn-quiet" onclick={clearFilters}>Clear filters</button>{/if}
+      </div>
     {/if}
     {#if nextOffset < page.totalHits}
-      <button type="button" class="btn btn-quiet more" disabled={busy !== null} onclick={() => search(nextOffset)}>Load more</button>
+      <button type="button" class="btn btn-quiet more" disabled={busy !== null} onclick={() => search(nextOffset)}>{busy === "search" ? "Loading…" : "Load more"}</button>
     {/if}
   {/if}
 
@@ -534,7 +577,19 @@
   {#if packPreview}
     <div class="preview" role="group" aria-label="Modpack installation preview">
       <h4>{packPreview.name} · {packPreview.packVersion}</h4>
-      <p>Minecraft {packPreview.minecraftVersion} · Fabric Loader {packPreview.fabricLoaderVersion} · New independent instance</p>
+      <p>Minecraft {packPreview.minecraftVersion} · Fabric Loader {packPreview.fabricLoaderVersion} · {packIntoInstance ? `Adds to ${instanceName}` : "New independent instance"}</p>
+      {#if mergePreview}
+        {#if mergePreview.blockers.length}
+          <div class="merge-blockers" role="alert">
+            <strong>This pack can't be added to {instanceName}</strong>
+            <ul>{#each mergePreview.blockers as blocker}<li>{blocker}</li>{/each}</ul>
+          </div>
+        {:else}
+          <p class="merge-summary">Adds {mergePreview.added.length} file{mergePreview.added.length === 1 ? "" : "s"} and {mergePreview.overridesWritten.length} pack setting{mergePreview.overridesWritten.length === 1 ? "" : "s"}{mergePreview.alreadyPresent.length ? ` · ${mergePreview.alreadyPresent.length} already in this instance` : ""}. The pack's content becomes ordinary content of this instance; it won't follow pack updates.</p>
+        {/if}
+        {#if mergePreview.keptExisting.length}<details><summary>Your files kept as they are ({mergePreview.keptExisting.length})</summary><ul>{#each mergePreview.keptExisting as path}<li>{path}</li>{/each}</ul></details>{/if}
+        {#if mergePreview.alreadyPresent.length}<details><summary>Already in this instance ({mergePreview.alreadyPresent.length})</summary><ul>{#each mergePreview.alreadyPresent as path}<li>{path}</li>{/each}</ul></details>{/if}
+      {/if}
       <p>{packFileCounts.mods} mods · {packFileCounts.resourcePacks} resource packs · {packFileCounts.shaders} shader packs · {packFileCounts.other} other files · {packPreview.overrides.length} overrides.</p>
       <p>{packPreview.recognized.length} Modrinth-managed components · {packPreview.unresolved.length} external verified files.</p>
       {#if packPreview.recognized.length}
@@ -550,38 +605,58 @@
       {#if packPreview.excluded.length}<details><summary>Excluded for this client ({packPreview.excluded.length})</summary><ul>{#each packPreview.excluded as path}<li>{path}</li>{/each}</ul></details>{/if}
       {#if packPreview.overrides.length}<details><summary>Pack defaults ({packPreview.overrides.length})</summary><ul>{#each packPreview.overrides as path}<li>{path}</li>{/each}</ul></details>{/if}
       <div class="preview-actions">
-        <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => packPreview = null}>Cancel</button>
-        <button type="button" class="btn" disabled={busy !== null || optionalChanged} onclick={confirmPack}>Install exact version</button>
+        <button type="button" class="btn btn-quiet" disabled={busy !== null} onclick={() => { packPreview = null; mergePreview = null; }}>Cancel</button>
+        <button type="button" class="btn" class:btn-primary={packIntoInstance} disabled={busy !== null || optionalChanged || !!mergePreview?.blockers.length} onclick={confirmPack}>{packIntoInstance ? `Add to ${instanceName}` : "Install exact version"}</button>
       </div>
     </div>
   {/if}
 </section>
 
 <style>
+  .merge-blockers { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--color-warning-soft); color: var(--color-warning); }
+  .merge-blockers ul { margin: var(--space-2) 0 0; padding-left: 1.2em; color: var(--color-text); }
+  .merge-summary { color: var(--color-text); }
   .browse { min-width: 0; container-type: inline-size; }
   .browse-heading, .browse-search, .browse-row, .preview-actions, .browse-filters { display: flex; gap: var(--space-3); align-items: center; }
   .browse-heading { justify-content: space-between; margin-bottom: var(--space-3); }
-  .browse-heading .group-subtitle { max-width: 50ch; }
+  .browse-heading { align-items: flex-start; }
+  .browse-heading > div { min-width: 0; flex: 1; }
+  .browse-heading .group-subtitle { max-width: 72ch; color: var(--color-text-secondary); }
   .source, .browse-meta, .filter-context { font-size: var(--text-metadata); color: var(--color-text-muted); }
-  .source { white-space: nowrap; }
+  .source { white-space: nowrap; color: var(--color-text-secondary); }
+  .search-field { position: relative; display: flex; min-width: 0; }
+  .search-field input { padding-right: 44px !important; }
+  .search-field input::-webkit-search-cancel-button { appearance: none; }
+  .clear-search { position: absolute; right: 0; top: 0; bottom: 0; width: 40px; border: none; border-radius: var(--f-radius-control); background: transparent; color: var(--color-text-secondary); font: inherit; cursor: pointer; }
+  .clear-search:hover { color: var(--color-text); background: var(--color-surface-hover); }
+  .search-control { min-width: 0; }
+  .browse-search input, .browse-search > .btn { min-height: 40px; border-radius: var(--f-radius-control); }
+  .browse-search > .btn { flex: none; }
+  .result-count { margin: 0 0 var(--space-3); font-size: var(--text-metadata); color: var(--color-text-secondary); overflow-wrap: anywhere; }
+  .browse-error { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+  .browse-error p { flex: 1 1 20em; margin: 0; overflow-wrap: anywhere; }
+  .browse-empty { display: grid; justify-items: start; align-content: center; gap: var(--space-2); min-height: 120px; padding: var(--space-4); background: var(--f-content-panel); border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); }
+  .browse-empty h4, .browse-empty p { margin: 0; }
+  .browse-empty h4 { font-size: var(--text-body); }
+  .browse-empty p { font-size: var(--text-secondary); color: var(--color-text-secondary); }
   .browse-kind-tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; }
   .browse-kind-tabs [aria-pressed="true"] { color: var(--color-text); background: var(--color-surface-raised); }
   .browse-search { align-items: end; margin-bottom: var(--space-3); }
-  .browse-search label, .version-choice { display: grid; gap: var(--space-1); flex: 1; }
+  .search-control, .version-choice { display: grid; gap: var(--space-1); flex: 1; }
   /* Text-field styling is scoped to the search input specifically: a bare
      `.browse input` selector also matched the category checkboxes and blew
      each one up into a full-width padded box, tearing the picker apart. */
   .browse input[type="search"], .browse select { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; }
   .browse-filters { flex-wrap: wrap; align-items: end; gap: var(--space-3); margin-bottom: var(--space-4); }
-  .sort-control, .category-filter { display: grid; gap: var(--space-1); width: 180px; max-width: 100%; }
+  .sort-control, .category-filter { display: grid; gap: var(--space-1); width: max(180px, 12em); max-width: 100%; }
   .filter-context { margin-left: auto; padding-bottom: var(--space-2); overflow-wrap: anywhere; }
   .category-filter { position: relative; }
-  .browse .filter-input { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); width: 100%; height: 40px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; font-size: var(--text-body); cursor: pointer; }
+  .browse .filter-input { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); width: 100%; min-height: 40px; height: auto; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--f-radius-control); background: var(--color-surface-sunken); color: var(--color-text); font: inherit; font-size: var(--text-body); cursor: pointer; }
   .browse .filter-input:hover { border-color: var(--color-text-muted); background: var(--color-surface-hover); }
   .browse .filter-input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   .select-wrap { position: relative; display: block; }
   .browse select.filter-input { appearance: none; padding-right: 36px; }
-  .filter-chevron { position: absolute; right: var(--space-3); top: 0; height: 40px; display: flex; align-items: center; pointer-events: none; }
+  .filter-chevron { position: absolute; right: var(--space-3); inset-block: 0; display: flex; align-items: center; pointer-events: none; }
   /* Vertical scrolling only: rows wrap internally, so no horizontal
      scrollbar can appear in normal use. */
   .category-popover { position: absolute; z-index: 3; top: calc(100% + var(--space-2)); left: 0; width: 300px; max-width: calc(100vw - 48px); max-height: 320px; overflow-y: auto; overflow-x: hidden; padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-surface-raised); box-shadow: var(--shadow-group); }
@@ -595,7 +670,7 @@
   .category-option span { flex: 1; min-width: 0; line-height: 1.3; overflow-wrap: anywhere; }
   .selected-categories { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); }
   .category-chip { padding: 2px var(--space-2); border: none; border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent); font-size: var(--text-metadata); cursor: pointer; }
-  .browse-status { display: flex; align-items: center; gap: var(--space-2); }
+  .browse-status { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); background: var(--f-content-panel); color: var(--color-text-secondary); overflow-wrap: anywhere; }
   .browse-loading { min-height: 96px; }
   .browse-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
   .browse-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: start; gap: var(--space-2) var(--space-3); padding: var(--space-4); border: 1px solid var(--color-surface-edge); border-radius: var(--radius-md); background: var(--f-panel); }
@@ -621,6 +696,41 @@
   .pack-optional label { display: block; }
   .preview li { margin: var(--space-1) 0; }
   .more { margin-top: var(--space-3); }
+  /* Mods prioritize scanning: a single compact list with aligned actions. */
+  .browse-mods .browse-heading { align-items: flex-start; }
+  .browse-mods .browse-heading > div { flex: 1 1 24em; min-width: 0; }
+  .browse-mods .browse-heading .group-subtitle { max-width: 72ch; color: var(--color-text-secondary); }
+  .browse-mods .source { color: var(--color-text-secondary); }
+  .browse-mods .browse-search input,
+  .browse-mods .filter-input,
+  .browse-mods .browse-search .btn { min-height: 40px; border-radius: var(--f-radius-control); }
+  .browse-mods .filter-input { height: auto; }
+  .browse-mods .sort-control, .browse-mods .category-filter { width: max(180px, 12em); }
+  .browse-mods .filter-chevron { bottom: 0; height: auto; }
+  .browse-mods .browse-search .btn { flex: none; }
+  /* Modpacks reuse the approved Mods rows; their review workflow stays distinct. */
+  :is(.browse-mods, .browse-modpacks) .browse-list { grid-template-columns: minmax(0, 1fr); gap: 0; border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); }
+  :is(.browse-mods, .browse-modpacks) .browse-row { padding: var(--space-3); border: none; border-bottom: 1px solid var(--f-edge); border-radius: 0; }
+  :is(.browse-mods, .browse-modpacks) .browse-row:first-child { border-radius: var(--f-radius-control) var(--f-radius-control) 0 0; }
+  :is(.browse-mods, .browse-modpacks) .browse-row:last-child { border-bottom: none; border-radius: 0 0 var(--f-radius-control) var(--f-radius-control); }
+  :is(.browse-mods, .browse-modpacks) .browse-copy h4 { font-size: var(--text-body); font-weight: 600; }
+  :is(.browse-mods, .browse-modpacks) .browse-copy p { margin-block: var(--space-1); font-size: var(--text-secondary); -webkit-line-clamp: 2; line-clamp: 2; }
+  :is(.browse-mods, .browse-modpacks) .browse-meta { color: var(--color-text-secondary); }
+  :is(.browse-mods, .browse-modpacks) .browse-actions .btn { min-height: 40px; }
+  .browse-mods > .browse-status { padding: var(--space-4); border: 1px solid var(--f-edge); border-radius: var(--f-radius-control); background: var(--f-content-panel); color: var(--color-text-secondary); }
+  .browse-resource-packs .browse-list { grid-template-columns: minmax(0, 1fr); }
+  .browse-resource-packs .browse-row { grid-template-columns: 64px minmax(0, 1fr); padding: var(--space-3); }
+  .browse-resource-packs .browse-glyph { width: 64px; height: 64px; }
+  .browse-resource-packs .browse-copy h4 { font-size: var(--text-body); }
+  .browse-resource-packs .browse-copy p { margin-block: var(--space-1); font-size: var(--text-secondary); -webkit-line-clamp: 2; line-clamp: 2; }
+  .browse-resource-packs .browse-meta { color: var(--color-text-secondary); }
+  .browse-resource-packs .browse-actions .btn { min-height: 40px; }
+  @container (min-width: 761px) { .browse-resource-packs .browse-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @container (min-width: 561px) {
+    :is(.browse-mods, .browse-modpacks) .browse-row { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; }
+    :is(.browse-mods, .browse-modpacks) .browse-glyph { grid-row: 1; }
+    :is(.browse-mods, .browse-modpacks) .browse-actions { grid-column: 3; grid-row: 1; align-self: center; }
+  }
   @media (max-width: 760px) { .browse-heading { align-items: flex-start; flex-wrap: wrap; } .filter-context { margin-left: 0; } }
   @container (max-width: 900px) { .browse-list { grid-template-columns: minmax(0, 1fr); } }
   @container (max-width: 440px) { .sort-control, .category-filter { width: calc((100% - var(--space-3)) / 2); min-width: 140px; } .filter-context { margin-left: 0; width: 100%; padding-bottom: 0; } .browse-row { padding: var(--space-3); } }

@@ -1,6 +1,6 @@
 {
   "name": "aurora-launcher",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "Launcher for the Aurora client mod for Minecraft: Java Edition",
   "type": "module",
   "scripts": {
@@ -13,12 +13,13 @@
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "test": "node --test \"src/lib/**/*.test.ts\"",
+    "test": "node --test --test-concurrency=1 \"src/lib/**/*.test.ts\"",
     "tauri": "tauri"
   },
   "license": "MIT",
   "dependencies": {
-    "@tauri-apps/api": "^2.12.1"
+    "@tauri-apps/api": "^2.12.1",
+    "material-symbols": "0.47.6"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.10",

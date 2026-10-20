@@ -34,14 +34,17 @@
   onMount(() => { if (!initialFixture) void load(); });
 </script>
 
+<!-- Range choice only means something once any playtime exists. -->
+{#if !(summary && summary.allTimeMs === 0 && !loading && !error)}
 <div class="range" role="group" aria-label="Playtime range">
   <button type="button" class:active={range === "7d"} aria-pressed={range === "7d"} onclick={() => range = "7d"}>7D</button>
   <button type="button" class:active={range === "30d"} aria-pressed={range === "30d"} onclick={() => range = "30d"}>30D</button>
   <button type="button" class:active={range === "all"} aria-pressed={range === "all"} onclick={() => range = "all"}>All</button>
 </div>
+{/if}
 {#if error}<p role="alert" class="error">{error}</p>
 {:else if loading}<p class="note">Loading playtime…</p>
-{:else if !summary || summary.allTimeMs === 0}<p class="note">No playtime recorded yet.</p>
+{:else if !summary || summary.allTimeMs === 0}<p class="note widget-empty">No playtime recorded yet.</p>
 {:else}
   <p class="total">{formatPlaytime(total ?? 0)}</p>
   <p class="note">{range === "7d" ? "Past 7 days" : range === "30d" ? "Past 30 days" : "All recorded time"} · UTC</p>
@@ -63,7 +66,8 @@
 <style>
   .range { display: flex; justify-content: flex-end; gap: var(--space-1); margin-bottom: var(--space-3); }
   .range button { font: inherit; font-size: var(--text-metadata); border: 0; border-radius: var(--radius-sm); padding: var(--space-1) var(--space-2); color: var(--color-text-secondary); background: transparent; cursor: pointer; }
-  .range button:hover, .range button.active { color: var(--color-text); background: var(--color-surface-sunken); }
+  .range button:hover { color: var(--color-text); background: var(--color-surface-sunken); }
+  .range button.active { color: var(--color-accent); background: var(--color-accent-soft); }
   button:focus-visible, .day:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   .total { margin: 0; font-size: clamp(1.5rem, 3vw, 2.2rem); font-weight: 650; line-height: 1.1; }
   .note { margin: var(--space-1) 0; color: var(--color-text-secondary); font-size: var(--text-metadata); }

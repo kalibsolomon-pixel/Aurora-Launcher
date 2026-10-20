@@ -23,6 +23,12 @@ impl ManagedPaths {
         let data_root = std::env::var_os("AURORA_DIAGNOSTIC_DATA_ROOT")
             .map(PathBuf::from)
             .unwrap_or(data_root);
+        // The opt-in private package can test path limitations with disposable
+        // roots. Ordinary release builds retain the platform-only contract.
+        #[cfg(feature = "private-candidate")]
+        let data_root = std::env::var_os("AURORA_PRIVATE_DATA_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or(data_root);
         if !data_root.is_absolute() {
             return Err(ManagedPathError::RelativeDataRoot(data_root));
         }

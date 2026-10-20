@@ -6,7 +6,7 @@
 //! rename so a partially written configuration can never be observed.
 
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -41,7 +41,23 @@ pub struct LauncherConfig {
     appearance: AppearancePreferences,
     home_widgets: crate::home_widgets::HomeLayout,
     discord: crate::discord::DiscordPreferences,
+    #[serde(skip)]
+    revision: ConfigRevision,
 }
+
+#[derive(Debug, Default)]
+struct ConfigRevision(std::sync::Mutex<Option<String>>);
+impl Clone for ConfigRevision {
+    fn clone(&self) -> Self {
+        Self(std::sync::Mutex::new(self.0.lock().unwrap().clone()))
+    }
+}
+impl PartialEq for ConfigRevision {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+impl Eq for ConfigRevision {}
 
 impl Default for LauncherConfig {
     fn default() -> Self {
@@ -51,6 +67,7 @@ impl Default for LauncherConfig {
             appearance: AppearancePreferences::new(),
             home_widgets: Default::default(),
             discord: Default::default(),
+            revision: Default::default(),
         }
     }
 }
@@ -203,6 +220,7 @@ impl LauncherConfig {
                     appearance: legacy.appearance,
                     home_widgets: Default::default(),
                     discord: Default::default(),
+                    revision: Default::default(),
                 }
             }
             version if version == u64::from(LEGACY_CONFIG_SCHEMA_VERSION) => {
@@ -214,6 +232,7 @@ impl LauncherConfig {
                     appearance: AppearancePreferences::new(),
                     home_widgets: Default::default(),
                     discord: Default::default(),
+                    revision: Default::default(),
                 }
             }
             found => {
@@ -240,10 +259,12 @@ impl LauncherConfig {
             .home_widgets
             .validate()
             .map_err(|detail| ConfigError::Malformed(detail.into()))?;
-        Ok(Self {
+        let config = Self {
             appearance: config.appearance.normalized(),
             ..config
-        })
+        };
+        *config.revision.0.lock().unwrap() = Some(config.to_json());
+        Ok(config)
     }
 
     /// Serializes the configuration as pretty, human-inspectable JSON.
@@ -294,6 +315,7 @@ impl ConfigLoad {
 
 /// Loads the configuration. Returns `Ok(None)` when no file exists yet.
 pub fn load(path: &Path) -> Result<Option<LauncherConfig>, ConfigError> {
+    crate::install::coordination::require_regular_or_missing(path).map_err(ConfigError::Read)?;
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -318,6 +340,8 @@ pub fn load_or_initialize(path: &Path) -> Result<ConfigLoad, ConfigError> {
         Some(config) => Ok(ConfigLoad::Existing(config)),
         None => {
             let config = LauncherConfig::default();
+            // Empty is a sentinel for the observed missing document.
+            *config.revision.0.lock().unwrap() = Some(String::new());
             save(path, &config)?;
             Ok(ConfigLoad::Initialized(config))
         }
@@ -327,29 +351,44 @@ pub fn load_or_initialize(path: &Path) -> Result<ConfigLoad, ConfigError> {
 /// Persists the configuration atomically: write to a sibling temporary file,
 /// then rename over the target.
 pub fn save(path: &Path, config: &LauncherConfig) -> Result<(), ConfigError> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(ConfigError::Write)?;
-    }
-
-    let temporary_path = temporary_sibling(path);
-    std::fs::write(&temporary_path, config.to_json()).map_err(|error| {
-        let _ = std::fs::remove_file(&temporary_path);
-        ConfigError::Write(error)
+    let parent = path
+        .parent()
+        .ok_or_else(|| ConfigError::Write(std::io::Error::other("configuration has no parent")))?;
+    let lock_root = parent.parent().unwrap_or(parent);
+    let guard = crate::install::coordination::TargetLock::acquire(
+        lock_root,
+        parent,
+        ".configuration-write.lock",
+    )
+    .map_err(|error| {
+        ConfigError::Write(match error {
+            crate::install::coordination::LockError::Busy => std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "another process is changing launcher preferences; refresh and retry",
+            ),
+            crate::install::coordination::LockError::Io(error) => error,
+        })
     })?;
-
-    match std::fs::rename(&temporary_path, path) {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            let _ = std::fs::remove_file(&temporary_path);
-            Err(ConfigError::Write(error))
+    // Parsing is required even for an explicit replacement: damaged or future
+    // configuration never becomes permission to overwrite ordinary user data.
+    let current = load(path)?;
+    let proposed = config.to_json();
+    if let (Some(base), Some(current)) =
+        (config.revision.0.lock().unwrap().as_ref(), current.as_ref())
+    {
+        if current.to_json() != *base && current.to_json() != proposed {
+            return Err(ConfigError::Write(std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "launcher preferences changed in another process; refresh and retry",
+            )));
         }
     }
-}
-
-fn temporary_sibling(path: &Path) -> PathBuf {
-    let mut temporary = path.as_os_str().to_owned();
-    temporary.push(".tmp");
-    PathBuf::from(temporary)
+    guard
+        .recheck(lock_root, parent)
+        .map_err(ConfigError::Write)?;
+    crate::install::journal::atomic_write(path, proposed.as_bytes()).map_err(ConfigError::Write)?;
+    *config.revision.0.lock().unwrap() = Some(proposed);
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -395,6 +434,7 @@ impl std::error::Error for ConfigError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn current_configuration_has_no_update_preference() {
@@ -643,6 +683,7 @@ mod tests {
             selected_instance_id: Some(InstanceId::new("aurora-default").unwrap()),
             home_widgets: Default::default(),
             discord: Default::default(),
+            revision: Default::default(),
             appearance: AppearancePreferences {
                 aurora_motion_speed: 50,
                 background: crate::appearance::BackgroundId::Simple,
@@ -819,6 +860,7 @@ mod tests {
             selected_instance_id: Some(InstanceId::new("beta-playground").unwrap()),
             home_widgets: Default::default(),
             discord: Default::default(),
+            revision: Default::default(),
             appearance: AppearancePreferences {
                 aurora_motion_speed: 50,
                 background: crate::appearance::BackgroundId::Simple,
@@ -831,12 +873,39 @@ mod tests {
         save(&path, &updated).unwrap();
 
         assert_eq!(load(&path).unwrap(), Some(updated));
-        let names: Vec<_> = std::fs::read_dir(directory.join("launcher"))
+        let mut names: Vec<_> = std::fs::read_dir(directory.join("launcher"))
             .unwrap()
             .filter_map(Result::ok)
             .map(|entry| entry.file_name().to_string_lossy().into_owned())
             .collect();
-        assert_eq!(names, vec!["config.json".to_owned()]);
+        names.sort();
+        assert_eq!(
+            names,
+            vec![
+                ".configuration-write.lock".to_owned(),
+                "config.json".to_owned()
+            ]
+        );
+    }
+
+    #[test]
+    fn stale_loaded_preferences_cannot_overwrite_another_process_and_damage_is_preserved() {
+        let root = std::env::temp_dir().join(format!("aurora-f3r-config-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("config.json");
+        save(&path, &LauncherConfig::default()).unwrap();
+        let mut first = load(&path).unwrap().unwrap();
+        let mut stale = load(&path).unwrap().unwrap();
+        first.set_selected_instance_id(Some(InstanceId::new("first").unwrap()));
+        stale.set_selected_instance_id(Some(InstanceId::new("stale").unwrap()));
+        save(&path, &first).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(save(&path, &stale).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        std::fs::write(&path, b"{").unwrap();
+        assert!(save(&path, &LauncherConfig::default()).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"{");
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

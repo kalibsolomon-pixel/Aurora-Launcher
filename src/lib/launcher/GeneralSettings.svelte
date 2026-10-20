@@ -2,27 +2,34 @@
   import { onMount } from 'svelte';
   import { desktopIntegration } from './desktopIntegration.svelte';
   import type { ShortcutStatus } from '$lib/backend';
+  import Tooltip from '$lib/shell/Tooltip.svelte';
   const labels: Record<ShortcutStatus['state'], string> = {
     present: 'Available', absent: 'Not created', conflict: 'Another shortcut occupies this location', unknown: 'Status unavailable',
   };
   onMount(() => { void desktopIntegration.refresh(); });
 </script>
-<section class="group" aria-labelledby="general-desktop-title">
-  <div class="group-heading"><div><h3 id="general-desktop-title" class="group-title">Desktop integration</h3><p class="group-subtitle">Open Aurora from your Windows desktop or Start menu.</p></div></div>
-  {#if !desktopIntegration.state && !desktopIntegration.error}
-    <div class="group-row" role="status"><span class="group-row-detail">Reading shortcut status…</span></div>
-  {:else if desktopIntegration.state?.supported}
-    {@const state = desktopIntegration.state}
-    <div class="group-row"><div class="group-row-main"><span class="group-row-title">Desktop shortcut</span><span class="group-row-detail">{labels[state.desktopShortcut.state]}</span></div>
-      {#if state.manageable && ['present', 'absent'].includes(state.desktopShortcut.state)}
-        <button type="button" class="btn" disabled={desktopIntegration.busy} onclick={() => state.desktopShortcut.state === 'present' ? desktopIntegration.remove() : desktopIntegration.create()}>{state.desktopShortcut.state === 'present' ? 'Remove shortcut' : 'Create shortcut'}</button>
-      {/if}
+<section class="group" aria-label="Desktop integration">
+  <div class="group-row">
+    <div class="action-label"><span class="group-row-title">Desktop shortcut</span>
+      <Tooltip label="About desktop shortcuts">Creates a Windows shortcut to this launcher executable. {desktopIntegration.state ? labels[desktopIntegration.state.desktopShortcut.state] : 'Reading shortcut status…'}. Shortcut changes require an installed production build.</Tooltip>
     </div>
-    <div class="group-row"><div class="group-row-main"><span class="group-row-title">Start menu shortcut</span><span class="group-row-detail">{labels[state.startMenuShortcut.state]} · Managed by the Aurora installer.</span></div></div>
-    {#if !state.manageable}<p class="group-footer">Desktop shortcut changes are available in an installed production build.</p>{/if}
-  {:else if desktopIntegration.state}
-    <p class="group-footer">Desktop integration is currently available on Windows.</p>
-  {/if}
-  <div class="group-row"><span class="group-row-detail">Status reflects the shortcuts on this computer.</span><button type="button" class="btn btn-quiet" disabled={desktopIntegration.busy} onclick={() => desktopIntegration.refresh()}>{desktopIntegration.busy ? 'Reading…' : 'Refresh status'}</button></div>
+    <button type="button" class="btn" disabled={desktopIntegration.busy} onclick={() => desktopIntegration.create()}>Add Desktop Shortcut</button>
+  </div>
+  <div class="group-row">
+    <div class="action-label"><span class="group-row-title">Start menu</span>
+      <Tooltip label="About the Start menu shortcut">Adds Aurora to the Start menu app list with a Programs shortcut. Windows requires you to pin it to the Start grid yourself. {desktopIntegration.state ? labels[desktopIntegration.state.startMenuShortcut.state] : 'Reading shortcut status…'}. Shortcut changes require an installed production build.</Tooltip>
+    </div>
+    <button type="button" class="btn" disabled={desktopIntegration.busy} onclick={() => desktopIntegration.addToStart()}>Add to Start Menu</button>
+  </div>
+  <div class="group-row">
+    <div class="action-label"><span class="group-row-title">Launcher data</span>
+      <Tooltip label="About the launcher path">Opens Aurora’s managed data folder in Windows Explorer.</Tooltip>
+    </div>
+    <button type="button" class="btn" disabled={desktopIntegration.busy} onclick={() => desktopIntegration.openPath()}>Open Path</button>
+  </div>
   {#if desktopIntegration.error}<p role="alert" class="group-row inline-message inline-message-error">{desktopIntegration.error.message}</p>{/if}
+  {#if desktopIntegration.notice}<p role="status" class="group-row group-row-detail">{desktopIntegration.notice}</p>{/if}
 </section>
+<style>
+  .action-label { display: flex; align-items: center; gap: 6px; }
+</style>

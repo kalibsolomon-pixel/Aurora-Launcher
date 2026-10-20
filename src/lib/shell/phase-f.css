@@ -11,11 +11,11 @@
   --f-shadow: 0 12px 36px rgb(0 0 0 / 16%);
   --f-blur: none;
   --f-content-panel: var(--f-panel);
-  --f-workspace-selection: #5bd0e0;
+  --f-workspace-selection: var(--color-accent);
   --f-dialog-panel: color-mix(in srgb, var(--color-background) 94%, transparent);
   --f-dialog-group: color-mix(in srgb, var(--color-surface) 94%, transparent);
   --f-dialog-dim: rgb(0 0 0 / 52%);
-  --f-rail-width: 112px;
+  --f-rail-width: 96px;
   /* Accent materials. Outside Borealis they resolve to the existing solid
      accent treatment, so OLED and Simple keep their production look. */
   --f-accent-fill: var(--color-accent-strong);
@@ -74,6 +74,10 @@
 .aurora-background img, .aurora-background video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .aurora-background video { opacity: 0; }
 .aurora-background::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(4 8 15 / 8%), rgb(4 8 15 / 10%) 50%, rgb(4 8 15 / 35%)); }
+/* Home's foreground receives a quieter part of the same Borealis canvas.
+   Static overlays add no decoder, filtered ancestor or animation work. */
+.aurora-shell:has(.home-page) .aurora-background::after { background: linear-gradient(90deg, rgb(4 8 15 / 36%), rgb(4 8 15 / 10%) 65%), linear-gradient(180deg, rgb(4 8 15 / 8%), rgb(4 8 15 / 44%)); }
+:root[data-background="borealis"] .home-page { --f-panel: linear-gradient(145deg, rgb(184 224 235 / 5%), rgb(9 16 26 / 10%)), rgb(8 17 27 / 80%); --f-edge: rgb(222 242 255 / 13%); --f-shadow: inset 0 1px 0 rgb(235 250 255 / 5%), 0 12px 32px rgb(0 0 0 / 16%); --f-blur: none; }
 :root[data-theme="oled"][data-background="simple"] { --f-panel: var(--color-surface); --f-content-panel: var(--color-surface); --f-blur: none; --f-dialog-panel: var(--color-background); --f-dialog-group: var(--color-surface); }
 .aurora-titlebar { height: 40px; flex: none; display: flex; align-items: stretch; user-select: none; z-index: 40; }
 .titlebar-drag { display: flex; flex: 1; align-items: center; gap: 10px; padding-left: 20px; font-size: 11px; color: var(--color-text-secondary); }
@@ -83,25 +87,36 @@
 .window-close:hover { background: #c42b3b; }
 .chrome-error { position: fixed; right: 12px; top: 40px; z-index: 100; background: var(--color-surface); padding: 12px; }
 .aurora-shell .app-frame { grid-template-columns: var(--f-rail-width) minmax(0, 1fr); flex: 1; height: auto; min-height: 0; }
-.aurora-shell .sidebar { padding: 18px 10px 14px; border: 0; background: transparent; gap: 20px; align-items: center; z-index: 30; }
-.rail-navigation { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.rail-link { width: 48px; height: 48px; display: grid; place-items: center; position: relative; border: 1px solid transparent; border-radius: 15px; background: transparent; color: var(--color-text-secondary); cursor: pointer; transition: background var(--f-fast), color var(--f-fast); }
+.aurora-shell .sidebar { padding: 18px var(--space-2) 14px; border: 0; background: transparent; gap: 20px; align-items: center; z-index: 30; }
+.rail-logo { width: 48px; height: 48px; object-fit: contain; flex: none; }
+:root[data-background="borealis"] .aurora-shell .sidebar { background: linear-gradient(180deg, rgb(8 17 27 / 16%), rgb(8 17 27 / 34%)); border-right: 1px solid rgb(222 242 255 / 8%); }
+.rail-navigation { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
+.rail-link { width: 48px; height: 48px; display: grid; place-items: center; position: relative; border: 1px solid transparent; border-radius: var(--f-radius-control); background: transparent; color: var(--color-text-secondary); cursor: pointer; transition: background-color var(--f-fast) ease, color var(--f-fast) ease, transform var(--f-fast) var(--f-ease); }
+.rail-link:active { transform: scale(.96); }
 .rail-link:hover { background: rgb(255 255 255 / 6%); color: var(--color-text); }
 .rail-link[aria-current="page"] { color: var(--color-accent); background: var(--color-accent-soft); border-color: var(--color-accent-outline); }
 .rail-link[aria-current="page"]::before { content: ''; position: absolute; left: -12px; top: 16px; width: 3px; height: 16px; background: var(--color-accent); border-radius: 2px; }
-.f-tooltip { position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); padding: 7px 11px; border: 1px solid var(--color-border-strong); border-radius: 8px; color: var(--color-text); background: var(--color-surface-raised); font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; box-shadow: var(--f-shadow); }
-.rail-link:hover .f-tooltip, .rail-link:focus-visible .f-tooltip { opacity: 1; }
+.f-tooltip { position: absolute; left: calc(100% + 14px); top: 50%; transform: translate(-4px, -50%); transform-origin: left center; padding: 7px 11px; border: 1px solid var(--color-border-strong); border-radius: 8px; color: var(--color-text); background: var(--color-surface-raised); font-size: 12px; font-weight: 500; white-space: nowrap; opacity: 0; pointer-events: none; box-shadow: var(--f-shadow); transition: opacity 125ms ease-out, transform 125ms ease-out; }
+.rail-link:hover .f-tooltip, .rail-link:focus-visible .f-tooltip { opacity: 1; transform: translate(0, -50%); }
+/* After one rail tooltip is open, moving along the rail shows the next one instantly. */
+.rail-navigation:hover .f-tooltip { transition-duration: 0ms; }
 .aurora-shell .account-chip { padding: 10px 5px; margin-top: auto; border-color: var(--f-edge); border-radius: 16px; background: var(--f-panel); backdrop-filter: var(--f-blur); }
 .aurora-shell .account-chip .account-identity { flex-direction: column; gap: 7px; width: 100%; text-align: center; }
 .aurora-shell .account-chip .identity-text { width: 100%; }
 .aurora-shell .account-chip .identity-name { font-size: 11px; }
-.aurora-shell .account-chip .identity-detail { font-size: 10px; line-height: 1.3; }
+.aurora-shell .account-chip .identity-detail { font-size: 10px; line-height: 1.3; overflow-wrap: anywhere; }
+/* The rail chip is identity at a glance; the full state is in its accessible
+   name and the account drawer. Only an actionable condition keeps a line. */
+.aurora-shell .account-chip .account-identity:not([data-state="reauthenticationRequired"]) .identity-detail { display: none; }
+.aurora-shell .account-chip .account-identity[data-state="reauthenticationRequired"] .identity-detail { color: var(--color-warning); }
+.aurora-shell .account-chip { transition: background-color var(--f-fast) ease, border-color var(--f-fast) ease, transform 160ms var(--f-ease); }
+.aurora-shell .account-chip:active { transform: scale(.97); }
 .aurora-shell .content { min-width: 0; padding: 24px var(--f-space-stage) 40px; overflow: auto; scrollbar-gutter: stable; }
 .f-pilot .group, .f-surface { background: var(--f-panel); border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); box-shadow: var(--f-shadow); backdrop-filter: var(--f-blur); }
 .f-pilot.page { padding: 0; }
-.f-pilot .btn { border-radius: var(--f-radius-control); transition: background var(--f-fast), transform var(--f-fast); }
-.f-pilot .btn:active:not(:disabled) { transform: translateY(1px); }
-.f-icon-button { width: 40px; height: 40px; padding: 0; display: inline-grid; place-items: center; flex: none; border: 1px solid var(--f-edge); border-radius: 12px; color: var(--color-text-secondary); background: rgb(13 19 29 / 65%); cursor: pointer; }
+.f-pilot .btn, dialog .btn { border-radius: var(--f-radius-control); transition: background-color var(--f-fast) ease, border-color var(--f-fast) ease, color var(--f-fast) ease, transform 160ms var(--f-ease); }
+.f-pilot .btn:active:not(:disabled), dialog .btn:active:not(:disabled), .f-icon-button:active:not(:disabled) { transform: scale(.97); }
+.f-icon-button { width: 40px; height: 40px; padding: 0; display: inline-grid; place-items: center; flex: none; border: 1px solid var(--f-edge); border-radius: 12px; color: var(--color-text-secondary); background: rgb(13 19 29 / 65%); cursor: pointer; transition: background-color var(--f-fast) ease, color var(--f-fast) ease, transform 160ms var(--f-ease); }
 .f-icon-button:hover { background: var(--color-surface-hover); color: var(--color-text); }
 .aurora-shell button:focus-visible, .f-pilot input:focus-visible, .f-pilot select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
 .f-pilot .group-row { padding: 20px 24px; }
@@ -112,11 +127,13 @@
 .f-pilot .page-subtitle { margin-top: 6px; }
 .f-pilot .group-row-detail { line-height: 1.5; }
 @media (max-width: 800px) { :root { --f-rail-width: 96px; } .aurora-shell .content { padding: 16px 20px 28px; } .aurora-shell .sidebar { padding-inline: 6px; } }
-@media (prefers-reduced-motion: reduce) { .f-pilot *, .rail-link { transition: none !important; } .f-pilot .btn:active:not(:disabled) { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .f-pilot *, .rail-link, .f-tooltip, .f-icon-button, dialog .btn, .aurora-shell .account-chip { transition: none !important; } .f-pilot .btn:active:not(:disabled), dialog .btn:active:not(:disabled), .f-icon-button:active:not(:disabled), .rail-link:active, .aurora-shell .account-chip:active { transform: none; } }
 @media (prefers-reduced-transparency: reduce) { :root[data-background="borealis"] { --f-panel: var(--color-surface); --f-content-panel: var(--color-surface); --f-blur: none; --f-dialog-panel: var(--color-background); --f-dialog-group: var(--color-surface); --f-accent-fill: var(--color-accent-strong); --f-accent-fill-hover: var(--color-accent-hover); --f-accent-fill-pressed: var(--color-accent-pressed); --f-accent-edge: var(--color-accent-strong); --f-accent-inset: none; --f-accent-shadow: none; --f-accent-blur: none; --f-logo-opacity: 1; --f-logo-ground: none; } }
+@media (prefers-reduced-transparency: reduce) { :root[data-background="borealis"] .home-page { --f-panel: var(--color-surface); --f-shadow: none; } }
 
 @media (max-height: 650px) {
   .aurora-shell .sidebar { padding-block: 10px; gap: 8px; }
+  .rail-logo { width: 40px; height: 40px; }
   .rail-navigation { gap: 4px; }
   .rail-link { width: 40px; height: 40px; border-radius: 12px; }
   .rail-link[aria-current="page"]::before { top: 12px; }
@@ -124,6 +141,7 @@
 }
 
 @supports not (backdrop-filter: blur(1px)) { :root[data-background="borealis"] { --f-panel: var(--color-surface); --f-content-panel: var(--color-surface); --f-dialog-panel: var(--color-background); --f-dialog-group: var(--color-surface); --f-accent-fill: var(--color-accent-strong); --f-accent-fill-hover: var(--color-accent-hover); --f-accent-fill-pressed: var(--color-accent-pressed); --f-accent-edge: var(--color-accent-strong); --f-accent-inset: none; --f-accent-shadow: none; --f-accent-blur: none; --f-logo-opacity: 1; --f-logo-ground: none; } }
+@supports not (backdrop-filter: blur(1px)) { :root[data-background="borealis"] .home-page { --f-panel: var(--color-surface); --f-shadow: none; } }
 
 /* Rows share their enclosing panel's glass instead of each filtering Borealis. */
 .f-pilot .mod-list, .f-pilot .packs-list { background: var(--f-content-panel); border-color: var(--f-edge); border-radius: var(--f-radius-panel); backdrop-filter: none; }
@@ -156,6 +174,11 @@
 }
 :root[data-background="borealis"] :is(.workspace-page, .modpack-group) :is(.mod-list, .packs-list, .browse-row, .project, .preview) {
   background: rgb(8 17 27 / 12%);
+}
+/* Content rows must also honor the accessibility fallback: the localized
+   Borealis row backing above otherwise overrides the root's opaque tokens. */
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-background="borealis"] :is(.workspace-page, .modpack-group) :is(.mod-list, .packs-list, .browse-row, .project, .preview) { background: var(--color-surface); }
 }
 .f-pilot .workspace-header { gap: var(--space-4); flex-wrap: wrap; }
 .f-pilot .workspace-tabs { border-color: var(--f-edge); }
@@ -209,4 +232,29 @@
    strokes over bright aurora regions, so it keeps a crisp body and joins
    the material system through slight translucency plus an accent-tinted
    grounding shadow. */
-:root[data-background="borealis"] .hero-logo { opacity: var(--f-logo-opacity); filter: var(--f-logo-ground); }
+:root[data-background="borealis"] .rail-logo { opacity: var(--f-logo-opacity); filter: var(--f-logo-ground); }
+
+/* Instance content maintenance: local-file recognition and the explicit
+   update check share one quiet row instead of two stacked strips. An open
+   recognition panel or update result takes the full row. */
+.content-tools { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 0 var(--space-4); margin-bottom: var(--space-4); }
+.content-tools > .recognition:has(.recognition-panel) { grid-column: 1 / -1; }
+.content-tools > .updates-card { margin-bottom: 0; }
+.content-tools .updates-head { min-height: 40px; }
+@media (max-width: 640px) { .content-tools { grid-template-columns: minmax(0, 1fr); } }
+
+/* One empty-state voice for every Home widget: same size, color and rhythm,
+   so neighbouring cards align instead of each inventing its own margins. */
+.home-widgets .widget .widget-empty { margin: 0; color: var(--color-text-secondary); font-size: var(--text-secondary); line-height: 1.5; }
+
+/* Shared modal dialog: the UI-4 Appearance dialog material, used by every
+   centered confirmation/edit dialog so they share one surface, radius,
+   backdrop and entrance. Modals scale from center (not trigger-anchored). */
+.aurora-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; margin: auto; padding: 26px; border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-dialog-panel); background-color: var(--color-surface-raised); backdrop-filter: var(--f-blur); color: var(--color-text); box-shadow: var(--f-shadow); }
+.aurora-dialog::backdrop { background: var(--f-dialog-dim); }
+.aurora-dialog[open] { animation: aurora-dialog-enter 180ms var(--f-ease); }
+.aurora-dialog h3 { margin: 0 0 12px; font-size: 1.0625rem; letter-spacing: -.01em; }
+.aurora-dialog p { color: var(--color-text-secondary); line-height: 1.6; }
+@keyframes aurora-dialog-enter { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes aurora-dialog-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .aurora-dialog[open] { animation: aurora-dialog-fade 120ms ease-out; } }

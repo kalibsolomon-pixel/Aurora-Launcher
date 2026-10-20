@@ -20,7 +20,10 @@ use std::fmt;
 
 use url::Url;
 
-use crate::fabric::plan::{GameInstallPlan, GameJavaRequirement, GameLibrary, merge_library_sets};
+use crate::game::plan::{
+    CompositionError, GameInstallPlan, GameJavaRequirement, GameLibrary,
+    installer_library_satisfied_by, merge_library_sets,
+};
 use crate::integrity::Sha1Digest;
 use crate::minecraft::metadata::MinecraftVersionId;
 use crate::minecraft::plan::MinecraftInstallPlan;
@@ -98,12 +101,32 @@ pub enum NeoForgeDataValue {
 }
 
 /// One client-side processor step, normalized to Aurora's execution model:
-/// an exact tool jar, its classpath, and a literal argument vector.
+/// an exact tool jar, its classpath, a literal argument vector, and any
+/// output expectations the installer publishes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NeoForgeProcessorStep {
     jar: NeoForgeCoordinate,
     classpath: Vec<NeoForgeCoordinate>,
     args: Vec<String>,
+    outputs: Vec<ProcessorOutputRule>,
+}
+
+/// One published output expectation: the data token naming the artifact
+/// the processor must produce and its official SHA-1.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessorOutputRule {
+    token: String,
+    sha1: Sha1Digest,
+}
+
+impl ProcessorOutputRule {
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+
+    pub fn sha1(&self) -> &Sha1Digest {
+        &self.sha1
+    }
 }
 
 impl NeoForgeProcessorStep {
@@ -117,6 +140,10 @@ impl NeoForgeProcessorStep {
 
     pub fn args(&self) -> &[String] {
         &self.args
+    }
+
+    pub fn outputs(&self) -> &[ProcessorOutputRule] {
+        &self.outputs
     }
 }
 
@@ -231,10 +258,25 @@ impl NeoForgePlan {
                         NeoForgeCoordinate::parse(entry).map_err(NeoForgePlanError::Coordinate)?,
                     );
                 }
+                let mut outputs = Vec::with_capacity(processor.outputs.len());
+                for output in &processor.outputs {
+                    if !profile.data.contains_key(&output.token) {
+                        return Err(NeoForgePlanError::Output {
+                            token: output.token.clone(),
+                            reason: "the published output expectation names a token the profile does not define"
+                                .to_owned(),
+                        });
+                    }
+                    outputs.push(ProcessorOutputRule {
+                        token: output.token.clone(),
+                        sha1: output.sha1,
+                    });
+                }
                 Ok(NeoForgeProcessorStep {
                     jar,
                     classpath,
                     args: processor.args.clone(),
+                    outputs,
                 })
             })
             .collect::<Result<Vec<_>, NeoForgePlanError>>()?;
@@ -333,6 +375,8 @@ pub enum NeoForgePlanError {
     Coordinate(InvalidNeoForgeCoordinate),
     /// A data-token value could not be normalized.
     Data { token: String, reason: String },
+    /// A published processor output expectation is unresolvable.
+    Output { token: String, reason: String },
 }
 
 impl fmt::Display for NeoForgePlanError {
@@ -346,6 +390,12 @@ impl fmt::Display for NeoForgePlanError {
             Self::Coordinate(error) => write!(formatter, "{error}"),
             Self::Data { token, reason } => {
                 write!(formatter, "the data token '{token}' is unusable: {reason}")
+            }
+            Self::Output { token, reason } => {
+                write!(
+                    formatter,
+                    "the processor output expectation '{token}' is unusable: {reason}"
+                )
             }
         }
     }
@@ -423,18 +473,19 @@ fn parse_data_value(
 /// Composes a vanilla Minecraft plan and a NeoForge plan into the complete
 /// game install plan.
 ///
-/// Composition mirrors the Fabric boundary: the two plans stay
+/// Composition mirrors the shared boundary: the two plans stay
 /// independently meaningful, the library merge rejects identity conflicts,
 /// Mojang's Java requirement stays authoritative (NeoForge publishes no
 /// loader Java floor of its own), and the loader's entry point wins.
 pub fn compose_neoforge_game_plan(
     minecraft: MinecraftInstallPlan,
-    neoforge: NeoForgePlan,
-) -> Result<GameInstallPlan, crate::fabric::plan::CompositionError> {
+    mut neoforge: NeoForgePlan,
+) -> Result<GameInstallPlan, CompositionError> {
     if minecraft.minecraft_version() != neoforge.minecraft_version() {
-        return Err(crate::fabric::plan::CompositionError::VersionMismatch {
+        return Err(CompositionError::VersionMismatch {
             minecraft_version: minecraft.minecraft_version().to_owned(),
-            fabric_version: format!("neoforge {}", neoforge.neoforge_version),
+            loader_version: neoforge.neoforge_version.clone(),
+            loader_family: "NeoForge",
         });
     }
 
@@ -446,6 +497,22 @@ pub fn compose_neoforge_game_plan(
         .collect();
     let libraries = merge_library_sets(&minecraft, loader_libraries)?;
 
+    // The installer-tool set can overlap the composed client set exactly as
+    // Forge's does; the same one-destination-one-artifact rule applies.
+    let mut retained_installer = Vec::with_capacity(neoforge.installer_libraries.len());
+    for library in std::mem::take(&mut neoforge.installer_libraries) {
+        let satisfied = installer_library_satisfied_by(
+            &libraries,
+            library.path(),
+            library.artifact().sha1(),
+            &library.coordinate().as_maven_string(),
+        )?;
+        if !satisfied {
+            retained_installer.push(library);
+        }
+    }
+    neoforge.installer_libraries = retained_installer;
+
     let minecraft_java = minecraft.java();
     let java = GameJavaRequirement::without_loader_floor(
         minecraft_java.component(),
@@ -455,7 +522,7 @@ pub fn compose_neoforge_game_plan(
     let main_class = neoforge.main_class().to_owned();
     Ok(GameInstallPlan::from_composed_parts(
         minecraft,
-        crate::fabric::plan::LoaderPlan::NeoForge(neoforge),
+        crate::game::plan::LoaderPlan::NeoForge(neoforge),
         libraries,
         java,
         main_class,
@@ -677,6 +744,92 @@ mod tests {
             crate::minecraft::rules::PlatformProfile::current().unwrap(),
         )
         .unwrap()
+    }
+
+    fn installer_destination_case(kind: &str) {
+        let minecraft = synthetic_minecraft_plan();
+        let baseline = compose_neoforge_game_plan(minecraft.clone(), plan()).unwrap();
+        let source = &minecraft.libraries()[0];
+        let mut profile = profile_document();
+        let coordinate = match kind {
+            "version" => "com.mojang:brigadier:9.9.9",
+            "basename" => "other.group:brigadier:1.0.18",
+            _ => "com.mojang:brigadier:1.0.18",
+        };
+        let path = NeoForgeCoordinate::parse(coordinate)
+            .unwrap()
+            .repository_path("jar");
+        let sha1 = if kind == "conflict" {
+            "0000000000000000000000000000000000000000".to_owned()
+        } else {
+            source.artifact().sha1().as_hex()
+        };
+        let url = format!("https://maven.neoforged.net/releases/{path}");
+        assert_ne!(url, source.artifact().url());
+        profile.libraries.push(ProfileLibrary {
+            name: coordinate.into(),
+            path: path.clone(),
+            url,
+            sha1,
+            size: source.artifact().size_bytes(),
+        });
+        let neoforge = NeoForgePlan::from_documents(
+            &profile,
+            &version_document(),
+            &MinecraftVersionId::new("26.2").unwrap(),
+            &NeoForgeVersionId::new("26.2.0.88").unwrap(),
+            &NeoForgeMavenEndpoints::official(),
+            Sha1Digest::parse("42d3bfead0ba3aa89c7d45ac29115defc9967219").unwrap(),
+            Sha1Digest::parse("42d3bfead0ba3aa89c7d45ac29115defc9967219").unwrap(),
+        )
+        .unwrap();
+        let composed = compose_neoforge_game_plan(minecraft.clone(), neoforge);
+        if kind == "conflict" {
+            assert!(matches!(
+                composed,
+                Err(CompositionError::LibraryConflict { .. })
+            ));
+            return;
+        }
+        let composed = composed.unwrap();
+        assert_eq!(composed.minecraft(), &minecraft);
+        assert_eq!(composed.libraries(), baseline.libraries());
+        assert_eq!(
+            composed.neoforge_loader().unwrap().processors(),
+            baseline.neoforge_loader().unwrap().processors()
+        );
+        let retained = kind != "same";
+        let libraries = composed.neoforge_loader().unwrap().installer_libraries();
+        assert_eq!(
+            libraries.iter().filter(|l| l.path() == path).count(),
+            usize::from(retained)
+        );
+        assert_eq!(
+            libraries.len(),
+            baseline
+                .neoforge_loader()
+                .unwrap()
+                .installer_libraries()
+                .len()
+                + usize::from(retained)
+        );
+    }
+
+    #[test]
+    fn installer_same_destination_different_urls_deduplicates() {
+        installer_destination_case("same");
+    }
+    #[test]
+    fn installer_same_destination_disagreeing_sha1_conflicts() {
+        installer_destination_case("conflict");
+    }
+    #[test]
+    fn installer_distinct_versions_are_retained() {
+        installer_destination_case("version");
+    }
+    #[test]
+    fn installer_shared_basename_is_not_identity() {
+        installer_destination_case("basename");
     }
 
     #[test]

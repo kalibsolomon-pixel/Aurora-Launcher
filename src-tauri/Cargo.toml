@@ -1,6 +1,6 @@
 [package]
 name = "aurora-launcher"
-version = "1.4.2"
+version = "1.5.0"
 description = "Launcher for the Aurora client mod for Minecraft: Java Edition"
 authors = ["Aurora Launcher contributors"]
 edition = "2024"
@@ -18,8 +18,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [features]
+# Local side-by-side candidate only; requires the matching Tauri overlay.
+private-candidate = []
 # Explicit research build only; absent from ordinary development/release builds.
 performance-p0-2 = []
+# Opt-in, debug-only real desktop fault acceptance; never enabled by normal builds.
+f3ra-desktop-acceptance = []
 
 [dependencies]
 tauri = { version = "2", features = [] }
@@ -108,6 +112,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_NetworkManagement_Dns",
     "Win32_System_JobObjects",
     "Win32_System_Threading",
+    "Win32_System_SystemInformation",
     "Win32_System_Diagnostics_Debug",
 ] }
 windows = { version = "0.61", default-features = false, features = [

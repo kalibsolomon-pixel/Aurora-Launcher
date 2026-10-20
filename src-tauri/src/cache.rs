@@ -487,6 +487,38 @@ impl ArtifactCache {
         source: &ObservedArtifactSource,
         options: &DownloadOptions,
     ) -> Result<ObservedArtifact, AcquisitionError> {
+        // First-observation publication is mutable authority keyed by source,
+        // unlike expected-digest publication. Serialize that exact source so
+        // competing processes cannot establish two different first pins.
+        let lock_name = format!("{}.lock", {
+            use sha2::Digest;
+            let digest: [u8; 32] = sha2::Sha256::digest(source.url().as_str().as_bytes()).into();
+            ArtifactDigest::from_sha256(digest).as_hex()
+        });
+        let lock_started = std::time::Instant::now();
+        let _source_guard = loop {
+            match crate::install::coordination::TargetLock::acquire(
+                self.managed.data_root(),
+                &self.managed.cache_dir().join("artifact-locks"),
+                &lock_name,
+            ) {
+                Ok(guard) => break guard,
+                Err(crate::install::coordination::LockError::Busy)
+                    if lock_started.elapsed() < std::time::Duration::from_secs(30) =>
+                {
+                    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+                }
+                Err(crate::install::coordination::LockError::Busy) => {
+                    return Err(AcquisitionError::StoreIo(std::io::Error::new(
+                        std::io::ErrorKind::WouldBlock,
+                        "another process is acquiring this exact artifact source; retry",
+                    )));
+                }
+                Err(crate::install::coordination::LockError::Io(error)) => {
+                    return Err(AcquisitionError::StoreIo(error));
+                }
+            }
+        };
         let pin = self.observed_pin_for(source.url().as_str())?;
 
         if let Some(pin) = &pin {
@@ -606,7 +638,7 @@ impl ArtifactCache {
             .observed_store_dir()
             .join(format!("{}.json", observed.as_hex()));
         let mut temporary = target.clone().into_os_string();
-        temporary.push(".tmp");
+        temporary.push(format!(".{}.tmp", uuid::Uuid::new_v4()));
         let temporary = PathBuf::from(temporary);
 
         std::fs::write(&temporary, json).map_err(|error| {
