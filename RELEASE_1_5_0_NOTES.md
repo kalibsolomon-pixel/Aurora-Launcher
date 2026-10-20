@@ -1,8 +1,5 @@
 # Aurora Launcher 1.5.0 — release notes
 
-Draft for the selected release candidate. Publication requires the remaining
-acceptance and owner gates in LAUNCHER_1_5_0_RELEASE_ACCEPTANCE.md.
-
 ## New features
 
 - Instance tiles and configurable Material Symbols icons, with Settings as the
@@ -59,6 +56,3 @@ the current release pipeline. No new platform is added by this release.
 - Registry schema 6 preserves supported older instance settings during migration.
   Older launchers cannot read newer schemas; back up metadata before reverting.
 - Iris and Vulkan compatibility are not established by this release.
-
-Final signed-installer, authenticated gameplay, supported-mod-stack and upgrade
-acceptance are still pending. This draft is not a publication announcement.
