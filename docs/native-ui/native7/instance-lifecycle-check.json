@@ -1,0 +1,17 @@
+[
+  {
+    "id": "31c45d230b8645fea6b734c8e85aeff7",
+    "state": "ready",
+    "packPresent": false
+  },
+  {
+    "id": "eaf749874a9a473d84a10412779e22ea",
+    "state": "ready",
+    "packPresent": true
+  },
+  {
+    "id": "33d424563f564676887bc7d53abfbbd0",
+    "state": "ready",
+    "packPresent": false
+  }
+]

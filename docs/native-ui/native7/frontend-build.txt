@@ -1,0 +1,84 @@
+
+> aurora-launcher@1.4.2 prebuild
+> npm run verify:version
+
+
+> aurora-launcher@1.4.2 verify:version
+> node tools/release/verify-version.mjs
+
+Aurora Launcher version contract: 1.4.2
+
+> aurora-launcher@1.4.2 build
+> vite build
+
+vite v8.3.0 building ssr environment for production...
+transforming...
+✓ 292 modules transformed.
+rendering chunks...
+vite v8.3.0 building client environment for production...
+transforming...
+✓ 310 modules transformed.
+rendering chunks...
+computing gzip size...
+.svelte-kit/output/client/_app/version.json                                                   0.02 kB │ gzip:   0.04 kB
+.svelte-kit/output/client/.vite/manifest.json                                                 3.77 kB │ gzip:   0.75 kB
+.svelte-kit/output/client/_app/immutable/assets/material-symbols-outlined.DJ9Z1fAF.woff2  4,003.08 kB
+.svelte-kit/output/client/_app/immutable/assets/0.BIFZvowJ.css                               14.03 kB │ gzip:   3.20 kB
+.svelte-kit/output/client/_app/immutable/assets/2.BGH343xs.css                              113.57 kB │ gzip:  17.69 kB
+.svelte-kit/output/client/_app/immutable/chunks/xihTtKlq.js                                   0.06 kB │ gzip:   0.08 kB
+.svelte-kit/output/client/_app/immutable/entry/start.DIkuR8Us.js                              0.07 kB │ gzip:   0.08 kB
+.svelte-kit/output/client/_app/immutable/nodes/1.B9zGXTlG.js                                  0.57 kB │ gzip:   0.32 kB
+.svelte-kit/output/client/_app/immutable/nodes/0.cA9Aks9E.js                                  0.85 kB │ gzip:   0.42 kB
+.svelte-kit/output/client/_app/immutable/chunks/BKnwzu3A.js                                   1.13 kB │ gzip:   0.56 kB
+.svelte-kit/output/client/_app/immutable/chunks/uBIymjUX.js                                   1.23 kB │ gzip:   0.68 kB
+.svelte-kit/output/client/_app/immutable/chunks/Bjy-W4x2.js                                   1.36 kB │ gzip:   0.65 kB
+.svelte-kit/output/client/_app/immutable/chunks/DLf_6yJB.js                                   1.82 kB │ gzip:   0.85 kB
+.svelte-kit/output/client/_app/immutable/entry/app.D5G-Dap4.js                                2.95 kB │ gzip:   1.33 kB
+.svelte-kit/output/client/_app/immutable/chunks/BJPuC4M-.js                                  20.13 kB │ gzip:   4.59 kB
+.svelte-kit/output/client/_app/immutable/chunks/jWkWTT6k.js                                  28.38 kB │ gzip:  10.97 kB
+.svelte-kit/output/client/_app/immutable/chunks/CWpTT9e1.js                                  52.37 kB │ gzip:  19.96 kB
+.svelte-kit/output/client/_app/immutable/chunks/B1lyax3v.js                                  52.38 kB │ gzip:  17.59 kB
+.svelte-kit/output/client/_app/immutable/nodes/2.CCSoul5T.js                                359.25 kB │ gzip: 101.14 kB
+
+✓ built in 695ms
+computing gzip size...
+.svelte-kit/output/server/.vite/manifest.json                                                 4.44 kB │ gzip:  0.76 kB
+.svelte-kit/output/server/_app/immutable/assets/material-symbols-outlined.DJ9Z1fAF.woff2  4,003.08 kB
+.svelte-kit/output/server/_app/immutable/assets/_layout.C5lFhDla.css                         13.98 kB │ gzip:  3.18 kB
+.svelte-kit/output/server/_app/immutable/assets/_page.BHzskM6p.css                          113.24 kB │ gzip: 17.66 kB
+.svelte-kit/output/server/chunks/appearance2.svelte.js                                        0.08 kB │ gzip:  0.07 kB
+.svelte-kit/output/server/chunks/windowActivity.js                                            0.08 kB │ gzip:  0.07 kB
+.svelte-kit/output/server/env.js                                                              0.22 kB │ gzip:  0.14 kB
+.svelte-kit/output/server/entries/pages/_layout.svelte.js                                     0.23 kB │ gzip:  0.18 kB
+.svelte-kit/output/server/chunks/env.js                                                       0.28 kB │ gzip:  0.17 kB
+.svelte-kit/output/server/entries/pages/_layout.ts.js                                         0.33 kB │ gzip:  0.20 kB
+.svelte-kit/output/server/internal.js                                                         0.40 kB │ gzip:  0.19 kB
+.svelte-kit/output/server/chunks/internal.js                                                  0.74 kB │ gzip:  0.34 kB
+.svelte-kit/output/server/chunks/windowActivity2.js                                           1.02 kB │ gzip:  0.50 kB
+.svelte-kit/output/server/entries/fallbacks/error.svelte.js                                   4.21 kB │ gzip:  1.66 kB
+.svelte-kit/output/server/chunks/index-server.js                                              4.83 kB │ gzip:  1.77 kB
+.svelte-kit/output/server/chunks/exports.js                                                   9.01 kB │ gzip:  2.96 kB
+.svelte-kit/output/server/chunks/shared.js                                                   10.57 kB │ gzip:  3.38 kB
+.svelte-kit/output/server/chunks/appearance.svelte.js                                        30.01 kB │ gzip:  5.70 kB
+.svelte-kit/output/server/chunks/utils.js                                                    31.76 kB │ gzip:  9.35 kB
+.svelte-kit/output/server/chunks/internal2.js                                                35.89 kB │ gzip: 10.34 kB
+.svelte-kit/output/server/remote-entry.js                                                    54.49 kB │ gzip: 12.02 kB
+.svelte-kit/output/server/chunks/server.js                                                  122.57 kB │ gzip: 32.12 kB
+.svelte-kit/output/server/index.js                                                          126.05 kB │ gzip: 31.93 kB
+.svelte-kit/output/server/entries/pages/_page.svelte.js                                     353.43 kB │ gzip: 72.01 kB
+
+✓ built in 3.33s
+
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-static
+  Wrote site to "build"
+  ✔ done
+[PLUGIN_TIMINGS] Plugin hooks ran for 3.3s of this 3.3s build (99%).
+The slowest hooks, timed inside each callback (the wait before a callback starts is excluded, the time it awaits is included):
+  - vite-plugin-sveltekit-compile writeBundle (61%, 2.0s, 1 call)
+Additional hook time came from the hooks below and from hooks under 1s.
+1 hook is listed without a time. Its calls overlapped, so the time inside one call includes work from other calls. To find its cost, profile the build with `node --cpu-prof`:
+  - vite-plugin-sveltekit-guard resolveId (1020 calls)
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+

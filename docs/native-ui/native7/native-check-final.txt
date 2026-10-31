@@ -1,0 +1,5 @@
+    Checking windows v0.61.3
+   Compiling aurora-native v1.4.2 (C:\Dev\aurora-launcher-native\native)
+    Checking slint v1.18.1
+    Checking aurora-launcher v1.4.2 (C:\Dev\aurora-launcher-native\src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 42.86s

@@ -1,0 +1,3 @@
+   Compiling aurora-launcher v1.4.2 (C:\Dev\aurora-launcher-native\src-tauri)
+   Compiling aurora-native v1.4.2 (C:\Dev\aurora-launcher-native\native)
+    Finished `release` profile [optimized] target(s) in 5m 55s

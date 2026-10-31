@@ -1,0 +1,693 @@
+✔ backup maintenance explains policy without changing readiness (0.612ms)
+✔ manual repair, safety skips, unknown ownership and retryable failure stay distinct (0.156ms)
+✔ creation choices consume backend capabilities including Vanilla and Fabric (0.9699ms)
+✔ Vanilla has no loader selector and Fabric accepts optional backend Aurora compatibility (0.1613ms)
+✔ transition renders backend additions removals and retention reasons (0.1435ms)
+✔ approved transition sends the fingerprint and refreshes successful state (0.14ms)
+✔ stale and failed transitions preserve errors and do not report success (0.4915ms)
+▶ update availability summaries
+  ✔ counts each typed state separately and never collapses blocked or noted entries (1.5838ms)
+  ✔ names each status in user-facing language with candidate versions (0.1741ms)
+✔ update availability summaries (2.5161ms)
+▶ provider browse vocabulary
+  ✔ labels every browsable content type and keeps modpacks distinct from installable kinds (0.1562ms)
+  ✔ exposes only provider-supported sort orders with readable labels (0.111ms)
+✔ provider browse vocabulary (0.4025ms)
+▶ release channel labels
+  ✔ labels and describes the three persisted policies (0.1788ms)
+✔ release channel labels (0.3333ms)
+✔ creation help follows the native compatible release and does not invent unavailable versions (0.7509ms)
+▶ Modrinth browse state
+  ✔ keeps default results separate by instance and domain and expires them (0.5948ms)
+  ✔ keeps browsable modpack defaults separate from installable kinds (0.109ms)
+  ✔ resets on a new first page and appends only subsequent pages (0.5195ms)
+  ✔ formats provider category slugs into readable labels without changing values (0.2146ms)
+  ✔ fades at 2.7 seconds, removes at 3 seconds, and cancels stale timers (0.2602ms)
+✔ Modrinth browse state (2.5306ms)
+▶ local mod list projection
+  ✔ sorts by display name without changing the source snapshot (8.1345ms)
+  ✔ searches name, mod id, filename, and author locally (0.1663ms)
+  ✔ filters enabled, disabled, and warning entries (0.1448ms)
+  ✔ sorts by state and warning count with stable name fallback (0.1484ms)
+✔ local mod list projection (9.5502ms)
+▶ remove confirmation state
+  ✔ starts for local and proven provider-managed entries, never required files (0.199ms)
+  ✔ reconciles a confirmation against the latest inventory (0.074ms)
+✔ remove confirmation state (0.9618ms)
+▶ mod size formatting
+  ✔ uses compact binary units (0.1503ms)
+✔ mod size formatting (0.2706ms)
+✔ local unmanaged packs route to the entry-level file removal (0.9929ms)
+✔ verified managed packs route to the provider graph lifecycle (0.1195ms)
+✔ blocked entries keep their trash disabled with the real reason instead of Unavailable (0.1085ms)
+✔ resource packs report Enabled/Disabled from the backend activation state (0.0979ms)
+✔ shaders truthfully report in-game activation without a fake toggle (0.1268ms)
+✔ unreadable options disable activation with their actual reason (0.0882ms)
+✔ a toggleable pack never exposes an unavailable reason (0.0754ms)
+✔ recovered provenance stays visible while capabilities stay normal (0.1266ms)
+✔ confirmed local removals re-check the current snapshot capability (1.1283ms)
+✔ visiblePacks filters by activation, warnings, management and search (0.8146ms)
+✔ all modes explain their unmeasured intent and preserve explicit heap/custom configuration (77442.3038ms)
+✔ pending saves disable draft controls without inventing a saved state (0.4256ms)
+✔ only provider-managed Modrinth provenance supplies installed artwork identity (0.8395ms)
+✔ typed artwork retries transient failures, coalesces concurrent subscribers and reuses success (0.2179ms)
+✔ typed absent artwork stays distinct from temporary rejection and expires (0.2615ms)
+✔ the Custom circle is the color picker: no redundant custom-color row remains (9354.005ms)
+✔ choosing a color in the picker path applies a custom accent immediately (0.3099ms)
+✔ status colors are not derived from the custom accent (0.1431ms)
+✔ local library loads without an account and remote failures preserve it (10476.841ms)
+✔ overlapping library reads coalesce; an edit waits before publishing its result (0.3231ms)
+✔ A to B to A rejects a prior pending mutation, even when account identity matches again (0.3152ms)
+✔ wrong-account and out-of-order profile responses never become current (0.1927ms)
+✔ mutation failure is stale, explicit retry refreshes, and duplicate actions invoke once (0.5079ms)
+✔ Home skin summary bounds an eighty-entry library and prioritizes favorites (9764.9708ms)
+✔ no account and offline states retain local previews and navigation (0.7196ms)
+✔ cape summary shows current choice, owned count, No Cape, and empty inventory (0.5338ms)
+✔ loading, stale, and remote failures remain honest without hiding the library (0.3814ms)
+✔ account switch hides the previous account cape and current model immediately (0.4117ms)
+✔ semantic native DTOs carry no token or user-selected filesystem path (0.6366ms)
+✔ General starts with live desktop conveniences, honoring native capability and conflicts (10574.9911ms)
+✔ desktop, Start menu and path actions use narrow native commands without frontend paths (0.7492ms)
+✔ a native refusal remains visible and never reports success (0.32ms)
+✔ playtime renders a textual total and seven ordered daily values (9968.5293ms)
+✔ playtime zero state is intentional (0.4004ms)
+✔ recent targets render bounded rows, long labels, owning instance, and missing state (1.2035ms)
+✔ server display does not require or render a raw destination (0.6596ms)
+✔ Quick Launch sends only the opaque target, kind, and account to native Play (0.5399ms)
+✔ playtime and recency use readable bounded units (0.5806ms)
+✔ the three stable history widgets obey show, size, ordering, and unknown-ID preservation (0.6451ms)
+✔ E3 cosmetics entries append only when explicitly enabled in an existing E2 layout (0.1807ms)
+✔ server list contains twenty older entries in one keyboard scroll region (49165.6545ms)
+✔ rename sends original name, blocks duplicate submissions and synchronizes state (0.6928ms)
+✔ rename failure retains the original display and editable draft (0.6064ms)
+✔ settings removes the redundant Aurora card, exposes snapshots and preserves arbitrary whole MiB (3.9639ms)
+✔ configuration sends the original draft baseline and refreshes readiness after save (0.4447ms)
+✔ unresolved recovery overrides stored and cached Ready on every content surface (0.5821ms)
+▶ configuration-versus-pin comparison
+  ✔ flags a changed Minecraft version on a ready instance (0.1227ms)
+  ✔ flags a changed pinned loader version (0.0626ms)
+  ✔ ignores the installed loader under the automatic policy (0.0613ms)
+  ✔ never flags a non-ready instance (0.0626ms)
+  ✔ labels the desired configuration compactly (0.0774ms)
+✔ configuration-versus-pin comparison (0.6126ms)
+▶ content status decisions
+  ✔ shows an installing instance as working with the live phase (0.5361ms)
+  ✔ shows a damaged instance with its first concrete problem (0.0908ms)
+  ✔ shows needs-install for both the stale gate and a differing configuration (0.1251ms)
+  ✔ shows ready for deep-validated and plain ready instances (0.1376ms)
+  ✔ shows not installed when no game content exists (0.0665ms)
+✔ content status decisions (1.1502ms)
+▶ Home and workspace readiness consistency
+  ✔ derives one decision for ready-unvalidated on every surface (0.1371ms)
+  ✔ derives one decision for ready-validated on every surface (0.0485ms)
+  ✔ derives one decision for stale-configuration on every surface (0.0366ms)
+  ✔ derives one decision for stale-validated on every surface (0.0373ms)
+  ✔ derives one decision for damaged on every surface (0.0328ms)
+  ✔ derives one decision for installing on every surface (0.0201ms)
+  ✔ derives one decision for not-installed on every surface (0.0192ms)
+✔ Home and workspace readiness consistency (0.45ms)
+▶ draft dirty derivation
+  ✔ is clean for an untouched draft (0.0669ms)
+  ✔ is dirty for changed memory, JVM arguments, and window size (0.041ms)
+  ✔ ignores equivalent deep-equal structures (0.0322ms)
+✔ draft dirty derivation (0.187ms)
+▶ managed Java status decisions
+  ✔ explains a native DLL path limitation without promising repair will fix it (0.1755ms)
+  ✔ is unchecked before any status query (0.0759ms)
+  ✔ shows ready with component and version detail (0.0633ms)
+  ✔ shows damaged and missing runtimes as actionable (0.057ms)
+  ✔ shows busy and error states (0.0287ms)
+✔ managed Java status decisions (0.5315ms)
+▶ generalized instance presentation
+  ✔ treats Aurora presence as install-affecting (0.0466ms)
+  ✔ accepts Fabric without Aurora without a fake version (0.0276ms)
+  ✔ compares platform identity even with an automatic loader policy (0.0253ms)
+✔ generalized instance presentation (0.1499ms)
+▶ global navigation
+  ✔ navigates between global destinations and leaves any workspace (0.7365ms)
+  ✔ ignores unknown pages instead of inventing navigation state (0.0997ms)
+  ✔ hides the developer destination outside development builds (0.1516ms)
+  ✔ reports the workspace as owned by the Instances destination (0.078ms)
+✔ global navigation (2.1589ms)
+▶ instance workspace navigation
+  ✔ opens a workspace on the Settings tab by default (Overview was removed) (0.1497ms)
+  ✔ keeps the current tab when reopening the same instance (0.0761ms)
+  ✔ switches instances deliberately and never changes selection semantics (0.0745ms)
+  ✔ ignores blank instance ids (0.0662ms)
+  ✔ switches workspace tabs without touching global state (0.0873ms)
+  ✔ opens each implemented content tab inside the same instance (0.1195ms)
+  ✔ navigates back to the Instances page from a workspace (0.086ms)
+✔ instance workspace navigation (0.8749ms)
+▶ workspace resolution against known instances
+  ✔ is loading until the registry state is known (0.1242ms)
+  ✔ reports a deleted or unknown instance explicitly (0.0513ms)
+  ✔ opens with the active instance identity and tab (0.0403ms)
+✔ workspace resolution against known instances (0.2918ms)
+✔ drag ordering only moves visible registered slots and preserves hidden/unknown data (11887.9694ms)
+✔ explicit player rotation changes projection without changing validated skin data (39.8178ms)
+✔ theme, accent and background writes preserve the other dimensions and failed saves preserve state (0.7973ms)
+✔ custom and preset colors apply all seven native palette tokens and survive reload (0.1714ms)
+✔ the front face is visible at the canonical default angle (37.857ms)
+✔ AA: the left-arrow activation rotates the displayed player visually LEFT (24.1774ms)
+✔ AB: the right-arrow activation rotates the displayed player visually RIGHT (23.9008ms)
+✔ AC/AD: left-then-right and right-then-left return to the original orientation (32.6573ms)
+✔ AE: reset restores the canonical default orientation exactly (31.0495ms)
+✔ AF: repeated arrow activations remain deterministic (30.3447ms)
+✔ the accepted increment and canonical default are preserved (0.1721ms)
+✔ AG: no pointer-drag rotation handlers or drag affordances exist in the preview source (0.4436ms)
+✔ Home removes rotation controls while retaining a descriptive image and decorative canvas (0.2454ms)
+✔ static 3D model contains six cuboid body parts and six expanded overlay parts (1.4724ms)
+✔ authoritative slim geometry changes arm widths without changing torso or legs (1.3171ms)
+✔ cape geometry uses separate bounded pixels and correct outward UVs without changing skin faces (9.1452ms)
+✔ legacy models mirror limbs and omit nonexistent outer body layers (0.1703ms)
+✔ missing or malformed pixels render a bounded default 3D player (1.5396ms)
+✔ software render uses actual texture pixels and transparent overlays without animation (77.9165ms)
+✔ modern body uses distinct head, torso, both arms and both legs (1.8744ms)
+✔ slim models have three-pixel arms and classic models have four (0.7144ms)
+✔ legacy limbs mirror their original arm and leg without reading modern UVs (0.2867ms)
+✔ all modern outer layers composite alpha over their corresponding body faces (0.864ms)
+✔ missing and malformed cosmetics never yield body pixels (0.2201ms)
+✔ camera clamps extreme and nonfinite values and normalizes repeated rotation (0.8909ms)
+✔ outer layers are optional for both modern and legacy skins; capes remain independent (1.6187ms)
+✔ default view preserves Home pixels exactly and full body stays inside all bounded views (267.3953ms)
+✔ Home states a blocked or delayed launch in words, while Ready stays the quiet dot (16427.6563ms)
+✔ signed-out Home offers sign-in from the skin area without nesting a control in an image (0.8211ms)
+✔ account identity exposes its state so the rail can keep only actionable detail (0.629ms)
+✔ instance Settings has one Rename, leads with readiness, and keeps Maintenance free of duplicates (3.5125ms)
+✖ shared controls use exact transition properties, reduced motion and unoutlined danger buttons (1.4201ms)
+✔ install and Java progress use human wording with native counts only (3.4387ms)
+✔ Java failures summarize in words and keep raw native diagnostics behind a disclosure (0.3531ms)
+✔ first-run Home keeps the launch panel and Playtime hides range controls without data (0.8817ms)
+✔ Home offers one existing command per known blocker and nothing for unknown codes (0.6833ms)
+✔ instance icons: every suggested icon is a real Material Symbol and search is bounded (13.2696ms)
+✔ Home names the instance once: no metadata line and no name inside Launch (0.6928ms)
+✔ Instances shows tile cards with icons, and the creation form offers an icon picker (122.42ms)
+✔ browsing modpacks inside an instance adds to that instance; only the standalone browser creates one (0.3561ms)
+✔ icon search understands everyday Minecraft words and browse-all starts with words, not numeric badges (2.0214ms)
+✔ Updates renders one primary action, concise versions, and no public channels (10634.231ms)
+✔ both-domain offers remain one Update action and secondary plain-text notes (0.3749ms)
+✔ no-update confirmation and mutation render a disabled primary action with honest progress (0.3388ms)
+✔ Home update notice is small, silent when current or offline, and independent of Play (4.938ms)
+✔ Home with no selected instance offers creation and keeps local navigation (0.2753ms)
+✔ installation blockers render native identity, filename, ownership and reason (0.3415ms)
+✔ installed artwork failure and Local/Unknown rows preserve a nonfatal glyph (0.4208ms)
+✔ Home permits selection when instances exist without a selected target (0.6417ms)
+✔ Home selector preserves installed Vanilla identity without card metadata (0.7065ms)
+✔ Home selector preserves ordinary Fabric without claiming Aurora management (1.1207ms)
+✔ Instance Details preserves the installed Forge identity for both F1C pins (0.3041ms)
+✔ Home selector preserves the optional Aurora identity (0.4009ms)
+✔ Home native readiness uses an accessible dot and enables Launch (1.0558ms)
+✔ Home Starting disables duplicate Play (0.4387ms)
+✔ Home Running disables duplicate Play (0.4351ms)
+✔ Home renders native running readiness after switching back without a matching latest event (0.3941ms)
+✔ Home blocks Play for native authentication and validation requirements (0.9907ms)
+✔ Home ignores readiness and process belonging to another instance (0.7248ms)
+✔ Home keeps management in Instances and typed Workspace navigation keeps selection (0.4303ms)
+✔ instance selection invokes only native selection and read-only status, preserving configuration (2.8906ms)
+✔ account dialog signed out leaves instance management available (0.7024ms)
+✔ signed-out Home explains native authentication requirements without management clutter (0.4931ms)
+✔ account dialog shows active Minecraft identity and management actions (0.3092ms)
+✔ account dialog with multiple identities distinguishes the active one and switch action (0.2118ms)
+✔ account switching uses Rust selection without assigning accounts to instances (0.8931ms)
+✔ cosmetic avatar failure leaves the model region empty without disabling native Ready (0.9708ms)
+✔ invalid avatar pixels use a fallback and valid pixels produce the head canvas (0.217ms)
+✔ account identity preserves a long username with accessible full text (0.0852ms)
+✔ late avatar completion cannot replace the newly selected account's image (0.1268ms)
+✔ late readiness cannot overwrite a newer selected instance decision (0.1573ms)
+✔ Play invokes the established native command once for the exact selected target (0.1586ms)
+✔ Play rejects stale instance or account display decisions before invoking native launch (0.0533ms)
+✔ a large instance list and long names retain accessible options and selected marker (0.874ms)
+✔ shell account modal opens and closes without changing Home, Settings or workspace navigation (1.0733ms)
+✔ signed-out account dialog contains Microsoft sign-in without changing the route (0.1031ms)
+✔ Home integrates its picker within the selected-instance card and has no account management row (0.9133ms)
+✔ Add account and cancellation use the existing native commands and preserve identity (0.3811ms)
+✔ the bottom-left chip opens the shell modal rather than inventing account navigation (0.3907ms)
+✔ the shared account identity uses the exact signed-in label and preserves sign-in states (0.1612ms)
+✔ default widgets sit below the unchanged primary card and 3D player (18560.8608ms)
+✔ available session is real, hidden widgets disappear, and all-off retains the edit entry point (3.3806ms)
+✔ unknown and removed widget IDs stay persisted but never render components (0.6019ms)
+✔ size and ordering choices are bounded and preserve hidden/unknown entries (0.2466ms)
+✔ Settings enable/disable, reorder, resize, restart load and reset use typed native persistence (0.7415ms)
+✔ failed save retains the prior layout with an actionable error (0.1902ms)
+✔ Home editor keeps deliberate edit mode and keyboard size/order controls (0.3643ms)
+✔ Discord describes automatic connection and shows native status without maintenance controls (1.2365ms)
+✔ missing application configuration disables connection honestly without hiding privacy choices (0.3146ms)
+✔ Discord preferences and reconnect invoke only native commands and never disturb Play (0.2819ms)
+✔ Discord failure leaves Ready and Play available (0.5293ms)
+✔ mod row preserves artwork and switch, promotes one trash, and excludes duplicate overflow removal (3.0879ms)
+✔ trash reuses native local confirmation and provider fingerprint lifecycle (0.4335ms)
+✔ gameplay preferences are separate opt-ins and address control requires server consent (0.343ms)
+✔ enriched server rows render favicon, name, MOTD and status without addresses (10402.9496ms)
+✔ rows without a presentation keep history identity and a deliberate server symbol (0.402ms)
+✔ malformed or remote favicon DTOs render the server fallback without loading a URL (0.6262ms)
+✔ offline presentations retain favicon and MOTD while reporting offline (0.2913ms)
+✔ hostile MOTD text renders as text, never as markup (0.2352ms)
+✔ MOTD lines clamp to one line and long text stays bounded (0.2695ms)
+✔ world mode is unchanged by the enrichment surface (0.1784ms)
+✔ presentation data never reaches the Quick Launch authority (0.7071ms)
+✔ category keyboard movement wraps, supports Home/End, and ignores unrelated keys (11495.2261ms)
+✔ global settings keep game configuration in the instance workspace (2.6138ms)
+✔ Discord exposes exactly the five requested preferences (1.1722ms)
+✔ About renders only running native version/platform and truthfully handles unavailable values (1.3487ms)
+✔ system accessibility is informational, without persisted override controls (0.9383ms)
+✔ save feedback never claims success while pending or failed (0.2552ms)
+✔ library search, favorites and deterministic recent sorting do not mutate native records (8.9945ms)
+✔ current markers require exact content and model rather than a name or opposite model (0.2147ms)
+✔ names use the native UTF-8 bound and reject control characters (0.2584ms)
+✔ overlapping startup, runtime completes first: one current readiness and no Checking tail (63673.8668ms)
+✔ overlapping startup, readiness completes first: one current readiness and no Checking tail (0.4204ms)
+✔ runtime can finish before accounts dispatch initial readiness (0.3012ms)
+✔ instance generation changes: obsolete startup response never replaces current result (0.2941ms)
+✔ account generation changes: obsolete startup response never replaces current result (0.2725ms)
+✔ same identities after an intervening refresh still discard the old response (0.3455ms)
+✔ changed content/configuration with matching identities requires a new check (0.3661ms)
+✔ mutation callback refresh remains authoritative while startup finishes (0.2599ms)
+✔ runtime-status failure preserves the independent readiness result and error (0.352ms)
+✔ failure retains the required startup follow-up (0.348ms)
+✔ blocked retains the required startup follow-up (0.1946ms)
+✔ runtimeDamaged retains the required startup follow-up (0.1593ms)
+✔ failed accounts load retains runtime-triggered readiness (0.2096ms)
+✔ repeated refreshes always dispatch and only the latest response publishes (0.136ms)
+✔ rapid navigation leaves the root-owned startup check intact (0.3226ms)
+✔ explicit runtime checks and runtime installation each request fresh readiness (0.2773ms)
+✔ disposing an in-flight startup discards its response and follow-up (0.2438ms)
+✔ a changed process snapshot requires fresh readiness (0.3875ms)
+✔ older runtime status cannot replace a newer status or launch another refresh (0.4412ms)
+✔ obsolete readiness errors cannot erase a newly selected identity even before its refresh (0.1925ms)
+✔ equal read-only startup discovery reload does not invalidate in-flight readiness (0.2762ms)
+✔ startup waits for a superseding initial-state read when startup completes first (0.2737ms)
+✔ startup waits for a superseding initial-state read when discovery completes first (0.1868ms)
+✔ read-only reload with changed DTO inputs still requires fresh readiness (0.2125ms)
+✔ a mutation reload invalidates checks started during the reload as well as before it (0.1377ms)
+✔ desktop focus hides cached Ready, coalesces checks, and accepts native busy status (0.1637ms)
+✔ a failed focus check never leaves an indefinite spinner or cached Ready (0.1056ms)
+✔ an older state response cannot replace newer native recovery authority (0.0936ms)
+✔ A: initial action is Check For Updates (0.8973ms)
+✔ B/L: click checks both once; repeated checking clicks are deduplicated (0.9812ms)
+✔ C/D/E/F: None Available is disabled for exactly five seconds; local reset performs zero checks (0.4914ms)
+✔ G: leaving the view cancels its timer and prevents later mutation (0.1599ms)
+✔ G: a check finishing after view destruction cannot create a timer (0.1048ms)
+✔ H/I/AF: Launcher only becomes one Update action (0.0974ms)
+✔ H/J/AG: Client only becomes one Update action (0.0699ms)
+✔ H/K/AH: both domains becomes one Update action (0.0623ms)
+✔ M/AP: manual offline check becomes retry without backend details (0.2562ms)
+✔ M: rejected manual check becomes retry (0.2003ms)
+✔ N/AL: failed Client apply stops Launcher mutation and retains both offers (0.2844ms)
+✔ O: Client success returns to current local state with no extra network check (0.1237ms)
+✔ AC/AE: one manual check invokes both domains exactly once and both current confirms none (0.0851ms)
+✔ AD: one offline domain preserves the other domain's exact offer (0.0903ms)
+✔ AD: one offline domain preserves the other domain's exact offer (0.0316ms)
+✔ AI/AJ: Client fully completes before Launcher download and install; no parallel mutations (0.1563ms)
+✔ AK: Client success and Launcher failure keeps Client updated; retry only reruns Launcher (0.1149ms)
+✔ Launcher-only update performs download and install with one action (0.0554ms)
+✔ Launcher install failure is truthful and retryable (0.0662ms)
+✔ stale or blocked Client preview stops both mutations (0.087ms)
+✔ stale or blocked Client preview stops both mutations (0.0714ms)
+✔ stale or blocked Client preview stops both mutations (0.0603ms)
+✔ AM/AZ: startup is bounded once; no-update startup is silent and creates no timer (0.1168ms)
+✔ AN: startup availability is true and remains true across navigation (0.0424ms)
+✔ AO: offline startup is silent/nonfatal and manual retry remains available (0.0749ms)
+✔ AO: rejected startup is nonfatal (0.0895ms)
+✔ BB: an unconfigured Launcher is never reported as current (0.0773ms)
+✔ manual check during startup waits, then makes one fresh check for both domains (0.1038ms)
+✔ a changed Client offer makes Retry check fresh truth and requires another explicit Update (0.1836ms)
+✔ summarizeAvailability reports an update with versions (0.5606ms)
+✔ summarizeAvailability names the launcher domain distinctly (0.0759ms)
+✔ unavailable is honest and never an instance or account failure (0.0639ms)
+✔ notApplicable explains itself (0.0642ms)
+✔ isUpdateAvailable only surfaces real offers (0.0753ms)
+✔ offeredVersion extracts the candidate (0.0677ms)
+✔ presentationNotes normalizes and bounds untrusted note text (0.1348ms)
+✔ formatBytes formats real progress honestly (0.0882ms)
+✔ launcherPhaseLabel never fabricates a percentage (0.1735ms)
+✔ clientPhaseLabel names the real transaction phases (0.124ms)
+✔ only native static PNG data is renderable, including in provider Browse (0.892ms)
+✔ fallbacks are stable local vector symbols across all content types (0.5324ms)
+✔ production CSP permits native data images only in the image directive (0.399ms)
+✔ video speed is bounded independently from motion accessibility policy (0.5214ms)
+✔ video pauses on hidden/blur/reduced motion, preserves rate and releases decoder on unmount (0.572ms)
+✔ native minimized pauses playback even while WebView2 still reports focused+visible (0.2662ms)
+✔ rejected autoplay shows the still, reports a redacted reason once, and can retry (3.0296ms)
+✔ seeds subscribers with the current state and pushes native transitions (0.8873ms)
+✔ a late subscriber is seeded with the live minimized state (0.1248ms)
+✔ initialize connects exactly once and unsubscribed listeners are dropped (0.1389ms)
+ℹ tests 301
+ℹ suites 16
+ℹ pass 300
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 329351.3184
+
+✖ failing tests:
+
+test at src\lib\launcher\premiumDesign.test.ts:91:1
+✖ shared controls use exact transition properties, reduced motion and unoutlined danger buttons (1.4201ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /\.btn-danger \{\n  border-color: transparent;\n  background: var\(--color-error-soft\);/. Input:
+  
+  '/*\r\n' +
+    ' * Aurora Launcher design system — tokens and shared primitives.\r\n' +
+    ' * The visual contract is LAUNCHER_DESIGN_LANGUAGE.md; every value here is a\r\n' +
+    ' * token from that document. Components must not introduce one-off literals.\r\n' +
+    ' *\r\n' +
+    ' * Layering: THEME → SEMANTIC TOKENS → SHARED PRIMITIVES → PAGES. Themes and\r\n' +
+    ' * accents are attribute-scoped token sets on the document root\r\n' +
+    ' * (`data-theme`, `data-accent`); a custom accent is applied as derived\r\n' +
+    ' * inline custom properties by the appearance store (never user CSS). All\r\n' +
+    ' * themes are dark and differ only through a coherent surface palette —\r\n' +
+    ' * never through layout.\r\n' +
+    ' */\r\n' +
+    '\r\n' +
+    ':root {\r\n' +
+    '  /* Every built-in theme is dark; native widgets (select popups, the color\r\n' +
+    '     picker, number inputs) must render accordingly. */\r\n' +
+    '  color-scheme: dark;\r\n' +
+    '\r\n' +
+    '  /* Spacing scale (base 4px) */\r\n' +
+    '  --space-1: 4px;\r\n' +
+    '  --space-2: 8px;\r\n' +
+    '  --space-3: 12px;\r\n' +
+    '  --space-4: 16px;\r\n' +
+    '  --space-5: 24px;\r\n' +
+    '  --space-6: 32px;\r\n' +
+    '  --space-7: 48px;\r\n' +
+    '\r\n' +
+    '  /* Typography roles */\r\n' +
+    '  --font-ui:\r\n' +
+    '    system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Ubuntu,\r\n' +
+    '    Cantarell, sans-serif;\r\n' +
+    '  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;\r\n' +
+    '  --text-identity: 1rem;\r\n' +
+    '  --text-page-title: 1.375rem;\r\n' +
+    '  --text-section: 0.95rem;\r\n' +
+    '  --text-body: 0.9rem;\r\n' +
+    '  --text-secondary: 0.85rem;\r\n' +
+    '  --text-metadata: 0.8rem;\r\n' +
+    '  --text-label: 0.75rem;\r\n' +
+    '\r\n' +
+    '  /* Shape */\r\n' +
+    '  --radius-sm: 6px;\r\n' +
+    '  --radius-md: 10px;\r\n' +
+    '  --radius-lg: 14px;\r\n' +
+    '\r\n' +
+    '  /* Motion */\r\n' +
+    '  --motion-fast: 90ms;\r\n' +
+    '  --motion-base: 150ms;\r\n' +
+    '  --motion-ease: ease-out;\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '/* ------------------------------------------------------------------ */\r\n' +
+    '/* Themes                                                              */\r\n' +
+    '/*                                                                     */\r\n' +
+    '/* The default block is the approved Aurora look; the other themes are  */\r\n' +
+    '/* palette variants of the same visual language. Status colors are      */\r\n' +
+    '/* semantically stable across themes (they are chosen for dark          */\r\n' +
+    '/* surfaces, and every theme is dark).                                  */\r\n' +
+    '/* ------------------------------------------------------------------ */\r\n' +
+    '\r\n' +
+    ':root,\r\n' +
+    ':root[data-theme="aurora-dark"] {\r\n' +
+    '  --color-background: #101116;\r\n' +
+    '  --color-surface: #16171d;\r\n' +
+    '  --color-surface-raised: #1d1f27;\r\n' +
+    '  --color-surface-hover: #242631;\r\n' +
+    '  --color-surface-pressed: #1a1c24;\r\n' +
+    '  --color-surface-sunken: #0d0e13;\r\n' +
+    '  --color-sidebar: #0a0b0e;\r\n' +
+    '  --color-border: #24262f;\r\n' +
+    '  --color-border-strong: #343743;\r\n' +
+    '  --color-surface-edge: rgba(255, 255, 255, 0.05);\r\n' +
+    '  --color-text: #edf1fb;\r\n' +
+    '  --color-text-secondary: #a7b0c5;\r\n' +
+    '  --color-text-muted: #929db4;\r\n' +
+    '  --shadow-group: 0 8px 24px rgba(0, 0, 0, 0.24);\r\n' +
+    '  --color-success: #7ee2b8;\r\n' +
+    '  --color-success-soft: rgba(58, 168, 122, 0.14);\r\n' +
+    '  --color-warning: #ecc36b;\r\n' +
+    '  --color-warning-soft: rgba(204, 158, 66, 0.14);\r\n' +
+    '  --color-error: #ff9a9a;\r\n' +
+    '  --color-error-soft: rgba(201, 88, 88, 0.14);\r\n' +
+    '  --color-working: #8fb7ff;\r\n' +
+    '  --color-working-soft: rgba(96, 134, 214, 0.14);\r\n' +
+    '  --color-muted-soft: rgba(132, 143, 168, 0.12);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    ':root[data-theme="midnight"] {\r\n' +
+    '  --color-background: #0d1017;\r\n' +
+    '  --color-surface: #121621;\r\n' +
+    '  --color-surface-raised: #191e2b;\r\n' +
+    '  --color-surface-hover: #202636;\r\n' +
+    '  --color-surface-pressed: #161b26;\r\n' +
+    '  --color-surface-sunken: #0a0d14;\r\n' +
+    '  --color-sidebar: #070910;\r\n' +
+    '  --color-border: #1f2531;\r\n' +
+    '  --color-border-strong: #2c3444;\r\n' +
+    '  --color-surface-edge: rgba(200, 215, 255, 0.05);\r\n' +
+    '  --color-text: #e9edf9;\r\n' +
+    '  --color-text-secondary: #a3adc4;\r\n' +
+    '  --color-text-muted: #919db5;\r\n' +
+    '  --shadow-group: 0 10px 32px rgba(0, 0, 0, 0.4);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    ':root[data-theme="oled"] {\r\n' +
+    '  --color-background: #000000;\r\n' +
+    '  --color-surface: #0b0b0e;\r\n' +
+    '  --color-surface-raised: #141419;\r\n' +
+    '  --color-surface-hover: #1b1b22;\r\n' +
+    '  --color-surface-pressed: #101015;\r\n' +
+    '  --color-surface-sunken: #000000;\r\n' +
+    '  --color-sidebar: #000000;\r\n' +
+    '  --color-border: #1c1d23;\r\n' +
+    '  --color-border-strong: #2b2d35;\r\n' +
+    '  --color-surface-edge: rgba(255, 255, 255, 0.045);\r\n' +
+    '  --color-text: #f0f3fc;\r\n' +
+    '  --color-text-secondary: #a9b2c7;\r\n' +
+    '  --color-text-muted: #939db4;\r\n' +
+    '  --shadow-group: 0 8px 28px rgba(0, 0, 0, 0.55);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '/* ------------------------------------------------------------------ */\r\n' +
+    '/* Accent                                                              */\r\n' +
+    '/*                                                                     */\r\n' +
+    '/* Curated presets, scoped by `data-accent`. A custom accent is applied */\r\n' +
+    '/* by the appearance store as derived inline custom properties (see the */\r\n' +
+    '/* appearance store), which take precedence over these blocks. The     */\r\n' +
+    '/* accent recolors selection, focus, and primary actions only — never  */\r\n' +
+    '/* status colors, text, or surfaces.                                   */\r\n' +
+    '/* ------------------------------------------------------------------ */\r\n' +
+    '\r\n' +
+    ':root,\r\n' +
+    ':root[data-accent="violet"] {\r\n' +
+    '  --color-accent: #8b80ff;\r\n' +
+    '  --color-accent-strong: #6f5df2;\r\n' +
+    '  --color-accent-hover: #6f63e8;\r\n' +
+    '  --color-accent-pressed: #6152e0;\r\n' +
+    '  --color-accent-contrast: #ffffff;\r\n' +
+    '  --color-accent-soft: rgba(139, 128, 255, 0.14);\r\n' +
+    '  --color-accent-outline: rgba(139, 128, 255, 0.55);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    ':root[data-accent="blue"] {\r\n' +
+    '  --color-accent: #7ba4ff;\r\n' +
+    '  --color-accent-strong: #3a6fd8;\r\n' +
+    '  --color-accent-hover: #4273d6;\r\n' +
+    '  --color-accent-pressed: #3563c8;\r\n' +
+    '  --color-accent-contrast: #ffffff;\r\n' +
+    '  --color-accent-soft: rgba(123, 164, 255, 0.14);\r\n' +
+    '  --color-accent-outline: rgba(123, 164, 255, 0.55);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    ':root[data-accent="cyan"] {\r\n' +
+    '  --color-accent: #5bd0e0;\r\n' +
+    '  --color-accent-strong: #37b3c6;\r\n' +
+    '  --color-accent-hover: #43bccd;\r\n' +
+    '  --color-accent-pressed: #2fa7b8;\r\n' +
+    '  --color-accent-contrast: #101116;\r\n' +
+    '  --color-accent-soft: rgba(91, 208, 224, 0.14);\r\n' +
+    '  --color-accent-outline: rgba(91, 208, 224, 0.55);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    ':root[data-accent="green"] {\r\n' +
+    '  --color-accent: #5ec98f;\r\n' +
+    '  --color-accent-strong: #3aa96d;\r\n' +
+    '  --color-accent-hover: #46b177;\r\n' +
+    '  --color-accent-pressed: #329962;\r\n' +
+    '  --color-accent-contrast: #101116;\r\n' +
+    '  --color-accent-soft: rgba(94, 201, 143, 0.14);\r\n' +
+    '  --color-accent-outline: rgba(94, 201, 143, 0.55);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    ':root[data-accent="amber"] {\r\n' +
+    '  --color-accent: #e2b655;\r\n' +
+    '  --color-accent-strong: #d0a03e;\r\n' +
+    '  --color-accent-hover: #d7ab4c;\r\n' +
+    '  --color-accent-pressed: #c2953a;\r\n' +
+    '  --color-accent-contrast: #101116;\r\n' +
+    '  --color-accent-soft: rgba(226, 182, 85, 0.14);\r\n' +
+    '  --color-accent-outline: rgba(226, 182, 85, 0.55);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    ':root[data-accent="rose"] {\r\n' +
+    '  --color-accent: #ef8fa5;\r\n' +
+    '  --color-accent-strong: #b03a58;\r\n' +
+    '  --color-accent-hover: #c04a68;\r\n' +
+    '  --color-accent-pressed: #a13350;\r\n' +
+    '  --color-accent-contrast: #ffffff;\r\n' +
+    '  --color-accent-soft: rgba(239, 143, 165, 0.14);\r\n' +
+    '  --color-accent-outline: rgba(239, 143, 165, 0.55);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    ':root[data-accent="neutral"] {\r\n' +
+    '  --color-accent: #dfe3ee;\r\n' +
+    '  --color-accent-strong: #c6ccdb;\r\n' +
+    '  --color-accent-hover: #d1d7e6;\r\n' +
+    '  --color-accent-pressed: #bac1d2;\r\n' +
+    '  --color-accent-contrast: #101116;\r\n' +
+    '  --color-accent-soft: rgba(223, 227, 238, 0.12);\r\n' +
+    '  --color-accent-outline: rgba(223, 227, 238, 0.5);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '* {\r\n' +
+    '  box-sizing: border-box;\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    'html {\r\n' +
+    '  min-width: 320px;\r\n' +
+    '  color: var(--color-text);\r\n' +
+    '  background: var(--color-background);\r\n' +
+    '  font-family: var(--font-ui);\r\n' +
+    '  font-synthesis: none;\r\n' +
+    '  text-rendering: optimizeLegibility;\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    'body {\r\n' +
+    '  min-width: 320px;\r\n' +
+    '  min-height: 100vh;\r\n' +
+    '  margin: 0;\r\n' +
+    '  color: var(--color-text);\r\n' +
+    '  background: var(--color-background);\r\n' +
+    '  font-size: var(--text-body);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    'h1,\r\n' +
+    'h2,\r\n' +
+    'h3,\r\n' +
+    'p {\r\n' +
+    '  margin-top: 0;\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '/* ------------------------------------------------------------------ */\r\n' +
+    '/* Application shell                                                   */\r\n' +
+    '/* ------------------------------------------------------------------ */\r\n' +
+    '\r\n' +
+    '.app-frame {\r\n' +
+    '  display: grid;\r\n' +
+    '  grid-template-columns: 204px 1fr;\r\n' +
+    '  height: 100vh;\r\n' +
+    '  min-height: 520px;\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '.sidebar {\r\n' +
+    '  display: flex;\r\n' +
+    '  flex-direction: column;\r\n' +
+    '  gap: var(--space-2);\r\n' +
+    '  padding: var(--space-5) var(--space-3) var(--space-4);\r\n' +
+    '  border-right: 1px solid var(--color-surface-edge);\r\n' +
+    '  background: var(--color-sidebar);\r\n' +
+    '  min-width: 0;\r\n' +
+    '  min-height: 0;\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '.brand {\r\n' +
+    '  display: flex;\r\n' +
+    '  align-items: center;\r\n' +
+    '  gap: var(--space-3);\r\n' +
+    '  padding: 0 var(--space-2) var(--space-4);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '.brand-icon {\r\n' +
+    '  width: 30px;\r\n' +
+    '  height: 30px;\r\n' +
+    '  flex: none;\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '.brand-name {\r\n' +
+    '  margin: 0;\r\n' +
+    '  font-size: var(--text-identity);\r\n' +
+    '  font-weight: 600;\r\n' +
+    '  letter-spacing: 0.01em;\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '.nav {\r\n' +
+    '  display: flex;\r\n' +
+    '  flex-direction: column;\r\n' +
+    '  gap: 2px;\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '.nav-item {\r\n' +
+    '  position: relative;\r\n' +
+    '  display: flex;\r\n' +
+    '  align-items: center;\r\n' +
+    '  gap: var(--space-2);\r\n' +
+    '  width: 100%;\r\n' +
+    '  padding: var(--space-2) var(--space-3);\r\n' +
+    '  border: none;\r\n' +
+    '  border-radius: var(--radius-md);\r\n' +
+    '  background: transparent;\r\n' +
+    '  color: var(--color-text-secondary);\r\n' +
+    '  font: inherit;\r\n' +
+    '  font-size: var(--text-body);\r\n' +
+    '  font-weight: 500;\r\n' +
+    '  text-align: left;\r\n' +
+    '  cursor: pointer;\r\n' +
+    '  transition: background-color var(--motion-fast) var(--motion-ease),\r\n' +
+    '    color var(--motion-fast) var(--motion-ease);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '.nav-item:hover {\r\n' +
+    '  background: var(--color-surface-raised);\r\n' +
+    '  color: var(--color-text);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '.nav-item:active {\r\n' +
+    '  background: var(--color-surface-pressed);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '.nav-item[aria-current="page"] {\r\n' +
+    '  background: var(--color-accent-soft);\r\n' +
+    '  color: var(--color-text);\r\n' +
+    '  font-weight: 600;\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '.nav-item[aria-current="page"]::before {\r\n' +
+    '  content: "";\r\n' +
+    '  position: absolute;\r\n' +
+    '  left: 0;\r\n' +
+    '  top: 8px;\r\n' +
+    '  bottom: 8px;\r\n' +
+    '  width: 3px;\r\n' +
+    '  border-radius: 2px;\r\n' +
+    '  background: var(--color-accent);\r\n' +
+    '}\r\n' +
+    '\r\n' +
+    '/* ------------------------------------------------------------------ */\r\n' +
+    '/* Sidebar instance shortcuts                                          */\r\n' +
+    '/*                                                                     */\r\n' +
+    '/* A short list of instances beneath the global destinations, in       */\r\n' +
+    '/* registry (creation) order — the registry records no recency data,   */\r\n' +
+    "/* so the label stays honest. Opening an entry enters that instance's  */\r\n" +
+    "/* workspace; the workspace's own entry carries the page marker while  */\r\n" +
+    '/* the global Instances destination retur'... 14763 more characters
+  
+      at TestContext.<anonymous> (file:///C:/Dev/aurora-launcher-native/src/lib/launcher/premiumDesign.test.ts:96:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '/*\r\n * Aurora Launcher design system — tokens and shared primitives.\r\n * The visual contract is LAUNCHER_DESIGN_LANGUAGE.md; every value here is a\r\n * token from that document. Components must not introduce one-off literals.\r\n *\r\n * Layering: THEME → SEMANTIC TOKENS → SHARED PRIMITIVES → PAGES. Themes and\r\n * accents are attribute-scoped token sets on the document root\r\n * (`data-theme`, `data-accent`); a custom accent is applied as derived\r\n * inline custom properties by the appearance store (never user CSS). All\r\n * themes are dark and differ only through a coherent surface palette —\r\n * never through layout.\r\n */\r\n\r\n:root {\r\n  /* Every built-in theme is dark; native widgets (select popups, the color\r\n     picker, number inputs) must render accordingly. */\r\n  color-scheme: dark;\r\n\r\n  /* Spacing scale (base 4px) */\r\n  --space-1: 4px;\r\n  --space-2: 8px;\r\n  --space-3: 12px;\r\n  --space-4: 16px;\r\n  --space-5: 24px;\r\n  --space-6: 32px;\r\n  --space-7: 48px;\r\n\r\n  /* Typography roles */\r\n  --font-ui:\r\n    system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Ubuntu,\r\n    Cantarell, sans-serif;\r\n  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;\r\n  --text-identity: 1rem;\r\n  --text-page-title: 1.375rem;\r\n  --text-section: 0.95rem;\r\n  --text-body: 0.9rem;\r\n  --text-secondary: 0.85rem;\r\n  --text-metadata: 0.8rem;\r\n  --text-label: 0.75rem;\r\n\r\n  /* Shape */\r\n  --radius-sm: 6px;\r\n  --radius-md: 10px;\r\n  --radius-lg: 14px;\r\n\r\n  /* Motion */\r\n  --motion-fast: 90ms;\r\n  --motion-base: 150ms;\r\n  --motion-ease: ease-out;\r\n}\r\n\r\n/* ------------------------------------------------------------------ */\r\n/* Themes                                                              */\r\n/*                                                                     */\r\n/* The default block is the approved Aurora look; the other themes are  */\r\n/* palette variants of the same visual language. Status colors are      */\r\n/* semantically stable across themes (they are chosen for dark          */\r\n/* surfaces, and every theme is dark).                                  */\r\n/* ------------------------------------------------------------------ */\r\n\r\n:root,\r\n:root[data-theme="aurora-dark"] {\r\n  --color-background: #101116;\r\n  --color-surface: #16171d;\r\n  --color-surface-raised: #1d1f27;\r\n  --color-surface-hover: #242631;\r\n  --color-surface-pressed: #1a1c24;\r\n  --color-surface-sunken: #0d0e13;\r\n  --color-sidebar: #0a0b0e;\r\n  --color-border: #24262f;\r\n  --color-border-strong: #343743;\r\n  --color-surface-edge: rgba(255, 255, 255, 0.05);\r\n  --color-text: #edf1fb;\r\n  --color-text-secondary: #a7b0c5;\r\n  --color-text-muted: #929db4;\r\n  --shadow-group: 0 8px 24px rgba(0, 0, 0, 0.24);\r\n  --color-success: #7ee2b8;\r\n  --color-success-soft: rgba(58, 168, 122, 0.14);\r\n  --color-warning: #ecc36b;\r\n  --color-warning-soft: rgba(204, 158, 66, 0.14);\r\n  --color-error: #ff9a9a;\r\n  --color-error-soft: rgba(201, 88, 88, 0.14);\r\n  --color-working: #8fb7ff;\r\n  --color-working-soft: rgba(96, 134, 214, 0.14);\r\n  --color-muted-soft: rgba(132, 143, 168, 0.12);\r\n}\r\n\r\n:root[data-theme="midnight"] {\r\n  --color-background: #0d1017;\r\n  --color-surface: #121621;\r\n  --color-surface-raised: #191e2b;\r\n  --color-surface-hover: #202636;\r\n  --color-surface-pressed: #161b26;\r\n  --color-surface-sunken: #0a0d14;\r\n  --color-sidebar: #070910;\r\n  --color-border: #1f2531;\r\n  --color-border-strong: #2c3444;\r\n  --color-surface-edge: rgba(200, 215, 255, 0.05);\r\n  --color-text: #e9edf9;\r\n  --color-text-secondary: #a3adc4;\r\n  --color-text-muted: #919db5;\r\n  --shadow-group: 0 10px 32px rgba(0, 0, 0, 0.4);\r\n}\r\n\r\n:root[data-theme="oled"] {\r\n  --color-background: #000000;\r\n  --color-surface: #0b0b0e;\r\n  --color-surface-raised: #141419;\r\n  --color-surface-hover: #1b1b22;\r\n  --color-surface-pressed: #101015;\r\n  --color-surface-sunken: #000000;\r\n  --color-sidebar: #000000;\r\n  --color-border: #1c1d23;\r\n  --color-border-strong: #2b2d35;\r\n  --color-surface-edge: rgba(255, 255, 255, 0.045);\r\n  --color-text: #f0f3fc;\r\n  --color-text-secondary: #a9b2c7;\r\n  --color-text-muted: #939db4;\r\n  --shadow-group: 0 8px 28px rgba(0, 0, 0, 0.55);\r\n}\r\n\r\n/* ------------------------------------------------------------------ */\r\n/* Accent                                                              */\r\n/*                                                                     */\r\n/* Curated presets, scoped by `data-accent`. A custom accent is applied */\r\n/* by the appearance store as derived inline custom properties (see the */\r\n/* appearance store), which take precedence over these blocks. The     */\r\n/* accent recolors selection, focus, and primary actions only — never  */\r\n/* status colors, text, or surfaces.                                   */\r\n/* ------------------------------------------------------------------ */\r\n\r\n:root,\r\n:root[data-accent="violet"] {\r\n  --color-accent: #8b80ff;\r\n  --color-accent-strong: #6f5df2;\r\n  --color-accent-hover: #6f63e8;\r\n  --color-accent-pressed: #6152e0;\r\n  --color-accent-contrast: #ffffff;\r\n  --color-accent-soft: rgba(139, 128, 255, 0.14);\r\n  --color-accent-outline: rgba(139, 128, 255, 0.55);\r\n}\r\n\r\n:root[data-accent="blue"] {\r\n  --color-accent: #7ba4ff;\r\n  --color-accent-strong: #3a6fd8;\r\n  --color-accent-hover: #4273d6;\r\n  --color-accent-pressed: #3563c8;\r\n  --color-accent-contrast: #ffffff;\r\n  --color-accent-soft: rgba(123, 164, 255, 0.14);\r\n  --color-accent-outline: rgba(123, 164, 255, 0.55);\r\n}\r\n\r\n:root[data-accent="cyan"] {\r\n  --color-accent: #5bd0e0;\r\n  --color-accent-strong: #37b3c6;\r\n  --color-accent-hover: #43bccd;\r\n  --color-accent-pressed: #2fa7b8;\r\n  --color-accent-contrast: #101116;\r\n  --color-accent-soft: rgba(91, 208, 224, 0.14);\r\n  --color-accent-outline: rgba(91, 208, 224, 0.55);\r\n}\r\n\r\n:root[data-accent="green"] {\r\n  --color-accent: #5ec98f;\r\n  --color-accent-strong: #3aa96d;\r\n  --color-accent-hover: #46b177;\r\n  --color-accent-pressed: #329962;\r\n  --color-accent-contrast: #101116;\r\n  --color-accent-soft: rgba(94, 201, 143, 0.14);\r\n  --color-accent-outline: rgba(94, 201, 143, 0.55);\r\n}\r\n\r\n:root[data-accent="amber"] {\r\n  --color-accent: #e2b655;\r\n  --color-accent-strong: #d0a03e;\r\n  --color-accent-hover: #d7ab4c;\r\n  --color-accent-pressed: #c2953a;\r\n  --color-accent-contrast: #101116;\r\n  --color-accent-soft: rgba(226, 182, 85, 0.14);\r\n  --color-accent-outline: rgba(226, 182, 85, 0.55);\r\n}\r\n\r\n:root[data-accent="rose"] {\r\n  --color-accent: #ef8fa5;\r\n  --color-accent-strong: #b03a58;\r\n  --color-accent-hover: #c04a68;\r\n  --color-accent-pressed: #a13350;\r\n  --color-accent-contrast: #ffffff;\r\n  --color-accent-soft: rgba(239, 143, 165, 0.14);\r\n  --color-accent-outline: rgba(239, 143, 165, 0.55);\r\n}\r\n\r\n:root[data-accent="neutral"] {\r\n  --color-accent: #dfe3ee;\r\n  --color-accent-strong: #c6ccdb;\r\n  --color-accent-hover: #d1d7e6;\r\n  --color-accent-pressed: #bac1d2;\r\n  --color-accent-contrast: #101116;\r\n  --color-accent-soft: rgba(223, 227, 238, 0.12);\r\n  --color-accent-outline: rgba(223, 227, 238, 0.5);\r\n}\r\n\r\n* {\r\n  box-sizing: border-box;\r\n}\r\n\r\nhtml {\r\n  min-width: 320px;\r\n  color: var(--color-text);\r\n  background: var(--color-background);\r\n  font-family: var(--font-ui);\r\n  font-synthesis: none;\r\n  text-rendering: optimizeLegibility;\r\n}\r\n\r\nbody {\r\n  min-width: 320px;\r\n  min-height: 100vh;\r\n  margin: 0;\r\n  color: var(--color-text);\r\n  background: var(--color-background);\r\n  font-size: var(--text-body);\r\n}\r\n\r\nh1,\r\nh2,\r\nh3,\r\np {\r\n  margin-top: 0;\r\n}\r\n\r\n/* ------------------------------------------------------------------ */\r\n/* Application shell                                                   */\r\n/* ------------------------------------------------------------------ */\r\n\r\n.app-frame {\r\n  display: grid;\r\n  grid-template-columns: 204px 1fr;\r\n  height: 100vh;\r\n  min-height: 520px;\r\n}\r\n\r\n.sidebar {\r\n  display: flex;\r\n  flex-direction: column;\r\n  gap: var(--space-2);\r\n  padding: var(--space-5) var(--space-3) var(--space-4);\r\n  border-right: 1px solid var(--color-surface-edge);\r\n  background: var(--color-sidebar);\r\n  min-width: 0;\r\n  min-height: 0;\r\n}\r\n\r\n.brand {\r\n  display: flex;\r\n  align-items: center;\r\n  gap: var(--space-3);\r\n  padding: 0 var(--space-2) var(--space-4);\r\n}\r\n\r\n.brand-icon {\r\n  width: 30px;\r\n  height: 30px;\r\n  flex: none;\r\n}\r\n\r\n.brand-name {\r\n  margin: 0;\r\n  font-size: var(--text-identity);\r\n  font-weight: 600;\r\n  letter-spacing: 0.01em;\r\n}\r\n\r\n.nav {\r\n  display: flex;\r\n  flex-direction: column;\r\n  gap: 2px;\r\n}\r\n\r\n.nav-item {\r\n  position: relative;\r\n  display: flex;\r\n  align-items: center;\r\n  gap: var(--space-2);\r\n  width: 100%;\r\n  padding: var(--space-2) var(--space-3);\r\n  border: none;\r\n  border-radius: var(--radius-md);\r\n  background: transparent;\r\n  color: var(--color-text-secondary);\r\n  font: inherit;\r\n  font-size: var(--text-body);\r\n  font-weight: 500;\r\n  text-align: left;\r\n  cursor: pointer;\r\n  transition: background-color var(--motion-fast) var(--motion-ease),\r\n    color var(--motion-fast) var(--motion-ease);\r\n}\r\n\r\n.nav-item:hover {\r\n  background: var(--color-surface-raised);\r\n  color: var(--color-text);\r\n}\r\n\r\n.nav-item:active {\r\n  background: var(--color-surface-pressed);\r\n}\r\n\r\n.nav-item[aria-current="page"] {\r\n  background: var(--color-accent-soft);\r\n  color: var(--color-text);\r\n  font-weight: 600;\r\n}\r\n\r\n.nav-item[aria-current="page"]::before {\r\n  content: "";\r\n  position: absolute;\r\n  left: 0;\r\n  top: 8px;\r\n  bottom: 8px;\r\n  width: 3px;\r\n  border-radius: 2px;\r\n  background: var(--color-accent);\r\n}\r\n\r\n/* ------------------------------------------------------------------ */\r\n/* Sidebar instance shortcuts                                          */\r\n/*                                                                     */\r\n/* A short list of instances beneath the global destinations, in       */\r\n/* registry (creation) order — the registry records no recency data,   */\r\n/* so the label stays honest. Opening an entry enters that instance\'s  */\r\n/* workspace; the workspace\'s own entry carries the page marker while  */\r\n/* the global Instances destination retur'... 14763 more characters,
+    expected: /\.btn-danger \{\n  border-color: transparent;\n  background: var\(--color-error-soft\);/,
+    operator: 'match',
+    diff: 'simple'
+  }

@@ -1,5 +1,26 @@
 # Native host architecture (NATIVE-1 / NATIVE-2)
 
+## NATIVE-7 continuation
+
+See [NATIVE_7_UI_COMPLETION_ACCEPTANCE](../../NATIVE_7_UI_COMPLETION_ACCEPTANCE.md)
+for the current implementation and verification limits. `player.rs` provides
+bounded CPU rasterization into one 320×440 RGBA image, scheduled by `skins.rs`
+only on changes/interaction; no idle preview timer or GPU surface exists.
+`skin_import.rs` uses the Windows file chooser on a blocking COM apartment,
+reads at most 128 KiB and delegates all decoding/storage to cosmetics.
+
+Discover freezes target, category, exact version and review fingerprint before
+commit. New managed modpack instances and reviewed existing-instance merges call
+their separate existing application services. Provider page offsets (not the
+filtered displayed count) advance pagination. Results cap at 200, decoded icon
+cache/pending work at 128 identities, with four concurrent artwork requests across
+batches. The core's isolated artwork decoder and CDN policy stay authoritative.
+
+Cosmetic account responses carry request generations; late results cannot
+replace a different selected account's preview. Local preview actions do not call
+Minecraft account mutation services. The owner-confirmed ribbon lives in
+`native/assets`; the retained WebView icon assets remain historical and unchanged.
+
 ## Layers
 
 ```text

@@ -1,0 +1,8 @@
+   Compiling aurora-launcher v1.4.2 (C:\Dev\aurora-launcher-native\src-tauri)
+   Compiling aurora-native v1.4.2 (C:\Dev\aurora-launcher-native\native)
+   Compiling windows v0.61.3
+    Finished `release` profile [optimized] target(s) in 2m 08s
+     Running `native\target\release\examples\appearance_acceptance.exe C:\Users\kalib\AppData\Local\Temp\aurora-native7-live-20261031`
+classic: 120 rotating frames, 873 ms total, 7.283 ms/frame
+slim: 120 rotating frames, 869 ms total, 7.248 ms/frame
+Malformed PNG refused; no account calls made.

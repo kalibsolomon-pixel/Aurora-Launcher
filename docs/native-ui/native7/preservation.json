@@ -1,0 +1,10 @@
+{
+  "startSha": "7641d0b3b84a9b01b30ecc3cc0487495c5e09b30",
+  "branch": "codex/native-ui-migration",
+  "baselineTrackedCount": 2998,
+  "missingBaselinePaths": [],
+  "deletedPaths": [],
+  "implementationSha": "2fcf1bf53b1eb24592b0e78371e841fc63aa42a7",
+  "criticalFilesPresent": true,
+  "finalReleaseSha256": "8039fe036554e964d726ba483ef8441ded6f9ea27c36c117fad72f75a7dbec39"
+}

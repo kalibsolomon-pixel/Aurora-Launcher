@@ -1,0 +1,299 @@
+{
+  "label": "home-idle-release",
+  "pid": 23560,
+  "seconds": 12.2543997,
+  "cpuPercentOneCore": 0.3825156772061221,
+  "workingSetMiB": 39.35679853723404,
+  "privateMiB": 12.804438164893616,
+  "handles": 483,
+  "gpu": {
+    "available": true,
+    "dedicatedBytes": null,
+    "sharedBytes": null,
+    "utilizationPercent": null
+  },
+  "samples": [
+    {
+      "workingSetMiB": 39.37109375,
+      "privateMiB": 12.84375,
+      "handles": 486,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.37109375,
+      "privateMiB": 12.84375,
+      "handles": 486,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.37109375,
+      "privateMiB": 12.84375,
+      "handles": 486,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.37109375,
+      "privateMiB": 12.84375,
+      "handles": 486,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    },
+    {
+      "workingSetMiB": 39.35546875,
+      "privateMiB": 12.80078125,
+      "handles": 483,
+      "cpuSeconds": 2.765625
+    }
+  ]
+}

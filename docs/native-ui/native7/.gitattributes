@@ -1,0 +1,2 @@
+# Console transcripts retain their original blank lines and diagnostic spacing.
+*.txt -whitespace

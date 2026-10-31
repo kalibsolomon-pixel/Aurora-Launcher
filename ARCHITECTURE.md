@@ -14,6 +14,17 @@ directory and schemas, and reports launcher self-update as unavailable.
 Details: `docs/native-ui/ARCHITECTURE.md`; results:
 `NATIVE_UI_MIGRATION_ACCEPTANCE.md`.
 
+NATIVE-7 adds shared pointer-transparent keyboard focus, accent-only navigation
+selection, a compact Home instance dropdown, and a sidebar account panel. Native
+Discover now connects project details, version review, artwork and both existing
+modpack engines (isolated installation versus ordinary-instance merge). Resource
+and shader packs are version-scoped and can use Vanilla contexts; mod-loader
+compatibility remains strict for mods. A small on-demand CPU cuboid renderer
+consumes the existing validated skin/cape pixels; PNG import uses a native Windows
+chooser and the existing cosmetics store. No GPU surface, browser, persistence
+schema, updater authority or second installer is introduced. Acceptance and its
+remaining limits are in `NATIVE_7_UI_COMPLETION_ACCEPTANCE.md`.
+
 ## Java execution eligibility and private candidates (2026-10-19)
 
 `runtime::install::validate_runtime_eligibility` verifies the exact normalized

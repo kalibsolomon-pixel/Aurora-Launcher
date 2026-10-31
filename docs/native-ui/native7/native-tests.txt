@@ -1,0 +1,21 @@
+   Compiling aurora-launcher v1.4.2 (C:\Dev\aurora-launcher-native\src-tauri)
+   Compiling aurora-native v1.4.2 (C:\Dev\aurora-launcher-native\native)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 50.94s
+     Running unittests src\main.rs (native\target\debug\deps\aurora_native-a2bedadc22774d6a.exe)
+
+running 12 tests
+test api::tests::command_errors_keep_code_and_message ... ok
+test api::tests::full_skin_pixels_and_model_survive_the_camel_case_contract ... ok
+test api::tests::configuration_round_trips_unknown_fields ... ok
+test player::tests::meshes_cover_classic_slim_legacy_and_layers ... ok
+test api::tests::subtitle_matches_launcher_wording ... ok
+test events::tests::progress_wording_counts_native_items_only ... ok
+test theme::tests::parses_hex_and_css_rgba_tokens ... ok
+test player::tests::front_uvs_sample_the_head_and_torso_regions ... ok
+test interaction_tests::one_primary_click_dispatches_exactly_once_with_and_without_window_focus ... ok
+test player::tests::transparent_empty_and_invalid_input_are_bounded ... ok
+test player::tests::transparent_outer_layers_reveal_the_base_without_seams ... ok
+test player::tests::rotation_layers_and_cape_change_real_geometry ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+

@@ -1,5 +1,12 @@
 # Functional parity matrix (native host vs WebView host)
 
+**Historical NATIVE-6 baseline.** NATIVE-7 supersedes the rows for single-click
+input, Home selection, selection styling, Discover/project artwork/details,
+modpack install/merge, 3D skins/capes, PNG import, accounts and native branding.
+The current functional/verification table is in
+[NATIVE_7_UI_COMPLETION_ACCEPTANCE](../../NATIVE_7_UI_COMPLETION_ACCEPTANCE.md).
+The original measurements and acceptance evidence below are preserved.
+
 Status values: **Done** (implemented against the authoritative backend and
 exercised), **Done (unexercised)** (implemented and compiled, not driven end
 to end in this session), **Partial**, **Missing** (backend exists, no native

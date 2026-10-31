@@ -1,0 +1,18 @@
+    Blocking waiting for file lock on build directory
+   Compiling aurora-native v1.4.2 (C:\Dev\aurora-launcher-native\native)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 46.56s
+     Running `native\target\debug\examples\provider_acceptance.exe C:\Users\kalib\AppData\Local\Temp\aurora-native7-live-20261031`
+INSTANCE 31c45d230b8645fea6b734c8e85aeff7 Minecraft 1.21.11 · Fabric 0.20.1
+BROWSE mod: initial=20 searched=20 page2=20 project=Sodium versions=20 icon=Some(5914)
+INSTALLED mod Sodium
+BROWSE resourcePack: initial=20 searched=20 page2=20 project=Fresh Animations versions=5 icon=Some(15823)
+INSTALLED resourcePack Fresh Animations
+BROWSE shaderPack: initial=20 searched=4 page2=0 project=Complementary Shaders - Reimagined versions=9 icon=Some(14093)
+INSTALLED shaderPack Complementary Shaders - Reimagined
+BROWSE modpack: initial=20 searched=10 page2=0 project=Adrenaline versions=578 icon=Some(9237)
+PACK REVIEW Adrenaline MC="1.21.11" loader="0.19.5"
+[aurora-launcher] planned Minecraft 1.21.11 + Fabric Loader 0.19.5: 75 vanilla + 8 Fabric = 83 libraries, Java 21, main class net.fabricmc.loader.impl.launch.knot.KnotClient
+PACK INSTALLED "eaf749874a9a473d84a10412779e22ea"
+[aurora-launcher] planned Minecraft 1.21.11 + Fabric Loader 0.19.5: 75 vanilla + 8 Fabric = 83 libraries, Java 21, main class net.fabricmc.loader.impl.launch.knot.KnotClient
+[aurora-launcher] created instance '33d424563f564676887bc7d53abfbbd0' (Minecraft 1.21.11, platform fabric, Aurora configured: false)
+MERGED {"added":27,"alreadyPresent":0,"instanceId":"33d424563f564676887bc7d53abfbbd0","keptExisting":[],"overridesWritten":7}

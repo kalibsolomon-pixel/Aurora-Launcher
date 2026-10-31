@@ -1,5 +1,24 @@
 # Spxctra native design system (Aurora Launcher)
 
+## NATIVE-7 amendments
+
+Selected navigation, tabs, rows and popup options use accent text/icons only.
+Selection backgrounds, tile borders, sidebar bars and tab underlines are removed;
+hover surfaces remain. Shared `KeyboardFocus` never consumes pointer presses and
+distinguishes pointer focus from keyboard focus rings. Switches/checkboxes retain
+their functional checked-state geometry. Accent swatches use a check instead of
+a selection outline. Shared button heights remain bounded in content rows.
+
+Home contains only the instance dropdown, compact version/readiness information
+and the existing Play pipeline. Accounts extend from the 88 px rail, without a
+dark scrim, with a bounded scrolling account list, outside/Escape dismissal and
+focus return. Skins groups a change-driven CPU player preview, local library and
+account-owned capes; previewing and applying are separate actions. Branding uses
+the owner-confirmed SVG, unchanged in silhouette. These amendments supersede
+the historical selection treatment and listed visual gaps below. Desktop review
+is incomplete; see the NATIVE-7 acceptance report, including the explicit stop of
+desktop control.
+
 Governing guidance: the installed `spxctra-ui` skill (1.0.0-draft) and the
 2026-10-31 Spxctra refinement of the WebView launcher
 ([`docs/spxctra-ui/README.md`](../spxctra-ui/README.md)). The skill references
