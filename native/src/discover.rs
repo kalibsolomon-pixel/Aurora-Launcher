@@ -75,7 +75,8 @@ pub fn bind(window: &AppWindow) {
 
 pub fn open_for(instance_id: String, kind: i32) {
     ui::with(|window, state| {
-        state.discover.origin = Some((instance_id.clone(), kind + 1));
+        // Content tabs share the content kind index, so the origin tab is the kind.
+        state.discover.origin = Some((instance_id.clone(), kind));
         state.discover.target = Some(instance_id);
         window.global::<Discover>().set_kind(kind.clamp(0, 3));
         window.global::<Nav>().set_page(Page::Discover);
@@ -453,43 +454,85 @@ fn install(project: slint::SharedString) {
         details(project);
         return;
     }
-    let Some((target, kind)) = ui::with(|w, s| {
+    // Queued in Downloads: the dialog never blocks further browsing, and
+    // installs into one instance take turns (see activity.rs).
+    let Some((target, kind, title, instance)) = ui::with(|w, s| {
         let d = w.global::<Discover>();
-        if d.get_install_busy() {
-            return None;
-        }
         let target = s.discover.target.clone()?;
-        d.set_install_busy(true);
-        d.set_progress("Resolving dependencies and verifying content…".into());
-        Some((target, KINDS[d.get_kind().clamp(0, 2) as usize]))
+        let title = s
+            .discover
+            .results
+            .iter()
+            .find(|p| p.project_id == project.as_str())
+            .map(|p| p.title.clone())
+            .unwrap_or_else(|| "Content".into());
+        let instance = s
+            .instance(&target)
+            .map(|i| i.display_name.clone())
+            .unwrap_or_default();
+        Some((
+            target,
+            KINDS[d.get_kind().clamp(0, 2) as usize],
+            title,
+            instance,
+        ))
     })
     .flatten() else {
         return;
     };
-    ui::spawn(
-        api::quick_install(ui::host(), target, kind, project.to_string()),
-        finish_install,
+    let project = project.to_string();
+    crate::activity::submit(
+        title.clone(),
+        format!("Into {instance}"),
+        Some(target.clone()),
+        project.clone(),
+        move || {
+            Box::pin(api::quick_install(
+                ui::host(),
+                target.clone(),
+                kind,
+                project.clone(),
+            ))
+        },
     );
+    ui::toast(format!("{title} added to Downloads."), Tone::Neutral);
 }
 
+/// Queues the reviewed install and closes the review. The commit still
+/// re-resolves and checks the frozen fingerprint in Rust.
 fn confirm_install() {
-    let Some(snapshot) = ui::with(|w, s| {
+    let Some((snapshot, title, detail)) = ui::with(|w, s| {
         let d = w.global::<Discover>();
-        if d.get_install_busy() || !d.get_can_install() {
+        if !d.get_can_install() {
             return None;
         }
         let snapshot = s.discover.review.take()?;
-        d.set_install_busy(true);
+        let title = d.get_project_title().to_string();
+        let detail = if snapshot.kind == "modpack" && !snapshot.merge {
+            "New modpack instance".to_owned()
+        } else {
+            format!(
+                "Into {}",
+                s.instance(&snapshot.target)
+                    .map(|i| i.display_name.clone())
+                    .unwrap_or_default()
+            )
+        };
+        s.discover.detail_serial += 1;
         d.set_can_install(false);
-        d.set_progress("Installing reviewed content…".into());
-        Some(snapshot)
+        d.set_details_open(false);
+        Some((snapshot, title, detail))
     })
     .flatten() else {
         return;
     };
-    let host = ui::host();
-    ui::spawn(
-        async move {
+    // A new pack instance touches no existing instance, so it runs at once.
+    let key = (snapshot.kind != "modpack" || snapshot.merge).then(|| snapshot.target.clone());
+    let project = snapshot.project.clone();
+    crate::activity::submit(title.clone(), detail, key, project, move || {
+        let snapshot = snapshot.clone();
+        let host = ui::host();
+        Box::pin(async move {
             if snapshot.kind == "modpack" {
                 api::install_pack(host, snapshot.merge, snapshot.request).await
             } else {
@@ -503,9 +546,9 @@ fn confirm_install() {
                 )
                 .await
             }
-        },
-        finish_install,
-    );
+        })
+    });
+    ui::toast(format!("{title} added to Downloads."), Tone::Neutral);
 }
 
 /// Display is never authority; commit re-resolves the request and fingerprint.
@@ -530,6 +573,7 @@ fn review_description(value: &Value, kind: &str, merge: bool) -> (String, bool, 
                 ("Already present", array(value, "alreadyPresent")),
                 ("Existing files kept", array(value, "keptExisting")),
                 ("Overrides written", array(value, "overridesWritten")),
+                ("Pack files not installed", array(pack, "skippedOverrides")),
                 ("Blockers", array(value, "blockers")),
             ]
         } else {
@@ -539,6 +583,7 @@ fn review_description(value: &Value, kind: &str, merge: bool) -> (String, bool, 
                 ("Overrides", array(pack, "overrides")),
                 ("Optional files omitted", array(pack, "optional")),
                 ("Excluded files", array(pack, "excluded")),
+                ("Pack files not installed", array(pack, "skippedOverrides")),
             ]
         };
         allowed &= array(value, "blockers").is_empty();
@@ -594,24 +639,15 @@ fn review_description(value: &Value, kind: &str, merge: bool) -> (String, bool, 
     (fingerprint, allowed, text)
 }
 
-fn finish_install(result: api::ApiResult<Value>) {
-    ui::with(|w, s| {
-        let d = w.global::<Discover>();
-        d.set_install_busy(false);
-        d.set_progress("".into());
-        if result.is_ok() {
-            d.set_details_open(false);
-            s.discover.review = None;
-        } else if let Err(e) = &result {
-            d.set_detail_error(format!("{} ({})", e.message, e.code).into());
-        }
-    });
-    match result {
-        Ok(_) => ui::toast("Installation completed and verified.", Tone::Success),
-        Err(e) => ui::error_toast(&e),
-    }
+/// After any queued install settles: refresh installed markers and state.
+pub fn after_install() {
     load_installed();
     crate::instances::reload(crate::home::refresh_readiness);
+}
+
+/// Re-renders result rows so queued/running projects show as busy.
+pub fn render_busy() {
+    render();
 }
 
 pub fn progress(phase: &str) {
@@ -640,6 +676,7 @@ fn downloads(count: u64) -> String {
     }
 }
 fn render() {
+    let busy = crate::activity::busy_projects();
     ui::with(|w, s| {
         let d = w.global::<Discover>();
         d.set_results(ui::model(
@@ -656,7 +693,7 @@ fn render() {
                         description: p.summary.clone().into(),
                         downloads: downloads(p.downloads).into(),
                         installed: s.discover.installed.contains(&p.project_id),
-                        busy: false,
+                        busy: busy.contains(&p.project_id),
                         has_picture: icon.is_some(),
                         picture: icon.unwrap_or_default(),
                     }

@@ -1,0 +1,161 @@
+// Floating, anchored popovers. Each covers the window with a transparent
+// layer so an outside click dismisses it without reaching the controls
+// underneath; clicks inside the panel never fall through.
+import { Theme } from "theme.slint";
+import { Button, ButtonKind, TextField, KeyboardFocus, FocusRing } from "components.slint";
+import { AccentPicker } from "state.slint";
+
+/// The custom accent picker: saturation/value square, hue strip, live
+/// preview and hex entry. Rust validates contrast with the core rules and
+/// previews the accent live; Cancel (or an outside click / Escape) restores
+/// the saved accent.
+export component AccentPickerPopover inherits Rectangle {
+    background: transparent;
+    accessible-role: none;
+    TouchArea { clicked => { AccentPicker.cancel(); } }
+    escape := KeyboardFocus {
+        capture-key-pressed(event) => {
+            if (event.text == Key.Escape) { AccentPicker.cancel(); return accept; }
+            reject
+        }
+        panel := Rectangle {
+            width: 272px;
+            height: layout.preferred-height;
+            x: max(8px, min(root.width - self.width - 8px, AccentPicker.anchor-x - 16px));
+            y: AccentPicker.anchor-y + 44px + self.height > root.height - 8px ? max(8px, AccentPicker.anchor-y - self.height - 8px) : AccentPicker.anchor-y + 44px;
+            background: Theme.raised;
+            border-radius: Theme.radius-lg;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            drop-shadow-blur: 24px;
+            drop-shadow-offset-y: 8px;
+            drop-shadow-color: #00000080;
+            accessible-role: groupbox;
+            accessible-label: "Custom accent color";
+            TouchArea { }
+            layout := VerticalLayout {
+                padding: 14px;
+                spacing: 12px;
+                sv := Rectangle {
+                    height: 152px;
+                    border-radius: Theme.radius-md;
+                    clip: true;
+                    background: @linear-gradient(90deg, #ffffff 0%, AccentPicker.hue-color 100%);
+                    accessible-role: slider;
+                    accessible-label: "Saturation and brightness";
+                    accessible-value: round(AccentPicker.saturation * 100) + "% saturation, " + round(AccentPicker.value * 100) + "% brightness";
+                    Rectangle { background: @linear-gradient(180deg, #00000000 0%, #000000 100%); }
+                    Rectangle {
+                        x: AccentPicker.saturation * parent.width - 8px;
+                        y: (1 - AccentPicker.value) * parent.height - 8px;
+                        width: 16px;
+                        height: 16px;
+                        border-radius: 8px;
+                        border-width: 2px;
+                        border-color: #ffffff;
+                        background: AccentPicker.preview;
+                    }
+                    sv-touch := TouchArea {
+                        mouse-cursor: crosshair;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.down) {
+                                sv-focus.pointer-focus();
+                                AccentPicker.set-sv(clamp(self.mouse-x / self.width, 0, 1), clamp(1 - self.mouse-y / self.height, 0, 1));
+                            }
+                        }
+                        moved => {
+                            if (self.pressed) {
+                                AccentPicker.set-sv(clamp(self.mouse-x / self.width, 0, 1), clamp(1 - self.mouse-y / self.height, 0, 1));
+                            }
+                        }
+                    }
+                    sv-focus := KeyboardFocus {
+                        key-pressed(event) => {
+                            if (event.text == Key.LeftArrow) { AccentPicker.set-sv(max(0, AccentPicker.saturation - 0.02), AccentPicker.value); return accept; }
+                            if (event.text == Key.RightArrow) { AccentPicker.set-sv(min(1, AccentPicker.saturation + 0.02), AccentPicker.value); return accept; }
+                            if (event.text == Key.UpArrow) { AccentPicker.set-sv(AccentPicker.saturation, min(1, AccentPicker.value + 0.02)); return accept; }
+                            if (event.text == Key.DownArrow) { AccentPicker.set-sv(AccentPicker.saturation, max(0, AccentPicker.value - 0.02)); return accept; }
+                            reject
+                        }
+                    }
+                    FocusRing { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; shown: sv-focus.has-focus && sv-focus.focus-visible; }
+                }
+                hue := Rectangle {
+                    height: 14px;
+                    border-radius: 7px;
+                    background: @linear-gradient(90deg, #ff0000 0%, #ffff00 16.67%, #00ff00 33.33%, #00ffff 50%, #0000ff 66.67%, #ff00ff 83.33%, #ff0000 100%);
+                    accessible-role: slider;
+                    accessible-label: "Hue";
+                    accessible-value: round(AccentPicker.hue) + " degrees";
+                    Rectangle {
+                        x: AccentPicker.hue / 360 * parent.width - 9px;
+                        y: -2px;
+                        width: 18px;
+                        height: 18px;
+                        border-radius: 9px;
+                        background: AccentPicker.hue-color;
+                        border-width: 2px;
+                        border-color: #ffffff;
+                    }
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.down) {
+                                hue-focus.pointer-focus();
+                                AccentPicker.set-hue(clamp(self.mouse-x / self.width, 0, 1) * 360);
+                            }
+                        }
+                        moved => {
+                            if (self.pressed) { AccentPicker.set-hue(clamp(self.mouse-x / self.width, 0, 1) * 360); }
+                        }
+                    }
+                    hue-focus := KeyboardFocus {
+                        key-pressed(event) => {
+                            if (event.text == Key.LeftArrow || event.text == Key.DownArrow) { AccentPicker.set-hue(max(0, AccentPicker.hue - 5)); return accept; }
+                            if (event.text == Key.RightArrow || event.text == Key.UpArrow) { AccentPicker.set-hue(min(360, AccentPicker.hue + 5)); return accept; }
+                            reject
+                        }
+                    }
+                    FocusRing { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; radius: 7px; shown: hue-focus.has-focus && hue-focus.focus-visible; }
+                }
+                HorizontalLayout {
+                    spacing: 10px;
+                    Rectangle {
+                        y: (parent.height - self.height) / 2;
+                        width: 36px;
+                        height: 36px;
+                        border-radius: 18px;
+                        background: AccentPicker.preview;
+                        border-width: 1px;
+                        border-color: Theme.border-strong;
+                        accessible-role: none;
+                    }
+                    TextField {
+                        horizontal-stretch: 1;
+                        label: "Hex color";
+                        placeholder: "#rrggbb";
+                        max-length: 7;
+                        invalid: !AccentPicker.valid;
+                        text <=> AccentPicker.hex;
+                        edited(text) => { AccentPicker.hex-edited(text); }
+                        accepted => { if (AccentPicker.valid) { AccentPicker.apply(); } }
+                        escaped => { AccentPicker.cancel(); }
+                    }
+                }
+                if AccentPicker.message != "": Text {
+                    text: AccentPicker.message;
+                    wrap: word-wrap;
+                    font-size: Theme.text-metadata;
+                    color: AccentPicker.valid ? Theme.text-muted : Theme.error;
+                }
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: 8px;
+                    Button { text: "Cancel"; kind: ButtonKind.ghost; compact: true; clicked => { AccentPicker.cancel(); } }
+                    Button { text: "Apply"; kind: ButtonKind.primary; compact: true; enabled: AccentPicker.valid; clicked => { AccentPicker.apply(); } }
+                }
+            }
+        }
+    }
+    init => { escape.focus(); }
+}

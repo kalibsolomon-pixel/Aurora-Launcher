@@ -1,0 +1,24 @@
+{
+  "takeoverHead": "117dab7ed7e5f317ccf3546611a257a718001cb4",
+  "baselineTrackedCount": 3066,
+  "initialStagedChanges": 0,
+  "missingBaselineTrackedFiles": [],
+  "missingPreexistingDirtyOrUntrackedFiles": [],
+  "takeoverDirtyOrUntrackedFilesIntentionallyChanged": [
+    "docs/native-ui/ARCHITECTURE.md",
+    "docs/native-ui/DESIGN_SYSTEM.md",
+    "native/src/main.rs",
+    "native/ui/pages/instances.slint",
+    "native/ui/pages/settings.slint",
+    "native/src/borealis.rs",
+    "native/src/chrome.rs"
+  ],
+  "additionalPreviouslyCleanFilesChanged": [
+    "NATIVE_UI_MIGRATION_ACCEPTANCE.md",
+    "docs/native-ui/PARITY_MATRIX.md",
+    "native/THIRD_PARTY_NOTICES.md"
+  ],
+  "privateScreenshotsPreservedWithMatchingHashes": 3,
+  "mainWorktreeSourceUntouched": true,
+  "generatedDataStaged": false
+}

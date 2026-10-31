@@ -42,6 +42,7 @@ pub fn instance_rows(state: &AppState) -> Vec<InstanceRow> {
                 status: status.into(),
                 tone,
                 selected: selected.as_deref() == Some(instance.id.as_str()),
+                icon: state.icon_path(&instance.id).into(),
             }
         })
         .collect()
@@ -81,12 +82,12 @@ fn blocker_action(code: &str) {
         }
         "launch_mod_incompatible" => {
             if let Some(id) = ui::state(|s| s.selected_instance().map(|i| i.id.clone())) {
-                crate::instances::open_workspace(id, 1);
+                crate::instances::open_workspace(id, crate::instances::TAB_MODS);
             }
         }
         _ => {
             if let Some(id) = ui::state(|s| s.selected_instance().map(|i| i.id.clone())) {
-                crate::instances::open_workspace(id, 0);
+                crate::instances::open_workspace(id, crate::instances::TAB_SETTINGS);
             }
         }
     }
@@ -298,6 +299,7 @@ pub fn render() {
         };
         home.set_has_instance(true);
         home.set_name(instance.display_name.clone().into());
+        home.set_icon(state.icon_path(&instance.id).into());
         home.set_subtitle(instance.subtitle().into());
         home.set_letter(ui::letter(&instance.display_name).into());
 

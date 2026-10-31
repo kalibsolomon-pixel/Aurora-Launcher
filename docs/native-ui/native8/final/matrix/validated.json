@@ -1,0 +1,312 @@
+{
+  "region": "x=150..width-70, y=height-100..height-20; contour only",
+  "active": {
+    "pixels": 94400.0,
+    "changed": 56824.0,
+    "meanAbsoluteChannelDelta": 0.6383156779661017,
+    "maxSummedRgbDelta": 9.0
+  },
+  "paused": {
+    "pixels": 94400.0,
+    "changed": 0.0
+  },
+  "scenarios": [
+    {
+      "scenario": "simple-active",
+      "pid": 628,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 40.516755756578945,
+      "privateMiB": 13.770764802631579
+    },
+    {
+      "scenario": "oled-active",
+      "pid": 26148,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 40.1207853618421,
+      "privateMiB": 13.636924342105264
+    },
+    {
+      "scenario": "borealis-active",
+      "pid": 6960,
+      "observedTicks": 18,
+      "meanTickMs": 500.29411764705884,
+      "cpuPercentOneCore": 0.7770227785184814,
+      "workingSetMiB": 43.80509868421053,
+      "privateMiB": 17.711862664473685
+    },
+    {
+      "scenario": "borealis-minimized",
+      "pid": 6960,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 38.8046875,
+      "privateMiB": 12.59765625
+    },
+    {
+      "scenario": "borealis-restored",
+      "pid": 6960,
+      "observedTicks": 18,
+      "meanTickMs": 500.2352941176471,
+      "cpuPercentOneCore": 0.31036405594514216,
+      "workingSetMiB": 43.86667351973684,
+      "privateMiB": 17.698704769736842
+    },
+    {
+      "scenario": "borealis-unfocused",
+      "pid": 6960,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 43.875,
+      "privateMiB": 17.703125
+    },
+    {
+      "scenario": "reduced-active",
+      "pid": 26200,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.15503946580455,
+      "workingSetMiB": 42.8792146381579,
+      "privateMiB": 15.837171052631579
+    },
+    {
+      "scenario": "forced-active",
+      "pid": 23392,
+      "observedTicks": 18,
+      "meanTickMs": 500.47058823529414,
+      "cpuPercentOneCore": 1.8645390224598792,
+      "workingSetMiB": 42.61472039473684,
+      "privateMiB": 15.803453947368421
+    },
+    {
+      "scenario": "forced-minimized",
+      "pid": 23392,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 37.54296875,
+      "privateMiB": 10.625
+    },
+    {
+      "scenario": "forced-restored",
+      "pid": 23392,
+      "observedTicks": 18,
+      "meanTickMs": 500.5882352941176,
+      "cpuPercentOneCore": 0.7767237433596582,
+      "workingSetMiB": 42.604440789473685,
+      "privateMiB": 16.070518092105264
+    },
+    {
+      "scenario": "forced-hidden",
+      "pid": 23392,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 42.59765625,
+      "privateMiB": 16.05859375
+    },
+    {
+      "scenario": "simple-active",
+      "pid": 14256,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 40.33984375,
+      "privateMiB": 13.4453125
+    },
+    {
+      "scenario": "oled-active",
+      "pid": 15504,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.15522504745937526,
+      "workingSetMiB": 41.837068256578945,
+      "privateMiB": 14.432154605263158
+    },
+    {
+      "scenario": "borealis-active",
+      "pid": 10724,
+      "observedTicks": 18,
+      "meanTickMs": 500.11764705882354,
+      "cpuPercentOneCore": 3.1086801442391776,
+      "workingSetMiB": 43.00010279605263,
+      "privateMiB": 16.238795230263158
+    },
+    {
+      "scenario": "borealis-minimized",
+      "pid": 10724,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 37.53515625,
+      "privateMiB": 10.5078125
+    },
+    {
+      "scenario": "borealis-restored",
+      "pid": 10724,
+      "observedTicks": 18,
+      "meanTickMs": 500.1764705882353,
+      "cpuPercentOneCore": 0.9332155328315278,
+      "workingSetMiB": 42.67896792763158,
+      "privateMiB": 15.676295230263158
+    },
+    {
+      "scenario": "borealis-unfocused",
+      "pid": 10724,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 42.703125,
+      "privateMiB": 15.65234375
+    },
+    {
+      "scenario": "reduced-active",
+      "pid": 26428,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.3100666065736085,
+      "workingSetMiB": 42.94099506578947,
+      "privateMiB": 15.940481085526315
+    },
+    {
+      "scenario": "forced-active",
+      "pid": 32488,
+      "observedTicks": 18,
+      "meanTickMs": 500.05882352941177,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 42.87088815789474,
+      "privateMiB": 15.955386513157896
+    },
+    {
+      "scenario": "forced-minimized",
+      "pid": 32488,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 37.7890625,
+      "privateMiB": 10.77734375
+    },
+    {
+      "scenario": "forced-restored",
+      "pid": 32488,
+      "observedTicks": 18,
+      "meanTickMs": 500.1764705882353,
+      "cpuPercentOneCore": 0.1552042569969928,
+      "workingSetMiB": 42.85217927631579,
+      "privateMiB": 15.946032072368421
+    },
+    {
+      "scenario": "forced-hidden",
+      "pid": 32488,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 42.84765625,
+      "privateMiB": 15.93359375
+    },
+    {
+      "scenario": "simple-active",
+      "pid": 24412,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 39.92907072368421,
+      "privateMiB": 13.072265625
+    },
+    {
+      "scenario": "oled-active",
+      "pid": 32960,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 40.950041118421055,
+      "privateMiB": 14.242393092105264
+    },
+    {
+      "scenario": "borealis-active",
+      "pid": 9416,
+      "observedTicks": 18,
+      "meanTickMs": 500.52941176470586,
+      "cpuPercentOneCore": 2.018297595364723,
+      "workingSetMiB": 43.64895148026316,
+      "privateMiB": 16.164370888157894
+    },
+    {
+      "scenario": "borealis-minimized",
+      "pid": 9416,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 38.671875,
+      "privateMiB": 11.12890625
+    },
+    {
+      "scenario": "borealis-restored",
+      "pid": 9416,
+      "observedTicks": 18,
+      "meanTickMs": 500.2352941176471,
+      "cpuPercentOneCore": 2.7966786296563084,
+      "workingSetMiB": 43.71073190789474,
+      "privateMiB": 16.153782894736842
+    },
+    {
+      "scenario": "borealis-unfocused",
+      "pid": 9416,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 43.72265625,
+      "privateMiB": 16.09375
+    },
+    {
+      "scenario": "reduced-active",
+      "pid": 18864,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 43.12458881578947,
+      "privateMiB": 16.10875822368421
+    },
+    {
+      "scenario": "forced-active",
+      "pid": 24248,
+      "observedTicks": 18,
+      "meanTickMs": 500.3529411764706,
+      "cpuPercentOneCore": 0.15526131766568937,
+      "workingSetMiB": 42.41015625,
+      "privateMiB": 15.53577302631579
+    },
+    {
+      "scenario": "forced-minimized",
+      "pid": 24248,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 37.3532072368421,
+      "privateMiB": 10.38610197368421
+    },
+    {
+      "scenario": "forced-restored",
+      "pid": 24248,
+      "observedTicks": 18,
+      "meanTickMs": 500.3529411764706,
+      "cpuPercentOneCore": 1.710670537265904,
+      "workingSetMiB": 42.3714021381579,
+      "privateMiB": 15.520456414473685
+    },
+    {
+      "scenario": "forced-hidden",
+      "pid": 24248,
+      "observedTicks": 0,
+      "meanTickMs": null,
+      "cpuPercentOneCore": 0.0,
+      "workingSetMiB": 42.36328125,
+      "privateMiB": 15.50390625
+    }
+  ]
+}

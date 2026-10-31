@@ -24,7 +24,11 @@ fn main() {
     if aurora_launcher_lib::run_artwork_decoder_if_requested() {
         return;
     }
-    let root = PathBuf::from(std::env::args_os().nth(1).expect("disposable root required"));
+    let root = PathBuf::from(
+        std::env::args_os()
+            .nth(1)
+            .expect("disposable root required"),
+    );
     assert!(
         root.file_name()
             .unwrap()
@@ -178,7 +182,9 @@ async fn fabric_instance(
 ) -> api::ApiResult<api::InstanceSummary> {
     let loader_json = match loader {
         Some("vanilla") => json!({"kind": "vanilla"}),
-        Some(version) => json!({"kind": "fabric", "policy": {"type": "pinned", "version": version}}),
+        Some(version) => {
+            json!({"kind": "fabric", "policy": {"type": "pinned", "version": version}})
+        }
         None => json!({"kind": "fabric", "policy": {"type": "automatic"}}),
     };
     timed(
@@ -217,7 +223,8 @@ async fn run(host: Host, scenarios: &[String], results: &mut Vec<Value>) -> api:
         .await?;
     }
     if enabled(scenarios, "merge") {
-        let target = fabric_instance(&host, results, "N8 merge target", "1.21.11", Some("0.19.3")).await?;
+        let target =
+            fabric_instance(&host, results, "N8 merge target", "1.21.11", Some("0.19.3")).await?;
         review_and_install(
             &host,
             results,
@@ -247,13 +254,26 @@ async fn run(host: Host, scenarios: &[String], results: &mut Vec<Value>) -> api:
         .await?;
     }
     if enabled(scenarios, "ordinary") {
-        let page = api::browse(host.clone(), String::new(), "modpack", "Adrenaline".into(), 0).await?;
+        let page = api::browse(
+            host.clone(),
+            String::new(),
+            "modpack",
+            "Adrenaline".into(),
+            0,
+        )
+        .await?;
         let hit = page
             .hits
             .iter()
             .find(|p| p.title.eq_ignore_ascii_case("Adrenaline"))
             .ok_or_else(|| api::ApiError::new("acceptance_empty", "Adrenaline not found"))?;
-        let project = api::project(host.clone(), String::new(), "modpack", hit.project_id.clone()).await?;
+        let project = api::project(
+            host.clone(),
+            String::new(),
+            "modpack",
+            hit.project_id.clone(),
+        )
+        .await?;
         let version = project
             .versions
             .iter()
@@ -274,8 +294,20 @@ async fn run(host: Host, scenarios: &[String], results: &mut Vec<Value>) -> api:
         let before = stats();
         let started = Instant::now();
         let (ra, rb) = tokio::join!(
-            fabric_instance(&host, &mut log_a, "N8 concurrent A", "1.21.10", Some("vanilla")),
-            fabric_instance(&host, &mut log_b, "N8 concurrent B", "1.21.10", Some("vanilla"))
+            fabric_instance(
+                &host,
+                &mut log_a,
+                "N8 concurrent A",
+                "1.21.10",
+                Some("vanilla")
+            ),
+            fabric_instance(
+                &host,
+                &mut log_b,
+                "N8 concurrent B",
+                "1.21.10",
+                Some("vanilla")
+            )
         );
         results.extend(log_a);
         results.extend(log_b);
@@ -306,7 +338,12 @@ async fn run(host: Host, scenarios: &[String], results: &mut Vec<Value>) -> api:
     }
     if enabled(scenarios, "runtime") {
         let state = api::launcher_state(host.clone()).await?;
-        for instance in state.instances.iter().filter(|i| i.state == "ready").take(6) {
+        for instance in state
+            .instances
+            .iter()
+            .filter(|i| i.state == "ready")
+            .take(6)
+        {
             timed(
                 results,
                 &format!("runtime for {}", instance.display_name),

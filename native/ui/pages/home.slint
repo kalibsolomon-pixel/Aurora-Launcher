@@ -2,8 +2,9 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
-import { Button, ButtonKind, Dropdown, Glyph, StatusPill, Tone, ProgressBar, EmptyState, FocusRing, KeyboardFocus, Spinner } from "../components.slint";
+import { Button, ButtonKind, Dropdown, Glyph, StatusPill, Tone, ProgressBar, EmptyState, FocusRing, KeyboardFocus, Spinner, PageTitle, InstanceIcon } from "../components.slint";
 import { Home, Nav, Page, InstanceRow, BlockerRow } from "../state.slint";
+import { WidgetGrid, Widgets, MediaGlyphs } from "../widgets.slint";
 
 /// One selectable instance tile.
 export component InstanceTile inherits Rectangle {
@@ -53,8 +54,6 @@ component BlockerLine inherits HorizontalLayout {
 }
 
 export component HomePage inherits ScrollView {
-    private property <int> columns: max(1, floor((self.visible-width - 64px) / 300px));
-    private property <length> tile-width: (self.visible-width - 64px - (columns - 1) * 12px) / columns;
     VerticalLayout {
         padding: Theme.space-6;
         spacing: Theme.space-5;
@@ -75,29 +74,34 @@ export component HomePage inherits ScrollView {
         }
 
         if Home.instances.length > 0: Rectangle {
-            max-width: 700px;
+            max-width: 760px;
             horizontal-stretch: 0;
+            background: Theme.surface;
+            border-radius: Theme.radius-lg;
             accessible-role: groupbox;
             accessible-label: "Selected instance";
             VerticalLayout {
-                padding: 0px;
-                spacing: Theme.space-4;
+                padding: Theme.space-5;
+                spacing: Theme.space-5;
                 HorizontalLayout {
                     spacing: Theme.space-4;
+                    if Home.has-instance: InstanceIcon { y: (parent.height - self.height) / 2; path: Home.icon; size: 88px; active: true; }
                     VerticalLayout {
-                        spacing: 8px;
+                        spacing: 6px;
                         horizontal-stretch: 1;
-                        Text { text: "Instance"; color: Theme.text-muted; font-size: Theme.text-metadata; }
-                        Dropdown { model: Home.instance-names; current-index: Home.instance-index; controlled: true; label: "Selected instance"; placeholder: "Choose an instance"; min-width: 280px; selected(index) => { Home.select-index(index); } }
-                        Text { text: Home.subtitle; font-size: Theme.text-metadata; color: Theme.text-secondary; wrap: word-wrap; }
-                    }
-                    VerticalLayout {
                         alignment: center;
+                        Text { text: Home.has-instance ? Home.name : "Choose an instance"; font-size: Theme.text-page-title; font-weight: 600; color: Theme.text; overflow: elide; }
+                        if Home.has-instance: Text { text: Home.subtitle; font-size: Theme.text-secondary-size; color: Theme.text-secondary; overflow: elide; }
                         HorizontalLayout {
                             spacing: 8px;
+                            alignment: start;
                             if Home.checking: Spinner { y: (parent.height - self.height) / 2; size: 16px; }
                             StatusPill { text: Home.status; tone: Home.tone; }
                         }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Dropdown { model: Home.instance-names; current-index: Home.instance-index; controlled: true; label: "Selected instance"; placeholder: "Choose an instance"; min-width: 220px; selected(index) => { Home.select-index(index); } }
                     }
                 }
                 for blocker in Home.blockers: BlockerLine { item: blocker; }
@@ -110,12 +114,12 @@ export component HomePage inherits ScrollView {
                         kind: ButtonKind.primary;
                         enabled: Home.can-play;
                         loading: Home.busy;
-                        min-width: 220px;
-                        control-height: 52px;
+                        min-width: 240px;
+                        control-height: 48px;
                         accessible-description-text: Home.status;
                         clicked => { Home.play(); }
                     }
-                    Button { text: ""; icon: Icons.refresh; kind: ButtonKind.ghost; control-height: 52px; accessible-description-text: "Check again"; enabled: !Home.busy; clicked => { Home.refresh(); } }
+                    Button { text: ""; icon: Icons.refresh; kind: ButtonKind.ghost; control-height: 48px; accessible-description-text: "Check again"; enabled: !Home.busy; clicked => { Home.refresh(); } }
                 }
                 if Home.progress-text != "": VerticalLayout {
                     spacing: 6px;
@@ -130,6 +134,13 @@ export component HomePage inherits ScrollView {
                 }
             }
         }
-
+        if Home.instances.length > 0: HorizontalLayout {
+            spacing: Theme.space-2;
+            Button { text: "Manage instances"; icon: Icons.instances; kind: ButtonKind.ghost; clicked => { Nav.navigate(Page.instances); } }
+            Button { text: "Browse content"; icon: Icons.discover; kind: ButtonKind.ghost; clicked => { Nav.navigate(Page.discover); } }
+            Rectangle { horizontal-stretch: 1; }
+            Button { text: Widgets.editing ? "Done" : "Customize"; icon: Widgets.editing ? Icons.check : MediaGlyphs.tune; kind: ButtonKind.ghost; accessible-description-text: "Add, remove or reorder Home widgets"; clicked => { Widgets.editing = !Widgets.editing; } }
+        }
+        WidgetGrid { }
     }
 }

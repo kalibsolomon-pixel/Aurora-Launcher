@@ -74,6 +74,17 @@ fn rgb(value: u32) -> Color {
     Color::from_rgb_u8((value >> 16) as u8, (value >> 8) as u8, value as u8)
 }
 
+/// A theme surface over the Borealis layer: the same tone, partly see-through,
+/// so the pre-blurred bands read as a soft frosted backdrop.
+fn translucent(value: u32, alpha: u8) -> Color {
+    Color::from_argb_u8(alpha, (value >> 16) as u8, (value >> 8) as u8, value as u8)
+}
+
+/// Whether the persisted background is the stylized Borealis layer.
+pub fn is_borealis(appearance: &Appearance) -> bool {
+    appearance.background == "borealis"
+}
+
 /// Parses `#rrggbb` or the CSS `rgba(r, g, b, a)` strings the appearance DTO
 /// uses for the soft/outline accent tokens.
 pub fn parse_color(text: &str) -> Option<Color> {
@@ -106,20 +117,49 @@ pub fn apply(window: &AppWindow, appearance: &Appearance) {
         "oled" => &OLED,
         _ => &AURORA_DARK,
     };
+    let borealis = is_borealis(appearance);
+    theme.set_borealis(borealis);
     theme.set_background(rgb(surfaces.background));
-    theme.set_sidebar(rgb(surfaces.sidebar));
-    theme.set_surface(rgb(surfaces.surface));
-    theme.set_raised(rgb(surfaces.raised));
-    theme.set_hover(rgb(surfaces.hover));
+    // Content panels and secondary surfaces show the bands softly; raised
+    // layers (dialogs, menus) stay nearly opaque so text never sits on a
+    // bright area.
+    let (sidebar, surface, hover, sunken) = if borealis {
+        (
+            translucent(surfaces.sidebar, 0x8c),
+            translucent(surfaces.surface, 0xb4),
+            translucent(surfaces.hover, 0xd0),
+            translucent(surfaces.sunken, 0xc8),
+        )
+    } else {
+        (
+            rgb(surfaces.sidebar),
+            rgb(surfaces.surface),
+            rgb(surfaces.hover),
+            rgb(surfaces.sunken),
+        )
+    };
+    theme.set_sidebar(sidebar);
+    theme.set_surface(surface);
+    theme.set_raised(if borealis {
+        translucent(surfaces.raised, 0xf2)
+    } else {
+        rgb(surfaces.raised)
+    });
+    theme.set_hover(hover);
     theme.set_pressed(rgb(surfaces.pressed));
-    theme.set_sunken(rgb(surfaces.sunken));
+    theme.set_sunken(sunken);
     theme.set_border(rgb(surfaces.border));
     theme.set_border_strong(rgb(surfaces.border_strong));
     theme.set_text(rgb(surfaces.text));
     theme.set_text_secondary(rgb(surfaces.text_secondary));
     theme.set_text_muted(rgb(surfaces.text_muted));
 
-    let palette = &appearance.palette;
+    apply_palette(window, &appearance.palette);
+}
+
+/// Applies only the accent family (used by the live custom-accent preview).
+pub fn apply_palette(window: &AppWindow, palette: &crate::api::AccentPalette) {
+    let theme = window.global::<Theme>();
     let set = |value: &str, apply: &dyn Fn(Color)| {
         if let Some(color) = parse_color(value) {
             apply(color);

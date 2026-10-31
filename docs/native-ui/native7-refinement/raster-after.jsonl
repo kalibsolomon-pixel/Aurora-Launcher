@@ -1,0 +1,2 @@
+{"model":"classic","frames":600,"mean_ms":2.0080,"p50_ms":2.0023,"p95_ms":2.5835,"max_ms":3.3857}
+{"model":"slim","frames":600,"mean_ms":1.8615,"p50_ms":1.8668,"p95_ms":2.3613,"max_ms":2.9063}

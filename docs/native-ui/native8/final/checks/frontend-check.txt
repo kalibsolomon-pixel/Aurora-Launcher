@@ -1,0 +1,17 @@
+
+> aurora-launcher@1.4.2 precheck
+> npm run verify:version
+
+
+> aurora-launcher@1.4.2 verify:version
+> node tools/release/verify-version.mjs
+
+Aurora Launcher version contract: 1.4.2
+
+> aurora-launcher@1.4.2 check
+> svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+
+Loading svelte-check in workspace: <worktree>
+Getting Svelte diagnostics...
+
+svelte-check found 0 errors and 0 warnings

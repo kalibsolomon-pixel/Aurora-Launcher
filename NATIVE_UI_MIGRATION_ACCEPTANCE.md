@@ -1,5 +1,10 @@
 # NATIVE initiative — acceptance report
 
+This is the historical NATIVE-6 report. Current continuation implementation,
+Windows acceptance and remaining limits are recorded in
+[NATIVE_8_ACCEPTANCE.md](NATIVE_8_ACCEPTANCE.md); NATIVE-7 records remain linked
+there. Historical resource numbers below retain their original methodology.
+
 **Classification: PARTIAL — WORKING NATIVE IMPLEMENTATION**
 
 A native Rust/Slint Aurora Launcher runs the core workflows end to end over the

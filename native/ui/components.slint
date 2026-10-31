@@ -68,6 +68,7 @@ export component Button inherits Rectangle {
     in property <bool> enabled: true;
     in property <bool> loading: false;
     in property <bool> compact: false;
+    in property <bool> selected: false;
     in property <length> control-height: compact ? 30px : Theme.control-height;
     in property <string> accessible-description-text;
     callback clicked();
@@ -102,7 +103,7 @@ export component Button inherits Rectangle {
             size: root.compact ? 16px : 18px;
             color: !root.active ? Theme.text-muted
                 : root.kind == ButtonKind.primary ? Theme.accent-contrast
-                : root.kind == ButtonKind.danger ? #ffffff : Theme.text;
+                : root.kind == ButtonKind.danger ? #ffffff : root.selected ? Theme.accent : Theme.text;
         }
         if root.loading: Spinner { y: (parent.height - self.height) / 2; size: 16px; }
         if root.text != "": Text {
@@ -113,7 +114,7 @@ export component Button inherits Rectangle {
             vertical-alignment: center;
             color: !root.active ? (root.loading && root.kind == ButtonKind.primary ? Theme.accent-contrast : Theme.text-muted)
                 : root.kind == ButtonKind.primary ? Theme.accent-contrast
-                : root.kind == ButtonKind.danger ? #ffffff : Theme.text;
+                : root.kind == ButtonKind.danger ? #ffffff : root.selected ? Theme.accent : Theme.text;
         }
     }
     touch := TouchArea {
@@ -463,42 +464,45 @@ export component Dropdown inherits Rectangle {
     }
 }
 
-/// Underlined tab row. Arrow keys move between tabs.
-export component Tabs inherits HorizontalLayout {
+/// One keyboard focus owner keeps the focus indication on the selected tab.
+export component Tabs inherits Rectangle {
     in property <[string]> model;
     in-out property <int> current: 0;
     callback selected(int);
-    spacing: 4px;
-    alignment: start;
+    height: 38px;
+    preferred-width: row.preferred-width;
     accessible-role: tab-list;
-    for title[i] in root.model: Rectangle {
-        height: 38px;
-        accessible-role: tab;
-        accessible-label: title;
-        accessible-item-selected: i == root.current;
-        accessible-action-default => { root.current = i; root.selected(i); }
-        HorizontalLayout {
-            padding-left: 12px;
-            padding-right: 12px;
-            Text {
-                text: title;
-                font-size: Theme.text-body;
-                font-weight: i == root.current ? 600 : 400;
-                color: i == root.current ? Theme.accent : tab-touch.has-hover ? Theme.text : Theme.text-secondary;
-                vertical-alignment: center;
+    forward-focus: focus;
+    row := HorizontalLayout {
+        spacing: 4px; alignment: start;
+        for title[i] in root.model: Rectangle {
+            accessible-role: tab;
+            accessible-label: title;
+            accessible-item-selected: i == root.current;
+            accessible-action-default => { root.current = i; root.selected(i); }
+            HorizontalLayout {
+                padding-left: 12px; padding-right: 12px;
+                Text { text: title; font-size: Theme.text-body; font-weight: i == root.current ? 600 : 400;
+                    color: i == root.current ? Theme.accent : tab-touch.has-hover ? Theme.text : Theme.text-secondary;
+                    vertical-alignment: center;
+                }
+            }
+            tab-touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); root.current = i; root.selected(i); } }
+            FocusRing { x: -2px; y: 2px; width: parent.width + 4px; height: parent.height - 4px;
+                shown: focus.has-focus && focus.focus-visible && i == root.current; radius: Theme.radius-sm;
             }
         }
-        tab-touch := TouchArea { mouse-cursor: pointer; clicked => { tab-focus.pointer-focus(); root.current = i; root.selected(i); } }
-        tab-focus := KeyboardFocus {
-        focus-on-click: false;
-            key-pressed(event) => {
-                if (event.text == " " || event.text == Key.Return) { root.current = i; root.selected(i); return accept; }
-                if (event.text == Key.RightArrow && i + 1 < root.model.length) { root.current = i + 1; root.selected(i + 1); return accept; }
-                if (event.text == Key.LeftArrow && i > 0) { root.current = i - 1; root.selected(i - 1); return accept; }
-                reject
-            }
+    }
+    focus := KeyboardFocus {
+        key-pressed(event) => {
+            if (root.model.length == 0) { return reject; }
+            if (event.text == " " || event.text == Key.Return) { root.selected(root.current); return accept; }
+            if (event.text == Key.RightArrow) { root.current = mod(root.current + 1, root.model.length); root.selected(root.current); return accept; }
+            if (event.text == Key.LeftArrow) { root.current = mod(root.current + root.model.length - 1, root.model.length); root.selected(root.current); return accept; }
+            if (event.text == Key.Home) { root.current = 0; root.selected(root.current); return accept; }
+            if (event.text == Key.End) { root.current = root.model.length - 1; root.selected(root.current); return accept; }
+            reject
         }
-        FocusRing { x: -2px; y: 2px; width: parent.width + 4px; height: parent.height - 4px; shown: tab-focus.has-focus && tab-focus.focus-visible; radius: Theme.radius-sm; }
     }
 }
 
@@ -599,9 +603,9 @@ export component Dialog inherits Rectangle {
             reject
         }
     panel := Rectangle {
-        x: root.sidebar-anchored ? 88px : (root.width - self.width) / 2;
+        x: root.sidebar-anchored ? 72px : (root.width - self.width) / 2;
         y: root.sidebar-anchored ? max(16px, root.height - self.height - 16px) : (root.height - self.height) / 2;
-        width: min(root.dialog-width, root.width - (root.sidebar-anchored ? 104px : 48px));
+        width: min(root.dialog-width, root.width - (root.sidebar-anchored ? 88px : 48px));
         height: min(content.preferred-height, root.height - 48px);
         background: Theme.raised;
         border-radius: Theme.radius-lg;
@@ -708,4 +712,22 @@ export component PageTitle inherits Text {
 export component Label inherits Text {
     font-size: Theme.text-metadata;
     color: Theme.text-muted;
+}
+
+/// An instance's identity tile: its Material Symbols icon on a neutral
+/// ground. The selected instance uses the accent for the glyph only.
+export component InstanceIcon inherits Rectangle {
+    in property <string> path;
+    in property <length> size: 40px;
+    in property <bool> active: false;
+    width: size;
+    height: size;
+    border-radius: size * 0.26;
+    background: Theme.hover;
+    accessible-role: none;
+    Icon {
+        path: root.path;
+        size: root.size * 0.58;
+        color: root.active ? Theme.accent : Theme.text-secondary;
+    }
 }

@@ -1,0 +1,214 @@
+// Home widgets: a small fixed grid with add, remove and reorder. Rust builds
+// every card from existing launcher records (gameplay history, instance
+// state, system media sessions); cards never poll or compute on their own.
+import { Theme } from "theme.slint";
+import { Icon, Icons } from "icons.slint";
+import { Button, ButtonKind, IconButton, Spinner } from "components.slint";
+
+export struct WidgetLine {
+    label: string,
+    value: string,
+    detail: string,
+}
+
+export struct WidgetView {
+    id: string,
+    title: string,
+    icon: string,
+    lines: [WidgetLine],
+    empty: string,
+    loading: bool,
+}
+
+export struct WidgetChoice {
+    id: string,
+    title: string,
+    icon: string,
+}
+
+export global Widgets {
+    in property <[WidgetView]> items;
+    in property <[WidgetChoice]> available;
+    in-out property <bool> editing: false;
+    callback add(string);
+    callback remove(string);
+    callback move(string, int);
+
+    // System media session (Windows Global System Media Transport Controls).
+    in property <bool> media-supported: false;
+    in property <bool> media-active: false;
+    in property <string> media-title;
+    in property <string> media-artist;
+    in property <string> media-source;
+    in property <image> media-art;
+    in property <bool> media-has-art: false;
+    in property <bool> media-playing: false;
+    in property <bool> media-can-toggle: false;
+    in property <bool> media-can-next: false;
+    in property <bool> media-can-previous: false;
+    in property <int> media-session-count: 0;
+    callback media-toggle();
+    callback media-next();
+    callback media-previous();
+    callback media-cycle();
+}
+
+export global MediaGlyphs {
+    out property <string> play: "M8 5v14l11-7z";
+    out property <string> pause: "M6 19h4V5H6v14zm8-14v14h4V5h-4z";
+    out property <string> next: "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z";
+    out property <string> previous: "M6 6h2v12H6zm3.5 6l8.5 6V6z";
+    out property <string> music: "M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z";
+    out property <string> swap: "M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z";
+    out property <string> up: "M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z";
+    out property <string> down: "M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z";
+    out property <string> tune: "M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z";
+}
+
+component EditBar inherits HorizontalLayout {
+    in property <string> id;
+    in property <bool> first;
+    in property <bool> last;
+    in property <string> title;
+    spacing: 2px;
+    alignment: end;
+    if !root.first: IconButton { icon: MediaGlyphs.up; label: "Move " + root.title + " earlier"; size: 28px; clicked => { Widgets.move(root.id, -1); } }
+    if !root.last: IconButton { icon: MediaGlyphs.down; label: "Move " + root.title + " later"; size: 28px; clicked => { Widgets.move(root.id, 1); } }
+    IconButton { icon: Icons.close; label: "Remove " + root.title; size: 28px; clicked => { Widgets.remove(root.id); } }
+}
+
+component CardHeader inherits HorizontalLayout {
+    in property <WidgetView> item;
+    in property <bool> first;
+    in property <bool> last;
+    spacing: 8px;
+    height: 28px;
+    Icon { y: (parent.height - self.height) / 2; path: root.item.icon; size: 18px; color: Theme.accent; }
+    Text { horizontal-stretch: 1; text: root.item.title; font-size: Theme.text-body; font-weight: 600; color: Theme.text; vertical-alignment: center; overflow: elide; }
+    if root.item.loading: Spinner { y: (parent.height - self.height) / 2; size: 14px; }
+    if Widgets.editing: EditBar { id: root.item.id; first: root.first; last: root.last; title: root.item.title; }
+}
+
+component ListCard inherits Rectangle {
+    in property <WidgetView> item;
+    in property <bool> first;
+    in property <bool> last;
+    background: Theme.surface;
+    border-radius: Theme.radius-lg;
+    clip: true;
+    accessible-role: groupbox;
+    accessible-label: root.item.title;
+    VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+        alignment: start;
+        CardHeader { item: root.item; first: root.first; last: root.last; }
+        if root.item.lines.length == 0 && !root.item.loading: Text {
+            text: root.item.empty;
+            color: Theme.text-muted;
+            font-size: Theme.text-metadata;
+            wrap: word-wrap;
+        }
+        for line in root.item.lines: HorizontalLayout {
+            spacing: 8px;
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 0px;
+                Text { text: line.label; color: Theme.text-secondary; font-size: Theme.text-secondary-size; overflow: elide; }
+                if line.detail != "": Text { text: line.detail; color: Theme.text-muted; font-size: Theme.text-label; overflow: elide; }
+            }
+            Text { text: line.value; color: Theme.text; font-size: Theme.text-secondary-size; font-weight: 600; horizontal-alignment: right; vertical-alignment: center; }
+        }
+    }
+}
+
+component MediaButton inherits IconButton {
+    size: 34px;
+}
+
+component MediaCard inherits Rectangle {
+    in property <WidgetView> item;
+    in property <bool> first;
+    in property <bool> last;
+    background: Theme.surface;
+    border-radius: Theme.radius-lg;
+    clip: true;
+    accessible-role: groupbox;
+    accessible-label: "Media";
+    VerticalLayout {
+        padding: 14px;
+        spacing: 10px;
+        alignment: start;
+        CardHeader { item: root.item; first: root.first; last: root.last; }
+        if !Widgets.media-supported: Text { text: "Media controls are available on Windows."; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
+        if Widgets.media-supported && !Widgets.media-active: Text { text: "Nothing is playing. Apps that share playback with Windows, such as Spotify or a browser playing YouTube, appear here."; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
+        if Widgets.media-supported && Widgets.media-active: HorizontalLayout {
+            spacing: 12px;
+            Rectangle {
+                width: 64px;
+                height: 64px;
+                border-radius: Theme.radius-md;
+                background: Theme.hover;
+                clip: true;
+                if Widgets.media-has-art: Image { width: parent.width; height: parent.height; source: Widgets.media-art; image-fit: cover; image-rendering: smooth; }
+                if !Widgets.media-has-art: Icon { path: MediaGlyphs.music; size: 28px; color: Theme.text-muted; }
+            }
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                spacing: 2px;
+                Text { text: Widgets.media-title; color: Theme.text; font-size: Theme.text-body; font-weight: 600; overflow: elide; }
+                Text { text: Widgets.media-artist; color: Theme.text-secondary; font-size: Theme.text-secondary-size; overflow: elide; }
+                Text { text: Widgets.media-source; color: Theme.text-muted; font-size: Theme.text-label; overflow: elide; }
+            }
+        }
+        if Widgets.media-supported && Widgets.media-active: HorizontalLayout {
+            spacing: 4px;
+            alignment: center;
+            MediaButton { icon: MediaGlyphs.previous; label: "Previous track"; enabled: Widgets.media-can-previous; clicked => { Widgets.media-previous(); } }
+            MediaButton { icon: Widgets.media-playing ? MediaGlyphs.pause : MediaGlyphs.play; label: Widgets.media-playing ? "Pause" : "Play"; enabled: Widgets.media-can-toggle; clicked => { Widgets.media-toggle(); } }
+            MediaButton { icon: MediaGlyphs.next; label: "Next track"; enabled: Widgets.media-can-next; clicked => { Widgets.media-next(); } }
+            if Widgets.media-session-count > 1: MediaButton { icon: MediaGlyphs.swap; label: "Switch to another media app"; clicked => { Widgets.media-cycle(); } }
+        }
+    }
+}
+
+component AddCard inherits Rectangle {
+    background: transparent;
+    border-radius: Theme.radius-lg;
+    border-width: 1px;
+    border-color: Theme.border-strong;
+    accessible-role: groupbox;
+    accessible-label: "Add widget";
+    VerticalLayout {
+        padding: 14px;
+        spacing: 6px;
+        alignment: start;
+        Text { text: Widgets.available.length > 0 ? "Add widget" : "All widgets are on Home"; color: Theme.text-secondary; font-size: Theme.text-body; font-weight: 600; }
+        for choice in Widgets.available: Button { text: choice.title; icon: choice.icon; kind: ButtonKind.ghost; compact: true; clicked => { Widgets.add(choice.id); } }
+    }
+}
+
+/// The widget grid: equal-width columns, fixed-height cards.
+export component WidgetGrid inherits Rectangle {
+    property <length> gap: 14px;
+    property <length> card-height: 196px;
+    property <int> columns: max(1, floor((self.width + gap) / (300px + gap)));
+    property <length> card-width: (self.width - (columns - 1) * gap) / columns;
+    property <int> count: Widgets.items.length + (Widgets.editing ? 1 : 0);
+    height: ceil(count / columns) * (card-height + gap);
+    for item[i] in Widgets.items: Rectangle {
+        x: mod(i, root.columns) * (root.card-width + root.gap);
+        y: floor(i / root.columns) * (root.card-height + root.gap);
+        width: root.card-width;
+        height: root.card-height;
+        if item.id == "media": MediaCard { width: parent.width; height: parent.height; item: item; first: i == 0; last: i == Widgets.items.length - 1; }
+        if item.id != "media": ListCard { width: parent.width; height: parent.height; item: item; first: i == 0; last: i == Widgets.items.length - 1; }
+    }
+    if Widgets.editing: AddCard {
+        x: mod(Widgets.items.length, root.columns) * (root.card-width + root.gap);
+        y: floor(Widgets.items.length / root.columns) * (root.card-height + root.gap);
+        width: root.card-width;
+        height: root.card-height;
+    }
+}

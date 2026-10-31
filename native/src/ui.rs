@@ -44,6 +44,7 @@ pub struct AppState {
     pub skin_thumbnails: std::collections::HashMap<String, slint::Image>,
     pub skin_preview: crate::skins::PreviewState,
     pub client_update: Option<(String, String)>,
+    pub icon_picker: crate::icons::PickerState,
 }
 
 impl AppState {
@@ -62,6 +63,16 @@ impl AppState {
 
     pub fn instance(&self, id: &str) -> Option<&InstanceSummary> {
         self.instances().iter().find(|instance| instance.id == id)
+    }
+
+    /// The stored Material Symbols name for an instance, if any.
+    pub fn icon_name(&self, id: &str) -> Option<&str> {
+        self.launcher.as_ref()?.icons.get(id).map(String::as_str)
+    }
+
+    /// The SVG path rendered for an instance (fallback when unset/unknown).
+    pub fn icon_path(&self, id: &str) -> &'static str {
+        crate::symbols::path_or_fallback(self.icon_name(id))
     }
 }
 

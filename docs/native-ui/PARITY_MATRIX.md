@@ -1,5 +1,11 @@
 # Functional parity matrix (native host vs WebView host)
 
+**NATIVE-8 continuation:** the current status of shared installation/downloads,
+native cards/navigation/icons, widgets/media, custom accent, Discord, chrome and
+Borealis is recorded in [NATIVE_8_ACCEPTANCE](../../NATIVE_8_ACCEPTANCE.md).
+Its evidence and explicit limitations supersede the corresponding historical
+rows below. Native packaging/updater authority remains separately gated.
+
 **Historical NATIVE-6 baseline.** NATIVE-7 supersedes the rows for single-click
 input, Home selection, selection styling, Discover/project artwork/details,
 modpack install/merge, 3D skins/capes, PNG import, accounts and native branding.

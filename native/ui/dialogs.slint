@@ -1,0 +1,123 @@
+// Instance identity: the searchable Material Symbols picker and the dialogs
+// that use it. Search, ranking and persistence happen in Rust
+// (native/src/icons.rs); the grid renders only the bounded result set.
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Icon, Icons } from "icons.slint";
+import {
+    Button, ButtonKind, TextField, Dropdown, Dialog, InstanceIcon, KeyboardFocus, FocusRing,
+} from "components.slint";
+import { Instances, IconPicker, SymbolCell } from "state.slint";
+
+component SymbolButton inherits Rectangle {
+    in property <SymbolCell> cell;
+    in property <bool> chosen;
+    width: 48px;
+    height: 48px;
+    border-radius: Theme.radius-md;
+    background: chosen ? Theme.accent-soft : touch.has-hover ? Theme.hover : transparent;
+    accessible-role: button;
+    accessible-label: cell.label;
+    accessible-checkable: true;
+    accessible-checked: chosen;
+    accessible-action-default => { IconPicker.choose(cell.name); }
+    forward-focus: focus;
+    Icon { path: root.cell.path; size: 26px; color: root.chosen ? Theme.accent : touch.has-hover ? Theme.text : Theme.text-secondary; }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); IconPicker.choose(root.cell.name); } }
+    focus := KeyboardFocus {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) { IconPicker.choose(root.cell.name); return accept; }
+            reject
+        }
+    }
+    FocusRing { x: -2px; y: -2px; width: root.width + 4px; height: root.height + 4px; shown: focus.has-focus && focus.focus-visible; }
+}
+
+/// Preview, search, category browsing and the bounded result grid.
+export component IconPickerPanel inherits VerticalLayout {
+    in property <length> grid-height: 248px;
+    spacing: Theme.space-3;
+    HorizontalLayout {
+        spacing: Theme.space-3;
+        InstanceIcon { y: (parent.height - self.height) / 2; path: IconPicker.chosen-path; size: 56px; active: true; }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+            Text { text: IconPicker.chosen-label; color: Theme.text; font-size: Theme.text-body; font-weight: 600; overflow: elide; }
+            Text { text: IconPicker.chosen == "" ? "Default icon" : "Material Symbols"; color: Theme.text-muted; font-size: Theme.text-metadata; }
+        }
+        Button { y: (parent.height - self.height) / 2; text: "Use default"; kind: ButtonKind.ghost; compact: true; enabled: IconPicker.chosen != ""; clicked => { IconPicker.reset(); } }
+    }
+    HorizontalLayout {
+        spacing: Theme.space-2;
+        search := TextField {
+            horizontal-stretch: 1;
+            leading-icon: Icons.search;
+            label: "Search icons";
+            placeholder: "Search icons: sword, server, tools…";
+            max-length: 64;
+            text <=> IconPicker.query;
+            edited(text) => { IconPicker.search(text); }
+        }
+        Dropdown {
+            width: 168px;
+            label: "Icon category";
+            model: IconPicker.categories;
+            current-index <=> IconPicker.category;
+            selected(index) => { IconPicker.category-changed(index); }
+        }
+    }
+    Text { text: IconPicker.summary; color: Theme.text-muted; font-size: Theme.text-metadata; }
+    grid-view := ScrollView {
+        height: root.grid-height;
+        property <int> columns: max(1, floor((self.visible-width) / 52px));
+        accessible-role: list;
+        accessible-label: "Icons";
+        Rectangle {
+            x: 0;
+            y: 0;
+            width: grid-view.visible-width;
+            height: max(grid-view.height, ceil(IconPicker.results.length / grid-view.columns) * 52px);
+            for cell[i] in IconPicker.results: SymbolButton {
+                x: mod(i, grid-view.columns) * 52px + 2px;
+                y: floor(i / grid-view.columns) * 52px + 2px;
+                cell: cell;
+                chosen: cell.name == IconPicker.chosen;
+            }
+        }
+    }
+    init => { search.focus-field(); }
+}
+
+/// Edit an instance's name and icon together (from the workspace header).
+export component IdentityDialog inherits Dialog {
+    title: "Edit instance";
+    dialog-width: 560px;
+    dismissed => { Instances.rename-open = false; }
+    Text { text: "Changes only how the instance looks in Aurora. Folders and data stay where they are."; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
+    TextField { label: "Instance name"; text <=> Instances.rename-text; max-length: 64; accepted => { Instances.rename-confirm(); } escaped => { Instances.rename-open = false; } }
+    IconPickerPanel { grid-height: min(248px, max(104px, root.height - 470px)); }
+    if Instances.rename-error != "": Text { text: Instances.rename-error; color: Theme.error; wrap: word-wrap; }
+    HorizontalLayout {
+        alignment: end;
+        spacing: 8px;
+        Button { text: "Cancel"; kind: ButtonKind.ghost; clicked => { Instances.rename-open = false; } }
+        Button { text: "Save"; kind: ButtonKind.primary; clicked => { Instances.rename-confirm(); } }
+    }
+}
+
+/// Choose an icon for an instance being created.
+export component IconPickerDialog inherits Dialog {
+    title: "Instance icon";
+    dialog-width: 560px;
+    dismissed => { IconPicker.cancel(); }
+    IconPickerPanel { grid-height: min(300px, max(104px, root.height - 380px)); }
+    HorizontalLayout {
+        alignment: end;
+        spacing: 8px;
+        Button { text: "Cancel"; kind: ButtonKind.ghost; clicked => { IconPicker.cancel(); } }
+        Button { text: "Use icon"; kind: ButtonKind.primary; clicked => { IconPicker.confirm(); } }
+    }
+}

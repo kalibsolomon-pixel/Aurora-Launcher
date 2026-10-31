@@ -1,0 +1,670 @@
+[
+ {
+  "file": "native8-results-1793464478.json",
+  "entries": [
+   {
+    "error": {
+     "code": "pack_dependency_conflict",
+     "message": "modmenu-17.0.1-beta.1.jar requires a Modrinth dependency absent from this exact pack snapshot."
+    },
+    "scenario": "Vulkan Optimized new instance: review",
+    "seconds": 1.29,
+    "transfers": {
+     "bytesDownloaded": 39572,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 1,
+     "transfersSucceeded": 1
+    }
+   }
+  ]
+ },
+ {
+  "file": "native8-results-1793464704.json",
+  "entries": [
+   {
+    "error": {
+     "code": "pack_dependency_conflict",
+     "message": "AsyncParticles-Lite-0.8.0-alpha+1.21.11.jar: asyncparticles 0.8.0-alpha requires mixinextras >=0.5.0. Installed: 0.4.1 (ProviderManaged, modernfix-5.26.3-build.1.jar). No active installed capability satisfies it."
+    },
+    "scenario": "Vulkan Optimized new instance: review",
+    "seconds": 4.33,
+    "transfers": {
+     "bytesDownloaded": 36424478,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 25,
+     "transfersSucceeded": 25
+    }
+   }
+  ]
+ },
+ {
+  "file": "native8-results-1793464922.json",
+  "entries": [
+   {
+    "result": {
+     "blockers": null,
+     "loader": "0.19.3",
+     "minecraft": "1.21.11",
+     "name": "1.21.11-4.1",
+     "overrides": 35,
+     "recognized": 25,
+     "skippedOverrides": [
+      "icon.png"
+     ],
+     "unresolved": 0
+    },
+    "scenario": "Vulkan Optimized new instance: review",
+    "seconds": 1.92,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "error": {
+     "code": "pack_component_install_failed",
+     "message": "c2me conflicts with ProviderManaged file 'c2me-fabric-mc1.21.11-0.4.0-alpha.0.21.jar': Concurrent Chunk Management Engine has unreadable, ambiguous, or modified mod/Mixin metadata. Inspect c2me-fabric-mc1.21.11-0.4.0-alpha.0.21.jar before Play."
+    },
+    "scenario": "Vulkan Optimized new instance: install",
+    "seconds": 42.76,
+    "transfers": {
+     "bytesDownloaded": 558005122,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 4677,
+     "transfersSucceeded": 4677
+    }
+   }
+  ]
+ },
+ {
+  "file": "native8-results-1793465191.json",
+  "entries": [
+   {
+    "result": {
+     "blockers": null,
+     "loader": "0.19.3",
+     "minecraft": "1.21.11",
+     "name": "1.21.11-4.1",
+     "overrides": 35,
+     "recognized": 25,
+     "skippedOverrides": [
+      "icon.png"
+     ],
+     "unresolved": 0
+    },
+    "scenario": "Vulkan Optimized new instance: review",
+    "seconds": 2.29,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "result": {
+     "aurora": null,
+     "auroraContentState": null,
+     "configuration": {
+      "additionalJvmArguments": "",
+      "auroraEnabled": false,
+      "loader": {
+       "kind": "fabric",
+       "policy": {
+        "type": "pinned",
+        "version": "0.19.3"
+       }
+      },
+      "memoryMib": 2048,
+      "minecraftVersion": "1.21.11",
+      "performanceMode": null,
+      "window": null
+     },
+     "displayName": "1.21.11-4.1",
+     "id": "a9631c08105b483bb236d6f9a99e8b82",
+     "minecraftVersion": "1.21.11",
+     "pack": {
+      "name": "1.21.11-4.1",
+      "packVersion": "1.21.11-4.1",
+      "projectId": "u76hn1pF",
+      "provider": "modrinth",
+      "versionId": "aRFc5ttQ"
+     },
+     "platform": {
+      "kind": "fabric",
+      "version": "0.19.3"
+     },
+     "state": "ready"
+    },
+    "scenario": "Vulkan Optimized new instance: install",
+    "seconds": 13.42,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "result": {
+     "problems": 0,
+     "status": "ready"
+    },
+    "scenario": "Vulkan Optimized instance validation",
+    "seconds": 1.42,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   }
+  ]
+ },
+ {
+  "file": "native8-results-1793465241.json",
+  "entries": [
+   {
+    "result": {
+     "id": "168b3951b234401d9a161875adcb9ead",
+     "subtitle": "Minecraft 1.21.11 \u00c2\u00b7 Fabric 0.19.3"
+    },
+    "scenario": "create N8 merge target",
+    "seconds": 9.19,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "result": {
+     "blockers": [],
+     "loader": "0.19.3",
+     "minecraft": "1.21.11",
+     "name": "1.21.11-4.1",
+     "overrides": 35,
+     "recognized": 25,
+     "skippedOverrides": [
+      "icon.png"
+     ],
+     "unresolved": 0
+    },
+    "scenario": "Vulkan Optimized merge: review",
+    "seconds": 2.72,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "result": {
+     "added": 25,
+     "alreadyPresent": 0,
+     "instanceId": "168b3951b234401d9a161875adcb9ead",
+     "keptExisting": [],
+     "overridesWritten": 35
+    },
+    "scenario": "Vulkan Optimized merge: install",
+    "seconds": 4.99,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "result": {
+     "added": 0,
+     "alreadyPresent": 60,
+     "blockers": [],
+     "overridesWritten": 0
+    },
+    "scenario": "Vulkan Optimized merge re-review",
+    "seconds": 0.68,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "result": {
+     "blockers": null,
+     "loader": "0.19.5",
+     "minecraft": "1.21.11",
+     "name": "Adrenaline",
+     "overrides": 7,
+     "recognized": 27,
+     "skippedOverrides": [],
+     "unresolved": 0
+    },
+    "scenario": "Adrenaline new instance (warm cache): review",
+    "seconds": 1.27,
+    "transfers": {
+     "bytesDownloaded": 7020,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 1,
+     "transfersSucceeded": 1
+    }
+   },
+   {
+    "result": {
+     "aurora": null,
+     "auroraContentState": null,
+     "configuration": {
+      "additionalJvmArguments": "",
+      "auroraEnabled": false,
+      "loader": {
+       "kind": "fabric",
+       "policy": {
+        "type": "pinned",
+        "version": "0.19.5"
+       }
+      },
+      "memoryMib": 2048,
+      "minecraftVersion": "1.21.11",
+      "performanceMode": null,
+      "window": null
+     },
+     "displayName": "Adrenaline",
+     "id": "0e1f9d8c00a940e4a0fbc890a41bfff6",
+     "minecraftVersion": "1.21.11",
+     "pack": {
+      "name": "Adrenaline",
+      "packVersion": "26.5.1+mc1.21.11.fabric",
+      "projectId": "BYN9yKrV",
+      "provider": "modrinth",
+      "versionId": "JBUK3TRN"
+     },
+     "platform": {
+      "kind": "fabric",
+      "version": "0.19.5"
+     },
+     "state": "ready"
+    },
+    "scenario": "Adrenaline new instance (warm cache): install",
+    "seconds": 19.62,
+    "transfers": {
+     "bytesDownloaded": 34003684,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 24,
+     "transfersSucceeded": 24
+    }
+   },
+   {
+    "error": {
+     "code": "fabric_plan_conflict",
+     "message": "library identity conflict: 'org.ow2.asm:asm:9.10.1' conflicts with the already-planned 'org.ow2.asm:asm:9.6'"
+    },
+    "scenario": "create N8 concurrent A",
+    "seconds": 0.59,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "error": {
+     "code": "fabric_plan_conflict",
+     "message": "library identity conflict: 'org.ow2.asm:asm:9.10.1' conflicts with the already-planned 'org.ow2.asm:asm:9.6'"
+    },
+    "scenario": "create N8 concurrent B",
+    "seconds": 0.59,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "a": {
+     "Err": "fabric_plan_conflict"
+    },
+    "b": {
+     "Err": "fabric_plan_conflict"
+    },
+    "scenario": "two cold Fabric 1.21.4 instances concurrently",
+    "seconds": 0.59,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   }
+  ]
+ },
+ {
+  "file": "native8-results-1793465332.json",
+  "entries": [
+   {
+    "error": {
+     "code": "fabric_plan_conflict",
+     "message": "library identity conflict: 'org.ow2.asm:asm:9.10.1' conflicts with the already-planned 'org.ow2.asm:asm:9.6'"
+    },
+    "scenario": "create N8 concurrent A",
+    "seconds": 0.78,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "error": {
+     "code": "fabric_plan_conflict",
+     "message": "library identity conflict: 'org.ow2.asm:asm:9.10.1' conflicts with the already-planned 'org.ow2.asm:asm:9.6'"
+    },
+    "scenario": "create N8 concurrent B",
+    "seconds": 0.78,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "a": {
+     "Err": "fabric_plan_conflict"
+    },
+    "b": {
+     "Err": "fabric_plan_conflict"
+    },
+    "scenario": "two cold Fabric 1.21.10 instances concurrently",
+    "seconds": 0.78,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   }
+  ]
+ },
+ {
+  "file": "native8-results-1793465584.json",
+  "entries": [
+   {
+    "result": {
+     "id": "3d81ba4e35464d34bbfbf9964f1ae42a",
+     "subtitle": "Minecraft 1.21.10 \u00c2\u00b7 Vanilla"
+    },
+    "scenario": "create N8 concurrent A",
+    "seconds": 15.6,
+    "transfers": {
+     "bytesDownloaded": 98304258,
+     "deduplicatedWaits": 59,
+     "retries": 0,
+     "transfersStarted": 59,
+     "transfersSucceeded": 59
+    }
+   },
+   {
+    "result": {
+     "id": "33f16ff99a814914acd2ec6bbe85d1dc",
+     "subtitle": "Minecraft 1.21.10 \u00c2\u00b7 Vanilla"
+    },
+    "scenario": "create N8 concurrent B",
+    "seconds": 21.53,
+    "transfers": {
+     "bytesDownloaded": 98304258,
+     "deduplicatedWaits": 59,
+     "retries": 0,
+     "transfersStarted": 59,
+     "transfersSucceeded": 59
+    }
+   },
+   {
+    "a": {
+     "Ok": "3d81ba4e35464d34bbfbf9964f1ae42a"
+    },
+    "b": {
+     "Ok": "33f16ff99a814914acd2ec6bbe85d1dc"
+    },
+    "scenario": "two cold Vanilla 1.21.10 instances concurrently",
+    "seconds": 21.54,
+    "transfers": {
+     "bytesDownloaded": 98304258,
+     "deduplicatedWaits": 59,
+     "retries": 0,
+     "transfersStarted": 59,
+     "transfersSucceeded": 59
+    }
+   },
+   {
+    "a": {
+     "Ok": "ready java-runtime-delta 21"
+    },
+    "b": {
+     "Err": "managed runtime 'windows-x64-cb4394a27089d19f65d5baa6cf0482c27c3c7865' is already being installed in this process"
+    },
+    "scenario": "runtime for both instances concurrently",
+    "transfers": {
+     "activeTransfers": 0,
+     "bytesDownloaded": 197486065,
+     "deduplicatedWaits": 66,
+     "retries": 0,
+     "transfersStarted": 257,
+     "transfersSucceeded": 257
+    }
+   }
+  ]
+ },
+ {
+  "file": "native8-results-1793465803.json",
+  "entries": [
+   {
+    "result": {
+     "id": "d04c40351cbb43cc936d5e42309c75d1",
+     "subtitle": "Minecraft 1.21.10 \u00c2\u00b7 Vanilla"
+    },
+    "scenario": "create N8 concurrent A",
+    "seconds": 10.86,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "result": {
+     "id": "842489d9035640b7aeef40a871213ef8",
+     "subtitle": "Minecraft 1.21.10 \u00c2\u00b7 Vanilla"
+    },
+    "scenario": "create N8 concurrent B",
+    "seconds": 16.73,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "a": {
+     "Ok": "d04c40351cbb43cc936d5e42309c75d1"
+    },
+    "b": {
+     "Ok": "842489d9035640b7aeef40a871213ef8"
+    },
+    "scenario": "two cold Vanilla 1.21.10 instances concurrently",
+    "seconds": 16.74,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "a": {
+     "Ok": "ready java-runtime-delta 21"
+    },
+    "b": {
+     "Ok": "ready java-runtime-delta 21"
+    },
+    "scenario": "runtime for both instances concurrently",
+    "transfers": {
+     "activeTransfers": 0,
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 1,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "error": {
+     "code": "instance_not_ready",
+     "message": "instance 'aa44bf14d36444a69ab0eea3c9e552ab' is not in a state that allows this operation: managed Java can only be prepared after instance content is ready"
+    },
+    "scenario": "runtime for 1.21.11-4.1",
+    "seconds": 0.0,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   }
+  ]
+ },
+ {
+  "file": "native8-results-1793465887.json",
+  "entries": [
+   {
+    "result": {
+     "component": "java-runtime-delta",
+     "major": 21,
+     "status": "ready"
+    },
+    "scenario": "runtime for 1.21.11-4.1",
+    "seconds": 2.34,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "result": {
+     "component": "java-runtime-delta",
+     "major": 21,
+     "status": "ready"
+    },
+    "scenario": "runtime for N8 merge target",
+    "seconds": 1.75,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "result": {
+     "component": "java-runtime-delta",
+     "major": 21,
+     "status": "ready"
+    },
+    "scenario": "runtime for Adrenaline",
+    "seconds": 2.0,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "result": {
+     "component": "java-runtime-delta",
+     "major": 21,
+     "status": "ready"
+    },
+    "scenario": "runtime for N8 concurrent A",
+    "seconds": 1.52,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "result": {
+     "component": "java-runtime-delta",
+     "major": 21,
+     "status": "ready"
+    },
+    "scenario": "runtime for N8 concurrent B",
+    "seconds": 1.6,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   },
+   {
+    "result": {
+     "component": "java-runtime-delta",
+     "major": 21,
+     "status": "ready"
+    },
+    "scenario": "runtime for N8 concurrent A",
+    "seconds": 1.43,
+    "transfers": {
+     "bytesDownloaded": 0,
+     "deduplicatedWaits": 0,
+     "retries": 0,
+     "transfersStarted": 0,
+     "transfersSucceeded": 0
+    }
+   }
+  ]
+ }
+]

@@ -1,5 +1,11 @@
 # Aurora Launcher — NATIVE-7 acceptance
 
+The subsequent owner-requested appearance/performance refinement is recorded in
+[NATIVE_7_UI_REFINEMENT_ACCEPTANCE.md](NATIVE_7_UI_REFINEMENT_ACCEPTANCE.md).
+It corrects cape orientation, moves preview rendering off the UI thread and
+refines the native layouts. The original phase classification below remains a
+historical statement; outstanding backend features are not implicitly complete.
+
 **Classification: PARTIAL — implemented native corrections, incomplete desktop/performance acceptance.**
 
 2026-10-31. Worktree: `C:\Dev\aurora-launcher-native`, branch

@@ -1,5 +1,49 @@
 # Native host architecture (NATIVE-1 / NATIVE-2)
 
+## NATIVE-8 current additions
+
+`activity.rs` schedules independent Discover installs and serializes each target
+instance. The core `transfer` coordinator owns global/per-host permits,
+digest single-flight and bounded retries; the UI never downloads artifacts.
+`icons.rs` uses the existing validated icon persistence service and generated
+Material Symbols paths. `widgets.rs` reads existing layout/history services;
+`media.rs` subscribes to Windows system media events only while its Home widget
+is present. `settings.rs` exposes existing Discord and appearance preferences.
+
+`chrome.rs` uses the winit-owned HWND for Windows chrome and current visibility,
+minimization, foreground and cloaking checks. `borealis.rs` owns one reusable
+500 ms timer with a suspended phase clock; paused themes perform no periodic
+motion work. This supersedes the earlier statement that Spinner is the only
+continuous animation. Forced foreground bypass and numeric telemetry are
+acceptance-feature-only and require an absolute diagnostic data root.
+
+See [NATIVE_8_ACCEPTANCE](../../NATIVE_8_ACCEPTANCE.md) for evidence, deliberate
+limitations and the distinction between visible-window and loaded-Home timing.
+
+## Preview worker refinement (2026-10-31 follow-up)
+
+`preview.rs` holds immutable `Arc` scene snapshots and a UI-owned render gate.
+`skins.rs` keeps one blocking CPU render in flight and one implicit newest pose;
+it never queues mouse events or rasterizes on the UI thread. The first update
+starts immediately. Sustained changes are limited to 120 frames/s by one pending
+timer; no preview timer survives idle. A completed frame cannot replace a newer
+skin/cape/layer setting. Returning account reads cannot overwrite a newer local
+preview, and account epochs still reject responses for another account.
+
+The cape box is locally rotated 180 degrees with the pitch sign adjusted to
+retain its rearward drape. Both the model and collection use the outward UV face
+at (1,1), including HD scaling. Tests distinguish asymmetric artwork from lining.
+
+`preview_probe.rs` is compiled only with the existing `disposable-data-root`
+acceptance feature. `--preview-probe=worker|legacy` runs a bounded synthetic
+rotation sequence through the real native controller and image handoff, skipping
+launcher loading, credentials, providers and persistence. Legacy mode reproduces
+the former 16 ms/UI-thread scheduler with the **same current rasterizer** to
+isolate scheduling effects. It is not a measurement of physical presentation.
+`--diagnostic-size=720x520` gives repeatable small-window acceptance. These flags
+are absent from distribution builds. `native/tools/renderer_benchmark.rs` is a
+separate standard-library-only raster benchmark over decoded synthetic fixtures.
+
 ## NATIVE-7 continuation
 
 See [NATIVE_7_UI_COMPLETION_ACCEPTANCE](../../NATIVE_7_UI_COMPLETION_ACCEPTANCE.md)

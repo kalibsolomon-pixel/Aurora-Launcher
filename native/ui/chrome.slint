@@ -1,0 +1,100 @@
+// Custom window chrome. On Windows the window is frameless and this strip
+// replaces the system title bar: it blends with the theme, keeps only the
+// caption buttons, and hands drag/resize to the OS (so Snap, monitor bounds
+// and DPI keep working). Elsewhere `custom` stays false and the native frame
+// is used.
+import { Theme } from "theme.slint";
+import { Icon } from "icons.slint";
+
+export global Chrome {
+    out property <length> sidebar-width: 72px;
+    out property <length> title-height: 36px;
+    in property <bool> custom: false;
+    in property <bool> maximized: false;
+    // Pointer pressed in a drag area: Rust starts an OS move, or toggles
+    // maximize when it is the second press of a double-click.
+    callback drag-pressed();
+    callback minimize();
+    callback toggle-maximize();
+    callback close();
+    // "n", "s", "e", "w", "ne", "nw", "se", "sw".
+    callback resize(string);
+}
+
+export global CaptionGlyphs {
+    out property <string> minimize: "M6 11.5H18V12.5H6Z";
+    out property <string> maximize: "M6 6H18V18H6ZM7 7V17H17V7Z";
+    out property <string> restore: "M8 6H18V16H16V15H17V7H9V8H8ZM6 8H16V18H6ZM7 9V17H15V9Z";
+    out property <string> close: "M6.7 6 12 11.3 17.3 6 18 6.7 12.7 12 18 17.3 17.3 18 12 12.7 6.7 18 6 17.3 11.3 12 6 6.7Z";
+}
+
+component CaptionButton inherits Rectangle {
+    in property <string> glyph;
+    in property <string> label;
+    in property <bool> danger: false;
+    callback clicked();
+    width: 46px;
+    height: Chrome.title-height;
+    background: touch.has-hover ? (danger ? #c42b1c : Theme.hover) : transparent;
+    accessible-role: button;
+    accessible-label: label;
+    accessible-action-default => { clicked(); }
+    Icon {
+        path: root.glyph;
+        size: 16px;
+        color: touch.has-hover && root.danger ? #ffffff : touch.has-hover ? Theme.text : Theme.text-secondary;
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+}
+
+/// The caption strip above the page content.
+export component TitleBar inherits Rectangle {
+    height: Chrome.title-height;
+    background: transparent;
+    accessible-role: none;
+    TouchArea {
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                Chrome.drag-pressed();
+            }
+        }
+    }
+    HorizontalLayout {
+        alignment: end;
+        CaptionButton { glyph: CaptionGlyphs.minimize; label: "Minimize"; clicked => { Chrome.minimize(); } }
+        CaptionButton { glyph: Chrome.maximized ? CaptionGlyphs.restore : CaptionGlyphs.maximize; label: Chrome.maximized ? "Restore" : "Maximize"; clicked => { Chrome.toggle-maximize(); } }
+        CaptionButton { glyph: CaptionGlyphs.close; label: "Close"; danger: true; clicked => { Chrome.close(); } }
+    }
+}
+
+/// An area (such as the sidebar logo) that also moves the window.
+export component DragArea inherits TouchArea {
+    pointer-event(event) => {
+        if (Chrome.custom && event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+            Chrome.drag-pressed();
+        }
+    }
+}
+
+component Edge inherits TouchArea {
+    in property <string> direction;
+    pointer-event(event) => {
+        if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+            Chrome.resize(root.direction);
+        }
+    }
+}
+
+/// Invisible resize zones along the window edges (restored windows only).
+export component ResizeEdges inherits Rectangle {
+    property <length> edge: 5px;
+    property <length> corner: 10px;
+    Edge { direction: "n"; x: root.corner; y: 0; width: root.width - 2 * root.corner; height: root.edge; mouse-cursor: ns-resize; }
+    Edge { direction: "s"; x: root.corner; y: root.height - root.edge; width: root.width - 2 * root.corner; height: root.edge; mouse-cursor: ns-resize; }
+    Edge { direction: "w"; x: 0; y: root.corner; width: root.edge; height: root.height - 2 * root.corner; mouse-cursor: ew-resize; }
+    Edge { direction: "e"; x: root.width - root.edge; y: root.corner; width: root.edge; height: root.height - 2 * root.corner; mouse-cursor: ew-resize; }
+    Edge { direction: "nw"; x: 0; y: 0; width: root.corner; height: root.corner; mouse-cursor: nwse-resize; }
+    Edge { direction: "se"; x: root.width - root.corner; y: root.height - root.corner; width: root.corner; height: root.corner; mouse-cursor: nwse-resize; }
+    Edge { direction: "ne"; x: root.width - root.corner; y: 0; width: root.corner; height: root.corner; mouse-cursor: nesw-resize; }
+    Edge { direction: "sw"; x: 0; y: root.height - root.corner; width: root.corner; height: root.corner; mouse-cursor: nesw-resize; }
+}

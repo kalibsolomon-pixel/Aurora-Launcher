@@ -10,19 +10,29 @@
 slint::include_modules!();
 
 mod accounts;
+mod activity;
 mod api;
+mod borealis;
+mod chrome;
 mod discover;
 mod events;
 mod home;
+mod icons;
 mod instances;
 #[cfg(test)]
 mod interaction_tests;
+mod media;
 mod player;
+mod preview;
+#[cfg(feature = "disposable-data-root")]
+mod preview_probe;
 mod settings;
 mod skin_import;
 mod skins;
+mod symbols;
 mod theme;
 mod ui;
+mod widgets;
 
 use aurora_launcher_lib::host::{
     APPLICATION_IDENTIFIER, Host, LAUNCHER_VERSION, platform_local_data_dir,
@@ -34,6 +44,7 @@ fn main() -> Result<(), slint::PlatformError> {
         return Ok(());
     }
 
+    borealis::diagnostic("process-entry");
     select_renderer()?;
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -47,6 +58,8 @@ fn main() -> Result<(), slint::PlatformError> {
         })?;
 
     let window = AppWindow::new()?;
+    #[cfg(feature = "disposable-data-root")]
+    preview_probe::configure_window(&window);
     let host = Host::native(
         platform_local_data_dir(APPLICATION_IDENTIFIER),
         LAUNCHER_VERSION,
@@ -62,9 +75,13 @@ fn main() -> Result<(), slint::PlatformError> {
         runtime.handle().clone(),
     );
 
+    chrome::install(&window);
     bind_navigation(&window);
     home::bind(&window);
     instances::bind(&window);
+    icons::bind(&window);
+    widgets::bind(&window);
+    activity::bind(&window);
     discover::bind(&window);
     accounts::bind(&window);
     settings::bind(&window);
@@ -73,6 +90,16 @@ fn main() -> Result<(), slint::PlatformError> {
         ui::with(|window, _| window.global::<Shell>().set_toast_visible(false));
     });
     window.global::<Shell>().on_retry_load(load);
+
+    // Opt-in local diagnostics: synthetic pixels, no launcher loading,
+    // credentials, provider requests, persistence or account mutations.
+    #[cfg(feature = "disposable-data-root")]
+    if preview_probe::start(&window) {
+        window.run()?;
+        ui::release();
+        runtime.shutdown_timeout(std::time::Duration::from_secs(2));
+        return Ok(());
+    }
 
     {
         let _guard = runtime.enter();
@@ -186,6 +213,8 @@ fn load() {
                 Ok(state) => {
                     instances::apply_state(state);
                     ui::with(|window, _| window.global::<Shell>().set_loaded(true));
+                    borealis::diagnostic("home-state-loaded");
+                    widgets::load();
                 }
                 Err(error) => {
                     ui::with(|window, _| {

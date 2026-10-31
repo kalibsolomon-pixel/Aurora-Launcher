@@ -1,0 +1,2 @@
+   Compiling aurora-native v1.4.2 (<worktree>\native)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 30.39s

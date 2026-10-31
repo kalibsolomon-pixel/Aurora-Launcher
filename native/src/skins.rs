@@ -4,6 +4,7 @@
 //! only decoded pixels, names and ids.
 
 use slint::ComponentHandle;
+use std::sync::Arc;
 
 use crate::api::{self, Cape, Cosmetics, HeadAvatar, SkinPreset, Texture};
 use crate::ui;
@@ -11,25 +12,33 @@ use crate::{AppWindow, CapeRow, SkinRow, Skins, Tone};
 
 pub struct PreviewState {
     pub serial: u64,
+    local_revision: u64,
+    preview_id: String,
     account_epoch: u64,
     cached_account: Option<String>,
     library_loaded: bool,
     library_epoch: u64,
-    skin: Option<HeadAvatar>,
-    current: Option<HeadAvatar>,
+    skin: Option<Arc<HeadAvatar>>,
+    current: Option<Arc<HeadAvatar>>,
     capes: Vec<Cape>,
-    cape: Option<Texture>,
+    cape: Option<Arc<Texture>>,
     cape_id: String,
     yaw: f32,
     pitch: f32,
     zoom: f32,
-    render_pending: bool,
+    render_gate: crate::preview::RenderGate,
+    render_timer_pending: bool,
+    frame_started: Option<std::time::Instant>,
+    #[cfg(feature = "disposable-data-root")]
+    legacy_pending: bool,
     pending_apply: Option<(String, String, String)>,
 }
 impl Default for PreviewState {
     fn default() -> Self {
         Self {
             serial: 0,
+            local_revision: 0,
+            preview_id: String::new(),
             account_epoch: 0,
             cached_account: None,
             library_loaded: false,
@@ -42,7 +51,11 @@ impl Default for PreviewState {
             yaw: crate::player::DEFAULT_YAW,
             pitch: 0.1,
             zoom: 1.,
-            render_pending: false,
+            render_gate: Default::default(),
+            render_timer_pending: false,
+            frame_started: None,
+            #[cfg(feature = "disposable-data-root")]
+            legacy_pending: false,
             pending_apply: None,
         }
     }
@@ -51,6 +64,7 @@ impl Default for PreviewState {
 fn preview_skin(id: slint::SharedString) {
     let serial = ui::with(|_, s| {
         s.skin_preview.serial += 1;
+        s.skin_preview.local_revision += 1;
         s.skin_preview.serial
     })
     .unwrap_or(0);
@@ -61,6 +75,7 @@ fn preview_skin(id: slint::SharedString) {
             .map(|p| p.name.clone())
     })
     .unwrap_or_default();
+    let preview_id = id.to_string();
     ui::spawn(
         api::skin_preview(ui::host(), id.to_string()),
         move |result| {
@@ -70,51 +85,193 @@ fn preview_skin(id: slint::SharedString) {
                 }
                 match result {
                     Ok(skin) => {
-                        s.skin_preview.skin = Some(skin);
+                        s.skin_preview.skin = Some(Arc::new(skin));
+                        s.skin_preview.preview_id = preview_id;
+                        s.skin_preview.yaw = crate::player::DEFAULT_YAW;
+                        w.global::<Skins>().set_rear_view(false);
                         w.global::<Skins>()
                             .set_preview_label(format!("Preview: {name}").into());
                     }
                     Err(e) => w.global::<Skins>().set_error(e.message.into()),
                 }
             });
+            render_presets();
             schedule_render();
         },
     );
 }
 
-/// A one-shot render coalesces pointer motion; no work is scheduled at idle.
+fn scene(p: &PreviewState, layers: bool) -> crate::preview::Scene {
+    crate::preview::Scene {
+        skin: p.skin.clone(),
+        cape: p.cape.clone(),
+        yaw: p.yaw,
+        pitch: p.pitch,
+        zoom: p.zoom,
+        layers,
+    }
+}
+
+/// Input updates the latest pose immediately. CPU rasterization never blocks
+/// event dispatch; only one immutable frame is handed to a blocking worker.
 fn schedule_render() {
-    let pending = ui::with(|_, s| {
-        if s.skin_preview.render_pending {
-            return false;
-        }
-        s.skin_preview.render_pending = true;
-        true
-    })
-    .unwrap_or(false);
-    if !pending {
+    #[cfg(feature = "disposable-data-root")]
+    if crate::preview_probe::legacy() {
+        schedule_legacy_probe();
         return;
     }
-    slint::Timer::single_shot(std::time::Duration::from_millis(16), || {
+    ui::with(|_, s| s.skin_preview.render_gate.request());
+    dispatch_render();
+}
+
+fn dispatch_render() {
+    enum Next {
+        Frame(crate::preview::Scene),
+        Wait(std::time::Duration),
+    }
+    let Some(next) = ui::with(|w, s| {
+        if w.global::<crate::Nav>().get_page() != crate::Page::Skins
+            || s.skin_preview.render_timer_pending
+            || !s.skin_preview.render_gate.ready()
+        {
+            return None;
+        }
+        // An immediate first frame, then at most 120 frames/s while input
+        // changes. A single timer reads the newest pose; idle schedules none.
+        let budget = std::time::Duration::from_nanos(8_333_333);
+        if let Some(remaining) = s
+            .skin_preview
+            .frame_started
+            .and_then(|start| budget.checked_sub(start.elapsed()))
+        {
+            s.skin_preview.render_timer_pending = true;
+            return Some(Next::Wait(remaining));
+        }
+        s.skin_preview.render_gate.start();
+        s.skin_preview.frame_started = Some(std::time::Instant::now());
+        Some(Next::Frame(scene(
+            &s.skin_preview,
+            w.global::<Skins>().get_outer_layers(),
+        )))
+    })
+    .flatten() else {
+        return;
+    };
+    let request = match next {
+        Next::Frame(frame) => frame,
+        Next::Wait(delay) => {
+            slint::Timer::single_shot(delay, || {
+                ui::with(|_, s| s.skin_preview.render_timer_pending = false);
+                dispatch_render();
+            });
+            return;
+        }
+    };
+    let work = request.clone();
+    #[cfg(feature = "disposable-data-root")]
+    let input = crate::preview_probe::input_time();
+    ui::spawn(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                let started = std::time::Instant::now();
+                let pixels = work.render();
+                (pixels, started.elapsed())
+            })
+            .await
+        },
+        move |result| {
+            ui::with(|w, s| {
+                s.skin_preview.render_gate.finish();
+                let current = scene(&s.skin_preview, w.global::<Skins>().get_outer_layers());
+                if w.global::<crate::Nav>().get_page() == crate::Page::Skins
+                    && request.same_appearance(&current)
+                {
+                    if let Ok((pixels, _render_time)) = result {
+                        #[cfg(feature = "disposable-data-root")]
+                        let handoff = std::time::Instant::now();
+                        w.global::<Skins>().set_player(
+                            ui::rectangular_image(
+                                &pixels,
+                                crate::player::WIDTH,
+                                crate::player::HEIGHT,
+                            )
+                            .unwrap_or_default(),
+                        );
+                        #[cfg(feature = "disposable-data-root")]
+                        crate::preview_probe::frame(input, _render_time, handoff.elapsed());
+                    }
+                }
+            });
+            dispatch_render();
+        },
+    );
+}
+
+#[cfg(feature = "disposable-data-root")]
+fn schedule_legacy_probe() {
+    if !ui::with(|_, s| {
+        if s.skin_preview.legacy_pending {
+            return false;
+        }
+        s.skin_preview.legacy_pending = true;
+        true
+    })
+    .unwrap_or(false)
+    {
+        return;
+    }
+    let input = crate::preview_probe::input_time();
+    slint::Timer::single_shot(std::time::Duration::from_millis(16), move || {
         ui::with(|w, s| {
-            let p = &mut s.skin_preview;
-            p.render_pending = false;
-            if w.global::<crate::Nav>().get_page() != crate::Page::Skins {
-                return;
-            }
-            let pixels = crate::player::render(
-                p.skin.as_ref(),
-                p.cape.as_ref(),
-                p.yaw,
-                p.pitch,
-                p.zoom,
-                w.global::<Skins>().get_outer_layers(),
-            );
+            s.skin_preview.legacy_pending = false;
+            let start = std::time::Instant::now();
+            let pixels = scene(&s.skin_preview, w.global::<Skins>().get_outer_layers()).render();
+            let render = start.elapsed();
+            let handoff = std::time::Instant::now();
             w.global::<Skins>().set_player(
                 ui::rectangular_image(&pixels, crate::player::WIDTH, crate::player::HEIGHT)
                     .unwrap_or_default(),
             );
+            crate::preview_probe::frame(input, render, handoff.elapsed());
         });
+    });
+}
+
+#[cfg(feature = "disposable-data-root")]
+pub fn probe_scene() {
+    let mut rgba = vec![0; 64 * 64 * 4];
+    for (x, y, width, height, color) in [
+        (0, 0, 32, 16, [188, 144, 104, 255]),
+        (0, 16, 56, 16, [70, 115, 164, 255]),
+        (16, 48, 32, 16, [70, 115, 164, 255]),
+    ] {
+        for py in y..y + height {
+            for px in x..x + width {
+                let i = (py * 64 + px) * 4;
+                rgba[i..i + 4].copy_from_slice(&color);
+            }
+        }
+    }
+    let skin = Arc::new(HeadAvatar {
+        rgba: vec![],
+        skin_rgba: rgba,
+        skin_height: 64,
+        model: "classic".into(),
+    });
+    ui::with(|w, s| {
+        s.skin_preview.skin = Some(skin.clone());
+        s.skin_preview.current = Some(skin);
+        let mut cape = vec![180; 64 * 32 * 4];
+        for pixel in cape.chunks_exact_mut(4) {
+            pixel[3] = 255;
+        }
+        s.skin_preview.cape = Some(Arc::new(Texture {
+            width: 64,
+            height: 32,
+            rgba: cape,
+        }));
+        w.global::<Skins>()
+            .set_preview_label("Synthetic performance fixture".into());
     });
 }
 
@@ -141,19 +298,7 @@ fn render_capes() {
 }
 
 fn cape_thumbnail(t: &Texture) -> Option<slint::Image> {
-    if !matches!((t.width, t.height), (64, 32) | (64, 64) | (128, 64))
-        || t.rgba.len() != (t.width * t.height * 4) as usize
-    {
-        return None;
-    }
-    let scale = t.width / 64;
-    let mut pixels = Vec::with_capacity(10 * 16 * 4);
-    for y in 1..17 {
-        for x in 12..22 {
-            let i = ((y * scale * t.width + x * scale) * 4) as usize;
-            pixels.extend_from_slice(&t.rgba[i..i + 4]);
-        }
-    }
+    let pixels = crate::player::cape_artwork(t)?;
     ui::rectangular_image(&pixels, 10, 16)
 }
 
@@ -261,8 +406,8 @@ pub fn bind(window: &AppWindow) {
     });
     skins.on_rotate(|dx, dy| {
         ui::with(|_, s| {
-            s.skin_preview.yaw = (s.skin_preview.yaw + dx * 0.012) % std::f32::consts::TAU;
-            s.skin_preview.pitch = (s.skin_preview.pitch + dy * 0.006).clamp(-0.6, 0.6);
+            (s.skin_preview.yaw, s.skin_preview.pitch) =
+                crate::player::apply_drag(s.skin_preview.yaw, s.skin_preview.pitch, dx, dy);
         });
         schedule_render();
     });
@@ -273,10 +418,19 @@ pub fn bind(window: &AppWindow) {
         schedule_render();
     });
     skins.on_reset_view(|| {
-        ui::with(|_, s| {
+        ui::with(|w, s| {
             s.skin_preview.yaw = crate::player::DEFAULT_YAW;
             s.skin_preview.pitch = 0.1;
             s.skin_preview.zoom = 1.;
+            w.global::<Skins>().set_rear_view(false);
+        });
+        schedule_render();
+    });
+    skins.on_view_back(|rear| {
+        ui::with(|w, s| {
+            s.skin_preview.yaw =
+                crate::player::DEFAULT_YAW + if rear { std::f32::consts::PI } else { 0. };
+            w.global::<Skins>().set_rear_view(rear);
         });
         schedule_render();
     });
@@ -284,12 +438,18 @@ pub fn bind(window: &AppWindow) {
     skins.on_preview_skin(preview_skin);
     skins.on_preview_cape(|id| {
         ui::with(|w, s| {
+            s.skin_preview.local_revision += 1;
             s.skin_preview.cape = s
                 .skin_preview
                 .capes
                 .iter()
                 .find(|c| c.id == id.as_str())
-                .and_then(|c| c.preview.clone());
+                .and_then(|c| c.preview.clone())
+                .map(Arc::new);
+            // Inspect a cape from the outside immediately, without changing
+            // anything on the account or requiring a manual half-turn.
+            s.skin_preview.yaw = crate::player::DEFAULT_YAW + std::f32::consts::PI;
+            w.global::<Skins>().set_rear_view(true);
             s.skin_preview.cape_id = id.to_string();
             w.global::<Skins>().set_cape_label(
                 s.skin_preview
@@ -307,7 +467,11 @@ pub fn bind(window: &AppWindow) {
     skins.on_preview_current(|| {
         ui::with(|w, s| {
             s.skin_preview.serial += 1;
+            s.skin_preview.local_revision += 1;
+            s.skin_preview.preview_id.clear();
             s.skin_preview.skin = s.skin_preview.current.clone();
+            s.skin_preview.yaw = crate::player::DEFAULT_YAW;
+            w.global::<Skins>().set_rear_view(false);
             w.global::<Skins>().set_preview_label(
                 if s.skin_preview.skin.is_some() {
                     "Current appearance"
@@ -317,6 +481,7 @@ pub fn bind(window: &AppWindow) {
                 .into(),
             );
         });
+        render_presets();
         schedule_render();
     });
     skins.on_remove(|preset| {
@@ -422,13 +587,16 @@ pub fn load() {
         skins.set_cape_label("No cape".into());
     });
     load_presets();
-    schedule_render();
     let serial = ui::with(|w, s| {
         s.skin_preview.account_epoch += 1;
+        s.skin_preview.serial += 1;
+        s.skin_preview.local_revision += 1;
+        s.skin_preview.preview_id.clear();
         s.skin_preview.cached_account = account.clone();
         s.skin_preview.current = None;
         s.skin_preview.skin = None;
         s.skin_preview.cape = None;
+        s.skin_preview.cape_id.clear();
         s.skin_preview.capes.clear();
         w.global::<Skins>().set_capes(ui::model(Vec::new()));
         w.global::<Skins>()
@@ -436,6 +604,8 @@ pub fn load() {
         s.skin_preview.account_epoch
     })
     .unwrap_or(0);
+    schedule_render();
+    let preview_revision = ui::state(|s| s.skin_preview.local_revision);
     let Some(account) = account else { return };
     ui::with(|window, _| window.global::<Skins>().set_loading(true));
     let expected_account = account.clone();
@@ -448,7 +618,10 @@ pub fn load() {
         }
         ui::with(|window, _| window.global::<Skins>().set_loading(false));
         match result {
-            Ok(cosmetics) => apply_cosmetics(cosmetics),
+            Ok(cosmetics) => apply_cosmetics_snapshot(
+                cosmetics,
+                ui::state(|s| s.skin_preview.local_revision != preview_revision),
+            ),
             Err(error) => {
                 ui::with(|window, _| window.global::<Skins>().set_error(error.message.into()));
             }
@@ -457,6 +630,10 @@ pub fn load() {
 }
 
 fn apply_cosmetics(cosmetics: Cosmetics) {
+    apply_cosmetics_snapshot(cosmetics, false);
+}
+
+fn apply_cosmetics_snapshot(cosmetics: Cosmetics, preserve_preview: bool) {
     ui::with(|window, state| {
         let skins = window.global::<Skins>();
         let image = cosmetics
@@ -468,39 +645,44 @@ fn apply_cosmetics(cosmetics: Cosmetics) {
         skins.set_current_model(
             model_label(cosmetics.current_skin_model.as_deref().unwrap_or("classic")).into(),
         );
-        state.skin_preview.current = cosmetics.current_skin.clone();
-        state.skin_preview.skin = cosmetics.current_skin;
-        state.skin_preview.cape = cosmetics
-            .capes
-            .iter()
-            .find(|c| c.selected)
-            .and_then(|c| c.preview.clone());
-        state.skin_preview.cape_id = cosmetics
-            .capes
-            .iter()
-            .find(|c| c.selected)
-            .map(|c| c.id.clone())
-            .unwrap_or_default();
-        skins.set_cape_label(
-            cosmetics
+        state.skin_preview.current = cosmetics.current_skin.map(Arc::new);
+        if !preserve_preview {
+            state.skin_preview.preview_id.clear();
+            state.skin_preview.skin = state.skin_preview.current.clone();
+            state.skin_preview.cape = cosmetics
                 .capes
                 .iter()
                 .find(|c| c.selected)
-                .map(|c| format!("Wearing {}", c.name))
-                .unwrap_or_else(|| "No cape".into())
+                .and_then(|c| c.preview.clone())
+                .map(Arc::new);
+            state.skin_preview.cape_id = cosmetics
+                .capes
+                .iter()
+                .find(|c| c.selected)
+                .map(|c| c.id.clone())
+                .unwrap_or_default();
+            skins.set_cape_label(
+                cosmetics
+                    .capes
+                    .iter()
+                    .find(|c| c.selected)
+                    .map(|c| format!("Wearing {}", c.name))
+                    .unwrap_or_else(|| "No cape".into())
+                    .into(),
+            );
+            skins.set_preview_label(
+                if state.skin_preview.skin.is_some() {
+                    "Current appearance"
+                } else {
+                    "Neutral model · no skin loaded"
+                }
                 .into(),
-        );
-        skins.set_preview_label(
-            if state.skin_preview.skin.is_some() {
-                "Current appearance"
-            } else {
-                "Neutral model · no skin loaded"
-            }
-            .into(),
-        );
+            );
+        }
         state.skin_preview.capes = cosmetics.capes;
     });
     render_capes();
+    render_presets();
     schedule_render();
 }
 
@@ -568,6 +750,7 @@ fn render_presets() {
                     .into(),
                     model: model_label(&preset.model).into(),
                     has_thumb: thumb.is_some(),
+                    previewed: state.skin_preview.preview_id == preset.id,
                     thumb: thumb.unwrap_or_default(),
                 }
             })

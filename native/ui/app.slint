@@ -7,22 +7,29 @@ import { Icon, Icons } from "icons.slint";
 import {
     Button, ButtonKind, IconButton, Toggle, Checkbox, Dropdown, TextField, Dialog, Toast, Tone,
     Avatar, StatusPill, Spinner, ProgressBar, FocusRing, KeyboardFocus, EmptyState, Divider,
+    Tooltip, InstanceIcon,
 } from "components.slint";
-import { Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, AccountRow } from "state.slint";
+import { Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, AccountRow, IconPicker, AccentPicker, Activity, ActivityRow } from "state.slint";
+import { IdentityDialog, IconPickerDialog } from "dialogs.slint";
+import { AccentPickerPopover } from "popovers.slint";
+import { Chrome, TitleBar, DragArea, ResizeEdges } from "chrome.slint";
+import { Widgets, WidgetChoice, WidgetLine, WidgetView } from "widgets.slint";
 import { HomePage } from "pages/home.slint";
 import { InstancesPage, WorkspacePage } from "pages/instances.slint";
 import { DiscoverPage } from "pages/discover.slint";
 import { SettingsPage } from "pages/settings.slint";
 import { SkinsPage } from "pages/skins.slint";
 
-export { Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, Tone }
+export { Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, Tone, IconPicker, AccentPicker, Chrome, Widgets, WidgetChoice, WidgetLine, WidgetView, Activity, ActivityRow }
 
 component NavItem inherits Rectangle {
     in property <string> label;
     in property <string> icon;
     in property <bool> active;
+    // Hover or keyboard focus shows the window-level tooltip.
+    out property <bool> hinted: touch.has-hover || (focus.has-focus && focus.focus-visible);
     callback activated();
-    height: 60px;
+    height: 52px;
     border-radius: Theme.radius-md;
     background: touch.has-hover ? Theme.hover : transparent;
     accessible-role: tab;
@@ -30,12 +37,7 @@ component NavItem inherits Rectangle {
     accessible-item-selected: active;
     accessible-action-default => { activated(); }
     forward-focus: focus;
-    VerticalLayout {
-        alignment: center;
-        spacing: 4px;
-        HorizontalLayout { alignment: center; Icon { path: root.icon; size: 22px; color: root.active ? Theme.accent : Theme.text-secondary; } }
-        Text { accessible-role: none; text: root.label; font-size: Theme.text-label; color: root.active ? Theme.accent : Theme.text-secondary; horizontal-alignment: center; }
-    }
+    Icon { path: root.icon; size: 28px; color: root.active ? Theme.accent : touch.has-hover ? Theme.text : Theme.text-secondary; }
     touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); root.activated(); } }
     focus := KeyboardFocus {
         focus-on-click: false;
@@ -48,29 +50,16 @@ component NavItem inherits Rectangle {
 }
 
 component AccountButton inherits Rectangle {
-    height: 64px;
+    out property <bool> hinted: touch.has-hover || (focus.has-focus && focus.focus-visible);
+    height: 52px;
     border-radius: Theme.radius-md;
     background: touch.has-hover ? Theme.hover : transparent;
     accessible-role: button;
     accessible-label: Accounts.has-account ? "Account: " + Accounts.name : "Sign in";
     accessible-action-default => { Accounts.open-dialog(); }
     forward-focus: focus;
-    VerticalLayout {
-        alignment: center;
-        spacing: 4px;
-        HorizontalLayout {
-            alignment: center;
-            if Accounts.has-account: Avatar { initial: Accounts.initial; picture: Accounts.avatar; has-picture: Accounts.has-avatar; size: 28px; }
-            if !Accounts.has-account: Icon { path: Icons.person; size: 22px; color: Theme.text-secondary; }
-        }
-        Text {
-            text: Accounts.has-account ? Accounts.name : "Sign in";
-            font-size: Theme.text-label;
-            color: Theme.text-secondary;
-            horizontal-alignment: center;
-            overflow: elide;
-        }
-    }
+    if Accounts.has-account: Avatar { initial: Accounts.initial; picture: Accounts.avatar; has-picture: Accounts.has-avatar; size: 32px; }
+    if !Accounts.has-account: Icon { path: Icons.person; size: 28px; color: touch.has-hover ? Theme.text : Theme.text-secondary; }
     touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); Accounts.open-dialog(); } }
     focus := KeyboardFocus {
         focus-on-click: false;
@@ -80,6 +69,40 @@ component AccountButton inherits Rectangle {
         }
     }
     FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; }
+}
+
+/// One download/install in the Downloads panel.
+component ActivityLine inherits Rectangle {
+    in property <ActivityRow> item;
+    height: layout.preferred-height;
+    border-radius: Theme.radius-md;
+    background: Theme.surface;
+    accessible-role: list-item;
+    accessible-label: root.item.title + ", " + root.item.phase;
+    accessible-description: root.item.message;
+    layout := HorizontalLayout {
+        padding: 10px;
+        spacing: 10px;
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 2px;
+            Text { text: root.item.title; color: Theme.text; font-size: Theme.text-body; font-weight: 600; overflow: elide; }
+            if root.item.detail != "": Text { text: root.item.detail; color: Theme.text-muted; font-size: Theme.text-metadata; overflow: elide; }
+            Text { text: root.item.message; color: root.item.tone == Tone.error ? Theme.error : Theme.text-secondary; font-size: Theme.text-metadata; wrap: word-wrap; }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 6px;
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: end;
+                if root.item.running: Spinner { y: (parent.height - self.height) / 2; size: 14px; }
+                StatusPill { text: root.item.phase; tone: root.item.tone; }
+            }
+            if root.item.can-cancel: Button { text: "Cancel"; compact: true; kind: ButtonKind.ghost; clicked => { Activity.cancel(root.item.id); } }
+            if root.item.can-retry: Button { text: "Retry"; icon: Icons.refresh; compact: true; clicked => { Activity.retry(root.item.id); } }
+        }
+    }
 }
 
 component AccountLine inherits Rectangle {
@@ -109,7 +132,11 @@ component AccountLine inherits Rectangle {
 }
 
 export component AppWindow inherits Window {
-    title: "Aurora Launcher";
+    in property <string> window-title: "Aurora Launcher";
+    title: window-title;
+    // Windows: frameless, with the themed caption strip below. The title
+    // still names the window for the taskbar and assistive technology.
+    no-frame: Chrome.custom;
     icon: @image-url("../assets/icon-256.png");
     preferred-width: 1120px;
     preferred-height: 760px;
@@ -119,9 +146,23 @@ export component AppWindow inherits Window {
     default-font-size: 14px;
     default-font-family: "Segoe UI";
 
+    // Borealis: one static, pre-blurred layer under translucent surfaces.
+    // Rust nudges `drift` a few pixels at a low rate only while the window
+    // is shown and focused with motion allowed; otherwise nothing repaints.
+    if Theme.borealis: Image {
+        x: -24px + Theme.drift;
+        y: -16px + Theme.drift * 0.4;
+        width: root.width + 48px;
+        height: root.height + 32px;
+        source: @image-url("../assets/borealis-bands.png");
+        image-fit: fill;
+        image-rendering: smooth;
+        accessible-role: none;
+    }
+
     HorizontalLayout {
         Rectangle {
-            width: 88px;
+            width: Chrome.sidebar-width;
             background: Theme.sidebar;
             accessible-role: tab-list;
             accessible-label: "Navigation";
@@ -129,22 +170,47 @@ export component AppWindow inherits Window {
                 padding: 10px;
                 padding-top: 16px;
                 spacing: 6px;
-                HorizontalLayout {
-                    alignment: center;
-                    Image { source: @image-url("../assets/aurora.svg"); width: 36px; height: 36px; image-rendering: smooth; accessible-role: image; accessible-label: "Aurora"; }
+                Rectangle {
+                    height: 54px * 512 / 640;
+                    // The logo area also moves the window.
+                    DragArea { }
+                    HorizontalLayout {
+                        alignment: center;
+                        // 150% of the former 36 px mark, from a pre-rasterized
+                        // texture so it stays crisp at high display scales.
+                        Image { source: @image-url("../assets/aurora-mark-216.png"); width: 54px; height: 54px * 512 / 640; image-rendering: smooth; accessible-role: image; accessible-label: "Aurora"; }
+                    }
                 }
-                Rectangle { height: 14px; }
-                NavItem { label: "Home"; icon: Icons.home; active: Nav.page == Page.home; activated => { Nav.navigate(Page.home); } }
-                NavItem { label: "Instances"; icon: Icons.instances; active: Nav.page == Page.instances; activated => { Nav.navigate(Page.instances); } }
-                NavItem { label: "Discover"; icon: Icons.discover; active: Nav.page == Page.discover; activated => { Nav.navigate(Page.discover); } }
-                NavItem { label: "Skins"; icon: Icons.person; active: Nav.page == Page.skins; activated => { Nav.navigate(Page.skins); } }
-                NavItem { label: "Settings"; icon: Icons.settings; active: Nav.page == Page.settings; activated => { Nav.navigate(Page.settings); } }
+                Rectangle { height: 18px; }
+                home-nav := NavItem { label: "Home"; icon: Icons.home; active: Nav.page == Page.home; activated => { Nav.navigate(Page.home); } }
+                instances-nav := NavItem { label: "Instances"; icon: Icons.instances; active: Nav.page == Page.instances; activated => { Nav.navigate(Page.instances); } }
+                discover-nav := NavItem { label: "Discover"; icon: Icons.discover; active: Nav.page == Page.discover; activated => { Nav.navigate(Page.discover); } }
+                skins-nav := NavItem { label: "Skins"; icon: Icons.person; active: Nav.page == Page.skins; activated => { Nav.navigate(Page.skins); } }
+                settings-nav := NavItem { label: "Settings"; icon: Icons.settings; active: Nav.page == Page.settings; activated => { Nav.navigate(Page.settings); } }
                 Rectangle { vertical-stretch: 1; }
+                downloads-nav := NavItem {
+                    label: Activity.active > 0 ? "Downloads (" + Activity.active + " active)" : "Downloads";
+                    icon: Icons.download;
+                    active: Activity.open || Activity.active > 0;
+                    activated => { Activity.open = !Activity.open; }
+                    if Activity.active > 0: Rectangle {
+                        x: parent.width / 2 + 6px;
+                        y: 10px;
+                        width: max(16px, count.preferred-width + 8px);
+                        height: 16px;
+                        border-radius: 8px;
+                        background: Theme.accent;
+                        count := Text { text: Activity.active; color: Theme.accent-contrast; font-size: 10px; font-weight: 700; }
+                    }
+                }
                 account-trigger := AccountButton { }
             }
         }
+        VerticalLayout {
+        horizontal-stretch: 1;
+        if Chrome.custom: TitleBar { }
         Rectangle {
-            horizontal-stretch: 1;
+            vertical-stretch: 1;
             if !Shell.loaded && Shell.fatal-error == "": HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Spinner { size: 28px; } } }
             if Shell.fatal-error != "": EmptyState {
                 icon: Icons.warning;
@@ -159,10 +225,21 @@ export component AppWindow inherits Window {
             if Shell.loaded && Nav.page == Page.skins: SkinsPage { }
             if Shell.loaded && Nav.page == Page.settings: SettingsPage { }
         }
+        }
+    }
+
+    // Sidebar tooltips live at window level so content never covers them;
+    // they have no input handlers and never take a click.
+    property <string> nav-tip: home-nav.hinted ? "Home" : instances-nav.hinted ? "Instances" : discover-nav.hinted ? "Discover" : skins-nav.hinted ? "Skins" : settings-nav.hinted ? "Settings" : downloads-nav.hinted ? downloads-nav.label : account-trigger.hinted ? (Accounts.has-account ? Accounts.name : "Sign in") : "";
+    property <length> nav-tip-center: home-nav.hinted ? home-nav.absolute-position.y + home-nav.height / 2 : instances-nav.hinted ? instances-nav.absolute-position.y + instances-nav.height / 2 : discover-nav.hinted ? discover-nav.absolute-position.y + discover-nav.height / 2 : skins-nav.hinted ? skins-nav.absolute-position.y + skins-nav.height / 2 : settings-nav.hinted ? settings-nav.absolute-position.y + settings-nav.height / 2 : downloads-nav.hinted ? downloads-nav.absolute-position.y + downloads-nav.height / 2 : account-trigger.absolute-position.y + account-trigger.height / 2;
+    if nav-tip != "" && !Accounts.dialog-open: Tooltip {
+        x: Chrome.sidebar-width + 6px;
+        y: max(4px, min(root.height - self.height - 4px, root.nav-tip-center - self.height / 2));
+        text: root.nav-tip;
     }
 
     if Shell.toast-visible: Toast {
-        x: (root.width - self.width) / 2 + 44px;
+        x: (root.width - self.width) / 2 + Chrome.sidebar-width / 2;
         y: root.height - self.height - 20px;
         text: Shell.toast-text;
         tone: Shell.toast-tone;
@@ -240,13 +317,47 @@ export component AppWindow inherits Window {
         }
     }
 
+    if Activity.open: Dialog {
+        title: "Downloads";
+        sidebar-anchored: true;
+        dialog-width: 460px;
+        dismissed => { Activity.open = false; }
+        Text { text: Activity.summary; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
+        if Activity.rows.length == 0: Text { text: "Installs you start from Discover appear here. Several can run at once; installs into the same instance take turns."; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
+        if Activity.rows.length > 0: ScrollView {
+            height: min(Activity.rows.length * 92px, min(380px, max(120px, root.height - 260px)));
+            VerticalLayout {
+                spacing: 6px;
+                alignment: start;
+                accessible-role: list;
+                for row in Activity.rows: ActivityLine { item: row; }
+            }
+        }
+        HorizontalLayout {
+            alignment: end;
+            Button { text: "Clear finished"; kind: ButtonKind.ghost; compact: true; enabled: Activity.rows.length > Activity.active; clicked => { Activity.clear(); } }
+        }
+    }
+
     if Instances.create-open: Dialog {
         title: "New instance";
         dialog-width: 520px;
         dismissible: !Instances.create-busy;
         dismissed => { Instances.create-open = false; }
-        Text { text: "Name"; color: Theme.text-secondary; font-size: Theme.text-metadata; }
-        TextField { label: "Instance name"; placeholder: "My instance"; text <=> Instances.create-name; max-length: 64; enabled: !Instances.create-busy; }
+        Text { text: "Name and icon"; color: Theme.text-secondary; font-size: Theme.text-metadata; }
+        HorizontalLayout {
+            spacing: Theme.space-3;
+            Rectangle {
+                width: 40px;
+                height: 40px;
+                accessible-role: button;
+                accessible-label: "Choose icon: " + Instances.create-icon-label;
+                accessible-action-default => { Instances.create-choose-icon(); }
+                InstanceIcon { path: Instances.create-icon; size: 40px; active: icon-touch.has-hover; }
+                icon-touch := TouchArea { mouse-cursor: pointer; enabled: !Instances.create-busy; clicked => { Instances.create-choose-icon(); } }
+            }
+            TextField { horizontal-stretch: 1; label: "Instance name"; placeholder: "My instance"; text <=> Instances.create-name; max-length: 64; enabled: !Instances.create-busy; }
+        }
         HorizontalLayout {
             spacing: Theme.space-3;
             VerticalLayout {
@@ -311,21 +422,7 @@ export component AppWindow inherits Window {
         }
     }
 
-    if Instances.rename-open: Dialog {
-        title: "Rename instance";
-        dialog-width: 420px;
-        dismissed => { Instances.rename-open = false; }
-        Text { text: "Renaming changes only the display name. Folders and data stay where they are."; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
-        field := TextField { label: "Instance name"; text <=> Instances.rename-text; max-length: 64; accepted => { Instances.rename-confirm(); } escaped => { Instances.rename-open = false; } }
-        if Instances.rename-error != "": Text { text: Instances.rename-error; color: Theme.error; wrap: word-wrap; }
-        HorizontalLayout {
-            alignment: end;
-            spacing: 8px;
-            Button { text: "Cancel"; kind: ButtonKind.ghost; clicked => { Instances.rename-open = false; } }
-            Button { text: "Rename"; kind: ButtonKind.primary; clicked => { Instances.rename-confirm(); } }
-        }
-        init => { field.focus-field(); field.select-everything(); }
-    }
+    if Instances.rename-open: IdentityDialog { }
 
     if Settings.client-dialog-open: Dialog {
         title: Settings.client-dialog-title;
@@ -357,6 +454,12 @@ export component AppWindow inherits Window {
         }
         init => { delete-field.focus-field(); }
     }
+
+    if IconPicker.open: IconPickerDialog { }
+
+    if AccentPicker.open: AccentPickerPopover { }
+
+    if Chrome.custom && !Chrome.maximized: ResizeEdges { }
 
     if Instances.remove-open: Dialog {
         title: Instances.remove-title;

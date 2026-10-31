@@ -1,5 +1,40 @@
 # Spxctra native design system (Aurora Launcher)
 
+## NATIVE-8 amendments
+
+The owner's NATIVE-8 brief explicitly authorizes subtle Borealis idle motion.
+One pre-blurred contour image drifts at 2 Hz only while the visible foreground
+window allows motion; Reduced Motion is static. Translucent tonal surfaces keep
+text stable and legible. This supersedes the historical no-Borealis/no-custom-
+title-bar/no-idle-motion statements below. Simple and OLED remain opaque and
+static. Windows uses the confirmed Aurora identity and native drag/resize/window
+controls behind a custom caption; other platforms retain their OS frame.
+
+The compact icon rail retains accessible names and hover/focus tooltips. Instance
+identity uses the existing persisted Material Symbols names, with search and a
+full native path catalog. Home widgets and the custom accent picker expose
+implemented services; they introduce no framework or runtime blur. See
+[NATIVE_8_ACCEPTANCE](../../NATIVE_8_ACCEPTANCE.md) for native screenshots,
+measured resources and verification limits. The refinement's retained raster
+measurements are not end-to-end preview latency.
+
+## Preview and layout refinement (2026-10-31 follow-up)
+
+Home has a compact, bounded launch surface with a clear page heading and direct
+routes to instance management and content. Discover and Instances retain their
+headers while their lists scroll. Skins uses a stationary fitting room beside
+an independently scrolling library: local skins are selectable rows, owned
+capes are a responsive artwork gallery. Front/Back, outer layers and reset stay
+beside the player. Selecting a cape shows the player's back immediately.
+
+Shared tabs have one keyboard focus owner, repeated Left/Right navigation,
+Home/End and a focus ring on the current tab. Selection remains accent text and
+icons only. The existing palettes, type roles, radii and spacing remain in use;
+there are no new effects, fonts, dependencies or background animations.
+
+See `NATIVE_7_UI_REFINEMENT_ACCEPTANCE.md` at the repository root for the new
+Windows screenshots, measured preview latency and remaining acceptance limits.
+
 ## NATIVE-7 amendments
 
 Selected navigation, tabs, rows and popup options use accent text/icons only.

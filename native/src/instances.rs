@@ -24,6 +24,10 @@ pub struct ContentItem {
     pub row: ContentRow,
 }
 
+/// Workspace tabs. Content tabs come first and their index equals the
+/// content kind index; Settings is always last.
+pub const TAB_MODS: i32 = 0;
+pub const TAB_SETTINGS: i32 = 3;
 const CONTENT_KINDS: [&str; 3] = ["mod", "resourcePack", "shaderPack"];
 
 /// The same content-status wording every surface shows (instanceStatus.ts).
@@ -54,7 +58,7 @@ pub fn content_status(instance: &InstanceSummary) -> (String, Tone) {
 
 pub fn bind(window: &AppWindow) {
     let instances = window.global::<Instances>();
-    instances.on_open(|id| open_workspace(id.to_string(), 0));
+    instances.on_open(|id| open_workspace(id.to_string(), TAB_MODS));
     instances.on_create(open_create);
     instances.on_close_workspace(|| {
         ui::with(|window, state| {
@@ -126,9 +130,9 @@ pub fn bind(window: &AppWindow) {
             return;
         };
         let host = ui::host();
-        if tab == 1 {
+        if tab == TAB_MODS {
             ui::spawn(api::open_mods_folder(host, id), report_error);
-        } else if let Some(kind) = CONTENT_KINDS.get(tab as usize - 1) {
+        } else if let Some(kind) = CONTENT_KINDS.get(tab as usize) {
             ui::spawn(api::open_content_folder(host, id, kind), report_error);
         }
     });
@@ -146,21 +150,22 @@ pub fn bind(window: &AppWindow) {
         .flatten() else {
             return;
         };
-        crate::discover::open_for(id, (tab - 1).max(0));
+        crate::discover::open_for(id, tab.clamp(0, 2));
     });
     instances.on_rename_start(|| {
-        ui::with(|window, state| {
-            let Some(workspace) = &state.workspace else {
-                return;
-            };
-            let Some(instance) = state.instance(&workspace.id) else {
-                return;
-            };
+        let Some(current) = ui::with(|window, state| {
+            let workspace = state.workspace.as_ref()?;
+            let instance = state.instance(&workspace.id)?;
             let instances = window.global::<Instances>();
             instances.set_rename_text(instance.display_name.clone().into());
             instances.set_rename_error("".into());
-            instances.set_rename_open(true);
-        });
+            Some(state.icon_name(&instance.id).map(str::to_owned))
+        })
+        .flatten() else {
+            return;
+        };
+        crate::icons::begin(crate::icons::Target::Identity, current);
+        ui::with(|window, _| window.global::<Instances>().set_rename_open(true));
     });
     instances.on_rename_confirm(rename);
     instances.on_delete_start(|| {
@@ -201,6 +206,7 @@ pub fn apply_state(state: LauncherState) {
     crate::home::render();
     render_workspace_header();
     crate::discover::render_targets();
+    crate::widgets::refresh();
 }
 
 pub fn render_list() {
@@ -267,6 +273,15 @@ fn render_workspace_header() {
         let (status, tone) = content_status(instance);
         instances.set_id(instance.id.clone().into());
         instances.set_name(instance.display_name.clone().into());
+        instances.set_icon(state.icon_path(&instance.id).into());
+        instances.set_icon_label(
+            crate::symbols::label(
+                state
+                    .icon_name(&instance.id)
+                    .unwrap_or(crate::symbols::FALLBACK_ICON),
+            )
+            .into(),
+        );
         instances.set_subtitle(instance.subtitle().into());
         instances.set_letter(ui::letter(&instance.display_name).into());
         instances.set_status(status.into());
@@ -514,7 +529,7 @@ fn repair() {
 }
 
 fn load_tab(tab: i32) {
-    if tab <= 0 {
+    if !(TAB_MODS..TAB_SETTINGS).contains(&tab) {
         return;
     }
     let Some((id, serial)) = ui::with(|window, state| {
@@ -531,12 +546,12 @@ fn load_tab(tab: i32) {
     };
     render_content();
     let host = ui::host();
-    if tab == 1 {
+    if tab == TAB_MODS {
         ui::spawn(api::instance_mods(host, id), move |result| {
             apply_content(serial, result.map(mod_items))
         });
     } else {
-        let kind = CONTENT_KINDS[tab as usize - 1];
+        let kind = CONTENT_KINDS[tab as usize];
         ui::spawn(api::instance_content(host, id, kind), move |result| {
             apply_content(serial, result.map(pack_items))
         });
@@ -707,13 +722,13 @@ fn toggle_content(entry: slint::SharedString, enabled: bool) {
     };
     let host = ui::host();
     let entry = entry.to_string();
-    if tab == 1 {
+    if tab == TAB_MODS {
         ui::spawn(
             api::set_mod_enabled(host, id, entry, enabled),
             move |result| finish_mutation(serial, result.map(mod_items)),
         );
-    } else if tab > 1 {
-        let kind = CONTENT_KINDS[tab as usize - 1];
+    } else if (1..TAB_SETTINGS).contains(&tab) {
+        let kind = CONTENT_KINDS[tab as usize];
         ui::spawn(
             api::set_pack_enabled(host, id, kind, entry, enabled),
             move |result| finish_mutation(serial, result.map(pack_items)),
@@ -739,12 +754,12 @@ fn remove_content() {
         return;
     };
     let host = ui::host();
-    if tab == 1 {
+    if tab == TAB_MODS {
         ui::spawn(api::remove_mod(host, id, entry), move |result| {
             finish_mutation(serial, result.map(mod_items))
         });
-    } else if tab > 1 {
-        let kind = CONTENT_KINDS[tab as usize - 1];
+    } else if (1..TAB_SETTINGS).contains(&tab) {
+        let kind = CONTENT_KINDS[tab as usize];
         ui::spawn(api::remove_content(host, id, kind, entry), move |result| {
             finish_mutation(serial, result.map(pack_items))
         });
@@ -767,8 +782,11 @@ fn finish_mutation(serial: u64, result: api::ApiResult<Vec<ContentItem>>) {
     }
 }
 
+/// Saves the identity dialog: the display name (only when it changed) and
+/// then the icon (only when it changed). Each goes through its own
+/// validated application service.
 fn rename() {
-    let Some((id, expected, name)) = ui::with(|window, state| {
+    let Some((id, expected, name, current_icon)) = ui::with(|window, state| {
         let workspace = state.workspace.as_ref()?;
         let instance = state.instance(&workspace.id)?;
         let name = window
@@ -776,10 +794,21 @@ fn rename() {
             .get_rename_text()
             .trim()
             .to_owned();
-        Some((instance.id.clone(), instance.display_name.clone(), name))
+        Some((
+            instance.id.clone(),
+            instance.display_name.clone(),
+            name,
+            state.icon_name(&instance.id).map(str::to_owned),
+        ))
     })
     .flatten() else {
         return;
+    };
+    let icon = crate::icons::chosen();
+    let save_icon = move |id: String| {
+        if icon != current_icon {
+            crate::icons::persist(id, icon, || {});
+        }
     };
     if name.is_empty() {
         ui::with(|window, _| {
@@ -789,12 +818,19 @@ fn rename() {
         });
         return;
     }
+    if name == expected {
+        ui::with(|window, _| window.global::<Instances>().set_rename_open(false));
+        save_icon(id);
+        return;
+    }
+    let renamed = id.clone();
     ui::spawn(
         api::rename_instance(ui::host(), id, expected, name),
-        |result| match result {
+        move |result| match result {
             Ok(_) => {
                 ui::with(|window, _| window.global::<Instances>().set_rename_open(false));
                 reload(|| {});
+                save_icon(renamed);
             }
             Err(error) => {
                 ui::with(|window, _| {
@@ -852,6 +888,7 @@ thread_local! {
 }
 
 fn open_create() {
+    crate::icons::reset_create_choice();
     ui::with(|window, state| {
         let instances = window.global::<Instances>();
         instances.set_create_name(format!("Instance {}", state.instances().len() + 1).into());
@@ -1035,6 +1072,9 @@ fn create() {
                         Tone::Success,
                     );
                     let id = instance.id.clone();
+                    if let Some(icon) = crate::icons::take_create_choice() {
+                        crate::icons::persist(id.clone(), Some(icon), || {});
+                    }
                     reload(move || {
                         // A first instance becomes the Home selection like the WebView UI.
                         let has_selection = ui::state(|s| s.selected_instance().is_some());

@@ -7,7 +7,7 @@ import { Discover, ProjectRow } from "../state.slint";
 
 component ProjectLine inherits Rectangle {
     in property <ProjectRow> item;
-    height: max(72px, layout.preferred-height);
+    height: max(92px, layout.preferred-height);
     border-radius: Theme.radius-md;
     background: touch.has-hover ? Theme.hover : Theme.surface;
     accessible-role: list-item;
@@ -15,21 +15,20 @@ component ProjectLine inherits Rectangle {
     accessible-description: root.item.description;
     touch := TouchArea { }
     layout := HorizontalLayout {
-        padding: 12px;
-        spacing: 12px;
-        Glyph { y: (parent.height - self.height) / 2; letter: root.item.letter; picture: root.item.picture; has-picture: root.item.has-picture; size: 44px; }
+        padding: 16px;
+        spacing: 16px;
+        Glyph { y: (parent.height - self.height) / 2; letter: root.item.letter; picture: root.item.picture; has-picture: root.item.has-picture; size: 48px; }
         VerticalLayout {
             horizontal-stretch: 1;
             alignment: center;
-            spacing: 2px;
+            spacing: 4px;
             HorizontalLayout {
                 spacing: 8px;
                 alignment: start;
                 Text { text: root.item.title; font-size: Theme.text-body; font-weight: 600; color: Theme.text; overflow: elide; horizontal-stretch: 0; }
-                Text { text: "by " + root.item.author; font-size: Theme.text-metadata; color: Theme.text-muted; overflow: elide; vertical-alignment: center; horizontal-stretch: 0; }
             }
             Text { text: root.item.description; font-size: Theme.text-metadata; color: Theme.text-secondary; wrap: word-wrap; max-height: 36px; overflow: elide; }
-            Text { text: root.item.downloads; font-size: Theme.text-label; color: Theme.text-muted; }
+            Text { text: root.item.author + " · " + root.item.downloads; font-size: Theme.text-label; color: Theme.text-muted; overflow: elide; }
         }
         Button { y: (parent.height - self.height) / 2; text: "Details"; compact: true; enabled: !Discover.install-busy; clicked => { Discover.details(root.item.id); } }
         Button {
@@ -44,11 +43,10 @@ component ProjectLine inherits Rectangle {
     }
 }
 
-export component DiscoverPage inherits ScrollView {
+export component DiscoverPage inherits Rectangle {
     VerticalLayout {
         padding: Theme.space-6;
         spacing: Theme.space-4;
-        alignment: start;
         HorizontalLayout {
             spacing: Theme.space-3;
             PageTitle { text: "Discover"; horizontal-stretch: 1; vertical-alignment: center; }
@@ -89,11 +87,16 @@ export component DiscoverPage inherits ScrollView {
         if Discover.error != "": Text { text: Discover.error; color: Theme.error; wrap: word-wrap; }
         if Discover.error != "": HorizontalLayout { alignment: start; Button { text: "Try again"; enabled: !Discover.loading; clicked => { Discover.search(); } } }
         if Discover.progress != "": Text { text: Discover.progress; color: Theme.text-secondary; wrap: word-wrap; }
-        VerticalLayout {
-            spacing: 6px;
-            accessible-role: list;
-            accessible-label: "Results";
-            for row in Discover.results: ProjectLine { item: row; }
+        ScrollView {
+            vertical-stretch: 1;
+            VerticalLayout {
+                padding: 4px;
+                spacing: 8px;
+                alignment: start;
+                accessible-role: list;
+                accessible-label: "Results";
+                for row in Discover.results: ProjectLine { item: row; }
+            }
         }
         if Discover.loading: HorizontalLayout { alignment: center; padding: Theme.space-5; Spinner { size: 22px; } }
         if Discover.has-more && !Discover.loading: HorizontalLayout { alignment: center; Button { text: "Show more"; clicked => { Discover.more(); } } }

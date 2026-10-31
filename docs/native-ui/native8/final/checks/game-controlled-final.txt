@@ -1,0 +1,56 @@
+warning: unused import: `std::io::Read`
+   --> src\server_enrichment\mod.rs:524:9
+    |
+524 |     use std::io::Read as _;
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> src\modrinth.rs:1747:13
+     |
+1747 |         let mut neoforge_file = VersionDto {
+     |             ----^^^^^^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `unbreak_path` is never used
+    --> src\instances\lifecycle.rs:2681:23
+     |
+2350 |     impl SyntheticWorld {
+     |     ------------------- method in this implementation
+...
+2681 |         pub(crate) fn unbreak_path(&self, path: &str) {
+     |                       ^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `carried_fabric_api` is never used
+    --> src\updates\client.rs:1180:12
+     |
+1064 |     impl Lab {
+     |     -------- method in this implementation
+...
+1180 |         fn carried_fabric_api(&self) -> serde_json::Value {
+     |            ^^^^^^^^^^^^^^^^^^
+
+warning: `aurora-launcher` (lib test) generated 4 warnings (run `cargo fix --lib -p aurora-launcher --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src\lib.rs (src-tauri\target\debug\deps\aurora_launcher_lib-57118536c2fe8f2d.exe)
+
+running 1 test
+BENCH limit=16 cold total_ms=1816 validation_ms=77 requests=198 downloaded_bytes=26294 max_concurrency=16 phases=[("asset-index", 4), ("client", 31), ("libraries", 101), ("assets", 523), ("materializing", 1374), ("extractingNatives", 1433), ("validating", 1435), ("committing", 1534)]
+[aurora-install] target=benchmark-first recovery=Completed
+BENCH limit=16 warm-reinstall total_ms=735 validation_ms=73 requests=0 downloaded_bytes=0 max_concurrency=0 phases=[("validating", 16), ("asset-index", 130), ("client", 130), ("libraries", 131), ("assets", 156), ("materializing", 169), ("extractingNatives", 226), ("validating", 227), ("committing", 325)]
+BENCH limit=16 second-instance total_ms=500 validation_ms=75 requests=0 downloaded_bytes=0 max_concurrency=0 phases=[("asset-index", 4), ("client", 5), ("libraries", 5), ("assets", 30), ("materializing", 43), ("extractingNatives", 102), ("validating", 104), ("committing", 204)]
+test install::tests::benchmark_controlled_game_installation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1050 filtered out; finished in 3.41s
+
+     Running tests\icon_assets.rs (src-tauri\target\debug\deps\icon_assets-58533c1ede720020.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s

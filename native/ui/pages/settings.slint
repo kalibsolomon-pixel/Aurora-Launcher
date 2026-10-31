@@ -4,7 +4,37 @@ import { ScrollView, AboutSlint } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
 import { Button, ButtonKind, Toggle, Dropdown, Group, SettingRow, PageTitle, FocusRing, KeyboardFocus, Label, TextField } from "../components.slint";
-import { Settings, Accounts, Swatch } from "../state.slint";
+import { Settings, Accounts, Swatch, AccentPicker } from "../state.slint";
+
+/// The custom accent: one more swatch beside the presets. It shows the saved
+/// custom color (checked when in use) or a "+" when none exists, and opens
+/// the anchored picker with one click.
+component CustomAccentSwatch inherits Rectangle {
+    in property <bool> chosen;
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
+    background: Settings.has-custom-accent ? Settings.custom-accent-color : (touch.has-hover ? Theme.hover : Theme.raised);
+    border-width: Settings.has-custom-accent ? 0px : 1px;
+    border-color: Theme.border-strong;
+    accessible-role: button;
+    accessible-label: Settings.has-custom-accent ? "Custom accent color" : "Add a custom accent color";
+    accessible-checked: chosen;
+    accessible-action-default => { open(); }
+    forward-focus: focus;
+    function open() { AccentPicker.show(self.absolute-position.x, self.absolute-position.y); }
+    if chosen: Icon { path: Icons.check; size: 18px; color: Theme.accent-contrast; }
+    if !chosen: Icon { path: Settings.has-custom-accent ? Icons.edit : Icons.add; size: Settings.has-custom-accent ? 14px : 18px; color: Settings.has-custom-accent ? Theme.accent-contrast : Theme.text-secondary; }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); root.open(); } }
+    focus := KeyboardFocus {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) { root.open(); return accept; }
+            reject
+        }
+    }
+    FocusRing { x: -4px; y: -4px; width: root.width + 8px; height: root.height + 8px; shown: focus.has-focus && focus.focus-visible; radius: 16px; }
+}
 
 component AccentSwatch inherits Rectangle {
     in property <Swatch> swatch;
@@ -66,20 +96,24 @@ export component SettingsPage inherits ScrollView {
                         chosen: swatch.id == Settings.accent-id;
                         picked => { Settings.accent-changed(swatch.id); }
                     }
+                    CustomAccentSwatch { chosen: Settings.accent-id == "custom"; }
                 }
             }
             SettingRow {
-                label: "Custom accent";
-                detail: Settings.accent-id == "custom" ? "In use. Aurora adjusts it for readable buttons." : "A #rrggbb color. Colors too dark to stay visible are refused.";
-                HorizontalLayout {
-                    spacing: 8px;
-                    TextField { width: 120px; label: "Custom accent color"; placeholder: "#8b80ff"; max-length: 7; text <=> Settings.custom-accent; accepted(text) => { Settings.custom-accent-apply(text); } }
-                    Button { text: "Apply"; enabled: !Settings.appearance-busy; clicked => { Settings.custom-accent-apply(Settings.custom-accent); } }
+                label: "Background";
+                detail: Settings.background-index >= 0 && Settings.background-index < Settings.background-descriptions.length ? Settings.background-descriptions[Settings.background-index] : "";
+                Dropdown {
+                    width: 220px;
+                    label: "Background";
+                    model: Settings.background-labels;
+                    current-index <=> Settings.background-index;
+                    enabled: !Settings.appearance-busy;
+                    selected(index) => { Settings.background-changed(index); }
                 }
             }
             SettingRow {
                 label: "Reduce motion";
-                detail: "Turns off transitions. Aurora never animates while idle.";
+                    detail: "Stops transitions and Borealis motion.";
                 Toggle { label: "Reduce motion"; checked <=> Settings.reduce-motion; toggled(value) => { Settings.reduce-motion-changed(value); } }
             }
             if Settings.appearance-error != "": Text { text: Settings.appearance-error; color: Theme.error; wrap: word-wrap; }
@@ -91,6 +125,28 @@ export component SettingsPage inherits ScrollView {
                 label: Accounts.has-account ? Accounts.name : "Not signed in";
                 detail: Accounts.has-account ? Accounts.status : "Sign-in opens Microsoft in your browser. Aurora never sees your password.";
                 Button { text: "Manage accounts"; icon: Icons.person; clicked => { Accounts.open-dialog(); } }
+            }
+        }
+
+        Group {
+            title: "Discord";
+            description: Settings.discord-status;
+            SettingRow {
+                label: "Rich Presence";
+                detail: "Shows that you are playing through Aurora in your Discord status. Nothing is shared until this is on.";
+                Toggle { label: "Discord Rich Presence"; checked <=> Settings.discord-enabled; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } }
+            }
+            if Settings.discord-enabled: VerticalLayout {
+                spacing: Theme.space-1;
+                SettingRow { label: "Instance name"; Toggle { label: "Share the instance name"; checked <=> Settings.discord-instance-name; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                SettingRow { label: "Minecraft version"; Toggle { label: "Share the Minecraft version"; checked <=> Settings.discord-minecraft-version; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                SettingRow { label: "Mod loader"; Toggle { label: "Share the mod loader"; checked <=> Settings.discord-platform; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                SettingRow { label: "Aurora Client status"; Toggle { label: "Share whether Aurora Client is active"; checked <=> Settings.discord-aurora-active; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                SettingRow { label: "Elapsed time"; Toggle { label: "Share elapsed play time"; checked <=> Settings.discord-elapsed-time; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                SettingRow { label: "World name"; detail: "The singleplayer world you are in."; Toggle { label: "Share the singleplayer world name"; checked <=> Settings.discord-world; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                SettingRow { label: "Server name"; detail: "The multiplayer server's name. A name that contains its address is withheld unless the address is allowed below."; Toggle { label: "Share the server name"; checked <=> Settings.discord-server; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                if Settings.discord-server: SettingRow { label: "Server address"; Toggle { label: "Share the server address"; checked <=> Settings.discord-server-address; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                if Settings.discord-configured: HorizontalLayout { alignment: end; Button { text: "Reconnect"; icon: Icons.refresh; compact: true; enabled: !Settings.discord-busy; clicked => { Settings.discord-connect(); } } }
             }
         }
 

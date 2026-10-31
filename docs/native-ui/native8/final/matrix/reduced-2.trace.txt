@@ -1,0 +1,2 @@
+[borealis] {"event":"process-entry","ms":0,"updates":0,"phaseMs":0,"visible":false,"foreground":false}
+[borealis] {"event":"home-state-loaded","ms":1033,"updates":0,"phaseMs":0,"visible":true,"foreground":true}

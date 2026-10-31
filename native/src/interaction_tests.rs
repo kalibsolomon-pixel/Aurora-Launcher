@@ -1,6 +1,6 @@
 //! Pointer regression tests dispatch actual press/release pairs, never UIA Invoke.
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
-use slint::platform::{Platform, PointerEventButton, WindowAdapter, WindowEvent};
+use slint::platform::{Key, Platform, PointerEventButton, WindowAdapter, WindowEvent};
 use slint::{ComponentHandle, LogicalPosition, LogicalSize};
 use std::{cell::Cell, rc::Rc};
 
@@ -11,11 +11,12 @@ slint::slint! {
         in-out property <bool> controlled: false;
         in-out property <int> authoritative-index: 0;
         out property <int> displayed-index: choice.current-index;
+        out property <int> tab-index: tabs.current;
         callback action(int);
         Button { x: 20px; y: 20px; width: 150px; height: 36px; text: "Action"; clicked => { root.action(0); } }
         Toggle { x: 20px; y: 80px; toggled => { root.action(1); } }
         Checkbox { x: 20px; y: 130px; width: 180px; height: 30px; text: "Check"; toggled => { root.action(2); } }
-        Tabs { x: 20px; y: 180px; width: 220px; height: 38px; model: ["First", "Second"]; selected => { root.action(3); } }
+        tabs := Tabs { x: 20px; y: 180px; width: 220px; height: 38px; model: ["First", "Second"]; selected => { root.action(3); } }
         choice := Dropdown { x: 20px; y: 240px; width: 200px; height: 36px; model: ["First", "Second"]; controlled: root.controlled; current-index: root.authoritative-index; selected => { root.action(4); } }
         TextField { x: 20px; y: 310px; width: 200px; height: 36px; label: "Query"; }
         Slider { x: 20px; y: 380px; width: 200px; height: 30px; released => { root.action(5); } }
@@ -68,6 +69,28 @@ fn one_primary_click_dispatches_exactly_once_with_and_without_window_focus() {
             );
         }
     }
+    click(fixture.window(), 55., 198.);
+    let before_keys = counts[3].get();
+    for (key, expected) in [
+        (Key::RightArrow, 1),
+        (Key::RightArrow, 0),
+        (Key::LeftArrow, 1),
+        (Key::Home, 0),
+        (Key::End, 1),
+    ] {
+        fixture
+            .window()
+            .dispatch_event(WindowEvent::KeyPressed { text: key.into() });
+        fixture
+            .window()
+            .dispatch_event(WindowEvent::KeyReleased { text: key.into() });
+        assert_eq!(
+            fixture.get_tab_index(),
+            expected,
+            "tab focus must follow repeated keyboard navigation"
+        );
+    }
+    assert_eq!(counts[3].get(), before_keys + 5, "one selection per key");
     let before = counts[4].get();
     click(fixture.window(), 60., 258.);
     click(fixture.window(), 60., 332.);

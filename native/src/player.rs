@@ -136,6 +136,22 @@ fn valid_cape(t: &Texture) -> bool {
     matches!((t.width, t.height), (64, 32) | (64, 64) | (128, 64))
         && t.rgba.len() == (t.width * t.height * 4) as usize
 }
+/// The cape's outward 10×16 artwork in Minecraft's texture net, also used
+/// by the collection. HD textures use the same UV region at their texel scale.
+pub fn cape_artwork(t: &Texture) -> Option<Vec<u8>> {
+    if !valid_cape(t) {
+        return None;
+    }
+    let scale = t.width as usize / 64;
+    let mut pixels = Vec::with_capacity(10 * 16 * 4);
+    for y in 1..17 {
+        for x in 1..11 {
+            let i = (y * scale * t.width as usize + x * scale) * 4;
+            pixels.extend_from_slice(&t.rgba[i..i + 4]);
+        }
+    }
+    Some(pixels)
+}
 fn mesh(modern: bool, slim: bool, layers: bool, cape: bool) -> Mesh {
     let mut m = Mesh {
         faces: Vec::with_capacity(78),
@@ -309,8 +325,11 @@ fn mesh(modern: bool, slim: bool, layers: bool, cape: bool) -> Mesh {
             P::new(0., -8., 3.),
             0,
             0,
-            12.,
-            0.,
+            // Minecraft's cape box faces opposite the body: the 1,1 face is
+            // the outward artwork; 12,1 is the lining. Reverse the local
+            // pitch too so the bottom still hangs behind the shoulders.
+            -12.,
+            180.,
             false,
             0.,
             true,
@@ -325,6 +344,17 @@ struct Projected {
     z: f32,
     inv: f32,
 }
+/// Applies a pointer drag of (`dx`, `dy`) pixels to the view. The camera
+/// looks along +z from negative z, so the surface facing the viewer follows
+/// the pointer when yaw *decreases* for a rightward drag (NATIVE-8 fix: the
+/// sign was inverted). Vertical drag was already correct and is unchanged.
+pub fn apply_drag(yaw: f32, pitch: f32, dx: f32, dy: f32) -> (f32, f32) {
+    (
+        (yaw - dx * 0.012) % std::f32::consts::TAU,
+        (pitch + dy * 0.006).clamp(-0.6, 0.6),
+    )
+}
+
 fn project(p: P, yaw: f32, pitch: f32, zoom: f32) -> Projected {
     let px = p.x * yaw.cos() + p.z * yaw.sin();
     let pz = -p.x * yaw.sin() + p.z * yaw.cos();
@@ -493,10 +523,18 @@ pub fn render(
                         if color[3] == 0 || (color[3] < 255) != transparent {
                             continue;
                         }
+                        let dst = pixel * 4;
                         if !transparent {
                             depth[pixel] = z;
+                            // Opaque texels need no destination read or alpha
+                            // composition. This is almost all base/cape work.
+                            for ch in 0..3 {
+                                out[dst + ch] =
+                                    (color[ch] as f32 * face.shade).round().clamp(0., 255.) as u8;
+                            }
+                            out[dst + 3] = 255;
+                            continue;
                         }
-                        let dst = pixel * 4;
                         let alpha = color[3] as f32 / 255.;
                         let back = out[dst + 3] as f32 / 255.;
                         let total = alpha + back * (1. - alpha);
@@ -520,6 +558,47 @@ pub fn render(
 }
 
 #[cfg(test)]
+mod drag_direction_tests {
+    use super::*;
+
+    #[test]
+    fn dragging_right_moves_the_facing_surface_right() {
+        let start_yaw = DEFAULT_YAW;
+        // A point on the surface facing the viewer (the camera is at -z).
+        let p = P {
+            x: 0.,
+            y: 0.,
+            z: -8.,
+        };
+        let before = project(p, start_yaw, 0.1, 1.);
+        let (yaw, pitch) = apply_drag(start_yaw, 0.1, 30., 0.);
+        let after = project(p, yaw, pitch, 1.);
+        assert!(after.x > before.x, "{} -> {}", before.x, after.x);
+        let (yaw, pitch) = apply_drag(start_yaw, 0.1, -30., 0.);
+        let after = project(p, yaw, pitch, 1.);
+        assert!(after.x < before.x);
+    }
+
+    #[test]
+    fn vertical_drag_is_unchanged_and_bounded() {
+        let p = P {
+            x: 0.,
+            y: 0.,
+            z: -8.,
+        };
+        let before = project(p, 0., 0., 1.);
+        let (yaw, pitch) = apply_drag(0., 0., 0., 30.);
+        assert_eq!(yaw, 0.);
+        assert!((pitch - 0.18).abs() < 1e-6);
+        assert!(
+            project(p, yaw, pitch, 1.).y > before.y,
+            "dragging down moves the facing surface down"
+        );
+        assert_eq!(apply_drag(0., 0.5, 0., 1000.).1, 0.6);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     fn skin(model: &str, height: u32) -> HeadAvatar {
@@ -528,6 +607,37 @@ mod tests {
             skin_rgba: vec![255; 64 * height as usize * 4],
             skin_height: height,
             model: model.into(),
+        }
+    }
+    #[test]
+    fn cape_outside_matches_thumbnail_and_preserves_left_right_artwork() {
+        for scale in [1, 2] {
+            let mut cape = Texture {
+                width: 64 * scale,
+                height: 32 * scale,
+                rgba: vec![0; (64 * 32 * scale * scale * 4) as usize],
+            };
+            for y in scale..17 * scale {
+                for x in scale..22 * scale {
+                    let color = if x < 6 * scale {
+                        [240, 20, 10, 255]
+                    } else if x < 11 * scale {
+                        [10, 240, 20, 255]
+                    } else {
+                        [10, 20, 240, 255]
+                    };
+                    let i = ((y * cape.width + x) * 4) as usize;
+                    cape.rgba[i..i + 4].copy_from_slice(&color);
+                }
+            }
+            let thumb = cape_artwork(&cape).unwrap();
+            assert_eq!(&thumb[..4], &[240, 20, 10, 255]);
+            assert_eq!(&thumb[36..40], &[10, 240, 20, 255]);
+            let frame = render(None, Some(&cape), std::f32::consts::PI, 0., 1., false);
+            for (x, expected) in [(135, [240, 20, 10, 255]), (185, [10, 240, 20, 255])] {
+                let i = (245 * W + x) * 4;
+                assert_eq!(&frame[i..i + 4], &expected, "cape scale {scale}, x {x}");
+            }
         }
     }
     #[test]

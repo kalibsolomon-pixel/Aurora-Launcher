@@ -84,6 +84,10 @@ pub struct LauncherState {
     pub instances: Vec<InstanceSummary>,
     #[serde(default)]
     pub platform_capabilities: Vec<PlatformCapability>,
+    /// Instance id → Material Symbols name, read from the separate icon
+    /// store with the state. A damaged store degrades to no icons.
+    #[serde(skip)]
+    pub icons: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -569,7 +573,122 @@ pub fn application_status(host: &Host) -> ApiResult<ApplicationStatus> {
 }
 
 pub async fn launcher_state(host: Host) -> ApiResult<LauncherState> {
-    convert(app::get_launcher_state(host).await)
+    let mut state: LauncherState = convert(app::get_launcher_state(host.clone()).await)?;
+    state.icons = blocking(move || app::get_instance_icons(host).unwrap_or_default())
+        .await
+        .unwrap_or_default();
+    Ok(state)
+}
+
+/// Sets (or clears, with `None`) one instance's Material Symbols icon.
+pub async fn set_instance_icon(
+    host: Host,
+    instance_id: String,
+    icon: Option<String>,
+) -> ApiResult<std::collections::BTreeMap<String, String>> {
+    let request = request(json!({ "instanceId": instance_id, "icon": icon }))?;
+    blocking(move || convert(app::set_instance_icon(host, request))).await?
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WidgetPlacement {
+    pub id: String,
+    pub enabled: bool,
+    pub size: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HomeLayout {
+    pub widgets: Vec<WidgetPlacement>,
+}
+
+pub async fn home_widgets(host: Host) -> ApiResult<HomeLayout> {
+    blocking(move || convert(app::get_home_widgets(host))).await?
+}
+
+pub async fn set_home_widgets(host: Host, layout: HomeLayout) -> ApiResult<HomeLayout> {
+    let request = request(serde_json::to_value(layout).map_err(contract)?)?;
+    blocking(move || convert(app::set_home_widgets(host, request))).await?
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Playtime {
+    pub today_ms: u64,
+    pub last_7_days_ms: u64,
+    pub last_30_days_ms: u64,
+    pub all_time_ms: u64,
+}
+
+pub async fn playtime(host: Host, instance_id: Option<String>) -> ApiResult<Playtime> {
+    blocking(move || convert(app::get_playtime_summary(host, instance_id))).await?
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentTarget {
+    pub instance_id: String,
+    pub display_name: String,
+    pub last_played_at: u64,
+    pub duration_ms: u64,
+    pub available: bool,
+    pub favorite: bool,
+}
+
+pub async fn recent_servers(
+    host: Host,
+    instance_id: Option<String>,
+    limit: usize,
+) -> ApiResult<Vec<RecentTarget>> {
+    blocking(move || convert(app::get_recent_servers(host, instance_id, limit))).await?
+}
+
+pub async fn recent_worlds(
+    host: Host,
+    instance_id: Option<String>,
+    limit: usize,
+) -> ApiResult<Vec<RecentTarget>> {
+    blocking(move || convert(app::get_recent_worlds(host, instance_id, limit))).await?
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscordPreferences {
+    pub enabled: bool,
+    pub instance_name: bool,
+    pub minecraft_version: bool,
+    pub platform: bool,
+    pub aurora_active: bool,
+    pub elapsed_time: bool,
+    pub world: bool,
+    pub server: bool,
+    pub server_address: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscordState {
+    pub connection: String,
+    pub configured: bool,
+    pub preferences: DiscordPreferences,
+}
+
+pub fn discord_state() -> ApiResult<DiscordState> {
+    convert::<_, DiscordState>(Ok::<_, app::CommandError>(app::get_discord_state()))
+}
+
+pub async fn set_discord_preferences(
+    host: Host,
+    preferences: DiscordPreferences,
+) -> ApiResult<DiscordState> {
+    let request = request(serde_json::to_value(preferences).map_err(contract)?)?;
+    blocking(move || convert(app::set_discord_preferences(host, request))).await?
+}
+
+pub async fn connect_discord() -> ApiResult<DiscordState> {
+    convert::<_, DiscordState>(Ok::<_, app::CommandError>(app::connect_discord().await))
 }
 
 pub async fn select_instance(host: Host, instance_id: String) -> ApiResult<()> {

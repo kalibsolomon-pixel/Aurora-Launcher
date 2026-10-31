@@ -12,6 +12,15 @@ export struct InstanceRow {
     status: string,
     tone: Tone,
     selected: bool,
+    // 24×24 SVG path of the instance's Material Symbols icon.
+    icon: string,
+}
+
+/// One icon in the Material Symbols picker grid.
+export struct SymbolCell {
+    name: string,
+    label: string,
+    path: string,
 }
 
 export struct BlockerRow {
@@ -65,6 +74,7 @@ export struct SkinRow {
     model: string,
     thumb: image,
     has-thumb: bool,
+    previewed: bool,
 }
 
 export struct CapeRow {
@@ -99,6 +109,7 @@ export global Shell {
 export global Home {
     in property <bool> has-instance: false;
     in property <string> name;
+    in property <string> icon;
     in property <string> subtitle;
     in property <string> letter;
     in property <string> status;
@@ -132,6 +143,8 @@ export global Instances {
     // Workspace header.
     in property <string> id;
     in property <string> name;
+    in property <string> icon;
+    in property <string> icon-label;
     in property <string> subtitle;
     in property <string> letter;
     in property <string> status;
@@ -187,6 +200,7 @@ export global Instances {
     in property <string> rename-error;
     callback rename-start();
     callback rename-confirm();
+    callback edit-icon();
 
     // Instance deletion (exact-name confirmation, enforced again in Rust).
     in-out property <bool> delete-open: false;
@@ -218,9 +232,34 @@ export global Instances {
     in property <string> create-progress;
     in property <float> create-fraction: -1;
     in property <string> create-error;
+    in property <string> create-icon;
+    in property <string> create-icon-label;
+    callback create-choose-icon();
     callback create-changed();
     callback snapshots-changed(bool);
     callback create-confirm();
+}
+
+/// The searchable Material Symbols picker. Rust performs the bounded search;
+/// the grid renders only the returned cells.
+export global IconPicker {
+    // Standalone picker (instance creation). The identity dialog embeds the
+    // same panel with the rename field.
+    in-out property <bool> open: false;
+    in-out property <string> query;
+    in property <[SymbolCell]> results;
+    in property <[string]> categories;
+    in-out property <int> category: 0;
+    in property <string> chosen;
+    in property <string> chosen-path;
+    in property <string> chosen-label;
+    in property <string> summary;
+    callback search(string);
+    callback category-changed(int);
+    callback choose(string);
+    callback reset();
+    callback confirm();
+    callback cancel();
 }
 
 export global Discover {
@@ -259,6 +298,51 @@ export global Discover {
     callback review();
     callback confirm-install();
     callback close-details();
+}
+
+/// The floating custom-accent picker anchored to the "+" swatch. Rust owns
+/// HSV/hex conversion and contrast validation (the core appearance rules).
+export global AccentPicker {
+    in-out property <bool> open: false;
+    in property <length> anchor-x;
+    in property <length> anchor-y;
+    in property <float> hue;
+    in property <float> saturation;
+    in property <float> value;
+    in property <color> hue-color: #ff0000;
+    in property <color> preview: #8b80ff;
+    in-out property <string> hex;
+    in property <string> message;
+    in property <bool> valid: true;
+    callback show(length, length);
+    callback set-hue(float);
+    callback set-sv(float, float);
+    callback hex-edited(string);
+    callback apply();
+    callback cancel();
+}
+
+export struct ActivityRow {
+    id: int,
+    title: string,
+    detail: string,
+    phase: string,
+    message: string,
+    tone: Tone,
+    can-cancel: bool,
+    can-retry: bool,
+    running: bool,
+}
+
+/// Downloads and installs started from Discover (native/src/activity.rs).
+export global Activity {
+    in property <[ActivityRow]> rows;
+    in property <string> summary;
+    in property <int> active: 0;
+    in-out property <bool> open: false;
+    callback cancel(int);
+    callback retry(int);
+    callback clear();
 }
 
 export global Accounts {
@@ -306,6 +390,8 @@ export global Skins {
     callback rotate(float, float);
     callback zoom(float);
     callback reset-view();
+    callback view-back(bool);
+    in property <bool> rear-view: false;
     callback preview-skin(string);
     callback preview-cape(string);
     callback preview-current();
@@ -327,9 +413,30 @@ export global Settings {
     in property <string> appearance-error;
     callback theme-changed(int);
     callback accent-changed(string);
-    in-out property <string> custom-accent;
-    callback custom-accent-apply(string);
+    // The custom swatch shows the saved custom color, or "+" when none.
+    in property <bool> has-custom-accent: false;
+    in property <color> custom-accent-color;
     callback reduce-motion-changed(bool);
+    in property <[string]> background-labels: ["Simple", "Borealis"];
+    in property <[string]> background-descriptions: ["Plain surfaces in the selected theme.", "Soft, stylized aurora bands behind translucent surfaces."];
+    in-out property <int> background-index: 0;
+    callback background-changed(int);
+
+    // Discord Rich Presence (optional; the core worker owns the connection).
+    in property <bool> discord-configured: false;
+    in property <string> discord-status;
+    in property <bool> discord-busy: false;
+    in-out property <bool> discord-enabled: false;
+    in-out property <bool> discord-instance-name: false;
+    in-out property <bool> discord-minecraft-version: false;
+    in-out property <bool> discord-platform: false;
+    in-out property <bool> discord-aurora-active: false;
+    in-out property <bool> discord-elapsed-time: false;
+    in-out property <bool> discord-world: false;
+    in-out property <bool> discord-server: false;
+    in-out property <bool> discord-server-address: false;
+    callback discord-changed();
+    callback discord-connect();
 
     in property <bool> shortcuts-supported: false;
     in property <string> desktop-state;

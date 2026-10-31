@@ -1,0 +1,76 @@
+   Compiling aurora-native v1.4.2 (<worktree>\native)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 37.28s
+     Running unittests src\main.rs (native\target\debug\deps\aurora_native-974a2b5b90f8bb54.exe)
+
+running 31 tests
+test api::tests::full_skin_pixels_and_model_survive_the_camel_case_contract ... ok
+test api::tests::configuration_round_trips_unknown_fields ... ok
+test theme::tests::parses_hex_and_css_rgba_tokens ... ok
+test media::tests::source_labels_are_short_and_friendly ... ok
+test discover::tests::review_blocks_conflicts_and_never_invents_an_install_fingerprint ... ok
+test borealis::tests::suspension_freezes_phase_and_delays_never_accumulate_work ... ok
+test borealis::tests::foreground_override_never_bypasses_visibility_motion_or_theme ... ok
+test player::drag_direction_tests::dragging_right_moves_the_facing_surface_right ... ok
+test player::tests::meshes_cover_classic_slim_legacy_and_layers ... ok
+test preview::tests::replaced_textures_and_layers_reject_stale_frames_but_rotation_does_not ... ok
+test settings::color_tests::hsv_round_trips_hex_colors ... ok
+test symbols::tests::categories_narrow_results ... ok
+test preview::tests::rapid_input_keeps_one_job_and_one_latest_pose_then_stops ... ok
+test symbols::tests::unknown_names_fall_back ... ok
+test discover::tests::pagination_deduplicates_provider_ids_and_bounds_retention ... ok
+test api::tests::command_errors_keep_code_and_message ... ok
+test events::tests::progress_wording_counts_native_items_only ... ok
+test player::drag_direction_tests::vertical_drag_is_unchanged_and_bounded ... ok
+test widgets::tests::an_untouched_layout_shows_only_playtime_and_servers ... ok
+test widgets::tests::durations_and_relative_days_read_naturally ... ok
+test widgets::tests::customized_layouts_are_respected_and_reorderable ... ok
+test api::tests::subtitle_matches_launcher_wording ... ok
+test symbols::tests::data_is_sorted_unique_and_valid ... ok
+test player::tests::front_uvs_sample_the_head_and_torso_regions ... ok
+test player::tests::transparent_outer_layers_reveal_the_base_without_seams ... ok
+test symbols::tests::empty_queries_start_with_the_defaults_and_stay_bounded ... ok
+test player::tests::transparent_empty_and_invalid_input_are_bounded ... ok
+test player::tests::cape_outside_matches_thumbnail_and_preserves_left_right_artwork ... ok
+test interaction_tests::one_primary_click_dispatches_exactly_once_with_and_without_window_focus ... ok
+test symbols::tests::requested_keywords_find_relevant_icons ... ok
+test player::tests::rotation_layers_and_cape_change_real_geometry ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running unittests examples\appearance_acceptance.rs (native\target\debug\examples\appearance_acceptance-dad320a6395f65b2.exe)
+
+running 12 tests
+test api::tests::command_errors_keep_code_and_message ... ok
+test api::tests::configuration_round_trips_unknown_fields ... ok
+test api::tests::full_skin_pixels_and_model_survive_the_camel_case_contract ... ok
+test player::drag_direction_tests::dragging_right_moves_the_facing_surface_right ... ok
+test api::tests::subtitle_matches_launcher_wording ... ok
+test player::tests::meshes_cover_classic_slim_legacy_and_layers ... ok
+test player::drag_direction_tests::vertical_drag_is_unchanged_and_bounded ... ok
+test player::tests::front_uvs_sample_the_head_and_torso_regions ... ok
+test player::tests::transparent_outer_layers_reveal_the_base_without_seams ... ok
+test player::tests::transparent_empty_and_invalid_input_are_bounded ... ok
+test player::tests::cape_outside_matches_thumbnail_and_preserves_left_right_artwork ... ok
+test player::tests::rotation_layers_and_cape_change_real_geometry ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running unittests examples\native8_install_acceptance.rs (native\target\debug\examples\native8_install_acceptance-0c05a0471e9dabbc.exe)
+
+running 4 tests
+test api::tests::command_errors_keep_code_and_message ... ok
+test api::tests::configuration_round_trips_unknown_fields ... ok
+test api::tests::subtitle_matches_launcher_wording ... ok
+test api::tests::full_skin_pixels_and_model_survive_the_camel_case_contract ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples\provider_acceptance.rs (native\target\debug\examples\provider_acceptance-036c2433cb5f8c31.exe)
+
+running 4 tests
+test api::tests::full_skin_pixels_and_model_survive_the_camel_case_contract ... ok
+test api::tests::command_errors_keep_code_and_message ... ok
+test api::tests::configuration_round_trips_unknown_fields ... ok
+test api::tests::subtitle_matches_launcher_wording ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

@@ -1,0 +1,27 @@
+{
+  "takeoverHead": "117dab7ed7e5f317ccf3546611a257a718001cb4",
+  "architecture": "x86_64-pc-windows-msvc",
+  "os": "Microsoft Windows NT 10.0.26300.0",
+  "logicalProcessors": 28,
+  "logicalSize": [
+    1120,
+    760
+  ],
+  "physicalSize": [
+    1400,
+    950
+  ],
+  "production": {
+    "sha256": "a04babf70e110ded0b2587cbddf6c63c53d3a304cc0711eeea6cb6a4859750f8",
+    "bytes": 29146624,
+    "disposableDataRoot": false,
+    "diagnosticFlagStringsPresent": false
+  },
+  "acceptance": {
+    "sha256": "5135beaeede28fd81689855aca90c0f56d97c0604b2ef90642ffd4afdc70d0b1",
+    "bytes": 29176832,
+    "disposableDataRoot": true
+  },
+  "gpu": "not reliably measured",
+  "foregroundFixture": "independent test-owned process, excluded from Launcher accounting"
+}
