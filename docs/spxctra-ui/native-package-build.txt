@@ -1,0 +1,9 @@
+
+> aurora-launcher@1.4.2 tauri
+> tauri build --debug --no-bundle --config C:\Users\kalib\AppData\Local\Temp\aurora-spxctra-20261031\tauri.spxctra-review.conf.json
+
+        Info Looking up installed tauri packages to check mismatched versions...
+   Compiling aurora-launcher v1.4.2 (C:\Dev\aurora-launcher\src-tauri)
+warning: aurora-launcher@1.4.2: STATIC_VCRUNTIME is deprecated; use build.windows.staticVCRuntime in tauri.conf.json or tauri_build::WindowsAttributes::static_vc_runtime instead.
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 19.23s
+       Built application at: C:\Dev\aurora-launcher\src-tauri\target\debug\aurora-launcher.exe

@@ -1,0 +1,76 @@
+{
+  "protectedFiles": [
+    {
+      "path": "PRIVATE_CANDIDATE_TESTING.md",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": "src-tauri/src/application.rs",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": "tools/visual/ui2.test.mjs",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": ".zcode-icon-diag.py",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": ".zcodeignore",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": "LAUNCHER_JAVA_VALIDATION_AND_PRIVATE_RC_REPORT.md",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": "UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": "docs/performance-p0-2/__pycache__/analyze.cpython-312.pyc",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": "tools/benchmark/__pycache__/collector_review.cpython-312.pyc",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": "tools/benchmark/__pycache__/initiative2_native_cycle.cpython-312.pyc",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": "tools/benchmark/__pycache__/process_capture.cpython-312.pyc",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": "tools/benchmark/__pycache__/readiness_checks.cpython-312.pyc",
+      "exists": true,
+      "unchanged": true
+    },
+    {
+      "path": "tools/benchmark/__pycache__/world_scene.cpython-312.pyc",
+      "exists": true,
+      "unchanged": true
+    }
+  ],
+  "originalTrackedCount": 2793,
+  "missingOriginalTrackedFiles": []
+}

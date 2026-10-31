@@ -54,7 +54,6 @@
 <style>
   .player-preview { min-width: 0; position: relative; height: 320px; display: grid; place-items: center; }
   .player-preview.has-skin { position: absolute; top: 0; bottom: 0; right: 0; width: 50%; height: auto; overflow: hidden; border-radius: 0 var(--f-radius-panel) var(--f-radius-panel) 0; pointer-events: none; }
-  .player-preview.has-skin::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 68%); }
   .player-model { width: 100%; display: grid; place-items: center; }
   .has-skin .player-model { position: absolute; top: 0; }
   canvas { display: block; width: auto; height: clamp(512px, 68vh, 592px); max-width: none; image-rendering: auto; opacity: 0; transition: opacity 420ms ease-out; }

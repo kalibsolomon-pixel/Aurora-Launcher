@@ -22,6 +22,7 @@
 </script>
 
 <div class="aurora-shell">
+<a class="skip-link" href="#main-content">Skip to content</a>
 <Background />
 <TitleBar />
 <div class="app-frame">
@@ -33,7 +34,7 @@
           aria-current={currentPage === destination.id ? "page" : undefined}
           onclick={() => navigation.goTo(destination.id)}>
           <Icon name={destination.id} />
-          <span class="f-tooltip" aria-hidden="true">{destination.label}</span>
+          <span class="rail-label" aria-hidden="true">{destination.label}</span>
         </button>
       {/each}
     </div>
@@ -52,7 +53,7 @@
     </button>
   </nav>
 
-  <main class="content">
+  <main class="content" id="main-content" tabindex="-1">
     {@render children()}
   </main>
 </div>

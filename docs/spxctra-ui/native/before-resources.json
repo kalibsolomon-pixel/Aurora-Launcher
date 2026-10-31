@@ -1,0 +1,9 @@
+{
+  "rootPid": 19760,
+  "seconds": 10.0075929,
+  "workingSetBytes": 500994048.0,
+  "privateBytes": 247078912.0,
+  "scope": "Debug Tauri process plus observed WebView2 descendants; isolated empty Home, Simple; one observation, development frontend; no comparison with native frameworks",
+  "cpuSeconds": 0.34375,
+  "processCount": 8
+}

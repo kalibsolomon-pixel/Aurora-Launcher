@@ -1,5 +1,15 @@
 # Aurora Launcher design language
 
+> **Spxctra simplification (2026-10-31):** [docs/spxctra-ui/README.md](docs/spxctra-ui/README.md)
+> records the current shared presentation. Opaque tonal surfaces, the existing
+> 6/10/14 px shape tokens, persistent navigation labels, a keyboard skip link,
+> and solid accent controls supersede the earlier glass, glow, hover-tooltip
+> navigation and oversized Home treatments below. Workspace content no longer
+> sits inside a second enclosing panel. Simple remains the default; existing
+> optional Borealis, theme and accent preferences remain available. The renderer
+> remains Tauri/WebView; this is implemented refinement, not owner visual acceptance
+> or a completed native renderer migration.
+
 > **UI-3 Discover and Library:** [UI_3_DISCOVER_LIBRARY_ACCEPTANCE.md](UI_3_DISCOVER_LIBRARY_ACCEPTANCE.md)
 > records the shared Discover controls, compact Mods list, artwork-led modpack
 > grid, medium resource-pack cards and consistent instance-local Installed rows.

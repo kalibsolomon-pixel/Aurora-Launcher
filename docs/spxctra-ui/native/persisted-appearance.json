@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 7,
+  "appearance": {
+    "background": "simple",
+    "auroraMotionSpeed": 50,
+    "theme": "aurora-dark",
+    "accent": {
+      "type": "preset",
+      "id": "violet"
+    }
+  },
+  "isolatedRoot": true
+}

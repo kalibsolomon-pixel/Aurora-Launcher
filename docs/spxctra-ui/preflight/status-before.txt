@@ -1,0 +1,10 @@
+ M PRIVATE_CANDIDATE_TESTING.md
+ M src-tauri/src/application.rs
+ M src-tauri/src/lib.rs
+ M tools/visual/ui2.test.mjs
+?? .zcode-icon-diag.py
+?? .zcodeignore
+?? LAUNCHER_JAVA_VALIDATION_AND_PRIVATE_RC_REPORT.md
+?? UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt
+?? docs/performance-p0-2/__pycache__/
+?? tools/benchmark/__pycache__/

@@ -72,7 +72,7 @@
 </div>
 <style>
   .cosmetic-preview { min-width:0; text-align:center; }
-  .preview-stage { position:relative; height:clamp(320px,48vh,480px); min-width:0; overflow:hidden; display:grid; place-items:center; border-radius:18px; cursor:grab; touch-action:none; background:radial-gradient(ellipse at 50% 65%,var(--color-accent-soft),transparent 65%); }
+  .preview-stage { position:relative; height:clamp(320px,48vh,480px); min-width:0; overflow:hidden; display:grid; place-items:center; border-radius: var(--radius-md); cursor:grab; touch-action:none; background: var(--color-surface); }
   .preview-stage.dragging { cursor:grabbing; }
   .preview-stage.missing { cursor:default; }
   .preview-stage:focus-visible { outline:2px solid var(--color-accent); outline-offset:3px; }

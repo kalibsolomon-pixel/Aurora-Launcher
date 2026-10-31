@@ -88,12 +88,11 @@ it("instance Settings has one Rename, leads with readiness, and keeps Maintenanc
   assert.match(workspace, /beginRename\(instance\.id\)[^>]*>Rename</);
 });
 
-it("shared controls use exact transition properties, press feedback and unoutlined danger buttons", () => {
+it("shared controls use exact transition properties, reduced motion and unoutlined danger buttons", () => {
   const css = readFileSync(new URL("../shell/phase-f.css", import.meta.url), "utf8");
   const app = readFileSync(new URL("../../app.css", import.meta.url), "utf8");
   assert.doesNotMatch(css, /transition:\s*all\b/);
-  assert.match(css, /\.f-pilot \.btn:active:not\(:disabled\)[^{]*\{ transform: scale\(\.97\); \}/);
-  assert.match(css, /prefers-reduced-motion: reduce\)[^\n]*\.f-tooltip/);
+  assert.match(css, /prefers-reduced-motion: reduce\)[^\n]*\.rail-link/);
   assert.match(app, /\.btn-danger \{\n  border-color: transparent;\n  background: var\(--color-error-soft\);/);
   const settings = readFileSync(new URL("./settings.css", import.meta.url), "utf8");
   assert.doesNotMatch(settings, /aria-current\] \{[^}]*accent-outline/);

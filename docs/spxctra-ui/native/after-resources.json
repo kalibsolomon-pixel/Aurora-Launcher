@@ -1,0 +1,9 @@
+{
+  "privateBytes": 313384960.0,
+  "cpuSeconds": 0.390625,
+  "seconds": 10.0126938,
+  "rootPid": 19760,
+  "processCount": 8,
+  "workingSetBytes": 575344640.0,
+  "scope": "Same debug Tauri process and WebView2 descendants after HMR; isolated empty Home, Simple; one observation, development frontend; shared host under compilation load"
+}

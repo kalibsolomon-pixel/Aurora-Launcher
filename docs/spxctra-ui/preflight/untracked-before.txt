@@ -1,0 +1,10 @@
+.zcode-icon-diag.py
+.zcodeignore
+LAUNCHER_JAVA_VALIDATION_AND_PRIVATE_RC_REPORT.md
+UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt
+docs/performance-p0-2/__pycache__/analyze.cpython-312.pyc
+tools/benchmark/__pycache__/collector_review.cpython-312.pyc
+tools/benchmark/__pycache__/initiative2_native_cycle.cpython-312.pyc
+tools/benchmark/__pycache__/process_capture.cpython-312.pyc
+tools/benchmark/__pycache__/readiness_checks.cpython-312.pyc
+tools/benchmark/__pycache__/world_scene.cpython-312.pyc

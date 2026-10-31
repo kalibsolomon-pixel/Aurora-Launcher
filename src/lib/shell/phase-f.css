@@ -1,85 +1,36 @@
-/* Phase F pilot. Existing page interiors keep their approved system. */
+/* Spxctra refinement. Keep the established token names for component compatibility.
+   Surface hierarchy comes from tone and spacing; only overlays need a boundary. */
 :root {
   --f-space-stage: clamp(24px, 4vw, 64px);
-  --f-radius-panel: 22px;
-  --f-radius-control: 14px;
-  --f-duration: 180ms;
-  --f-fast: 120ms;
-  --f-ease: cubic-bezier(.2,.8,.2,1);
-  --f-panel: color-mix(in srgb, var(--color-surface) 94%, transparent);
-  --f-edge: rgb(255 255 255 / 7%);
-  --f-shadow: 0 12px 36px rgb(0 0 0 / 16%);
+  --f-radius-panel: var(--radius-lg);
+  --f-radius-control: var(--radius-md);
+  --f-duration: var(--motion-base);
+  --f-fast: var(--motion-fast);
+  --f-ease: var(--motion-ease);
+  --f-panel: var(--color-surface);
+  --f-edge: var(--color-surface-edge);
+  --f-shadow: none;
   --f-blur: none;
-  --f-content-panel: var(--f-panel);
+  --f-content-panel: var(--color-surface);
   --f-workspace-selection: var(--color-accent);
-  --f-dialog-panel: color-mix(in srgb, var(--color-background) 94%, transparent);
-  --f-dialog-group: color-mix(in srgb, var(--color-surface) 94%, transparent);
-  --f-dialog-dim: rgb(0 0 0 / 52%);
+  --f-dialog-panel: var(--color-surface-raised);
+  --f-dialog-group: var(--color-surface);
+  --f-dialog-dim: rgb(0 0 0 / 60%);
   --f-rail-width: 96px;
-  /* Accent materials. Outside Borealis they resolve to the existing solid
-     accent treatment, so OLED and Simple keep their production look. */
   --f-accent-fill: var(--color-accent-strong);
   --f-accent-fill-hover: var(--color-accent-hover);
   --f-accent-fill-pressed: var(--color-accent-pressed);
   --f-accent-edge: var(--color-accent-strong);
   --f-accent-inset: none;
   --f-accent-shadow: none;
-  --f-accent-blur: none;
-  --f-logo-opacity: 1;
-  --f-logo-ground: none;
 }
-:root[data-background="borealis"] {
-  --f-panel: linear-gradient(145deg, rgb(184 224 235 / 10%), rgb(9 16 26 / 24%)), rgb(8 17 27 / 26%);
-  --f-edge: rgb(222 242 255 / 19%);
-  --f-shadow: inset 0 1px 0 rgb(235 250 255 / 9%), 0 16px 48px rgb(0 0 0 / 18%);
-  --f-blur: blur(28px) saturate(135%) brightness(.92);
-  /* Scrolling content uses a dark translucent backing rather than sampling
-     the animated video through a filter on every result/entire list. */
-  --f-content-panel: linear-gradient(145deg, rgb(184 224 235 / 5%), rgb(9 16 26 / 12%)), rgb(8 17 27 / 82%);
-  --f-dialog-panel: linear-gradient(145deg, rgb(184 224 235 / 11%), rgb(9 16 26 / 38%)), rgb(8 17 27 / 56%);
-  --f-dialog-group: rgb(13 21 32 / 52%);
-  --f-dialog-dim: rgb(0 0 0 / 38%);
-  --color-text-secondary: #c3ccd9;
-  --color-text-muted: #a8b7ca;
-  /* Accent glass: translucent accent layers composed over the frosted panel
-     ancestors, so primary actions inherit the shared diffusion without new
-     backdrop-filter surfaces of their own. Everything derives from the active
-     accent tokens, so custom accents work unchanged. */
-  --f-accent-fill:
-    linear-gradient(160deg, rgb(255 255 255 / 14%) 0%, rgb(255 255 255 / 4%) 42%, rgb(4 10 20 / 18%) 100%),
-    color-mix(in srgb, var(--color-accent-strong) 86%, transparent);
-  --f-accent-fill-hover:
-    linear-gradient(160deg, rgb(255 255 255 / 18%) 0%, rgb(255 255 255 / 6%) 42%, rgb(4 10 20 / 14%) 100%),
-    color-mix(in srgb, var(--color-accent-hover) 88%, transparent);
-  --f-accent-fill-pressed:
-    linear-gradient(160deg, rgb(255 255 255 / 8%) 0%, rgb(255 255 255 / 2%) 42%, rgb(4 10 20 / 22%) 100%),
-    color-mix(in srgb, var(--color-accent-pressed) 90%, transparent);
-  --f-accent-edge: color-mix(in srgb, var(--color-accent) 74%, rgb(255 255 255 / 18%));
-  --f-accent-inset: inset 0 1px 0 rgb(255 255 255 / 20%);
-  --f-accent-shadow: 0 10px 26px color-mix(in srgb, var(--color-accent-strong) 30%, rgb(3 8 16 / 32%));
-  /* The single selected rail item is the only accent surface that diffuses
-     the background itself; it is one small 48px region, not a per-control blur. */
-  --f-accent-blur: blur(14px) saturate(150%);
-  --f-logo-opacity: 0.96;
-  --f-logo-ground: drop-shadow(0 2px 16px color-mix(in srgb, var(--color-accent) 22%, transparent)) drop-shadow(0 1px 2px rgb(0 0 0 / 28%));
-}
-:root[data-background="borealis"] .page-header,
-:root[data-background="borealis"] .settings-nav { text-shadow: 0 1px 5px rgb(0 0 0 / 85%); }
-:root[data-background="borealis"] .f-pilot .field-label,
-:root[data-background="borealis"] .f-pilot .mods-heading .group-subtitle,
-:root[data-background="borealis"] .f-pilot .packs-heading .group-subtitle { text-shadow: 0 1px 4px #03060b, 0 0 8px #03060b; }
 .aurora-shell { height: 100dvh; display: flex; flex-direction: column; isolation: isolate; overflow: hidden; }
 .aurora-background { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: #080e18; }
 /* Bundled silent video; the still remains for reduced motion and decode failures. */
 .aurora-background img, .aurora-background video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .aurora-background video { opacity: 0; }
-.aurora-background::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(4 8 15 / 8%), rgb(4 8 15 / 10%) 50%, rgb(4 8 15 / 35%)); }
-/* Home's foreground receives a quieter part of the same Borealis canvas.
-   Static overlays add no decoder, filtered ancestor or animation work. */
-.aurora-shell:has(.home-page) .aurora-background::after { background: linear-gradient(90deg, rgb(4 8 15 / 36%), rgb(4 8 15 / 10%) 65%), linear-gradient(180deg, rgb(4 8 15 / 8%), rgb(4 8 15 / 44%)); }
-:root[data-background="borealis"] .home-page { --f-panel: linear-gradient(145deg, rgb(184 224 235 / 5%), rgb(9 16 26 / 10%)), rgb(8 17 27 / 80%); --f-edge: rgb(222 242 255 / 13%); --f-shadow: inset 0 1px 0 rgb(235 250 255 / 5%), 0 12px 32px rgb(0 0 0 / 16%); --f-blur: none; }
-:root[data-theme="oled"][data-background="simple"] { --f-panel: var(--color-surface); --f-content-panel: var(--color-surface); --f-blur: none; --f-dialog-panel: var(--color-background); --f-dialog-group: var(--color-surface); }
-.aurora-titlebar { height: 40px; flex: none; display: flex; align-items: stretch; user-select: none; z-index: 40; }
+.aurora-background::after { content: ""; position: absolute; inset: 0; background: rgb(4 8 15 / 62%); }
+.aurora-titlebar { height: 40px; flex: none; display: flex; align-items: stretch; user-select: none; z-index: 40; background: var(--color-background); }
 .titlebar-drag { display: flex; flex: 1; align-items: center; gap: 10px; padding-left: 20px; font-size: 11px; color: var(--color-text-secondary); }
 .titlebar-drag > * { pointer-events: none; }
 .window-control { width: 48px; background: transparent; border: 0; color: var(--color-text-secondary); display: grid; place-items: center; }
@@ -87,20 +38,19 @@
 .window-close:hover { background: #c42b3b; }
 .chrome-error { position: fixed; right: 12px; top: 40px; z-index: 100; background: var(--color-surface); padding: 12px; }
 .aurora-shell .app-frame { grid-template-columns: var(--f-rail-width) minmax(0, 1fr); flex: 1; height: auto; min-height: 0; }
-.aurora-shell .sidebar { padding: 18px var(--space-2) 14px; border: 0; background: transparent; gap: 20px; align-items: center; z-index: 30; }
+.aurora-shell .sidebar { padding: 18px var(--space-2) 14px; border: 0; background: var(--color-sidebar); gap: 16px; align-items: center; z-index: 30; }
 .rail-logo { width: 48px; height: 48px; object-fit: contain; flex: none; }
-:root[data-background="borealis"] .aurora-shell .sidebar { background: linear-gradient(180deg, rgb(8 17 27 / 16%), rgb(8 17 27 / 34%)); border-right: 1px solid rgb(222 242 255 / 8%); }
 .rail-navigation { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
-.rail-link { width: 48px; height: 48px; display: grid; place-items: center; position: relative; border: 1px solid transparent; border-radius: var(--f-radius-control); background: transparent; color: var(--color-text-secondary); cursor: pointer; transition: background-color var(--f-fast) ease, color var(--f-fast) ease, transform var(--f-fast) var(--f-ease); }
-.rail-link:active { transform: scale(.96); }
-.rail-link:hover { background: rgb(255 255 255 / 6%); color: var(--color-text); }
-.rail-link[aria-current="page"] { color: var(--color-accent); background: var(--color-accent-soft); border-color: var(--color-accent-outline); }
-.rail-link[aria-current="page"]::before { content: ''; position: absolute; left: -12px; top: 16px; width: 3px; height: 16px; background: var(--color-accent); border-radius: 2px; }
-.f-tooltip { position: absolute; left: calc(100% + 14px); top: 50%; transform: translate(-4px, -50%); transform-origin: left center; padding: 7px 11px; border: 1px solid var(--color-border-strong); border-radius: 8px; color: var(--color-text); background: var(--color-surface-raised); font-size: 12px; font-weight: 500; white-space: nowrap; opacity: 0; pointer-events: none; box-shadow: var(--f-shadow); transition: opacity 125ms ease-out, transform 125ms ease-out; }
-.rail-link:hover .f-tooltip, .rail-link:focus-visible .f-tooltip { opacity: 1; transform: translate(0, -50%); }
-/* After one rail tooltip is open, moving along the rail shows the next one instantly. */
-.rail-navigation:hover .f-tooltip { transition-duration: 0ms; }
-.aurora-shell .account-chip { padding: 10px 5px; margin-top: auto; border-color: var(--f-edge); border-radius: 16px; background: var(--f-panel); backdrop-filter: var(--f-blur); }
+/* Labels stay visible: no hover knowledge is required to find a destination. */
+.rail-link { width: 72px; min-height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1); position: relative; border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--color-text-secondary); cursor: pointer; transition: background-color var(--f-fast) ease, color var(--f-fast) ease; }
+.rail-link:hover { background: var(--color-surface-hover); color: var(--color-text); }
+.rail-link:active { background: var(--color-surface-pressed); }
+.rail-link[aria-current="page"] { color: var(--color-accent); background: var(--color-accent-soft); }
+.rail-link[aria-current="page"]::before { content: ''; position: absolute; left: 0; top: 18px; width: 3px; height: 24px; background: var(--color-accent); border-radius: 2px; }
+.rail-label { font-size: 11px; line-height: 1.3; font-weight: 500; }
+.skip-link { position: fixed; left: var(--space-3); top: var(--space-2); z-index: 200; padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text); transform: translateY(-160%); }
+.skip-link:focus { transform: none; }
+.aurora-shell .account-chip { padding: 10px 5px; margin-top: auto; border-color: transparent; border-radius: var(--radius-md); background: transparent; }
 .aurora-shell .account-chip .account-identity { flex-direction: column; gap: 7px; width: 100%; text-align: center; }
 .aurora-shell .account-chip .identity-text { width: 100%; }
 .aurora-shell .account-chip .identity-name { font-size: 11px; }
@@ -109,130 +59,55 @@
    name and the account drawer. Only an actionable condition keeps a line. */
 .aurora-shell .account-chip .account-identity:not([data-state="reauthenticationRequired"]) .identity-detail { display: none; }
 .aurora-shell .account-chip .account-identity[data-state="reauthenticationRequired"] .identity-detail { color: var(--color-warning); }
-.aurora-shell .account-chip { transition: background-color var(--f-fast) ease, border-color var(--f-fast) ease, transform 160ms var(--f-ease); }
-.aurora-shell .account-chip:active { transform: scale(.97); }
+.aurora-shell .account-chip { transition: background-color var(--f-fast) ease, border-color var(--f-fast) ease; }
+.aurora-shell .account-chip:hover { background: var(--color-surface-hover); }
 .aurora-shell .content { min-width: 0; padding: 24px var(--f-space-stage) 40px; overflow: auto; scrollbar-gutter: stable; }
-.f-pilot .group, .f-surface { background: var(--f-panel); border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); box-shadow: var(--f-shadow); backdrop-filter: var(--f-blur); }
+.f-pilot .group, .f-surface { background: var(--f-panel); border: 1px solid transparent; border-radius: var(--f-radius-panel); box-shadow: none; }
 .f-pilot.page { padding: 0; }
-.f-pilot .btn, dialog .btn { border-radius: var(--f-radius-control); transition: background-color var(--f-fast) ease, border-color var(--f-fast) ease, color var(--f-fast) ease, transform 160ms var(--f-ease); }
-.f-pilot .btn:active:not(:disabled), dialog .btn:active:not(:disabled), .f-icon-button:active:not(:disabled) { transform: scale(.97); }
-.f-icon-button { width: 40px; height: 40px; padding: 0; display: inline-grid; place-items: center; flex: none; border: 1px solid var(--f-edge); border-radius: 12px; color: var(--color-text-secondary); background: rgb(13 19 29 / 65%); cursor: pointer; transition: background-color var(--f-fast) ease, color var(--f-fast) ease, transform 160ms var(--f-ease); }
+.f-pilot .btn, dialog .btn { border-radius: var(--f-radius-control); transition: background-color var(--f-fast) ease, border-color var(--f-fast) ease, color var(--f-fast) ease; }
+.f-icon-button { width: 40px; height: 40px; padding: 0; display: inline-grid; place-items: center; flex: none; border: 1px solid var(--f-edge); border-radius: var(--radius-md); color: var(--color-text-secondary); background: var(--color-surface-raised); cursor: pointer; transition: background-color var(--f-fast) ease, color var(--f-fast) ease; }
 .f-icon-button:hover { background: var(--color-surface-hover); color: var(--color-text); }
 .aurora-shell button:focus-visible, .f-pilot input:focus-visible, .f-pilot select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
 .f-pilot .group-row { padding: 20px 24px; }
 .f-pilot .group-heading { padding: 24px; }
 .f-pilot .group-footer { padding: 16px 24px; }
 .f-pilot input[type="checkbox"] { width: 18px; height: 18px; flex: none; cursor: pointer; }
-.f-pilot .page-title { font-size: 28px; letter-spacing: -.035em; }
+.f-pilot .page-title { font-size: var(--text-page-title); letter-spacing: -.025em; }
 .f-pilot .page-subtitle { margin-top: 6px; }
 .f-pilot .group-row-detail { line-height: 1.5; }
 @media (max-width: 800px) { :root { --f-rail-width: 96px; } .aurora-shell .content { padding: 16px 20px 28px; } .aurora-shell .sidebar { padding-inline: 6px; } }
-@media (prefers-reduced-motion: reduce) { .f-pilot *, .rail-link, .f-tooltip, .f-icon-button, dialog .btn, .aurora-shell .account-chip { transition: none !important; } .f-pilot .btn:active:not(:disabled), dialog .btn:active:not(:disabled), .f-icon-button:active:not(:disabled), .rail-link:active, .aurora-shell .account-chip:active { transform: none; } }
-@media (prefers-reduced-transparency: reduce) { :root[data-background="borealis"] { --f-panel: var(--color-surface); --f-content-panel: var(--color-surface); --f-blur: none; --f-dialog-panel: var(--color-background); --f-dialog-group: var(--color-surface); --f-accent-fill: var(--color-accent-strong); --f-accent-fill-hover: var(--color-accent-hover); --f-accent-fill-pressed: var(--color-accent-pressed); --f-accent-edge: var(--color-accent-strong); --f-accent-inset: none; --f-accent-shadow: none; --f-accent-blur: none; --f-logo-opacity: 1; --f-logo-ground: none; } }
-@media (prefers-reduced-transparency: reduce) { :root[data-background="borealis"] .home-page { --f-panel: var(--color-surface); --f-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { .f-pilot *, .rail-link, .f-icon-button, dialog .btn, .aurora-shell .account-chip { transition: none !important; } .f-pilot .btn:active:not(:disabled), dialog .btn:active:not(:disabled), .f-icon-button:active:not(:disabled), .rail-link:active, .aurora-shell .account-chip:active { transform: none; } }
 
 @media (max-height: 650px) {
   .aurora-shell .sidebar { padding-block: 10px; gap: 8px; }
   .rail-logo { width: 40px; height: 40px; }
   .rail-navigation { gap: 4px; }
-  .rail-link { width: 40px; height: 40px; border-radius: 12px; }
+  .rail-link { min-height: 48px; }
   .rail-link[aria-current="page"]::before { top: 12px; }
   .aurora-shell .account-chip { padding-block: 6px; }
 }
 
-@supports not (backdrop-filter: blur(1px)) { :root[data-background="borealis"] { --f-panel: var(--color-surface); --f-content-panel: var(--color-surface); --f-dialog-panel: var(--color-background); --f-dialog-group: var(--color-surface); --f-accent-fill: var(--color-accent-strong); --f-accent-fill-hover: var(--color-accent-hover); --f-accent-fill-pressed: var(--color-accent-pressed); --f-accent-edge: var(--color-accent-strong); --f-accent-inset: none; --f-accent-shadow: none; --f-accent-blur: none; --f-logo-opacity: 1; --f-logo-ground: none; } }
-@supports not (backdrop-filter: blur(1px)) { :root[data-background="borealis"] .home-page { --f-panel: var(--color-surface); --f-shadow: none; } }
 
-/* Rows share their enclosing panel's glass instead of each filtering Borealis. */
+/* Scrolling lists share an opaque surface with no filtered ancestors. */
 .f-pilot .mod-list, .f-pilot .packs-list { background: var(--f-content-panel); border-color: var(--f-edge); border-radius: var(--f-radius-panel); backdrop-filter: none; }
 .f-pilot .browse-row, .f-pilot .project, .f-pilot .preview { background: var(--f-content-panel); backdrop-filter: none; border-color: var(--f-edge); }
 
-/* Match the established group material once around the workspace. Keeping
-   diffusion on the enclosing panel avoids one filter per scrolling result. */
-.f-pilot.workspace-page {
-  padding: 24px;
-  border: 1px solid var(--f-edge);
-  border-radius: var(--f-radius-panel);
-  box-shadow: var(--f-shadow);
-}
-.f-pilot.workspace-page, .f-pilot .modpack-group {
-  position: relative;
-  isolation: isolate;
-  background: none;
-  backdrop-filter: none;
-}
-/* A separate background layer preserves viewport positioning for browse notices. */
-.f-pilot.workspace-page::before, .f-pilot .modpack-group::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  border-radius: inherit;
-  background: var(--f-panel);
-  backdrop-filter: var(--f-blur);
-}
-:root[data-background="borealis"] :is(.workspace-page, .modpack-group) :is(.mod-list, .packs-list, .browse-row, .project, .preview) {
-  background: rgb(8 17 27 / 12%);
-}
-/* Content rows must also honor the accessibility fallback: the localized
-   Borealis row backing above otherwise overrides the root's opaque tokens. */
-@media (prefers-reduced-transparency: reduce) {
-  :root[data-background="borealis"] :is(.workspace-page, .modpack-group) :is(.mod-list, .packs-list, .browse-row, .project, .preview) { background: var(--color-surface); }
-}
+/* The workspace is a page, not another panel around every content group. */
+.f-pilot.workspace-page { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 .f-pilot .workspace-header { gap: var(--space-4); flex-wrap: wrap; }
 .f-pilot .workspace-tabs { border-color: var(--f-edge); }
 .f-pilot .workspace-tabs .workspace-tab-active,
 .f-pilot .content-view-tabs .btn[aria-pressed="true"],
 .f-pilot .browse-kind-tabs .btn[aria-pressed="true"] {
   color: var(--color-text);
-  background: color-mix(in srgb, var(--f-workspace-selection) 12%, transparent);
+  background: transparent;
   box-shadow: inset 0 -3px var(--f-workspace-selection);
   border-bottom-color: transparent;
 }
 .f-pilot :is(.content-view-tabs, .browse-kind-tabs) { align-items: center; flex-wrap: wrap; }
 .f-pilot :is(.content-view-tabs, .browse-kind-tabs) .btn { min-height: 40px; }
 .f-pilot :is(.mods-heading, .packs-heading) { gap: var(--space-4); flex-wrap: wrap; }
-@media (max-width: 800px) { .f-pilot.workspace-page { padding: 16px; } }
 
-/* ------------------------------------------------------------------ */
-/* Accent glass (Borealis only)                                        */
-/*                                                                     */
-/* Primary actions become accent-tinted glass by layering translucent  */
-/* accent fills over the frosted panel ancestors: no new blur surfaces  */
-/* are created, the Borealis diffusion behind a card shows through the  */
-/* tint. The selected rail item is the one deliberate exception — a     */
-/* single small diffusion region, because the rail has no frosted       */
-/* ancestor of its own. Small precision indicators (status dots,        */
-/* swatches, native control accents) deliberately stay solid.           */
-/* ------------------------------------------------------------------ */
-
-:root[data-background="borealis"] .btn-primary {
-  border-color: var(--f-accent-edge);
-  background: var(--f-accent-fill);
-  box-shadow: var(--f-accent-inset), var(--f-accent-shadow);
-}
-:root[data-background="borealis"] .btn-primary:hover:not(:disabled) {
-  border-color: var(--f-accent-edge);
-  background: var(--f-accent-fill-hover);
-}
-:root[data-background="borealis"] .btn-primary:active:not(:disabled) {
-  border-color: var(--f-accent-edge);
-  background: var(--f-accent-fill-pressed);
-}
-
-:root[data-background="borealis"] .rail-link[aria-current="page"] {
-  background: linear-gradient(160deg, rgb(255 255 255 / 9%) 0%, rgb(6 12 22 / 10%) 100%), color-mix(in srgb, var(--color-accent) 26%, transparent);
-  border-color: var(--f-accent-edge);
-  backdrop-filter: var(--f-accent-blur);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%), 0 6px 18px color-mix(in srgb, var(--color-accent) 18%, rgb(3 8 16 / 20%));
-}
-
-/* The hero mark is thin white line art: a glass fill would dissolve its
-   strokes over bright aurora regions, so it keeps a crisp body and joins
-   the material system through slight translucency plus an accent-tinted
-   grounding shadow. */
-:root[data-background="borealis"] .rail-logo { opacity: var(--f-logo-opacity); filter: var(--f-logo-ground); }
 
 /* Instance content maintenance: local-file recognition and the explicit
    update check share one quiet row instead of two stacked strips. An open
@@ -247,14 +122,11 @@
    so neighbouring cards align instead of each inventing its own margins. */
 .home-widgets .widget .widget-empty { margin: 0; color: var(--color-text-secondary); font-size: var(--text-secondary); line-height: 1.5; }
 
-/* Shared modal dialog: the UI-4 Appearance dialog material, used by every
-   centered confirmation/edit dialog so they share one surface, radius,
-   backdrop and entrance. Modals scale from center (not trigger-anchored). */
-.aurora-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; margin: auto; padding: 26px; border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-dialog-panel); background-color: var(--color-surface-raised); backdrop-filter: var(--f-blur); color: var(--color-text); box-shadow: var(--f-shadow); }
+/* Modal boundaries distinguish the temporary task from the page beneath it. */
+.aurora-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; margin: auto; padding: 26px; border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-dialog-panel); background-color: var(--color-surface-raised); backdrop-filter: var(--f-blur); color: var(--color-text); box-shadow: var(--f-shadow); }
 .aurora-dialog::backdrop { background: var(--f-dialog-dim); }
 .aurora-dialog[open] { animation: aurora-dialog-enter 180ms var(--f-ease); }
 .aurora-dialog h3 { margin: 0 0 12px; font-size: 1.0625rem; letter-spacing: -.01em; }
 .aurora-dialog p { color: var(--color-text-secondary); line-height: 1.6; }
 @keyframes aurora-dialog-enter { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
-@keyframes aurora-dialog-fade { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .aurora-dialog[open] { animation: aurora-dialog-fade 120ms ease-out; } }
+@media (prefers-reduced-motion: reduce) { .aurora-dialog[open] { animation: none; } }

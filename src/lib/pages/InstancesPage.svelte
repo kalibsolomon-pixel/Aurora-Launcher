@@ -359,13 +359,12 @@
   .library-heading { display: grid; gap: var(--space-1); }
   .library-loading { display: flex; align-items: center; gap: var(--space-3); margin: 0; color: var(--color-text-secondary); }
   .instance-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
-  .instance-tile { position: relative; isolation: isolate; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 188px; padding: 18px; border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: var(--f-content-panel); box-shadow: var(--f-shadow); transition: border-color var(--f-fast) ease, box-shadow var(--f-fast) ease, transform 160ms var(--f-ease); }
+  .instance-tile { position: relative; isolation: isolate; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 188px; padding: 18px; border: 1px solid transparent; border-radius: var(--f-radius-panel); background: var(--f-content-panel); transition: border-color var(--f-fast) ease; }
   .instance-tile::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: rgb(255 255 255 / 3.5%); opacity: 0; transition: opacity var(--f-fast) ease; pointer-events: none; }
   @media (hover: hover) and (pointer: fine) {
     .instance-tile:has(.tile-open:hover:not(:disabled))::before { opacity: 1; }
     .instance-tile:has(.tile-open:hover:not(:disabled)) { border-color: rgb(255 255 255 / 16%); }
   }
-  .instance-tile:has(.tile-open:active:not(:disabled)) { transform: scale(.985); }
   .instance-tile:has(.tile-open:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: 3px; }
   .instance-tile.selected { border-color: var(--color-accent-outline); box-shadow: inset 2px 0 0 var(--color-accent), var(--f-shadow); }
   .tile-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-3); }

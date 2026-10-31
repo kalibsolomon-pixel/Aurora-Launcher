@@ -1,0 +1,8 @@
+8c45ad2 Refine instance cards and simplify launcher settings
+db3b241 Apply loader-supplied mods in readiness and launch validation
+c103108 Resolve bundled and loader-supplied mods like Fabric Loader
+becf6de Instance tiles and icons, Settings-first workspace, simpler Home launch
+9640c66 Add instance icons store, in-instance modpack merge and Fabric provides
+39c8a03 Separate candidate executable identity from production NSIS process checks
+6f1b8bf Contain Java diagnostic crash output in private candidate 2
+21b45c8 Align Java launch eligibility and isolate private Windows candidates

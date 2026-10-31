@@ -1,0 +1,58 @@
+[
+  {
+    "path": "PRIVATE_CANDIDATE_TESTING.md",
+    "sha256": "B3C9EA88B6791E780DABAFCD4378DBA95257961F13D4CF2CC4F435F9464E2905"
+  },
+  {
+    "path": "src-tauri/src/application.rs",
+    "sha256": "62BC89E9501AF28A721DEC79C9C7F9DB1F586D9EC432147E723376022A4A443E"
+  },
+  {
+    "path": "src-tauri/src/lib.rs",
+    "sha256": "A275E0CBB71C291C1B82581B89AD9BCFAE9355CA3EFA27B05D9AD0C22BAF610D"
+  },
+  {
+    "path": "tools/visual/ui2.test.mjs",
+    "sha256": "F8690E20742FA4E4C153700BB4E2868B47B87C67B42A05DDEF18611872826AE0"
+  },
+  {
+    "path": ".zcode-icon-diag.py",
+    "sha256": "5E6199883ECE4CB38308D080AAF9D45612594ACF0ADE0660BAEB95AEA1200F16"
+  },
+  {
+    "path": ".zcodeignore",
+    "sha256": "E7577714C5582301E11449A27731439051A29D035C4D2373595FB6C5042BCC3E"
+  },
+  {
+    "path": "LAUNCHER_JAVA_VALIDATION_AND_PRIVATE_RC_REPORT.md",
+    "sha256": "0B50CF4D19045B0FE5BFFDD5E4ECA054E8405333C6AD221F824593F47FC897AA"
+  },
+  {
+    "path": "UserskalibAppDataLocalTempaurora-phase-d-final-evidencesodium-exit-zero-ready.txt",
+    "sha256": "AD1790BFF169F56025E6DA2BC6F75B9434A046D478643F50BA0D68CBB25B5250"
+  },
+  {
+    "path": "docs/performance-p0-2/__pycache__/analyze.cpython-312.pyc",
+    "sha256": "76DC3497A710FAF67FC16A0ECB3AAEBE19C652BFBC266CC85C9C3480EC0E2CE3"
+  },
+  {
+    "path": "tools/benchmark/__pycache__/collector_review.cpython-312.pyc",
+    "sha256": "5BD0DD019B96A539406889E27280C7F5D3145F9235383C2F562D8E4ED65F9570"
+  },
+  {
+    "path": "tools/benchmark/__pycache__/initiative2_native_cycle.cpython-312.pyc",
+    "sha256": "3D25470C879C5C21CA74B90C2C18B60C7B0D0F82F8F9A08378C33B4C10FF78AA"
+  },
+  {
+    "path": "tools/benchmark/__pycache__/process_capture.cpython-312.pyc",
+    "sha256": "B539B5BD0799E6C981C91526D4C83531A6992FFCB1D07D22A8E04E5A6B7B4B69"
+  },
+  {
+    "path": "tools/benchmark/__pycache__/readiness_checks.cpython-312.pyc",
+    "sha256": "B66B84BB86382D38F74CEE8CBA1BB65F9A66C6FC328DF06C6D5F3400B96794EA"
+  },
+  {
+    "path": "tools/benchmark/__pycache__/world_scene.cpython-312.pyc",
+    "sha256": "5C497AB31D2307C5B808D721C617BF6AFA6A335AABD2C9380FD8BC6E779A8B21"
+  }
+]

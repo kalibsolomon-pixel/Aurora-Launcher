@@ -31,7 +31,6 @@
 <section class="appearance-surface f-surface" aria-labelledby="appearance-title">
           <div class="section-intro"><h3 id="appearance-title">Appearance</h3></div>
           {#if !appearance.state && !appearance.error}<p role="status">Loading appearance…</p>{/if}
-          <ul class="appearance-summary" aria-label="Current appearance"><li>Theme: {appearance.state?.themes.find(item => item.id === appearance.theme)?.label ?? appearance.theme}</li><li>Background: {appearance.background === 'borealis' ? 'Aurora Borealis' : 'Simple'}</li><li>Accent: {appearance.accent.type === 'custom' ? appearance.accent.hex : appearance.state?.accents.find(item => appearance.accent.type === 'preset' && item.id === appearance.accent.id)?.label ?? appearance.accent.id}</li></ul>
           <fieldset class="choice-section" disabled={!appearance.state}><legend>Theme</legend>
             <div class="theme-grid">
               {#each appearance.state?.themes ?? [] as theme}
@@ -43,7 +42,7 @@
               {/each}
             </div>
           </fieldset>
-          <fieldset class="choice-section" disabled={!appearance.state}><legend>Background <Tooltip label="About background">Borealis adds gentle motion and frosted surfaces. Motion rests when Aurora is inactive and follows your system’s reduced-motion setting.</Tooltip></legend>
+          <fieldset class="choice-section" disabled={!appearance.state}><legend>Background <Tooltip label="About background">Borealis adds optional background motion. Choose Simple to keep the background still. Motion also rests when Aurora is inactive and follows your system’s reduced-motion setting.</Tooltip></legend>
             <div class="background-grid">
               {#each [{id:'simple',label:'Simple'},{id:'borealis',label:'Aurora Borealis'}] as background}
                 <label class="background-tile" class:chosen={appearance.background === background.id}>
@@ -95,7 +94,7 @@
   .choice-section { border: 0; border-bottom: 1px solid var(--f-edge); padding: 0 0 26px; margin: 0 0 26px; min-width: 0; }
   legend { font-size: .875rem; font-weight: 600; padding: 0; margin-bottom: 14px; }
   .theme-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-  .theme-tile, .background-tile { display: grid; gap: 10px; position: relative; padding: 8px; border: 1px solid var(--f-edge); border-radius: 14px; background: rgb(8 15 25 / 24%); cursor: pointer; min-width: 0; }
+  .theme-tile, .background-tile { display: grid; gap: 10px; position: relative; padding: 8px; border: 1px solid var(--f-edge); border-radius: var(--radius-md); background: rgb(8 15 25 / 24%); cursor: pointer; min-width: 0; }
   .chosen { border-color: var(--color-accent); }
   .theme-tile:focus-within, .background-tile:focus-within { outline: 2px solid var(--color-accent); outline-offset: 3px; }
   .theme-tile input, .background-tile input, .accent-option input { position: absolute; width: 1px; height: 1px; opacity: 0; }
@@ -118,7 +117,6 @@
   .custom-picker-input { position: absolute; width: 0; height: 0; opacity: 0; padding: 0; border: 0; pointer-events: none; }
   .accent-option:has(input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: 3px; }
   @media (max-width: 760px) { .theme-grid { grid-template-columns: 1fr; } .theme-tile { grid-template-columns: 80px minmax(0, 1fr); align-items: center; } .theme-preview { height: 55px; } .background-preview { height: 76px; } }
-  .appearance-summary { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0 0 20px; padding: 0; list-style: none; color: var(--color-text-secondary); font-size: .8125rem; }
   .motion-setting output { font-variant-numeric: tabular-nums; font-size: .8125rem; color: var(--color-text-secondary); }
   .accent-option .custom-picker-input { inset: 0; width: 100%; height: 100%; cursor: pointer; pointer-events: auto; z-index: 1; }
   .accent-option .custom-picker-input:disabled { cursor: wait; }

@@ -1,0 +1,46 @@
+[
+  {
+    "path": "AGENTS.md",
+    "exists": true
+  },
+  {
+    "path": "README.md",
+    "exists": true
+  },
+  {
+    "path": "ARCHITECTURE.md",
+    "exists": true
+  },
+  {
+    "path": "package.json",
+    "exists": true
+  },
+  {
+    "path": "package-lock.json",
+    "exists": true
+  },
+  {
+    "path": "src-tauri/Cargo.toml",
+    "exists": true
+  },
+  {
+    "path": "src-tauri/Cargo.lock",
+    "exists": true
+  },
+  {
+    "path": "src-tauri/build.rs",
+    "exists": true
+  },
+  {
+    "path": "src-tauri/tauri.conf.json",
+    "exists": true
+  },
+  {
+    "path": "vite.config.ts",
+    "exists": false
+  },
+  {
+    "path": "svelte.config.js",
+    "exists": true
+  }
+]

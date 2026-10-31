@@ -110,7 +110,7 @@
   .launch-control .play-hero { display: flex; flex: 1; justify-content: center; align-items: center; gap: var(--space-3); min-width: 0; padding: var(--space-4); border: 0; border-radius: var(--f-radius-control) 0 0 var(--f-radius-control); background: transparent !important; box-shadow: none; }
   .launch-control .play-hero:hover:not(:disabled) { background: var(--f-accent-fill-hover) !important; }
   .launch-control .play-hero:active:not(:disabled) { background: var(--f-accent-fill-pressed) !important; }
-  .launch-word { font-size: 1.5rem; font-weight: 700; letter-spacing: -.03em; }
+  .launch-word { font-size: 1.25rem; font-weight: 700; letter-spacing: -.03em; }
   .launch-control .picker-identity { font-size: 1.125rem; font-weight: 400; }
   .launch-control .picker-trigger { flex: none; width: 52px; min-height: 0; align-self: stretch; justify-content: center; padding: 0; border: 0; border-left: 1px solid var(--f-accent-edge); border-radius: 0 var(--f-radius-control) var(--f-radius-control) 0; color: var(--color-accent-contrast); background: transparent; }
   .launch-control .picker-trigger:hover:not(:disabled), .launch-control .picker-trigger[aria-expanded="true"] { background: rgb(255 255 255 / 10%); }

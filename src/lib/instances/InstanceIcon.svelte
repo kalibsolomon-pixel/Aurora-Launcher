@@ -15,7 +15,7 @@
 <style>
   .instance-icon { display: inline-grid; place-items: center; flex: none; color: var(--color-text); }
   .instance-icon .material-symbols-outlined { font-size: var(--icon-size); font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24; user-select: none; }
-  /* Tile: a quiet square ground tinted by the accent, the instance's identity mark. */
-  .tile { width: calc(var(--icon-size) * 1.9); height: calc(var(--icon-size) * 1.9); border-radius: calc(var(--icon-size) * .5); background: linear-gradient(160deg, color-mix(in srgb, var(--color-accent) 22%, transparent), color-mix(in srgb, var(--color-accent) 8%, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 24%, transparent); color: color-mix(in srgb, var(--color-accent) 30%, var(--color-text)); }
-  .tile.fallback { background: rgb(255 255 255 / 5%); box-shadow: inset 0 0 0 1px var(--f-edge); color: var(--color-text-secondary); }
+  /* The glyph identifies the instance; its ground stays neutral. */
+  .tile { width: calc(var(--icon-size) * 1.6); height: calc(var(--icon-size) * 1.6); border-radius: var(--radius-md); background: var(--color-surface-raised); color: var(--color-text); }
+  .tile.fallback { color: var(--color-text-secondary); }
 </style>

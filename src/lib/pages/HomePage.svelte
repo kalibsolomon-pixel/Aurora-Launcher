@@ -189,15 +189,15 @@
 <style>
   .home-page { max-width: 1280px; margin-inline: auto; width: 100%; }
   .aurora-update-notice { margin-bottom: 16px; }
-  .home-composition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: center; padding: var(--space-5); border: 1px solid var(--f-edge); border-radius: var(--f-radius-panel); background: radial-gradient(ellipse at 85% 45%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 65%), var(--f-panel); box-shadow: var(--f-shadow); position: relative; }
-  .home-composition { min-height: clamp(320px, 52vh, 404px); }
+  .home-composition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: center; padding: var(--space-5); border-radius: var(--f-radius-panel); background: var(--f-panel); position: relative; }
+  .home-composition { min-height: 320px; }
   .home-composition:has(.launch-feedback) :global(.player-preview.has-skin) { display: none; }
   .home-launch-column { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-5); min-width: 0; padding-block: var(--space-3); }
   .instance-heading { display: flex; align-items: center; gap: var(--space-4); min-width: 0; width: 100%; }
   .instance-heading h1 { min-width: 0; }
-  .instance-heading h1 { margin: 0; font-size: 2rem; line-height: 1.2; font-weight: 650; letter-spacing: -.035em; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  .instance-heading h1 { margin: 0; font-size: 1.75rem; line-height: 1.2; font-weight: 650; letter-spacing: -.025em; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   /* Launch carries only the verb and readiness dot; the name is the heading above. */
-  .instance-card { width: min(100%, 300px); height: 80px; min-height: 4rem; min-width: 0; margin: 0; position: relative; z-index: 2; }
+  .instance-card { width: min(100%, 260px); height: 56px; min-width: 0; margin: 0; position: relative; z-index: 2; }
   .home-composition.home-empty { grid-template-columns: minmax(0, 1fr); min-height: 0; align-items: start; }
   .home-empty .empty-state { padding: var(--space-3) var(--space-2); }
   .home-empty .empty-title { font-size: 1.375rem; letter-spacing: -.02em; }

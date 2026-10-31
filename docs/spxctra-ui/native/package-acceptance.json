@@ -1,0 +1,11 @@
+{
+  "url": "http://tauri.localhost/#main-content",
+  "restoredNativeTheme": "midnight",
+  "savedNativeTheme": "aurora-dark",
+  "noDeveloperDestination": true,
+  "signedOut": true,
+  "noInstances": true,
+  "skipLinkFocus": true,
+  "errors": [],
+  "scope": "Actual bundled production frontend in isolated debug native package; no accounts, games or provider writes"
+}
