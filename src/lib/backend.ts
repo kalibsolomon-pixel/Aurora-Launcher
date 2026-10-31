@@ -1414,6 +1414,8 @@ export interface ModrinthPackPreview {
   optional: string[];
   excluded: string[];
   overrides: string[];
+  /** Pack overrides outside the game-content roots (e.g. a root icon.png); never written. */
+  skippedOverrides: string[];
   fingerprint: string;
 }
 

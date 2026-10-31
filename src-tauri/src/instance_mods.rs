@@ -1745,11 +1745,15 @@ fn inspect_declared_nested_jars<R: Read + Seek>(
 /// loading, class loading, arbitrary JSON scan, or external path follows.
 // Mixin uses Gson's comment-tolerant reader. Remove comments lexically,
 // preserving quoted strings and line positions; never inspect or execute code.
+// Gson's lenient mode also accepts one trailing comma before an array's `]`
+// (read as an omitted element; C2ME ships such a config) but still rejects
+// one before an object's `}`, so only the array form is tolerated here.
 fn mixin_json(bytes: &[u8]) -> Result<serde_json::Value, &'static str> {
     let mut normalized = bytes.to_vec();
     let mut i = 0;
     let mut string = false;
     let mut escaped = false;
+    let mut nesting: Vec<u8> = Vec::new();
     while i < bytes.len() {
         let b = bytes[i];
         if string {
@@ -1767,6 +1771,30 @@ fn mixin_json(bytes: &[u8]) -> Result<serde_json::Value, &'static str> {
             string = true;
             i += 1;
             continue;
+        }
+        match b {
+            b'[' | b'{' => nesting.push(b),
+            b']' | b'}' => {
+                if b == b']' && nesting.last() == Some(&b'[') {
+                    // Comments before this point are already blanked, so the
+                    // previous significant byte is structural, never quoted.
+                    if let Some(j) = normalized[..i]
+                        .iter()
+                        .rposition(|c| !c.is_ascii_whitespace())
+                        .filter(|&j| normalized[j] == b',')
+                    {
+                        let before = normalized[..j]
+                            .iter()
+                            .rposition(|c| !c.is_ascii_whitespace());
+                        // `[,]` stays malformed; only `[x,]` is tolerated.
+                        if before.is_some_and(|k| normalized[k] != b'[' && normalized[k] != b',') {
+                            normalized[j] = b' ';
+                        }
+                    }
+                }
+                nesting.pop();
+            }
+            _ => {}
         }
         if b == b'/' && bytes.get(i + 1) == Some(&b'/') {
             while i < bytes.len() && bytes[i] != b'\n' {
@@ -3898,5 +3926,33 @@ versionRange="[1,2)"
                 .iter()
                 .any(|warning| warning.code == "nested_metadata_malformed")
         );
+    }
+}
+
+#[cfg(test)]
+mod lenient_mixin_json_tests {
+    use super::mixin_json;
+
+    #[test]
+    fn a_trailing_comma_in_an_array_is_read_like_gson_lenient() {
+        let value = mixin_json(
+            br#"{"package":"a.b","mixins":["One","Two", // last
+            ],"client":[]}"#,
+        )
+        .unwrap();
+        assert_eq!(value["mixins"], serde_json::json!(["One", "Two"]));
+    }
+
+    #[test]
+    fn object_trailing_commas_and_empty_elements_stay_malformed() {
+        assert!(mixin_json(br#"{"package":"a.b",}"#).is_err());
+        assert!(mixin_json(br#"{"mixins":[,]}"#).is_err());
+        assert!(mixin_json(br#"{"mixins":["a",,]}"#).is_err());
+    }
+
+    #[test]
+    fn commas_inside_strings_are_untouched() {
+        let value = mixin_json(br#"{"mixins":["a,]"]}"#).unwrap();
+        assert_eq!(value["mixins"][0], "a,]");
     }
 }

@@ -44,6 +44,7 @@ mod performance;
 pub mod runtime;
 pub mod server_enrichment;
 pub mod shortcuts;
+pub mod transfer;
 pub mod updates;
 #[cfg(feature = "tauri-host")]
 pub mod window_activity;

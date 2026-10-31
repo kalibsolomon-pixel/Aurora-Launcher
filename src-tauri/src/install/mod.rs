@@ -469,9 +469,12 @@ pub async fn install_game(
     });
 
     // Preserve classpath order even when independent acquisitions complete
-    // out of order. A failed batch is fully settled before returning, so no
-    // download task is abandoned with an open untrusted staging file.
-    for batch in plan
+    // out of order. The sliding window keeps `small_artifact_concurrency`
+    // transfers busy instead of waiting for each batch's slowest file. After
+    // a failure or cancellation no new transfer starts, and every in-flight
+    // one settles before returning, so no download task is abandoned with an
+    // open untrusted staging file.
+    let downloadable_libraries: Vec<&GameLibrary> = plan
         .libraries()
         .iter()
         .filter(|library| match library {
@@ -481,19 +484,15 @@ pub async fn install_game(
             GameLibrary::Forge(entry) => entry.artifact().is_downloadable(),
             _ => true,
         })
-        .collect::<Vec<_>>()
-        .chunks(context.small_artifact_concurrency)
-    {
-        check_cancel(context)?;
-        let acquired = join_all(
-            batch
-                .iter()
-                .map(|library| async { acquire_library(&cache, library, context).await }),
-        )
-        .await;
-        check_cancel(context)?;
-        for (library, result) in batch.iter().zip(acquired) {
-            let (source, trust, size, role, origin) = result?;
+        .collect();
+    check_cancel(context)?;
+    let library_results = settled_window(
+        &downloadable_libraries,
+        context.small_artifact_concurrency,
+        context,
+        |library| acquire_library(&cache, library, context),
+        |library, result| {
+            let (source, trust, size, role, origin) = result;
             completed += 1;
             files.push(PlannedFile {
                 source,
@@ -509,8 +508,11 @@ pub async fn install_game(
                 total_items,
                 Some(library.coordinate_string()),
             );
-        }
-    }
+        },
+    )
+    .await;
+    library_results?;
+    check_cancel(context)?;
     let libraries_finished = Instant::now();
 
     // ---- NeoForge-specific artifacts: the verified installer (kept for
@@ -617,26 +619,30 @@ pub async fn install_game(
         forge_installer_path = Some(installer.path);
     }
 
-    // Asset objects, deduplicated by hash.
-    for batch in objects.chunks(context.small_artifact_concurrency) {
-        check_cancel(context)?;
-        let acquired = join_all(batch.iter().map(|object| async {
-            let hex = object.sha1().as_hex();
-            let source = Sha1ArtifactSource::https_or_loopback(
-                context.asset_endpoints().object_url(object.sha1()).as_str(),
-                &hex,
-                Some(object.size_bytes()),
-            )
-            .map_err(|error| InstallError::InvalidSource(error.to_string()))?;
-            cache
-                .acquire_sha1(&source, context.download_options())
-                .await
-                .map_err(InstallError::Acquisition)
-        }))
-        .await;
-        check_cancel(context)?;
-        for (object, result) in batch.iter().zip(acquired) {
-            let artifact = result?;
+    // Asset objects, deduplicated by hash, through the same settled window.
+    let object_refs: Vec<_> = objects.iter().collect();
+    check_cancel(context)?;
+    let asset_results = settled_window(
+        &object_refs,
+        context.small_artifact_concurrency,
+        context,
+        |object| {
+            let cache = &cache;
+            async move {
+                let hex = object.sha1().as_hex();
+                let source = Sha1ArtifactSource::https_or_loopback(
+                    context.asset_endpoints().object_url(object.sha1()).as_str(),
+                    &hex,
+                    Some(object.size_bytes()),
+                )
+                .map_err(|error| InstallError::InvalidSource(error.to_string()))?;
+                cache
+                    .acquire_sha1(&source, context.download_options())
+                    .await
+                    .map_err(InstallError::Acquisition)
+            }
+        },
+        |object, artifact| {
             completed += 1;
             files.push(PlannedFile {
                 source: artifact.path.clone(),
@@ -652,8 +658,10 @@ pub async fn install_game(
                 total_items,
                 Some(format!("asset {}", object.sha1().as_hex())),
             );
-        }
-    }
+        },
+    )
+    .await;
+    asset_results?;
     let assets_finished = Instant::now();
     check_cancel(context)?;
     transaction_receipt
@@ -1533,6 +1541,29 @@ fn https_or_loopback_artifact_source(
         .or_else(|_| ArtifactSource::loopback_http_for_testing(url, &sha256.as_hex(), size_bytes))
 }
 
+/// [`crate::transfer::settled_window`] that also stops scheduling on install
+/// cancellation and reports a cancellation observed after settling.
+async fn settled_window<'a, T, R, Fut>(
+    items: &'a [T],
+    width: usize,
+    context: &InstallContext,
+    acquire: impl Fn(&'a T) -> Fut,
+    accept: impl FnMut(&'a T, R),
+) -> Result<(), InstallError>
+where
+    Fut: std::future::Future<Output = Result<R, InstallError>>,
+{
+    crate::transfer::settled_window(
+        items,
+        width,
+        || check_cancel(context).is_ok(),
+        acquire,
+        accept,
+    )
+    .await?;
+    check_cancel(context)
+}
+
 /// Copies one verified cache object into the staged game tree and checks the
 /// copied byte count. Content re-verification happens in the staged
 /// validation pass.
@@ -1554,10 +1585,24 @@ fn materialize_file(staging_game: &Path, file: &PlannedFile) -> Result<(), Insta
             source: error,
         })?;
     }
-    std::fs::copy(&file.source, &target).map_err(|error| InstallError::Materialization {
-        path: file.relative.clone(),
-        source: error,
-    })?;
+    // Asset objects and indexes are Mojang content-addressed, read-only game
+    // data that neither Minecraft nor any install processor rewrites in
+    // place, so instances share the verified store's bytes through a hard
+    // link instead of a ~450 MB copy each. Libraries, the client and natives
+    // are always copied: Forge processors run inside the staged tree and
+    // could otherwise write through a link into the shared store. Any link
+    // failure (other volume, FAT, NTFS link limit) falls back to a copy;
+    // the staged validation pass re-hashes either way.
+    let linked = matches!(
+        file.role,
+        InstalledFileRole::AssetObject | InstalledFileRole::AssetIndex
+    ) && std::fs::hard_link(&file.source, &target).is_ok();
+    if !linked {
+        std::fs::copy(&file.source, &target).map_err(|error| InstallError::Materialization {
+            path: file.relative.clone(),
+            source: error,
+        })?;
+    }
     let copied = std::fs::metadata(&target)
         .map_err(|error| InstallError::Materialization {
             path: file.relative.clone(),
@@ -2576,6 +2621,53 @@ mod tests {
         // Validation mutated nothing: the tampered file is still the tampered
         // bytes, and the manifest still describes the original expectation.
         assert_eq!(std::fs::read(&client).unwrap(), b"tampered bytes");
+    }
+
+    /// Asset objects are hard-linked from the verified store, so writing
+    /// through an instance's copy also damages the shared store object. The
+    /// damage must be detected (instance validation, then cache
+    /// re-validation on reuse) and repaired by a full verified acquisition,
+    /// never propagated into a new installation.
+    #[tokio::test]
+    async fn in_place_damage_to_a_shared_asset_is_detected_and_reacquired() {
+        let (fixture, plan) = synthetic_game();
+        let env = TestEnv::new("shared-asset-damage");
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .unwrap();
+        let index_text =
+            std::fs::read_to_string(env.game().join("assets/indexes/32.json")).unwrap();
+        let index = AssetIndexObjectsDocument::from_json(&index_text).unwrap();
+        let victim = &assets::plan_asset_objects(&index).unwrap()[0];
+        let installed_object = env.game().join(victim.game_relative_path());
+        let original = std::fs::read(&installed_object).unwrap();
+        {
+            use std::io::Write as _;
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(&installed_object)
+                .unwrap();
+            file.write_all(b"damaged in place").unwrap();
+        }
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Damaged);
+            }
+            ValidationOutcome::NotInstalled => panic!("damage must be reported"),
+        }
+        // Reinstalling re-validates the store object by hashing, finds the
+        // damage, and re-acquires verified bytes for the new tree.
+        install(&env, &fixture, &plan, InstallFaults::default())
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(&installed_object).unwrap(), original);
+        match validate_installed_game(&env.managed, &env.instance).unwrap() {
+            ValidationOutcome::Installed(validation) => {
+                assert_eq!(validation.status, ValidationStatus::Valid);
+            }
+            ValidationOutcome::NotInstalled => panic!("the repaired game must validate"),
+        }
     }
 
     #[tokio::test]

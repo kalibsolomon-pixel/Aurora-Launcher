@@ -348,6 +348,8 @@ impl ArtifactCache {
             .join(ARTIFACTS_DIR)
             .join("sha512-map");
         let map_path = map_dir.join(source.sha512().as_hex());
+        let _flight =
+            crate::transfer::single_flight(format!("sha512:{}", source.sha512().as_hex())).await;
         if let Ok(text) = std::fs::read_to_string(&map_path) {
             if let Ok(sha256) = ArtifactDigest::parse(text.trim()) {
                 let path = self.verified_path(&sha256);
@@ -365,8 +367,16 @@ impl ArtifactCache {
                 }
             }
         }
-        let staging = self.prepare_staging(&self.store_dir())?;
-        let downloaded = downloads::download_sha512(source, &staging, &DownloadOptions::default())
+        self.prepare_staging(&self.store_dir())?;
+        let default_options = DownloadOptions::default();
+        let options = &default_options;
+        let (staging, downloaded) =
+            crate::transfer::with_retry(host_of(source.url()), || async move {
+                let staging = self.new_staging_path();
+                let downloaded = downloads::download_sha512(source, &staging, options).await?;
+                let bytes = downloaded.bytes;
+                Ok(((staging, downloaded), bytes))
+            })
             .await
             .map_err(AcquisitionError::Download)?;
         let path = self.verified_path(&downloaded.sha256);
@@ -407,6 +417,8 @@ impl ArtifactCache {
             digest: source.sha256(),
             size_bytes: source.size_bytes(),
         };
+        let _flight =
+            crate::transfer::single_flight(format!("sha256:{}", source.sha256().as_hex())).await;
 
         if let Some(bytes) = self.validate_existing(&verified_path, expected).await? {
             return Ok(VerifiedArtifact {
@@ -417,8 +429,14 @@ impl ArtifactCache {
             });
         }
 
-        let staging_path = self.prepare_staging(&self.store_dir())?;
-        let downloaded = downloads::download(source, &staging_path, options)
+        self.prepare_staging(&self.store_dir())?;
+        let (staging_path, downloaded) =
+            crate::transfer::with_retry(host_of(source.url()), || async move {
+                let staging = self.new_staging_path();
+                let downloaded = downloads::download(source, &staging, options).await?;
+                let bytes = downloaded.bytes;
+                Ok(((staging, downloaded), bytes))
+            })
             .await
             .map_err(AcquisitionError::Download)?;
         self.promote(&staging_path, &verified_path, expected)
@@ -448,6 +466,8 @@ impl ArtifactCache {
             digest: source.sha1(),
             size_bytes: source.size_bytes(),
         };
+        let _flight =
+            crate::transfer::single_flight(format!("sha1:{}", source.sha1().as_hex())).await;
 
         if let Some(bytes) = self.validate_existing(&verified_path, expected).await? {
             return Ok(VerifiedSha1Artifact {
@@ -458,8 +478,14 @@ impl ArtifactCache {
             });
         }
 
-        let staging_path = self.prepare_staging(&self.sha1_store_dir())?;
-        let downloaded = downloads::download_sha1(source, &staging_path, options)
+        self.prepare_staging(&self.sha1_store_dir())?;
+        let (staging_path, downloaded) =
+            crate::transfer::with_retry(host_of(source.url()), || async move {
+                let staging = self.new_staging_path();
+                let downloaded = downloads::download_sha1(source, &staging, options).await?;
+                let bytes = downloaded.bytes;
+                Ok(((staging, downloaded), bytes))
+            })
             .await
             .map_err(AcquisitionError::Download)?;
         self.promote(&staging_path, &verified_path, expected)
@@ -547,9 +573,14 @@ impl ArtifactCache {
 
         std::fs::create_dir_all(self.observed_store_dir()).map_err(AcquisitionError::StoreIo)?;
         std::fs::create_dir_all(self.staging_dir()).map_err(AcquisitionError::StoreIo)?;
-        let staging_path = self.new_staging_path();
-
-        let downloaded = downloads::download_observed(source, pin.as_ref(), &staging_path, options)
+        let (staging_path, downloaded) =
+            crate::transfer::with_retry(host_of(source.url()), || async move {
+                let staging = self.new_staging_path();
+                let downloaded =
+                    downloads::download_observed(source, pin.as_ref(), &staging, options).await?;
+                let bytes = downloaded.bytes;
+                Ok(((staging, downloaded), bytes))
+            })
             .await
             .map_err(AcquisitionError::Download)?;
 
@@ -1365,4 +1396,10 @@ mod tests {
             cache.observed_store_dir().join(digest.as_hex())
         );
     }
+}
+
+/// The transfer-permit key for a source URL (loopback test servers share
+/// one key, which is fine for bounded tests).
+fn host_of(url: &url::Url) -> &str {
+    url.host_str().unwrap_or("unknown-host")
 }

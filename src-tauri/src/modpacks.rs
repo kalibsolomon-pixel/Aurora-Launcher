@@ -57,6 +57,8 @@ pub struct PackPreview {
     pub optional: Vec<String>,
     pub excluded: Vec<String>,
     pub overrides: Vec<String>,
+    /// Pack overrides outside the game-content roots, never written.
+    pub skipped_overrides: Vec<String>,
     pub fingerprint: String,
 }
 
@@ -69,11 +71,17 @@ pub struct RecognizedPreview {
     pub title: String,
 }
 
+/// Pack files downloaded at once per pack; the process-wide transfer
+/// permits still bound the total across concurrent installs.
+pub(crate) const PACK_DOWNLOAD_CONCURRENCY: usize = 8;
+
 pub(crate) struct Resolved {
     pub(crate) archive: VerifiedArtifact,
     pub(crate) archive_sha512: String,
     pub(crate) provider_project_id: String,
     pub(crate) provider_version_id: String,
+    /// The Modrinth project title, used only as the new instance's display name.
+    pub(crate) provider_title: String,
     pub(crate) pack: PackPlan,
     pub(crate) provider_plans: Vec<ProviderInstallPlan>,
     pub(crate) unresolved: Vec<PackFile>,
@@ -218,6 +226,12 @@ pub(crate) async fn resolve(
             unresolved.push(file.clone());
         }
     }
+    // Modrinth-declared requirements absent from the pack are confirmed
+    // against the components' own Fabric metadata below rather than failing
+    // outright: mods commonly bundle a declared dependency as a jar-in-jar
+    // (Mod Menu ships Text Placeholder API), and Fabric Loader, not Modrinth
+    // metadata, decides what launches.
+    let mut unconfirmed = Vec::new();
     for planned in &provider_plans {
         for dependency in &planned.dependencies {
             match dependency.kind {
@@ -229,13 +243,7 @@ pub(crate) async fn resolve(
                                 .as_ref()
                                 .is_none_or(|exact| exact == &candidate.version_id)
                     }) {
-                        return Err(fail(
-                            "pack_dependency_conflict",
-                            format!(
-                                "{} requires a Modrinth dependency absent from this exact pack snapshot.",
-                                planned.file_name
-                            ),
-                        ));
+                        unconfirmed.push(planned.file_name.clone());
                     }
                 }
                 crate::instance_content::DependencyKind::Incompatible => {
@@ -252,6 +260,10 @@ pub(crate) async fn resolve(
                 crate::instance_content::DependencyKind::Optional => {}
             }
         }
+    }
+    if !unconfirmed.is_empty() {
+        confirm_with_fabric_metadata(managed, &pack, &provider_plans, &unresolved, &unconfirmed)
+            .await?;
     }
     let mut excluded = pack.excluded_paths.clone();
     excluded.extend(
@@ -275,6 +287,7 @@ pub(crate) async fn resolve(
         optional: pack.optional_files.iter().map(|f| f.path.clone()).collect(),
         excluded,
         overrides: pack.overrides.iter().map(|f| f.path.clone()).collect(),
+        skipped_overrides: pack.skipped_overrides.clone(),
         fingerprint: String::new(),
     };
     let bytes = serde_json::to_vec(&preview).map_err(|_| {
@@ -289,6 +302,7 @@ pub(crate) async fn resolve(
         archive_sha512: artifact.sha512,
         provider_project_id: artifact.project_id,
         provider_version_id: artifact.version_id,
+        provider_title: artifact.title,
         pack,
         provider_plans,
         unresolved,
@@ -323,51 +337,77 @@ pub async fn install(
     }
     let cache = ArtifactCache::new(managed.clone());
     progress("downloading");
+    // Pack files download concurrently through the shared transfer permits;
+    // each is verified against the pack's own digests before use.
     let mut external = Vec::new();
-    for file in &resolved.unresolved {
-        let source = Sha512ArtifactSource::mrpack_fallback(
-            &file.downloads[0],
-            &file.sha512,
-            (file.file_size > 0).then_some(file.file_size),
-        )
-        .map_err(|_| {
-            fail(
-                "pack_invalid_download",
-                "An unresolved pack file has an invalid source.",
-            )
-        })?;
-        let artifact = cache
-            .acquire_sha512(&source)
-            .await
-            .map_err(|e| fail("pack_download_failed", e.to_string()))?;
-        verify_external(file, &artifact)?;
-        external.push(AcquiredExternal {
-            file: file.clone(),
-            artifact,
-        });
-    }
-    for planned in &resolved.provider_plans {
-        let artifact = match &planned.source {
-            ProviderArtifactSource::Sha512(source) => cache.acquire_sha512(source).await,
-            ProviderArtifactSource::Sha256(source) => cache.acquire(source).await,
-        }
-        .map_err(|e| fail("pack_download_failed", e.to_string()))?;
-        let file = resolved
-            .pack
-            .required_files
-            .iter()
-            .chain(resolved.pack.optional_files.iter())
-            .find(|file| {
-                file.path
-                    == format!(
-                        "{}/{}",
-                        planned.content_type.directory_name(),
-                        planned.file_name
+    crate::transfer::settled_window(
+        &resolved.unresolved,
+        PACK_DOWNLOAD_CONCURRENCY,
+        || true,
+        |file| {
+            let cache = &cache;
+            async move {
+                let source = Sha512ArtifactSource::mrpack_fallback(
+                    &file.downloads[0],
+                    &file.sha512,
+                    (file.file_size > 0).then_some(file.file_size),
+                )
+                .map_err(|_| {
+                    fail(
+                        "pack_invalid_download",
+                        "An unresolved pack file has an invalid source.",
                     )
+                })?;
+                let artifact = cache
+                    .acquire_sha512(&source)
+                    .await
+                    .map_err(|e| fail("pack_download_failed", e.to_string()))?;
+                verify_external(file, &artifact)?;
+                Ok(artifact)
+            }
+        },
+        |file, artifact| {
+            external.push(AcquiredExternal {
+                file: file.clone(),
+                artifact,
             })
-            .ok_or_else(|| fail("pack_plan_invalid", "A recognized file left the pack plan."))?;
-        verify_external(file, &artifact)?;
-    }
+        },
+    )
+    .await?;
+    crate::transfer::settled_window(
+        &resolved.provider_plans,
+        PACK_DOWNLOAD_CONCURRENCY,
+        || true,
+        |planned| {
+            let (cache, resolved) = (&cache, &resolved);
+            async move {
+                let artifact = match &planned.source {
+                    ProviderArtifactSource::Sha512(source) => cache.acquire_sha512(source).await,
+                    ProviderArtifactSource::Sha256(source) => cache.acquire(source).await,
+                }
+                .map_err(|e| fail("pack_download_failed", e.to_string()))?;
+                let file = resolved
+                    .pack
+                    .required_files
+                    .iter()
+                    .chain(resolved.pack.optional_files.iter())
+                    .find(|file| {
+                        file.path
+                            == format!(
+                                "{}/{}",
+                                planned.content_type.directory_name(),
+                                planned.file_name
+                            )
+                    })
+                    .ok_or_else(|| {
+                        fail("pack_plan_invalid", "A recognized file left the pack plan.")
+                    })?;
+                verify_external(file, &artifact)
+            }
+        },
+        |_, ()| {},
+    )
+    .await?;
     progress("preparingInstance");
     let mut configuration = InstanceConfiguration::from_parts(
         &resolved.pack.minecraft_version,
@@ -381,7 +421,14 @@ pub async fn install(
         None,
     );
     configuration.set_aurora_enabled(false);
-    let mut display_name = resolved.pack.name.clone();
+    // The project title ("Vulkan Optimized") names the instance; a pack
+    // index name is often just a version string. The pack identity
+    // recorded below keeps the index name, which pack state verifies.
+    let mut display_name = if resolved.provider_title.trim().is_empty() {
+        resolved.pack.name.clone()
+    } else {
+        resolved.provider_title.trim().to_owned()
+    };
     while display_name.len() > 80 {
         display_name.pop();
     }
@@ -546,6 +593,153 @@ pub async fn install(
     };
     progress("complete");
     Ok(record)
+}
+
+/// Evaluates the pack's own mod jars the way Fabric Loader would: every
+/// Fabric `depends` must be satisfied by a top-level pack mod, a bundled
+/// (jar-in-jar) copy, or a built-in (`minecraft`, `fabricloader`). Called
+/// only when Modrinth metadata names a requirement the pack does not list,
+/// so ordinary packs never download during review. The jars land in the
+/// verified cache and are reused by installation.
+async fn confirm_with_fabric_metadata(
+    managed: &ManagedPaths,
+    pack: &PackPlan,
+    provider_plans: &[ProviderInstallPlan],
+    unresolved: &[PackFile],
+    unconfirmed: &[String],
+) -> Result<(), PackInstallError> {
+    use crate::instance_content::ContentType;
+    let cache = ArtifactCache::new(managed.clone());
+    let mod_plans: Vec<&ProviderInstallPlan> = provider_plans
+        .iter()
+        .filter(|plan| plan.content_type == ContentType::Mod)
+        .collect();
+    let external_mods: Vec<&PackFile> = unresolved
+        .iter()
+        .filter(|file| file.path.starts_with("mods/") && file.path.ends_with(".jar"))
+        .collect();
+    let provider_artifacts = acquire_provider_artifacts(&cache, &mod_plans).await?;
+    let external_artifacts = acquire_externals(&cache, &external_mods).await?;
+    let mut inventory = crate::instance_mods::ModInventory {
+        instance_id: String::new(),
+        entries: Vec::new(),
+        missing_managed: Vec::new(),
+    };
+    let jars = mod_plans
+        .iter()
+        .map(|plan| plan.file_name.clone())
+        .zip(&provider_artifacts)
+        .chain(
+            external_mods
+                .iter()
+                .map(|file| file.path.trim_start_matches("mods/").to_owned())
+                .zip(&external_artifacts),
+        );
+    for (file_name, artifact) in jars {
+        let (metadata, warnings) =
+            crate::instance_mods::inspect_mod_metadata(&artifact.path, artifact.bytes, "fabric");
+        let Some(metadata) = metadata else {
+            if unconfirmed.contains(&file_name) {
+                return Err(fail(
+                    "pack_dependency_conflict",
+                    format!(
+                        "{file_name} requires a Modrinth dependency absent from this pack, and its Fabric metadata could not be read to confirm it is bundled."
+                    ),
+                ));
+            }
+            continue;
+        };
+        crate::mod_compatibility::add_artifact(
+            &mut inventory,
+            file_name,
+            metadata,
+            artifact.sha256.as_hex(),
+            warnings,
+        );
+    }
+    let issues = crate::mod_compatibility::validate(
+        &inventory,
+        &pack.minecraft_version,
+        &pack.fabric_loader_version,
+        None,
+        "fabric",
+    );
+    // Only the jars Modrinth flagged are decided here. Other Fabric issues
+    // (for example a requirement Fabric Loader itself supplies, such as
+    // MixinExtras) stay with Play readiness, which evaluates the installed,
+    // digest-recorded loader jar's modules; no loader jar exists yet here.
+    if let Some(problem) = issues.iter().find(|issue| {
+        unconfirmed.contains(&issue.file_name)
+            && matches!(
+                issue.code.as_str(),
+                "mod_dependency_unsatisfied" | "mod_metadata_unusable"
+            )
+    }) {
+        return Err(fail(
+            "pack_dependency_conflict",
+            format!("{}: {}", problem.file_name, problem.message),
+        ));
+    }
+    Ok(())
+}
+
+/// Acquires and verifies external pack files concurrently, returning the
+/// artifacts in input order.
+pub(crate) async fn acquire_externals(
+    cache: &ArtifactCache,
+    files: &[&PackFile],
+) -> Result<Vec<VerifiedArtifact>, PackInstallError> {
+    let mut artifacts = Vec::with_capacity(files.len());
+    crate::transfer::settled_window(
+        files,
+        PACK_DOWNLOAD_CONCURRENCY,
+        || true,
+        |file| async move {
+            let source = Sha512ArtifactSource::mrpack_fallback(
+                &file.downloads[0],
+                &file.sha512,
+                (file.file_size > 0).then_some(file.file_size),
+            )
+            .map_err(|_| {
+                fail(
+                    "pack_invalid_download",
+                    "An unresolved pack file has an invalid source.",
+                )
+            })?;
+            let artifact = cache
+                .acquire_sha512(&source)
+                .await
+                .map_err(|e| fail("pack_download_failed", e.to_string()))?;
+            verify_external(file, &artifact)?;
+            Ok(artifact)
+        },
+        |_, artifact| artifacts.push(artifact),
+    )
+    .await?;
+    Ok(artifacts)
+}
+
+/// Acquires provider-resolved component artifacts concurrently, in order.
+pub(crate) async fn acquire_provider_artifacts(
+    cache: &ArtifactCache,
+    plans: &[&ProviderInstallPlan],
+) -> Result<Vec<VerifiedArtifact>, PackInstallError> {
+    let mut artifacts = Vec::with_capacity(plans.len());
+    crate::transfer::settled_window(
+        plans,
+        PACK_DOWNLOAD_CONCURRENCY,
+        || true,
+        |plan| async move {
+            match &plan.source {
+                ProviderArtifactSource::Sha512(source) => cache.acquire_sha512(source).await,
+                ProviderArtifactSource::Sha256(source) => cache.acquire(source).await,
+            }
+            .map_err(|e| fail("pack_download_failed", e.to_string()))
+        },
+        |_, artifact| artifacts.push(artifact),
+    )
+    .await?;
+    Ok(artifacts)
 }
 
 pub(crate) fn verify_external(

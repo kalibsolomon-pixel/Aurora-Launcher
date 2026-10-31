@@ -20,7 +20,6 @@ use serde::Serialize;
 use sha2::{Digest as _, Sha256};
 
 use crate::cache::{ArtifactCache, VerifiedArtifact};
-use crate::downloads::Sha512ArtifactSource;
 use crate::instance_content::{ContentState, ProviderInstallPlan, ProviderRecord};
 use crate::instance_mods::ModOwnership;
 use crate::instances::platform::PlatformPin;
@@ -417,19 +416,15 @@ async fn batch_identity_blockers(
     provider_plans: &[ProviderInstallPlan],
     externals: &[PackFile],
 ) -> Result<Vec<String>, PackInstallError> {
-    use crate::instance_content::ProviderArtifactSource;
     let cache = ArtifactCache::new(managed.clone());
     let kind = crate::instance_mods::platform_kind_of(managed, instance);
     let mut batch: Vec<(String, crate::instance_mods::ModMetadata)> = Vec::new();
-    for plan in provider_plans
+    let mod_plans: Vec<&ProviderInstallPlan> = provider_plans
         .iter()
         .filter(|plan| plan.content_type == crate::instance_content::ContentType::Mod)
-    {
-        let artifact = match &plan.source {
-            ProviderArtifactSource::Sha256(source) => cache.acquire(source).await,
-            ProviderArtifactSource::Sha512(source) => cache.acquire_sha512(source).await,
-        }
-        .map_err(|e| fail("pack_download_failed", e.to_string()))?;
+        .collect();
+    let mod_artifacts = crate::modpacks::acquire_provider_artifacts(&cache, &mod_plans).await?;
+    for (plan, artifact) in mod_plans.iter().zip(&mod_artifacts) {
         if let (Some(metadata), _) =
             crate::instance_mods::inspect_mod_metadata(&artifact.path, artifact.bytes, &kind)
         {
@@ -437,26 +432,12 @@ async fn batch_identity_blockers(
         }
     }
     let mut external_metadata = Vec::new();
-    for file in externals
+    let external_mods: Vec<&PackFile> = externals
         .iter()
         .filter(|file| file.path.starts_with("mods/"))
-    {
-        let source = Sha512ArtifactSource::mrpack_fallback(
-            &file.downloads[0],
-            &file.sha512,
-            (file.file_size > 0).then_some(file.file_size),
-        )
-        .map_err(|_| {
-            fail(
-                "pack_invalid_download",
-                "An unresolved pack file has an invalid source.",
-            )
-        })?;
-        let artifact = cache
-            .acquire_sha512(&source)
-            .await
-            .map_err(|e| fail("pack_download_failed", e.to_string()))?;
-        crate::modpacks::verify_external(file, &artifact)?;
+        .collect();
+    let external_artifacts = crate::modpacks::acquire_externals(&cache, &external_mods).await?;
+    for (file, artifact) in external_mods.iter().zip(&external_artifacts) {
         if let (Some(metadata), _) =
             crate::instance_mods::inspect_mod_metadata(&artifact.path, artifact.bytes, &kind)
         {
@@ -581,26 +562,13 @@ pub async fn install(
 
     progress("downloading");
     let cache = ArtifactCache::new(managed.clone());
-    let mut external: Vec<(PackFile, VerifiedArtifact)> = Vec::new();
-    for file in &merge.externals {
-        let source = Sha512ArtifactSource::mrpack_fallback(
-            &file.downloads[0],
-            &file.sha512,
-            (file.file_size > 0).then_some(file.file_size),
-        )
-        .map_err(|_| {
-            fail(
-                "pack_invalid_download",
-                "An unresolved pack file has an invalid source.",
-            )
-        })?;
-        let artifact = cache
-            .acquire_sha512(&source)
-            .await
-            .map_err(|e| fail("pack_download_failed", e.to_string()))?;
-        crate::modpacks::verify_external(file, &artifact)?;
-        external.push((file.clone(), artifact));
-    }
+    let external_refs: Vec<&PackFile> = merge.externals.iter().collect();
+    let external: Vec<(PackFile, VerifiedArtifact)> = merge
+        .externals
+        .iter()
+        .cloned()
+        .zip(crate::modpacks::acquire_externals(&cache, &external_refs).await?)
+        .collect();
 
     progress("installingComponents");
     let records: Vec<ProviderRecord> = if merge.provider_plans.is_empty() {

@@ -639,6 +639,37 @@ async fn send_mrpack_request(
     url: &Url,
     options: &DownloadOptions,
 ) -> Result<reqwest::Response, DownloadError> {
+    let client = mrpack_client(options);
+    let response = client
+        .get(url.clone())
+        .send()
+        .await
+        .map_err(DownloadError::from_transport)?;
+    if !response.status().is_success() {
+        return Err(DownloadError::HttpStatus {
+            status: response.status().as_u16(),
+        });
+    }
+    Ok(response)
+}
+
+/// The pack-fallback client, pooled per runtime like [`build_client`] so
+/// the many files of one pack reuse connections instead of handshaking
+/// once per file. Its redirect policy is fixed by `options` alone.
+fn mrpack_client(options: &DownloadOptions) -> reqwest::Client {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static CLIENTS: OnceLock<
+        Mutex<HashMap<(tokio::runtime::Id, DownloadOptions), reqwest::Client>>,
+    > = OnceLock::new();
+    let key = (tokio::runtime::Handle::current().id(), options.clone());
+    let mut clients = CLIENTS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .expect("HTTP client pool lock is not poisoned");
+    if let Some(client) = clients.get(&key) {
+        return client.clone();
+    }
     ensure_rustls_crypto_provider();
     let max_redirects = options.max_redirects;
     let client = reqwest::Client::builder()
@@ -663,17 +694,8 @@ async fn send_mrpack_request(
         }))
         .build()
         .expect("pack download client configuration is valid");
-    let response = client
-        .get(url.clone())
-        .send()
-        .await
-        .map_err(DownloadError::from_transport)?;
-    if !response.status().is_success() {
-        return Err(DownloadError::HttpStatus {
-            status: response.status().as_u16(),
-        });
-    }
-    Ok(response)
+    clients.insert(key, client.clone());
+    client
 }
 
 pub(crate) fn mrpack_allowed_url(url: &Url) -> bool {

@@ -104,6 +104,24 @@ pub struct PackPlan {
     pub optional_files: Vec<PackFile>,
     pub excluded_paths: Vec<String>,
     pub overrides: Vec<OverrideFile>,
+    /// Override entries that are well-formed but name something outside the
+    /// game-content roots (for example a pack's root `icon.png` or
+    /// `credits.txt`). They are never written; the review discloses them.
+    pub skipped_overrides: Vec<String>,
+}
+
+/// Why one override entry was refused. The entry name is disclosed only when
+/// it is short printable text, so archive bytes never reach the UI verbatim.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverrideRefusal {
+    /// Traversal, reserved device names, invalid characters, or similar.
+    UnsafePath,
+    /// The entry names a launcher-owned state file or directory.
+    LauncherOwned,
+    /// A link, device, or other non-regular archive entry.
+    NotRegularFile,
+    /// The bytes or archive position differ from the reviewed plan.
+    ChangedContent,
 }
 
 #[derive(Debug)]
@@ -118,7 +136,22 @@ pub enum PackError {
     PathCollision,
     InvalidHash,
     InvalidDownload,
-    UnsafeOverride,
+    UnsafeOverride {
+        entry: Option<String>,
+        reason: OverrideRefusal,
+    },
+}
+
+impl PackError {
+    fn unsafe_override(entry: &str, reason: OverrideRefusal) -> Self {
+        let shown = entry.len() <= 200
+            && !entry.is_empty()
+            && entry.chars().all(|ch| !ch.is_control() && ch != '\u{feff}');
+        Self::UnsafeOverride {
+            entry: shown.then(|| entry.to_owned()),
+            reason,
+        }
+    }
 }
 
 impl PackError {
@@ -134,13 +167,27 @@ impl PackError {
             Self::PathCollision => "pack_path_collision",
             Self::InvalidHash => "pack_invalid_hash",
             Self::InvalidDownload => "pack_invalid_download",
-            Self::UnsafeOverride => "pack_unsafe_override",
+            Self::UnsafeOverride { .. } => "pack_unsafe_override",
         }
     }
 }
 
 impl fmt::Display for PackError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Self::UnsafeOverride { entry, reason } = self {
+            let why = match reason {
+                OverrideRefusal::UnsafePath => "its path is not safe inside a game directory",
+                OverrideRefusal::LauncherOwned => "it names a file Aurora manages for the instance",
+                OverrideRefusal::NotRegularFile => {
+                    "it is a link or special file, not a regular file"
+                }
+                OverrideRefusal::ChangedContent => "its bytes changed after the pack was reviewed",
+            };
+            return match entry {
+                Some(entry) => write!(f, "The pack override \"{entry}\" was refused: {why}."),
+                None => write!(f, "A pack override was refused: {why}."),
+            };
+        }
         f.write_str(match self {
             Self::Io => "The verified pack archive could not be read.",
             Self::ArchiveLimit => "The pack exceeds Aurora's archive, entry, or expansion limit.",
@@ -158,9 +205,7 @@ impl fmt::Display for PackError {
             Self::PathCollision => "Pack files or overrides claim the same destination path.",
             Self::InvalidHash => "A pack file lacks a valid SHA-1 or SHA-512 digest.",
             Self::InvalidDownload => "A pack file has no approved HTTPS download source.",
-            Self::UnsafeOverride => {
-                "An override has an unsafe path, file type, or changed content."
-            }
+            Self::UnsafeOverride { .. } => unreachable!("formatted above"),
         })
     }
 }
@@ -174,6 +219,75 @@ fn digest_shape(value: &str, len: usize) -> bool {
 /// Paths are checked for both Windows and Unix, regardless of host. A strict
 /// game-root allowlist stops pack data from naming launcher state files.
 pub fn destination_path(path: &str) -> Result<String, PackError> {
+    let parts = safe_segments(path)?;
+    if !game_content_root(&parts) {
+        return Err(PackError::InvalidPath);
+    }
+    Ok(path.to_owned())
+}
+
+/// Launcher-owned names at an instance root. The allowlist is the primary
+/// guard; this list only turns a pack that explicitly names launcher state
+/// into a refusal instead of a quiet skip.
+const LAUNCHER_OWNED_ROOT_NAMES: &[&str] = &[
+    "game",
+    "aurora-installed.json",
+    "aurora-retained.json",
+    "content-managed.json",
+    "pack-installed.json",
+    "pack-update.json",
+    "instances.json",
+];
+
+fn game_content_root(parts: &[&str]) -> bool {
+    let root = parts[0].to_ascii_lowercase();
+    if parts.len() == 1 {
+        matches!(
+            root.as_str(),
+            "options.txt" | "servers.dat" | "optionsshaders.txt"
+        )
+    } else {
+        matches!(
+            root.as_str(),
+            "mods"
+                | "config"
+                | "defaultconfigs"
+                | "resourcepacks"
+                | "shaderpacks"
+                | "kubejs"
+                | "scripts"
+                | "patchouli_books"
+                | "journeymap"
+                | "fancymenu"
+                | "datapacks"
+        )
+    }
+}
+
+/// Where a well-formed override goes. Unsafe names are errors, never skips.
+enum OverrideDestination {
+    Install(String),
+    Skip,
+}
+
+fn override_destination(relative: &str, entry: &str) -> Result<OverrideDestination, PackError> {
+    let parts = safe_segments(relative)
+        .map_err(|_| PackError::unsafe_override(entry, OverrideRefusal::UnsafePath))?;
+    let root = parts[0].to_ascii_lowercase();
+    if LAUNCHER_OWNED_ROOT_NAMES.contains(&root.as_str()) || root.starts_with(".aurora-") {
+        return Err(PackError::unsafe_override(
+            entry,
+            OverrideRefusal::LauncherOwned,
+        ));
+    }
+    Ok(if game_content_root(&parts) {
+        OverrideDestination::Install(relative.to_owned())
+    } else {
+        OverrideDestination::Skip
+    })
+}
+
+fn safe_segments(path: &str) -> Result<Vec<&str>, PackError> {
     if path.is_empty() || path.len() > 512 || path.starts_with('/') || path.contains('\\') {
         return Err(PackError::InvalidPath);
     }
@@ -216,32 +330,7 @@ pub fn destination_path(path: &str) -> Result<String, PackError> {
     {
         return Err(PackError::InvalidPath);
     }
-    let root = parts[0].to_ascii_lowercase();
-    let allowed = if parts.len() == 1 {
-        matches!(
-            root.as_str(),
-            "options.txt" | "servers.dat" | "optionsshaders.txt"
-        )
-    } else {
-        matches!(
-            root.as_str(),
-            "mods"
-                | "config"
-                | "defaultconfigs"
-                | "resourcepacks"
-                | "shaderpacks"
-                | "kubejs"
-                | "scripts"
-                | "patchouli_books"
-                | "journeymap"
-                | "fancymenu"
-                | "datapacks"
-        )
-    };
-    if !allowed {
-        return Err(PackError::InvalidPath);
-    }
-    Ok(path.to_owned())
+    Ok(parts)
 }
 
 fn archive_name(path: &str) -> Result<(), PackError> {
@@ -304,13 +393,19 @@ pub fn read_override(path: &Path, planned: &OverrideFile) -> Result<Vec<u8>, Pac
         OverrideLayer::Client => format!("client-overrides/{}", planned.path),
     };
     if entry.name() != expected || entry.size() != planned.size {
-        return Err(PackError::UnsafeOverride);
+        return Err(PackError::unsafe_override(
+            &expected,
+            OverrideRefusal::ChangedContent,
+        ));
     }
     let bytes = read_bounded(&mut entry, MAX_OVERRIDE_BYTES)?;
     if bytes.len() as u64 != planned.size
         || format!("{:x}", Sha256::digest(&bytes)) != planned.sha256
     {
-        return Err(PackError::UnsafeOverride);
+        return Err(PackError::unsafe_override(
+            &expected,
+            OverrideRefusal::ChangedContent,
+        ));
     }
     Ok(bytes)
 }
@@ -336,7 +431,10 @@ fn parse_reader<R: Read + Seek>(reader: R) -> Result<PackPlan, PackError> {
             let file_type = mode & 0o170000;
             file_type != 0 && file_type != if entry.is_dir() { 0o040000 } else { 0o100000 }
         }) {
-            return Err(PackError::UnsafeOverride);
+            return Err(PackError::unsafe_override(
+                &name,
+                OverrideRefusal::NotRegularFile,
+            ));
         }
         expanded = expanded
             .checked_add(entry.size())
@@ -439,17 +537,25 @@ fn parse_reader<R: Read + Seek>(reader: R) -> Result<PackPlan, PackError> {
         }
     }
     let mut overrides = BTreeMap::new();
+    let mut skipped = std::collections::BTreeSet::new();
     for (i, name, size) in archive_overrides {
         let (layer, relative) = if let Some(rest) = name.strip_prefix("client-overrides/") {
             (OverrideLayer::Client, rest)
         } else {
             (
                 OverrideLayer::Common,
-                name.strip_prefix("overrides/")
-                    .ok_or(PackError::UnsafeOverride)?,
+                name.strip_prefix("overrides/").ok_or_else(|| {
+                    PackError::unsafe_override(&name, OverrideRefusal::UnsafePath)
+                })?,
             )
         };
-        let path = destination_path(relative).map_err(|_| PackError::UnsafeOverride)?;
+        let path = match override_destination(relative, &name)? {
+            OverrideDestination::Install(path) => path,
+            OverrideDestination::Skip => {
+                skipped.insert(relative.to_owned());
+                continue;
+            }
+        };
         if destinations.contains(&path.to_lowercase()) {
             return Err(PackError::PathCollision);
         }
@@ -486,6 +592,7 @@ fn parse_reader<R: Read + Seek>(reader: R) -> Result<PackPlan, PackError> {
         optional_files,
         excluded_paths,
         overrides: overrides.into_values().collect(),
+        skipped_overrides: skipped.into_iter().collect(),
     })
 }
 
@@ -663,13 +770,190 @@ mod tests {
             "overrides/C:/config/a",
             "client-overrides/config\\..\\a",
             "overrides/pack-installed.json",
+            "overrides/game/versions/x.jar",
+            "client-overrides/Aurora-Installed.json",
+            "overrides/.aurora-transition-stage-1/a",
+            "overrides/config/CON.txt",
+            "overrides/config/a?.txt",
         ] {
             assert!(pack(&index(""), &[(path, b"x")]).is_err(), "{path}");
         }
+        let error = pack(&index(""), &[("overrides/pack-installed.json", b"x")]).unwrap_err();
+        assert_eq!(error.code(), "pack_unsafe_override");
+        assert!(
+            error.to_string().contains("overrides/pack-installed.json"),
+            "{error}"
+        );
+        assert!(matches!(
+            error,
+            PackError::UnsafeOverride {
+                reason: OverrideRefusal::LauncherOwned,
+                ..
+            }
+        ));
         let too_large = vec![0u8; (MAX_OVERRIDE_BYTES + 1) as usize];
         assert!(matches!(
             pack(&index(""), &[("overrides/config/large.bin", &too_large)]),
             Err(PackError::ArchiveLimit)
         ));
+    }
+}
+
+#[cfg(test)]
+mod native8_override_tests {
+    use super::*;
+    use std::io::{Cursor, Write};
+
+    fn index() -> String {
+        r#"{"formatVersion":1,"game":"minecraft","versionId":"v1","name":"Pack","files":[],"dependencies":{"minecraft":"1.21.11","fabric-loader":"0.19.3"}}"#.to_owned()
+    }
+
+    fn build(entries: &[(&str, &[u8], Option<u32>)]) -> Vec<u8> {
+        let mut buffer = Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut buffer);
+            zip.start_file(
+                "modrinth.index.json",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            zip.write_all(index().as_bytes()).unwrap();
+            for (name, bytes, mode) in entries {
+                let mut options = zip::write::SimpleFileOptions::default();
+                if let Some(mode) = mode {
+                    options = options.unix_permissions(*mode);
+                }
+                zip.start_file(*name, options).unwrap();
+                zip.write_all(bytes).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        buffer.into_inner()
+    }
+
+    /// Shape of Vulkan Optimized 1.21.11-4.1 (Modrinth u76hn1pF/aRFc5ttQ):
+    /// config overrides, `options.txt`, and the pack's root `icon.png`, which
+    /// used to fail the whole pack as `pack_unsafe_override`.
+    #[test]
+    fn a_root_pack_icon_is_skipped_and_disclosed_instead_of_failing_the_pack() {
+        let bytes = build(&[
+            (
+                "overrides/config/vulkanmod_settings.json",
+                b"{}",
+                Some(0o100644),
+            ),
+            ("overrides/config/dynamic_fps.json", b"{}", Some(0o100600)),
+            ("overrides/icon.png", b"\x89PNG", Some(0o100644)),
+            ("overrides/options.txt", b"fov:0", Some(0o100700)),
+        ]);
+        let plan = parse_reader(Cursor::new(bytes)).unwrap();
+        let installed: Vec<_> = plan.overrides.iter().map(|o| o.path.as_str()).collect();
+        assert_eq!(
+            installed,
+            [
+                "config/dynamic_fps.json",
+                "config/vulkanmod_settings.json",
+                "options.txt"
+            ]
+        );
+        assert_eq!(plan.skipped_overrides, ["icon.png"]);
+    }
+
+    #[test]
+    fn unknown_root_files_and_directories_are_skipped_never_written() {
+        let bytes = build(&[
+            ("overrides/credits.txt", b"x", None),
+            ("overrides/LICENSE.md", b"x", None),
+            (
+                "client-overrides/global_packs/required_data/a.zip",
+                b"x",
+                None,
+            ),
+            ("overrides/config/a.toml", b"x", None),
+        ]);
+        let plan = parse_reader(Cursor::new(bytes)).unwrap();
+        assert_eq!(plan.overrides.len(), 1);
+        assert_eq!(
+            plan.skipped_overrides,
+            [
+                "LICENSE.md",
+                "credits.txt",
+                "global_packs/required_data/a.zip"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_symlink_override_is_refused_by_name() {
+        let mut buffer = Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut buffer);
+            zip.start_file(
+                "modrinth.index.json",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            zip.write_all(index().as_bytes()).unwrap();
+            zip.add_symlink(
+                "overrides/config/link",
+                "../../../outside",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            zip.finish().unwrap();
+        }
+        let bytes = buffer.into_inner();
+        let error = parse_reader(Cursor::new(bytes)).unwrap_err();
+        assert!(matches!(
+            error,
+            PackError::UnsafeOverride {
+                reason: OverrideRefusal::NotRegularFile,
+                ..
+            }
+        ));
+        assert!(
+            error.to_string().contains("overrides/config/link"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn skipped_entries_still_pass_traversal_and_device_name_checks() {
+        for name in ["overrides/NUL.txt", "overrides/a.", "overrides/x/../../y"] {
+            let bytes = build(&[(name, b"x", None)]);
+            assert!(parse_reader(Cursor::new(bytes)).is_err(), "{name}");
+        }
+    }
+
+    #[test]
+    fn case_insensitive_override_duplicates_still_collide() {
+        let bytes = build(&[
+            ("overrides/icon.png", b"x", None),
+            ("overrides/ICON.png", b"y", None),
+        ]);
+        assert!(matches!(
+            parse_reader(Cursor::new(bytes)),
+            Err(PackError::PathCollision)
+        ));
+    }
+
+    #[test]
+    fn a_changed_override_is_refused_on_reread() {
+        let dir = std::env::temp_dir().join(format!("aurora-n8-mrpack-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("pack.mrpack");
+        std::fs::write(&path, build(&[("overrides/config/a.toml", b"one", None)])).unwrap();
+        let plan = parse_verified_file(&path).unwrap();
+        std::fs::write(&path, build(&[("overrides/config/a.toml", b"two", None)])).unwrap();
+        let error = read_override(&path, &plan.overrides[0]).unwrap_err();
+        assert!(matches!(
+            error,
+            PackError::UnsafeOverride {
+                reason: OverrideRefusal::ChangedContent,
+                ..
+            }
+        ));
+        std::fs::remove_file(&path).unwrap();
+        std::fs::remove_dir(&dir).unwrap();
     }
 }

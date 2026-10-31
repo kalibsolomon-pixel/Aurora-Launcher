@@ -155,6 +155,12 @@ async fn ensure_runtime_with_faults(
 ) -> Result<InstalledRuntime, RuntimeInstallError> {
     let started = Instant::now();
     let root = plan.installation_dir(managed);
+    // Instances needing the same runtime at once share one installation:
+    // later requests wait here, then validate and reuse the finished tree.
+    // If the owner is cancelled, the next waiter installs it itself. The
+    // file lock below still reports another *process* as busy.
+    let _in_process_owner =
+        crate::transfer::single_flight(format!("runtime:{}", plan.identity())).await;
     let _process_guard = crate::install::coordination::TargetLock::acquire(
         managed.data_root(),
         root.parent()
@@ -1306,8 +1312,11 @@ mod tests {
         let handler_attempts = Arc::clone(&attempts);
         let server = TestServer::spawn(Arc::new(move |request| match request.path.as_str() {
             "/bin-java.exe" => TestResponse::ok(b"java-runtime"),
+            // Fail every automatic transfer retry of the first install so
+            // it fails as a whole; the next explicit install succeeds.
             "/bin-javaw.exe"
-                if handler_attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 =>
+                if handler_attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                    < crate::transfer::MAX_ATTEMPTS as usize =>
             {
                 TestResponse::status(500)
             }
@@ -1322,6 +1331,32 @@ mod tests {
                 .is_err()
         );
         assert!(!plan.installation_dir(&managed).exists());
+        ensure_runtime(&managed, &plan, &options(), false, &mut |_| {})
+            .await
+            .unwrap();
+        assert_eq!(
+            attempts.load(std::sync::atomic::Ordering::SeqCst),
+            crate::transfer::MAX_ATTEMPTS as usize + 1
+        );
+        let _ = std::fs::remove_dir_all(managed.data_root());
+    }
+
+    #[tokio::test]
+    async fn a_transient_server_error_is_retried_automatically() {
+        let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let handler_attempts = Arc::clone(&attempts);
+        let server = TestServer::spawn(Arc::new(move |request| match request.path.as_str() {
+            "/bin-java.exe" => TestResponse::ok(b"java-runtime"),
+            "/bin-javaw.exe"
+                if handler_attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 =>
+            {
+                TestResponse::status(503)
+            }
+            "/bin-javaw.exe" => TestResponse::ok(b"javaw-runtime"),
+            _ => TestResponse::status(404),
+        }));
+        let managed = managed("network-auto-retry");
+        let plan = test_plan(server.base_url(), b"java-runtime", b"javaw-runtime");
         ensure_runtime(&managed, &plan, &options(), false, &mut |_| {})
             .await
             .unwrap();
@@ -1378,7 +1413,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn overlapping_same_runtime_installs_fail_immediately() {
+    async fn overlapping_same_runtime_installs_share_one_installation() {
         let server = TestServer::spawn(Arc::new(|request| {
             let response = match request.path.as_str() {
                 "/bin-java.exe" => TestResponse::ok(b"java-runtime"),
@@ -1403,14 +1438,15 @@ mod tests {
             .await
         });
         tokio::time::sleep(Duration::from_millis(20)).await;
+        // The second request waits for the in-process owner, then reuses
+        // its validated result instead of failing or installing again.
         let second = ensure_runtime(&managed, &plan, &options(), false, &mut |_| {})
             .await
-            .unwrap_err();
-        assert!(matches!(
-            second,
-            RuntimeInstallError::AlreadyInProgress { .. }
-        ));
-        first.await.unwrap().unwrap();
+            .unwrap();
+        let first = first.await.unwrap().unwrap();
+        assert!(!first.reused, "the first request installs");
+        assert!(second.reused, "the waiting request reuses the same tree");
+        assert_eq!(first.root(), second.root());
         let _ = std::fs::remove_dir_all(managed.data_root());
     }
 
