@@ -1,0 +1,37 @@
+﻿{
+    "label":  "slint-femtovg",
+    "exe":  "C:\\Dev\\aurora-launcher-native\\native\\prototypes\\slint-proto\\target\\release\\aurora-slint-proto.exe",
+    "arguments":  [
+
+                  ],
+    "capturedAt":  "2026-10-31T00:57:44.4618533-04:00",
+    "processCount":  1,
+    "processes":  {
+                      "pid":  15600,
+                      "name":  "aurora-slint-proto",
+                      "workingSet":  164114432,
+                      "privateBytes":  409661440,
+                      "cpu":  0.4375,
+                      "peakWorkingSet":  270921728,
+                      "handles":  381,
+                      "threads":  15
+                  },
+    "windowVisibleMs":  23.6,
+    "quiescentMs":  1254.9,
+    "idle":  {
+                 "seconds":  21.53,
+                 "workingSetMiB":  156.5,
+                 "privateMiB":  390.7,
+                 "cpuPercentOfOneCore":  0.218,
+                 "gpuUtilizationPercentMean":  0,
+                 "gpuDedicatedMiB":  231.6,
+                 "gpuSharedMiB":  2.6
+             },
+    "minimized":  {
+                      "seconds":  10.78,
+                      "workingSetMiB":  156.5,
+                      "privateMiB":  390.7,
+                      "cpuPercentOfOneCore":  0.29,
+                      "gpuUtilizationPercentMean":  0
+                  }
+}

@@ -1,0 +1,376 @@
+// NATIVE-0 representative prototype: Home, instance tiles, Settings controls,
+// a long list, a modal, theme switching and async status. Not shipped.
+import { ScrollView, ComboBox, Slider, Switch, LineEdit } from "std-widgets.slint";
+
+export global Theme {
+    in-out property <int> theme: 0;
+    in-out property <bool> reduced-motion: false;
+    out property <color> background: theme == 0 ? #101116 : theme == 1 ? #0d1017 : #000000;
+    out property <color> sidebar: theme == 0 ? #0a0b0e : theme == 1 ? #070910 : #000000;
+    out property <color> surface: theme == 0 ? #16171d : theme == 1 ? #121621 : #0b0b0e;
+    out property <color> raised: theme == 0 ? #1d1f27 : theme == 1 ? #191e2b : #141419;
+    out property <color> hover: theme == 0 ? #242631 : theme == 1 ? #202636 : #1b1b22;
+    out property <color> pressed: theme == 0 ? #1a1c24 : theme == 1 ? #161b26 : #101015;
+    out property <color> border: theme == 0 ? #24262f : theme == 1 ? #1f2531 : #1c1d23;
+    out property <color> text: #edf1fb;
+    out property <color> text-secondary: #a7b0c5;
+    out property <color> text-muted: #929db4;
+    out property <color> accent: #8b80ff;
+    out property <color> accent-strong: #6f5df2;
+    out property <color> accent-hover: #6f63e8;
+    out property <color> accent-pressed: #6152e0;
+    out property <color> accent-soft: #8b80ff24;
+    out property <color> success: #7ee2b8;
+    out property <color> working: #8fb7ff;
+    out property <duration> fast: reduced-motion ? 0ms : 90ms;
+}
+
+export struct InstanceItem {
+    name: string,
+    detail: string,
+    ready: bool,
+    glyph: string,
+}
+
+component FocusRing inherits Rectangle {
+    in property <bool> visible-ring;
+    in property <length> radius: 10px;
+
+    border-radius: radius + 3px;
+    border-width: visible-ring ? 2px : 0px;
+    border-color: Theme.accent;
+}
+
+component Button inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    in property <length> font-size: 14px;
+    callback clicked;
+    min-height: 36px;
+    border-radius: 10px;
+    accessible-role: button;
+    accessible-label: text;
+    accessible-action-default => { if (enabled) { clicked(); } }
+    forward-focus: fs;
+    background: !enabled ? Theme.raised : primary
+        ? (ta.pressed ? Theme.accent-pressed : ta.has-hover ? Theme.accent-hover : Theme.accent-strong)
+        : (ta.pressed ? Theme.pressed : ta.has-hover ? Theme.hover : Theme.raised);
+    animate background { duration: Theme.fast; }
+    HorizontalLayout {
+        padding-left: 16px; padding-right: 16px;
+        Text {
+            text: root.text;
+            font-size: root.font-size;
+            font-weight: 600;
+            color: !root.enabled ? Theme.text-muted : Theme.text;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { fs.focus(); root.clicked(); }
+    }
+    fs := FocusScope {
+        enabled: root.enabled;
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { root.clicked(); return accept; }
+            reject
+        }
+    }
+    FocusRing { visible-ring: fs.has-focus; radius: root.border-radius; x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; }
+}
+
+component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <string> glyph;
+    in property <bool> active;
+    callback activated;
+    height: 64px;
+    border-radius: 10px;
+    accessible-role: tab;
+    accessible-label: label;
+    accessible-item-selected: active;
+    accessible-action-default => { activated(); }
+    forward-focus: fs;
+    background: active ? Theme.accent-soft : ta.has-hover ? Theme.hover : transparent;
+    VerticalLayout {
+        alignment: center; spacing: 4px;
+        Text { text: root.glyph; font-size: 18px; color: root.active ? Theme.accent : Theme.text-secondary; horizontal-alignment: center; }
+        Text { text: root.label; font-size: 12px; color: root.active ? Theme.text : Theme.text-secondary; horizontal-alignment: center; }
+    }
+    Rectangle { x: 0; y: (parent.height - 24px) / 2; width: 3px; height: 24px; border-radius: 2px; background: root.active ? Theme.accent : transparent; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { fs.focus(); root.activated(); } }
+    fs := FocusScope {
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { root.activated(); return accept; }
+            reject
+        }
+    }
+    FocusRing { visible-ring: fs.has-focus; x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; }
+}
+
+component InstanceTile inherits Rectangle {
+    in property <InstanceItem> item;
+    in property <bool> selected;
+    callback activated;
+    height: 72px;
+    border-radius: 10px;
+    accessible-role: list-item;
+    accessible-label: item.name;
+    accessible-item-selected: selected;
+    accessible-action-default => { activated(); }
+    forward-focus: fs;
+    background: selected ? Theme.raised : ta.has-hover ? Theme.hover : Theme.surface;
+    border-width: selected ? 1px : 0px;
+    border-color: Theme.accent;
+    HorizontalLayout {
+        padding: 12px; spacing: 12px;
+        Rectangle {
+            width: 48px; height: 48px; border-radius: 10px; background: Theme.pressed;
+            Text { text: root.item.glyph; font-size: 22px; color: Theme.text; }
+        }
+        VerticalLayout {
+            alignment: center; spacing: 2px;
+            Text { text: root.item.name; font-size: 14px; font-weight: 600; color: Theme.text; overflow: elide; }
+            Text { text: root.item.detail; font-size: 12px; color: Theme.text-muted; overflow: elide; }
+        }
+        Rectangle {
+            width: 64px;
+            Text {
+                text: root.item.ready ? "Ready" : "Install";
+                font-size: 12px;
+                color: root.item.ready ? Theme.success : Theme.working;
+            }
+        }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { fs.focus(); root.activated(); } }
+    fs := FocusScope {
+        key-pressed(e) => {
+            if (e.text == " " || e.text == Key.Return) { root.activated(); return accept; }
+            reject
+        }
+    }
+    FocusRing { visible-ring: fs.has-focus; x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; }
+}
+
+component SettingRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> detail;
+    spacing: 16px;
+    padding-top: 10px; padding-bottom: 10px;
+    VerticalLayout {
+        alignment: center;
+        horizontal-stretch: 1;
+        Text { text: root.label; font-size: 14px; color: Theme.text; }
+        if root.detail != "": Text { text: root.detail; font-size: 12px; color: Theme.text-muted; wrap: word-wrap; }
+    }
+    @children
+}
+
+component Group inherits Rectangle {
+    in property <string> title;
+    background: Theme.surface;
+    border-radius: 14px;
+    VerticalLayout {
+        padding: 16px; spacing: 4px;
+        Text { text: root.title; font-size: 15px; font-weight: 600; color: Theme.text; }
+        @children
+    }
+}
+
+component HomePage inherits VerticalLayout {
+    in property <[InstanceItem]> instances;
+    in-out property <int> selected;
+    in property <string> status-text;
+    in property <float> progress;
+    in property <bool> busy;
+    callback play();
+    callback pick(int);
+    padding: 32px; spacing: 24px;
+    Text { text: "Home"; font-size: 22px; font-weight: 600; color: Theme.text; accessible-role: text; }
+    HorizontalLayout {
+        spacing: 24px;
+        VerticalLayout {
+            spacing: 16px; horizontal-stretch: 2;
+            Rectangle {
+                background: Theme.surface; border-radius: 14px; min-height: 220px;
+                VerticalLayout {
+                    padding: 24px; spacing: 12px; alignment: end;
+                    Text { text: root.instances.length > 0 ? root.instances[root.selected].name : "No instance"; font-size: 24px; font-weight: 700; color: Theme.text; }
+                    Text { text: root.instances.length > 0 ? root.instances[root.selected].detail : ""; font-size: 13px; color: Theme.text-secondary; }
+                    HorizontalLayout {
+                        spacing: 12px; alignment: start;
+                        Button { text: root.busy ? "Installing…" : "Play"; primary: true; enabled: !root.busy; min-width: 180px; min-height: 48px; font-size: 16px; clicked => { root.play(); } }
+                    }
+                    if root.busy || root.status-text != "": VerticalLayout {
+                        spacing: 6px;
+                        Text { text: root.status-text; font-size: 12px; color: Theme.text-muted; }
+                        Rectangle {
+                            height: 4px; border-radius: 2px; background: Theme.raised;
+                            Rectangle { x: 0; width: parent.width * clamp(root.progress, 0, 1); height: parent.height; border-radius: 2px; background: Theme.accent; }
+                        }
+                    }
+                }
+            }
+        }
+        VerticalLayout {
+            spacing: 8px; horizontal-stretch: 1; min-width: 240px;
+            Text { text: "Instances"; font-size: 15px; font-weight: 600; color: Theme.text-secondary; }
+            for item[i] in root.instances: InstanceTile {
+                item: item;
+                selected: i == root.selected;
+                activated => { root.pick(i); }
+            }
+        }
+    }
+}
+
+component ListPage inherits VerticalLayout {
+    in property <[InstanceItem]> rows;
+    in-out property <string> query;
+    padding: 32px; spacing: 16px;
+    Text { text: "Mods"; font-size: 22px; font-weight: 600; color: Theme.text; }
+    LineEdit { placeholder-text: "Search installed content"; text <=> root.query; }
+    ScrollView {
+        vertical-stretch: 1;
+        VerticalLayout {
+            spacing: 2px;
+            for row in root.rows: Rectangle {
+                height: 52px; border-radius: 10px;
+                background: rta.has-hover ? Theme.hover : Theme.surface;
+                rta := TouchArea {}
+                HorizontalLayout {
+                    padding-left: 12px; padding-right: 12px; spacing: 12px;
+                    Rectangle { width: 32px; height: 32px; y: 10px; border-radius: 6px; background: Theme.raised; Text { text: row.glyph; color: Theme.text; } }
+                    VerticalLayout { alignment: center; Text { text: row.name; color: Theme.text; font-size: 13px; } Text { text: row.detail; color: Theme.text-muted; font-size: 11px; } }
+                    Switch { checked: row.ready; }
+                }
+            }
+        }
+    }
+}
+
+component SettingsPage inherits ScrollView {
+    callback open-dialog();
+    in-out property <float> memory: 4;
+    VerticalLayout {
+        padding: 32px; spacing: 16px;
+        Text { text: "Settings"; font-size: 22px; font-weight: 600; color: Theme.text; }
+        Group {
+            title: "Appearance";
+            SettingRow {
+                label: "Theme"; detail: "Surface palette for every screen.";
+                ComboBox { model: ["Aurora Dark", "Midnight", "OLED"]; current-index <=> Theme.theme; width: 200px; }
+            }
+            SettingRow {
+                label: "Reduce motion"; detail: "Disable transitions.";
+                Switch { checked <=> Theme.reduced-motion; }
+            }
+        }
+        Group {
+            title: "Minecraft";
+            SettingRow {
+                label: "Memory"; detail: "Maximum Java heap: " + round(root.memory) + " GB";
+                Slider { minimum: 2; maximum: 16; value <=> root.memory; width: 220px; }
+            }
+            SettingRow {
+                label: "Close launcher on play"; detail: "";
+                Switch { checked: false; }
+            }
+        }
+        Group {
+            title: "Account";
+            SettingRow {
+                label: "Microsoft account"; detail: "Sign-in opens your system browser.";
+                Button { text: "Manage"; clicked => { root.open-dialog(); } }
+            }
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "Aurora Launcher — Slint prototype";
+    icon: @image-url("../../../../static/aurora-icon.png");
+    preferred-width: 1120px;
+    preferred-height: 760px;
+    min-width: 720px;
+    min-height: 520px;
+    background: Theme.background;
+    default-font-size: 14px;
+
+    in property <[InstanceItem]> instances;
+    in property <[InstanceItem]> content-rows;
+    in-out property <int> selected: 0;
+    in-out property <int> page: 0;
+    in property <string> status-text;
+    in property <float> progress;
+    in property <bool> busy;
+    in-out property <bool> dialog-open;
+    in-out property <string> query;
+    callback play();
+    callback query-changed(string);
+
+    changed query => { query-changed(query); }
+
+    HorizontalLayout {
+        Rectangle {
+            width: 96px; background: Theme.sidebar;
+            VerticalLayout {
+                padding: 12px; spacing: 6px;
+                Image { source: @image-url("../../../../static/aurora-icon.png"); width: 40px; height: 40px; image-rendering: smooth; accessible-role: image; accessible-label: "Aurora"; }
+                Rectangle { height: 12px; }
+                NavItem { label: "Home"; glyph: "⌂"; active: root.page == 0; activated => { root.page = 0; } }
+                NavItem { label: "Mods"; glyph: "▤"; active: root.page == 1; activated => { root.page = 1; } }
+                NavItem { label: "Settings"; glyph: "⚙"; active: root.page == 2; activated => { root.page = 2; } }
+                Rectangle { vertical-stretch: 1; }
+            }
+        }
+        Rectangle {
+            horizontal-stretch: 1;
+            if root.page == 0: HomePage {
+                instances: root.instances;
+                selected <=> root.selected;
+                status-text: root.status-text;
+                progress: root.progress;
+                busy: root.busy;
+                play => { root.play(); }
+                pick(i) => { root.selected = i; }
+            }
+            if root.page == 1: ListPage { rows: root.content-rows; query <=> root.query; }
+            if root.page == 2: SettingsPage { open-dialog => { root.dialog-open = true; } }
+        }
+    }
+
+    if root.dialog-open: Rectangle {
+        background: #000000a0;
+        TouchArea { }
+        FocusScope {
+            key-pressed(e) => {
+                if (e.text == Key.Escape) { root.dialog-open = false; return accept; }
+                reject
+            }
+            init => { self.focus(); }
+        }
+        Rectangle {
+            width: min(440px, parent.width - 48px);
+            height: 220px;
+            background: Theme.raised; border-radius: 14px;
+            accessible-role: groupbox;
+            accessible-label: "Accounts";
+            VerticalLayout {
+                padding: 24px; spacing: 12px;
+                Text { text: "Accounts"; font-size: 18px; font-weight: 600; color: Theme.text; }
+                Text { text: "Sign-in happens in your system browser. Aurora never sees your password."; wrap: word-wrap; color: Theme.text-secondary; }
+                Rectangle { vertical-stretch: 1; }
+                HorizontalLayout {
+                    alignment: end; spacing: 8px;
+                    Button { text: "Close"; clicked => { root.dialog-open = false; } }
+                    Button { text: "Sign in"; primary: true; clicked => { root.dialog-open = false; } }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,37 @@
+﻿{
+    "label":  "slint-software",
+    "exe":  "C:\\Dev\\aurora-launcher-native\\native\\prototypes\\slint-proto\\target\\release\\aurora-slint-proto.exe",
+    "arguments":  [
+
+                  ],
+    "capturedAt":  "2026-10-31T01:02:02.2292120-04:00",
+    "processCount":  1,
+    "processes":  {
+                      "pid":  29460,
+                      "name":  "aurora-slint-proto",
+                      "workingSet":  109584384,
+                      "privateBytes":  90021888,
+                      "cpu":  0.28125,
+                      "peakWorkingSet":  172769280,
+                      "handles":  266,
+                      "threads":  10
+                  },
+    "windowVisibleMs":  26.3,
+    "quiescentMs":  701.4,
+    "idle":  {
+                 "seconds":  21.51,
+                 "workingSetMiB":  104.5,
+                 "privateMiB":  85.9,
+                 "cpuPercentOfOneCore":  0.291,
+                 "gpuUtilizationPercentMean":  0,
+                 "gpuDedicatedMiB":  0,
+                 "gpuSharedMiB":  0
+             },
+    "minimized":  {
+                      "seconds":  10.77,
+                      "workingSetMiB":  104.5,
+                      "privateMiB":  85.9,
+                      "cpuPercentOfOneCore":  0.29,
+                      "gpuUtilizationPercentMean":  0
+                  }
+}

@@ -1,0 +1,37 @@
+﻿{
+    "label":  "gpui",
+    "exe":  "C:\\Dev\\aurora-launcher-native\\native\\prototypes\\gpui-proto\\target\\release\\aurora-gpui-proto.exe",
+    "arguments":  [
+
+                  ],
+    "capturedAt":  "2026-10-31T00:59:34.0023718-04:00",
+    "processCount":  1,
+    "processes":  {
+                      "pid":  3620,
+                      "name":  "aurora-gpui-proto",
+                      "workingSet":  51453952,
+                      "privateBytes":  73584640,
+                      "cpu":  1.15625,
+                      "peakWorkingSet":  51453952,
+                      "handles":  1188,
+                      "threads":  41
+                  },
+    "windowVisibleMs":  164.4,
+    "quiescentMs":  829.2,
+    "idle":  {
+                 "seconds":  21.59,
+                 "workingSetMiB":  49.1,
+                 "privateMiB":  70.2,
+                 "cpuPercentOfOneCore":  2.967,
+                 "gpuUtilizationPercentMean":  0,
+                 "gpuDedicatedMiB":  34.4,
+                 "gpuSharedMiB":  2.7
+             },
+    "minimized":  {
+                      "seconds":  10.81,
+                      "workingSetMiB":  49.1,
+                      "privateMiB":  70.2,
+                      "cpuPercentOfOneCore":  2.603,
+                      "gpuUtilizationPercentMean":  0
+                  }
+}
