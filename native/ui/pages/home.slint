@@ -2,7 +2,7 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
-import { Button, ButtonKind, Glyph, StatusPill, Tone, ProgressBar, EmptyState, FocusRing, Spinner } from "../components.slint";
+import { Button, ButtonKind, Dropdown, Glyph, StatusPill, Tone, ProgressBar, EmptyState, FocusRing, KeyboardFocus, Spinner } from "../components.slint";
 import { Home, Nav, Page, InstanceRow, BlockerRow } from "../state.slint";
 
 /// One selectable instance tile.
@@ -11,8 +11,8 @@ export component InstanceTile inherits Rectangle {
     callback activated();
     height: 64px;
     border-radius: Theme.radius-md;
-    background: root.item.selected ? Theme.raised : touch.has-hover ? Theme.hover : Theme.surface;
-    border-width: root.item.selected ? 1px : 0px;
+    background: touch.has-hover ? Theme.hover : Theme.surface;
+    border-width: 0px;
     border-color: Theme.accent-outline;
     accessible-role: list-item;
     accessible-label: root.item.name;
@@ -27,18 +27,19 @@ export component InstanceTile inherits Rectangle {
         VerticalLayout {
             alignment: center;
             spacing: 2px;
-            Text { text: root.item.name; font-size: Theme.text-body; font-weight: 600; color: Theme.text; overflow: elide; }
+            Text { text: root.item.name; font-size: Theme.text-body; font-weight: 600; color: root.item.selected ? Theme.accent : Theme.text-secondary; overflow: elide; }
             Text { text: root.item.subtitle; font-size: Theme.text-metadata; color: Theme.text-muted; overflow: elide; }
         }
     }
-    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); root.activated(); } }
-    focus := FocusScope {
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); root.activated(); } }
+    focus := KeyboardFocus {
+        focus-on-click: false;
         key-pressed(event) => {
             if (event.text == " " || event.text == Key.Return) { root.activated(); return accept; }
             reject
         }
     }
-    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; }
 }
 
 component BlockerLine inherits HorizontalLayout {
@@ -59,7 +60,7 @@ export component HomePage inherits ScrollView {
         spacing: Theme.space-5;
         alignment: start;
 
-        if !Home.has-instance: Rectangle {
+        if Home.instances.length == 0: Rectangle {
             background: Theme.surface;
             border-radius: Theme.radius-lg;
             EmptyState {
@@ -73,23 +74,22 @@ export component HomePage inherits ScrollView {
             }
         }
 
-        if Home.has-instance: Rectangle {
-            background: Theme.surface;
-            border-radius: Theme.radius-lg;
+        if Home.instances.length > 0: Rectangle {
+            max-width: 700px;
+            horizontal-stretch: 0;
             accessible-role: groupbox;
             accessible-label: "Selected instance";
             VerticalLayout {
-                padding: Theme.space-5;
+                padding: 0px;
                 spacing: Theme.space-4;
                 HorizontalLayout {
                     spacing: Theme.space-4;
-                    Glyph { y: (parent.height - self.height) / 2; letter: Home.letter; size: 56px; }
                     VerticalLayout {
-                        alignment: center;
-                        spacing: 4px;
+                        spacing: 8px;
                         horizontal-stretch: 1;
-                        Text { text: Home.name; font-size: 24px; font-weight: 700; color: Theme.text; overflow: elide; accessible-role: AccessibleRole.text; }
-                        Text { text: Home.subtitle; font-size: Theme.text-secondary-size; color: Theme.text-secondary; overflow: elide; }
+                        Text { text: "Instance"; color: Theme.text-muted; font-size: Theme.text-metadata; }
+                        Dropdown { model: Home.instance-names; current-index: Home.instance-index; controlled: true; label: "Selected instance"; placeholder: "Choose an instance"; min-width: 280px; selected(index) => { Home.select-index(index); } }
+                        Text { text: Home.subtitle; font-size: Theme.text-metadata; color: Theme.text-secondary; wrap: word-wrap; }
                     }
                     VerticalLayout {
                         alignment: center;
@@ -111,11 +111,11 @@ export component HomePage inherits ScrollView {
                         enabled: Home.can-play;
                         loading: Home.busy;
                         min-width: 220px;
-                        min-height: 52px;
+                        control-height: 52px;
                         accessible-description-text: Home.status;
                         clicked => { Home.play(); }
                     }
-                    Button { text: ""; icon: Icons.refresh; kind: ButtonKind.ghost; min-height: 52px; accessible-description-text: "Check again"; enabled: !Home.busy; clicked => { Home.refresh(); } }
+                    Button { text: ""; icon: Icons.refresh; kind: ButtonKind.ghost; control-height: 52px; accessible-description-text: "Check again"; enabled: !Home.busy; clicked => { Home.refresh(); } }
                 }
                 if Home.progress-text != "": VerticalLayout {
                     spacing: 6px;
@@ -131,21 +131,5 @@ export component HomePage inherits ScrollView {
             }
         }
 
-        if Home.instances.length > 1: VerticalLayout {
-            spacing: Theme.space-3;
-            Text { text: "Switch instance"; font-size: Theme.text-section; font-weight: 600; color: Theme.text-secondary; accessible-role: AccessibleRole.text; }
-            Rectangle {
-                height: ceil(Home.instances.length / root.columns) * 76px - 12px;
-                accessible-role: list;
-                accessible-label: "Instances";
-                for row[i] in Home.instances: InstanceTile {
-                    x: mod(i, root.columns) * (root.tile-width + 12px);
-                    y: floor(i / root.columns) * 76px;
-                    width: root.tile-width;
-                    item: row;
-                    activated => { Home.select(row.id); }
-                }
-            }
-        }
     }
 }

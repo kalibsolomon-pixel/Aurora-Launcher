@@ -2,11 +2,22 @@
 // screens do not restyle controls locally. Each interactive control defines
 // normal, hover, pressed, focus-visible, disabled and (where relevant)
 // selected/loading states, and supports pointer and keyboard activation.
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Icon, Icons } from "icons.slint";
 
 export enum ButtonKind { primary, secondary, ghost, danger }
 export enum Tone { neutral, success, warning, error, working, accent }
+
+/// Keyboard ownership never intercepts the press intended for a TouchArea.
+/// Pointer handlers call pointer-focus; Tab/programmatic focus keeps a ring.
+export component KeyboardFocus inherits FocusScope {
+    focus-on-click: false;
+    out property <bool> focus-visible: true;
+    focus-gained(reason) => { if (reason == FocusReason.tab-navigation) { focus-visible = true; } if (reason == FocusReason.pointer-click) { focus-visible = false; } }
+    capture-key-pressed(event) => { focus-visible = true; reject }
+    public function pointer-focus() { self.focus(); focus-visible = false; }
+}
 
 /// Focus-visible outline drawn outside a control's bounds.
 export component FocusRing inherits Rectangle {
@@ -57,16 +68,18 @@ export component Button inherits Rectangle {
     in property <bool> enabled: true;
     in property <bool> loading: false;
     in property <bool> compact: false;
+    in property <length> control-height: compact ? 30px : Theme.control-height;
     in property <string> accessible-description-text;
     callback clicked();
     private property <bool> active: enabled && !loading;
     horizontal-stretch: 0;
     vertical-stretch: 0;
-    min-height: compact ? 30px : Theme.control-height;
+    min-height: control-height;
+    max-height: control-height;
     min-width: compact ? 30px : 36px;
     border-radius: Theme.radius-md;
     accessible-role: button;
-    accessible-label: text;
+    accessible-label: text != "" ? text : accessible-description-text;
     accessible-description: accessible-description-text;
     accessible-enabled: active;
     accessible-action-default => { if (active) { clicked(); } }
@@ -106,16 +119,17 @@ export component Button inherits Rectangle {
     touch := TouchArea {
         enabled: root.active;
         mouse-cursor: root.active ? pointer : default;
-        clicked => { root.clicked(); }
+        clicked => { focus.pointer-focus(); root.clicked(); }
     }
-    focus := FocusScope {
+    focus := KeyboardFocus {
+        focus-on-click: false;
         enabled: root.active;
         key-pressed(event) => {
             if (event.text == " " || event.text == Key.Return) { root.clicked(); return accept; }
             reject
         }
     }
-    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; radius: root.border-radius; }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; radius: root.border-radius; }
 }
 
 /// An icon-only button. `label` is its accessible name and tooltip text.
@@ -134,10 +148,11 @@ export component IconButton inherits Rectangle {
     accessible-enabled: enabled;
     accessible-action-default => { if (enabled) { clicked(); } }
     forward-focus: focus;
-    background: !enabled ? transparent : touch.pressed ? Theme.pressed : (touch.has-hover || selected) ? Theme.hover : transparent;
+    background: !enabled ? transparent : touch.pressed ? Theme.pressed : touch.has-hover ? Theme.hover : transparent;
     Icon { path: root.icon; size: root.size * 0.6; color: !root.enabled ? Theme.text-muted : root.selected ? Theme.accent : Theme.text-secondary; }
-    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } }
-    focus := FocusScope {
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.pointer-focus(); root.clicked(); } }
+    focus := KeyboardFocus {
+        focus-on-click: false;
         enabled: root.enabled;
         key-pressed(event) => {
             if (event.text == " " || event.text == Key.Return) { root.clicked(); return accept; }
@@ -145,7 +160,7 @@ export component IconButton inherits Rectangle {
         }
     }
     if touch.has-hover && root.label != "": Tooltip { text: root.label; x: (root.width - self.width) / 2; y: root.height + 6px; }
-    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; radius: root.border-radius; }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; radius: root.border-radius; }
 }
 
 /// A two-state switch. `label` names it for assistive technology.
@@ -177,29 +192,33 @@ export component Toggle inherits Rectangle {
         background: root.checked ? Theme.accent-contrast : Theme.text-secondary;
         animate x { duration: Theme.motion-base; easing: ease-out; }
     }
-    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.flip(); } }
-    focus := FocusScope {
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.pointer-focus(); root.flip(); } }
+    focus := KeyboardFocus {
+        focus-on-click: false;
         enabled: root.enabled;
         key-pressed(event) => {
             if (event.text == " " || event.text == Key.Return) { root.flip(); return accept; }
             reject
         }
     }
-    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; radius: 11px; }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; radius: 11px; }
 }
 
-export component Checkbox inherits HorizontalLayout {
+export component Checkbox inherits Rectangle {
     in-out property <bool> checked;
     in property <string> text;
     in property <bool> enabled: true;
     callback toggled(bool);
-    spacing: 10px;
+    min-height: 30px;
+    min-width: row.preferred-width;
     accessible-role: checkbox;
     accessible-label: text;
     accessible-checked: checked;
     accessible-checkable: true;
     accessible-action-default => { if (enabled) { checked = !checked; toggled(checked); } }
     forward-focus: focus;
+    row := HorizontalLayout {
+        spacing: 10px;
     box := Rectangle {
         width: 18px;
         height: 18px;
@@ -209,10 +228,12 @@ export component Checkbox inherits HorizontalLayout {
         border-color: Theme.border-strong;
         background: root.checked ? Theme.accent-strong : transparent;
         if root.checked: Icon { path: Icons.check; size: 14px; color: Theme.accent-contrast; }
-        FocusRing { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; shown: focus.has-focus; radius: 4px; }
+        FocusRing { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; shown: focus.has-focus && focus.focus-visible; radius: 4px; }
     }
     Text { text: root.text; color: root.enabled ? Theme.text : Theme.text-muted; font-size: Theme.text-body; vertical-alignment: center; }
-    focus := FocusScope {
+    }
+    focus := KeyboardFocus {
+        focus-on-click: false;
         width: 0px;
         enabled: root.enabled;
         key-pressed(event) => {
@@ -223,7 +244,7 @@ export component Checkbox inherits HorizontalLayout {
     TouchArea {
         enabled: root.enabled;
         mouse-cursor: pointer;
-        clicked => { focus.focus(); root.checked = !root.checked; root.toggled(root.checked); }
+        clicked => { focus.pointer-focus(); root.checked = !root.checked; root.toggled(root.checked); }
     }
 }
 
@@ -267,19 +288,19 @@ export component Slider inherits Rectangle {
         x: (root.width - self.width) * root.fraction;
         border-radius: 8px;
         background: root.enabled ? (touch.pressed ? Theme.accent-pressed : Theme.accent) : Theme.text-muted;
-        FocusRing { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; shown: focus.has-focus; radius: 8px; }
+        FocusRing { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; shown: focus.has-focus && focus.focus-visible; radius: 8px; }
     }
     touch := TouchArea {
         enabled: root.enabled;
         mouse-cursor: pointer;
         pointer-event(event) => {
-            if (event.kind == PointerEventKind.down) { focus.focus(); }
-            if (event.kind == PointerEventKind.up) { root.released(root.value); }
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) { focus.pointer-focus(); root.set-value(root.minimum + (root.maximum - root.minimum) * clamp(self.mouse-x / root.width, 0, 1)); }
+            if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) { root.released(root.value); }
         }
         moved => { if (self.pressed) { root.set-value(root.minimum + (root.maximum - root.minimum) * clamp(self.mouse-x / root.width, 0, 1)); } }
-        clicked => { root.set-value(root.minimum + (root.maximum - root.minimum) * clamp(self.mouse-x / root.width, 0, 1)); root.released(root.value); }
     }
-    focus := FocusScope {
+    focus := KeyboardFocus {
+        focus-on-click: false;
         enabled: root.enabled;
         key-pressed(event) => {
             if (event.text == Key.RightArrow || event.text == Key.UpArrow) { root.set-value(root.value + root.step); root.released(root.value); return accept; }
@@ -363,6 +384,8 @@ export component Dropdown inherits Rectangle {
     in property <bool> enabled: true;
     in property <string> label;
     in property <string> placeholder: "Select";
+    // Persisted selectors keep displaying Rust's last acknowledged value.
+    in property <bool> controlled: false;
     callback selected(int);
     min-height: Theme.control-height;
     min-width: 160px;
@@ -378,7 +401,7 @@ export component Dropdown inherits Rectangle {
     forward-focus: focus;
     function pick(i: int) {
         if (i >= 0 && i < root.model.length) {
-            root.current-index = i;
+            if (!root.controlled) { root.current-index = i; }
             root.selected(i);
         }
     }
@@ -396,8 +419,9 @@ export component Dropdown inherits Rectangle {
         }
         Icon { y: (parent.height - self.height) / 2; path: Icons.expand; size: 18px; color: Theme.text-muted; }
     }
-    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.focus(); popup.show(); } }
-    focus := FocusScope {
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.pointer-focus(); popup.show(); } }
+    focus := KeyboardFocus {
+        focus-on-click: false;
         enabled: root.enabled;
         key-pressed(event) => {
             if (event.text == " " || event.text == Key.Return) { popup.show(); return accept; }
@@ -406,34 +430,35 @@ export component Dropdown inherits Rectangle {
             reject
         }
     }
-    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; radius: root.border-radius; }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; radius: root.border-radius; }
     popup := PopupWindow {
         x: 0;
         y: root.height + 4px;
         width: root.width;
+        height: min(280px, root.model.length * 32px + 8px);
         close-policy: close-on-click-outside;
         Rectangle {
             background: Theme.raised;
             border-radius: Theme.radius-md;
             border-width: 1px;
             border-color: Theme.border-strong;
-            VerticalLayout {
+            ScrollView { VerticalLayout {
                 padding: 4px;
                 for item[i] in root.model: Rectangle {
                     height: 32px;
                     border-radius: Theme.radius-sm;
-                    background: option.has-hover ? Theme.hover : i == root.current-index ? Theme.accent-soft : transparent;
+                    background: option.has-hover ? Theme.hover : transparent;
                     accessible-role: list-item;
                     accessible-label: item;
                     accessible-item-selected: i == root.current-index;
                     HorizontalLayout {
                         padding-left: 10px;
                         padding-right: 10px;
-                        Text { text: item; color: Theme.text; font-size: Theme.text-body; vertical-alignment: center; overflow: elide; }
+                        Text { text: item; color: i == root.current-index ? Theme.accent : Theme.text-secondary; font-size: Theme.text-body; vertical-alignment: center; overflow: elide; }
                     }
-                    option := TouchArea { mouse-cursor: pointer; clicked => { root.pick(i); popup.close(); } }
+                    option := TouchArea { mouse-cursor: pointer; clicked => { root.pick(i); popup.close(); focus.pointer-focus(); } }
                 }
-            }
+            } }
         }
     }
 }
@@ -459,13 +484,13 @@ export component Tabs inherits HorizontalLayout {
                 text: title;
                 font-size: Theme.text-body;
                 font-weight: i == root.current ? 600 : 400;
-                color: i == root.current ? Theme.text : tab-touch.has-hover ? Theme.text : Theme.text-secondary;
+                color: i == root.current ? Theme.accent : tab-touch.has-hover ? Theme.text : Theme.text-secondary;
                 vertical-alignment: center;
             }
         }
-        Rectangle { y: parent.height - 2px; height: 2px; border-radius: 1px; background: i == root.current ? Theme.accent : transparent; }
-        tab-touch := TouchArea { mouse-cursor: pointer; clicked => { tab-focus.focus(); root.current = i; root.selected(i); } }
-        tab-focus := FocusScope {
+        tab-touch := TouchArea { mouse-cursor: pointer; clicked => { tab-focus.pointer-focus(); root.current = i; root.selected(i); } }
+        tab-focus := KeyboardFocus {
+        focus-on-click: false;
             key-pressed(event) => {
                 if (event.text == " " || event.text == Key.Return) { root.current = i; root.selected(i); return accept; }
                 if (event.text == Key.RightArrow && i + 1 < root.model.length) { root.current = i + 1; root.selected(i + 1); return accept; }
@@ -473,7 +498,7 @@ export component Tabs inherits HorizontalLayout {
                 reject
             }
         }
-        FocusRing { x: -2px; y: 2px; width: parent.width + 4px; height: parent.height - 4px; shown: tab-focus.has-focus; radius: Theme.radius-sm; }
+        FocusRing { x: -2px; y: 2px; width: parent.width + 4px; height: parent.height - 4px; shown: tab-focus.has-focus && tab-focus.focus-visible; radius: Theme.radius-sm; }
     }
 }
 
@@ -562,18 +587,21 @@ export component Dialog inherits Rectangle {
     in property <string> title;
     in property <length> dialog-width: 480px;
     in property <bool> dismissible: true;
+    in property <bool> sidebar-anchored: false;
     callback dismissed();
-    background: Theme.scrim;
+    background: sidebar-anchored ? transparent : Theme.scrim;
     accessible-role: none;
     TouchArea { clicked => { if (root.dismissible) { root.dismissed(); } } }
-    escape := FocusScope {
-        key-pressed(event) => {
+    escape := KeyboardFocus {
+        focus-on-click: false;
+        capture-key-pressed(event) => {
             if (event.text == Key.Escape && root.dismissible) { root.dismissed(); return accept; }
             reject
         }
-    }
     panel := Rectangle {
-        width: min(root.dialog-width, root.width - 48px);
+        x: root.sidebar-anchored ? 88px : (root.width - self.width) / 2;
+        y: root.sidebar-anchored ? max(16px, root.height - self.height - 16px) : (root.height - self.height) / 2;
+        width: min(root.dialog-width, root.width - (root.sidebar-anchored ? 104px : 48px));
         height: min(content.preferred-height, root.height - 48px);
         background: Theme.raised;
         border-radius: Theme.radius-lg;
@@ -591,6 +619,7 @@ export component Dialog inherits Rectangle {
             }
             @children
         }
+    }
     }
     init => { escape.focus(); }
 }

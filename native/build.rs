@@ -4,9 +4,9 @@ fn main() {
 
     #[cfg(windows)]
     {
-        println!("cargo:rerun-if-changed=../src-tauri/icons/icon.ico");
+        println!("cargo:rerun-if-changed=assets/icon.ico");
         let mut resource = winresource::WindowsResource::new();
-        resource.set_icon("../src-tauri/icons/icon.ico");
+        resource.set_icon("assets/icon.ico");
         resource.set("ProductName", "Aurora Launcher (native preview)");
         resource.set("FileDescription", "Aurora Launcher");
         resource

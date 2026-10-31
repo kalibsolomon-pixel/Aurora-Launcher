@@ -42,6 +42,7 @@ pub struct AppState {
     pub toast_serial: u64,
     pub skin_presets: Vec<crate::api::SkinPreset>,
     pub skin_thumbnails: std::collections::HashMap<String, slint::Image>,
+    pub skin_preview: crate::skins::PreviewState,
     pub client_update: Option<(String, String)>,
 }
 
@@ -204,4 +205,20 @@ pub fn rgba_image(rgba: &[u8]) -> Option<slint::Image> {
     }
     let buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(rgba, side, side);
     Some(slint::Image::from_rgba8(buffer))
+}
+
+pub fn rectangular_image(rgba: &[u8], width: u32, height: u32) -> Option<slint::Image> {
+    if width == 0
+        || height == 0
+        || width > 1024
+        || height > 1024
+        || rgba.len() != width as usize * height as usize * 4
+    {
+        return None;
+    }
+    Some(slint::Image::from_rgba8(slint::SharedPixelBuffer::<
+        slint::Rgba8Pixel,
+    >::clone_from_slice(
+        rgba, width, height
+    )))
 }

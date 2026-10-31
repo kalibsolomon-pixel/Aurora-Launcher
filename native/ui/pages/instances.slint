@@ -5,7 +5,7 @@ import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
 import {
     Button, ButtonKind, IconButton, Glyph, StatusPill, Tone, Toggle, Slider, TextField, Tabs,
-    Group, SettingRow, Divider, EmptyState, Spinner, PageTitle, FocusRing,
+    Group, SettingRow, Divider, EmptyState, Spinner, PageTitle, FocusRing, KeyboardFocus,
 } from "../components.slint";
 import { Instances, ContentRow, InstanceRow } from "../state.slint";
 
@@ -32,22 +32,22 @@ component InstanceListRow inherits Rectangle {
             HorizontalLayout {
                 spacing: 8px;
                 alignment: start;
-                Text { text: root.item.name; font-size: Theme.text-body; font-weight: 600; color: Theme.text; overflow: elide; horizontal-stretch: 0; }
-                if root.item.selected: Text { text: "Selected on Home"; font-size: Theme.text-label; color: Theme.accent; vertical-alignment: center; horizontal-stretch: 0; }
+                Text { text: root.item.name; font-size: Theme.text-body; font-weight: 600; color: root.item.selected ? Theme.accent : Theme.text-secondary; overflow: elide; horizontal-stretch: 0; }
             }
             Text { text: root.item.subtitle; font-size: Theme.text-metadata; color: Theme.text-muted; overflow: elide; }
         }
         StatusPill { y: (parent.height - self.height) / 2; text: root.item.status; tone: root.item.tone; }
         Icon { y: (parent.height - self.height) / 2; path: Icons.chevron; size: 20px; color: Theme.text-muted; }
     }
-    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); root.activated(); } }
-    focus := FocusScope {
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); root.activated(); } }
+    focus := KeyboardFocus {
+        focus-on-click: false;
         key-pressed(event) => {
             if (event.text == " " || event.text == Key.Return) { root.activated(); return accept; }
             reject
         }
     }
-    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; }
 }
 
 export component InstancesPage inherits ScrollView {

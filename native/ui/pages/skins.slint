@@ -4,7 +4,7 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
-import { Button, ButtonKind, IconButton, Group, EmptyState, Spinner, PageTitle, StatusPill, Tone } from "../components.slint";
+import { Button, ButtonKind, IconButton, Group, EmptyState, Spinner, PageTitle, StatusPill, Tone, FocusRing, KeyboardFocus, Checkbox, Dropdown } from "../components.slint";
 import { Skins, SkinRow, CapeRow, Accounts } from "../state.slint";
 
 component Pixels inherits Rectangle {
@@ -40,16 +40,17 @@ component PresetLine inherits Rectangle {
             Text { text: root.item.name; color: Theme.text; font-size: Theme.text-body; overflow: elide; }
             Text { text: root.item.model; color: Theme.text-muted; font-size: Theme.text-metadata; }
         }
-        Button { y: (parent.height - self.height) / 2; text: "Use"; compact: true; enabled: !Skins.busy; accessible-description-text: root.item.name; clicked => { Skins.apply(root.item.id); } }
+        Button { y: (parent.height - self.height) / 2; text: "Preview"; compact: true; clicked => { Skins.preview-skin(root.item.id); } }
+        Button { y: (parent.height - self.height) / 2; text: "Apply"; compact: true; enabled: !Skins.busy && Skins.has-account; accessible-description-text: root.item.name; clicked => { Skins.apply(root.item.id); } }
         IconButton { y: (parent.height - self.height) / 2; icon: Icons.delete; label: "Remove " + root.item.name + " from the library"; enabled: !Skins.busy; clicked => { Skins.remove(root.item.id); } }
     }
 }
 
 component CapeLine inherits Rectangle {
     in property <CapeRow> item;
-    height: 52px;
+    height: 70px;
     border-radius: Theme.radius-md;
-    background: item.selected ? Theme.accent-soft : Theme.surface;
+    background: Theme.surface;
     accessible-role: list-item;
     accessible-label: item.name;
     accessible-item-selected: item.selected;
@@ -57,66 +58,97 @@ component CapeLine inherits Rectangle {
         padding-left: 14px;
         padding-right: 10px;
         spacing: 12px;
-        Text { horizontal-stretch: 1; text: root.item.name; color: Theme.text; font-size: Theme.text-body; vertical-alignment: center; overflow: elide; }
+        if root.item.has-picture: Image { width: 28px; height: 44px; y: (parent.height - self.height) / 2; source: root.item.picture; image-rendering: pixelated; image-fit: contain; }
+        Text { horizontal-stretch: 1; text: root.item.name; color: root.item.previewed || root.item.selected ? Theme.accent : Theme.text-secondary; font-size: Theme.text-body; vertical-alignment: center; overflow: elide; }
+        Button { y: (parent.height - self.height) / 2; text: "Preview"; compact: true; clicked => { Skins.preview-cape(root.item.id); } }
         if root.item.selected: StatusPill { y: (parent.height - self.height) / 2; text: "Wearing"; tone: Tone.accent; }
         if !root.item.selected: Button { y: (parent.height - self.height) / 2; text: "Wear"; compact: true; enabled: !Skins.busy; accessible-description-text: root.item.name; clicked => { Skins.select-cape(root.item.id); } }
     }
 }
 
+component PlayerViewer inherits Rectangle {
+    private property <length> last-x;
+    private property <length> last-y;
+    width: min(320px, 0.45 * SkinsPageWidth.width);
+    height: self.width * 1.375;
+    background: Theme.sunken;
+    border-radius: Theme.radius-lg;
+    clip: true;
+    accessible-role: image;
+    accessible-label: "3D player preview. Drag to rotate, scroll to zoom. Arrow keys rotate; Home resets.";
+    forward-focus: focus;
+    Image { source: Skins.player; width: parent.width; height: parent.height; image-fit: contain; image-rendering: pixelated; }
+    drag := TouchArea {
+        mouse-cursor: self.pressed ? grabbing : grab;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) { focus.pointer-focus(); root.last-x=self.mouse-x; root.last-y=self.mouse-y; }
+        }
+        moved => { if (self.pressed) { Skins.rotate((self.mouse-x - root.last-x)/1px, (self.mouse-y - root.last-y)/1px); root.last-x=self.mouse-x; root.last-y=self.mouse-y; } }
+        scroll-event(event) => { Skins.zoom(event.delta-y / 120px); accept }
+    }
+    focus := KeyboardFocus {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (event.text == Key.LeftArrow) { Skins.rotate(25,0); return accept; }
+            if (event.text == Key.RightArrow) { Skins.rotate(-25,0); return accept; }
+            if (event.text == Key.UpArrow) { Skins.rotate(0,15); return accept; }
+            if (event.text == Key.DownArrow) { Skins.rotate(0,-15); return accept; }
+            if (event.text == Key.Home) { Skins.reset-view(); return accept; }
+            reject
+        }
+    }
+    FocusRing { x: 3px; y: 3px; width: parent.width - 6px; height: parent.height - 6px; shown: focus.has-focus && focus.focus-visible; }
+}
+
+// Layout constraint shared only by this screen's preview.
+global SkinsPageWidth { in-out property <length> width: 700px; }
 export component SkinsPage inherits ScrollView {
+    changed visible-width => { SkinsPageWidth.width = self.visible-width - 64px; }
     VerticalLayout {
         padding: Theme.space-6;
         spacing: Theme.space-4;
         alignment: start;
         HorizontalLayout {
-            PageTitle { text: "Skins"; horizontal-stretch: 1; vertical-alignment: center; }
-            if Skins.has-account: IconButton { icon: Icons.refresh; label: "Reload skins and capes"; size: 36px; clicked => { Skins.refresh(); } }
+            PageTitle { text: "Skins & capes"; horizontal-stretch: 1; vertical-alignment: center; }
+            IconButton { icon: Icons.refresh; label: "Reload skins and capes"; size: 36px; clicked => { Skins.refresh(); } }
         }
-        if !Skins.has-account: Rectangle {
-            background: Theme.surface;
-            border-radius: Theme.radius-lg;
-            EmptyState {
-                icon: Icons.person;
-                title: "Sign in to manage skins";
-                message: "Skins and capes belong to your Minecraft account.";
-                HorizontalLayout { alignment: center; Button { text: "Sign in"; kind: ButtonKind.primary; clicked => { Accounts.open-dialog(); } } }
+        HorizontalLayout {
+            spacing: Theme.space-5;
+            alignment: start;
+            PlayerViewer { }
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                spacing: 12px;
+                Text { text: Skins.has-account ? Skins.account-name : "Your appearance"; color: Theme.text; font-size: 22px; font-weight: 600; wrap: word-wrap; }
+                Text { text: Skins.preview-label; color: Theme.text-secondary; wrap: word-wrap; }
+                Text { text: Skins.cape-label; color: Theme.text-muted; wrap: word-wrap; }
+                if Skins.has-account: Text { text: Skins.current-model + " model"; color: Theme.text-muted; }
+                Text { text: "Drag to rotate · Scroll to zoom"; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
+                HorizontalLayout { alignment: start; spacing: 8px; Button { text: "Reset view"; compact: true; clicked => { Skins.reset-view(); } } Button { text: "Current skin"; compact: true; clicked => { Skins.preview-current(); } } }
+                Checkbox { text: "Outer layers"; checked <=> Skins.outer-layers; toggled => { Skins.layers-changed(); } }
+                if Skins.has-current && Skins.has-account: HorizontalLayout { alignment: start; Button { text: "Save current to library"; enabled: !Skins.busy; clicked => { Skins.save-current(); } } }
+                if !Skins.has-account: VerticalLayout { spacing: 8px; Text { text: "Sign in to load your current skin and owned capes. Library previews stay local."; color: Theme.text-secondary; wrap: word-wrap; } HorizontalLayout { alignment: start; Button { text: "Sign in"; kind: ButtonKind.primary; clicked => { Accounts.open-dialog(); } } } }
+                Text { text: "Previewing changes nothing on your account. Apply and Wear are separate actions."; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
             }
         }
-        if Skins.has-account && Skins.loading: HorizontalLayout { alignment: center; padding: Theme.space-5; Spinner { size: 22px; } }
+        if Skins.loading: HorizontalLayout { alignment: start; Spinner { size: 22px; } Text { text: "Loading appearance…"; color: Theme.text-secondary; } }
         if Skins.error != "": Text { text: Skins.error; color: Theme.error; wrap: word-wrap; }
-        if Skins.has-account: Group {
-            title: "Current skin";
-            HorizontalLayout {
-                spacing: Theme.space-4;
-                padding-top: Theme.space-2;
-                Pixels { picture: Skins.current; present: Skins.has-current; size: 72px; }
-                VerticalLayout {
-                    horizontal-stretch: 1;
-                    alignment: center;
-                    Text { text: Skins.account-name; color: Theme.text; font-size: Theme.text-section; font-weight: 600; }
-                    Text { text: Skins.has-current ? Skins.current-model + " model" : "Default skin"; color: Theme.text-muted; font-size: Theme.text-metadata; }
-                }
-                if Skins.has-current: Button { y: (parent.height - self.height) / 2; text: "Save to library"; icon: Icons.download; enabled: !Skins.busy; clicked => { Skins.save-current(); } }
-            }
+        Group {
+            title: "Skin library";
+            HorizontalLayout { alignment: start; spacing: 8px; Dropdown { label: "Imported skin model"; model: ["Classic", "Slim"]; current-index <=> Skins.import-model; enabled: !Skins.busy; } Button { text: "Import PNG"; enabled: !Skins.busy; clicked => { Skins.import-file(); } } }
+            description: Skins.presets.length == 0 ? "No saved skins yet. Save your current skin to keep it." : "Preview a saved skin before applying it to your account.";
+            VerticalLayout { spacing: 4px; accessible-role: list; for row in Skins.presets: PresetLine { item: row; } }
         }
         if Skins.has-account: Group {
-            title: "Library";
-            description: Skins.presets.length == 0 ? "Saved skins appear here. Save your current skin to keep it." : "Using a skin uploads it to your Minecraft profile.";
-            VerticalLayout {
-                spacing: 4px;
-                accessible-role: list;
-                for row in Skins.presets: PresetLine { item: row; }
+            title: "Cape collection";
+            description: Skins.capes.length == 0 ? "This account owns no capes." : "Preview a cape, then choose Wear to update your account.";
+            VerticalLayout { spacing: 4px; accessible-role: list; for row in Skins.capes: CapeLine { item: row; } }
+            if Skins.capes.length > 0: HorizontalLayout {
+                spacing: 8px;
+                Button { text: "Preview without cape"; kind: ButtonKind.ghost; clicked => { Skins.preview-cape(""); } }
+                Button { text: "Wear no cape"; kind: ButtonKind.ghost; enabled: !Skins.busy; clicked => { Skins.disable-cape(); } }
             }
-        }
-        if Skins.has-account: Group {
-            title: "Capes";
-            description: Skins.capes.length == 0 ? "This account owns no capes." : "";
-            VerticalLayout {
-                spacing: 4px;
-                accessible-role: list;
-                for row in Skins.capes: CapeLine { item: row; }
-            }
-            if Skins.capes.length > 0: HorizontalLayout { alignment: end; Button { text: "Wear no cape"; kind: ButtonKind.ghost; enabled: !Skins.busy; clicked => { Skins.disable-cape(); } } }
         }
     }
 }

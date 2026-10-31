@@ -254,7 +254,7 @@ impl Client {
         sort: BrowseSort,
         offset: u32,
     ) -> Result<SearchPage, Error> {
-        if !matches!(context.loader.as_str(), "fabric" | "neoforge") {
+        if kind == BrowseKind::Mod && !matches!(context.loader.as_str(), "fabric" | "neoforge") {
             return Err(Error::NoCompatibleVersion);
         }
         if query.len() > 160 || offset > 10_000 || categories.len() > 8 {
@@ -1134,7 +1134,7 @@ fn compatible_browse(context: &Context, kind: BrowseKind, version: &VersionDto) 
         // pack boundary.
         return version.loaders.iter().any(|loader| loader == "fabric");
     }
-    if !matches!(context.loader.as_str(), "fabric" | "neoforge") {
+    if kind == BrowseKind::Mod && !matches!(context.loader.as_str(), "fabric" | "neoforge") {
         return false;
     }
     version
@@ -1910,6 +1910,42 @@ mod tests {
                 .flatten()
                 .any(|value| value == "project_type:shader")
         );
+    }
+
+    #[tokio::test]
+    async fn non_mod_browsing_does_not_require_a_mod_loader() {
+        let server = TestServer::spawn(Arc::new(|request: &TestRequest| {
+            let url = Url::parse(&format!("http://localhost{}", request.path)).unwrap();
+            let facets = url
+                .query_pairs()
+                .find(|(key, _)| key == "facets")
+                .unwrap()
+                .1
+                .into_owned();
+            assert!(!facets.contains("categories:vanilla"));
+            TestResponse::ok(br#"{"hits":[],"offset":0,"total_hits":0}"#)
+        }));
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        let mut context = context();
+        for loader in ["vanilla", "forge", "fabric", "neoforge"] {
+            context.loader = loader.into();
+            for kind in [
+                BrowseKind::ResourcePack,
+                BrowseKind::ShaderPack,
+                BrowseKind::Modpack,
+            ] {
+                client
+                    .search_browse(&context, kind, "", &[], BrowseSort::Downloads, 0)
+                    .await
+                    .unwrap();
+            }
+            let mut pack: VersionDto =
+                serde_json::from_value(version("11112222", "AAAABBBB", json!([]))).unwrap();
+            pack.loaders = vec!["minecraft".into()];
+            assert!(compatible_browse(&context, BrowseKind::ResourcePack, &pack));
+            pack.loaders = vec!["iris".into()];
+            assert!(compatible_browse(&context, BrowseKind::ShaderPack, &pack));
+        }
     }
 
     #[tokio::test]

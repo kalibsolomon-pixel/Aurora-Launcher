@@ -37,6 +37,8 @@ export struct ProjectRow {
     author: string,
     description: string,
     downloads: string,
+    picture: image,
+    has-picture: bool,
     installed: bool,
     busy: bool,
 }
@@ -69,6 +71,9 @@ export struct CapeRow {
     id: string,
     name: string,
     selected: bool,
+    previewed: bool,
+    picture: image,
+    has-picture: bool,
 }
 
 export enum Page { home, instances, discover, skins, settings }
@@ -109,6 +114,9 @@ export global Home {
     in property <string> message;
     in property <Tone> message-tone: Tone.neutral;
     in property <[InstanceRow]> instances;
+    in property <[string]> instance-names;
+    in property <int> instance-index: -1;
+    callback select-index(int);
     callback play();
     callback select(string);
     callback blocker-action(string);
@@ -231,6 +239,26 @@ export global Discover {
     callback instance-changed(int);
     callback install(string);
     callback more();
+    in property <bool> can-return: false;
+    callback return-to-instance();
+    in-out property <bool> details-open: false;
+    in property <string> project-title;
+    in property <string> project-summary;
+    in property <string> compatibility;
+    in property <[string]> versions;
+    in-out property <int> version-index: -1;
+    in-out property <int> pack-mode: 0;
+    in property <bool> details-loading: false;
+    in property <bool> install-busy: false;
+    in property <bool> can-install: false;
+    in property <string> detail-error;
+    in property <string> review-text;
+    in property <string> progress;
+    callback details(string);
+    callback version-changed();
+    callback review();
+    callback confirm-install();
+    callback close-details();
 }
 
 export global Accounts {
@@ -270,6 +298,22 @@ export global Skins {
     callback remove(string);
     callback select-cape(string);
     callback disable-cape();
+    in property <image> player;
+    in property <string> preview-label;
+    in property <string> cape-label;
+    in-out property <bool> outer-layers: true;
+    callback layers-changed();
+    callback rotate(float, float);
+    callback zoom(float);
+    callback reset-view();
+    callback preview-skin(string);
+    callback preview-cape(string);
+    callback preview-current();
+    in-out property <bool> apply-open: false;
+    in property <string> apply-label;
+    callback confirm-apply();
+    in-out property <int> import-model: 0;
+    callback import-file();
 }
 
 export global Settings {

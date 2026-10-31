@@ -11,6 +11,11 @@ use crate::{AppWindow, BlockerRow, Home, InstanceRow, Tone};
 pub fn bind(window: &AppWindow) {
     let home = window.global::<Home>();
     home.on_play(play);
+    home.on_select_index(|index| {
+        if let Some(id) = ui::state(|s| s.instances().get(index as usize).map(|i| i.id.clone())) {
+            crate::instances::select(id);
+        }
+    });
     home.on_select(|id| crate::instances::select(id.to_string()));
     home.on_refresh(|| {
         refresh_readiness();
@@ -257,9 +262,38 @@ pub fn render() {
     ui::with(|window, state| {
         let home = window.global::<Home>();
         home.set_instances(ui::model(instance_rows(state)));
+        home.set_instance_names(ui::model(
+            state
+                .instances()
+                .iter()
+                .map(|i| i.display_name.clone().into())
+                .collect(),
+        ));
+        home.set_instance_index(
+            state
+                .instances()
+                .iter()
+                .position(|i| {
+                    state
+                        .selected_instance()
+                        .is_some_and(|selected| selected.id == i.id)
+                })
+                .map(|i| i as i32)
+                .unwrap_or(-1),
+        );
         let Some(instance) = state.selected_instance().cloned() else {
             home.set_has_instance(false);
             home.set_can_play(false);
+            home.set_status("Choose an instance".into());
+            home.set_tone(Tone::Neutral);
+            home.set_subtitle("".into());
+            home.set_blockers(ui::model(Vec::new()));
+            home.set_busy(false);
+            home.set_checking(false);
+            home.set_running(false);
+            home.set_play_label("Play".into());
+            home.set_progress_text("".into());
+            home.set_message("".into());
             return;
         };
         home.set_has_instance(true);

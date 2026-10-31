@@ -274,8 +274,15 @@ pub struct AccountSummary {
 
 /// A decoded 8×8 (or larger) head avatar as RGBA bytes.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HeadAvatar {
     pub rgba: Vec<u8>,
+    #[serde(default)]
+    pub skin_rgba: Vec<u8>,
+    #[serde(default)]
+    pub skin_height: u32,
+    #[serde(default)]
+    pub model: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -459,6 +466,7 @@ pub struct ContentManagement {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchPage {
+    pub offset: u32,
     pub total_hits: u32,
     pub hits: Vec<ProjectSummary>,
 }
@@ -478,6 +486,27 @@ pub struct ProjectSummary {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProjectDetails {
+    pub project_id: String,
+    pub title: String,
+    pub summary: String,
+    pub game_versions: Vec<String>,
+    pub loaders: Vec<String>,
+    pub versions: Vec<VersionChoice>,
+    pub default_version_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionChoice {
+    pub id: String,
+    pub name: String,
+    pub version_number: String,
+    pub loaders: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Cosmetics {
     pub current_skin_model: Option<String>,
     pub has_current_skin: bool,
@@ -490,6 +519,14 @@ pub struct Cape {
     pub id: String,
     pub name: String,
     pub selected: bool,
+    pub preview: Option<Texture>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Texture {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -770,6 +807,94 @@ pub async fn quick_install(
     convert(app::quick_install_modrinth(host, request).await)
 }
 
+pub async fn project(
+    host: Host,
+    instance: String,
+    kind: &'static str,
+    project: String,
+) -> ApiResult<ProjectDetails> {
+    let request =
+        request(json!({"instanceId": instance, "contentType": kind, "projectId": project}))?;
+    convert(app::get_modrinth_project(host, request).await)
+}
+
+/// Only normalized, bounded PNGs from the core's isolated artwork decoder.
+pub async fn project_artwork(host: Host, project: String) -> ApiResult<Option<Vec<u8>>> {
+    use base64::Engine;
+    let request = request(json!({"projectId": project}))?;
+    let value: Value = convert(app::resolve_project_artwork(host, request).await)?;
+    Ok(value["source"]
+        .as_str()
+        .and_then(|s| s.strip_prefix("data:image/png;base64,"))
+        .filter(|s| s.len() <= 2 * 1024 * 1024)
+        .and_then(|s| base64::engine::general_purpose::STANDARD.decode(s).ok()))
+}
+
+pub async fn provider_inventory(host: Host, instance: String) -> ApiResult<Value> {
+    let request = request(json!({"instanceId": instance}))?;
+    blocking(move || convert(app::get_provider_lifecycle(host, request))).await?
+}
+
+pub async fn preview_content(
+    host: Host,
+    instance: String,
+    kind: &'static str,
+    project: String,
+    version: String,
+) -> ApiResult<Value> {
+    let request = request(
+        json!({"instanceId": instance, "contentType": kind, "projectId": project, "versionId": version}),
+    )?;
+    convert(app::preview_modrinth_install(host, request).await)
+}
+
+pub async fn install_content(
+    host: Host,
+    instance: String,
+    kind: &'static str,
+    project: String,
+    version: String,
+    fingerprint: String,
+) -> ApiResult<Value> {
+    let request = request(
+        json!({"instanceId": instance, "contentType": kind, "projectId": project, "versionId": version, "previewFingerprint": fingerprint}),
+    )?;
+    convert(app::install_modrinth(host, request).await)
+}
+
+/// The same reviewed pack engines used by the WebView host. The frozen
+/// request is produced by preview; commit only adds its returned fingerprint.
+pub async fn preview_pack(host: Host, merge: bool, value: Value) -> ApiResult<Value> {
+    if merge {
+        convert(app::preview_modrinth_pack_merge(host, request(value)?).await)
+    } else {
+        convert(app::preview_modrinth_pack(host, request(value)?).await)
+    }
+}
+
+pub async fn install_pack(host: Host, merge: bool, value: Value) -> ApiResult<Value> {
+    if merge {
+        convert(app::install_modrinth_pack_merge(host, request(value)?).await)
+    } else {
+        convert(app::install_modrinth_pack(host, request(value)?).await)
+    }
+}
+
+pub async fn skin_preview(host: Host, preset: String) -> ApiResult<HeadAvatar> {
+    let request = request(json!({"presetId": preset}))?;
+    blocking(move || convert(app::skin_preset_preview(host, request))).await?
+}
+
+pub async fn import_skin(
+    host: Host,
+    name: String,
+    model: String,
+    bytes: Vec<u8>,
+) -> ApiResult<Value> {
+    let request = request(json!({"name":name,"model":model,"bytes":bytes}))?;
+    blocking(move || convert(app::import_skin_preset(host, request))).await?
+}
+
 pub async fn accounts(host: Host) -> ApiResult<AccountsState> {
     blocking(move || convert(app::get_accounts(host))).await?
 }
@@ -919,6 +1044,17 @@ pub async fn apply_client_update(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn full_skin_pixels_and_model_survive_the_camel_case_contract() {
+        let avatar: HeadAvatar = serde_json::from_value(
+            json!({"rgba":[1,2,3,255],"skinRgba":[9,8,7,255],"skinHeight":64,"model":"slim"}),
+        )
+        .unwrap();
+        assert_eq!(avatar.skin_rgba, vec![9, 8, 7, 255]);
+        assert_eq!(avatar.skin_height, 64);
+        assert_eq!(avatar.model, "slim");
+    }
 
     #[test]
     fn configuration_round_trips_unknown_fields() {

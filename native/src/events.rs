@@ -83,6 +83,11 @@ fn counted(step: &str, progress: &ItemProgress) -> String {
 /// Handles one event on the UI thread.
 pub fn dispatch(name: &str, payload: Value) {
     match name {
+        "modpack-progress" => {
+            if let Ok(event) = serde_json::from_value::<Phase>(payload) {
+                crate::discover::progress(&event.phase);
+            }
+        }
         "launch-progress" => {
             if let Ok(event) = serde_json::from_value::<Phase>(payload) {
                 crate::home::on_launch_progress(&event.phase);

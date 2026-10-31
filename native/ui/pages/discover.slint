@@ -17,7 +17,7 @@ component ProjectLine inherits Rectangle {
     layout := HorizontalLayout {
         padding: 12px;
         spacing: 12px;
-        Glyph { y: (parent.height - self.height) / 2; letter: root.item.letter; size: 44px; }
+        Glyph { y: (parent.height - self.height) / 2; letter: root.item.letter; picture: root.item.picture; has-picture: root.item.has-picture; size: 44px; }
         VerticalLayout {
             horizontal-stretch: 1;
             alignment: center;
@@ -31,11 +31,12 @@ component ProjectLine inherits Rectangle {
             Text { text: root.item.description; font-size: Theme.text-metadata; color: Theme.text-secondary; wrap: word-wrap; max-height: 36px; overflow: elide; }
             Text { text: root.item.downloads; font-size: Theme.text-label; color: Theme.text-muted; }
         }
+        Button { y: (parent.height - self.height) / 2; text: "Details"; compact: true; enabled: !Discover.install-busy; clicked => { Discover.details(root.item.id); } }
         Button {
             y: (parent.height - self.height) / 2;
-            text: root.item.installed ? "Installed" : "Install";
+            text: root.item.installed ? "Installed" : Discover.kind == 3 ? "Review" : "Install";
             icon: root.item.installed ? Icons.check : Icons.download;
-            enabled: !root.item.installed;
+            enabled: !root.item.installed && !Discover.install-busy;
             loading: root.item.busy;
             accessible-description-text: root.item.title;
             clicked => { Discover.install(root.item.id); }
@@ -60,8 +61,9 @@ export component DiscoverPage inherits ScrollView {
                 selected(index) => { Discover.instance-changed(index); }
             }
         }
+        if Discover.can-return: HorizontalLayout { alignment: start; Button { text: "Back to instance"; kind: ButtonKind.ghost; clicked => { Discover.return-to-instance(); } } }
         Tabs {
-            model: ["Mods", "Resource packs", "Shaders"];
+            model: ["Mods", "Resource packs", "Shaders", "Modpacks"];
             current <=> Discover.kind;
             selected(index) => { Discover.kind-changed(index); }
         }
@@ -73,17 +75,20 @@ export component DiscoverPage inherits ScrollView {
                 placeholder: "Search Modrinth";
                 label: "Search Modrinth";
                 text <=> Discover.query;
+                max-length: 160;
                 accepted => { Discover.search(); }
             }
-            Button { text: "Search"; kind: ButtonKind.primary; enabled: Discover.has-instances; clicked => { Discover.search(); } }
+            Button { text: "Search"; kind: ButtonKind.primary; enabled: !Discover.loading && (Discover.has-instances || Discover.kind == 3); clicked => { Discover.search(); } }
         }
-        if !Discover.has-instances: Rectangle {
+        if !Discover.has-instances && Discover.kind != 3: Rectangle {
             background: Theme.surface;
             border-radius: Theme.radius-lg;
             EmptyState { icon: Icons.discover; title: "Create an instance first"; message: "Content is always installed into one instance, checked for compatibility with its Minecraft version and loader."; }
         }
         if Discover.summary != "": Text { text: Discover.summary; color: Theme.text-muted; font-size: Theme.text-metadata; }
         if Discover.error != "": Text { text: Discover.error; color: Theme.error; wrap: word-wrap; }
+        if Discover.error != "": HorizontalLayout { alignment: start; Button { text: "Try again"; enabled: !Discover.loading; clicked => { Discover.search(); } } }
+        if Discover.progress != "": Text { text: Discover.progress; color: Theme.text-secondary; wrap: word-wrap; }
         VerticalLayout {
             spacing: 6px;
             accessible-role: list;

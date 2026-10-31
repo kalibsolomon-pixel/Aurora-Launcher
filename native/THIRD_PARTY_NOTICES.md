@@ -12,4 +12,7 @@ which keeps its existing dependency notices.
   `native/ui/icons.slint` are from Google's Material Design icon set, licensed
   under the Apache License 2.0 (the same family the WebView launcher ships
   through the `material-symbols` package).
-* **winresource** (build-time only) — MIT; embeds the existing Aurora icon.
+* **winresource** (build-time only) — MIT; embeds the confirmed native Aurora icon.
+* **base64** and **windows** — MIT and/or Apache-2.0; versions already used by
+  the launcher dependency tree, now direct native dependencies for artwork data
+  decoding and the Windows PNG file chooser respectively.

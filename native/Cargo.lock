@@ -463,11 +463,13 @@ name = "aurora-native"
 version = "1.4.2"
 dependencies = [
  "aurora-launcher",
+ "base64 0.22.1",
  "serde",
  "serde_json",
  "slint",
  "slint-build",
  "tokio",
+ "windows 0.61.3",
  "winresource",
 ]
 

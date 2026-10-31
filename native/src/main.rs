@@ -15,7 +15,11 @@ mod discover;
 mod events;
 mod home;
 mod instances;
+#[cfg(test)]
+mod interaction_tests;
+mod player;
 mod settings;
+mod skin_import;
 mod skins;
 mod theme;
 mod ui;
@@ -119,7 +123,7 @@ fn bind_navigation(window: &AppWindow) {
         match page {
             Page::Discover => discover::on_shown(),
             Page::Settings => settings::load(),
-            Page::Skins => skins::load(),
+            Page::Skins => skins::on_shown(),
             _ => {}
         }
     });

@@ -90,7 +90,7 @@ it("instance Settings has one Rename, leads with readiness, and keeps Maintenanc
 
 it("shared controls use exact transition properties, reduced motion and unoutlined danger buttons", () => {
   const css = readFileSync(new URL("../shell/phase-f.css", import.meta.url), "utf8");
-  const app = readFileSync(new URL("../../app.css", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../../app.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   assert.doesNotMatch(css, /transition:\s*all\b/);
   assert.match(css, /prefers-reduced-motion: reduce\)[^\n]*\.rail-link/);
   assert.match(app, /\.btn-danger \{\n  border-color: transparent;\n  background: var\(--color-error-soft\);/);

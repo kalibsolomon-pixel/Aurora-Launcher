@@ -3,7 +3,7 @@
 import { ScrollView, AboutSlint } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
-import { Button, ButtonKind, Toggle, Dropdown, Group, SettingRow, PageTitle, FocusRing, Label, TextField } from "../components.slint";
+import { Button, ButtonKind, Toggle, Dropdown, Group, SettingRow, PageTitle, FocusRing, KeyboardFocus, Label, TextField } from "../components.slint";
 import { Settings, Accounts, Swatch } from "../state.slint";
 
 component AccentSwatch inherits Rectangle {
@@ -14,22 +14,23 @@ component AccentSwatch inherits Rectangle {
     height: 32px;
     border-radius: 16px;
     background: swatch.color;
-    border-width: chosen ? 3px : 0px;
-    border-color: Theme.text;
+    border-width: 0px;
+    if chosen: Icon { path: Icons.check; size: 18px; color: Theme.accent-contrast; }
     accessible-role: radio-button;
     accessible-label: swatch.label;
     accessible-checked: chosen;
     accessible-checkable: true;
     accessible-action-default => { picked(); }
     forward-focus: focus;
-    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); root.picked(); } }
-    focus := FocusScope {
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); root.picked(); } }
+    focus := KeyboardFocus {
+        focus-on-click: false;
         key-pressed(event) => {
             if (event.text == " " || event.text == Key.Return) { root.picked(); return accept; }
             reject
         }
     }
-    FocusRing { x: -4px; y: -4px; width: root.width + 8px; height: root.height + 8px; shown: focus.has-focus; radius: 16px; }
+    FocusRing { x: -4px; y: -4px; width: root.width + 8px; height: root.height + 8px; shown: focus.has-focus && focus.focus-visible; radius: 16px; }
 }
 
 export component SettingsPage inherits ScrollView {

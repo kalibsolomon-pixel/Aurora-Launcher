@@ -3038,12 +3038,16 @@ fn provider_context(
         instance.clone(),
         crate::modrinth::Context {
             minecraft_version: record.installed().minecraft_version.clone(),
-            loader: record
-                .installed()
-                .platform
-                .provider_loader()
-                .map_err(|reason| CommandError::new("provider_platform_unsupported", reason))?
-                .into(),
+            // Resource/shader packs are Minecraft-version scoped. Vanilla has
+            // no mod-loader identity, but must still reach those pipelines.
+            // Mod compatibility itself remains fail-closed in the provider.
+            loader: match &record.installed().platform {
+                crate::instances::platform::PlatformPin::Vanilla {} => "vanilla",
+                platform => platform
+                    .provider_loader()
+                    .map_err(|reason| CommandError::new("provider_platform_unsupported", reason))?,
+            }
+            .into(),
             fabric_api_protected: crate::instance_mods::verified_required_mods(managed, &instance)?
                 .iter()
                 .any(|metadata| metadata.id == "fabric-api"),

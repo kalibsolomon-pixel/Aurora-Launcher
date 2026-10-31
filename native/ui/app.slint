@@ -6,7 +6,7 @@ import { Theme } from "theme.slint";
 import { Icon, Icons } from "icons.slint";
 import {
     Button, ButtonKind, IconButton, Toggle, Checkbox, Dropdown, TextField, Dialog, Toast, Tone,
-    Avatar, StatusPill, Spinner, ProgressBar, FocusRing, EmptyState, Divider,
+    Avatar, StatusPill, Spinner, ProgressBar, FocusRing, KeyboardFocus, EmptyState, Divider,
 } from "components.slint";
 import { Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, AccountRow } from "state.slint";
 import { HomePage } from "pages/home.slint";
@@ -24,7 +24,7 @@ component NavItem inherits Rectangle {
     callback activated();
     height: 60px;
     border-radius: Theme.radius-md;
-    background: active ? Theme.accent-soft : touch.has-hover ? Theme.hover : transparent;
+    background: touch.has-hover ? Theme.hover : transparent;
     accessible-role: tab;
     accessible-label: label;
     accessible-item-selected: active;
@@ -34,17 +34,17 @@ component NavItem inherits Rectangle {
         alignment: center;
         spacing: 4px;
         HorizontalLayout { alignment: center; Icon { path: root.icon; size: 22px; color: root.active ? Theme.accent : Theme.text-secondary; } }
-        Text { accessible-role: none; text: root.label; font-size: Theme.text-label; color: root.active ? Theme.text : Theme.text-secondary; horizontal-alignment: center; }
+        Text { accessible-role: none; text: root.label; font-size: Theme.text-label; color: root.active ? Theme.accent : Theme.text-secondary; horizontal-alignment: center; }
     }
-    Rectangle { x: 0; y: (parent.height - 24px) / 2; width: 3px; height: 24px; border-radius: 2px; background: root.active ? Theme.accent : transparent; }
-    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); root.activated(); } }
-    focus := FocusScope {
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); root.activated(); } }
+    focus := KeyboardFocus {
+        focus-on-click: false;
         key-pressed(event) => {
             if (event.text == " " || event.text == Key.Return) { root.activated(); return accept; }
             reject
         }
     }
-    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; }
 }
 
 component AccountButton inherits Rectangle {
@@ -71,21 +71,22 @@ component AccountButton inherits Rectangle {
             overflow: elide;
         }
     }
-    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); Accounts.open-dialog(); } }
-    focus := FocusScope {
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); Accounts.open-dialog(); } }
+    focus := KeyboardFocus {
+        focus-on-click: false;
         key-pressed(event) => {
             if (event.text == " " || event.text == Key.Return) { Accounts.open-dialog(); return accept; }
             reject
         }
     }
-    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; }
 }
 
 component AccountLine inherits Rectangle {
     in property <AccountRow> item;
     height: 56px;
     border-radius: Theme.radius-md;
-    background: root.item.selected ? Theme.accent-soft : touch.has-hover ? Theme.hover : Theme.surface;
+    background: touch.has-hover ? Theme.hover : Theme.surface;
     accessible-role: list-item;
     accessible-label: root.item.name;
     accessible-description: root.item.status;
@@ -99,7 +100,7 @@ component AccountLine inherits Rectangle {
         VerticalLayout {
             horizontal-stretch: 1;
             alignment: center;
-            Text { text: root.item.name; color: Theme.text; font-size: Theme.text-body; font-weight: 600; overflow: elide; }
+            Text { text: root.item.name; color: root.item.selected ? Theme.accent : Theme.text-secondary; font-size: Theme.text-body; font-weight: 600; overflow: elide; }
             Text { text: root.item.status; color: Theme.text-muted; font-size: Theme.text-metadata; overflow: elide; }
         }
         if !root.item.selected: Button { y: (parent.height - self.height) / 2; text: "Use"; compact: true; clicked => { Accounts.select(root.item.id); } }
@@ -109,7 +110,7 @@ component AccountLine inherits Rectangle {
 
 export component AppWindow inherits Window {
     title: "Aurora Launcher";
-    icon: @image-url("../../static/aurora-icon.png");
+    icon: @image-url("../assets/icon-256.png");
     preferred-width: 1120px;
     preferred-height: 760px;
     min-width: 720px;
@@ -130,7 +131,7 @@ export component AppWindow inherits Window {
                 spacing: 6px;
                 HorizontalLayout {
                     alignment: center;
-                    Image { source: @image-url("../../static/aurora-icon.png"); width: 36px; height: 36px; image-rendering: smooth; accessible-role: image; accessible-label: "Aurora"; }
+                    Image { source: @image-url("../assets/aurora.svg"); width: 36px; height: 36px; image-rendering: smooth; accessible-role: image; accessible-label: "Aurora"; }
                 }
                 Rectangle { height: 14px; }
                 NavItem { label: "Home"; icon: Icons.home; active: Nav.page == Page.home; activated => { Nav.navigate(Page.home); } }
@@ -139,7 +140,7 @@ export component AppWindow inherits Window {
                 NavItem { label: "Skins"; icon: Icons.person; active: Nav.page == Page.skins; activated => { Nav.navigate(Page.skins); } }
                 NavItem { label: "Settings"; icon: Icons.settings; active: Nav.page == Page.settings; activated => { Nav.navigate(Page.settings); } }
                 Rectangle { vertical-stretch: 1; }
-                AccountButton { }
+                account-trigger := AccountButton { }
             }
         }
         Rectangle {
@@ -168,21 +169,62 @@ export component AppWindow inherits Window {
         dismissed => { Shell.dismiss-toast(); }
     }
 
+    if Skins.apply-open: Dialog {
+        title: "Apply skin";
+        dismissed => { Skins.apply-open = false; }
+        Text { text: Skins.apply-label; color: Theme.text-secondary; wrap: word-wrap; }
+        HorizontalLayout { alignment: end; spacing: 8px; Button { text: "Cancel"; clicked => { Skins.apply-open = false; } } Button { text: "Apply to account"; kind: ButtonKind.primary; enabled: !Skins.busy; clicked => { Skins.confirm-apply(); } } }
+    }
+
+    if Discover.details-open: Dialog {
+        title: Discover.project-title;
+        dialog-width: 640px;
+        dismissible: !Discover.install-busy;
+        dismissed => { Discover.close-details(); }
+        ScrollView {
+            height: min(350px, max(100px, root.height - 310px));
+            VerticalLayout {
+                spacing: 12px;
+                alignment: start;
+                Text { text: Discover.project-summary; color: Theme.text-secondary; wrap: word-wrap; }
+                Text { text: Discover.compatibility; color: Theme.text-muted; wrap: word-wrap; font-size: Theme.text-metadata; }
+                Dropdown { label: "Project version"; model: Discover.versions; current-index <=> Discover.version-index; enabled: !Discover.install-busy && !Discover.details-loading; selected => { Discover.version-changed(); } }
+                if Discover.kind == 3: Dropdown { label: "Modpack installation workflow"; model: ["New modpack instance", "Add to target instance"]; current-index <=> Discover.pack-mode; enabled: !Discover.install-busy && !Discover.details-loading; selected => { Discover.version-changed(); } }
+                if Discover.kind == 3 && Discover.pack-mode == 1: Text { text: "Target: " + (Discover.instance-index >= 0 ? Discover.instance-names[Discover.instance-index] : "Choose an instance in Discover first"); color: Theme.text-secondary; wrap: word-wrap; }
+                if Discover.review-text != "": Text { text: Discover.review-text; color: Theme.text-secondary; wrap: word-wrap; font-size: Theme.text-secondary-size; }
+                if Discover.detail-error != "": Text { text: Discover.detail-error; color: Theme.error; wrap: word-wrap; }
+            }
+        }
+        if Discover.details-loading: HorizontalLayout { spacing: 8px; Spinner { } Text { text: "Loading and verifying review…"; color: Theme.text-secondary; } }
+        if Discover.progress != "": Text { text: Discover.progress; color: Theme.text-secondary; wrap: word-wrap; }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button { text: "Close"; enabled: !Discover.install-busy; clicked => { Discover.close-details(); } }
+            Button { text: "Review installation"; enabled: !Discover.details-loading && !Discover.install-busy && Discover.version-index >= 0; clicked => { Discover.review(); } }
+            Button { text: "Install reviewed content"; kind: ButtonKind.primary; enabled: Discover.can-install; loading: Discover.install-busy; clicked => { Discover.confirm-install(); } }
+        }
+    }
+
     if Accounts.dialog-open: Dialog {
         title: "Accounts";
-        dialog-width: 460px;
+        sidebar-anchored: true;
+        dialog-width: 420px;
         dismissible: !Accounts.login-busy;
-        dismissed => { Accounts.dialog-open = false; }
+        dismissed => { Accounts.dialog-open = false; account-trigger.focus(); }
         Text {
             text: "Sign-in happens on Microsoft's website in your browser. Aurora never sees your password and keeps only a refresh credential in Windows Credential Manager.";
             color: Theme.text-secondary;
             font-size: Theme.text-secondary-size;
             wrap: word-wrap;
         }
-        VerticalLayout {
-            spacing: 6px;
-            accessible-role: list;
-            for row in Accounts.rows: AccountLine { item: row; }
+        ScrollView {
+            height: min(Accounts.rows.length * 62px, min(240px, max(0px, root.height - 320px)));
+            VerticalLayout {
+                spacing: 6px;
+                accessible-role: list;
+                for row in Accounts.rows: AccountLine { item: row; }
+            }
         }
         if Accounts.login-busy: HorizontalLayout {
             spacing: 10px;
