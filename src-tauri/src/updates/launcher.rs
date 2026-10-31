@@ -12,13 +12,20 @@
 //! update candidate. On Windows the install step launches the verified
 //! NSIS installer and the application exits — that platform behavior is
 //! surfaced truthfully instead of being hidden behind a fabricated restart.
+#![cfg_attr(not(feature = "tauri-host"), allow(dead_code))]
 
+#[cfg(feature = "tauri-host")]
 use std::sync::Mutex;
+#[cfg(feature = "tauri-host")]
 use std::sync::OnceLock;
 
 use serde::Serialize;
+#[cfg(feature = "tauri-host")]
 use tauri::AppHandle;
+#[cfg(feature = "tauri-host")]
 use tauri_plugin_updater::UpdaterExt;
+
+use crate::host::Host;
 
 use crate::updates::{CheckDomain, LauncherPhase, UpdateAvailability, begin_check, finish_check};
 
@@ -48,16 +55,19 @@ pub struct LauncherUpdateStatus {
 /// The downloaded-but-not-installed update held between the explicit
 /// download and install steps. Process-local; never persisted, never
 /// exposed beyond its version identity.
+#[cfg(feature = "tauri-host")]
 fn pending() -> &'static Mutex<Option<PendingUpdate>> {
     static PENDING: OnceLock<Mutex<Option<PendingUpdate>>> = OnceLock::new();
     PENDING.get_or_init(|| Mutex::new(None))
 }
 
+#[cfg(feature = "tauri-host")]
 struct PendingUpdate {
     update: tauri_plugin_updater::Update,
     installer: VerifiedInstaller,
 }
 
+#[cfg(feature = "tauri-host")]
 struct VerifiedInstaller {
     version: String,
     url: url::Url,
@@ -67,6 +77,7 @@ struct VerifiedInstaller {
     bytes: Vec<u8>,
 }
 
+#[cfg(feature = "tauri-host")]
 impl VerifiedInstaller {
     // The production caller supplies only the result of official Update::download.
     // An error (including failed signature verification) cannot become retained bytes.
@@ -132,12 +143,14 @@ impl LauncherUpdateError {
     }
 }
 
+#[cfg(feature = "tauri-host")]
 fn installed_version(app: &AppHandle) -> String {
     app.package_info().version.to_string()
 }
 
 /// Builds the configured updater for production. Fails closed when this
 /// build carries no trust material.
+#[cfg(feature = "tauri-host")]
 fn build_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, LauncherUpdateError> {
     let pubkey = UPDATER_PUBKEY.ok_or_else(|| {
         LauncherUpdateError::new(
@@ -155,6 +168,7 @@ fn build_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, Launc
 /// Production construction with the compiled key and fixed endpoint. Boundary
 /// tests exercise the shared HTTP policy and install identity checks, not this
 /// desktop plugin builder or a full official download/install transaction.
+#[cfg(feature = "tauri-host")]
 fn build_configured_updater<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     pubkey: &str,
@@ -175,7 +189,8 @@ fn build_configured_updater<R: tauri::Runtime>(
 
 /// The one-shot read-only launcher update check for production. The check
 /// itself never installs anything; failures are honest unavailability.
-pub async fn check_launcher_update(app: &AppHandle) -> UpdateAvailability {
+#[cfg(feature = "tauri-host")]
+async fn check_launcher_update_tauri(app: &AppHandle) -> UpdateAvailability {
     let Some(_) = UPDATER_PUBKEY else {
         return UpdateAvailability::unavailable(
             "Launcher updates are not configured in this build.",
@@ -200,7 +215,7 @@ pub async fn check_launcher_update(app: &AppHandle) -> UpdateAvailability {
 
 /// Runs the de-duplicated launcher check and records it in the update
 /// center. `None` means a check is already in flight.
-pub async fn run_check(app: &AppHandle) -> Option<UpdateAvailability> {
+pub async fn run_check(app: &Host) -> Option<UpdateAvailability> {
     if begin_check(CheckDomain::Launcher) == crate::updates::CheckStart::Duplicate {
         return None;
     }
@@ -212,7 +227,8 @@ pub async fn run_check(app: &AppHandle) -> Option<UpdateAvailability> {
 /// Downloads the currently offered update after re-checking that it is
 /// still the presented one. Progress is reported through real updater
 /// callbacks; nothing is fabricated.
-pub async fn download(
+#[cfg(feature = "tauri-host")]
+async fn download_tauri(
     app: &AppHandle,
     presented_version: &str,
     mut progress: impl FnMut(u64, Option<u64>) + Send,
@@ -280,7 +296,8 @@ pub async fn download(
 /// On Windows this launches the verified installer and the application
 /// exits as part of the install — the platform's documented updater
 /// behavior, surfaced truthfully to the UI before the call.
-pub async fn install(
+#[cfg(feature = "tauri-host")]
+async fn install_tauri(
     app: &AppHandle,
     presented_version: &str,
 ) -> Result<LauncherUpdateStatus, LauncherUpdateError> {
@@ -338,8 +355,60 @@ pub async fn install(
     })
 }
 
+/// The message every launcher-update operation reports in a host without the
+/// official updater. Native preview builds never install the WebView build's
+/// signed NSIS installer over themselves; moving the production update
+/// authority to a native artifact requires a separate owner-approved migration.
+const NATIVE_HOST_UPDATES: &str = "Launcher self-update is not available in the native preview build. Update through the published installer.";
+
+/// The one-shot read-only launcher update check.
+pub async fn check_launcher_update(app: &Host) -> UpdateAvailability {
+    #[cfg(feature = "tauri-host")]
+    if let Some(app) = app.tauri() {
+        return check_launcher_update_tauri(app).await;
+    }
+    let _ = app;
+    UpdateAvailability::unavailable(NATIVE_HOST_UPDATES)
+}
+
+/// Downloads the currently offered, signature-verified update.
+pub async fn download(
+    app: &Host,
+    presented_version: &str,
+    progress: impl FnMut(u64, Option<u64>) + Send,
+) -> Result<LauncherUpdateStatus, LauncherUpdateError> {
+    #[cfg(feature = "tauri-host")]
+    if let Some(app) = app.tauri() {
+        return download_tauri(app, presented_version, progress).await;
+    }
+    let _ = (app, presented_version, progress);
+    Err(LauncherUpdateError::new(
+        "updater_unconfigured",
+        NATIVE_HOST_UPDATES,
+    ))
+}
+
+/// Installs the downloaded, signature-verified update.
+pub async fn install(
+    app: &Host,
+    presented_version: &str,
+) -> Result<LauncherUpdateStatus, LauncherUpdateError> {
+    #[cfg(feature = "tauri-host")]
+    if let Some(app) = app.tauri() {
+        return install_tauri(app, presented_version).await;
+    }
+    let _ = (app, presented_version);
+    Err(LauncherUpdateError::new(
+        "updater_unconfigured",
+        NATIVE_HOST_UPDATES,
+    ))
+}
+
 /// Whether a downloaded update is waiting to be installed, and its version.
 pub fn pending_version() -> Option<String> {
+    #[cfg(not(feature = "tauri-host"))]
+    return None;
+    #[cfg(feature = "tauri-host")]
     pending()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -407,6 +476,7 @@ fn validate_production_artifact(
     }
 }
 
+#[cfg_attr(not(feature = "tauri-host"), allow(dead_code))]
 fn configure_updater_client(client: reqwest::ClientBuilder) -> reqwest::ClientBuilder {
     client.redirect(reqwest::redirect::Policy::custom(|attempt| {
         if redirect_allowed(attempt.previous(), attempt.url()) {
@@ -437,6 +507,7 @@ fn redirect_allowed(previous: &[url::Url], next: &url::Url) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "tauri-host")]
     #[test]
     fn bundled_updater_configuration_initializes_without_release_overrides() {
         // Tauri deserializes plugin configuration before our Rust builder can
@@ -454,6 +525,7 @@ mod tests {
         assert!(!updater.dangerous_accept_invalid_hostnames);
         assert!(!updater.allow_downgrades);
     }
+    #[cfg(feature = "tauri-host")]
     #[test]
     fn missing_updater_configuration_reproduces_startup_rejection() {
         let mut config: tauri::Config =
@@ -570,6 +642,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "tauri-host")]
     #[test]
     fn failed_verified_download_cannot_create_retained_installer() {
         let result = VerifiedInstaller::from_download(
@@ -581,6 +654,7 @@ mod tests {
         assert!(matches!(result, Err(error) if error.code == "update_download_failed"));
     }
 
+    #[cfg(feature = "tauri-host")]
     #[test]
     fn install_recheck_returns_original_bytes_only_for_exact_identity() {
         let url = url::Url::parse("https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/v1.4.1/Aurora.Launcher_1.4.1_x64-setup.exe").unwrap();

@@ -1,6 +1,6 @@
+use crate::host::Host;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Emitter, Manager};
 
 use crate::aurora::AuroraInstallError;
 use crate::cache::{AcquisitionError, ArtifactCache, ArtifactOrigin};
@@ -544,8 +544,8 @@ impl From<AcquisitionError> for CommandError {
     }
 }
 
-fn managed_paths(app: &AppHandle) -> Result<ManagedPaths, CommandError> {
-    let resolved_root = app.path().app_local_data_dir().map_err(|error| {
+fn managed_paths(app: &Host) -> Result<ManagedPaths, CommandError> {
+    let resolved_root = app.local_data_dir().map_err(|error| {
         CommandError::managed_path(format!(
             "Aurora's managed data location could not be resolved: {error}"
         ))
@@ -558,8 +558,7 @@ fn managed_paths(app: &AppHandle) -> Result<ManagedPaths, CommandError> {
     })
 }
 
-#[tauri::command]
-pub fn get_application_status(app: AppHandle) -> Result<ApplicationStatus, CommandError> {
+pub fn get_application_status(app: Host) -> Result<ApplicationStatus, CommandError> {
     let _performance = crate::performance::scope(crate::performance::Event::UnrelatedIpc);
     let managed_paths = managed_paths(&app)?;
 
@@ -569,7 +568,7 @@ pub fn get_application_status(app: AppHandle) -> Result<ApplicationStatus, Comma
     );
 
     Ok(ApplicationStatus::ready(
-        app.package_info().version.to_string(),
+        app.version().to_owned(),
         std::env::consts::OS,
         std::env::consts::ARCH,
         managed_paths.data_root().to_path_buf(),
@@ -581,10 +580,9 @@ pub fn get_application_status(app: AppHandle) -> Result<ApplicationStatus, Comma
 /// On first run this materializes the default configuration under the managed
 /// data root; malformed persisted files are reported as structured errors and
 /// left untouched.
-#[tauri::command]
-pub async fn get_launcher_state(app: AppHandle) -> Result<LauncherState, CommandError> {
+pub async fn get_launcher_state(app: Host) -> Result<LauncherState, CommandError> {
     let paths = managed_paths(&app)?;
-    tauri::async_runtime::spawn_blocking(move || load_launcher_state(&paths))
+    tokio::task::spawn_blocking(move || load_launcher_state(&paths))
         .await
         .map_err(|_| {
             CommandError::new(
@@ -687,14 +685,13 @@ pub struct DeleteInstanceRequest {
     instance_id: String,
     confirmed_name: String,
 }
-#[tauri::command]
 pub async fn delete_instance(
-    app: AppHandle,
+    app: Host,
     request: DeleteInstanceRequest,
 ) -> Result<(), CommandError> {
     let managed = managed_paths(&app)?;
     let id = crate::instances::InstanceId::new(request.instance_id)?;
-    tauri::async_runtime::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         crate::instances::deletion::delete(&managed, &id, &request.confirmed_name)
             .map_err(|error| CommandError::new(error.0, error.1))
     })
@@ -709,14 +706,13 @@ pub async fn delete_instance(
 
 /// Home layout and Discord preferences use the same registry/config write lock
 /// as selection, so unrelated preferences cannot be lost to concurrent writes.
-#[tauri::command]
-pub fn get_home_widgets(app: AppHandle) -> Result<crate::home_widgets::HomeLayout, CommandError> {
+pub fn get_home_widgets(app: Host) -> Result<crate::home_widgets::HomeLayout, CommandError> {
     let paths = managed_paths(&app)?;
     let config = crate::config::load(&paths.config_file())?.unwrap_or_default();
     Ok(config.home_widgets().clone())
 }
 fn history_query(
-    app: &AppHandle,
+    app: &Host,
     instance_id: Option<String>,
 ) -> Result<
     (
@@ -738,9 +734,8 @@ fn history_query(
         })?;
     Ok((store, instance))
 }
-#[tauri::command]
 pub fn get_playtime_summary(
-    app: AppHandle,
+    app: Host,
     instance_id: Option<String>,
 ) -> Result<crate::gameplay_history::Playtime, CommandError> {
     let (store, instance) = history_query(&app, instance_id)?;
@@ -759,9 +754,8 @@ pub fn get_playtime_summary(
             )
         })
 }
-#[tauri::command]
 pub fn get_daily_playtime(
-    app: AppHandle,
+    app: Host,
     instance_id: Option<String>,
     days: usize,
 ) -> Result<Vec<crate::gameplay_history::DailyPlaytime>, CommandError> {
@@ -779,9 +773,8 @@ pub fn get_daily_playtime(
             )
         })
 }
-#[tauri::command]
 pub fn get_recent_worlds(
-    app: AppHandle,
+    app: Host,
     instance_id: Option<String>,
     limit: usize,
 ) -> Result<Vec<crate::gameplay_history::RecentTarget>, CommandError> {
@@ -815,9 +808,8 @@ pub fn get_recent_worlds(
     }
     Ok(entries)
 }
-#[tauri::command]
 pub fn get_recent_servers(
-    app: AppHandle,
+    app: Host,
     instance_id: Option<String>,
     limit: usize,
 ) -> Result<Vec<crate::gameplay_history::RecentTarget>, CommandError> {
@@ -855,9 +847,8 @@ pub fn get_recent_servers(
 }
 
 /// Saves a local favorite for an opaque Recent Servers target id.
-#[tauri::command]
 pub fn set_recent_server_favorite(
-    app: AppHandle,
+    app: Host,
     target_id: String,
     favorite: bool,
 ) -> Result<(), CommandError> {
@@ -881,9 +872,8 @@ pub struct ServerEnrichmentRequest {
 /// persisted history, caches sanitized presentation under the managed cache,
 /// and returns display-only DTOs. One server's failure degrades only its own
 /// entry; no history document is written.
-#[tauri::command]
 pub async fn refresh_recent_server_status(
-    app: AppHandle,
+    app: Host,
     request: ServerEnrichmentRequest,
 ) -> Result<Vec<crate::server_enrichment::RecentServerPresentation>, CommandError> {
     if request.target_ids.len() > 20 {
@@ -908,9 +898,8 @@ pub async fn refresh_recent_server_status(
     )
     .await)
 }
-#[tauri::command]
 pub fn set_home_widgets(
-    app: AppHandle,
+    app: Host,
     request: crate::home_widgets::HomeLayout,
 ) -> Result<crate::home_widgets::HomeLayout, CommandError> {
     request
@@ -923,21 +912,17 @@ pub fn set_home_widgets(
     crate::config::save(&paths.config_file(), &config)?;
     Ok(request)
 }
-#[tauri::command]
-pub fn reset_home_widgets(app: AppHandle) -> Result<crate::home_widgets::HomeLayout, CommandError> {
+pub fn reset_home_widgets(app: Host) -> Result<crate::home_widgets::HomeLayout, CommandError> {
     set_home_widgets(app, Default::default())
 }
-#[tauri::command]
 pub fn get_discord_state() -> crate::discord::DiscordState {
     crate::discord::state()
 }
-#[tauri::command]
 pub async fn connect_discord() -> crate::discord::DiscordState {
     crate::discord::connect().await
 }
-#[tauri::command]
 pub fn set_discord_preferences(
-    app: AppHandle,
+    app: Host,
     request: crate::discord::DiscordPreferences,
 ) -> Result<crate::discord::DiscordState, CommandError> {
     let paths = managed_paths(&app)?;
@@ -1058,8 +1043,7 @@ impl AppearanceDto {
 /// These are cosmetic launcher preferences: unknown stored values were
 /// already normalized to safe defaults at load, and this command never
 /// blocks the rest of the launcher.
-#[tauri::command]
-pub fn get_appearance(app: AppHandle) -> Result<AppearanceDto, CommandError> {
+pub fn get_appearance(app: Host) -> Result<AppearanceDto, CommandError> {
     let managed_paths = managed_paths(&app)?;
 
     let config = match crate::config::load(&managed_paths.config_file())? {
@@ -1076,9 +1060,8 @@ pub fn get_appearance(app: AppHandle) -> Result<AppearanceDto, CommandError> {
 /// unusable accent color is rejected with an explanation and nothing is
 /// written — then saved atomically with the rest of the launcher
 /// configuration.
-#[tauri::command]
 pub fn set_appearance(
-    app: AppHandle,
+    app: Host,
     request: SetAppearanceRequest,
 ) -> Result<AppearanceDto, CommandError> {
     let managed_paths = managed_paths(&app)?;
@@ -1225,7 +1208,6 @@ impl DesktopIntegrationDto {
 ///
 /// Status is queried from the filesystem on every call — a user may delete
 /// a shortcut outside Aurora, and nothing is persisted in its place.
-#[tauri::command]
 pub fn get_desktop_integration() -> Result<DesktopIntegrationDto, CommandError> {
     #[cfg(windows)]
     {
@@ -1242,7 +1224,6 @@ pub fn get_desktop_integration() -> Result<DesktopIntegrationDto, CommandError> 
 /// Refuses development builds and shortcuts slots Aurora cannot prove it
 /// owns; conflicts surface as `shortcut_conflict` and the existing file is
 /// never touched.
-#[tauri::command]
 pub fn create_desktop_shortcut() -> Result<DesktopIntegrationDto, CommandError> {
     #[cfg(windows)]
     {
@@ -1263,7 +1244,6 @@ pub fn create_desktop_shortcut() -> Result<DesktopIntegrationDto, CommandError> 
 
 /// Adds the running installed launcher to the Start menu's app list.
 /// Windows grid pinning remains a user action; this is a real Programs link.
-#[tauri::command]
 pub fn create_start_menu_shortcut() -> Result<DesktopIntegrationDto, CommandError> {
     #[cfg(windows)]
     {
@@ -1281,8 +1261,7 @@ pub fn create_start_menu_shortcut() -> Result<DesktopIntegrationDto, CommandErro
 }
 
 /// Opens the platform-resolved launcher data folder. No frontend path is accepted.
-#[tauri::command]
-pub fn open_launcher_folder(app: AppHandle) -> Result<(), CommandError> {
+pub fn open_launcher_folder(app: Host) -> Result<(), CommandError> {
     #[cfg(windows)]
     {
         let managed = managed_paths(&app)?;
@@ -1293,7 +1272,7 @@ pub fn open_launcher_folder(app: AppHandle) -> Result<(), CommandError> {
                 "The launcher data folder does not exist yet.",
             ));
         }
-        tauri_plugin_opener::open_path(folder, None::<&str>).map_err(|_| {
+        crate::host::open_path(folder).map_err(|_| {
             CommandError::new(
                 "launcher_folder_open_failure",
                 "The launcher data folder could not be opened in Explorer.",
@@ -1314,7 +1293,6 @@ pub fn open_launcher_folder(app: AppHandle) -> Result<(), CommandError> {
 ///
 /// Only a shortcut proven to target this executable is removed; anything
 /// else at the slot is a reported conflict and survives untouched.
-#[tauri::command]
 pub fn remove_desktop_shortcut() -> Result<DesktopIntegrationDto, CommandError> {
     #[cfg(windows)]
     {
@@ -1394,9 +1372,8 @@ pub enum AcquisitionOrigin {
 /// verified object. It accepts no fixture shortcuts, so it can only be driven
 /// with a real reachable source â€” deterministic pipeline verification lives
 /// in the Rust test suite, which uses local loopback test servers.
-#[tauri::command]
 pub async fn acquire_artifact(
-    app: AppHandle,
+    app: Host,
     request: AcquireArtifactRequest,
 ) -> Result<AcquiredArtifact, CommandError> {
     let managed_paths = managed_paths(&app)?;
@@ -1462,7 +1439,6 @@ pub struct MinecraftPlanSummary {
 /// layer: it performs real discovery, SHA-1-verified version-document
 /// fetching, parsing, and platform-aware planning in Rust, and installs
 /// nothing â€” no client jar, library, native, asset, or runtime is downloaded.
-#[tauri::command]
 pub async fn plan_minecraft_install(
     request: PlanMinecraftInstallRequest,
 ) -> Result<MinecraftPlanSummary, CommandError> {
@@ -1539,7 +1515,6 @@ pub struct FabricPlanSummary {
 /// composition layer: it performs real loader discovery, exact profile
 /// resolution, Mojang planning, and composition in Rust, and installs
 /// nothing â€” no Minecraft or Fabric artifact is downloaded.
-#[tauri::command]
 pub async fn plan_fabric_install(
     request: PlanFabricInstallRequest,
 ) -> Result<FabricPlanSummary, CommandError> {
@@ -1580,9 +1555,8 @@ pub async fn plan_fabric_install(
 
 /// Plans a Minecraft + NeoForge installation without installing anything
 /// (the development proof surface for the composed NeoForge pipeline).
-#[tauri::command]
 pub async fn plan_neoforge_install(
-    app: AppHandle,
+    app: Host,
     request: PlanNeoForgeInstallRequest,
 ) -> Result<NeoForgePlanSummary, CommandError> {
     let managed = managed_paths(&app)?;
@@ -1736,9 +1710,8 @@ pub struct InstalledGameSummary {
 /// commit flow natively and reports progress through `install-progress`
 /// events. It installs a game, never launches one, installs no Java runtime,
 /// and never touches the user's `.minecraft`.
-#[tauri::command]
 pub async fn install_game(
-    app: AppHandle,
+    app: Host,
     request: InstallGameRequest,
 ) -> Result<InstalledGameSummary, CommandError> {
     let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
@@ -1853,9 +1826,8 @@ pub struct ValidationProblemDto {
 
 /// Validates one instance's installed game against its installed-state
 /// record â€” a read-only, download-free check that reports damage precisely.
-#[tauri::command]
 pub fn validate_installed_game(
-    app: AppHandle,
+    app: Host,
     request: ValidateInstalledGameRequest,
 ) -> Result<InstalledGameValidationDto, CommandError> {
     let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
@@ -2033,7 +2005,6 @@ pub struct AuroraReleaseSummary {
 ///
 /// Resolves from the manifest offered for creation in this build. Production
 /// entries are bundled, with no remote release discovery endpoint.
-#[tauri::command]
 pub fn list_aurora_releases() -> Result<Vec<AuroraReleaseSummary>, CommandError> {
     let manifest = crate::distribution::creation_manifest()
         .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
@@ -2123,9 +2094,8 @@ impl TryFrom<&InstanceLoaderPolicyDto> for crate::instances::settings::LoaderPol
 /// through the Phase 5 executor, install Aurora, validate everything, and
 /// mark the instance ready. Progress is reported through
 /// `instance-progress` events.
-#[tauri::command]
 pub async fn create_instance(
-    app: AppHandle,
+    app: Host,
     request: CreateInstanceRequest,
 ) -> Result<InstanceSummary, CommandError> {
     let managed_paths = managed_paths(&app)?;
@@ -2197,7 +2167,6 @@ pub struct AuroraCompatibility {
     loader_version: Option<String>,
 }
 
-#[tauri::command]
 pub fn get_aurora_compatibility(
     request: AuroraCompatibilityRequest,
 ) -> Result<AuroraCompatibility, CommandError> {
@@ -2241,9 +2210,8 @@ impl From<crate::instances::transition::TransitionError> for CommandError {
     }
 }
 
-#[tauri::command]
 pub fn preview_aurora_transition(
-    app: AppHandle,
+    app: Host,
     request: AuroraTransitionRequest,
 ) -> Result<crate::instances::transition::TransitionPreview, CommandError> {
     let managed = managed_paths(&app)?;
@@ -2258,9 +2226,8 @@ pub fn preview_aurora_transition(
     )?)
 }
 
-#[tauri::command]
 pub async fn apply_aurora_transition(
-    app: AppHandle,
+    app: Host,
     request: AuroraTransitionRequest,
 ) -> Result<InstanceSummary, CommandError> {
     let managed = managed_paths(&app)?;
@@ -2302,9 +2269,8 @@ pub struct RetryInstanceRequest {
 }
 
 /// Retries the installation of an instance whose creation did not finish.
-#[tauri::command]
 pub async fn retry_instance_install(
-    app: AppHandle,
+    app: Host,
     request: RetryInstanceRequest,
 ) -> Result<InstanceSummary, CommandError> {
     let managed_paths = managed_paths(&app)?;
@@ -2350,9 +2316,8 @@ pub struct RenameInstanceRequest {
 
 /// Renames an instance's display name. Metadata only â€” identifiers and
 /// filesystem paths are untouched.
-#[tauri::command]
 pub fn rename_instance(
-    app: AppHandle,
+    app: Host,
     request: RenameInstanceRequest,
 ) -> Result<InstanceSummary, CommandError> {
     let managed_paths = managed_paths(&app)?;
@@ -2373,9 +2338,8 @@ fn icon_error(error: crate::instance_icons::IconError) -> CommandError {
 }
 
 /// Display icons (Material Symbols names) for registered instances.
-#[tauri::command]
 pub fn get_instance_icons(
-    app: AppHandle,
+    app: Host,
 ) -> Result<std::collections::BTreeMap<String, String>, CommandError> {
     let managed = managed_paths(&app)?;
     crate::instance_icons::load(&managed).map_err(icon_error)
@@ -2389,9 +2353,8 @@ pub struct SetInstanceIconRequest {
 }
 
 /// Sets or clears one instance's icon. Presentation metadata only.
-#[tauri::command]
 pub fn set_instance_icon(
-    app: AppHandle,
+    app: Host,
     request: SetInstanceIconRequest,
 ) -> Result<std::collections::BTreeMap<String, String>, CommandError> {
     let managed = managed_paths(&app)?;
@@ -2416,9 +2379,8 @@ pub struct PerformanceAdviceRequest {
     mode: Option<crate::instances::performance::PerformanceMode>,
 }
 
-#[tauri::command]
 pub fn get_instance_performance_advice(
-    app: AppHandle,
+    app: Host,
     request: PerformanceAdviceRequest,
 ) -> Result<crate::instances::performance::MemoryAdvice, CommandError> {
     let managed = managed_paths(&app)?;
@@ -2446,9 +2408,8 @@ pub fn get_instance_performance_advice(
 /// and paths are untouched. Readiness reflects the change immediately — deep
 /// validation reports a stale instance until its new configuration is
 /// installed through `install_instance_configuration`.
-#[tauri::command]
 pub fn update_instance_configuration(
-    app: AppHandle,
+    app: Host,
     request: UpdateInstanceConfigurationRequest,
 ) -> Result<InstanceSummary, CommandError> {
     let managed_paths = managed_paths(&app)?;
@@ -2482,9 +2443,8 @@ pub fn update_instance_configuration(
 /// (re)installs the content to match it — the deliberate path for
 /// install-affecting configuration changes. Progress is reported through
 /// `instance-progress` events.
-#[tauri::command]
 pub async fn install_instance_configuration(
-    app: AppHandle,
+    app: Host,
     request: RetryInstanceRequest,
 ) -> Result<InstanceSummary, CommandError> {
     let managed_paths = managed_paths(&app)?;
@@ -2629,9 +2589,8 @@ fn validate_canonical_instance_folder(
 /// managed paths, and the folder must exist before the OS opener receives it
 /// as structured data. There is no arbitrary-path surface and no shell
 /// command string anywhere in this path.
-#[tauri::command]
 pub fn open_instance_folder(
-    app: AppHandle,
+    app: Host,
     request: OpenInstanceFolderRequest,
 ) -> Result<(), CommandError> {
     let managed = managed_paths(&app)?;
@@ -2639,7 +2598,7 @@ pub fn open_instance_folder(
 
     let folder = resolve_instance_folder(&managed, &registry, &request.instance_id)?;
 
-    tauri_plugin_opener::open_path(&folder, None::<&str>).map_err(|error| {
+    crate::host::open_path(&folder).map_err(|error| {
         CommandError::new(
             "instance_folder_open_failure",
             format!("the instance folder could not be opened: {error}"),
@@ -2689,15 +2648,14 @@ fn registered_instance(
 /// Scans one registered instance's actual mods directory on a blocking worker.
 /// Search/filter/sort in the presentation layer operates on this snapshot and
 /// never triggers another filesystem scan per keystroke.
-#[tauri::command]
 pub async fn get_instance_mods(
-    app: AppHandle,
+    app: Host,
     request: InstanceModsRequest,
 ) -> Result<crate::instance_mods::ModInventory, CommandError> {
     crate::performance::measure(crate::performance::Event::ModInventoryCommand, async {
         let managed = managed_paths(&app)?;
         let instance = registered_instance(&managed, &request.instance_id)?;
-        let result = tauri::async_runtime::spawn_blocking(crate::performance::queued(move || {
+        let result = tokio::task::spawn_blocking(crate::performance::queued(move || {
             crate::instance_mods::scan(&managed, &instance)
         }))
         .await
@@ -2714,14 +2672,13 @@ pub async fn get_instance_mods(
 
 /// Enables or disables one current user-managed JAR through a same-directory
 /// rename and returns the resulting authoritative inventory.
-#[tauri::command]
 pub async fn set_instance_mod_enabled(
-    app: AppHandle,
+    app: Host,
     request: SetInstanceModEnabledRequest,
 ) -> Result<crate::instance_mods::ModInventory, CommandError> {
     let managed = managed_paths(&app)?;
     let instance = registered_instance(&managed, &request.instance_id)?;
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         crate::instance_mods::set_enabled(&managed, &instance, &request.entry_id, request.enabled)
     })
     .await
@@ -2736,14 +2693,13 @@ pub async fn set_instance_mod_enabled(
 
 /// Permanently removes one current user-managed local JAR after the frontend's
 /// explicit confirmation, then returns the authoritative inventory.
-#[tauri::command]
 pub async fn remove_instance_mod(
-    app: AppHandle,
+    app: Host,
     request: RemoveInstanceModRequest,
 ) -> Result<crate::instance_mods::ModInventory, CommandError> {
     let managed = managed_paths(&app)?;
     let instance = registered_instance(&managed, &request.instance_id)?;
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         crate::instance_mods::remove(&managed, &instance, &request.entry_id)
     })
     .await
@@ -2757,15 +2713,14 @@ pub async fn remove_instance_mod(
 }
 
 /// Opens only the exact derived mods directory of a registered instance.
-#[tauri::command]
 pub fn open_instance_mods_folder(
-    app: AppHandle,
+    app: Host,
     request: InstanceModsRequest,
 ) -> Result<(), CommandError> {
     let managed = managed_paths(&app)?;
     let instance = registered_instance(&managed, &request.instance_id)?;
     let folder = crate::instance_mods::validate_mods_directory(&managed, &instance)?;
-    tauri_plugin_opener::open_path(&folder, None::<&str>).map_err(|error| {
+    crate::host::open_path(&folder).map_err(|error| {
         CommandError::new(
             "instance_folder_open_failure",
             format!("the instance mods folder could not be opened: {error}"),
@@ -2810,9 +2765,8 @@ pub struct InstanceContentContext {
     mods_loadable: bool,
 }
 
-#[tauri::command]
 pub fn get_instance_content_context(
-    app: AppHandle,
+    app: Host,
     request: InstanceModsRequest,
 ) -> Result<InstanceContentContext, CommandError> {
     let managed = managed_paths(&app)?;
@@ -2844,9 +2798,8 @@ pub fn get_instance_content_context(
     })
 }
 
-#[tauri::command]
 pub async fn get_instance_content(
-    app: AppHandle,
+    app: Host,
     request: InstanceContentRequest,
 ) -> Result<crate::instance_content::ContentInventory, CommandError> {
     let managed = managed_paths(&app)?;
@@ -2857,7 +2810,7 @@ pub async fn get_instance_content(
             "Use the Mods inventory for Fabric mods.",
         ));
     }
-    tauri::async_runtime::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         crate::instance_content::scan(&managed, &instance, request.content_type)
     })
     .await
@@ -2870,9 +2823,8 @@ pub async fn get_instance_content(
     .map_err(CommandError::from)
 }
 
-#[tauri::command]
 pub async fn remove_instance_content(
-    app: AppHandle,
+    app: Host,
     request: RemoveInstanceContentRequest,
 ) -> Result<crate::instance_content::ContentInventory, CommandError> {
     let managed = managed_paths(&app)?;
@@ -2883,7 +2835,7 @@ pub async fn remove_instance_content(
             "Use the Mods action for Fabric mods.",
         ));
     }
-    tauri::async_runtime::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         crate::instance_content::remove(
             &managed,
             &instance,
@@ -2901,14 +2853,13 @@ pub async fn remove_instance_content(
     .map_err(CommandError::from)
 }
 
-#[tauri::command]
 pub async fn set_instance_pack_enabled(
-    app: AppHandle,
+    app: Host,
     request: SetInstancePackEnabledRequest,
 ) -> Result<crate::instance_content::ContentInventory, CommandError> {
     let managed = managed_paths(&app)?;
     let instance = registered_instance(&managed, &request.instance_id)?;
-    tauri::async_runtime::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         crate::instance_content::set_pack_enabled(
             &managed,
             &instance,
@@ -2927,16 +2878,15 @@ pub async fn set_instance_pack_enabled(
     .map_err(CommandError::from)
 }
 
-#[tauri::command]
 pub fn open_instance_content_folder(
-    app: AppHandle,
+    app: Host,
     request: InstanceContentRequest,
 ) -> Result<(), CommandError> {
     let managed = managed_paths(&app)?;
     let instance = registered_instance(&managed, &request.instance_id)?;
     let folder =
         crate::instance_content::ensure_directory(&managed, &instance, request.content_type)?;
-    tauri_plugin_opener::open_path(&folder, None::<&str>).map_err(|error| {
+    crate::host::open_path(&folder).map_err(|error| {
         CommandError::new(
             "instance_folder_open_failure",
             format!("content folder could not be opened: {error}"),
@@ -2944,16 +2894,15 @@ pub fn open_instance_content_folder(
     })
 }
 
-#[tauri::command]
 pub async fn scan_instance_content(
-    app: AppHandle,
+    app: Host,
     request: InstanceContentRequest,
 ) -> Result<crate::content_recognition::RecognitionScan, CommandError> {
     let managed = managed_paths(&app)?;
     let (instance, _context) = provider_context(&managed, &request.instance_id)?;
     // The read-only local half (classification, bounded hashing, inventory
     // revision) runs on a blocking worker; hashing never touches the UI.
-    let local = tauri::async_runtime::spawn_blocking({
+    let local = tokio::task::spawn_blocking({
         let managed = managed.clone();
         let instance = instance.clone();
         move || crate::content_recognition::scan_local(&managed, &instance, request.content_type)
@@ -2976,9 +2925,8 @@ pub async fn scan_instance_content(
     .map_err(CommandError::from)
 }
 
-#[tauri::command]
 pub async fn register_recovered_content(
-    app: AppHandle,
+    app: Host,
     request: crate::content_recognition::RecoveredContentApproval,
 ) -> Result<Vec<crate::instance_content::ProviderRecord>, CommandError> {
     let managed = managed_paths(&app)?;
@@ -3271,9 +3219,8 @@ async fn resolve_environment_candidate(
     }))
 }
 
-#[tauri::command]
 pub async fn search_modrinth(
-    app: AppHandle,
+    app: Host,
     request: ModrinthSearchRequest,
 ) -> Result<crate::modrinth::SearchPage, CommandError> {
     let managed = managed_paths(&app)?;
@@ -3289,9 +3236,8 @@ pub async fn search_modrinth(
         .map_err(provider_error)
 }
 
-#[tauri::command]
 pub async fn browse_modrinth(
-    app: AppHandle,
+    app: Host,
     request: ProviderBrowseRequest,
 ) -> Result<crate::modrinth::SearchPage, CommandError> {
     if request.provider != "modrinth" {
@@ -3327,7 +3273,6 @@ pub async fn browse_modrinth(
 
 /// Live provider category tags for the browse filter. One bounded request
 /// per process; no polling.
-#[tauri::command]
 pub async fn browse_modrinth_tags(
     request: ProviderBrowseTagsRequest,
 ) -> Result<Vec<crate::modrinth::ProviderCategory>, CommandError> {
@@ -3343,9 +3288,8 @@ pub async fn browse_modrinth_tags(
         .map_err(provider_error)
 }
 
-#[tauri::command]
 pub async fn get_modrinth_project(
-    app: AppHandle,
+    app: Host,
     request: ModrinthProjectRequest,
 ) -> Result<crate::modrinth::ProjectDetails, CommandError> {
     let managed = managed_paths(&app)?;
@@ -3402,9 +3346,8 @@ pub struct ModrinthArtworkRequest {
     project_id: String,
 }
 
-#[tauri::command]
 pub async fn get_modrinth_project_artwork(
-    app: AppHandle,
+    app: Host,
     request: ModrinthArtworkRequest,
 ) -> Option<String> {
     // Failure is cosmetic. No frontend URL or filesystem locator is accepted.
@@ -3414,18 +3357,16 @@ pub async fn get_modrinth_project_artwork(
     crate::artwork::cached_artwork(&managed, &request.project_id).await
 }
 
-#[tauri::command]
 pub async fn resolve_project_artwork(
-    app: AppHandle,
+    app: Host,
     request: ModrinthArtworkRequest,
 ) -> Result<crate::artwork::ArtworkResult, CommandError> {
     let managed = managed_paths(&app)?;
     Ok(crate::artwork::resolve_artwork(&managed, &request.project_id).await)
 }
 
-#[tauri::command]
 pub async fn get_installed_artwork_identities(
-    app: AppHandle,
+    app: Host,
     request: InstanceContentRequest,
 ) -> Result<crate::installed_artwork::Identities, CommandError> {
     let managed = managed_paths(&app)?;
@@ -3449,9 +3390,8 @@ pub struct ModrinthPackRequest {
     fingerprint: Option<String>,
 }
 
-#[tauri::command]
 pub async fn preview_modrinth_pack(
-    app: AppHandle,
+    app: Host,
     request: ModrinthPackRequest,
 ) -> Result<crate::modpacks::PackPreview, CommandError> {
     let managed = managed_paths(&app)?;
@@ -3466,9 +3406,8 @@ pub async fn preview_modrinth_pack(
     .map_err(|error| CommandError::new(error.code, error.message))
 }
 
-#[tauri::command]
 pub async fn install_modrinth_pack(
-    app: AppHandle,
+    app: Host,
     request: ModrinthPackRequest,
 ) -> Result<InstanceSummary, CommandError> {
     let fingerprint = request.fingerprint.ok_or_else(|| {
@@ -3509,9 +3448,8 @@ pub struct ModrinthPackMergeRequest {
 }
 
 /// Read-only review of merging an exact pack version into an existing instance.
-#[tauri::command]
 pub async fn preview_modrinth_pack_merge(
-    app: AppHandle,
+    app: Host,
     request: ModrinthPackMergeRequest,
 ) -> Result<crate::pack_merge::PackMergePreview, CommandError> {
     let managed = managed_paths(&app)?;
@@ -3529,9 +3467,8 @@ pub async fn preview_modrinth_pack_merge(
 }
 
 /// Adds the reviewed pack's content to the instance; never creates an instance.
-#[tauri::command]
 pub async fn install_modrinth_pack_merge(
-    app: AppHandle,
+    app: Host,
     request: ModrinthPackMergeRequest,
 ) -> Result<crate::pack_merge::PackMergeResult, CommandError> {
     let fingerprint = request.fingerprint.ok_or_else(|| {
@@ -3567,9 +3504,8 @@ pub struct ModpackInstanceRequest {
 /// Pack-level update discovery for one managed modpack instance. The
 /// frontend supplies only the instance identifier: the installed pack state
 /// is the sole authority for which project's timeline is consulted.
-#[tauri::command]
 pub async fn check_modpack_update(
-    app: AppHandle,
+    app: Host,
     request: ModpackInstanceRequest,
 ) -> Result<crate::pack_update::PackUpdateCheck, CommandError> {
     let managed = managed_paths(&app)?;
@@ -3584,9 +3520,8 @@ pub async fn check_modpack_update(
 
 /// The full three-way reconciliation plan for the discovered candidate.
 /// Read-only: no instance bytes change while previewing.
-#[tauri::command]
 pub async fn preview_modpack_update(
-    app: AppHandle,
+    app: Host,
     request: ModpackInstanceRequest,
 ) -> Result<crate::pack_update::PackUpdatePlan, CommandError> {
     let managed = managed_paths(&app)?;
@@ -3617,9 +3552,8 @@ pub struct ModpackUpdateApproval {
 /// Apply one reviewed pack reconciliation. The plan is re-derived natively
 /// and must still match the reviewed fingerprint; conflict resolutions are
 /// validated against the fresh classification.
-#[tauri::command]
 pub async fn apply_modpack_update(
-    app: AppHandle,
+    app: Host,
     request: ModpackUpdateApproval,
 ) -> Result<InstanceSummary, CommandError> {
     let managed = managed_paths(&app)?;
@@ -3662,9 +3596,8 @@ pub struct ModpackDetails {
     divergences: Vec<crate::pack_state::PackDivergence>,
 }
 
-#[tauri::command]
 pub fn get_modpack_details(
-    app: AppHandle,
+    app: Host,
     request: ModpackInstanceRequest,
 ) -> Result<ModpackDetails, CommandError> {
     let managed = managed_paths(&app)?;
@@ -3705,9 +3638,8 @@ pub fn get_modpack_details(
     })
 }
 
-#[tauri::command]
 pub async fn preview_modrinth_install(
-    app: AppHandle,
+    app: Host,
     request: ModrinthPreviewRequest,
 ) -> Result<ModrinthPreviewResponse, CommandError> {
     let managed = managed_paths(&app)?;
@@ -3737,9 +3669,8 @@ pub async fn preview_modrinth_install(
     })
 }
 
-#[tauri::command]
 pub async fn install_modrinth(
-    app: AppHandle,
+    app: Host,
     request: ModrinthInstallRequest,
 ) -> Result<Vec<crate::instance_content::ProviderRecord>, CommandError> {
     let managed = managed_paths(&app)?;
@@ -3815,9 +3746,8 @@ async fn install_resolved_provider_plans(
 
 /// One-click UX over the same resolution, fingerprint, and transaction path as
 /// the reviewed install. No search-result metadata becomes install authority.
-#[tauri::command]
 pub async fn quick_install_modrinth(
-    app: AppHandle,
+    app: Host,
     request: ModrinthQuickInstallRequest,
 ) -> Result<Vec<crate::instance_content::ProviderRecord>, CommandError> {
     let managed = managed_paths(&app)?;
@@ -4047,9 +3977,8 @@ fn lifecycle_record<'a>(
     })
 }
 
-#[tauri::command]
 pub fn get_provider_lifecycle(
-    app: AppHandle,
+    app: Host,
     request: InstanceModsRequest,
 ) -> Result<Vec<ProviderLifecycleEntry>, CommandError> {
     let managed = managed_paths(&app)?;
@@ -4074,9 +4003,8 @@ pub fn get_provider_lifecycle(
         .collect())
 }
 
-#[tauri::command]
 pub async fn check_modrinth_update(
-    app: AppHandle,
+    app: Host,
     request: ProviderLifecycleRequest,
 ) -> Result<Option<crate::modrinth::VersionChoice>, CommandError> {
     let managed = managed_paths(&app)?;
@@ -4166,9 +4094,8 @@ pub struct BulkUpdatePreview {
 
 /// Explicit, user-triggered availability check across the managed Modrinth
 /// records of one instance. Read-only; no background polling exists.
-#[tauri::command]
 pub async fn check_instance_updates(
-    app: AppHandle,
+    app: Host,
     request: CheckInstanceUpdatesRequest,
 ) -> Result<crate::content_updates::UpdatesReport, CommandError> {
     let managed = managed_paths(&app)?;
@@ -4186,9 +4113,8 @@ pub async fn check_instance_updates(
 
 /// Change only the persisted pin/release-channel policy of one managed
 /// Modrinth record. Files, bytes, versions and provenance are untouched.
-#[tauri::command]
 pub fn set_provider_update_policy(
-    app: AppHandle,
+    app: Host,
     request: ProviderPolicyRequest,
 ) -> Result<crate::instance_content::ProviderRecord, CommandError> {
     let managed = managed_paths(&app)?;
@@ -4369,9 +4295,8 @@ fn lifecycle_delta_multi(
     delta
 }
 
-#[tauri::command]
 pub async fn preview_modrinth_update(
-    app: AppHandle,
+    app: Host,
     request: ProviderLifecycleRequest,
 ) -> Result<ProviderUpdatePreview, CommandError> {
     let managed = managed_paths(&app)?;
@@ -4391,9 +4316,8 @@ pub async fn preview_modrinth_update(
     })
 }
 
-#[tauri::command]
 pub async fn preview_modrinth_bulk_update(
-    app: AppHandle,
+    app: Host,
     request: ProviderBulkUpdateRequest,
 ) -> Result<BulkUpdatePreview, CommandError> {
     let managed = managed_paths(&app)?;
@@ -4431,9 +4355,8 @@ pub(crate) async fn apply_resolved_updates(
     Ok(())
 }
 
-#[tauri::command]
 pub async fn apply_modrinth_update(
-    app: AppHandle,
+    app: Host,
     request: ProviderLifecycleApproval,
 ) -> Result<(), CommandError> {
     let managed = managed_paths(&app)?;
@@ -4450,9 +4373,8 @@ pub async fn apply_modrinth_update(
     .await
 }
 
-#[tauri::command]
 pub async fn apply_modrinth_bulk_update(
-    app: AppHandle,
+    app: Host,
     request: ProviderBulkUpdateApproval,
 ) -> Result<(), CommandError> {
     let managed = managed_paths(&app)?;
@@ -4512,18 +4434,16 @@ fn resolve_removal_preview(
     Ok((instance, state, preview))
 }
 
-#[tauri::command]
 pub fn preview_provider_removal(
-    app: AppHandle,
+    app: Host,
     request: ProviderLifecycleRequest,
 ) -> Result<ProviderRemovalPreview, CommandError> {
     let managed = managed_paths(&app)?;
     Ok(resolve_removal_preview(&managed, &request)?.2)
 }
 
-#[tauri::command]
 pub fn apply_provider_removal(
-    app: AppHandle,
+    app: Host,
     request: ProviderLifecycleApproval,
 ) -> Result<(), CommandError> {
     let managed = managed_paths(&app)?;
@@ -4572,7 +4492,6 @@ pub struct FabricLoaderVersionDto {
 /// manifest, newest first. Historical types are absent because the launcher
 /// deliberately does not support them. `include_snapshots` is an explicit
 /// filter: snapshots never mix into the ordinary release list.
-#[tauri::command]
 pub async fn list_minecraft_versions(
     include_snapshots: bool,
 ) -> Result<Vec<MinecraftVersionDto>, CommandError> {
@@ -4604,7 +4523,6 @@ pub async fn list_minecraft_versions(
 /// version, newest first, with the official `stable` markers. An
 /// unsupported Minecraft version is Fabric Meta's own answer and surfaces as
 /// `fabric_combination_unsupported`.
-#[tauri::command]
 pub async fn list_fabric_loader_versions(
     minecraft_version: String,
 ) -> Result<Vec<FabricLoaderVersionDto>, CommandError> {
@@ -4630,7 +4548,6 @@ pub async fn list_fabric_loader_versions(
 /// newest first, with the official stability markers. A Minecraft version
 /// no current NeoForge generation addresses surfaces as an empty list —
 /// a truthful no-compatible answer, never a fabricated one.
-#[tauri::command]
 pub async fn list_neoforge_versions(
     minecraft_version: String,
 ) -> Result<Vec<NeoForgeVersionDto>, CommandError> {
@@ -4674,7 +4591,6 @@ pub struct ForgeVersionDto {
 
 /// Lists every Forge version this launcher can install for one exact
 /// Minecraft version, newest build first.
-#[tauri::command]
 pub async fn list_forge_versions(
     minecraft_version: String,
 ) -> Result<Vec<ForgeVersionDto>, CommandError> {
@@ -4725,8 +4641,7 @@ pub struct SelectInstanceRequest {
 
 /// Selects an instance. The selection always refers to a registered
 /// instance; a dangling selection is never written.
-#[tauri::command]
-pub fn select_instance(app: AppHandle, request: SelectInstanceRequest) -> Result<(), CommandError> {
+pub fn select_instance(app: Host, request: SelectInstanceRequest) -> Result<(), CommandError> {
     let _performance = crate::performance::scope(crate::performance::Event::InstanceSelection);
     let managed_paths = managed_paths(&app)?;
     let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
@@ -4759,32 +4674,28 @@ pub struct InstanceProblemDto {
 }
 
 /// Explicit storage maintenance, on a worker and under the existing target locks.
-#[tauri::command]
 pub async fn maintain_installation_backups(
-    app: AppHandle,
+    app: Host,
     request: ValidateInstalledGameRequest,
 ) -> Result<crate::install::retention::RetentionReport, CommandError> {
     let managed = managed_paths(&app)?;
     let instance = crate::instances::InstanceId::new(request.instance_id)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        crate::install::retention::maintain(&managed, &instance)
-    })
-    .await
-    .map_err(|_| {
-        CommandError::new(
-            "storage_io_failure",
-            "Backup maintenance could not finish. Existing recovery data remains protected.",
-        )
-    })?
-    .map_err(CommandError::from)
+    tokio::task::spawn_blocking(move || crate::install::retention::maintain(&managed, &instance))
+        .await
+        .map_err(|_| {
+            CommandError::new(
+                "storage_io_failure",
+                "Backup maintenance could not finish. Existing recovery data remains protected.",
+            )
+        })?
+        .map_err(CommandError::from)
 }
 
 /// Validates one instance completely â€” a read-only, download-free check
 /// covering the game installation, the Aurora installation and artifact
 /// bytes, and cross-component version consistency.
-#[tauri::command]
 pub fn validate_instance(
-    app: AppHandle,
+    app: Host,
     request: ValidateInstalledGameRequest,
 ) -> Result<InstanceValidationDto, CommandError> {
     let managed_paths = managed_paths(&app)?;
@@ -4864,9 +4775,8 @@ fn runtime_status_dto(instance_id: &str, validation: RuntimeValidation) -> Runti
 /// Resolves and deeply validates the exact managed runtime for one
 /// content-ready instance. Validation is read-only; runtime absence is
 /// reported independently and never damages the instance's content status.
-#[tauri::command]
 pub async fn get_instance_runtime_status(
-    app: AppHandle,
+    app: Host,
     request: ValidateInstalledGameRequest,
 ) -> Result<RuntimeStatusDto, CommandError> {
     crate::performance::measure(crate::performance::Event::RuntimeStatus, async {
@@ -4891,9 +4801,8 @@ pub async fn get_instance_runtime_status(
 
 /// Acquires, installs, validates, and executes the exact official runtime for
 /// one content-ready instance. Shared exact runtimes are reused.
-#[tauri::command]
 pub async fn ensure_instance_runtime(
-    app: AppHandle,
+    app: Host,
     request: ValidateInstalledGameRequest,
 ) -> Result<RuntimeStatusDto, CommandError> {
     let managed = managed_paths(&app)?;
@@ -5003,8 +4912,7 @@ pub struct AccountIdRequest {
 }
 
 /// Lists the launcher's accounts with derived status and the selection.
-#[tauri::command]
-pub fn get_accounts(app: AppHandle) -> Result<AccountsStateDto, CommandError> {
+pub fn get_accounts(app: Host) -> Result<AccountsStateDto, CommandError> {
     let managed = managed_paths(&app)?;
     let store = crate::auth::OsCredentialStore;
     let document = crate::auth::accounts::load(&managed.accounts_file())?;
@@ -5035,8 +4943,7 @@ pub fn get_accounts(app: AppHandle) -> Result<AccountsStateDto, CommandError> {
 /// public client ID, optionally overridden through the
 /// `AURORA_MICROSOFT_CLIENT_ID` build-environment variable); without it the
 /// command fails deliberately instead of pretending.
-#[tauri::command]
-pub async fn begin_microsoft_login(app: AppHandle) -> Result<AccountSummaryDto, CommandError> {
+pub async fn begin_microsoft_login(app: Host) -> Result<AccountSummaryDto, CommandError> {
     let managed = managed_paths(&app)?;
     let registration = crate::auth::flow::production_registration()
         .ok_or_else(|| CommandError::from(crate::auth::AuthError::ConfigurationMissing))?;
@@ -5050,10 +4957,10 @@ pub async fn begin_microsoft_login(app: AppHandle) -> Result<AccountSummaryDto, 
         accounts_path: &managed.accounts_file(),
         options: crate::auth::flow::AuthFlowOptions::default(),
         browser: &|url: &str| {
-            // The official Tauri opener: the user's default system browser,
+            // The user's default system browser (the official Tauri opener
+            // in the WebView host, ShellExecute/xdg-open in the native host),
             // exactly the public-client model — no embedded webview.
-            tauri_plugin_opener::open_url(url, None::<&str>)
-                .map_err(|error| crate::auth::flow::BrowserOpenError::new(error.to_string()))
+            crate::host::open_url(url).map_err(crate::auth::flow::BrowserOpenError::new)
         },
     };
 
@@ -5075,7 +4982,6 @@ pub async fn begin_microsoft_login(app: AppHandle) -> Result<AccountSummaryDto, 
 }
 
 /// Cancels the active sign-in, if one exists. Idempotent.
-#[tauri::command]
 pub fn cancel_microsoft_login() -> Result<(), CommandError> {
     crate::auth::flow::cancel_active_login();
     Ok(())
@@ -5083,8 +4989,7 @@ pub fn cancel_microsoft_login() -> Result<(), CommandError> {
 
 /// Selects an account. The selection always refers to a known account; a
 /// dangling selection is never written.
-#[tauri::command]
-pub fn select_account(app: AppHandle, request: SelectAccountRequest) -> Result<(), CommandError> {
+pub fn select_account(app: Host, request: SelectAccountRequest) -> Result<(), CommandError> {
     let managed = managed_paths(&app)?;
     let account_id = request.account_id.trim().to_owned();
     crate::auth::accounts::AccountId::validate(&account_id)?;
@@ -5106,8 +5011,7 @@ pub fn select_account(app: AppHandle, request: SelectAccountRequest) -> Result<(
 /// Removes one account from Aurora: deletes the persisted credential,
 /// the non-secret record, and the cached session. Local removal only — the
 /// Microsoft account session itself is not revoked.
-#[tauri::command]
-pub async fn remove_account(app: AppHandle, request: AccountIdRequest) -> Result<(), CommandError> {
+pub async fn remove_account(app: Host, request: AccountIdRequest) -> Result<(), CommandError> {
     let managed = managed_paths(&app)?;
     let account_id = request.account_id.trim().to_owned();
     crate::auth::accounts::AccountId::validate(&account_id)?;
@@ -5134,9 +5038,8 @@ pub async fn remove_account(app: AppHandle, request: AccountIdRequest) -> Result
 
 /// Restores or refreshes one account's session on demand and reports the
 /// non-secret outcome. The Minecraft token itself stays in Rust.
-#[tauri::command]
 pub async fn refresh_account_session(
-    app: AppHandle,
+    app: Host,
     request: AccountIdRequest,
 ) -> Result<AccountSessionDto, CommandError> {
     let managed = managed_paths(&app)?;
@@ -5183,9 +5086,8 @@ pub struct AccountAvatarRequest {
 
 /// Separate cosmetic command: session secrets and remote locators stay native.
 /// A failed image never participates in Play readiness or launch assembly.
-#[tauri::command]
 pub async fn get_account_avatar(
-    app: AppHandle,
+    app: Host,
     request: AccountAvatarRequest,
 ) -> Result<Option<crate::auth::avatar::HeadAvatar>, CommandError> {
     let managed = managed_paths(&app)?;
@@ -5211,7 +5113,7 @@ pub async fn get_account_avatar(
 }
 
 async fn fetch_account_avatar(
-    app: &AppHandle,
+    app: &Host,
     account_id: &str,
     refresh: bool,
 ) -> Option<crate::auth::avatar::HeadAvatar> {
@@ -5260,10 +5162,7 @@ pub struct CachedAccountAvatarDto {
     pub avatar: crate::auth::avatar::HeadAvatar,
 }
 
-#[tauri::command]
-pub fn get_cached_account_avatars(
-    app: AppHandle,
-) -> Result<Vec<CachedAccountAvatarDto>, CommandError> {
+pub fn get_cached_account_avatars(app: Host) -> Result<Vec<CachedAccountAvatarDto>, CommandError> {
     Ok(crate::auth::avatar::list_cached(&managed_paths(&app)?)
         .into_iter()
         .map(|(account_id, avatar)| CachedAccountAvatarDto { account_id, avatar })
@@ -5300,7 +5199,7 @@ fn cosmetic_error(error: crate::cosmetics::CosmeticsError) -> CommandError {
 }
 
 async fn cosmetic_session(
-    app: &AppHandle,
+    app: &Host,
     account_id: &str,
 ) -> Result<std::sync::Arc<crate::auth::session::MinecraftSession>, CommandError> {
     refresh_account_session(
@@ -5318,9 +5217,8 @@ async fn cosmetic_session(
     })
 }
 
-#[tauri::command]
 pub async fn get_cosmetics(
-    app: AppHandle,
+    app: Host,
     request: AccountIdRequest,
 ) -> Result<crate::cosmetics::CosmeticsState, CommandError> {
     let session = cosmetic_session(&app, &request.account_id).await?;
@@ -5328,10 +5226,7 @@ pub async fn get_cosmetics(
         .await
         .map_err(cosmetic_error)
 }
-#[tauri::command]
-pub fn list_skin_presets(
-    app: AppHandle,
-) -> Result<Vec<crate::cosmetics::SkinPreset>, CommandError> {
+pub fn list_skin_presets(app: Host) -> Result<Vec<crate::cosmetics::SkinPreset>, CommandError> {
     crate::cosmetics::list_presets(&managed_paths(&app)?).map_err(cosmetic_error)
 }
 #[derive(Debug, Deserialize)]
@@ -5340,17 +5235,15 @@ pub struct SkinFavoriteRequest {
     preset_id: String,
     favorite: bool,
 }
-#[tauri::command]
 pub fn set_skin_favorite(
-    app: AppHandle,
+    app: Host,
     request: SkinFavoriteRequest,
 ) -> Result<Vec<crate::cosmetics::SkinPreset>, CommandError> {
     crate::cosmetics::set_favorite(&managed_paths(&app)?, &request.preset_id, request.favorite)
         .map_err(cosmetic_error)
 }
-#[tauri::command]
 pub fn skin_preset_preview(
-    app: AppHandle,
+    app: Host,
     request: PresetIdRequest,
 ) -> Result<crate::auth::avatar::HeadAvatar, CommandError> {
     crate::cosmetics::preset_preview(&managed_paths(&app)?, &request.preset_id)
@@ -5363,9 +5256,8 @@ pub struct SkinPresetImportDto {
     duplicate: bool,
 }
 
-#[tauri::command]
 pub fn import_skin_preset(
-    app: AppHandle,
+    app: Host,
     request: ImportSkinPresetRequest,
 ) -> Result<SkinPresetImportDto, CommandError> {
     let outcome = crate::cosmetics::import_preset(
@@ -5392,9 +5284,8 @@ pub struct SkinPresetChanges {
     name: Option<String>,
     model: Option<crate::cosmetics::SkinModel>,
 }
-#[tauri::command]
 pub fn update_skin_preset(
-    app: AppHandle,
+    app: Host,
     request: UpdateSkinPresetRequest,
 ) -> Result<Vec<crate::cosmetics::SkinPreset>, CommandError> {
     crate::cosmetics::update_preset(
@@ -5410,9 +5301,8 @@ pub fn update_skin_preset(
 pub struct PresetThumbnailDto {
     rgba: Vec<u8>,
 }
-#[tauri::command]
 pub fn skin_preset_thumbnail(
-    app: AppHandle,
+    app: Host,
     request: PresetIdRequest,
 ) -> Result<Option<PresetThumbnailDto>, CommandError> {
     Ok(
@@ -5431,9 +5321,8 @@ pub struct SaveCurrentSkinRequest {
 /// Saves the active account's current skin into the Skin Library through the
 /// existing validated import path. Uses the same authenticated profile the
 /// avatar pipeline trusts; nothing is invented locally.
-#[tauri::command]
 pub async fn save_current_skin(
-    app: AppHandle,
+    app: Host,
     request: SaveCurrentSkinRequest,
 ) -> Result<SkinPresetImportDto, CommandError> {
     let managed = managed_paths(&app)?;
@@ -5482,14 +5371,12 @@ pub async fn save_current_skin(
         duplicate: outcome.duplicate,
     })
 }
-#[tauri::command]
-pub fn remove_skin_preset(app: AppHandle, request: PresetIdRequest) -> Result<(), CommandError> {
+pub fn remove_skin_preset(app: Host, request: PresetIdRequest) -> Result<(), CommandError> {
     crate::cosmetics::remove_preset(&managed_paths(&app)?, &request.preset_id)
         .map_err(cosmetic_error)
 }
-#[tauri::command]
 pub async fn apply_skin_preset(
-    app: AppHandle,
+    app: Host,
     request: ApplySkinPresetRequest,
 ) -> Result<crate::cosmetics::CosmeticsState, CommandError> {
     let session = cosmetic_session(&app, &request.account_id).await?;
@@ -5505,9 +5392,8 @@ pub async fn apply_skin_preset(
     .await
     .map_err(cosmetic_error)
 }
-#[tauri::command]
 pub async fn select_cape(
-    app: AppHandle,
+    app: Host,
     request: SelectCapeRequest,
 ) -> Result<crate::cosmetics::CosmeticsState, CommandError> {
     let session = cosmetic_session(&app, &request.account_id).await?;
@@ -5519,9 +5405,8 @@ pub async fn select_cape(
     .await
     .map_err(cosmetic_error)
 }
-#[tauri::command]
 pub async fn disable_cape(
-    app: AppHandle,
+    app: Host,
     request: AccountIdRequest,
 ) -> Result<crate::cosmetics::CosmeticsState, CommandError> {
     let session = cosmetic_session(&app, &request.account_id).await?;
@@ -5613,9 +5498,8 @@ fn validate_quick_world(
     Ok(())
 }
 
-#[tauri::command]
 pub async fn quick_play_history(
-    app: AppHandle,
+    app: Host,
     request: QuickPlayRequest,
 ) -> Result<LaunchProcessDto, CommandError> {
     use crate::gameplay_history::{Mode, QuickLaunchTarget, ServerTarget};
@@ -5752,7 +5636,7 @@ impl From<crate::launch::boundary::BoundaryError> for CommandError {
     }
 }
 
-fn emit_launch_phase(app: &AppHandle, phase: &'static str) {
+fn emit_launch_phase(app: &Host, phase: &'static str) {
     let _ = app.emit("launch-progress", LaunchProgressEvent { phase });
 }
 
@@ -5933,9 +5817,8 @@ async fn calculate_play_readiness(
 
 /// Returns the complete Rust-owned, non-secret Play decision for the
 /// selected instance/account pair.
-#[tauri::command]
 pub async fn get_play_readiness(
-    app: AppHandle,
+    app: Host,
     request: LaunchReadinessRequest,
 ) -> Result<PlayReadinessDto, CommandError> {
     crate::performance::measure(crate::performance::Event::Readiness, async {
@@ -5948,7 +5831,6 @@ pub async fn get_play_readiness(
 
 /// Returns process-local state only. It never reconstructs process truth by
 /// name and never claims a process survived a launcher restart.
-#[tauri::command]
 pub fn get_launch_state(
     request: ValidateInstalledGameRequest,
 ) -> Result<LaunchProcessDto, CommandError> {
@@ -5958,16 +5840,15 @@ pub fn get_launch_state(
 
 /// Checks all preconditions, obtains a Rust-only session, assembles the exact
 /// argument vector, and starts supervised Minecraft without a shell.
-#[tauri::command]
 pub async fn play_instance(
-    app: AppHandle,
+    app: Host,
     request: PlayRequest,
 ) -> Result<LaunchProcessDto, CommandError> {
     play_instance_with_target(app, request, None).await
 }
 
 async fn play_instance_with_target(
-    app: AppHandle,
+    app: Host,
     request: PlayRequest,
     quick_target: Option<crate::gameplay_history::QuickLaunchTarget>,
 ) -> Result<LaunchProcessDto, CommandError> {
@@ -6316,7 +6197,7 @@ pub struct UpdateOverviewDto {
     startup_check_done: bool,
 }
 
-fn update_overview(app: &AppHandle) -> Result<UpdateOverviewDto, CommandError> {
+fn update_overview(app: &Host) -> Result<UpdateOverviewDto, CommandError> {
     let managed = managed_paths(app)?;
     let config = crate::config::load(&managed.config_file())?.unwrap_or_default();
     let selected = config.selected_instance_id().map(|id| id.to_string());
@@ -6344,7 +6225,7 @@ fn update_overview(app: &AppHandle) -> Result<UpdateOverviewDto, CommandError> {
     });
     Ok(UpdateOverviewDto {
         launcher: launcher_updates::LauncherUpdateStatus {
-            installed_version: app.package_info().version.to_string(),
+            installed_version: app.version().to_owned(),
             availability: state
                 .launcher
                 .clone()
@@ -6368,10 +6249,7 @@ fn update_overview(app: &AppHandle) -> Result<UpdateOverviewDto, CommandError> {
 /// One bounded update check across both domains. Startup checks run at most
 /// once per process; manual checks re-run on demand. Checking never
 /// installs anything and never blocks the launcher on update services.
-async fn run_update_check(
-    app: &AppHandle,
-    startup: bool,
-) -> Result<UpdateOverviewDto, CommandError> {
+async fn run_update_check(app: &Host, startup: bool) -> Result<UpdateOverviewDto, CommandError> {
     static CHECK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
     let _check = CHECK
         .get_or_init(|| tokio::sync::Mutex::new(()))
@@ -6424,8 +6302,7 @@ async fn run_update_check(
 /// The single post-startup update check. Bounded, once per process,
 /// non-fatal: the launcher stays fully usable when update services are
 /// unreachable.
-#[tauri::command]
-pub async fn startup_update_check(app: AppHandle) -> Result<UpdateOverviewDto, CommandError> {
+pub async fn startup_update_check(app: Host) -> Result<UpdateOverviewDto, CommandError> {
     crate::performance::measure(
         crate::performance::Event::StartupUpdateCheck,
         run_update_check(&app, true),
@@ -6434,8 +6311,7 @@ pub async fn startup_update_check(app: AppHandle) -> Result<UpdateOverviewDto, C
 }
 
 /// The explicit user-triggered check across both domains.
-#[tauri::command]
-pub async fn check_for_updates(app: AppHandle) -> Result<UpdateOverviewDto, CommandError> {
+pub async fn check_for_updates(app: Host) -> Result<UpdateOverviewDto, CommandError> {
     crate::performance::measure(
         crate::performance::Event::ManualUpdateCheck,
         run_update_check(&app, false),
@@ -6444,8 +6320,7 @@ pub async fn check_for_updates(app: AppHandle) -> Result<UpdateOverviewDto, Comm
 }
 
 /// The current overview without performing any network work.
-#[tauri::command]
-pub fn get_update_overview(app: AppHandle) -> Result<UpdateOverviewDto, CommandError> {
+pub fn get_update_overview(app: Host) -> Result<UpdateOverviewDto, CommandError> {
     update_overview(&app)
 }
 
@@ -6457,9 +6332,8 @@ pub struct PreviewClientUpdateRequest {
 
 /// The read-only, fingerprinted Aurora Client update preview. Fresh
 /// published metadata is fetched; nothing on the instance changes.
-#[tauri::command]
 pub async fn preview_client_update(
-    app: AppHandle,
+    app: Host,
     request: PreviewClientUpdateRequest,
 ) -> Result<crate::updates::client::ClientUpdatePreview, CommandError> {
     crate::performance::measure(crate::performance::Event::ClientPreviewCommand, async {
@@ -6496,9 +6370,8 @@ struct ClientUpdateProgressEvent {
 /// manifest is re-fetched and the fingerprint re-derived: a changed world
 /// refuses the stale plan before any mutation. Progress is emitted as real
 /// transaction phases.
-#[tauri::command]
 pub async fn apply_client_update(
-    app: AppHandle,
+    app: Host,
     request: ApplyClientUpdateRequest,
 ) -> Result<InstanceSummary, CommandError> {
     let managed = managed_paths(&app)?;
@@ -6569,9 +6442,8 @@ pub struct LauncherUpdateDownloadRequest {
 
 /// Downloads the offered launcher update after re-validating the offer.
 /// Real progress only: byte counts come from the updater's own callbacks.
-#[tauri::command]
 pub async fn launcher_update_download(
-    app: AppHandle,
+    app: Host,
     request: LauncherUpdateDownloadRequest,
 ) -> Result<launcher_updates::LauncherUpdateStatus, CommandError> {
     if crate::updates::begin_transaction(CheckDomain::Launcher)
@@ -6617,9 +6489,8 @@ pub struct LauncherUpdateInstallRequest {
 /// Installs the downloaded, signature-verified launcher update. On Windows
 /// the verified installer launches and the application exits as part of
 /// the install — the UI presents that honestly before invoking this.
-#[tauri::command]
 pub async fn launcher_update_install(
-    app: AppHandle,
+    app: Host,
     request: LauncherUpdateInstallRequest,
 ) -> Result<launcher_updates::LauncherUpdateStatus, CommandError> {
     if crate::updates::begin_transaction(CheckDomain::Launcher)
@@ -7814,3 +7685,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(feature = "tauri-host")]
+#[path = "application_tauri.rs"]
+pub(crate) mod tauri_commands;

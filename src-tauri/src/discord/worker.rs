@@ -8,7 +8,6 @@ use std::{
     sync::{Mutex, OnceLock},
     time::Duration,
 };
-use tauri::Emitter;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
@@ -208,7 +207,7 @@ impl<T: Transport> Worker<T> {
         self.transport.disconnect();
     }
 }
-pub fn initialize(app: tauri::AppHandle, preferences: DiscordPreferences) {
+pub fn initialize(app: crate::host::Host, preferences: DiscordPreferences) {
     let (wake, mut gameplay_wake) = mpsc::channel(1);
     let _ = GAMEPLAY_WAKE.set(wake);
     let (sender, mut receiver) = mpsc::unbounded_channel();
@@ -216,7 +215,8 @@ pub fn initialize(app: tauri::AppHandle, preferences: DiscordPreferences) {
         return;
     }
     status().lock().unwrap().preferences = preferences.clone();
-    tauri::async_runtime::spawn(async move {
+    let host = app.clone();
+    host.spawn(async move {
         let mut worker = Worker::new(Native::default(), preferences);
         loop {
             let mut reconnect = false;

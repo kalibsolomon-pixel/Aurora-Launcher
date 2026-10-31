@@ -13,5 +13,7 @@ fn main() {
             "private-candidate requires src-tauri/tauri.private.conf.json; use the private build script"
         );
     }
-    tauri_build::build()
+    // The native host builds the launcher core without Tauri.
+    #[cfg(feature = "tauri-host")]
+    tauri_build::build();
 }

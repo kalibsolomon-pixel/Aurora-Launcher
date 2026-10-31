@@ -1,5 +1,6 @@
 //! P0.2 research probes. Ordinary builds compile these calls to no-ops.
 //! No probe accepts strings, paths, identities, arguments, errors or secrets.
+#![cfg_attr(not(feature = "tauri-host"), allow(dead_code))]
 use std::future::Future;
 
 #[cfg_attr(not(feature = "performance-p0-2"), allow(dead_code))]
@@ -100,6 +101,7 @@ pub(crate) enum ProbeError {
 
 // Separate research entry points keep all ordinary command DTOs/signatures
 // unchanged. Each delegates to exactly the same authoritative implementation.
+#[cfg(feature = "tauri-host")]
 #[tauri::command]
 pub(crate) async fn performance_readiness(
     app: tauri::AppHandle,
@@ -108,27 +110,9 @@ pub(crate) async fn performance_readiness(
 ) -> Result<crate::application::PlayReadinessDto, ProbeError> {
     #[cfg(feature = "performance-p0-2")]
     {
-        enabled::measure_context(probe, crate::application::get_play_readiness(app, request))
-            .await
-            .map_err(ProbeError::Authoritative)
-    }
-    #[cfg(not(feature = "performance-p0-2"))]
-    {
-        let _ = (app, request, probe);
-        Err(ProbeError::Disabled)
-    }
-}
-#[tauri::command]
-pub(crate) async fn performance_runtime_status(
-    app: tauri::AppHandle,
-    request: crate::application::ValidateInstalledGameRequest,
-    probe: Probe,
-) -> Result<crate::application::RuntimeStatusDto, ProbeError> {
-    #[cfg(feature = "performance-p0-2")]
-    {
         enabled::measure_context(
             probe,
-            crate::application::get_instance_runtime_status(app, request),
+            crate::application::get_play_readiness(crate::host::Host::from_tauri(&app), request),
         )
         .await
         .map_err(ProbeError::Authoritative)
@@ -139,6 +123,32 @@ pub(crate) async fn performance_runtime_status(
         Err(ProbeError::Disabled)
     }
 }
+#[cfg(feature = "tauri-host")]
+#[tauri::command]
+pub(crate) async fn performance_runtime_status(
+    app: tauri::AppHandle,
+    request: crate::application::ValidateInstalledGameRequest,
+    probe: Probe,
+) -> Result<crate::application::RuntimeStatusDto, ProbeError> {
+    #[cfg(feature = "performance-p0-2")]
+    {
+        enabled::measure_context(
+            probe,
+            crate::application::get_instance_runtime_status(
+                crate::host::Host::from_tauri(&app),
+                request,
+            ),
+        )
+        .await
+        .map_err(ProbeError::Authoritative)
+    }
+    #[cfg(not(feature = "performance-p0-2"))]
+    {
+        let _ = (app, request, probe);
+        Err(ProbeError::Disabled)
+    }
+}
+#[cfg(feature = "tauri-host")]
 #[tauri::command]
 pub(crate) async fn performance_play(
     app: tauri::AppHandle,
@@ -147,9 +157,12 @@ pub(crate) async fn performance_play(
 ) -> Result<crate::application::LaunchProcessDto, ProbeError> {
     #[cfg(feature = "performance-p0-2")]
     {
-        enabled::measure_context(probe, crate::application::play_instance(app, request))
-            .await
-            .map_err(ProbeError::Authoritative)
+        enabled::measure_context(
+            probe,
+            crate::application::play_instance(crate::host::Host::from_tauri(&app), request),
+        )
+        .await
+        .map_err(ProbeError::Authoritative)
     }
     #[cfg(not(feature = "performance-p0-2"))]
     {
@@ -158,6 +171,7 @@ pub(crate) async fn performance_play(
     }
 }
 
+#[cfg(feature = "tauri-host")]
 #[tauri::command]
 pub(crate) fn performance_mark(
     event: FrontendEvent,

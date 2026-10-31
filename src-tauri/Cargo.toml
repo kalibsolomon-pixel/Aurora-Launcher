@@ -15,18 +15,30 @@ name = "aurora_launcher_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2", features = [], optional = true }
 
 [features]
+# The Tauri/WebView host (the production application). Disabling default
+# features builds the host-neutral launcher core used by the native host.
+default = ["tauri-host"]
+tauri-host = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-opener", "dep:tauri-plugin-updater"]
 # Local side-by-side candidate only; requires the matching Tauri overlay.
 private-candidate = []
 # Explicit research build only; absent from ordinary development/release builds.
 performance-p0-2 = []
+# Native-host acceptance builds only: honor AURORA_DIAGNOSTIC_DATA_ROOT in
+# release so measurements use a disposable root. Never enabled for distribution.
+disposable-data-root = []
 # Opt-in, debug-only real desktop fault acceptance; never enabled by normal builds.
 f3ra-desktop-acceptance = []
 
+[[bin]]
+name = "aurora-launcher"
+path = "src/main.rs"
+required-features = ["tauri-host"]
+
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = [], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.13", default-features = false, features = [
@@ -50,7 +62,7 @@ sha2 = "0.10"
 # Phase 7's `process` + `time` bound structured managed-Java diagnostics;
 # Phase 8's `macros` provides the `select!` used to race the OAuth callback
 # receiver against login cancellation and timeout.
-tokio = { version = "1", default-features = false, features = ["fs", "io-util", "macros", "net", "process", "rt", "sync", "time"] }
+tokio = { version = "1", default-features = false, features = ["fs", "io-util", "macros", "net", "process", "rt", "rt-multi-thread", "sync", "time"] }
 url = "2"
 # Instance identifier generation (Phase 6): opaque, collision-resistant UUIDv4
 # in the canonical simple (hyphen-less) lowercase-hex form. Focused and
@@ -69,7 +81,7 @@ base64ct = { version = "1", features = ["alloc"] }
 # System-browser opening for OAuth (Phase 8): the official Tauri 2 opener
 # plugin; only its synchronous free functions are used from Rust, so no
 # frontend capability is granted.
-tauri-plugin-opener = "2"
+tauri-plugin-opener = { version = "2", optional = true }
 # ZIP-only archive support (Phase 5): Minecraft native artifacts are ZIP/JAR
 # files. Focused maintained implementation (zip-rs); `deflate` covers the
 # compression real native jars use, everything else stays off.
@@ -85,7 +97,7 @@ semver = "1"
 # update manifests (minisign-style pubkey trust), verified downloads, and the
 # platform install lifecycle. >= 2.12 required (CVE-2026-95624 fixed there);
 # only the Rust API is used, so no frontend capability is granted.
-tauri-plugin-updater = "2.12"
+tauri-plugin-updater = { version = "2.12", optional = true }
 image-webp = "0.2.4"
 # Real Modrinth GIF icons normalize to one static PNG in the existing isolated
 # cosmetic worker. No animation, quantizer or general image framework is needed.
@@ -115,11 +127,15 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_SystemInformation",
     "Win32_System_Diagnostics_Debug",
 ] }
+# `std` provides OsStr conversions; Tauri enabled it implicitly before the
+# native host could build the core without Tauri.
 windows = { version = "0.61", default-features = false, features = [
+    "std",
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
     "Win32_System_Com",
     "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
 ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]

@@ -19,7 +19,7 @@ impl ManagedPaths {
         // Development acceptance can run the real app against a disposable
         // managed root without ever opening the owner's normal instance data.
         // Release builds have no override.
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "disposable-data-root"))]
         let data_root = std::env::var_os("AURORA_DIAGNOSTIC_DATA_ROOT")
             .map(PathBuf::from)
             .unwrap_or(data_root);
