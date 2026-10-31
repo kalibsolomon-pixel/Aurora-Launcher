@@ -1,0 +1,38 @@
+﻿{
+    "exe":  "C:\\Dev\\aurora-launcher-native\\src-tauri\\target\\release\\aurora-launcher.exe",
+    "pages":  [
+                  "Home",
+                  "Instances",
+                  "Appearance",
+                  "Settings"
+              ],
+    "capturedAt":  "2026-10-31T04:18:58.4921582-04:00",
+    "processCount":  7,
+    "samples":  [
+                    {
+                        "step":  "idle-start",
+                        "workingSetMiB":  398.4,
+                        "privateMiB":  227.5,
+                        "cpuSeconds":  1.3
+                    },
+                    {
+                        "step":  "after-navigation",
+                        "workingSetMiB":  510.4,
+                        "privateMiB":  309.1,
+                        "cpuSeconds":  10.12
+                    },
+                    {
+                        "step":  "settled",
+                        "workingSetMiB":  472.2,
+                        "privateMiB":  256.7,
+                        "cpuSeconds":  10.23
+                    },
+                    {
+                        "step":  "idle-end",
+                        "workingSetMiB":  471.7,
+                        "privateMiB":  245.5,
+                        "cpuSeconds":  10.25
+                    }
+                ],
+    "finalIdleCpuPercent":  0.1
+}

@@ -79,3 +79,26 @@ sanity check, not a release figure.
 
 **Slint 1.18 with the software renderer** (winit backend). Rationale and
 rejected alternatives are in [`FRAMEWORK_DECISION.md`](FRAMEWORK_DECISION.md).
+
+## NATIVE-6: full native launcher vs Tauri (release builds)
+
+Raw JSON: [`evidence/native6/`](evidence/native6/). Same host and probe as
+above; both on empty data roots; 3 interleaved runs (medians).
+
+| Build | Processes | First window | Quiescent | Idle working set | Idle private | GPU dedicated | Idle CPU | Minimized CPU |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Tauri 2 + WebView2 | 7 | 23.4 ms | 1615 ms | 407.2 MiB | 213.0 MiB | 73.6 MiB | 0.20–0.28 % | 0 % (one run 13.7 %) |
+| Native (Slint software) | 1 | 25.3 ms | 874 ms | 106.8 MiB | 85.7 MiB | 0 MiB | 0.00 % | 0.00 % |
+
+First runs after each build (cold-ish, not post-reboot): Tauri 48 ms / 1451 ms,
+native 534 ms / 1361 ms.
+
+Navigation scenario (`native/tools/nav-scenario.ps1`, UIA Invoke on the
+sidebar, 30 cycles): Tauri 398 → 510 MiB working set, settled 472 MiB / 246 MiB
+private, 8.8 s CPU for 120 switches; native 106 → 115 MiB, settled 87 MiB
+private, 0.5 s CPU for 150 switches. Both returned to ≈0 % idle CPU.
+
+Native interaction scenario on a populated root (`native-scenario.ps1`: 120
+navigations, 20 account-dialog cycles, a Discover search with 20 live results):
+private 89.8 → 92.8 MiB, idle CPU 0 % afterwards, UIA dispatch p50 1.1 ms /
+p95 1.9 ms.

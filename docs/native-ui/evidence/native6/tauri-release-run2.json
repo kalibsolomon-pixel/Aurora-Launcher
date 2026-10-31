@@ -1,0 +1,99 @@
+﻿{
+    "label":  "tauri-release",
+    "exe":  "C:\\Dev\\aurora-launcher-native\\src-tauri\\target\\release\\aurora-launcher.exe",
+    "arguments":  [
+
+                  ],
+    "capturedAt":  "2026-10-31T01:45:52.8538136-04:00",
+    "processCount":  7,
+    "processes":  [
+                      {
+                          "pid":  33240,
+                          "name":  "aurora-launcher",
+                          "workingSet":  34439168,
+                          "privateBytes":  7958528,
+                          "cpu":  0.390625,
+                          "peakWorkingSet":  43687936,
+                          "handles":  434,
+                          "threads":  43
+                      },
+                      {
+                          "pid":  28568,
+                          "name":  "msedgewebview2",
+                          "workingSet":  125362176,
+                          "privateBytes":  37781504,
+                          "cpu":  1.03125,
+                          "peakWorkingSet":  125603840,
+                          "handles":  1456,
+                          "threads":  63
+                      },
+                      {
+                          "pid":  17772,
+                          "name":  "msedgewebview2",
+                          "workingSet":  19189760,
+                          "privateBytes":  3538944,
+                          "cpu":  0.03125,
+                          "peakWorkingSet":  19222528,
+                          "handles":  209,
+                          "threads":  12
+                      },
+                      {
+                          "pid":  18716,
+                          "name":  "msedgewebview2",
+                          "workingSet":  97181696,
+                          "privateBytes":  119488512,
+                          "cpu":  0.3125,
+                          "peakWorkingSet":  107749376,
+                          "handles":  1312,
+                          "threads":  49
+                      },
+                      {
+                          "pid":  27208,
+                          "name":  "msedgewebview2",
+                          "workingSet":  36532224,
+                          "privateBytes":  12558336,
+                          "cpu":  0.140625,
+                          "peakWorkingSet":  36761600,
+                          "handles":  339,
+                          "threads":  24
+                      },
+                      {
+                          "pid":  27020,
+                          "name":  "msedgewebview2",
+                          "workingSet":  20029440,
+                          "privateBytes":  7815168,
+                          "cpu":  0.0625,
+                          "peakWorkingSet":  20029440,
+                          "handles":  192,
+                          "threads":  11
+                      },
+                      {
+                          "pid":  4412,
+                          "name":  "msedgewebview2",
+                          "workingSet":  90693632,
+                          "privateBytes":  34234368,
+                          "cpu":  0.203125,
+                          "peakWorkingSet":  129130496,
+                          "handles":  356,
+                          "threads":  32
+                      }
+                  ],
+    "windowVisibleMs":  22.5,
+    "quiescentMs":  1618.7,
+    "idle":  {
+                 "seconds":  21.93,
+                 "workingSetMiB":  403.8,
+                 "privateMiB":  213,
+                 "cpuPercentOfOneCore":  0.214,
+                 "gpuUtilizationPercentMean":  0,
+                 "gpuDedicatedMiB":  73.6,
+                 "gpuSharedMiB":  11.7
+             },
+    "minimized":  {
+                      "seconds":  11.05,
+                      "workingSetMiB":  403.6,
+                      "privateMiB":  191.7,
+                      "cpuPercentOfOneCore":  0,
+                      "gpuUtilizationPercentMean":  0
+                  }
+}

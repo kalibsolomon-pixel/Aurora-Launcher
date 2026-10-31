@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Host-agnostic navigation scenario for either launcher build: idle sample,
   30 cycles through the given navigation destinations (UI Automation Invoke
@@ -34,13 +34,19 @@ function Sample([string] $step) {
 $cond = New-Object System.Windows.Automation.PropertyCondition($A::ProcessIdProperty, $p.Id)
 $window = $A::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $cond)
 function Invoke([string] $name) {
+    # WebView2 builds its accessibility tree lazily; allow a bounded wait.
     $c = New-Object System.Windows.Automation.PropertyCondition($A::NameProperty, $name)
-    foreach ($e in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $c)) {
-        $pattern = $null
-        if ($e.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) { $pattern.Invoke(); return }
+    for ($attempt = 0; $attempt -lt 50; $attempt++) {
+        foreach ($e in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $c)) {
+            $pattern = $null
+            if ($e.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) { $pattern.Invoke(); return }
+        }
+        Start-Sleep -Milliseconds 200
     }
     throw "no invokable '$name'"
 }
+# Any failure closes the exact process this script started.
+trap { & (Join-Path $PSScriptRoot 'close-window.ps1') -ProcessId $p.Id | Out-Null; break }
 $samples = @(Sample 'idle-start')
 for ($i = 0; $i -lt 30; $i++) { foreach ($page in $Pages) { Invoke $page; Start-Sleep -Milliseconds 150 } }
 $samples += Sample 'after-navigation'

@@ -1,0 +1,39 @@
+﻿{
+    "exe":  "C:\\Dev\\aurora-launcher-native\\native\\target\\release\\aurora-native.exe",
+    "pages":  [
+                  "Home",
+                  "Instances",
+                  "Discover",
+                  "Skins",
+                  "Settings"
+              ],
+    "capturedAt":  "2026-10-31T04:16:55.5634444-04:00",
+    "processCount":  1,
+    "samples":  [
+                    {
+                        "step":  "idle-start",
+                        "workingSetMiB":  106.4,
+                        "privateMiB":  85.6,
+                        "cpuSeconds":  0.17
+                    },
+                    {
+                        "step":  "after-navigation",
+                        "workingSetMiB":  114.7,
+                        "privateMiB":  87.7,
+                        "cpuSeconds":  0.66
+                    },
+                    {
+                        "step":  "settled",
+                        "workingSetMiB":  114.5,
+                        "privateMiB":  87.4,
+                        "cpuSeconds":  0.66
+                    },
+                    {
+                        "step":  "idle-end",
+                        "workingSetMiB":  114.4,
+                        "privateMiB":  87.4,
+                        "cpuSeconds":  0.66
+                    }
+                ],
+    "finalIdleCpuPercent":  0
+}

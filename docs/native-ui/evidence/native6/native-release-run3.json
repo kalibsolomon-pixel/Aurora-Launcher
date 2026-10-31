@@ -1,0 +1,37 @@
+﻿{
+    "label":  "native-release",
+    "exe":  "C:\\Dev\\aurora-launcher-native\\native\\target\\release\\aurora-native.exe",
+    "arguments":  [
+
+                  ],
+    "capturedAt":  "2026-10-31T01:48:39.9462244-04:00",
+    "processCount":  1,
+    "processes":  {
+                      "pid":  21872,
+                      "name":  "aurora-native",
+                      "workingSet":  111984640,
+                      "privateBytes":  89817088,
+                      "cpu":  0.296875,
+                      "peakWorkingSet":  173535232,
+                      "handles":  300,
+                      "threads":  12
+                  },
+    "windowVisibleMs":  25.3,
+    "quiescentMs":  863,
+    "idle":  {
+                 "seconds":  21.79,
+                 "workingSetMiB":  106.8,
+                 "privateMiB":  85.7,
+                 "cpuPercentOfOneCore":  0,
+                 "gpuUtilizationPercentMean":  0,
+                 "gpuDedicatedMiB":  0,
+                 "gpuSharedMiB":  0
+             },
+    "minimized":  {
+                      "seconds":  10.9,
+                      "workingSetMiB":  106.8,
+                      "privateMiB":  85.7,
+                      "cpuPercentOfOneCore":  0,
+                      "gpuUtilizationPercentMean":  0
+                  }
+}

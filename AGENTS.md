@@ -184,3 +184,36 @@ mods (Aurora Client, bootstrap Fabric API) keep strict identity. Loader-supplied
 modules come only from the manifest-recorded, digest-verified installed loader
 jar and are validation-only. Do not reintroduce the stricter bundled-version
 rule. See `docs/instance-tiles-icons/README.md`.
+
+## Native host (NATIVE initiative, 2026-10-31)
+
+A native Slint host (`native/`, crate `aurora-native`) runs alongside the
+Tauri/WebView host over the same core. See `NATIVE_UI_MIGRATION_ACCEPTANCE.md`
+and `docs/native-ui/`.
+
+- Launcher operations live in `src-tauri/src/application.rs` and take a
+  `host::Host`, never `tauri::AppHandle`. `application_tauri.rs` holds only thin
+  generated `#[tauri::command]` wrappers; keep behavior out of it. New commands
+  need both a wrapper there and, when the native UI uses them, a typed call in
+  `native/src/api.rs`.
+- `tauri`, `tauri-build` and the opener/updater plugins stay optional behind the
+  default `tauri-host` feature; the core must keep building and testing with
+  `--no-default-features`. Keep `Host` dispatch dynamic so shared code paths
+  never link the WebView runtime into tests or the native host.
+- The native host consumes the serialized DTO contract (the same JSON as
+  `src/lib/backend.ts`) through mirror types; it never reads private core
+  fields and never re-decides readiness, verification or installation.
+- Native presentation is Slint: tokens in `native/ui/theme.slint`, shared
+  controls in `native/ui/components.slint`, one global per domain in
+  `native/ui/state.slint`. Screens do not restyle controls locally.
+- Play readiness deep-verifies installed files: trigger it only when its inputs
+  change or on explicit refresh, never on navigation, and keep at most one
+  check in flight.
+- The native host does not self-update; changing the update authority to a
+  native artifact needs an owner-approved migration
+  (`docs/native-ui/UPDATER_ASSESSMENT.md`).
+- Native acceptance uses `AURORA_DIAGNOSTIC_DATA_ROOT` (debug builds, or release
+  with the `disposable-data-root` feature only). Windows credential targets are
+  global per account: never sign out in a disposable root of an account also
+  used in production.
+

@@ -2,6 +2,18 @@
 
 # Aurora Launcher architecture
 
+## Native host and host-neutral services (2026-10-31)
+
+`application.rs` now implements every operation against `host::Host`
+(local data directory, version, events, task spawning, open path/https URL).
+The Tauri host registers generated wrappers (`application_tauri.rs`) with
+unchanged IPC names, arguments, DTOs, error codes and events. A native Slint
+host (`native/`) builds the same core with `--no-default-features` (no Tauri,
+no WebView2) and is a side-by-side preview: it shares the identifier, data
+directory and schemas, and reports launcher self-update as unavailable.
+Details: `docs/native-ui/ARCHITECTURE.md`; results:
+`NATIVE_UI_MIGRATION_ACCEPTANCE.md`.
+
 ## Java execution eligibility and private candidates (2026-10-19)
 
 `runtime::install::validate_runtime_eligibility` verifies the exact normalized
