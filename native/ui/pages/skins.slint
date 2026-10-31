@@ -1,0 +1,122 @@
+// Skins: the selected account's current skin, the local skin library and
+// owned capes. Every change goes to Minecraft services through Rust; the UI
+// never sees tokens or skin URLs.
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { Icon, Icons } from "../icons.slint";
+import { Button, ButtonKind, IconButton, Group, EmptyState, Spinner, PageTitle, StatusPill, Tone } from "../components.slint";
+import { Skins, SkinRow, CapeRow, Accounts } from "../state.slint";
+
+component Pixels inherits Rectangle {
+    in property <image> picture;
+    in property <bool> present;
+    in property <length> size: 48px;
+    width: size;
+    height: size;
+    border-radius: Theme.radius-sm;
+    background: Theme.hover;
+    clip: true;
+    accessible-role: none;
+    if root.present: Image { width: root.size; height: root.size; source: root.picture; image-rendering: pixelated; }
+}
+
+component PresetLine inherits Rectangle {
+    in property <SkinRow> item;
+    height: 64px;
+    border-radius: Theme.radius-md;
+    background: touch.has-hover ? Theme.hover : Theme.surface;
+    accessible-role: list-item;
+    accessible-label: item.name;
+    accessible-description: item.model;
+    touch := TouchArea { }
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 10px;
+        spacing: 12px;
+        Pixels { y: (parent.height - self.height) / 2; picture: root.item.thumb; present: root.item.has-thumb; size: 40px; }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            Text { text: root.item.name; color: Theme.text; font-size: Theme.text-body; overflow: elide; }
+            Text { text: root.item.model; color: Theme.text-muted; font-size: Theme.text-metadata; }
+        }
+        Button { y: (parent.height - self.height) / 2; text: "Use"; compact: true; enabled: !Skins.busy; accessible-description-text: root.item.name; clicked => { Skins.apply(root.item.id); } }
+        IconButton { y: (parent.height - self.height) / 2; icon: Icons.delete; label: "Remove " + root.item.name + " from the library"; enabled: !Skins.busy; clicked => { Skins.remove(root.item.id); } }
+    }
+}
+
+component CapeLine inherits Rectangle {
+    in property <CapeRow> item;
+    height: 52px;
+    border-radius: Theme.radius-md;
+    background: item.selected ? Theme.accent-soft : Theme.surface;
+    accessible-role: list-item;
+    accessible-label: item.name;
+    accessible-item-selected: item.selected;
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 10px;
+        spacing: 12px;
+        Text { horizontal-stretch: 1; text: root.item.name; color: Theme.text; font-size: Theme.text-body; vertical-alignment: center; overflow: elide; }
+        if root.item.selected: StatusPill { y: (parent.height - self.height) / 2; text: "Wearing"; tone: Tone.accent; }
+        if !root.item.selected: Button { y: (parent.height - self.height) / 2; text: "Wear"; compact: true; enabled: !Skins.busy; accessible-description-text: root.item.name; clicked => { Skins.select-cape(root.item.id); } }
+    }
+}
+
+export component SkinsPage inherits ScrollView {
+    VerticalLayout {
+        padding: Theme.space-6;
+        spacing: Theme.space-4;
+        alignment: start;
+        HorizontalLayout {
+            PageTitle { text: "Skins"; horizontal-stretch: 1; vertical-alignment: center; }
+            if Skins.has-account: IconButton { icon: Icons.refresh; label: "Reload skins and capes"; size: 36px; clicked => { Skins.refresh(); } }
+        }
+        if !Skins.has-account: Rectangle {
+            background: Theme.surface;
+            border-radius: Theme.radius-lg;
+            EmptyState {
+                icon: Icons.person;
+                title: "Sign in to manage skins";
+                message: "Skins and capes belong to your Minecraft account.";
+                HorizontalLayout { alignment: center; Button { text: "Sign in"; kind: ButtonKind.primary; clicked => { Accounts.open-dialog(); } } }
+            }
+        }
+        if Skins.has-account && Skins.loading: HorizontalLayout { alignment: center; padding: Theme.space-5; Spinner { size: 22px; } }
+        if Skins.error != "": Text { text: Skins.error; color: Theme.error; wrap: word-wrap; }
+        if Skins.has-account: Group {
+            title: "Current skin";
+            HorizontalLayout {
+                spacing: Theme.space-4;
+                padding-top: Theme.space-2;
+                Pixels { picture: Skins.current; present: Skins.has-current; size: 72px; }
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    alignment: center;
+                    Text { text: Skins.account-name; color: Theme.text; font-size: Theme.text-section; font-weight: 600; }
+                    Text { text: Skins.has-current ? Skins.current-model + " model" : "Default skin"; color: Theme.text-muted; font-size: Theme.text-metadata; }
+                }
+                if Skins.has-current: Button { y: (parent.height - self.height) / 2; text: "Save to library"; icon: Icons.download; enabled: !Skins.busy; clicked => { Skins.save-current(); } }
+            }
+        }
+        if Skins.has-account: Group {
+            title: "Library";
+            description: Skins.presets.length == 0 ? "Saved skins appear here. Save your current skin to keep it." : "Using a skin uploads it to your Minecraft profile.";
+            VerticalLayout {
+                spacing: 4px;
+                accessible-role: list;
+                for row in Skins.presets: PresetLine { item: row; }
+            }
+        }
+        if Skins.has-account: Group {
+            title: "Capes";
+            description: Skins.capes.length == 0 ? "This account owns no capes." : "";
+            VerticalLayout {
+                spacing: 4px;
+                accessible-role: list;
+                for row in Skins.capes: CapeLine { item: row; }
+            }
+            if Skins.capes.length > 0: HorizontalLayout { alignment: end; Button { text: "Wear no cape"; kind: ButtonKind.ghost; enabled: !Skins.busy; clicked => { Skins.disable-cape(); } } }
+        }
+    }
+}

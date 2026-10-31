@@ -1,0 +1,70 @@
+// Spxctra native design tokens for Aurora Launcher.
+//
+// Values mirror src/app.css (the approved Aurora token set) so both renderers
+// share one visual contract. Surface palettes are set per theme from Rust
+// (native/src/theme.rs); the accent family always comes from the Rust
+// appearance service (`appearance::AccentPalette`), never from literals here.
+
+export global Theme {
+    // Surfaces (Aurora Dark defaults; Rust overwrites per theme).
+    in-out property <color> background: #101116;
+    in-out property <color> sidebar: #0a0b0e;
+    in-out property <color> surface: #16171d;
+    in-out property <color> raised: #1d1f27;
+    in-out property <color> hover: #242631;
+    in-out property <color> pressed: #1a1c24;
+    in-out property <color> sunken: #0d0e13;
+    in-out property <color> border: #24262f;
+    in-out property <color> border-strong: #343743;
+    in-out property <color> text: #edf1fb;
+    in-out property <color> text-secondary: #a7b0c5;
+    in-out property <color> text-muted: #929db4;
+
+    // Accent family (Rust-derived, including validated custom accents).
+    in-out property <color> accent: #8b80ff;
+    in-out property <color> accent-strong: #6f5df2;
+    in-out property <color> accent-hover: #6f63e8;
+    in-out property <color> accent-pressed: #6152e0;
+    in-out property <color> accent-contrast: #ffffff;
+    in-out property <color> accent-soft: #8b80ff24;
+    in-out property <color> accent-outline: #8b80ff8c;
+
+    // Status colors are stable across themes (all themes are dark).
+    out property <color> success: #7ee2b8;
+    out property <color> success-soft: #3aa87a24;
+    out property <color> warning: #ecc36b;
+    out property <color> warning-soft: #cc9e4224;
+    out property <color> error: #ff9a9a;
+    out property <color> error-soft: #c9585824;
+    out property <color> working: #8fb7ff;
+    out property <color> working-soft: #6086d624;
+    out property <color> muted-soft: #848fa81f;
+    out property <color> scrim: #000000a6;
+
+    // Motion: short and purposeful; zero under reduced motion.
+    in-out property <bool> reduce-motion: false;
+    out property <duration> motion-fast: reduce-motion ? 0ms : 90ms;
+    out property <duration> motion-base: reduce-motion ? 0ms : 150ms;
+
+    // Shape and spacing (src/app.css --radius-*, --space-*).
+    out property <length> radius-sm: 6px;
+    out property <length> radius-md: 10px;
+    out property <length> radius-lg: 14px;
+    out property <length> space-1: 4px;
+    out property <length> space-2: 8px;
+    out property <length> space-3: 12px;
+    out property <length> space-4: 16px;
+    out property <length> space-5: 24px;
+    out property <length> space-6: 32px;
+    out property <length> space-7: 48px;
+
+    // Type roles (rem values at 16px).
+    out property <length> text-page-title: 22px;
+    out property <length> text-identity: 16px;
+    out property <length> text-section: 15px;
+    out property <length> text-body: 14px;
+    out property <length> text-secondary-size: 13px;
+    out property <length> text-metadata: 12.5px;
+    out property <length> text-label: 12px;
+    out property <length> control-height: 36px;
+}

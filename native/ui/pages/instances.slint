@@ -1,0 +1,268 @@
+// Instances manages installations; each workspace manages one instance's
+// configuration and content.
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { Icon, Icons } from "../icons.slint";
+import {
+    Button, ButtonKind, IconButton, Glyph, StatusPill, Tone, Toggle, Slider, TextField, Tabs,
+    Group, SettingRow, Divider, EmptyState, Spinner, PageTitle, FocusRing,
+} from "../components.slint";
+import { Instances, ContentRow, InstanceRow } from "../state.slint";
+
+component InstanceListRow inherits Rectangle {
+    in property <InstanceRow> item;
+    callback activated();
+    height: 64px;
+    border-radius: Theme.radius-md;
+    background: touch.has-hover ? Theme.hover : Theme.surface;
+    accessible-role: list-item;
+    accessible-label: root.item.name;
+    accessible-description: root.item.subtitle + ". " + root.item.status;
+    accessible-action-default => { activated(); }
+    forward-focus: focus;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 16px;
+        spacing: 12px;
+        Glyph { y: (parent.height - self.height) / 2; letter: root.item.letter; size: 40px; }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                Text { text: root.item.name; font-size: Theme.text-body; font-weight: 600; color: Theme.text; overflow: elide; horizontal-stretch: 0; }
+                if root.item.selected: Text { text: "Selected on Home"; font-size: Theme.text-label; color: Theme.accent; vertical-alignment: center; horizontal-stretch: 0; }
+            }
+            Text { text: root.item.subtitle; font-size: Theme.text-metadata; color: Theme.text-muted; overflow: elide; }
+        }
+        StatusPill { y: (parent.height - self.height) / 2; text: root.item.status; tone: root.item.tone; }
+        Icon { y: (parent.height - self.height) / 2; path: Icons.chevron; size: 20px; color: Theme.text-muted; }
+    }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); root.activated(); } }
+    focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) { root.activated(); return accept; }
+            reject
+        }
+    }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; }
+}
+
+export component InstancesPage inherits ScrollView {
+    VerticalLayout {
+        padding: Theme.space-6;
+        spacing: Theme.space-4;
+        alignment: start;
+        HorizontalLayout {
+            PageTitle { text: "Instances"; horizontal-stretch: 1; vertical-alignment: center; }
+            Button { text: "New instance"; icon: Icons.add; kind: ButtonKind.primary; clicked => { Instances.create(); } }
+        }
+        if Instances.loading: HorizontalLayout { alignment: center; padding: Theme.space-6; Spinner { size: 24px; } }
+        if !Instances.loading && Instances.rows.length == 0: Rectangle {
+            background: Theme.surface;
+            border-radius: Theme.radius-lg;
+            EmptyState {
+                icon: Icons.instances;
+                title: "No instances";
+                message: "An instance is an isolated Minecraft installation with its own mods, worlds and settings. Your normal .minecraft folder is never used.";
+            }
+        }
+        VerticalLayout {
+            spacing: 6px;
+            accessible-role: list;
+            accessible-label: "Instances";
+            for row in Instances.rows: InstanceListRow { item: row; activated => { Instances.open(row.id); } }
+        }
+    }
+}
+
+component ContentLine inherits Rectangle {
+    in property <ContentRow> item;
+    height: max(56px, layout.preferred-height);
+    border-radius: Theme.radius-md;
+    background: touch.has-hover ? Theme.hover : Theme.surface;
+    accessible-role: list-item;
+    accessible-label: root.item.title;
+    accessible-description: root.item.detail;
+    touch := TouchArea { }
+    layout := HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 10px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 12px;
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+            Text { text: root.item.title; font-size: Theme.text-body; color: root.item.enabled ? Theme.text : Theme.text-muted; overflow: elide; }
+            Text { text: root.item.detail; font-size: Theme.text-metadata; color: Theme.text-muted; overflow: elide; }
+            if root.item.note != "": Text { text: root.item.note; font-size: Theme.text-metadata; color: Theme.warning; wrap: word-wrap; }
+        }
+        if root.item.toggleable: Toggle {
+            y: (parent.height - self.height) / 2;
+            checked: root.item.enabled;
+            label: (root.item.enabled ? "Disable " : "Enable ") + root.item.title;
+            toggled(value) => { Instances.content-toggle(root.item.id, value); }
+        }
+        if root.item.removable: IconButton {
+            y: (parent.height - self.height) / 2;
+            icon: Icons.delete;
+            label: "Remove " + root.item.title;
+            clicked => { Instances.content-remove(root.item.id, root.item.title); }
+        }
+    }
+}
+
+component ConfigurationTab inherits VerticalLayout {
+    spacing: Theme.space-4;
+    Group {
+        title: "Memory";
+        description: Instances.memory-hint;
+        SettingRow {
+            label: "Maximum memory";
+            detail: round(Instances.memory-gib * 2) / 2 + " GB";
+            Slider {
+                width: 260px;
+                minimum: 1;
+                maximum: Instances.memory-max-gib;
+                step: 0.5;
+                label: "Maximum memory in gigabytes";
+                value <=> Instances.memory-gib;
+                changed => { Instances.config-edited(); }
+            }
+        }
+        SettingRow {
+            label: "Java arguments";
+            detail: "Extra JVM arguments. Aurora validates them before launch.";
+            TextField {
+                width: 320px;
+                label: "Additional Java arguments";
+                placeholder: "None";
+                text <=> Instances.jvm-args;
+                edited => { Instances.config-edited(); }
+            }
+        }
+    }
+    Group {
+        title: "Window";
+        SettingRow {
+            label: "Custom game window size";
+            detail: "Otherwise Minecraft chooses its default size.";
+            Toggle { label: "Custom game window size"; checked <=> Instances.custom-window; toggled => { Instances.config-edited(); } }
+        }
+        if Instances.custom-window: SettingRow {
+            label: "Width × height";
+            detail: "100 – 7680 pixels.";
+            HorizontalLayout {
+                spacing: 8px;
+                TextField { width: 96px; label: "Window width"; text <=> Instances.window-width; edited => { Instances.config-edited(); } }
+                Text { text: "×"; color: Theme.text-muted; vertical-alignment: center; }
+                TextField { width: 96px; label: "Window height"; text <=> Instances.window-height; edited => { Instances.config-edited(); } }
+            }
+        }
+    }
+    if Instances.config-error != "": Text { text: Instances.config-error; color: Theme.error; font-size: Theme.text-secondary-size; wrap: word-wrap; }
+    HorizontalLayout {
+        alignment: end;
+        spacing: Theme.space-2;
+        Button { text: "Revert"; kind: ButtonKind.ghost; enabled: Instances.config-dirty && !Instances.config-busy; clicked => { Instances.revert-config(); } }
+        Button { text: "Save"; kind: ButtonKind.primary; enabled: Instances.config-dirty; loading: Instances.config-busy; clicked => { Instances.save-config(); } }
+    }
+    Group {
+        title: "Installation";
+        SettingRow {
+            label: "Health";
+            detail: Instances.health-text;
+            HorizontalLayout {
+                spacing: 8px;
+                Button { text: "Check"; icon: Icons.refresh; loading: Instances.health-busy; clicked => { Instances.validate(); } }
+                if Instances.can-repair: Button { text: "Repair"; kind: ButtonKind.primary; enabled: !Instances.health-busy; clicked => { Instances.repair(); } }
+            }
+        }
+        if Instances.runtime-text != "": SettingRow { label: "Java"; detail: Instances.runtime-text; }
+        SettingRow {
+            label: "Instance folder";
+            detail: "Worlds, mods and settings for this instance.";
+            Button { text: "Open folder"; icon: Icons.folder; clicked => { Instances.open-folder(); } }
+        }
+    }
+    Group {
+        title: "Delete instance";
+        description: "Permanently removes this instance, including its worlds, mods and settings. Shared Java runtimes and downloads are kept.";
+        HorizontalLayout {
+            alignment: end;
+            Button { text: "Delete instance…"; kind: ButtonKind.danger; icon: Icons.delete; enabled: !Instances.installing; clicked => { Instances.delete-start(); } }
+        }
+    }
+}
+
+component ContentTab inherits VerticalLayout {
+    in property <string> noun;
+    spacing: Theme.space-3;
+    HorizontalLayout {
+        spacing: Theme.space-2;
+        TextField {
+            horizontal-stretch: 1;
+            leading-icon: Icons.search;
+            placeholder: "Filter installed " + root.noun;
+            label: "Filter installed " + root.noun;
+            text <=> Instances.content-filter;
+            edited(text) => { Instances.content-filter-changed(text); }
+        }
+        Button { text: "Find more"; icon: Icons.discover; clicked => { Instances.content-discover(); } }
+        IconButton { icon: Icons.folder; label: "Open folder"; size: 36px; clicked => { Instances.content-open-folder(); } }
+        IconButton { icon: Icons.refresh; label: "Refresh"; size: 36px; clicked => { Instances.content-refresh(); } }
+    }
+    if Instances.content-loading: HorizontalLayout { alignment: center; padding: Theme.space-5; Spinner { size: 22px; } }
+    if Instances.content-error != "": Text { text: Instances.content-error; color: Theme.error; wrap: word-wrap; }
+    if !Instances.content-loading && Instances.content.length == 0 && Instances.content-error == "": Rectangle {
+        background: Theme.surface;
+        border-radius: Theme.radius-lg;
+        EmptyState { icon: Icons.extension; title: "Nothing installed"; message: "Use Find more to browse Modrinth, or place files in the instance folder."; }
+    }
+    VerticalLayout {
+        spacing: 4px;
+        accessible-role: list;
+        for row in Instances.content: ContentLine { item: row; }
+    }
+}
+
+export component WorkspacePage inherits ScrollView {
+    VerticalLayout {
+        padding: Theme.space-6;
+        spacing: Theme.space-4;
+        alignment: start;
+        HorizontalLayout {
+            spacing: Theme.space-3;
+            IconButton { y: (parent.height - self.height) / 2; icon: Icons.back; label: "Back to instances"; size: 36px; clicked => { Instances.close-workspace(); } }
+            Glyph { y: (parent.height - self.height) / 2; letter: Instances.letter; size: 48px; }
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                spacing: 2px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    PageTitle { text: Instances.name; overflow: elide; horizontal-stretch: 0; }
+                    IconButton { y: (parent.height - self.height) / 2; icon: Icons.edit; label: "Rename"; size: 28px; clicked => { Instances.rename-start(); } }
+                }
+                Text { text: Instances.subtitle; font-size: Theme.text-secondary-size; color: Theme.text-secondary; overflow: elide; }
+            }
+            StatusPill { y: (parent.height - self.height) / 2; text: Instances.status; tone: Instances.tone; }
+            if !Instances.selected: Button { y: (parent.height - self.height) / 2; text: "Use on Home"; clicked => { Instances.make-selected(); } }
+            Button { y: (parent.height - self.height) / 2; text: "Play"; icon: Icons.play; kind: ButtonKind.primary; enabled: !Instances.installing; clicked => { Instances.play(); } }
+        }
+        Tabs {
+            model: ["Settings", "Mods", "Resource packs", "Shaders"];
+            current <=> Instances.tab;
+            selected(index) => { Instances.tab-changed(index); }
+        }
+        if Instances.tab == 0: ConfigurationTab { }
+        if Instances.tab == 1: ContentTab { noun: "mods"; }
+        if Instances.tab == 2: ContentTab { noun: "resource packs"; }
+        if Instances.tab == 3: ContentTab { noun: "shaders"; }
+    }
+}

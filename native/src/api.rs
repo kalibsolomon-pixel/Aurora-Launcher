@@ -1,0 +1,967 @@
+//! The native host's view of the launcher application services.
+//!
+//! Every operation calls the same `aurora_launcher_lib::application`
+//! function the WebView frontend reaches over IPC, with requests built from
+//! the same camelCase JSON contract (`src/lib/backend.ts`). Responses are
+//! read back through mirror types below, so the native UI depends only on the
+//! documented DTO shapes — never on private Rust internals — and cannot skip
+//! any validation the application layer performs.
+
+use aurora_launcher_lib::application as app;
+use aurora_launcher_lib::host::Host;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+
+/// A structured operation failure (`CommandError` in Rust, `LauncherBackendError` in TS).
+#[derive(Debug, Clone, Deserialize)]
+pub struct ApiError {
+    pub code: String,
+    pub message: String,
+}
+
+impl ApiError {
+    pub fn new(code: &str, message: impl Into<String>) -> Self {
+        Self {
+            code: code.to_owned(),
+            message: message.into(),
+        }
+    }
+}
+
+pub type ApiResult<T> = Result<T, ApiError>;
+
+fn contract(error: serde_json::Error) -> ApiError {
+    ApiError::new(
+        "native_contract_mismatch",
+        format!("Unexpected launcher response: {error}"),
+    )
+}
+
+fn request<R: DeserializeOwned>(value: Value) -> ApiResult<R> {
+    serde_json::from_value(value).map_err(contract)
+}
+
+fn convert<T: Serialize, U: DeserializeOwned>(
+    result: Result<T, app::CommandError>,
+) -> ApiResult<U> {
+    match result {
+        Ok(value) => serde_json::to_value(value)
+            .and_then(serde_json::from_value)
+            .map_err(contract),
+        Err(error) => Err(serde_json::to_value(error)
+            .and_then(serde_json::from_value)
+            .unwrap_or_else(|_| {
+                ApiError::new("backend_unavailable", "The launcher operation failed.")
+            })),
+    }
+}
+
+/// Runs a synchronous (filesystem-bound) application function off the UI
+/// and async worker threads.
+async fn blocking<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> ApiResult<T> {
+    tokio::task::spawn_blocking(work).await.map_err(|_| {
+        ApiError::new(
+            "backend_unavailable",
+            "The launcher worker did not complete.",
+        )
+    })
+}
+
+// ---------------------------------------------------------------- mirrors
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplicationStatus {
+    pub launcher_version: String,
+    pub managed_data_root: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherState {
+    pub config: ConfigSummary,
+    pub instances: Vec<InstanceSummary>,
+    #[serde(default)]
+    pub platform_capabilities: Vec<PlatformCapability>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigSummary {
+    pub selected_instance_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformCapability {
+    pub kind: String,
+    pub can_create: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceSummary {
+    pub id: String,
+    pub display_name: String,
+    pub state: String,
+    pub aurora: Option<AuroraPin>,
+    pub platform: Platform,
+    #[serde(default)]
+    pub pack: Option<PackPin>,
+    pub minecraft_version: String,
+    pub configuration: InstanceConfiguration,
+    #[serde(default)]
+    pub recovery: Option<Recovery>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AuroraPin {
+    pub channel: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Platform {
+    pub kind: String,
+    #[serde(default)]
+    pub version: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PackPin {
+    pub name: String,
+    pub pack_version: String,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Recovery {
+    pub status: String,
+    pub message: String,
+}
+
+/// The desired configuration. `loader` and unknown fields round-trip as JSON
+/// so an edit never drops configuration the native UI does not render.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceConfiguration {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub performance_mode: Option<String>,
+    pub minecraft_version: String,
+    pub aurora_enabled: bool,
+    pub loader: Value,
+    pub memory_mib: u32,
+    pub additional_jvm_arguments: String,
+    pub window: Option<WindowSize>,
+    #[serde(flatten)]
+    pub other: serde_json::Map<String, Value>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq)]
+pub struct WindowSize {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl InstanceSummary {
+    /// "Fabric 0.17.3", "Vanilla", … as the WebView UI words it.
+    pub fn platform_label(&self) -> String {
+        let name = match self.platform.kind.as_str() {
+            "vanilla" => "Vanilla",
+            "fabric" => "Fabric",
+            "forge" => "Forge",
+            "neoForge" => "NeoForge",
+            "quilt" => "Quilt",
+            other => other,
+        };
+        match &self.platform.version {
+            Some(version) => format!("{name} {version}"),
+            None => name.to_owned(),
+        }
+    }
+
+    pub fn subtitle(&self) -> String {
+        let mut parts = vec![
+            format!("Minecraft {}", self.minecraft_version),
+            self.platform_label(),
+        ];
+        if let Some(aurora) = &self.aurora {
+            parts.push(format!("Aurora {}", aurora.version));
+        }
+        if let Some(pack) = &self.pack {
+            parts.push(format!("{} {}", pack.name, pack.pack_version));
+        }
+        parts.join(" · ")
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayReadiness {
+    pub ready: bool,
+    pub instance_id: String,
+    pub account_id: Option<String>,
+    pub account_name: Option<String>,
+    pub instance_status: String,
+    pub runtime_status: String,
+    pub account_status: String,
+    pub process_status: String,
+    pub blockers: Vec<PlayBlocker>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct PlayBlocker {
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchProcess {
+    pub instance_id: String,
+    pub status: String,
+    pub process_id: Option<u32>,
+    pub exit_code: Option<i32>,
+    pub message: Option<String>,
+    #[serde(default)]
+    pub diagnostic: Option<LaunchDiagnostic>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct LaunchDiagnostic {
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeStatus {
+    pub status: String,
+    pub component: String,
+    pub required_major_version: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceValidation {
+    pub status: String,
+    pub problems: Vec<InstanceProblem>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct InstanceProblem {
+    pub component: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountsState {
+    pub accounts: Vec<AccountSummary>,
+    pub selected_account_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountSummary {
+    pub account_id: String,
+    pub minecraft_name: String,
+    pub status: String,
+}
+
+/// A decoded 8×8 (or larger) head avatar as RGBA bytes.
+#[derive(Debug, Clone, Deserialize)]
+pub struct HeadAvatar {
+    pub rgba: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedAvatar {
+    pub account_id: String,
+    pub avatar: HeadAvatar,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Appearance {
+    pub aurora_motion_speed: u8,
+    pub background: String,
+    pub theme: String,
+    pub accent: Value,
+    pub palette: AccentPalette,
+    pub themes: Vec<ThemeOption>,
+    pub accents: Vec<AccentOption>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccentPalette {
+    pub accent: String,
+    pub accent_strong: String,
+    pub accent_hover: String,
+    pub accent_pressed: String,
+    pub accent_contrast: String,
+    pub accent_soft: String,
+    pub accent_outline: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ThemeOption {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AccentOption {
+    pub id: String,
+    pub label: String,
+    pub hex: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopIntegration {
+    pub supported: bool,
+    pub manageable: bool,
+    pub desktop_shortcut: ShortcutStatus,
+    pub start_menu_shortcut: ShortcutStatus,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShortcutStatus {
+    pub state: String,
+    pub managed_by: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateOverview {
+    pub launcher: LauncherUpdateStatus,
+    pub client: Value,
+    pub client_instance_id: Option<String>,
+    pub client_instance_name: Option<String>,
+    pub client_installed_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherUpdateStatus {
+    pub installed_version: String,
+    pub availability: Value,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MinecraftVersion {
+    pub id: String,
+    pub version_type: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuroraCompatibility {
+    pub available: bool,
+    pub reason: String,
+    pub version: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryAdvice {
+    pub recommended_mib: Option<u32>,
+    pub explanation: String,
+    pub facts: HostFacts,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostFacts {
+    pub total_mib: Option<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModInventory {
+    pub entries: Vec<ModEntry>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModEntry {
+    pub entry_id: String,
+    pub file_name: String,
+    pub display_name: String,
+    pub enabled: bool,
+    pub ownership: String,
+    #[serde(default)]
+    pub metadata: Option<ModMetadata>,
+    #[serde(default)]
+    pub warnings: Vec<Warning>,
+    pub can_toggle: bool,
+    pub can_remove: bool,
+    #[serde(default)]
+    pub removal_blocked_reason: Option<String>,
+    #[serde(default)]
+    pub action_blocked_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModMetadata {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub authors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Warning {
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContentInventory {
+    pub entries: Vec<ContentEntry>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContentEntry {
+    pub entry_id: String,
+    pub file_name: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub size_bytes: Option<u64>,
+    #[serde(default)]
+    pub warnings: Vec<Warning>,
+    pub management: ContentManagement,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContentManagement {
+    pub can_remove: bool,
+    pub can_toggle: bool,
+    pub active: Option<bool>,
+    pub activation_managed_in_game: bool,
+    #[serde(default)]
+    pub removal_blocked_reason: Option<String>,
+    #[serde(default)]
+    pub toggle_blocked_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchPage {
+    pub total_hits: u32,
+    pub hits: Vec<ProjectSummary>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSummary {
+    pub project_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub summary: String,
+    #[serde(default)]
+    pub author: String,
+    #[serde(default)]
+    pub downloads: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Cosmetics {
+    pub current_skin_model: Option<String>,
+    pub has_current_skin: bool,
+    pub current_skin: Option<HeadAvatar>,
+    pub capes: Vec<Cape>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Cape {
+    pub id: String,
+    pub name: String,
+    pub selected: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SkinPreset {
+    pub id: String,
+    pub name: String,
+    pub model: String,
+    #[serde(default)]
+    pub favorite: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Thumbnail {
+    pub rgba: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientUpdatePreview {
+    pub installed_version: String,
+    pub outcome: String,
+    pub candidate: Option<ClientUpdateCandidate>,
+    pub blockers: Vec<String>,
+    pub warnings: Vec<String>,
+    pub fingerprint: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientUpdateCandidate {
+    pub version: String,
+    pub notes: Option<String>,
+    pub minecraft_version: String,
+}
+
+// ------------------------------------------------------------- operations
+
+pub fn application_status(host: &Host) -> ApiResult<ApplicationStatus> {
+    convert(app::get_application_status(host.clone()))
+}
+
+pub async fn launcher_state(host: Host) -> ApiResult<LauncherState> {
+    convert(app::get_launcher_state(host).await)
+}
+
+pub async fn select_instance(host: Host, instance_id: String) -> ApiResult<()> {
+    let request = request(json!({ "instanceId": instance_id }))?;
+    blocking(move || convert::<_, ()>(app::select_instance(host, request))).await?
+}
+
+pub async fn play_readiness(
+    host: Host,
+    instance_id: String,
+    account_id: Option<String>,
+) -> ApiResult<PlayReadiness> {
+    let request = request(json!({ "instanceId": instance_id, "accountId": account_id }))?;
+    convert(app::get_play_readiness(host, request).await)
+}
+
+pub async fn launch_state(instance_id: String) -> ApiResult<LaunchProcess> {
+    let request = request(json!({ "instanceId": instance_id }))?;
+    blocking(move || convert(app::get_launch_state(request))).await?
+}
+
+pub async fn play(host: Host, instance_id: String, account_id: String) -> ApiResult<LaunchProcess> {
+    let request = request(json!({ "instanceId": instance_id, "accountId": account_id }))?;
+    convert(app::play_instance(host, request).await)
+}
+
+pub async fn runtime_status(host: Host, instance_id: String) -> ApiResult<RuntimeStatus> {
+    let request = request(json!({ "instanceId": instance_id }))?;
+    convert(app::get_instance_runtime_status(host, request).await)
+}
+
+pub async fn ensure_runtime(host: Host, instance_id: String) -> ApiResult<RuntimeStatus> {
+    let request = request(json!({ "instanceId": instance_id }))?;
+    convert(app::ensure_instance_runtime(host, request).await)
+}
+
+pub async fn validate_instance(host: Host, instance_id: String) -> ApiResult<InstanceValidation> {
+    let request = request(json!({ "instanceId": instance_id }))?;
+    blocking(move || convert(app::validate_instance(host, request))).await?
+}
+
+pub async fn retry_install(host: Host, instance_id: String) -> ApiResult<InstanceSummary> {
+    let request = request(json!({ "instanceId": instance_id }))?;
+    convert(app::retry_instance_install(host, request).await)
+}
+
+pub async fn install_configuration(host: Host, instance_id: String) -> ApiResult<InstanceSummary> {
+    let request = request(json!({ "instanceId": instance_id }))?;
+    convert(app::install_instance_configuration(host, request).await)
+}
+
+pub async fn rename_instance(
+    host: Host,
+    instance_id: String,
+    expected: String,
+    name: String,
+) -> ApiResult<InstanceSummary> {
+    let request = request(
+        json!({ "instanceId": instance_id, "newDisplayName": name, "expectedDisplayName": expected }),
+    )?;
+    blocking(move || convert(app::rename_instance(host, request))).await?
+}
+
+pub async fn update_configuration(
+    host: Host,
+    instance_id: String,
+    expected: InstanceConfiguration,
+    configuration: InstanceConfiguration,
+) -> ApiResult<InstanceSummary> {
+    let request = request(json!({
+        "instanceId": instance_id,
+        "configuration": configuration,
+        "expectedConfiguration": expected,
+    }))?;
+    blocking(move || convert(app::update_instance_configuration(host, request))).await?
+}
+
+pub async fn performance_advice(host: Host, instance_id: String) -> ApiResult<MemoryAdvice> {
+    let request = request(json!({ "instanceId": instance_id, "mode": Value::Null }))?;
+    blocking(move || convert(app::get_instance_performance_advice(host, request))).await?
+}
+
+pub async fn delete_instance(
+    host: Host,
+    instance_id: String,
+    confirmed_name: String,
+) -> ApiResult<()> {
+    let request = request(json!({ "instanceId": instance_id, "confirmedName": confirmed_name }))?;
+    convert::<_, ()>(app::delete_instance(host, request).await)
+}
+
+pub async fn open_instance_folder(host: Host, instance_id: String) -> ApiResult<()> {
+    let request = request(json!({ "instanceId": instance_id }))?;
+    blocking(move || convert::<_, ()>(app::open_instance_folder(host, request))).await?
+}
+
+pub async fn create_instance(
+    host: Host,
+    name: String,
+    minecraft: String,
+    loader: Value,
+    aurora: bool,
+) -> ApiResult<InstanceSummary> {
+    let request = request(json!({
+        "displayName": name,
+        "minecraftVersion": minecraft,
+        "loader": loader,
+        "auroraEnabled": aurora,
+    }))?;
+    convert(app::create_instance(host, request).await)
+}
+
+pub async fn aurora_compatibility(
+    minecraft: String,
+    loader: Value,
+) -> ApiResult<AuroraCompatibility> {
+    let request = request(json!({ "minecraftVersion": minecraft, "loader": loader }))?;
+    blocking(move || convert(app::get_aurora_compatibility(request))).await?
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuroraRelease {
+    pub minecraft_version: String,
+}
+
+pub async fn aurora_releases() -> ApiResult<Vec<AuroraRelease>> {
+    blocking(|| convert(app::list_aurora_releases())).await?
+}
+
+pub async fn minecraft_versions(include_snapshots: bool) -> ApiResult<Vec<MinecraftVersion>> {
+    convert(app::list_minecraft_versions(include_snapshots).await)
+}
+
+pub async fn instance_mods(host: Host, instance_id: String) -> ApiResult<ModInventory> {
+    let request = request(json!({ "instanceId": instance_id }))?;
+    convert(app::get_instance_mods(host, request).await)
+}
+
+pub async fn set_mod_enabled(
+    host: Host,
+    instance_id: String,
+    entry_id: String,
+    enabled: bool,
+) -> ApiResult<ModInventory> {
+    let request =
+        request(json!({ "instanceId": instance_id, "entryId": entry_id, "enabled": enabled }))?;
+    convert(app::set_instance_mod_enabled(host, request).await)
+}
+
+pub async fn remove_mod(
+    host: Host,
+    instance_id: String,
+    entry_id: String,
+) -> ApiResult<ModInventory> {
+    let request = request(json!({ "instanceId": instance_id, "entryId": entry_id }))?;
+    convert(app::remove_instance_mod(host, request).await)
+}
+
+pub async fn open_mods_folder(host: Host, instance_id: String) -> ApiResult<()> {
+    let request = request(json!({ "instanceId": instance_id }))?;
+    blocking(move || convert::<_, ()>(app::open_instance_mods_folder(host, request))).await?
+}
+
+pub async fn instance_content(
+    host: Host,
+    instance_id: String,
+    kind: &'static str,
+) -> ApiResult<ContentInventory> {
+    let request = request(json!({ "instanceId": instance_id, "contentType": kind }))?;
+    convert(app::get_instance_content(host, request).await)
+}
+
+pub async fn set_pack_enabled(
+    host: Host,
+    instance_id: String,
+    kind: &'static str,
+    entry_id: String,
+    enabled: bool,
+) -> ApiResult<ContentInventory> {
+    let request = request(
+        json!({ "instanceId": instance_id, "contentType": kind, "entryId": entry_id, "enabled": enabled }),
+    )?;
+    convert(app::set_instance_pack_enabled(host, request).await)
+}
+
+pub async fn remove_content(
+    host: Host,
+    instance_id: String,
+    kind: &'static str,
+    entry_id: String,
+) -> ApiResult<ContentInventory> {
+    let request =
+        request(json!({ "instanceId": instance_id, "contentType": kind, "entryId": entry_id }))?;
+    convert(app::remove_instance_content(host, request).await)
+}
+
+pub async fn open_content_folder(
+    host: Host,
+    instance_id: String,
+    kind: &'static str,
+) -> ApiResult<()> {
+    let request = request(json!({ "instanceId": instance_id, "contentType": kind }))?;
+    blocking(move || convert::<_, ()>(app::open_instance_content_folder(host, request))).await?
+}
+
+pub async fn browse(
+    host: Host,
+    instance_id: String,
+    kind: &'static str,
+    search: String,
+    offset: u32,
+) -> ApiResult<SearchPage> {
+    let request = request(json!({
+        "instanceId": instance_id,
+        "provider": "modrinth",
+        "contentType": kind,
+        "search": search,
+        "categories": [],
+        "sort": if search.trim().is_empty() { "downloads" } else { "relevance" },
+        "offset": offset,
+    }))?;
+    convert(app::browse_modrinth(host, request).await)
+}
+
+pub async fn quick_install(
+    host: Host,
+    instance_id: String,
+    kind: &'static str,
+    project_id: String,
+) -> ApiResult<Value> {
+    let request = request(
+        json!({ "instanceId": instance_id, "contentType": kind, "projectId": project_id }),
+    )?;
+    convert(app::quick_install_modrinth(host, request).await)
+}
+
+pub async fn accounts(host: Host) -> ApiResult<AccountsState> {
+    blocking(move || convert(app::get_accounts(host))).await?
+}
+
+pub async fn cached_avatars(host: Host) -> ApiResult<Vec<CachedAvatar>> {
+    blocking(move || convert(app::get_cached_account_avatars(host))).await?
+}
+
+pub async fn account_avatar(host: Host, account_id: String) -> ApiResult<Option<HeadAvatar>> {
+    let request = request(json!({ "accountId": account_id, "refresh": false }))?;
+    convert(app::get_account_avatar(host, request).await)
+}
+
+pub async fn begin_login(host: Host) -> ApiResult<AccountSummary> {
+    convert(app::begin_microsoft_login(host).await)
+}
+
+pub async fn cancel_login() -> ApiResult<()> {
+    blocking(|| convert::<_, ()>(app::cancel_microsoft_login())).await?
+}
+
+pub async fn select_account(host: Host, account_id: String) -> ApiResult<()> {
+    let request = request(json!({ "accountId": account_id }))?;
+    blocking(move || convert::<_, ()>(app::select_account(host, request))).await?
+}
+
+pub async fn remove_account(host: Host, account_id: String) -> ApiResult<()> {
+    let request = request(json!({ "accountId": account_id }))?;
+    convert(app::remove_account(host, request).await)
+}
+
+pub async fn refresh_session(host: Host, account_id: String) -> ApiResult<Value> {
+    let request = request(json!({ "accountId": account_id }))?;
+    convert(app::refresh_account_session(host, request).await)
+}
+
+pub async fn appearance(host: Host) -> ApiResult<Appearance> {
+    blocking(move || convert(app::get_appearance(host))).await?
+}
+
+pub async fn set_appearance(
+    host: Host,
+    theme: String,
+    accent: Value,
+    background: String,
+    motion: u8,
+) -> ApiResult<Appearance> {
+    let request = request(json!({
+        "theme": theme,
+        "accent": accent,
+        "background": background,
+        "auroraMotionSpeed": motion,
+    }))?;
+    blocking(move || convert(app::set_appearance(host, request))).await?
+}
+
+pub async fn desktop_integration() -> ApiResult<DesktopIntegration> {
+    blocking(|| convert(app::get_desktop_integration())).await?
+}
+
+pub async fn create_desktop_shortcut() -> ApiResult<DesktopIntegration> {
+    blocking(|| convert(app::create_desktop_shortcut())).await?
+}
+
+pub async fn remove_desktop_shortcut() -> ApiResult<DesktopIntegration> {
+    blocking(|| convert(app::remove_desktop_shortcut())).await?
+}
+
+pub async fn create_start_menu_shortcut() -> ApiResult<DesktopIntegration> {
+    blocking(|| convert(app::create_start_menu_shortcut())).await?
+}
+
+pub async fn open_launcher_folder(host: Host) -> ApiResult<()> {
+    blocking(move || convert::<_, ()>(app::open_launcher_folder(host))).await?
+}
+
+pub async fn startup_update_check(host: Host) -> ApiResult<UpdateOverview> {
+    convert(app::startup_update_check(host).await)
+}
+
+pub async fn check_for_updates(host: Host) -> ApiResult<UpdateOverview> {
+    convert(app::check_for_updates(host).await)
+}
+
+pub async fn cosmetics(host: Host, account_id: String) -> ApiResult<Cosmetics> {
+    let request = request(json!({ "accountId": account_id }))?;
+    convert(app::get_cosmetics(host, request).await)
+}
+
+pub async fn skin_presets(host: Host) -> ApiResult<Vec<SkinPreset>> {
+    blocking(move || convert(app::list_skin_presets(host))).await?
+}
+
+pub async fn skin_thumbnail(host: Host, preset_id: String) -> ApiResult<Option<Thumbnail>> {
+    let request = request(json!({ "presetId": preset_id }))?;
+    blocking(move || convert(app::skin_preset_thumbnail(host, request))).await?
+}
+
+pub async fn save_current_skin(host: Host, account_id: String) -> ApiResult<Value> {
+    let request = request(json!({ "accountId": account_id }))?;
+    convert(app::save_current_skin(host, request).await)
+}
+
+pub async fn remove_skin_preset(host: Host, preset_id: String) -> ApiResult<()> {
+    let request = request(json!({ "presetId": preset_id }))?;
+    blocking(move || convert::<_, ()>(app::remove_skin_preset(host, request))).await?
+}
+
+pub async fn apply_skin_preset(
+    host: Host,
+    account_id: String,
+    preset_id: String,
+    model: String,
+) -> ApiResult<Cosmetics> {
+    let request =
+        request(json!({ "accountId": account_id, "presetId": preset_id, "model": model }))?;
+    convert(app::apply_skin_preset(host, request).await)
+}
+
+pub async fn select_cape(host: Host, account_id: String, cape_id: String) -> ApiResult<Cosmetics> {
+    let request = request(json!({ "accountId": account_id, "capeId": cape_id }))?;
+    convert(app::select_cape(host, request).await)
+}
+
+pub async fn disable_cape(host: Host, account_id: String) -> ApiResult<Cosmetics> {
+    let request = request(json!({ "accountId": account_id }))?;
+    convert(app::disable_cape(host, request).await)
+}
+
+pub async fn preview_client_update(
+    host: Host,
+    instance_id: String,
+) -> ApiResult<ClientUpdatePreview> {
+    let request = request(json!({ "instanceId": instance_id }))?;
+    convert(app::preview_client_update(host, request).await)
+}
+
+pub async fn apply_client_update(
+    host: Host,
+    instance_id: String,
+    fingerprint: String,
+) -> ApiResult<InstanceSummary> {
+    let request = request(json!({ "instanceId": instance_id, "fingerprint": fingerprint }))?;
+    convert(app::apply_client_update(host, request).await)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configuration_round_trips_unknown_fields() {
+        let original = json!({
+            "performanceMode": "balanced",
+            "minecraftVersion": "1.21.10",
+            "auroraEnabled": true,
+            "loader": { "kind": "fabric", "policy": { "type": "automatic" } },
+            "memoryMib": 4096,
+            "additionalJvmArguments": "",
+            "window": null,
+            "futureField": { "kept": true }
+        });
+        let parsed: InstanceConfiguration = serde_json::from_value(original.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), original);
+    }
+
+    #[test]
+    fn command_errors_keep_code_and_message() {
+        let error: ApiError =
+            serde_json::from_value(json!({ "code": "instance_not_found", "message": "gone" }))
+                .unwrap();
+        assert_eq!(error.code, "instance_not_found");
+        assert_eq!(error.message, "gone");
+    }
+
+    #[test]
+    fn subtitle_matches_launcher_wording() {
+        let instance: InstanceSummary = serde_json::from_value(json!({
+            "id": "a", "displayName": "Aurora", "state": "ready",
+            "aurora": { "channel": "stable", "version": "3.0.0" },
+            "platform": { "kind": "fabric", "version": "0.17.3" },
+            "minecraftVersion": "1.21.10",
+            "configuration": {
+                "minecraftVersion": "1.21.10", "auroraEnabled": true,
+                "loader": { "kind": "fabric", "policy": { "type": "automatic" } },
+                "memoryMib": 4096, "additionalJvmArguments": "", "window": null
+            }
+        }))
+        .unwrap();
+        assert_eq!(
+            instance.subtitle(),
+            "Minecraft 1.21.10 · Fabric 0.17.3 · Aurora 3.0.0"
+        );
+    }
+}

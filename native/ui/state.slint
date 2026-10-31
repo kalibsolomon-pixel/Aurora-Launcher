@@ -1,0 +1,316 @@
+// The UI state contract. Each launcher domain owns one global; Rust
+// controllers (native/src/*.rs) write its `in` properties and handle its
+// callbacks. Screens only read these globals and invoke callbacks — they hold
+// no launcher authority of their own.
+import { Tone } from "components.slint";
+
+export struct InstanceRow {
+    id: string,
+    name: string,
+    subtitle: string,
+    letter: string,
+    status: string,
+    tone: Tone,
+    selected: bool,
+}
+
+export struct BlockerRow {
+    code: string,
+    message: string,
+    action: string,
+}
+
+export struct ContentRow {
+    id: string,
+    title: string,
+    detail: string,
+    enabled: bool,
+    toggleable: bool,
+    removable: bool,
+    note: string,
+}
+
+export struct ProjectRow {
+    id: string,
+    title: string,
+    letter: string,
+    author: string,
+    description: string,
+    downloads: string,
+    installed: bool,
+    busy: bool,
+}
+
+export struct AccountRow {
+    id: string,
+    name: string,
+    initial: string,
+    status: string,
+    selected: bool,
+    avatar: image,
+    has-avatar: bool,
+}
+
+export struct Swatch {
+    id: string,
+    label: string,
+    color: color,
+}
+
+export struct SkinRow {
+    id: string,
+    name: string,
+    model: string,
+    thumb: image,
+    has-thumb: bool,
+}
+
+export struct CapeRow {
+    id: string,
+    name: string,
+    selected: bool,
+}
+
+export enum Page { home, instances, discover, skins, settings }
+
+export global Nav {
+    in-out property <Page> page: Page.home;
+    // The instance workspace is a sub-page of Instances.
+    in-out property <bool> workspace-open: false;
+    callback navigate(Page);
+}
+
+export global Shell {
+    in property <bool> loaded: false;
+    in property <string> fatal-error;
+    in property <string> toast-text;
+    in property <Tone> toast-tone: Tone.neutral;
+    in property <bool> toast-visible: false;
+    in property <string> version;
+    callback dismiss-toast();
+    callback retry-load();
+}
+
+export global Home {
+    in property <bool> has-instance: false;
+    in property <string> name;
+    in property <string> subtitle;
+    in property <string> letter;
+    in property <string> status;
+    in property <Tone> tone: Tone.neutral;
+    in property <[BlockerRow]> blockers;
+    in property <bool> can-play: false;
+    in property <bool> busy: false;
+    in property <bool> running: false;
+    in property <bool> checking: false;
+    in property <string> play-label: "Play";
+    in property <string> progress-text;
+    in property <float> progress: -1;
+    in property <string> message;
+    in property <Tone> message-tone: Tone.neutral;
+    in property <[InstanceRow]> instances;
+    callback play();
+    callback select(string);
+    callback blocker-action(string);
+    callback refresh();
+}
+
+export global Instances {
+    in property <[InstanceRow]> rows;
+    in property <bool> loading: false;
+    callback open(string);
+    callback create();
+
+    // Workspace header.
+    in property <string> id;
+    in property <string> name;
+    in property <string> subtitle;
+    in property <string> letter;
+    in property <string> status;
+    in property <Tone> tone: Tone.neutral;
+    in property <bool> installing: false;
+    in property <bool> selected: false;
+    in-out property <int> tab: 0;
+    callback tab-changed(int);
+    callback play();
+    callback make-selected();
+    callback open-folder();
+    callback close-workspace();
+
+    // Configuration.
+    in-out property <float> memory-gib: 4;
+    in property <float> memory-max-gib: 16;
+    in property <string> memory-hint;
+    in-out property <string> jvm-args;
+    in-out property <bool> custom-window: false;
+    in-out property <string> window-width;
+    in-out property <string> window-height;
+    in property <bool> config-dirty: false;
+    in property <bool> config-busy: false;
+    in property <string> config-error;
+    callback config-edited();
+    callback save-config();
+    callback revert-config();
+
+    // Health.
+    in property <string> health-text;
+    in property <Tone> health-tone: Tone.neutral;
+    in property <bool> health-busy: false;
+    in property <bool> can-repair: false;
+    in property <string> runtime-text;
+    callback validate();
+    callback repair();
+
+    // Content tabs (mods, resource packs, shaders).
+    in property <[ContentRow]> content;
+    in property <bool> content-loading: false;
+    in property <string> content-error;
+    in-out property <string> content-filter;
+    callback content-filter-changed(string);
+    callback content-toggle(string, bool);
+    callback content-remove(string, string);
+    callback content-open-folder();
+    callback content-refresh();
+    callback content-discover();
+
+    // Rename.
+    in-out property <bool> rename-open: false;
+    in-out property <string> rename-text;
+    in property <string> rename-error;
+    callback rename-start();
+    callback rename-confirm();
+
+    // Instance deletion (exact-name confirmation, enforced again in Rust).
+    in-out property <bool> delete-open: false;
+    in-out property <string> delete-text;
+    in property <string> delete-error;
+    in property <bool> delete-busy: false;
+    callback delete-start();
+    callback delete-confirm();
+
+    // Removal confirmation.
+    in-out property <bool> remove-open: false;
+    in property <string> remove-title;
+    in property <string> remove-detail;
+    callback remove-confirm();
+
+    // Creation.
+    in-out property <bool> create-open: false;
+    in-out property <string> create-name;
+    in property <[string]> versions;
+    in-out property <int> version-index: 0;
+    in-out property <bool> include-snapshots: false;
+    in property <[string]> loaders: ["Fabric", "Vanilla"];
+    in-out property <int> loader-index: 0;
+    in-out property <bool> create-aurora: true;
+    in property <bool> aurora-available: false;
+    in property <string> aurora-note;
+    in property <bool> versions-loading: false;
+    in property <bool> create-busy: false;
+    in property <string> create-progress;
+    in property <float> create-fraction: -1;
+    in property <string> create-error;
+    callback create-changed();
+    callback snapshots-changed(bool);
+    callback create-confirm();
+}
+
+export global Discover {
+    in-out property <int> kind: 0;
+    in-out property <string> query;
+    in property <[ProjectRow]> results;
+    in property <bool> loading: false;
+    in property <string> error;
+    in property <bool> has-more: false;
+    in property <string> summary;
+    in property <[string]> instance-names;
+    in-out property <int> instance-index: 0;
+    in property <bool> has-instances: false;
+    callback search();
+    callback kind-changed(int);
+    callback instance-changed(int);
+    callback install(string);
+    callback more();
+}
+
+export global Accounts {
+    in property <[AccountRow]> rows;
+    in property <bool> has-account: false;
+    in property <string> name;
+    in property <string> initial;
+    in property <image> avatar;
+    in property <bool> has-avatar: false;
+    in property <string> status;
+    in property <bool> login-busy: false;
+    in property <string> login-phase;
+    in property <string> error;
+    in-out property <bool> dialog-open: false;
+    callback open-dialog();
+    callback sign-in();
+    callback cancel-sign-in();
+    callback select(string);
+    callback remove(string);
+    callback refresh(string);
+}
+
+export global Skins {
+    in property <bool> has-account: false;
+    in property <string> account-name;
+    in property <image> current;
+    in property <bool> has-current: false;
+    in property <string> current-model;
+    in property <[SkinRow]> presets;
+    in property <[CapeRow]> capes;
+    in property <bool> loading: false;
+    in property <bool> busy: false;
+    in property <string> error;
+    callback refresh();
+    callback save-current();
+    callback apply(string);
+    callback remove(string);
+    callback select-cape(string);
+    callback disable-cape();
+}
+
+export global Settings {
+    in property <[string]> theme-labels;
+    in property <[string]> theme-descriptions;
+    in-out property <int> theme-index: 0;
+    in property <[Swatch]> accents;
+    in property <string> accent-id;
+    in-out property <bool> reduce-motion: false;
+    in property <bool> appearance-busy: false;
+    in property <string> appearance-error;
+    callback theme-changed(int);
+    callback accent-changed(string);
+    in-out property <string> custom-accent;
+    callback custom-accent-apply(string);
+    callback reduce-motion-changed(bool);
+
+    in property <bool> shortcuts-supported: false;
+    in property <string> desktop-state;
+    in property <string> start-menu-state;
+    in property <bool> desktop-present: false;
+    in property <bool> start-menu-present: false;
+    in property <bool> shortcuts-busy: false;
+    callback toggle-desktop-shortcut();
+    callback create-start-menu-shortcut();
+    callback open-launcher-folder();
+
+    in property <string> launcher-update;
+    in property <string> client-update;
+    in property <bool> update-busy: false;
+    callback check-updates();
+    in property <bool> client-update-available: false;
+    callback review-client-update();
+    in-out property <bool> client-dialog-open: false;
+    in property <string> client-dialog-title;
+    in property <string> client-dialog-detail;
+    in property <bool> client-dialog-can-apply: false;
+    in property <bool> client-dialog-busy: false;
+    callback client-update-apply();
+
+    in property <string> version;
+    in property <string> data-root;
+    in property <string> renderer;
+}

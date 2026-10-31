@@ -1,0 +1,96 @@
+// Discover: browse Modrinth and install into one chosen instance.
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { Icon, Icons } from "../icons.slint";
+import { Button, ButtonKind, Tabs, TextField, Dropdown, EmptyState, Spinner, PageTitle, Glyph } from "../components.slint";
+import { Discover, ProjectRow } from "../state.slint";
+
+component ProjectLine inherits Rectangle {
+    in property <ProjectRow> item;
+    height: max(72px, layout.preferred-height);
+    border-radius: Theme.radius-md;
+    background: touch.has-hover ? Theme.hover : Theme.surface;
+    accessible-role: list-item;
+    accessible-label: root.item.title;
+    accessible-description: root.item.description;
+    touch := TouchArea { }
+    layout := HorizontalLayout {
+        padding: 12px;
+        spacing: 12px;
+        Glyph { y: (parent.height - self.height) / 2; letter: root.item.letter; size: 44px; }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                Text { text: root.item.title; font-size: Theme.text-body; font-weight: 600; color: Theme.text; overflow: elide; horizontal-stretch: 0; }
+                Text { text: "by " + root.item.author; font-size: Theme.text-metadata; color: Theme.text-muted; overflow: elide; vertical-alignment: center; horizontal-stretch: 0; }
+            }
+            Text { text: root.item.description; font-size: Theme.text-metadata; color: Theme.text-secondary; wrap: word-wrap; max-height: 36px; overflow: elide; }
+            Text { text: root.item.downloads; font-size: Theme.text-label; color: Theme.text-muted; }
+        }
+        Button {
+            y: (parent.height - self.height) / 2;
+            text: root.item.installed ? "Installed" : "Install";
+            icon: root.item.installed ? Icons.check : Icons.download;
+            enabled: !root.item.installed;
+            loading: root.item.busy;
+            accessible-description-text: root.item.title;
+            clicked => { Discover.install(root.item.id); }
+        }
+    }
+}
+
+export component DiscoverPage inherits ScrollView {
+    VerticalLayout {
+        padding: Theme.space-6;
+        spacing: Theme.space-4;
+        alignment: start;
+        HorizontalLayout {
+            spacing: Theme.space-3;
+            PageTitle { text: "Discover"; horizontal-stretch: 1; vertical-alignment: center; }
+            if Discover.has-instances: Text { text: "Install into"; color: Theme.text-muted; font-size: Theme.text-secondary-size; vertical-alignment: center; }
+            if Discover.has-instances: Dropdown {
+                width: 240px;
+                label: "Target instance";
+                model: Discover.instance-names;
+                current-index <=> Discover.instance-index;
+                selected(index) => { Discover.instance-changed(index); }
+            }
+        }
+        Tabs {
+            model: ["Mods", "Resource packs", "Shaders"];
+            current <=> Discover.kind;
+            selected(index) => { Discover.kind-changed(index); }
+        }
+        HorizontalLayout {
+            spacing: Theme.space-2;
+            TextField {
+                horizontal-stretch: 1;
+                leading-icon: Icons.search;
+                placeholder: "Search Modrinth";
+                label: "Search Modrinth";
+                text <=> Discover.query;
+                accepted => { Discover.search(); }
+            }
+            Button { text: "Search"; kind: ButtonKind.primary; enabled: Discover.has-instances; clicked => { Discover.search(); } }
+        }
+        if !Discover.has-instances: Rectangle {
+            background: Theme.surface;
+            border-radius: Theme.radius-lg;
+            EmptyState { icon: Icons.discover; title: "Create an instance first"; message: "Content is always installed into one instance, checked for compatibility with its Minecraft version and loader."; }
+        }
+        if Discover.summary != "": Text { text: Discover.summary; color: Theme.text-muted; font-size: Theme.text-metadata; }
+        if Discover.error != "": Text { text: Discover.error; color: Theme.error; wrap: word-wrap; }
+        VerticalLayout {
+            spacing: 6px;
+            accessible-role: list;
+            accessible-label: "Results";
+            for row in Discover.results: ProjectLine { item: row; }
+        }
+        if Discover.loading: HorizontalLayout { alignment: center; padding: Theme.space-5; Spinner { size: 22px; } }
+        if Discover.has-more && !Discover.loading: HorizontalLayout { alignment: center; Button { text: "Show more"; clicked => { Discover.more(); } } }
+    }
+}

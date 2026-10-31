@@ -1,0 +1,682 @@
+// The shared Spxctra native component family. Every screen composes these;
+// screens do not restyle controls locally. Each interactive control defines
+// normal, hover, pressed, focus-visible, disabled and (where relevant)
+// selected/loading states, and supports pointer and keyboard activation.
+import { Theme } from "theme.slint";
+import { Icon, Icons } from "icons.slint";
+
+export enum ButtonKind { primary, secondary, ghost, danger }
+export enum Tone { neutral, success, warning, error, working, accent }
+
+/// Focus-visible outline drawn outside a control's bounds.
+export component FocusRing inherits Rectangle {
+    in property <bool> shown;
+    in property <length> radius: Theme.radius-md;
+    border-radius: radius + 3px;
+    border-width: shown ? 2px : 0px;
+    border-color: Theme.accent;
+    background: transparent;
+}
+
+/// A short, non-interactive label shown under a hovered control.
+export component Tooltip inherits Rectangle {
+    in property <string> text;
+    background: Theme.raised;
+    border-radius: Theme.radius-sm;
+    border-width: 1px;
+    border-color: Theme.border-strong;
+    width: label.preferred-width + 16px;
+    height: label.preferred-height + 8px;
+    accessible-role: none;
+    label := Text { text: root.text; font-size: Theme.text-label; color: Theme.text; }
+}
+
+/// A small busy indicator. Static (no animation) under reduced motion.
+export component Spinner inherits Rectangle {
+    in property <length> size: 18px;
+    width: size;
+    height: size;
+    accessible-role: progress-indicator;
+    accessible-label: "Working";
+    Path {
+        width: root.size;
+        height: root.size;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        stroke: Theme.accent;
+        stroke-width: 2.5px;
+        commands: "M12 3a9 9 0 0 1 9 9";
+        transform-rotation: Theme.reduce-motion ? 0deg : mod(animation-tick() / 2.4ms, 360) * 1deg;
+    }
+}
+
+export component Button inherits Rectangle {
+    in property <string> text;
+    in property <string> icon;
+    in property <ButtonKind> kind: secondary;
+    in property <bool> enabled: true;
+    in property <bool> loading: false;
+    in property <bool> compact: false;
+    in property <string> accessible-description-text;
+    callback clicked();
+    private property <bool> active: enabled && !loading;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    min-height: compact ? 30px : Theme.control-height;
+    min-width: compact ? 30px : 36px;
+    border-radius: Theme.radius-md;
+    accessible-role: button;
+    accessible-label: text;
+    accessible-description: accessible-description-text;
+    accessible-enabled: active;
+    accessible-action-default => { if (active) { clicked(); } }
+    forward-focus: focus;
+    opacity: loading ? 0.8 : 1;
+    background: !active ? (kind == ButtonKind.primary ? (loading ? Theme.accent-strong : Theme.raised) : transparent)
+        : kind == ButtonKind.primary ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent-strong)
+        : kind == ButtonKind.danger ? (touch.pressed ? #a13350 : touch.has-hover ? #c04a68 : #b03a58)
+        : kind == ButtonKind.ghost ? (touch.pressed ? Theme.pressed : touch.has-hover ? Theme.hover : transparent)
+        : (touch.pressed ? Theme.pressed : touch.has-hover ? Theme.hover : Theme.raised);
+    animate background { duration: Theme.motion-fast; }
+    layout := HorizontalLayout {
+        padding-left: compact ? 8px : (root.text == "" ? 8px : 14px);
+        padding-right: compact ? 8px : (root.text == "" ? 8px : 14px);
+        spacing: 8px;
+        alignment: center;
+        if root.icon != "" && !root.loading: Icon {
+            y: (parent.height - self.height) / 2;
+            path: root.icon;
+            size: root.compact ? 16px : 18px;
+            color: !root.active ? Theme.text-muted
+                : root.kind == ButtonKind.primary ? Theme.accent-contrast
+                : root.kind == ButtonKind.danger ? #ffffff : Theme.text;
+        }
+        if root.loading: Spinner { y: (parent.height - self.height) / 2; size: 16px; }
+        if root.text != "": Text {
+            accessible-role: none;
+            text: root.text;
+            font-size: root.compact ? Theme.text-label : Theme.text-body;
+            font-weight: 600;
+            vertical-alignment: center;
+            color: !root.active ? (root.loading && root.kind == ButtonKind.primary ? Theme.accent-contrast : Theme.text-muted)
+                : root.kind == ButtonKind.primary ? Theme.accent-contrast
+                : root.kind == ButtonKind.danger ? #ffffff : Theme.text;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.active;
+        mouse-cursor: root.active ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+    focus := FocusScope {
+        enabled: root.active;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) { root.clicked(); return accept; }
+            reject
+        }
+    }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; radius: root.border-radius; }
+}
+
+/// An icon-only button. `label` is its accessible name and tooltip text.
+export component IconButton inherits Rectangle {
+    in property <string> icon;
+    in property <string> label;
+    in property <bool> enabled: true;
+    in property <bool> selected: false;
+    in property <length> size: 32px;
+    callback clicked();
+    width: size;
+    height: size;
+    border-radius: Theme.radius-sm;
+    accessible-role: button;
+    accessible-label: label;
+    accessible-enabled: enabled;
+    accessible-action-default => { if (enabled) { clicked(); } }
+    forward-focus: focus;
+    background: !enabled ? transparent : touch.pressed ? Theme.pressed : (touch.has-hover || selected) ? Theme.hover : transparent;
+    Icon { path: root.icon; size: root.size * 0.6; color: !root.enabled ? Theme.text-muted : root.selected ? Theme.accent : Theme.text-secondary; }
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } }
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) { root.clicked(); return accept; }
+            reject
+        }
+    }
+    if touch.has-hover && root.label != "": Tooltip { text: root.label; x: (root.width - self.width) / 2; y: root.height + 6px; }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; radius: root.border-radius; }
+}
+
+/// A two-state switch. `label` names it for assistive technology.
+export component Toggle inherits Rectangle {
+    in-out property <bool> checked;
+    in property <bool> enabled: true;
+    in property <string> label;
+    callback toggled(bool);
+    width: 40px;
+    height: 22px;
+    border-radius: 11px;
+    accessible-role: switch;
+    accessible-label: label;
+    accessible-checked: checked;
+    accessible-checkable: true;
+    accessible-enabled: enabled;
+    accessible-action-default => { if (enabled) { root.flip(); } }
+    forward-focus: focus;
+    background: !enabled ? (checked ? Theme.accent-strong : Theme.raised) : checked ? (touch.has-hover ? Theme.accent-hover : Theme.accent-strong) : (touch.has-hover ? Theme.border-strong : Theme.hover);
+    opacity: enabled ? 1 : 0.55;
+    animate background { duration: Theme.motion-fast; }
+    function flip() { root.checked = !root.checked; root.toggled(root.checked); }
+    knob := Rectangle {
+        width: 16px;
+        height: 16px;
+        y: 3px;
+        x: root.checked ? root.width - self.width - 3px : 3px;
+        border-radius: 8px;
+        background: root.checked ? Theme.accent-contrast : Theme.text-secondary;
+        animate x { duration: Theme.motion-base; easing: ease-out; }
+    }
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.flip(); } }
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) { root.flip(); return accept; }
+            reject
+        }
+    }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; radius: 11px; }
+}
+
+export component Checkbox inherits HorizontalLayout {
+    in-out property <bool> checked;
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback toggled(bool);
+    spacing: 10px;
+    accessible-role: checkbox;
+    accessible-label: text;
+    accessible-checked: checked;
+    accessible-checkable: true;
+    accessible-action-default => { if (enabled) { checked = !checked; toggled(checked); } }
+    forward-focus: focus;
+    box := Rectangle {
+        width: 18px;
+        height: 18px;
+        y: (parent.height - self.height) / 2;
+        border-radius: 4px;
+        border-width: root.checked ? 0px : 1.5px;
+        border-color: Theme.border-strong;
+        background: root.checked ? Theme.accent-strong : transparent;
+        if root.checked: Icon { path: Icons.check; size: 14px; color: Theme.accent-contrast; }
+        FocusRing { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; shown: focus.has-focus; radius: 4px; }
+    }
+    Text { text: root.text; color: root.enabled ? Theme.text : Theme.text-muted; font-size: Theme.text-body; vertical-alignment: center; }
+    focus := FocusScope {
+        width: 0px;
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " ") { root.checked = !root.checked; root.toggled(root.checked); return accept; }
+            reject
+        }
+    }
+    TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { focus.focus(); root.checked = !root.checked; root.toggled(root.checked); }
+    }
+}
+
+/// A horizontal value slider with arrow-key, Home/End and pointer control.
+export component Slider inherits Rectangle {
+    in-out property <float> value;
+    in property <float> minimum: 0;
+    in property <float> maximum: 100;
+    in property <float> step: 1;
+    in property <bool> enabled: true;
+    in property <string> label;
+    callback changed(float);
+    callback released(float);
+    min-width: 160px;
+    height: 24px;
+    accessible-role: slider;
+    accessible-label: label;
+    accessible-value: round(value);
+    accessible-value-minimum: minimum;
+    accessible-value-maximum: maximum;
+    accessible-value-step: step;
+    accessible-action-increment => { root.set-value(root.value + root.step); root.released(root.value); }
+    accessible-action-decrement => { root.set-value(root.value - root.step); root.released(root.value); }
+    forward-focus: focus;
+    function set-value(v: float) {
+        root.value = clamp(round(v / root.step) * root.step, root.minimum, root.maximum);
+        root.changed(root.value);
+    }
+    private property <float> fraction: maximum > minimum ? (value - minimum) / (maximum - minimum) : 0;
+    track := Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.hover;
+        Rectangle { x: 0; width: parent.width * root.fraction; border-radius: 2px; background: root.enabled ? Theme.accent : Theme.text-muted; }
+    }
+    thumb := Rectangle {
+        width: 16px;
+        height: 16px;
+        y: (parent.height - self.height) / 2;
+        x: (root.width - self.width) * root.fraction;
+        border-radius: 8px;
+        background: root.enabled ? (touch.pressed ? Theme.accent-pressed : Theme.accent) : Theme.text-muted;
+        FocusRing { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; shown: focus.has-focus; radius: 8px; }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) { focus.focus(); }
+            if (event.kind == PointerEventKind.up) { root.released(root.value); }
+        }
+        moved => { if (self.pressed) { root.set-value(root.minimum + (root.maximum - root.minimum) * clamp(self.mouse-x / root.width, 0, 1)); } }
+        clicked => { root.set-value(root.minimum + (root.maximum - root.minimum) * clamp(self.mouse-x / root.width, 0, 1)); root.released(root.value); }
+    }
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.RightArrow || event.text == Key.UpArrow) { root.set-value(root.value + root.step); root.released(root.value); return accept; }
+            if (event.text == Key.LeftArrow || event.text == Key.DownArrow) { root.set-value(root.value - root.step); root.released(root.value); return accept; }
+            if (event.text == Key.Home) { root.set-value(root.minimum); root.released(root.value); return accept; }
+            if (event.text == Key.End) { root.set-value(root.maximum); root.released(root.value); return accept; }
+            reject
+        }
+    }
+}
+
+/// A single-line text field.
+export component TextField inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <string> label;
+    in property <bool> enabled: true;
+    in property <bool> invalid: false;
+    in property <string> leading-icon;
+    in property <int> max-length: 256;
+    callback edited(string);
+    callback accepted(string);
+    callback escaped();
+    min-height: Theme.control-height;
+    min-width: 120px;
+    border-radius: Theme.radius-md;
+    background: enabled ? Theme.sunken : Theme.surface;
+    border-width: 1px;
+    border-color: invalid ? Theme.error : input.has-focus ? Theme.accent : touch.has-hover ? Theme.border-strong : Theme.border;
+    accessible-role: text-input;
+    accessible-label: label != "" ? label : placeholder;
+    accessible-value: text;
+    forward-focus: input;
+    public function focus-field() { input.focus(); }
+    public function select-everything() { input.select-all(); }
+    touch := TouchArea { mouse-cursor: MouseCursor.text; clicked => { input.focus(); } }
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 8px;
+        if root.leading-icon != "": Icon { y: (parent.height - self.height) / 2; path: root.leading-icon; size: 18px; color: Theme.text-muted; }
+        Rectangle {
+            horizontal-stretch: 1;
+            clip: true;
+            if root.text == "" && !input.has-focus: Text {
+                x: 0;
+                width: parent.width;
+                text: root.placeholder;
+                color: Theme.text-muted;
+                font-size: Theme.text-body;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            input := TextInput {
+                text <=> root.text;
+                enabled: root.enabled;
+                color: Theme.text;
+                font-size: Theme.text-body;
+                vertical-alignment: center;
+                single-line: true;
+                selection-background-color: Theme.accent-soft;
+                selection-foreground-color: Theme.text;
+                edited => {
+                    if (self.text.character-count > root.max-length) { self.text = root.text; }
+                    root.edited(self.text);
+                }
+                accepted => { root.accepted(self.text); }
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) { root.escaped(); return accept; }
+                    reject
+                }
+            }
+        }
+    }
+}
+
+/// A dropdown selector over a list of labels.
+export component Dropdown inherits Rectangle {
+    in property <[string]> model;
+    in-out property <int> current-index: 0;
+    in property <bool> enabled: true;
+    in property <string> label;
+    in property <string> placeholder: "Select";
+    callback selected(int);
+    min-height: Theme.control-height;
+    min-width: 160px;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    border-radius: Theme.radius-md;
+    background: !enabled ? Theme.surface : touch.pressed ? Theme.pressed : touch.has-hover ? Theme.hover : Theme.raised;
+    accessible-role: combobox;
+    accessible-label: label;
+    accessible-value: current-index >= 0 && current-index < model.length ? model[current-index] : "";
+    accessible-enabled: enabled;
+    accessible-action-default => { if (enabled) { popup.show(); } }
+    forward-focus: focus;
+    function pick(i: int) {
+        if (i >= 0 && i < root.model.length) {
+            root.current-index = i;
+            root.selected(i);
+        }
+    }
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 8px;
+        spacing: 8px;
+        Text {
+            horizontal-stretch: 1;
+            text: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : root.placeholder;
+            color: root.enabled ? Theme.text : Theme.text-muted;
+            font-size: Theme.text-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        Icon { y: (parent.height - self.height) / 2; path: Icons.expand; size: 18px; color: Theme.text-muted; }
+    }
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.focus(); popup.show(); } }
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) { popup.show(); return accept; }
+            if (event.text == Key.DownArrow) { root.pick(root.current-index + 1); return accept; }
+            if (event.text == Key.UpArrow) { root.pick(root.current-index - 1); return accept; }
+            reject
+        }
+    }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; radius: root.border-radius; }
+    popup := PopupWindow {
+        x: 0;
+        y: root.height + 4px;
+        width: root.width;
+        close-policy: close-on-click-outside;
+        Rectangle {
+            background: Theme.raised;
+            border-radius: Theme.radius-md;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            VerticalLayout {
+                padding: 4px;
+                for item[i] in root.model: Rectangle {
+                    height: 32px;
+                    border-radius: Theme.radius-sm;
+                    background: option.has-hover ? Theme.hover : i == root.current-index ? Theme.accent-soft : transparent;
+                    accessible-role: list-item;
+                    accessible-label: item;
+                    accessible-item-selected: i == root.current-index;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        Text { text: item; color: Theme.text; font-size: Theme.text-body; vertical-alignment: center; overflow: elide; }
+                    }
+                    option := TouchArea { mouse-cursor: pointer; clicked => { root.pick(i); popup.close(); } }
+                }
+            }
+        }
+    }
+}
+
+/// Underlined tab row. Arrow keys move between tabs.
+export component Tabs inherits HorizontalLayout {
+    in property <[string]> model;
+    in-out property <int> current: 0;
+    callback selected(int);
+    spacing: 4px;
+    alignment: start;
+    accessible-role: tab-list;
+    for title[i] in root.model: Rectangle {
+        height: 38px;
+        accessible-role: tab;
+        accessible-label: title;
+        accessible-item-selected: i == root.current;
+        accessible-action-default => { root.current = i; root.selected(i); }
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 12px;
+            Text {
+                text: title;
+                font-size: Theme.text-body;
+                font-weight: i == root.current ? 600 : 400;
+                color: i == root.current ? Theme.text : tab-touch.has-hover ? Theme.text : Theme.text-secondary;
+                vertical-alignment: center;
+            }
+        }
+        Rectangle { y: parent.height - 2px; height: 2px; border-radius: 1px; background: i == root.current ? Theme.accent : transparent; }
+        tab-touch := TouchArea { mouse-cursor: pointer; clicked => { tab-focus.focus(); root.current = i; root.selected(i); } }
+        tab-focus := FocusScope {
+            key-pressed(event) => {
+                if (event.text == " " || event.text == Key.Return) { root.current = i; root.selected(i); return accept; }
+                if (event.text == Key.RightArrow && i + 1 < root.model.length) { root.current = i + 1; root.selected(i + 1); return accept; }
+                if (event.text == Key.LeftArrow && i > 0) { root.current = i - 1; root.selected(i - 1); return accept; }
+                reject
+            }
+        }
+        FocusRing { x: -2px; y: 2px; width: parent.width + 4px; height: parent.height - 4px; shown: tab-focus.has-focus; radius: Theme.radius-sm; }
+    }
+}
+
+/// A grouped surface with an optional heading and description.
+export component Group inherits Rectangle {
+    in property <string> title;
+    in property <string> description;
+    background: Theme.surface;
+    border-radius: Theme.radius-lg;
+    VerticalLayout {
+        padding: Theme.space-4;
+        spacing: Theme.space-1;
+        if root.title != "": Text { text: root.title; font-size: Theme.text-section; font-weight: 600; color: Theme.text; accessible-role: AccessibleRole.text; }
+        if root.description != "": Text { text: root.description; font-size: Theme.text-metadata; color: Theme.text-muted; wrap: word-wrap; }
+        @children
+    }
+}
+
+/// A labeled setting row; the control goes in the children slot.
+export component SettingRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> detail;
+    spacing: Theme.space-4;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    VerticalLayout {
+        horizontal-stretch: 1;
+        alignment: center;
+        spacing: 2px;
+        Text { text: root.label; font-size: Theme.text-body; color: Theme.text; wrap: word-wrap; }
+        if root.detail != "": Text { text: root.detail; font-size: Theme.text-metadata; color: Theme.text-muted; wrap: word-wrap; }
+    }
+    @children
+}
+
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.border;
+}
+
+/// A compact status label; tone is never the only carrier of meaning.
+export component StatusPill inherits Rectangle {
+    in property <string> text;
+    in property <Tone> tone: neutral;
+    height: 22px;
+    width: label.preferred-width + 16px;
+    border-radius: 11px;
+    background: tone == Tone.success ? Theme.success-soft : tone == Tone.warning ? Theme.warning-soft
+        : tone == Tone.error ? Theme.error-soft : tone == Tone.working ? Theme.working-soft
+        : tone == Tone.accent ? Theme.accent-soft : Theme.muted-soft;
+    accessible-role: AccessibleRole.text;
+    accessible-label: text;
+    label := Text {
+        text: root.text;
+        font-size: Theme.text-label;
+        font-weight: 600;
+        color: tone == Tone.success ? Theme.success : tone == Tone.warning ? Theme.warning
+            : tone == Tone.error ? Theme.error : tone == Tone.working ? Theme.working
+            : tone == Tone.accent ? Theme.accent : Theme.text-secondary;
+    }
+}
+
+/// Determinate progress. `progress` < 0 renders a static indeterminate bar.
+export component ProgressBar inherits Rectangle {
+    in property <float> progress: -1;
+    in property <string> label;
+    height: 4px;
+    border-radius: 2px;
+    background: Theme.hover;
+    accessible-role: progress-indicator;
+    accessible-label: label;
+    accessible-value: progress >= 0 ? round(progress * 100) : -1;
+    accessible-value-minimum: 0;
+    accessible-value-maximum: 100;
+    if root.progress >= 0: Rectangle {
+        x: 0;
+        width: parent.width * clamp(root.progress, 0, 1);
+        border-radius: 2px;
+        background: Theme.accent;
+        animate width { duration: Theme.motion-base; }
+    }
+}
+
+/// A modal dialog surface. Escape and the scrim dismiss it when `dismissible`.
+export component Dialog inherits Rectangle {
+    in property <string> title;
+    in property <length> dialog-width: 480px;
+    in property <bool> dismissible: true;
+    callback dismissed();
+    background: Theme.scrim;
+    accessible-role: none;
+    TouchArea { clicked => { if (root.dismissible) { root.dismissed(); } } }
+    escape := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape && root.dismissible) { root.dismissed(); return accept; }
+            reject
+        }
+    }
+    panel := Rectangle {
+        width: min(root.dialog-width, root.width - 48px);
+        height: min(content.preferred-height, root.height - 48px);
+        background: Theme.raised;
+        border-radius: Theme.radius-lg;
+        border-width: 1px;
+        border-color: Theme.border;
+        accessible-role: groupbox;
+        accessible-label: root.title;
+        TouchArea { }
+        content := VerticalLayout {
+            padding: Theme.space-5;
+            spacing: Theme.space-3;
+            HorizontalLayout {
+                Text { horizontal-stretch: 1; text: root.title; font-size: 18px; font-weight: 600; color: Theme.text; vertical-alignment: center; wrap: word-wrap; }
+                if root.dismissible: IconButton { icon: Icons.close; label: "Close"; clicked => { root.dismissed(); } }
+            }
+            @children
+        }
+    }
+    init => { escape.focus(); }
+}
+
+/// A transient notification line shown at the bottom of the window.
+export component Toast inherits Rectangle {
+    in property <string> text;
+    in property <Tone> tone: neutral;
+    callback dismissed();
+    height: row.preferred-height;
+    width: min(row.preferred-width, 560px);
+    background: Theme.raised;
+    border-radius: Theme.radius-md;
+    border-width: 1px;
+    border-color: tone == Tone.error ? Theme.error : tone == Tone.success ? Theme.success : Theme.border-strong;
+    accessible-role: AccessibleRole.text;
+    accessible-label: text;
+    row := HorizontalLayout {
+        padding: 10px;
+        padding-left: 14px;
+        spacing: 10px;
+        Icon {
+            y: (parent.height - self.height) / 2;
+            path: root.tone == Tone.error || root.tone == Tone.warning ? Icons.warning : root.tone == Tone.success ? Icons.check : Icons.info;
+            size: 18px;
+            color: root.tone == Tone.error ? Theme.error : root.tone == Tone.warning ? Theme.warning : root.tone == Tone.success ? Theme.success : Theme.text-secondary;
+        }
+        Text { text: root.text; color: Theme.text; font-size: Theme.text-secondary-size; vertical-alignment: center; wrap: word-wrap; max-width: 440px; }
+        IconButton { icon: Icons.close; label: "Dismiss"; size: 26px; clicked => { root.dismissed(); } }
+    }
+}
+
+/// A square instance/content glyph: a letter on a neutral ground, or an image.
+export component Glyph inherits Rectangle {
+    in property <string> letter;
+    in property <image> picture;
+    in property <bool> has-picture: false;
+    in property <length> size: 40px;
+    width: size;
+    height: size;
+    border-radius: size > 32px ? Theme.radius-md : Theme.radius-sm;
+    background: Theme.hover;
+    clip: true;
+    accessible-role: none;
+    if root.has-picture: Image { width: root.size; height: root.size; source: root.picture; image-fit: cover; image-rendering: smooth; }
+    if !root.has-picture: Text { text: root.letter; color: Theme.text; font-size: root.size * 0.42; font-weight: 600; }
+}
+
+/// A round account avatar with an initial fallback.
+export component Avatar inherits Rectangle {
+    in property <string> initial;
+    in property <image> picture;
+    in property <bool> has-picture: false;
+    in property <length> size: 32px;
+    width: size;
+    height: size;
+    border-radius: has-picture ? Theme.radius-sm : size / 2;
+    background: Theme.accent-soft;
+    clip: true;
+    accessible-role: none;
+    if root.has-picture: Image { width: root.size; height: root.size; source: root.picture; image-rendering: pixelated; }
+    if !root.has-picture: Text { accessible-role: none; text: root.initial == "" ? "?" : root.initial; color: Theme.accent; font-size: root.size * 0.45; font-weight: 700; }
+}
+
+/// A centered explanation for empty, loading and error states.
+export component EmptyState inherits VerticalLayout {
+    in property <string> icon;
+    in property <string> title;
+    in property <string> message;
+    alignment: center;
+    spacing: Theme.space-2;
+    padding: Theme.space-6;
+    if root.icon != "": HorizontalLayout { alignment: center; Icon { path: root.icon; size: 32px; color: Theme.text-muted; } }
+    Text { text: root.title; font-size: Theme.text-section; font-weight: 600; color: Theme.text; horizontal-alignment: center; wrap: word-wrap; }
+    if root.message != "": Text { text: root.message; font-size: Theme.text-secondary-size; color: Theme.text-muted; horizontal-alignment: center; wrap: word-wrap; }
+    @children
+}
+
+export component PageTitle inherits Text {
+    font-size: Theme.text-page-title;
+    font-weight: 600;
+    color: Theme.text;
+    accessible-role: AccessibleRole.text;
+}
+
+export component Label inherits Text {
+    font-size: Theme.text-metadata;
+    color: Theme.text-muted;
+}

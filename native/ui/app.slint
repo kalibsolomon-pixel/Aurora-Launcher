@@ -1,0 +1,331 @@
+// Aurora Launcher native shell: compact navigation, one content region, and
+// overlays (dialogs, notifications). Rendering is event-driven: nothing here
+// animates while idle.
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Icon, Icons } from "icons.slint";
+import {
+    Button, ButtonKind, IconButton, Toggle, Checkbox, Dropdown, TextField, Dialog, Toast, Tone,
+    Avatar, StatusPill, Spinner, ProgressBar, FocusRing, EmptyState, Divider,
+} from "components.slint";
+import { Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, AccountRow } from "state.slint";
+import { HomePage } from "pages/home.slint";
+import { InstancesPage, WorkspacePage } from "pages/instances.slint";
+import { DiscoverPage } from "pages/discover.slint";
+import { SettingsPage } from "pages/settings.slint";
+import { SkinsPage } from "pages/skins.slint";
+
+export { Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, Tone }
+
+component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <string> icon;
+    in property <bool> active;
+    callback activated();
+    height: 60px;
+    border-radius: Theme.radius-md;
+    background: active ? Theme.accent-soft : touch.has-hover ? Theme.hover : transparent;
+    accessible-role: tab;
+    accessible-label: label;
+    accessible-item-selected: active;
+    accessible-action-default => { activated(); }
+    forward-focus: focus;
+    VerticalLayout {
+        alignment: center;
+        spacing: 4px;
+        HorizontalLayout { alignment: center; Icon { path: root.icon; size: 22px; color: root.active ? Theme.accent : Theme.text-secondary; } }
+        Text { accessible-role: none; text: root.label; font-size: Theme.text-label; color: root.active ? Theme.text : Theme.text-secondary; horizontal-alignment: center; }
+    }
+    Rectangle { x: 0; y: (parent.height - 24px) / 2; width: 3px; height: 24px; border-radius: 2px; background: root.active ? Theme.accent : transparent; }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); root.activated(); } }
+    focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) { root.activated(); return accept; }
+            reject
+        }
+    }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; }
+}
+
+component AccountButton inherits Rectangle {
+    height: 64px;
+    border-radius: Theme.radius-md;
+    background: touch.has-hover ? Theme.hover : transparent;
+    accessible-role: button;
+    accessible-label: Accounts.has-account ? "Account: " + Accounts.name : "Sign in";
+    accessible-action-default => { Accounts.open-dialog(); }
+    forward-focus: focus;
+    VerticalLayout {
+        alignment: center;
+        spacing: 4px;
+        HorizontalLayout {
+            alignment: center;
+            if Accounts.has-account: Avatar { initial: Accounts.initial; picture: Accounts.avatar; has-picture: Accounts.has-avatar; size: 28px; }
+            if !Accounts.has-account: Icon { path: Icons.person; size: 22px; color: Theme.text-secondary; }
+        }
+        Text {
+            text: Accounts.has-account ? Accounts.name : "Sign in";
+            font-size: Theme.text-label;
+            color: Theme.text-secondary;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); Accounts.open-dialog(); } }
+    focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) { Accounts.open-dialog(); return accept; }
+            reject
+        }
+    }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; }
+}
+
+component AccountLine inherits Rectangle {
+    in property <AccountRow> item;
+    height: 56px;
+    border-radius: Theme.radius-md;
+    background: root.item.selected ? Theme.accent-soft : touch.has-hover ? Theme.hover : Theme.surface;
+    accessible-role: list-item;
+    accessible-label: root.item.name;
+    accessible-description: root.item.status;
+    accessible-item-selected: root.item.selected;
+    touch := TouchArea { mouse-cursor: pointer; clicked => { if (!root.item.selected) { Accounts.select(root.item.id); } } }
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 8px;
+        spacing: 12px;
+        Avatar { y: (parent.height - self.height) / 2; initial: root.item.initial; picture: root.item.avatar; has-picture: root.item.has-avatar; size: 32px; }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            Text { text: root.item.name; color: Theme.text; font-size: Theme.text-body; font-weight: 600; overflow: elide; }
+            Text { text: root.item.status; color: Theme.text-muted; font-size: Theme.text-metadata; overflow: elide; }
+        }
+        if !root.item.selected: Button { y: (parent.height - self.height) / 2; text: "Use"; compact: true; clicked => { Accounts.select(root.item.id); } }
+        IconButton { y: (parent.height - self.height) / 2; icon: Icons.logout; label: "Sign out " + root.item.name; clicked => { Accounts.remove(root.item.id); } }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "Aurora Launcher";
+    icon: @image-url("../../static/aurora-icon.png");
+    preferred-width: 1120px;
+    preferred-height: 760px;
+    min-width: 720px;
+    min-height: 520px;
+    background: Theme.background;
+    default-font-size: 14px;
+    default-font-family: "Segoe UI";
+
+    HorizontalLayout {
+        Rectangle {
+            width: 88px;
+            background: Theme.sidebar;
+            accessible-role: tab-list;
+            accessible-label: "Navigation";
+            VerticalLayout {
+                padding: 10px;
+                padding-top: 16px;
+                spacing: 6px;
+                HorizontalLayout {
+                    alignment: center;
+                    Image { source: @image-url("../../static/aurora-icon.png"); width: 36px; height: 36px; image-rendering: smooth; accessible-role: image; accessible-label: "Aurora"; }
+                }
+                Rectangle { height: 14px; }
+                NavItem { label: "Home"; icon: Icons.home; active: Nav.page == Page.home; activated => { Nav.navigate(Page.home); } }
+                NavItem { label: "Instances"; icon: Icons.instances; active: Nav.page == Page.instances; activated => { Nav.navigate(Page.instances); } }
+                NavItem { label: "Discover"; icon: Icons.discover; active: Nav.page == Page.discover; activated => { Nav.navigate(Page.discover); } }
+                NavItem { label: "Skins"; icon: Icons.person; active: Nav.page == Page.skins; activated => { Nav.navigate(Page.skins); } }
+                NavItem { label: "Settings"; icon: Icons.settings; active: Nav.page == Page.settings; activated => { Nav.navigate(Page.settings); } }
+                Rectangle { vertical-stretch: 1; }
+                AccountButton { }
+            }
+        }
+        Rectangle {
+            horizontal-stretch: 1;
+            if !Shell.loaded && Shell.fatal-error == "": HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Spinner { size: 28px; } } }
+            if Shell.fatal-error != "": EmptyState {
+                icon: Icons.warning;
+                title: "Aurora could not load its launcher state";
+                message: Shell.fatal-error;
+                HorizontalLayout { alignment: center; Button { text: "Try again"; clicked => { Shell.retry-load(); } } }
+            }
+            if Shell.loaded && Nav.page == Page.home: HomePage { }
+            if Shell.loaded && Nav.page == Page.instances && !Nav.workspace-open: InstancesPage { }
+            if Shell.loaded && Nav.page == Page.instances && Nav.workspace-open: WorkspacePage { }
+            if Shell.loaded && Nav.page == Page.discover: DiscoverPage { }
+            if Shell.loaded && Nav.page == Page.skins: SkinsPage { }
+            if Shell.loaded && Nav.page == Page.settings: SettingsPage { }
+        }
+    }
+
+    if Shell.toast-visible: Toast {
+        x: (root.width - self.width) / 2 + 44px;
+        y: root.height - self.height - 20px;
+        text: Shell.toast-text;
+        tone: Shell.toast-tone;
+        dismissed => { Shell.dismiss-toast(); }
+    }
+
+    if Accounts.dialog-open: Dialog {
+        title: "Accounts";
+        dialog-width: 460px;
+        dismissible: !Accounts.login-busy;
+        dismissed => { Accounts.dialog-open = false; }
+        Text {
+            text: "Sign-in happens on Microsoft's website in your browser. Aurora never sees your password and keeps only a refresh credential in Windows Credential Manager.";
+            color: Theme.text-secondary;
+            font-size: Theme.text-secondary-size;
+            wrap: word-wrap;
+        }
+        VerticalLayout {
+            spacing: 6px;
+            accessible-role: list;
+            for row in Accounts.rows: AccountLine { item: row; }
+        }
+        if Accounts.login-busy: HorizontalLayout {
+            spacing: 10px;
+            Spinner { y: (parent.height - self.height) / 2; size: 18px; }
+            Text { horizontal-stretch: 1; text: Accounts.login-phase; color: Theme.text-secondary; vertical-alignment: center; wrap: word-wrap; }
+        }
+        if Accounts.error != "": Text { text: Accounts.error; color: Theme.error; wrap: word-wrap; font-size: Theme.text-secondary-size; }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            if Accounts.login-busy: Button { text: "Cancel sign-in"; clicked => { Accounts.cancel-sign-in(); } }
+            if !Accounts.login-busy: Button { text: Accounts.rows.length == 0 ? "Sign in with Microsoft" : "Add account"; icon: Icons.open-external; kind: ButtonKind.primary; clicked => { Accounts.sign-in(); } }
+        }
+    }
+
+    if Instances.create-open: Dialog {
+        title: "New instance";
+        dialog-width: 520px;
+        dismissible: !Instances.create-busy;
+        dismissed => { Instances.create-open = false; }
+        Text { text: "Name"; color: Theme.text-secondary; font-size: Theme.text-metadata; }
+        TextField { label: "Instance name"; placeholder: "My instance"; text <=> Instances.create-name; max-length: 64; enabled: !Instances.create-busy; }
+        HorizontalLayout {
+            spacing: Theme.space-3;
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 4px;
+                Text { text: "Minecraft version"; color: Theme.text-secondary; font-size: Theme.text-metadata; }
+                Dropdown {
+                    label: "Minecraft version";
+                    model: Instances.versions;
+                    current-index <=> Instances.version-index;
+                    enabled: !Instances.create-busy && !Instances.versions-loading && Instances.versions.length > 0;
+                    placeholder: Instances.versions-loading ? "Loading…" : "Unavailable";
+                    selected => { Instances.create-changed(); }
+                }
+            }
+            VerticalLayout {
+                spacing: 4px;
+                Text { text: "Loader"; color: Theme.text-secondary; font-size: Theme.text-metadata; }
+                Dropdown {
+                    width: 150px;
+                    label: "Mod loader";
+                    model: Instances.loaders;
+                    current-index <=> Instances.loader-index;
+                    enabled: !Instances.create-busy;
+                    selected => { Instances.create-changed(); }
+                }
+            }
+        }
+        Checkbox { text: "Include snapshots"; checked <=> Instances.include-snapshots; enabled: !Instances.create-busy; toggled(value) => { Instances.snapshots-changed(value); } }
+        HorizontalLayout {
+            spacing: Theme.space-3;
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                Text { text: "Aurora Client"; color: Theme.text; font-size: Theme.text-body; }
+                Text { text: Instances.aurora-note; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
+            }
+            Toggle {
+                y: (parent.height - self.height) / 2;
+                label: "Install Aurora Client";
+                checked <=> Instances.create-aurora;
+                enabled: Instances.aurora-available && !Instances.create-busy;
+            }
+        }
+        if Instances.create-busy: VerticalLayout {
+            spacing: 6px;
+            Text { text: Instances.create-progress; color: Theme.text-secondary; font-size: Theme.text-metadata; }
+            ProgressBar { progress: Instances.create-fraction; label: Instances.create-progress; }
+        }
+        if Instances.create-error != "": Text { text: Instances.create-error; color: Theme.error; wrap: word-wrap; font-size: Theme.text-secondary-size; }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button { text: "Cancel"; kind: ButtonKind.ghost; enabled: !Instances.create-busy; clicked => { Instances.create-open = false; } }
+            Button {
+                text: "Create and install";
+                kind: ButtonKind.primary;
+                loading: Instances.create-busy;
+                enabled: Instances.versions.length > 0;
+                clicked => { Instances.create-confirm(); }
+            }
+        }
+    }
+
+    if Instances.rename-open: Dialog {
+        title: "Rename instance";
+        dialog-width: 420px;
+        dismissed => { Instances.rename-open = false; }
+        Text { text: "Renaming changes only the display name. Folders and data stay where they are."; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
+        field := TextField { label: "Instance name"; text <=> Instances.rename-text; max-length: 64; accepted => { Instances.rename-confirm(); } escaped => { Instances.rename-open = false; } }
+        if Instances.rename-error != "": Text { text: Instances.rename-error; color: Theme.error; wrap: word-wrap; }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button { text: "Cancel"; kind: ButtonKind.ghost; clicked => { Instances.rename-open = false; } }
+            Button { text: "Rename"; kind: ButtonKind.primary; clicked => { Instances.rename-confirm(); } }
+        }
+        init => { field.focus-field(); field.select-everything(); }
+    }
+
+    if Settings.client-dialog-open: Dialog {
+        title: Settings.client-dialog-title;
+        dialog-width: 480px;
+        dismissible: !Settings.client-dialog-busy;
+        dismissed => { Settings.client-dialog-open = false; }
+        Text { text: Settings.client-dialog-detail; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button { text: "Cancel"; kind: ButtonKind.ghost; enabled: !Settings.client-dialog-busy; clicked => { Settings.client-dialog-open = false; } }
+            Button { text: "Update"; kind: ButtonKind.primary; enabled: Settings.client-dialog-can-apply; loading: Settings.client-dialog-busy; clicked => { Settings.client-update-apply(); } }
+        }
+    }
+
+    if Instances.delete-open: Dialog {
+        title: "Delete " + Instances.name + "?";
+        dialog-width: 460px;
+        dismissible: !Instances.delete-busy;
+        dismissed => { Instances.delete-open = false; }
+        Text { text: "This permanently deletes the instance folder, including worlds and screenshots. It cannot be undone. Type the instance name to confirm."; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
+        delete-field := TextField { label: "Type the instance name to confirm"; placeholder: Instances.name; text <=> Instances.delete-text; enabled: !Instances.delete-busy; }
+        if Instances.delete-error != "": Text { text: Instances.delete-error; color: Theme.error; wrap: word-wrap; }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button { text: "Cancel"; kind: ButtonKind.ghost; enabled: !Instances.delete-busy; clicked => { Instances.delete-open = false; } }
+            Button { text: "Delete permanently"; kind: ButtonKind.danger; loading: Instances.delete-busy; enabled: Instances.delete-text == Instances.name; clicked => { Instances.delete-confirm(); } }
+        }
+        init => { delete-field.focus-field(); }
+    }
+
+    if Instances.remove-open: Dialog {
+        title: Instances.remove-title;
+        dialog-width: 420px;
+        dismissed => { Instances.remove-open = false; }
+        Text { text: Instances.remove-detail; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button { text: "Cancel"; kind: ButtonKind.ghost; clicked => { Instances.remove-open = false; } }
+            Button { text: "Remove"; kind: ButtonKind.danger; icon: Icons.delete; clicked => { Instances.remove-confirm(); } }
+        }
+    }
+}

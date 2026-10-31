@@ -1,0 +1,151 @@
+// Home: select an instance and launch it. Nothing else competes here.
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { Icon, Icons } from "../icons.slint";
+import { Button, ButtonKind, Glyph, StatusPill, Tone, ProgressBar, EmptyState, FocusRing, Spinner } from "../components.slint";
+import { Home, Nav, Page, InstanceRow, BlockerRow } from "../state.slint";
+
+/// One selectable instance tile.
+export component InstanceTile inherits Rectangle {
+    in property <InstanceRow> item;
+    callback activated();
+    height: 64px;
+    border-radius: Theme.radius-md;
+    background: root.item.selected ? Theme.raised : touch.has-hover ? Theme.hover : Theme.surface;
+    border-width: root.item.selected ? 1px : 0px;
+    border-color: Theme.accent-outline;
+    accessible-role: list-item;
+    accessible-label: root.item.name;
+    accessible-description: root.item.subtitle + ". " + root.item.status;
+    accessible-item-selected: root.item.selected;
+    accessible-action-default => { activated(); }
+    forward-focus: focus;
+    HorizontalLayout {
+        padding: 12px;
+        spacing: 12px;
+        Glyph { y: (parent.height - self.height) / 2; letter: root.item.letter; size: 40px; }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text { text: root.item.name; font-size: Theme.text-body; font-weight: 600; color: Theme.text; overflow: elide; }
+            Text { text: root.item.subtitle; font-size: Theme.text-metadata; color: Theme.text-muted; overflow: elide; }
+        }
+    }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); root.activated(); } }
+    focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) { root.activated(); return accept; }
+            reject
+        }
+    }
+    FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus; }
+}
+
+component BlockerLine inherits HorizontalLayout {
+    in property <BlockerRow> item;
+    spacing: Theme.space-3;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    Icon { y: (parent.height - self.height) / 2; path: Icons.info; size: 18px; color: Theme.warning; }
+    Text { horizontal-stretch: 1; text: root.item.message; font-size: Theme.text-secondary-size; color: Theme.text-secondary; wrap: word-wrap; vertical-alignment: center; }
+    if root.item.action != "": Button { text: root.item.action; compact: true; clicked => { Home.blocker-action(root.item.code); } }
+}
+
+export component HomePage inherits ScrollView {
+    private property <int> columns: max(1, floor((self.visible-width - 64px) / 300px));
+    private property <length> tile-width: (self.visible-width - 64px - (columns - 1) * 12px) / columns;
+    VerticalLayout {
+        padding: Theme.space-6;
+        spacing: Theme.space-5;
+        alignment: start;
+
+        if !Home.has-instance: Rectangle {
+            background: Theme.surface;
+            border-radius: Theme.radius-lg;
+            EmptyState {
+                icon: Icons.instances;
+                title: "No instance yet";
+                message: "Create an instance to install Minecraft and Aurora. Each instance keeps its own mods, worlds and settings.";
+                HorizontalLayout {
+                    alignment: center;
+                    Button { text: "Create instance"; icon: Icons.add; kind: ButtonKind.primary; clicked => { Nav.navigate(Page.instances); } }
+                }
+            }
+        }
+
+        if Home.has-instance: Rectangle {
+            background: Theme.surface;
+            border-radius: Theme.radius-lg;
+            accessible-role: groupbox;
+            accessible-label: "Selected instance";
+            VerticalLayout {
+                padding: Theme.space-5;
+                spacing: Theme.space-4;
+                HorizontalLayout {
+                    spacing: Theme.space-4;
+                    Glyph { y: (parent.height - self.height) / 2; letter: Home.letter; size: 56px; }
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 4px;
+                        horizontal-stretch: 1;
+                        Text { text: Home.name; font-size: 24px; font-weight: 700; color: Theme.text; overflow: elide; accessible-role: AccessibleRole.text; }
+                        Text { text: Home.subtitle; font-size: Theme.text-secondary-size; color: Theme.text-secondary; overflow: elide; }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            if Home.checking: Spinner { y: (parent.height - self.height) / 2; size: 16px; }
+                            StatusPill { text: Home.status; tone: Home.tone; }
+                        }
+                    }
+                }
+                for blocker in Home.blockers: BlockerLine { item: blocker; }
+                HorizontalLayout {
+                    spacing: Theme.space-3;
+                    alignment: start;
+                    Button {
+                        text: Home.play-label;
+                        icon: Home.running ? "" : Icons.play;
+                        kind: ButtonKind.primary;
+                        enabled: Home.can-play;
+                        loading: Home.busy;
+                        min-width: 220px;
+                        min-height: 52px;
+                        accessible-description-text: Home.status;
+                        clicked => { Home.play(); }
+                    }
+                    Button { text: ""; icon: Icons.refresh; kind: ButtonKind.ghost; min-height: 52px; accessible-description-text: "Check again"; enabled: !Home.busy; clicked => { Home.refresh(); } }
+                }
+                if Home.progress-text != "": VerticalLayout {
+                    spacing: 6px;
+                    Text { text: Home.progress-text; font-size: Theme.text-metadata; color: Theme.text-muted; }
+                    ProgressBar { progress: Home.progress; label: Home.progress-text; }
+                }
+                if Home.message != "": Text {
+                    text: Home.message;
+                    font-size: Theme.text-secondary-size;
+                    color: Home.message-tone == Tone.error ? Theme.error : Theme.text-secondary;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
+        if Home.instances.length > 1: VerticalLayout {
+            spacing: Theme.space-3;
+            Text { text: "Switch instance"; font-size: Theme.text-section; font-weight: 600; color: Theme.text-secondary; accessible-role: AccessibleRole.text; }
+            Rectangle {
+                height: ceil(Home.instances.length / root.columns) * 76px - 12px;
+                accessible-role: list;
+                accessible-label: "Instances";
+                for row[i] in Home.instances: InstanceTile {
+                    x: mod(i, root.columns) * (root.tile-width + 12px);
+                    y: floor(i / root.columns) * 76px;
+                    width: root.tile-width;
+                    item: row;
+                    activated => { Home.select(row.id); }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,146 @@
+// Launcher Settings: launcher-wide preferences only. Per-instance settings
+// live in each instance workspace.
+import { ScrollView, AboutSlint } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { Icon, Icons } from "../icons.slint";
+import { Button, ButtonKind, Toggle, Dropdown, Group, SettingRow, PageTitle, FocusRing, Label, TextField } from "../components.slint";
+import { Settings, Accounts, Swatch } from "../state.slint";
+
+component AccentSwatch inherits Rectangle {
+    in property <Swatch> swatch;
+    in property <bool> chosen;
+    callback picked();
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
+    background: swatch.color;
+    border-width: chosen ? 3px : 0px;
+    border-color: Theme.text;
+    accessible-role: radio-button;
+    accessible-label: swatch.label;
+    accessible-checked: chosen;
+    accessible-checkable: true;
+    accessible-action-default => { picked(); }
+    forward-focus: focus;
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); root.picked(); } }
+    focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) { root.picked(); return accept; }
+            reject
+        }
+    }
+    FocusRing { x: -4px; y: -4px; width: root.width + 8px; height: root.height + 8px; shown: focus.has-focus; radius: 16px; }
+}
+
+export component SettingsPage inherits ScrollView {
+    VerticalLayout {
+        padding: Theme.space-6;
+        spacing: Theme.space-4;
+        alignment: start;
+        PageTitle { text: "Settings"; }
+
+        Group {
+            title: "Appearance";
+            SettingRow {
+                label: "Theme";
+                detail: Settings.theme-index >= 0 && Settings.theme-index < Settings.theme-descriptions.length ? Settings.theme-descriptions[Settings.theme-index] : "";
+                Dropdown {
+                    width: 220px;
+                    label: "Theme";
+                    model: Settings.theme-labels;
+                    current-index <=> Settings.theme-index;
+                    enabled: !Settings.appearance-busy;
+                    selected(index) => { Settings.theme-changed(index); }
+                }
+            }
+            SettingRow {
+                label: "Accent";
+                detail: "Used for selection, focus and primary actions.";
+                HorizontalLayout {
+                    spacing: 10px;
+                    accessible-role: list;
+                    accessible-label: "Accent color";
+                    for swatch in Settings.accents: AccentSwatch {
+                        swatch: swatch;
+                        chosen: swatch.id == Settings.accent-id;
+                        picked => { Settings.accent-changed(swatch.id); }
+                    }
+                }
+            }
+            SettingRow {
+                label: "Custom accent";
+                detail: Settings.accent-id == "custom" ? "In use. Aurora adjusts it for readable buttons." : "A #rrggbb color. Colors too dark to stay visible are refused.";
+                HorizontalLayout {
+                    spacing: 8px;
+                    TextField { width: 120px; label: "Custom accent color"; placeholder: "#8b80ff"; max-length: 7; text <=> Settings.custom-accent; accepted(text) => { Settings.custom-accent-apply(text); } }
+                    Button { text: "Apply"; enabled: !Settings.appearance-busy; clicked => { Settings.custom-accent-apply(Settings.custom-accent); } }
+                }
+            }
+            SettingRow {
+                label: "Reduce motion";
+                detail: "Turns off transitions. Aurora never animates while idle.";
+                Toggle { label: "Reduce motion"; checked <=> Settings.reduce-motion; toggled(value) => { Settings.reduce-motion-changed(value); } }
+            }
+            if Settings.appearance-error != "": Text { text: Settings.appearance-error; color: Theme.error; wrap: word-wrap; }
+        }
+
+        Group {
+            title: "Account";
+            SettingRow {
+                label: Accounts.has-account ? Accounts.name : "Not signed in";
+                detail: Accounts.has-account ? Accounts.status : "Sign-in opens Microsoft in your browser. Aurora never sees your password.";
+                Button { text: "Manage accounts"; icon: Icons.person; clicked => { Accounts.open-dialog(); } }
+            }
+        }
+
+        Group {
+            title: "Updates";
+            SettingRow {
+                label: "Launcher";
+                detail: Settings.launcher-update;
+            }
+            SettingRow {
+                label: "Aurora Client";
+                detail: Settings.client-update;
+                HorizontalLayout {
+                    spacing: 8px;
+                    if Settings.client-update-available: Button { text: "Review update"; kind: ButtonKind.primary; clicked => { Settings.review-client-update(); } }
+                    Button { text: "Check now"; icon: Icons.update; loading: Settings.update-busy; clicked => { Settings.check-updates(); } }
+                }
+            }
+        }
+
+        Group {
+            title: "Desktop";
+            if Settings.shortcuts-supported: SettingRow {
+                label: "Desktop shortcut";
+                detail: Settings.desktop-state;
+                Button {
+                    text: Settings.desktop-present ? "Remove" : "Create";
+                    enabled: !Settings.shortcuts-busy;
+                    clicked => { Settings.toggle-desktop-shortcut(); }
+                }
+            }
+            if Settings.shortcuts-supported && !Settings.start-menu-present: SettingRow {
+                label: "Start menu shortcut";
+                detail: Settings.start-menu-state;
+                Button { text: "Create"; enabled: !Settings.shortcuts-busy; clicked => { Settings.create-start-menu-shortcut(); } }
+            }
+            SettingRow {
+                label: "Launcher folder";
+                detail: Settings.data-root;
+                Button { text: "Open"; icon: Icons.folder; clicked => { Settings.open-launcher-folder(); } }
+            }
+        }
+
+        Group {
+            title: "About";
+            SettingRow { label: "Aurora Launcher " + Settings.version; detail: "Native preview · " + Settings.renderer; }
+            Label { text: "Aurora Launcher is open source under the MIT license. The native interface is built with Slint under the Slint Royalty-free License 2.0."; wrap: word-wrap; }
+            HorizontalLayout {
+                alignment: start;
+                AboutSlint { max-height: 140px; }
+            }
+        }
+    }
+}
