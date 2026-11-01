@@ -12,6 +12,7 @@ mod cosmetic_image;
 #[cfg(all(debug_assertions, feature = "f3ra-desktop-acceptance"))]
 mod desktop_acceptance;
 pub mod local_content;
+pub mod local_pack;
 
 #[cfg(all(
     feature = "native-preview",

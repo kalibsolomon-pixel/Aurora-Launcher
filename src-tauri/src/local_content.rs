@@ -41,7 +41,9 @@ fn tickets() -> &'static Mutex<HashMap<String, Ticket>> {
 fn invalid(message: &str) -> ContentError {
     ContentError::UnsupportedActionWith(message.into())
 }
-fn safe_source(path: &Path) -> Result<u64, ContentError> {
+/// Absolute regular file, no symlink/reparse ancestor, 1 byte – 512 MiB.
+/// Shared with the local `.mrpack` recognizer.
+pub(crate) fn safe_source(path: &Path) -> Result<u64, ContentError> {
     if !path.is_absolute() {
         return Err(ContentError::UnsafePath);
     }

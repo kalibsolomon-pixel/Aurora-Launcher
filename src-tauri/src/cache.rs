@@ -297,6 +297,45 @@ impl ArtifactCache {
         .await?;
         Ok(VerifiedLocalArtifact { path, bytes: size })
     }
+
+    /// Record that the verified SHA-256 object also has a provider-published
+    /// SHA-512, after re-hashing the stored bytes against both digests and the
+    /// size. [`ArtifactCache::acquire_sha512`] re-verifies every hit anyway, so
+    /// a recorded alias only avoids a download; it never grants trust.
+    pub fn record_sha512_alias(
+        &self,
+        sha512: &crate::integrity::Sha512Digest,
+        sha256: &ArtifactDigest,
+        size: u64,
+    ) -> Result<(), AcquisitionError> {
+        let path = self.verified_path(sha256);
+        let (_, computed) = verify_file_sha512(&path, sha512, Some(size)).map_err(|_| {
+            AcquisitionError::Download(DownloadError::Sha256Mismatch {
+                expected: sha256.as_hex(),
+                actual: "stored bytes do not match the published SHA-512".into(),
+            })
+        })?;
+        if &computed != sha256 {
+            return Err(AcquisitionError::Download(DownloadError::Sha256Mismatch {
+                expected: sha256.as_hex(),
+                actual: computed.as_hex(),
+            }));
+        }
+        let map_dir = self
+            .managed
+            .cache_dir()
+            .join(ARTIFACTS_DIR)
+            .join("sha512-map");
+        std::fs::create_dir_all(&map_dir).map_err(AcquisitionError::StoreIo)?;
+        let map_path = map_dir.join(sha512.as_hex());
+        let temporary = map_dir.join(format!("{}.{}.tmp", sha512.as_hex(), uuid::Uuid::new_v4()));
+        std::fs::write(&temporary, sha256.as_hex()).map_err(AcquisitionError::StoreIo)?;
+        if let Err(error) = std::fs::rename(&temporary, &map_path) {
+            let _ = std::fs::remove_file(&temporary);
+            return Err(AcquisitionError::StoreIo(error));
+        }
+        Ok(())
+    }
     pub fn new(managed: ManagedPaths) -> Self {
         Self {
             managed,

@@ -3760,6 +3760,30 @@ async fn install_resolved_provider_plans(
     })
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalModpackRequest {
+    source_path: String,
+}
+
+/// Identify one explicitly selected local `.mrpack`. Success means Modrinth
+/// publishes these exact bytes as a pack version; the caller then reviews and
+/// installs that identity through the unchanged hosted pack engine, which
+/// reuses the verified local bytes. Nothing is installed here.
+pub async fn identify_local_modpack(
+    app: Host,
+    request: LocalModpackRequest,
+) -> Result<crate::local_pack::LocalPackMatch, CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::local_pack::recognize(
+        &managed,
+        &crate::modrinth::Client::official(),
+        std::path::Path::new(&request.source_path),
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
+}
+
 /// One-click UX over the same resolution, fingerprint, and transaction path as
 /// the reviewed install. No search-result metadata becomes install authority.
 #[derive(Debug, Clone, Deserialize)]
