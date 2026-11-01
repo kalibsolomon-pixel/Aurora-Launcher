@@ -190,7 +190,7 @@ fn play() {
         let account = state.accounts.selected_account_id.clone()?;
         let decision = state.readiness.as_ref()?;
         if state.play_busy
-            || !decision.ready
+            || !(decision.ready || decision.can_prepare)
             || decision.instance_id != instance
             || decision.account_id.as_deref() != Some(account.as_str())
         {
@@ -225,6 +225,7 @@ fn play() {
 pub fn on_launch_progress(phase: &str) {
     let label = match phase {
         "checkingPreconditions" => "Checking readiness…",
+        "preparingJava" => "Preparing managed Java…",
         "resolvingLaunch" => "Preparing the game…",
         "restoringSession" => "Restoring the Minecraft session…",
         "assemblingArguments" => "Assembling the launch…",
@@ -325,6 +326,7 @@ pub fn render() {
                 || state.play_busy);
         let checking = decision.is_none() && state.play_error.is_none();
         let ready = decision.is_some_and(|d| d.ready);
+        let preparable = decision.is_some_and(|d| d.can_prepare);
 
         let (status, tone) = if running {
             ("Running", Tone::Success)
@@ -334,6 +336,8 @@ pub fn render() {
             ("Checking…", Tone::Working)
         } else if ready {
             ("Ready", Tone::Success)
+        } else if preparable {
+            ("Play will prepare Java", Tone::Neutral)
         } else {
             ("Needs attention", Tone::Warning)
         };
@@ -348,12 +352,12 @@ pub fn render() {
             } else if starting {
                 "Starting…"
             } else {
-                "Play"
+                if preparable { "Prepare & play" } else { "Play" }
             }
             .into(),
         );
         home.set_can_play(
-            ready
+            (ready || preparable)
                 && !running
                 && !starting
                 && !checking

@@ -1,5 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export interface InstanceSyncPolicy { schemaVersion: number; enabled: boolean }
+export interface InstanceSyncRequest {
+  sourceId: string; destinationId: string;
+  category: "settings" | "controls" | "resourcePacks" | "shaderPacks" | "screenshots" | "configuration";
+  exclusions: string[];
+  selectedPaths?: string[];
+}
+export interface InstanceSyncPreview {
+  fingerprint: string;
+  entries: { path: string; action: "copyMissing" | "mergeSettings" | "identical" | "keepConflict"; changedKeys: string[] }[];
+  changes: number; conflicts: number; bytesToCopy: number;
+}
+export interface InstanceSyncReceipt { copied: number; conflictsKept: number; backupId: string | null }
+export const getInstanceSyncPolicy = (): Promise<InstanceSyncPolicy> => invoke("get_instance_sync_policy");
+export const setInstanceSyncEnabled = (enabled: boolean): Promise<InstanceSyncPolicy> => invoke("set_instance_sync_enabled", { request: { enabled } });
+export const previewInstanceSync = (request: InstanceSyncRequest): Promise<InstanceSyncPreview> => invoke("preview_instance_sync", { request });
+export const applyInstanceSync = (sync: InstanceSyncRequest, fingerprint: string): Promise<InstanceSyncReceipt> => invoke("apply_instance_sync", { request: { sync, fingerprint } });
+
 export interface LocalContentPreview {
   ticket: string; fingerprint: string; fileName: string; instanceName: string;
   contentType: "mod" | "resourcePack" | "shaderPack";
@@ -2049,6 +2067,8 @@ export interface PlayBlocker {
 /** Rust's complete non-secret decision about whether Play may proceed. */
 export interface PlayReadiness {
   ready: boolean;
+  /** A missing exact managed Java runtime may be prepared by Play; not Ready yet. */
+  canPrepare?: boolean;
   instanceId: string;
   accountId: string | null;
   accountName: string | null;

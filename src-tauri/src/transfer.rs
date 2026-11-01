@@ -93,74 +93,80 @@ pub fn snapshot() -> TransferSnapshot {
     }
 }
 
-/// Exclusive in-process ownership of one artifact identity.
-pub struct FlightGuard {
+/// One live user of a keyed coordination slot, including a queued future.
+/// Drop runs on cancellation too; completed hosts/digests never accumulate.
+struct SlotLease<T: 'static> {
     key: String,
-    _guard: OwnedMutexGuard<()>,
+    slot: Arc<T>,
+    map: &'static Mutex<HashMap<String, Arc<T>>>,
 }
 
-impl Drop for FlightGuard {
+impl<T> Drop for SlotLease<T> {
     fn drop(&mut self) {
-        // Forget the slot once nobody else holds or awaits it, so the map
-        // stays bounded by in-flight work rather than by history.
-        let mut flights = coordinator()
-            .flights
-            .lock()
-            .expect("flight map is not poisoned");
-        if let Some(slot) = flights.get(&self.key) {
-            // One reference in the map plus the one inside our guard.
-            if Arc::strong_count(slot) <= 2 {
-                flights.remove(&self.key);
+        let mut slots = self.map.lock().expect("coordination map is not poisoned");
+        if let Some(slot) = slots.get(&self.key) {
+            if Arc::ptr_eq(slot, &self.slot) && Arc::strong_count(slot) == 2 {
+                slots.remove(&self.key);
             }
         }
     }
 }
 
+fn slot<T>(
+    map: &'static Mutex<HashMap<String, Arc<T>>>,
+    key: String,
+    create: impl FnOnce() -> T,
+) -> SlotLease<T> {
+    let slot = Arc::clone(
+        map.lock()
+            .expect("coordination map is not poisoned")
+            .entry(key.clone())
+            .or_insert_with(|| Arc::new(create())),
+    );
+    SlotLease { key, slot, map }
+}
+
+/// Exclusive in-process ownership of one artifact identity. Release the
+/// owned mutex before the lease checks for the last slot user.
+pub struct FlightGuard {
+    _guard: OwnedMutexGuard<()>,
+    _lease: SlotLease<tokio::sync::Mutex<()>>,
+}
+
 /// Waits until this process owns `key` (for example `sha1:<hex>`).
 pub async fn single_flight(key: String) -> FlightGuard {
-    let slot = {
-        let mut flights = coordinator()
-            .flights
-            .lock()
-            .expect("flight map is not poisoned");
-        Arc::clone(
-            flights
-                .entry(key.clone())
-                .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(()))),
-        )
-    };
-    let guard = match Arc::clone(&slot).try_lock_owned() {
+    let lease = slot(&coordinator().flights, key, || tokio::sync::Mutex::new(()));
+    let guard = match Arc::clone(&lease.slot).try_lock_owned() {
         Ok(guard) => guard,
         Err(_) => {
             coordinator()
                 .stats
                 .deduplicated_waits
                 .fetch_add(1, Ordering::Relaxed);
-            slot.lock_owned().await
+            Arc::clone(&lease.slot).lock_owned().await
         }
     };
-    FlightGuard { key, _guard: guard }
+    FlightGuard {
+        _guard: guard,
+        _lease: lease,
+    }
 }
 
 /// Held for the duration of one network transfer.
 pub struct TransferPermit {
     _global: OwnedSemaphorePermit,
     _host: OwnedSemaphorePermit,
+    _lease: SlotLease<Semaphore>,
 }
 
 pub async fn permit(host: &str) -> TransferPermit {
     let c = coordinator();
-    let host_semaphore = {
-        let mut hosts = c.hosts.lock().expect("host map is not poisoned");
-        Arc::clone(
-            hosts
-                .entry(host.to_ascii_lowercase())
-                .or_insert_with(|| Arc::new(Semaphore::new(PER_HOST_TRANSFER_LIMIT))),
-        )
-    };
+    let lease = slot(&c.hosts, host.to_ascii_lowercase(), || {
+        Semaphore::new(PER_HOST_TRANSFER_LIMIT)
+    });
     // Host first: a request queued behind a saturated host does not hold a
     // global slot that another host's request could use.
-    let host = host_semaphore
+    let host = Arc::clone(&lease.slot)
         .acquire_owned()
         .await
         .expect("transfer semaphores are never closed");
@@ -171,6 +177,7 @@ pub async fn permit(host: &str) -> TransferPermit {
     TransferPermit {
         _global: global,
         _host: host,
+        _lease: lease,
     }
 }
 
@@ -304,10 +311,119 @@ where
     first_error.map_or(Ok(()), Err)
 }
 
+/// Completion-order counterpart for consumers whose output order is irrelevant.
+/// Slow items do not prevent refilling free slots. Width bounds both futures
+/// and completed values; there is no reorder buffer or detached task.
+pub async fn settled_each<'a, T, R, E, Fut>(
+    items: &'a [T],
+    width: usize,
+    should_start: impl Fn() -> bool,
+    acquire: impl Fn(&'a T) -> Fut,
+    mut accept: impl FnMut(&'a T, R),
+) -> Result<(), E>
+where
+    Fut: Future<Output = Result<R, E>>,
+{
+    use futures_util::stream::{FuturesUnordered, StreamExt};
+    let mut first_error = None;
+    let mut pending = items.iter();
+    let mut in_flight = FuturesUnordered::new();
+    loop {
+        while first_error.is_none() && in_flight.len() < width.max(1) && should_start() {
+            let Some(item) = pending.next() else { break };
+            let future = acquire(item);
+            in_flight.push(async move { (item, future.await) });
+        }
+        let Some((item, outcome)) = in_flight.next().await else {
+            break;
+        };
+        match outcome {
+            Ok(value) if first_error.is_none() => accept(item, value),
+            Ok(_) => {}
+            Err(error) => {
+                first_error.get_or_insert(error);
+            }
+        }
+    }
+    first_error.map_or(Ok(()), Err)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
+
+    #[tokio::test]
+    async fn completed_hosts_and_cancelled_waiters_release_slots() {
+        for index in 0..100 {
+            drop(permit(&format!("transient-{index}.test")).await);
+        }
+        assert!(
+            !coordinator()
+                .hosts
+                .lock()
+                .unwrap()
+                .keys()
+                .any(|k| k.starts_with("transient-"))
+        );
+        let owner = single_flight("cancelled-waiter".into()).await;
+        // Poll a queued waiter, then cancel the owner before the waiter. The
+        // old owner's Drop saw the waiter and could never reclaim this slot.
+        let mut waiter = Box::pin(single_flight("cancelled-waiter".into()));
+        assert!(futures_util::poll!(&mut waiter).is_pending());
+        drop(owner);
+        drop(waiter);
+        assert!(
+            !coordinator()
+                .flights
+                .lock()
+                .unwrap()
+                .contains_key("cancelled-waiter")
+        );
+    }
+
+    #[tokio::test]
+    async fn completion_window_refills_while_first_item_is_pending_and_settles_errors() {
+        let release = Arc::new(tokio::sync::Notify::new());
+        let started = Arc::new(AtomicUsize::new(0));
+        let pending = Arc::new(AtomicUsize::new(0));
+        let r = Arc::clone(&release);
+        let s = Arc::clone(&started);
+        let p = Arc::clone(&pending);
+        let worker = tokio::spawn(async move {
+            settled_each(
+                &(0..20).collect::<Vec<_>>(),
+                3,
+                || true,
+                |item| {
+                    let (r, s, p) = (Arc::clone(&r), Arc::clone(&s), Arc::clone(&p));
+                    async move {
+                        s.fetch_add(1, Ordering::SeqCst);
+                        p.fetch_add(1, Ordering::SeqCst);
+                        if *item == 0 {
+                            r.notified().await;
+                        }
+                        p.fetch_sub(1, Ordering::SeqCst);
+                        if *item == 5 { Err(5) } else { Ok(()) }
+                    }
+                },
+                |_, ()| {},
+            )
+            .await
+        });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while started.load(Ordering::SeqCst) < 6 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(!worker.is_finished());
+        release.notify_one();
+        assert_eq!(worker.await.unwrap(), Err(5));
+        assert_eq!(pending.load(Ordering::SeqCst), 0);
+        assert!(started.load(Ordering::SeqCst) < 20);
+    }
 
     #[tokio::test]
     async fn settled_window_keeps_order_bounds_width_and_settles_after_failure() {

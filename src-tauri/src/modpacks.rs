@@ -386,7 +386,7 @@ pub async fn install(
     )
     .await?;
     checkpoint()?;
-    crate::transfer::settled_window(
+    crate::transfer::settled_each(
         &resolved.provider_plans,
         PACK_DOWNLOAD_CONCURRENCY,
         || crate::content_jobs::checkpoint().is_ok(),

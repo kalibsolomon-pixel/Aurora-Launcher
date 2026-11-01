@@ -1,0 +1,738 @@
+{
+  "machine": {
+    "cpu": "Intel(R) Core(TM) i7-14700F",
+    "logicalProcessors": 28,
+    "os": {
+      "Caption": "Microsoft Windows 11 Home",
+      "BuildNumber": "26300",
+      "TotalVisibleMemorySize": 33304812
+    }
+  },
+  "baselineSource": "0e2c8dd9e13ea1b1d548505d575674d9114ee386",
+  "pandoraSource": "2d83d6f22c43e804d9b544e8dc98d49d4874e3af",
+  "toolchain": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "groups": {
+    "idle-before": {
+      "runs": [
+        {
+          "run": "pandora-idle-before-0",
+          "exeSha256": "37cf0797822efb8e5b9b88a0584bbaa53e7fcc4a493d37cc2184f4be606a4c61",
+          "peakWorkingSetMiB": 32.13671875,
+          "peakSampledPrivateMiB": 10.46484375,
+          "observedDescendants": [],
+          "cpuSeconds": 0.09375,
+          "logicalReadMiB": 0.5859584808349609,
+          "logicalWriteMiB": 0.4333362579345703,
+          "idleWorkingSetMiB": 32.08984375,
+          "idlePrivateCommittedMiB": 10.3359375,
+          "idleCpuSeconds": 0.0,
+          "idleSampleSeconds": 12.022841800004244,
+          "idleOneCorePercent": 0.0,
+          "homeLoadedInternalMs": 32,
+          "homeCheckpoint": {
+            "event": "home-state-loaded",
+            "ms": 32,
+            "updates": 0,
+            "phaseMs": 0,
+            "visible": true,
+            "foreground": true
+          }
+        },
+        {
+          "run": "pandora-idle-before-1",
+          "exeSha256": "37cf0797822efb8e5b9b88a0584bbaa53e7fcc4a493d37cc2184f4be606a4c61",
+          "peakWorkingSetMiB": 31.4375,
+          "peakSampledPrivateMiB": 10.2578125,
+          "observedDescendants": [],
+          "cpuSeconds": 0.15625,
+          "logicalReadMiB": 0.6447887420654297,
+          "logicalWriteMiB": 0.49625110626220703,
+          "idleWorkingSetMiB": 31.390625,
+          "idlePrivateCommittedMiB": 10.125,
+          "idleCpuSeconds": 0.078125,
+          "idleSampleSeconds": 12.030136700021103,
+          "idleOneCorePercent": 0.6494107419399727,
+          "homeLoadedInternalMs": 28,
+          "homeCheckpoint": {
+            "event": "home-state-loaded",
+            "ms": 28,
+            "updates": 0,
+            "phaseMs": 0,
+            "visible": true,
+            "foreground": true
+          }
+        },
+        {
+          "run": "pandora-idle-before-2",
+          "exeSha256": "37cf0797822efb8e5b9b88a0584bbaa53e7fcc4a493d37cc2184f4be606a4c61",
+          "peakWorkingSetMiB": 31.41796875,
+          "peakSampledPrivateMiB": 10.25,
+          "observedDescendants": [],
+          "cpuSeconds": 0.140625,
+          "logicalReadMiB": 0.6685504913330078,
+          "logicalWriteMiB": 0.5085468292236328,
+          "idleWorkingSetMiB": 31.37109375,
+          "idlePrivateCommittedMiB": 10.1171875,
+          "idleCpuSeconds": 0.03125,
+          "idleSampleSeconds": 12.016960999928415,
+          "idleOneCorePercent": 0.2600491089235137,
+          "homeLoadedInternalMs": 25,
+          "homeCheckpoint": {
+            "event": "home-state-loaded",
+            "ms": 25,
+            "updates": 0,
+            "phaseMs": 0,
+            "visible": true,
+            "foreground": true
+          }
+        },
+        {
+          "run": "pandora-idle-before-3",
+          "exeSha256": "37cf0797822efb8e5b9b88a0584bbaa53e7fcc4a493d37cc2184f4be606a4c61",
+          "peakWorkingSetMiB": 31.453125,
+          "peakSampledPrivateMiB": 10.29296875,
+          "observedDescendants": [],
+          "cpuSeconds": 0.125,
+          "logicalReadMiB": 0.5721731185913086,
+          "logicalWriteMiB": 0.4384641647338867,
+          "idleWorkingSetMiB": 31.40625,
+          "idlePrivateCommittedMiB": 10.1640625,
+          "idleCpuSeconds": 0.046875,
+          "idleSampleSeconds": 12.015995100024156,
+          "idleOneCorePercent": 0.39010501926640906,
+          "homeLoadedInternalMs": 26,
+          "homeCheckpoint": {
+            "event": "home-state-loaded",
+            "ms": 26,
+            "updates": 0,
+            "phaseMs": 0,
+            "visible": true,
+            "foreground": true
+          }
+        },
+        {
+          "run": "pandora-idle-before-4",
+          "exeSha256": "37cf0797822efb8e5b9b88a0584bbaa53e7fcc4a493d37cc2184f4be606a4c61",
+          "peakWorkingSetMiB": 32.20703125,
+          "peakSampledPrivateMiB": 10.53515625,
+          "observedDescendants": [],
+          "cpuSeconds": 0.171875,
+          "logicalReadMiB": 0.5767555236816406,
+          "logicalWriteMiB": 0.4407768249511719,
+          "idleWorkingSetMiB": 32.16015625,
+          "idlePrivateCommittedMiB": 10.40625,
+          "idleCpuSeconds": 0.078125,
+          "idleSampleSeconds": 12.002172000007704,
+          "idleOneCorePercent": 0.6509238494494984,
+          "homeLoadedInternalMs": 28,
+          "homeCheckpoint": {
+            "event": "home-state-loaded",
+            "ms": 28,
+            "updates": 0,
+            "phaseMs": 0,
+            "visible": true,
+            "foreground": true
+          }
+        }
+      ],
+      "median": {
+        "peakWorkingSetMiB": 31.453125,
+        "peakSampledPrivateMiB": 10.29296875,
+        "cpuSeconds": 0.140625,
+        "logicalReadMiB": 0.5859584808349609,
+        "logicalWriteMiB": 0.4407768249511719,
+        "idleWorkingSetMiB": 31.40625,
+        "idlePrivateCommittedMiB": 10.1640625,
+        "idleCpuSeconds": 0.046875,
+        "idleSampleSeconds": 12.016960999928415,
+        "idleOneCorePercent": 0.39010501926640906,
+        "homeLoadedInternalMs": 28
+      },
+      "range": {
+        "peakWorkingSetMiB": [
+          31.41796875,
+          32.20703125
+        ],
+        "peakSampledPrivateMiB": [
+          10.25,
+          10.53515625
+        ],
+        "cpuSeconds": [
+          0.09375,
+          0.171875
+        ],
+        "logicalReadMiB": [
+          0.5721731185913086,
+          0.6685504913330078
+        ],
+        "logicalWriteMiB": [
+          0.4333362579345703,
+          0.5085468292236328
+        ],
+        "idleWorkingSetMiB": [
+          31.37109375,
+          32.16015625
+        ],
+        "idlePrivateCommittedMiB": [
+          10.1171875,
+          10.40625
+        ],
+        "idleCpuSeconds": [
+          0.0,
+          0.078125
+        ],
+        "idleSampleSeconds": [
+          12.002172000007704,
+          12.030136700021103
+        ],
+        "idleOneCorePercent": [
+          0.0,
+          0.6509238494494984
+        ],
+        "homeLoadedInternalMs": [
+          25,
+          32
+        ]
+      }
+    },
+    "idle-after": {
+      "runs": [
+        {
+          "run": "pandora-idle-after-0",
+          "exeSha256": "d0e3a897a5ed956fb37f70bf821df087071206a48885c78be9fe6fcc17f1b48e",
+          "peakWorkingSetMiB": 45.37890625,
+          "peakSampledPrivateMiB": 10.25,
+          "observedDescendants": [],
+          "cpuSeconds": 0.1875,
+          "logicalReadMiB": 0.8558254241943359,
+          "logicalWriteMiB": 0.6571931838989258,
+          "idleWorkingSetMiB": 45.328125,
+          "idlePrivateCommittedMiB": 10.12109375,
+          "idleCpuSeconds": 0.109375,
+          "idleSampleSeconds": 12.009175200015306,
+          "idleOneCorePercent": 0.910761964733936,
+          "homeLoadedInternalMs": 31,
+          "homeCheckpoint": {
+            "event": "home-state-loaded",
+            "ms": 31,
+            "updates": 0,
+            "phaseMs": 0,
+            "visible": true,
+            "foreground": true
+          }
+        },
+        {
+          "run": "pandora-idle-after-1",
+          "exeSha256": "d0e3a897a5ed956fb37f70bf821df087071206a48885c78be9fe6fcc17f1b48e",
+          "peakWorkingSetMiB": 31.35546875,
+          "peakSampledPrivateMiB": 10.22265625,
+          "observedDescendants": [],
+          "cpuSeconds": 0.15625,
+          "logicalReadMiB": 0.6443614959716797,
+          "logicalWriteMiB": 0.4900684356689453,
+          "idleWorkingSetMiB": 31.34765625,
+          "idlePrivateCommittedMiB": 10.08984375,
+          "idleCpuSeconds": 0.03125,
+          "idleSampleSeconds": 12.042521400027908,
+          "idleOneCorePercent": 0.2594971514846349,
+          "homeLoadedInternalMs": 28,
+          "homeCheckpoint": {
+            "event": "home-state-loaded",
+            "ms": 28,
+            "updates": 0,
+            "phaseMs": 0,
+            "visible": true,
+            "foreground": true
+          }
+        },
+        {
+          "run": "pandora-idle-after-2",
+          "exeSha256": "d0e3a897a5ed956fb37f70bf821df087071206a48885c78be9fe6fcc17f1b48e",
+          "peakWorkingSetMiB": 31.4296875,
+          "peakSampledPrivateMiB": 10.2578125,
+          "observedDescendants": [],
+          "cpuSeconds": 0.15625,
+          "logicalReadMiB": 0.6205835342407227,
+          "logicalWriteMiB": 0.4757394790649414,
+          "idleWorkingSetMiB": 31.3828125,
+          "idlePrivateCommittedMiB": 10.125,
+          "idleCpuSeconds": 0.03125,
+          "idleSampleSeconds": 12.002192600048147,
+          "idleOneCorePercent": 0.2603690928928656,
+          "homeLoadedInternalMs": 25,
+          "homeCheckpoint": {
+            "event": "home-state-loaded",
+            "ms": 25,
+            "updates": 0,
+            "phaseMs": 0,
+            "visible": true,
+            "foreground": true
+          }
+        },
+        {
+          "run": "pandora-idle-after-3",
+          "exeSha256": "d0e3a897a5ed956fb37f70bf821df087071206a48885c78be9fe6fcc17f1b48e",
+          "peakWorkingSetMiB": 31.3984375,
+          "peakSampledPrivateMiB": 10.21875,
+          "observedDescendants": [],
+          "cpuSeconds": 0.09375,
+          "logicalReadMiB": 0.5963783264160156,
+          "logicalWriteMiB": 0.4588327407836914,
+          "idleWorkingSetMiB": 31.3515625,
+          "idlePrivateCommittedMiB": 10.0859375,
+          "idleCpuSeconds": 0.046875,
+          "idleSampleSeconds": 12.029117199941538,
+          "idleOneCorePercent": 0.3896794687496088,
+          "homeLoadedInternalMs": 42,
+          "homeCheckpoint": {
+            "event": "home-state-loaded",
+            "ms": 42,
+            "updates": 0,
+            "phaseMs": 0,
+            "visible": true,
+            "foreground": true
+          }
+        },
+        {
+          "run": "pandora-idle-after-4",
+          "exeSha256": "d0e3a897a5ed956fb37f70bf821df087071206a48885c78be9fe6fcc17f1b48e",
+          "peakWorkingSetMiB": 31.3359375,
+          "peakSampledPrivateMiB": 10.16796875,
+          "observedDescendants": [],
+          "cpuSeconds": 0.140625,
+          "logicalReadMiB": 0.7658147811889648,
+          "logicalWriteMiB": 0.5875711441040039,
+          "idleWorkingSetMiB": 31.2890625,
+          "idlePrivateCommittedMiB": 10.03515625,
+          "idleCpuSeconds": 0.046875,
+          "idleSampleSeconds": 12.035332100000232,
+          "idleOneCorePercent": 0.3894782429809236,
+          "homeLoadedInternalMs": 33,
+          "homeCheckpoint": {
+            "event": "home-state-loaded",
+            "ms": 33,
+            "updates": 0,
+            "phaseMs": 0,
+            "visible": true,
+            "foreground": true
+          }
+        }
+      ],
+      "median": {
+        "peakWorkingSetMiB": 31.3984375,
+        "peakSampledPrivateMiB": 10.22265625,
+        "cpuSeconds": 0.15625,
+        "logicalReadMiB": 0.6443614959716797,
+        "logicalWriteMiB": 0.4900684356689453,
+        "idleWorkingSetMiB": 31.3515625,
+        "idlePrivateCommittedMiB": 10.08984375,
+        "idleCpuSeconds": 0.046875,
+        "idleSampleSeconds": 12.029117199941538,
+        "idleOneCorePercent": 0.3894782429809236,
+        "homeLoadedInternalMs": 31
+      },
+      "range": {
+        "peakWorkingSetMiB": [
+          31.3359375,
+          45.37890625
+        ],
+        "peakSampledPrivateMiB": [
+          10.16796875,
+          10.2578125
+        ],
+        "cpuSeconds": [
+          0.09375,
+          0.1875
+        ],
+        "logicalReadMiB": [
+          0.5963783264160156,
+          0.8558254241943359
+        ],
+        "logicalWriteMiB": [
+          0.4588327407836914,
+          0.6571931838989258
+        ],
+        "idleWorkingSetMiB": [
+          31.2890625,
+          45.328125
+        ],
+        "idlePrivateCommittedMiB": [
+          10.03515625,
+          10.125
+        ],
+        "idleCpuSeconds": [
+          0.03125,
+          0.109375
+        ],
+        "idleSampleSeconds": [
+          12.002192600048147,
+          12.042521400027908
+        ],
+        "idleOneCorePercent": [
+          0.2594971514846349,
+          0.910761964733936
+        ],
+        "homeLoadedInternalMs": [
+          25,
+          42
+        ]
+      }
+    },
+    "archive-before": {
+      "runs": [
+        {
+          "run": "pandora-archive-before-0",
+          "exeSha256": "0132e568dfd62a356b6eab2d4a2019858754209131c4660dd917b004de6677b0",
+          "peakWorkingSetMiB": 69.23828125,
+          "peakSampledPrivateMiB": 65.84765625,
+          "observedDescendants": [],
+          "cpuSeconds": 0.21875,
+          "logicalReadMiB": 160.00690460205078,
+          "logicalWriteMiB": 2.193450927734375e-05,
+          "elapsedMs": 211.6601
+        },
+        {
+          "run": "pandora-archive-before-1",
+          "exeSha256": "0132e568dfd62a356b6eab2d4a2019858754209131c4660dd917b004de6677b0",
+          "peakWorkingSetMiB": 69.22265625,
+          "peakSampledPrivateMiB": 65.8359375,
+          "observedDescendants": [],
+          "cpuSeconds": 0.234375,
+          "logicalReadMiB": 160.00690460205078,
+          "logicalWriteMiB": 2.193450927734375e-05,
+          "elapsedMs": 220.8957
+        },
+        {
+          "run": "pandora-archive-before-2",
+          "exeSha256": "0132e568dfd62a356b6eab2d4a2019858754209131c4660dd917b004de6677b0",
+          "peakWorkingSetMiB": 69.23046875,
+          "peakSampledPrivateMiB": 65.83984375,
+          "observedDescendants": [],
+          "cpuSeconds": 0.21875,
+          "logicalReadMiB": 160.00690460205078,
+          "logicalWriteMiB": 2.193450927734375e-05,
+          "elapsedMs": 230.3384
+        }
+      ],
+      "median": {
+        "peakWorkingSetMiB": 69.23046875,
+        "peakSampledPrivateMiB": 65.83984375,
+        "cpuSeconds": 0.21875,
+        "logicalReadMiB": 160.00690460205078,
+        "logicalWriteMiB": 2.193450927734375e-05,
+        "elapsedMs": 220.8957
+      },
+      "range": {
+        "peakWorkingSetMiB": [
+          69.22265625,
+          69.23828125
+        ],
+        "peakSampledPrivateMiB": [
+          65.8359375,
+          65.84765625
+        ],
+        "cpuSeconds": [
+          0.21875,
+          0.234375
+        ],
+        "logicalReadMiB": [
+          160.00690460205078,
+          160.00690460205078
+        ],
+        "logicalWriteMiB": [
+          2.193450927734375e-05,
+          2.193450927734375e-05
+        ],
+        "elapsedMs": [
+          211.6601,
+          230.3384
+        ]
+      }
+    },
+    "archive-after": {
+      "runs": [
+        {
+          "run": "pandora-archive-after-0",
+          "exeSha256": "5b4d2187ddcc6dd87eff98c35a0add0ec67e359841d230ac1adee82d66ed20c3",
+          "peakWorkingSetMiB": 5.16796875,
+          "peakSampledPrivateMiB": 0.75390625,
+          "observedDescendants": [],
+          "cpuSeconds": 0.078125,
+          "logicalReadMiB": 160.00690460205078,
+          "logicalWriteMiB": 2.09808349609375e-05,
+          "elapsedMs": 90.4426
+        },
+        {
+          "run": "pandora-archive-after-1",
+          "exeSha256": "5b4d2187ddcc6dd87eff98c35a0add0ec67e359841d230ac1adee82d66ed20c3",
+          "peakWorkingSetMiB": 4.28125,
+          "peakSampledPrivateMiB": 0.7109375,
+          "observedDescendants": [],
+          "cpuSeconds": 0.09375,
+          "logicalReadMiB": 160.00690460205078,
+          "logicalWriteMiB": 2.09808349609375e-05,
+          "elapsedMs": 93.2989
+        },
+        {
+          "run": "pandora-archive-after-2",
+          "exeSha256": "5b4d2187ddcc6dd87eff98c35a0add0ec67e359841d230ac1adee82d66ed20c3",
+          "peakWorkingSetMiB": 4.3046875,
+          "peakSampledPrivateMiB": 0.75390625,
+          "observedDescendants": [],
+          "cpuSeconds": 0.09375,
+          "logicalReadMiB": 160.00690460205078,
+          "logicalWriteMiB": 3.0517578125e-05,
+          "elapsedMs": 94.85119999999999
+        }
+      ],
+      "median": {
+        "peakWorkingSetMiB": 4.3046875,
+        "peakSampledPrivateMiB": 0.75390625,
+        "cpuSeconds": 0.09375,
+        "logicalReadMiB": 160.00690460205078,
+        "logicalWriteMiB": 2.09808349609375e-05,
+        "elapsedMs": 93.2989
+      },
+      "range": {
+        "peakWorkingSetMiB": [
+          4.28125,
+          5.16796875
+        ],
+        "peakSampledPrivateMiB": [
+          0.7109375,
+          0.75390625
+        ],
+        "cpuSeconds": [
+          0.078125,
+          0.09375
+        ],
+        "logicalReadMiB": [
+          160.00690460205078,
+          160.00690460205078
+        ],
+        "logicalWriteMiB": [
+          2.09808349609375e-05,
+          3.0517578125e-05
+        ],
+        "elapsedMs": [
+          90.4426,
+          94.85119999999999
+        ]
+      }
+    },
+    "hosts-before": {
+      "runs": [
+        {
+          "run": "pandora-hosts-before-0",
+          "exeSha256": "0132e568dfd62a356b6eab2d4a2019858754209131c4660dd917b004de6677b0",
+          "peakWorkingSetMiB": 11.02734375,
+          "peakSampledPrivateMiB": 7.83203125,
+          "observedDescendants": [],
+          "cpuSeconds": 0.015625,
+          "logicalReadMiB": 0.0,
+          "logicalWriteMiB": 3.147125244140625e-05,
+          "elapsedMs": 12.051900000000002
+        },
+        {
+          "run": "pandora-hosts-before-1",
+          "exeSha256": "0132e568dfd62a356b6eab2d4a2019858754209131c4660dd917b004de6677b0",
+          "peakWorkingSetMiB": 11.015625,
+          "peakSampledPrivateMiB": 7.8125,
+          "observedDescendants": [],
+          "cpuSeconds": 0.0,
+          "logicalReadMiB": 0.0,
+          "logicalWriteMiB": 2.09808349609375e-05,
+          "elapsedMs": 12.0289
+        },
+        {
+          "run": "pandora-hosts-before-2",
+          "exeSha256": "0132e568dfd62a356b6eab2d4a2019858754209131c4660dd917b004de6677b0",
+          "peakWorkingSetMiB": 10.97265625,
+          "peakSampledPrivateMiB": 7.77734375,
+          "observedDescendants": [],
+          "cpuSeconds": 0.015625,
+          "logicalReadMiB": 0.0,
+          "logicalWriteMiB": 2.09808349609375e-05,
+          "elapsedMs": 12.2098
+        }
+      ],
+      "median": {
+        "peakWorkingSetMiB": 11.015625,
+        "peakSampledPrivateMiB": 7.8125,
+        "cpuSeconds": 0.015625,
+        "logicalReadMiB": 0.0,
+        "logicalWriteMiB": 2.09808349609375e-05,
+        "elapsedMs": 12.051900000000002
+      },
+      "range": {
+        "peakWorkingSetMiB": [
+          10.97265625,
+          11.02734375
+        ],
+        "peakSampledPrivateMiB": [
+          7.77734375,
+          7.83203125
+        ],
+        "cpuSeconds": [
+          0.0,
+          0.015625
+        ],
+        "logicalReadMiB": [
+          0.0,
+          0.0
+        ],
+        "logicalWriteMiB": [
+          2.09808349609375e-05,
+          3.147125244140625e-05
+        ],
+        "elapsedMs": [
+          12.0289,
+          12.2098
+        ]
+      }
+    },
+    "hosts-after": {
+      "runs": [
+        {
+          "run": "pandora-hosts-after-0",
+          "exeSha256": "5b4d2187ddcc6dd87eff98c35a0add0ec67e359841d230ac1adee82d66ed20c3",
+          "peakWorkingSetMiB": 4.0703125,
+          "peakSampledPrivateMiB": 0.65234375,
+          "observedDescendants": [],
+          "cpuSeconds": 0.015625,
+          "logicalReadMiB": 0.0,
+          "logicalWriteMiB": 2.09808349609375e-05,
+          "elapsedMs": 13.9763
+        },
+        {
+          "run": "pandora-hosts-after-1",
+          "exeSha256": "5b4d2187ddcc6dd87eff98c35a0add0ec67e359841d230ac1adee82d66ed20c3",
+          "peakWorkingSetMiB": 4.08203125,
+          "peakSampledPrivateMiB": 0.6640625,
+          "observedDescendants": [],
+          "cpuSeconds": 0.015625,
+          "logicalReadMiB": 0.0,
+          "logicalWriteMiB": 3.147125244140625e-05,
+          "elapsedMs": 12.120000000000001
+        },
+        {
+          "run": "pandora-hosts-after-2",
+          "exeSha256": "5b4d2187ddcc6dd87eff98c35a0add0ec67e359841d230ac1adee82d66ed20c3",
+          "peakWorkingSetMiB": 4.07421875,
+          "peakSampledPrivateMiB": 0.65625,
+          "observedDescendants": [],
+          "cpuSeconds": 0.015625,
+          "logicalReadMiB": 0.0,
+          "logicalWriteMiB": 2.09808349609375e-05,
+          "elapsedMs": 11.8954
+        }
+      ],
+      "median": {
+        "peakWorkingSetMiB": 4.07421875,
+        "peakSampledPrivateMiB": 0.65625,
+        "cpuSeconds": 0.015625,
+        "logicalReadMiB": 0.0,
+        "logicalWriteMiB": 2.09808349609375e-05,
+        "elapsedMs": 12.120000000000001
+      },
+      "range": {
+        "peakWorkingSetMiB": [
+          4.0703125,
+          4.08203125
+        ],
+        "peakSampledPrivateMiB": [
+          0.65234375,
+          0.6640625
+        ],
+        "cpuSeconds": [
+          0.015625,
+          0.015625
+        ],
+        "logicalReadMiB": [
+          0.0,
+          0.0
+        ],
+        "logicalWriteMiB": [
+          2.09808349609375e-05,
+          3.147125244140625e-05
+        ],
+        "elapsedMs": [
+          11.8954,
+          13.9763
+        ]
+      }
+    }
+  },
+  "scheduler": {
+    "runs": [
+      {
+        "run": 0,
+        "completionOrder": false,
+        "elapsedMs": 626.1225999999999
+      },
+      {
+        "run": 0,
+        "completionOrder": true,
+        "elapsedMs": 406.02369999999996
+      },
+      {
+        "run": 1,
+        "completionOrder": true,
+        "elapsedMs": 409.5083
+      },
+      {
+        "run": 1,
+        "completionOrder": false,
+        "elapsedMs": 626.9381000000001
+      },
+      {
+        "run": 2,
+        "completionOrder": false,
+        "elapsedMs": 623.6059
+      },
+      {
+        "run": 2,
+        "completionOrder": true,
+        "elapsedMs": 404.8619
+      },
+      {
+        "run": 3,
+        "completionOrder": true,
+        "elapsedMs": 403.857
+      },
+      {
+        "run": 3,
+        "completionOrder": false,
+        "elapsedMs": 622.5364
+      },
+      {
+        "run": 4,
+        "completionOrder": false,
+        "elapsedMs": 623.668
+      },
+      {
+        "run": 4,
+        "completionOrder": true,
+        "elapsedMs": 407.7418
+      },
+      {
+        "run": 5,
+        "completionOrder": true,
+        "elapsedMs": 406.036
+      },
+      {
+        "run": 5,
+        "completionOrder": false,
+        "elapsedMs": 627.2332
+      }
+    ],
+    "medianOrderedMs": 624.8952999999999,
+    "medianCompletionMs": 406.02985
+  },
+  "limitations": [
+    "Logical I/O is not physical disk I/O.",
+    "Delay-only scheduling is not internet throughput.",
+    "Idle is empty-root Simple, not populated/Borealis or a matched Pandora comparison.",
+    "The first after-build working-set outlier is retained; causal attribution is unproven."
+  ]
+}

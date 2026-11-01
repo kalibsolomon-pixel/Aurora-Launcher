@@ -492,6 +492,24 @@ export global Skins {
     callback import-file();
 }
 
+export global InstanceSync {
+    in property <[string]> names;
+    in-out property <int> source-index: 0;
+    in-out property <int> destination-index: 1;
+    in-out property <int> category-index: 0;
+    in-out property <string> exclusions;
+    in-out property <string> selected-paths;
+    in property <bool> enabled: false;
+    in property <bool> loaded: false;
+    in property <bool> busy: false;
+    in property <bool> can-apply: false;
+    in property <string> message;
+    callback enable-changed(bool);
+    callback changed();
+    callback review();
+    callback apply();
+}
+
 export global Settings {
     in property <[string]> theme-labels;
     in property <[string]> theme-descriptions;

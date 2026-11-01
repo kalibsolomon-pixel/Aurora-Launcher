@@ -5,6 +5,7 @@ import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
 import { Button, ButtonKind, Toggle, Dropdown, Group, SettingRow, PageTitle, FocusRing, KeyboardFocus, Label, TextField } from "../components.slint";
 import { Settings, Accounts, Swatch, AccentPicker } from "../state.slint";
+import { SyncSettings } from "../syncing.slint";
 
 /// The custom accent: one more swatch beside the presets. It shows the saved
 /// custom color (checked when in use) or a "+" when none exists, and opens
@@ -167,6 +168,8 @@ export component SettingsPage inherits ScrollView {
                 }
             }
         }
+
+        SyncSettings { }
 
         Group {
             title: "Desktop";

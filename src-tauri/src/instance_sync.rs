@@ -1,0 +1,810 @@
+//! Explicit, reviewed synchronization. No watchers, shared mutable directories,
+//! timestamp winners, deletions, provider adoption or network work. Local hashes
+//! bind the review to observed bytes; they are not publisher verification.
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+
+use crate::install::coordination::{TargetLock, checked_directory, ensure_directory, redirected};
+use crate::instances::{InstanceId, InstanceRegistry, InstanceState};
+use crate::paths::ManagedPaths;
+
+const MAX_FILES: usize = 4096;
+const MAX_FILE: u64 = 256 * 1024 * 1024;
+const MAX_TOTAL: u64 = 1024 * 1024 * 1024;
+const MAX_OPTIONS: u64 = 1024 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Policy {
+    pub schema_version: u32,
+    pub enabled: bool,
+}
+impl Default for Policy {
+    fn default() -> Self {
+        Self {
+            schema_version: 1,
+            enabled: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Category {
+    Settings,
+    Controls,
+    ResourcePacks,
+    ShaderPacks,
+    Screenshots,
+    Configuration,
+}
+impl Category {
+    fn root(self) -> &'static str {
+        match self {
+            Self::Settings | Self::Controls => "options.txt",
+            Self::ResourcePacks => "resourcepacks",
+            Self::ShaderPacks => "shaderpacks",
+            Self::Screenshots => "screenshots",
+            Self::Configuration => "config",
+        }
+    }
+    fn options(self) -> bool {
+        matches!(self, Self::Settings | Self::Controls)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Request {
+    pub source_id: InstanceId,
+    pub destination_id: InstanceId,
+    pub category: Category,
+    /// Exact relative paths or directory prefixes; never glob expressions.
+    pub exclusions: Vec<String>,
+    /// Configuration sync never enumerates all config implicitly. The user
+    /// must select exact config/... files or directory roots for this run.
+    #[serde(default)]
+    pub selected_paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Entry {
+    pub path: String,
+    /// copyMissing, mergeSettings, identical, or keepConflict.
+    pub action: &'static str,
+    pub changed_keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Preview {
+    pub fingerprint: String,
+    pub entries: Vec<Entry>,
+    pub changes: usize,
+    pub conflicts: usize,
+    pub bytes_to_copy: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Receipt {
+    pub copied: usize,
+    pub conflicts_kept: usize,
+    pub backup_id: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct SyncError {
+    pub code: &'static str,
+    pub message: &'static str,
+}
+impl std::fmt::Display for SyncError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.message)
+    }
+}
+impl std::error::Error for SyncError {}
+fn fail(code: &'static str, message: &'static str) -> SyncError {
+    SyncError { code, message }
+}
+fn storage<T>(_: T) -> SyncError {
+    fail(
+        "sync_storage",
+        "Sync could not safely read or write its selected files. Any completed files and backups are retained; review again before retrying.",
+    )
+}
+fn unsafe_path() -> SyncError {
+    fail(
+        "sync_unsafe_path",
+        "Sync refuses redirected, special, unsafe or oversized paths.",
+    )
+}
+fn stale() -> SyncError {
+    fail(
+        "sync_review_stale",
+        "Files, instances or sync preferences changed. Review the sync again.",
+    )
+}
+
+fn policy_file(managed: &ManagedPaths) -> PathBuf {
+    managed.launcher_dir().join("instance-sync.json")
+}
+pub fn policy(managed: &ManagedPaths) -> Result<Policy, SyncError> {
+    if !managed.launcher_dir().exists() {
+        return Ok(Policy::default());
+    }
+    checked_directory(managed.data_root(), &managed.launcher_dir()).map_err(storage)?;
+    let Some(bytes) = read_small(managed, &policy_file(managed), 4096)? else {
+        return Ok(Policy::default());
+    };
+    let value: Policy = serde_json::from_slice(&bytes).map_err(|_| {
+        fail(
+            "sync_policy_invalid",
+            "Sync preferences are malformed and were left unchanged.",
+        )
+    })?;
+    if value.schema_version != 1 {
+        return Err(fail(
+            "sync_schema_unsupported",
+            "This sync preference schema is unsupported and was left unchanged.",
+        ));
+    }
+    Ok(value)
+}
+pub fn set_enabled(managed: &ManagedPaths, enabled: bool) -> Result<Policy, SyncError> {
+    let _lock = TargetLock::acquire(
+        managed.data_root(),
+        &managed.launcher_dir(),
+        ".instance-sync.lock",
+    )
+    .map_err(storage)?;
+    let mut current = policy(managed)?;
+    current.enabled = enabled;
+    crate::install::journal::atomic_write(
+        &policy_file(managed),
+        &serde_json::to_vec(&current).map_err(storage)?,
+    )
+    .map_err(storage)?;
+    Ok(current)
+}
+
+#[derive(Serialize)]
+struct FilePlan {
+    path: String,
+    source: String,
+    destination: Option<String>,
+    size: u64,
+    #[serde(skip)]
+    merged: Option<Vec<u8>>,
+    output_hash: Option<String>,
+    action: &'static str,
+    changed_keys: Vec<String>,
+}
+
+fn validate_relative(path: &str) -> Result<(), SyncError> {
+    if path.len() > 1024
+        || path.is_empty()
+        || path.split('/').any(|part| {
+            let stem = part.split('.').next().unwrap_or("").to_ascii_uppercase();
+            part.is_empty()
+                || part == "."
+                || part == ".."
+                || part.ends_with(['.', ' '])
+                || part
+                    .chars()
+                    .any(|c| c.is_control() || "\\:*?\"<>|".contains(c))
+                || matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+                || (stem.len() == 4
+                    && (stem.starts_with("COM") || stem.starts_with("LPT"))
+                    && stem.as_bytes()[3].is_ascii_digit())
+        })
+    {
+        return Err(unsafe_path());
+    }
+    Ok(())
+}
+
+fn excluded(request: &Request, path: &str) -> bool {
+    request.exclusions.iter().any(|prefix| {
+        path.eq_ignore_ascii_case(prefix)
+            || path
+                .to_ascii_lowercase()
+                .starts_with(&(prefix.to_ascii_lowercase() + "/"))
+    })
+}
+
+fn regular_file(managed: &ManagedPaths, path: &Path) -> Result<Option<File>, SyncError> {
+    // Inspect every ancestor, including missing descendants, before opening.
+    let relative = path.strip_prefix(managed.data_root()).map_err(storage)?;
+    let mut current = managed.data_root().to_path_buf();
+    for component in relative.components() {
+        if !matches!(component, std::path::Component::Normal(_)) {
+            return Err(unsafe_path());
+        }
+        current.push(component);
+        match fs::symlink_metadata(&current) {
+            Ok(meta) if redirected(&meta) => return Err(unsafe_path()),
+            Ok(meta) if current != path && !meta.is_dir() => return Err(unsafe_path()),
+            Ok(meta) if current == path && (!meta.is_file() || meta.len() > MAX_FILE) => {
+                return Err(unsafe_path());
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(storage(error)),
+        }
+    }
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.share_mode(1).custom_flags(0x0020_0000);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(storage)?;
+    let meta = file.metadata().map_err(storage)?;
+    if !meta.is_file() || redirected(&meta) || meta.len() > MAX_FILE {
+        return Err(unsafe_path());
+    }
+    Ok(Some(file))
+}
+
+fn read_small(
+    managed: &ManagedPaths,
+    path: &Path,
+    limit: u64,
+) -> Result<Option<Vec<u8>>, SyncError> {
+    let Some(file) = regular_file(managed, path)? else {
+        return Ok(None);
+    };
+    let mut bytes = Vec::new();
+    file.take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(storage)?;
+    if bytes.len() as u64 > limit {
+        return Err(unsafe_path());
+    }
+    Ok(Some(bytes))
+}
+fn digest(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+fn hash_file(managed: &ManagedPaths, path: &Path) -> Result<Option<(String, u64)>, SyncError> {
+    let Some(mut file) = regular_file(managed, path)? else {
+        return Ok(None);
+    };
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    let mut total = 0;
+    loop {
+        let read = file.read(&mut buffer).map_err(storage)?;
+        if read == 0 {
+            break;
+        }
+        total += read as u64;
+        if total > MAX_FILE {
+            return Err(unsafe_path());
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(Some((format!("{:x}", hasher.finalize()), total)))
+}
+
+fn options(bytes: &[u8]) -> Result<(Vec<String>, BTreeMap<String, String>), SyncError> {
+    let text = std::str::from_utf8(bytes).map_err(|_| {
+        fail(
+            "sync_options_invalid",
+            "Options must be valid UTF-8 with one unambiguous value per key.",
+        )
+    })?;
+    let mut order = Vec::new();
+    let mut values = BTreeMap::new();
+    for line in text.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        let Some((key, value)) = line.split_once(':') else {
+            return Err(fail(
+                "sync_options_invalid",
+                "Options contain an unsupported line; no settings were changed.",
+            ));
+        };
+        if key.is_empty()
+            || line.chars().any(|c| c.is_control())
+            || values.insert(key.to_owned(), value.to_owned()).is_some()
+        {
+            return Err(fail(
+                "sync_options_invalid",
+                "Options contain duplicate or invalid keys; no settings were changed.",
+            ));
+        }
+        order.push(key.to_owned());
+    }
+    Ok((order, values))
+}
+
+fn merge_options(
+    source: &[u8],
+    destination: &[u8],
+    category: Category,
+) -> Result<(Vec<u8>, Vec<String>), SyncError> {
+    let (_, source) = options(source)?;
+    let (order, mut target) = options(destination)?;
+    let mut keys = Vec::new();
+    for (key, value) in source {
+        // Only common keys are eligible. Pack activation/order, data version,
+        // paths, unknown mod settings and version-specific keys stay local.
+        let allowed = if category == Category::Controls {
+            key.starts_with("key_")
+        } else {
+            matches!(
+                key.as_str(),
+                "mouseSensitivity"
+                    | "invertYMouse"
+                    | "autoJump"
+                    | "toggleCrouch"
+                    | "toggleSprint"
+                    | "subtitles"
+                    | "showSubtitles"
+                    | "chatOpacity"
+                    | "chatScale"
+                    | "chatWidth"
+                    | "chatHeightFocused"
+                    | "chatHeightUnfocused"
+            ) || key.starts_with("soundCategory_")
+        };
+        if allowed && target.get(&key).is_some_and(|current| current != &value) {
+            target.insert(key.clone(), value);
+            keys.push(key);
+        }
+    }
+    if keys.is_empty() {
+        return Ok((destination.to_vec(), keys));
+    }
+    let mut result = String::new();
+    for key in order {
+        result.push_str(&key);
+        result.push(':');
+        result.push_str(&target[&key]);
+        result.push('\n');
+    }
+    if result.len() as u64 > MAX_OPTIONS {
+        return Err(unsafe_path());
+    }
+    Ok((result.into_bytes(), keys))
+}
+
+fn collect(
+    managed: &ManagedPaths,
+    root: &Path,
+    request: &Request,
+) -> Result<Vec<String>, SyncError> {
+    if request.category.options() {
+        return Ok(if excluded(request, "options.txt") {
+            vec![]
+        } else {
+            vec!["options.txt".into()]
+        });
+    }
+    let start = request.category.root().to_owned();
+    let mut pending = if request.category == Category::Configuration {
+        request
+            .selected_paths
+            .iter()
+            .cloned()
+            .map(|path| (path, 0))
+            .collect()
+    } else {
+        vec![(start, 0)]
+    };
+    let mut result = Vec::new();
+    let mut count = 0;
+    while let Some((relative, depth)) = pending.pop() {
+        validate_relative(&relative)?;
+        if excluded(request, &relative) {
+            continue;
+        }
+        count += 1;
+        if count > MAX_FILES || depth > 16 {
+            return Err(unsafe_path());
+        }
+        let path = root.join(&relative);
+        let meta = match fs::symlink_metadata(&path) {
+            Ok(meta) => meta,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(storage(error)),
+        };
+        if redirected(&meta) {
+            return Err(unsafe_path());
+        }
+        if meta.is_dir() {
+            checked_directory(managed.data_root(), &path).map_err(storage)?;
+            for entry in fs::read_dir(&path).map_err(storage)? {
+                let name = entry
+                    .map_err(storage)?
+                    .file_name()
+                    .into_string()
+                    .map_err(|_| unsafe_path())?;
+                // A crash may leave our exact private staging name. It is
+                // never user content or a source for a later sync.
+                if name
+                    .strip_prefix(".aurora-sync-")
+                    .is_some_and(|id| id.len() == 32 && id.bytes().all(|c| c.is_ascii_hexdigit()))
+                {
+                    count += 1;
+                    if count >= MAX_FILES {
+                        return Err(unsafe_path());
+                    }
+                    continue;
+                }
+                if pending.len() + count >= MAX_FILES {
+                    return Err(unsafe_path());
+                }
+                pending.push((format!("{relative}/{name}"), depth + 1));
+            }
+        } else if meta.is_file() {
+            result.push(relative);
+        } else {
+            return Err(unsafe_path());
+        }
+    }
+    result.sort();
+    let mut names = BTreeSet::new();
+    if result.iter().any(|p| !names.insert(p.to_ascii_lowercase())) {
+        return Err(unsafe_path());
+    }
+    Ok(result)
+}
+
+fn plan(managed: &ManagedPaths, request: &Request) -> Result<(Preview, Vec<FilePlan>), SyncError> {
+    if !policy(managed)?.enabled {
+        return Err(fail(
+            "sync_disabled",
+            "Enable instance syncing before reviewing or applying it.",
+        ));
+    }
+    if request.source_id == request.destination_id
+        || request.exclusions.len() > 128
+        || request.selected_paths.len() > 128
+    {
+        return Err(unsafe_path());
+    }
+    if request.category == Category::Configuration {
+        if request.selected_paths.is_empty() {
+            return Err(fail(
+                "sync_config_selection_required",
+                "Choose specific config/... files or directories before reviewing configuration sync.",
+            ));
+        }
+        for path in &request.selected_paths {
+            validate_relative(path)?;
+            if !path.starts_with("config/") {
+                return Err(unsafe_path());
+            }
+        }
+    } else if !request.selected_paths.is_empty() {
+        return Err(unsafe_path());
+    }
+    for path in &request.exclusions {
+        validate_relative(path)?;
+    }
+    let registry = InstanceRegistry::load(&managed.instance_registry_file()).map_err(storage)?;
+    let source = registry.find(&request.source_id).ok_or_else(stale)?;
+    let destination = registry.find(&request.destination_id).ok_or_else(stale)?;
+    if [source, destination]
+        .iter()
+        .any(|r| r.state() != InstanceState::Ready)
+    {
+        return Err(fail(
+            "sync_instance_not_ready",
+            "Both instances must have completed installation before syncing.",
+        ));
+    }
+    if (request.category.options() || request.category == Category::Configuration)
+        && (source.installed().minecraft_version != destination.installed().minecraft_version
+            || source.installed().platform != destination.installed().platform)
+    {
+        return Err(fail(
+            "sync_settings_incompatible",
+            "Settings, controls and configuration sync requires matching installed Minecraft and loader versions.",
+        ));
+    }
+    let source_root = managed
+        .instance_paths(&request.source_id)
+        .root()
+        .to_path_buf();
+    let destination_root = managed
+        .instance_paths(&request.destination_id)
+        .root()
+        .to_path_buf();
+    checked_directory(managed.data_root(), &source_root).map_err(storage)?;
+    checked_directory(managed.data_root(), &destination_root).map_err(storage)?;
+    let mut files = Vec::new();
+    let mut total = 0;
+    for path in collect(managed, &source_root, request)? {
+        let Some((hash, size)) = hash_file(managed, &source_root.join(&path))? else {
+            continue;
+        };
+        total += size;
+        if total > MAX_TOTAL {
+            return Err(unsafe_path());
+        }
+        let old = hash_file(managed, &destination_root.join(&path))?.map(|(h, _)| h);
+        let (merged, changed_keys, action) = if request.category.options() {
+            let source =
+                read_small(managed, &source_root.join(&path), MAX_OPTIONS)?.ok_or_else(stale)?;
+            let target = read_small(managed, &destination_root.join(&path), MAX_OPTIONS)?
+                .ok_or_else(|| fail("sync_options_missing", "Open the destination game once to create its version-specific options before syncing settings."))?;
+            if digest(&source) != hash || Some(digest(&target)) != old {
+                return Err(stale());
+            }
+            let (merged, keys) = merge_options(&source, &target, request.category)?;
+            let action = if keys.is_empty() {
+                "identical"
+            } else {
+                "mergeSettings"
+            };
+            (Some(merged), keys, action)
+        } else {
+            (
+                None,
+                vec![],
+                match old.as_ref() {
+                    None => "copyMissing",
+                    Some(h) if h == &hash => "identical",
+                    Some(_) => "keepConflict",
+                },
+            )
+        };
+        files.push(FilePlan {
+            path,
+            source: hash,
+            destination: old,
+            size,
+            output_hash: merged.as_ref().map(|b| digest(b)),
+            merged,
+            action,
+            changed_keys,
+        });
+    }
+    let fingerprint =
+        digest(&serde_json::to_vec(&(request, source, destination, &files)).map_err(storage)?);
+    let preview = Preview {
+        fingerprint,
+        entries: files
+            .iter()
+            .map(|f| Entry {
+                path: f.path.clone(),
+                action: f.action,
+                changed_keys: f.changed_keys.clone(),
+            })
+            .collect(),
+        changes: files
+            .iter()
+            .filter(|f| matches!(f.action, "copyMissing" | "mergeSettings"))
+            .count(),
+        conflicts: files.iter().filter(|f| f.action == "keepConflict").count(),
+        bytes_to_copy: files
+            .iter()
+            .filter(|f| matches!(f.action, "copyMissing" | "mergeSettings"))
+            .map(|f| f.merged.as_ref().map_or(f.size, |b| b.len() as u64))
+            .sum(),
+    };
+    Ok((preview, files))
+}
+
+fn locked<T>(
+    managed: &ManagedPaths,
+    request: &Request,
+    work: impl FnOnce() -> Result<T, SyncError>,
+) -> Result<T, SyncError> {
+    if request.source_id == request.destination_id {
+        return Err(unsafe_path());
+    }
+    // Logical Play reservations exclude both in-flight preparations. Kernel
+    // operation locks exclude other Aurora installation/sync writers.
+    let registry = InstanceRegistry::load(&managed.instance_registry_file()).map_err(storage)?;
+    if registry.find(&request.source_id).is_none()
+        || registry.find(&request.destination_id).is_none()
+    {
+        return Err(stale());
+    }
+    let _source_play = crate::launch::process::PreparationGuard::acquire(
+        request.source_id.as_str(),
+    )
+    .map_err(|_| {
+        fail(
+            "sync_instance_busy",
+            "Stop both selected games and wait for active operations before syncing.",
+        )
+    })?;
+    let _destination_play =
+        crate::launch::process::PreparationGuard::acquire(request.destination_id.as_str())
+            .map_err(|_| {
+                fail(
+                    "sync_instance_busy",
+                    "Stop both selected games and wait for active operations before syncing.",
+                )
+            })?;
+    let mut ids = [&request.source_id, &request.destination_id];
+    ids.sort_by_key(|id| id.as_str());
+    let _a =
+        crate::instances::lifecycle::lock_instance_operation(managed, ids[0]).map_err(storage)?;
+    let _b =
+        crate::instances::lifecycle::lock_instance_operation(managed, ids[1]).map_err(storage)?;
+    let _policy = TargetLock::acquire(
+        managed.data_root(),
+        &managed.launcher_dir(),
+        ".instance-sync.lock",
+    )
+    .map_err(storage)?;
+    // Content activation (including resource-pack options) has its own
+    // process-local writer boundary. Share it as well as lifecycle locks.
+    crate::instance_content::with_instance_lock(ids[0], || {
+        Ok(crate::instance_content::with_instance_lock(ids[1], || {
+            Ok(work())
+        }))
+    })
+    .map_err(|_| {
+        fail(
+            "sync_instance_busy",
+            "Selected instance content is being changed. Try again after it finishes.",
+        )
+    })?
+    .map_err(|_| {
+        fail(
+            "sync_instance_busy",
+            "Selected instance content is being changed. Try again after it finishes.",
+        )
+    })?
+}
+pub fn preview(managed: &ManagedPaths, request: &Request) -> Result<Preview, SyncError> {
+    locked(managed, request, || {
+        plan(managed, request).map(|(preview, _)| preview)
+    })
+}
+
+pub fn apply(
+    managed: &ManagedPaths,
+    request: &Request,
+    fingerprint: &str,
+) -> Result<Receipt, SyncError> {
+    apply_with_checkpoint(managed, request, fingerprint, |_| Ok(()))
+}
+
+fn apply_with_checkpoint(
+    managed: &ManagedPaths,
+    request: &Request,
+    fingerprint: &str,
+    mut checkpoint: impl FnMut(&'static str) -> Result<(), SyncError>,
+) -> Result<Receipt, SyncError> {
+    locked(managed, request, || {
+        let (preview, files) = plan(managed, request)?;
+        if preview.fingerprint != fingerprint {
+            return Err(stale());
+        }
+        let source_root = managed
+            .instance_paths(&request.source_id)
+            .root()
+            .to_path_buf();
+        let target_root = managed
+            .instance_paths(&request.destination_id)
+            .root()
+            .to_path_buf();
+        let mut receipt = Receipt {
+            copied: 0,
+            conflicts_kept: preview.conflicts,
+            backup_id: None,
+        };
+        if preview.changes == 0 {
+            return Ok(receipt);
+        }
+        let id = uuid::Uuid::new_v4().simple().to_string();
+        let backup = managed.launcher_dir().join("sync-backups").join(&id);
+        ensure_directory(managed.data_root(), &backup).map_err(storage)?;
+        // Receipt exists before any destination mutation. A crash leaves the
+        // reviewed inventory plus individual complete files/backups, never a
+        // partial replacement. There is no automatic rollback of user content.
+        crate::install::journal::atomic_write(
+            &backup.join("review.json"),
+            &serde_json::to_vec(&(request, &preview)).map_err(storage)?,
+        )
+        .map_err(storage)?;
+        receipt.backup_id = Some(id);
+        checkpoint("reviewSaved")?;
+        for file in files
+            .iter()
+            .filter(|f| matches!(f.action, "copyMissing" | "mergeSettings"))
+        {
+            if hash_file(managed, &source_root.join(&file.path))?
+                .map(|v| v.0)
+                .as_deref()
+                != Some(&file.source)
+                || hash_file(managed, &target_root.join(&file.path))?.map(|v| v.0)
+                    != file.destination
+            {
+                return Err(stale());
+            }
+            let target = target_root.join(&file.path);
+            ensure_directory(
+                managed.data_root(),
+                target.parent().ok_or_else(unsafe_path)?,
+            )
+            .map_err(storage)?;
+            if let Some(merged) = &file.merged {
+                let original = read_small(managed, &target, MAX_OPTIONS)?.ok_or_else(stale)?;
+                if Some(digest(&original)) != file.destination {
+                    return Err(stale());
+                }
+                let saved = backup.join("options.txt");
+                let mut handle = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&saved)
+                    .map_err(storage)?;
+                handle.write_all(&original).map_err(storage)?;
+                handle.sync_all().map_err(storage)?;
+                checkpoint("backupSaved")?;
+                if hash_file(managed, &target)?.map(|v| v.0) != file.destination {
+                    return Err(stale());
+                }
+                crate::install::journal::atomic_write(&target, merged).map_err(storage)?;
+            } else {
+                // Create one private copy. Linking this unique completed temp
+                // into an absent destination gives portable no-clobber commit;
+                // the temporary name is then removed (no inter-instance link).
+                let temp = target
+                    .with_file_name(format!(".aurora-sync-{}", uuid::Uuid::new_v4().simple()));
+                let mut output = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&temp)
+                    .map_err(storage)?;
+                let result = (|| {
+                    let input =
+                        regular_file(managed, &source_root.join(&file.path))?.ok_or_else(stale)?;
+                    let count = std::io::copy(&mut input.take(MAX_FILE + 1), &mut output)
+                        .map_err(storage)?;
+                    output.sync_all().map_err(storage)?;
+                    drop(output);
+                    if count != file.size
+                        || hash_file(managed, &temp)?.map(|v| v.0).as_deref() != Some(&file.source)
+                    {
+                        return Err(stale());
+                    }
+                    checked_directory(
+                        managed.data_root(),
+                        target.parent().ok_or_else(unsafe_path)?,
+                    )
+                    .map_err(storage)?;
+                    fs::hard_link(&temp, &target).map_err(storage)
+                })();
+                // Only the exact unique file created above is disposable.
+                let _ = fs::remove_file(&temp);
+                result?;
+            }
+            receipt.copied += 1;
+            checkpoint("fileCommitted")?;
+        }
+        crate::install::journal::atomic_write(
+            &backup.join("completed.json"),
+            &serde_json::to_vec(&receipt).map_err(storage)?,
+        )
+        .map_err(storage)?;
+        Ok(receipt)
+    })
+}
+
+#[cfg(test)]
+#[path = "instance_sync_tests.rs"]
+mod tests;

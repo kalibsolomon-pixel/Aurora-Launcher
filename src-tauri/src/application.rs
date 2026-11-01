@@ -30,6 +30,63 @@ use crate::paths::ManagedPaths;
 use crate::runtime::install::{RuntimeInstallError, RuntimeValidation};
 use crate::runtime::metadata::RuntimeMetadataError;
 
+impl From<crate::instance_sync::SyncError> for CommandError {
+    fn from(error: crate::instance_sync::SyncError) -> Self {
+        Self::new(error.code, error.message)
+    }
+}
+
+pub fn get_instance_sync_policy(app: Host) -> Result<crate::instance_sync::Policy, CommandError> {
+    Ok(crate::instance_sync::policy(&managed_paths(&app)?)?)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SyncEnabledRequest {
+    pub enabled: bool,
+}
+
+pub fn set_instance_sync_enabled(
+    app: Host,
+    request: SyncEnabledRequest,
+) -> Result<crate::instance_sync::Policy, CommandError> {
+    Ok(crate::instance_sync::set_enabled(
+        &managed_paths(&app)?,
+        request.enabled,
+    )?)
+}
+
+pub async fn preview_instance_sync(
+    app: Host,
+    request: crate::instance_sync::Request,
+) -> Result<crate::instance_sync::Preview, CommandError> {
+    let managed = managed_paths(&app)?;
+    tokio::task::spawn_blocking(move || crate::instance_sync::preview(&managed, &request))
+        .await
+        .map_err(|_| CommandError::new("sync_worker_failed", "The sync worker did not complete."))?
+        .map_err(Into::into)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SyncApplyRequest {
+    pub sync: crate::instance_sync::Request,
+    pub fingerprint: String,
+}
+
+pub async fn apply_instance_sync(
+    app: Host,
+    request: SyncApplyRequest,
+) -> Result<crate::instance_sync::Receipt, CommandError> {
+    let managed = managed_paths(&app)?;
+    tokio::task::spawn_blocking(move || {
+        crate::instance_sync::apply(&managed, &request.sync, &request.fingerprint)
+    })
+    .await
+    .map_err(|_| CommandError::new("sync_worker_failed", "The sync worker did not complete."))?
+    .map_err(Into::into)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplicationStatus {
@@ -5765,6 +5822,7 @@ pub struct PlayBlockerDto {
 #[serde(rename_all = "camelCase")]
 pub struct PlayReadinessDto {
     ready: bool,
+    can_prepare: bool,
     instance_id: String,
     account_id: Option<String>,
     account_name: Option<String>,
@@ -6016,6 +6074,7 @@ async fn calculate_play_readiness(
     }
     Ok(PlayReadinessDto {
         ready: readiness.ready(),
+        can_prepare: readiness.can_prepare(),
         instance_id: instance_id.to_string(),
         account_id: account_id.map(str::to_owned),
         account_name,
@@ -6197,7 +6256,38 @@ async fn play_instance_with_target(
             let runtime =
                 crate::runtime::install::validate_runtime_eligibility(&managed, &runtime_plan)
                     .await?;
-            if runtime.status != RuntimeValidationStatus::Ready {
+            if runtime.status == RuntimeValidationStatus::Missing {
+                // The Play intent authorizes acquisition of this exact resolved
+                // managed requirement, never custom-Java fallback or repair of
+                // a damaged/foreign runtime. Account checks still precede it.
+                let (account, _) = launch_account_status(&managed, Some(&account_id))?;
+                if account != crate::launch::state::LaunchAccountStatus::Ready {
+                    return Err(CommandError::new(
+                        "launch_authentication_required",
+                        "Sign in before preparing Java for Play.",
+                    ));
+                }
+                emit_launch_phase(&app, "preparingJava");
+                let installed = crate::runtime::install::ensure_missing_runtime(
+                    &managed,
+                    &runtime_plan,
+                    &crate::downloads::DownloadOptions::default(),
+                    true,
+                    &mut |progress| {
+                        let _ = app.emit(
+                            "runtime-progress",
+                            RuntimeProgressEvent {
+                                phase: progress.phase.as_str(),
+                                completed_items: progress.completed_items,
+                                total_items: progress.total_items,
+                                current_item: progress.current_item,
+                            },
+                        );
+                    },
+                )
+                .await?;
+                Some(installed.launch_executable().to_path_buf())
+            } else if runtime.status != RuntimeValidationStatus::Ready {
                 return Err(CommandError::new(
                     "launch_runtime_not_ready",
                     format!(
@@ -6205,13 +6295,14 @@ async fn play_instance_with_target(
                         runtime.status.as_str()
                     ),
                 ));
+            } else {
+                Some(runtime.launch_executable.ok_or_else(|| {
+                    CommandError::new(
+                        "launch_runtime_not_ready",
+                        "The validated runtime has no launch executable.",
+                    )
+                })?)
             }
-            Some(runtime.launch_executable.ok_or_else(|| {
-                CommandError::new(
-                    "launch_runtime_not_ready",
-                    "The validated runtime has no launch executable.",
-                )
-            })?)
         };
 
         emit_launch_phase(&app, "restoringSession");
@@ -7219,6 +7310,7 @@ mod tests {
     fn production_launch_dtos_have_no_secret_or_argument_fields() {
         let readiness = PlayReadinessDto {
             ready: false,
+            can_prepare: false,
             instance_id: "fixture".to_owned(),
             account_id: None,
             account_name: None,

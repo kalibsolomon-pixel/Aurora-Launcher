@@ -34,6 +34,7 @@ mod settings;
 mod skin_import;
 mod skins;
 mod symbols;
+mod syncing;
 mod theme;
 mod ui;
 mod widgets;

@@ -9,7 +9,7 @@ import {
     Avatar, StatusPill, Spinner, ProgressBar, FocusRing, KeyboardFocus, EmptyState, Divider,
     Tooltip, InstanceIcon,
 } from "components.slint";
-import { Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, AccountRow, IconPicker, AccentPicker, Activity, ActivityRow, ContentImport } from "state.slint";
+import { Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, InstanceSync, Skins, AccountRow, IconPicker, AccentPicker, Activity, ActivityRow, ContentImport } from "state.slint";
 import { IdentityDialog, IconPickerDialog } from "dialogs.slint";
 import { AccentPickerPopover } from "popovers.slint";
 import { Chrome, TitleBar, DragArea, ResizeEdges } from "chrome.slint";
@@ -20,7 +20,7 @@ import { DiscoverPage } from "pages/discover.slint";
 import { SettingsPage } from "pages/settings.slint";
 import { SkinsPage } from "pages/skins.slint";
 
-export { Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, Tone, IconPicker, AccentPicker, Chrome, Widgets, WidgetChoice, WidgetLine, WidgetView, Activity, ActivityRow, ContentImport }
+export { Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, InstanceSync, Skins, Tone, IconPicker, AccentPicker, Chrome, Widgets, WidgetChoice, WidgetLine, WidgetView, Activity, ActivityRow, ContentImport }
 
 component NavItem inherits Rectangle {
     in property <string> label;

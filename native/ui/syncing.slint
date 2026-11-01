@@ -1,0 +1,42 @@
+import { Theme } from "theme.slint";
+import { Button, Group, SettingRow, Toggle, Dropdown, TextField, Label } from "components.slint";
+import { InstanceSync } from "state.slint";
+
+export component SyncSettings inherits Group {
+    title: "Instance syncing";
+    SettingRow {
+        label: "Enable reviewed syncing";
+        detail: "Copy between two stopped instances on demand. Worlds and server lists stay local.";
+        Toggle { label: "Enable instance syncing"; checked: InstanceSync.enabled; enabled: InstanceSync.loaded && !InstanceSync.busy; toggled(value) => { InstanceSync.enable-changed(value); } }
+    }
+    if InstanceSync.enabled: VerticalLayout {
+        spacing: Theme.space-3;
+        SettingRow {
+            label: "From";
+            Dropdown { width: 220px; label: "Sync source instance"; model: InstanceSync.names; current-index <=> InstanceSync.source-index; enabled: !InstanceSync.busy; selected => { InstanceSync.changed(); } }
+        }
+        SettingRow {
+            label: "To";
+            Dropdown { width: 220px; label: "Sync destination instance"; model: InstanceSync.names; current-index <=> InstanceSync.destination-index; enabled: !InstanceSync.busy; selected => { InstanceSync.changed(); } }
+        }
+        SettingRow {
+            label: "Content";
+            detail: InstanceSync.category-index < 2 ? "Transfers common settings only, with a backup. Minecraft and loader versions must match. Pack order stays local." : "Adds missing files. Existing different files are kept; no files are deleted.";
+            Dropdown { width: 220px; label: "Sync content"; model: ["Game settings", "Controls", "Resource packs", "Shader packs", "Screenshots", "Selected configuration"]; current-index <=> InstanceSync.category-index; enabled: !InstanceSync.busy; selected => { InstanceSync.changed(); } }
+        }
+        if InstanceSync.category-index == 5: VerticalLayout {
+            spacing: Theme.space-3;
+            Label { text: "Choose config/... files or directories (separated by semicolons)"; wrap: word-wrap; }
+            TextField { label: "Selected configuration paths"; text <=> InstanceSync.selected-paths; placeholder: "config/sodium-options.json; config/chosen-mod"; max-length: 4096; enabled: !InstanceSync.busy; edited => { InstanceSync.changed(); } }
+        }
+        Label { text: "Exclude paths (optional, separated by semicolons)"; }
+        TextField { label: "Excluded relative paths"; text <=> InstanceSync.exclusions; placeholder: "resourcepacks/private; resourcepacks/local.zip"; max-length: 4096; enabled: !InstanceSync.busy; edited => { InstanceSync.changed(); } }
+        HorizontalLayout {
+            alignment: start;
+            spacing: Theme.space-3;
+            Button { text: InstanceSync.busy ? "Working…" : "Review sync"; enabled: !InstanceSync.busy && InstanceSync.loaded && InstanceSync.names.length > 1 && InstanceSync.source-index != InstanceSync.destination-index; clicked => { InstanceSync.review(); } }
+            if InstanceSync.can-apply: Button { text: "Apply reviewed sync"; enabled: !InstanceSync.busy; clicked => { InstanceSync.apply(); } }
+        }
+    }
+    if InstanceSync.message != "": Label { text: InstanceSync.message; wrap: word-wrap; }
+}

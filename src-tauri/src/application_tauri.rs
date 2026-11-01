@@ -10,6 +10,34 @@ use super::*;
 use crate::host::Host;
 
 #[tauri::command]
+pub fn get_instance_sync_policy(
+    app: tauri::AppHandle,
+) -> Result<crate::instance_sync::Policy, CommandError> {
+    super::get_instance_sync_policy(Host::from_tauri(&app))
+}
+#[tauri::command]
+pub fn set_instance_sync_enabled(
+    app: tauri::AppHandle,
+    request: SyncEnabledRequest,
+) -> Result<crate::instance_sync::Policy, CommandError> {
+    super::set_instance_sync_enabled(Host::from_tauri(&app), request)
+}
+#[tauri::command]
+pub async fn preview_instance_sync(
+    app: tauri::AppHandle,
+    request: crate::instance_sync::Request,
+) -> Result<crate::instance_sync::Preview, CommandError> {
+    super::preview_instance_sync(Host::from_tauri(&app), request).await
+}
+#[tauri::command]
+pub async fn apply_instance_sync(
+    app: tauri::AppHandle,
+    request: SyncApplyRequest,
+) -> Result<crate::instance_sync::Receipt, CommandError> {
+    super::apply_instance_sync(Host::from_tauri(&app), request).await
+}
+
+#[tauri::command]
 pub fn discard_local_content_review(
     app: tauri::AppHandle,
     request: LocalContentDiscardRequest,

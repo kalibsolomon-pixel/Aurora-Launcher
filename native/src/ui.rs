@@ -45,6 +45,8 @@ pub struct AppState {
     pub skin_preview: crate::skins::PreviewState,
     pub client_update: Option<(String, String)>,
     pub icon_picker: crate::icons::PickerState,
+    pub sync_review: Option<(serde_json::Value, crate::api::SyncPreview)>,
+    pub sync_instance_ids: Vec<String>,
 }
 
 impl AppState {

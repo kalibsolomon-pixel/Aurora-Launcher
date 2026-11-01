@@ -2,6 +2,36 @@
 
 # Aurora Launcher architecture
 
+## PANDORA initiative — selective backend integration
+
+`instance_sync` provides off-by-default, on-demand source-to-destination review
+and apply. Settings/controls transfer common eligible keys only between matching
+installed Minecraft/loader pins, with an original-options backup. Resource packs,
+shaders, screenshots and explicitly selected configuration files/directories use
+private additive copies and keep differing destination files. Review fingerprints,
+bounded traversal/streaming hashes, reparse checks, Play reservations, lifecycle
+and content locks protect commits. Schema-1 sync preferences live separately in
+`launcher/instance-sync.json`; review receipts/backups live in `launcher/sync-backups`.
+No watcher, automatic launch/exit sync, shared world directory, delete propagation,
+server-list merge or background index is introduced. Native Settings uses the
+shared controls and typed application services. Per-file completion is recoverable
+by inspection/review; it is not an atomic multi-file sync transaction.
+
+Rust readiness now reports `canPrepare` separately from `ready` when the sole
+blocker is missing exact managed Java. Native Play uses the existing verified
+runtime installer and supervisor; a writer-locked missing-only policy refuses
+automatic replacement of damaged/unknown trees. Custom Java still never falls
+back. Final instance/runtime/session validation remains authoritative.
+
+Transfer slot leases reclaim completed host/digest coordination entries, including
+cancelled waiters. An order-independent provider verification pass uses bounded
+completion-order scheduling; classpath/manifest ordering stays deterministic.
+Modpack review hashes override payloads in 64 KiB chunks while actual extraction
+retains its existing bounds and transactions. No dependency or release authority
+changes. Full scope, evidence and limitations:
+`docs/pandora/PANDORA_ARCHITECTURE_AUDIT.md` and
+`PANDORA_BACKEND_INTEGRATION_ACCEPTANCE.md`.
+
 ## NATIVE-10 — explicit per-instance custom Java (current)
 
 The owner approved this new capability during NATIVE-10. Managed Java remains

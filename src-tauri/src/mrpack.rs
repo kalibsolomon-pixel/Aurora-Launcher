@@ -368,6 +368,37 @@ fn safe_download(raw: &str) -> bool {
     crate::downloads::mrpack_allowed_url(&url)
 }
 
+/// Planning needs an identity, not an expanded payload. Hash incrementally
+/// with the same expansion/length checks used by override materialization.
+fn hash_override(reader: &mut impl Read, expected_size: u64) -> Result<String, PackError> {
+    if expected_size > MAX_OVERRIDE_BYTES {
+        return Err(PackError::ArchiveLimit);
+    }
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    let mut total = 0u64;
+    loop {
+        let count = reader
+            .read(&mut buffer)
+            .map_err(|_| PackError::InvalidArchive)?;
+        if count == 0 {
+            break;
+        }
+        total += count as u64;
+        if total > MAX_OVERRIDE_BYTES {
+            return Err(PackError::ArchiveLimit);
+        }
+        if total > expected_size {
+            return Err(PackError::InvalidArchive);
+        }
+        hasher.update(&buffer[..count]);
+    }
+    if total != expected_size {
+        return Err(PackError::InvalidArchive);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
 pub fn parse_verified_file(path: &Path) -> Result<PackPlan, PackError> {
     let file = File::open(path).map_err(|_| PackError::Io)?;
     if file.metadata().map_err(|_| PackError::Io)?.len() > MAX_PACK_BYTES {
@@ -560,14 +591,11 @@ fn parse_reader<R: Read + Seek>(reader: R) -> Result<PackPlan, PackError> {
             return Err(PackError::PathCollision);
         }
         let mut entry = zip.by_index(i).map_err(|_| PackError::InvalidArchive)?;
-        let bytes = read_bounded(&mut entry, MAX_OVERRIDE_BYTES)?;
-        if bytes.len() as u64 != size {
-            return Err(PackError::InvalidArchive);
-        }
+        let sha256 = hash_override(&mut entry, size)?;
         let override_file = OverrideFile {
             path: path.clone(),
             archive_index: i,
-            sha256: format!("{:x}", Sha256::digest(&bytes)),
+            sha256,
             size,
             layer,
         };
@@ -599,6 +627,29 @@ fn parse_reader<R: Read + Seek>(reader: R) -> Result<PackPlan, PackError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn streamed_override_hash_matches_bytes_and_rejects_short_long_and_bad_reads() {
+        let bytes = vec![0x57u8; 192 * 1024 + 17];
+        assert_eq!(
+            hash_override(&mut bytes.as_slice(), bytes.len() as u64).unwrap(),
+            format!("{:x}", Sha256::digest(&bytes))
+        );
+        assert!(hash_override(&mut bytes.as_slice(), bytes.len() as u64 + 1).is_err());
+        assert!(hash_override(&mut bytes.as_slice(), bytes.len() as u64 - 1).is_err());
+        assert!(hash_override(&mut bytes.as_slice(), MAX_OVERRIDE_BYTES + 1).is_err());
+        struct BadReader;
+        impl Read for BadReader {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("broken"))
+            }
+        }
+        assert!(hash_override(&mut BadReader, 1).is_err());
+        assert_eq!(
+            hash_override(&mut [].as_slice(), 0).unwrap(),
+            format!("{:x}", Sha256::digest([]))
+        );
+    }
 
     #[test]
     fn a_neoforge_mrpack_is_rejected_with_an_explicit_phase_k_message() {

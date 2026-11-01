@@ -10,6 +10,7 @@ use crate::{AccentPicker, AppWindow, Settings, Swatch, Theme, Tone};
 const BACKGROUNDS: [&str; 2] = ["simple", "borealis"];
 
 pub fn bind(window: &AppWindow) {
+    crate::syncing::bind(window);
     let settings = window.global::<Settings>();
     settings.on_theme_changed(|index| {
         let theme = ui::state(|s| {
@@ -123,6 +124,7 @@ fn shortcut_operation(
 }
 
 pub fn load() {
+    crate::syncing::load();
     if let Ok(state) = api::discord_state() {
         apply_discord(&state);
     }

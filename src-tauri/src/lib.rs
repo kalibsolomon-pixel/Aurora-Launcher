@@ -37,6 +37,7 @@ mod installed_artwork;
 pub mod instance_content;
 pub mod instance_icons;
 pub mod instance_mods;
+pub mod instance_sync;
 pub mod instances;
 pub mod integrity;
 pub mod launch;
@@ -98,6 +99,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            application::tauri_commands::get_instance_sync_policy,
+            application::tauri_commands::set_instance_sync_enabled,
+            application::tauri_commands::preview_instance_sync,
+            application::tauri_commands::apply_instance_sync,
             performance::performance_mark,
             performance::performance_readiness,
             performance::performance_runtime_status,

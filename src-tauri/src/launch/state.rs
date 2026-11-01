@@ -185,11 +185,90 @@ impl PlayReadiness {
     pub fn ready(&self) -> bool {
         self.blockers.is_empty()
     }
+
+    /// Preparation is a separate decision from Ready. Only a wholly absent
+    /// managed runtime is automatic; damaged, custom, unresolved and content
+    /// problems retain their existing explicit recovery paths.
+    pub fn can_prepare(&self) -> bool {
+        self.instance == LaunchInstanceStatus::Ready
+            && self.runtime == LaunchRuntimeStatus::Missing
+            && self.account == LaunchAccountStatus::Ready
+            && !self.process.blocks_launch()
+            && self.blockers.len() == 1
+            && self.blockers[0].code == "launch_runtime_not_ready"
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn automatic_preparation_is_only_for_missing_managed_java() {
+        let decision = |runtime| {
+            PlayReadiness::evaluate(
+                LaunchInstanceStatus::Ready,
+                runtime,
+                LaunchAccountStatus::Ready,
+                LaunchProcessStatus::Stopped,
+            )
+        };
+        assert!(decision(LaunchRuntimeStatus::Missing).can_prepare());
+        for status in [
+            LaunchRuntimeStatus::Ready,
+            LaunchRuntimeStatus::Damaged,
+            LaunchRuntimeStatus::Unresolved,
+            LaunchRuntimeStatus::CustomInvalid,
+        ] {
+            assert!(!decision(status).can_prepare());
+        }
+        for account in [
+            LaunchAccountStatus::Missing,
+            LaunchAccountStatus::ReauthenticationRequired,
+            LaunchAccountStatus::ConfigurationMissing,
+        ] {
+            assert!(
+                !PlayReadiness::evaluate(
+                    LaunchInstanceStatus::Ready,
+                    LaunchRuntimeStatus::Missing,
+                    account,
+                    LaunchProcessStatus::Stopped
+                )
+                .can_prepare()
+            );
+        }
+        for instance in [
+            LaunchInstanceStatus::Missing,
+            LaunchInstanceStatus::Installing,
+            LaunchInstanceStatus::Stale,
+            LaunchInstanceStatus::Damaged,
+        ] {
+            assert!(
+                !PlayReadiness::evaluate(
+                    instance,
+                    LaunchRuntimeStatus::Missing,
+                    LaunchAccountStatus::Ready,
+                    LaunchProcessStatus::Stopped
+                )
+                .can_prepare()
+            );
+        }
+        let mut with_mod_conflict = decision(LaunchRuntimeStatus::Missing);
+        with_mod_conflict.blockers.push(LaunchBlocker {
+            code: "launch_mod_incompatible",
+            message: "conflict".into(),
+        });
+        assert!(!with_mod_conflict.can_prepare());
+        assert!(
+            !PlayReadiness::evaluate(
+                LaunchInstanceStatus::Ready,
+                LaunchRuntimeStatus::Missing,
+                LaunchAccountStatus::Ready,
+                LaunchProcessStatus::Running
+            )
+            .can_prepare()
+        );
+    }
 
     #[test]
     fn every_launch_precondition_is_rust_owned_and_explicit() {

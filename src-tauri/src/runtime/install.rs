@@ -153,6 +153,49 @@ async fn ensure_runtime_with_faults(
     progress: &mut (dyn FnMut(InstallRuntimeProgress) + Send),
     faults: RuntimeInstallFaults,
 ) -> Result<InstalledRuntime, RuntimeInstallError> {
+    ensure_runtime_with_policy(
+        managed,
+        plan,
+        options,
+        execute_diagnostic,
+        progress,
+        faults,
+        false,
+    )
+    .await
+}
+
+/// Play may fill an absent exact runtime, or reuse one completed while it
+/// waited. Re-check under the same writer lock as installation so a racing
+/// damaged/foreign tree never turns automatic preparation into repair.
+pub async fn ensure_missing_runtime(
+    managed: &ManagedPaths,
+    plan: &JavaRuntimePlan,
+    options: &DownloadOptions,
+    execute_diagnostic: bool,
+    progress: &mut (dyn FnMut(InstallRuntimeProgress) + Send),
+) -> Result<InstalledRuntime, RuntimeInstallError> {
+    ensure_runtime_with_policy(
+        managed,
+        plan,
+        options,
+        execute_diagnostic,
+        progress,
+        RuntimeInstallFaults::default(),
+        true,
+    )
+    .await
+}
+
+async fn ensure_runtime_with_policy(
+    managed: &ManagedPaths,
+    plan: &JavaRuntimePlan,
+    options: &DownloadOptions,
+    execute_diagnostic: bool,
+    progress: &mut (dyn FnMut(InstallRuntimeProgress) + Send),
+    faults: RuntimeInstallFaults,
+    missing_only: bool,
+) -> Result<InstalledRuntime, RuntimeInstallError> {
     let started = Instant::now();
     let root = plan.installation_dir(managed);
     // Instances needing the same runtime at once share one installation:
@@ -194,6 +237,12 @@ async fn ensure_runtime_with_faults(
         return Ok(installed_result(plan, managed, state, true));
     }
 
+    if missing_only && initial.status != RuntimeValidationStatus::Missing {
+        return Err(RuntimeInstallError::TargetConflict {
+            path: root.display().to_string(),
+            reason: "automatic Play preparation does not replace damaged or unknown runtimes; use explicit runtime installation".into(),
+        });
+    }
     let replacing = decide_replacement(&root, plan)?;
     let files: Vec<_> = plan
         .entries()
@@ -1175,6 +1224,39 @@ mod tests {
             RuntimeValidationStatus::Ready
         );
         let _ = std::fs::remove_dir_all(managed.data_root());
+    }
+
+    #[tokio::test]
+    async fn play_preparation_fills_only_missing_runtime_and_reuses_without_network() {
+        let server = TestServer::spawn(Arc::new(|request| match request.path.as_str() {
+            "/bin-java.exe" => TestResponse::ok(b"java-runtime"),
+            "/bin-javaw.exe" => TestResponse::ok(b"javaw-runtime"),
+            _ => TestResponse::status(404),
+        }));
+        let managed = managed("pandora-missing-only");
+        let plan = test_plan(server.base_url(), b"java-runtime", b"javaw-runtime");
+        let first = ensure_missing_runtime(&managed, &plan, &options(), false, &mut |_| {})
+            .await
+            .unwrap();
+        assert!(!first.reused());
+        assert_eq!(server.request_count(), 2);
+        let second = ensure_missing_runtime(&managed, &plan, &options(), false, &mut |_| {})
+            .await
+            .unwrap();
+        assert!(second.reused());
+        assert_eq!(server.request_count(), 2);
+        let java = plan.diagnostic_executable_path(&managed);
+        std::fs::write(&java, b"local damaged runtime").unwrap();
+        assert!(matches!(
+            ensure_missing_runtime(&managed, &plan, &options(), false, &mut |_| {}).await,
+            Err(RuntimeInstallError::TargetConflict { .. })
+        ));
+        assert_eq!(std::fs::read(&java).unwrap(), b"local damaged runtime");
+        assert_eq!(
+            server.request_count(),
+            2,
+            "automatic Play never repairs a damaged runtime"
+        );
     }
 
     #[tokio::test]
