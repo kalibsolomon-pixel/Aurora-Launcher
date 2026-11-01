@@ -89,3 +89,44 @@ updates, public-CDN throughput, real duplication, populated/Borealis idle and
 Pandora-vs-Aurora matched runtime measurements remain NOT MEASURED unless the
 acceptance report separately supplies those results. Existing deterministic
 loopback installer tests establish behavior, not a performance delta.
+
+
+## PANDORA-4 follow-up
+
+`pandora4_sync_bench` and `tools/benchmark/pandora4_resources.py` extend the
+existing sampler. The probe refuses existing roots and accepts only absolute
+`pandora4-*` paths, with an explicit marker, synthetic registry and no installed
+game/accounts. Counts are disabled (two synthetic records, zero participants),
+2, 8, 32 and 64 selected records. Each record starts with 32 identical 1 KiB
+files and two common options. Preparation completes before timing each workload:
+converged, a one-sided edit, two concurrent edits, then a new 2 MiB resource pack.
+The conflict stays present during the copy and six subsequent repeated cycles.
+The accepted pre-change core is exported read-only with `git archive`; only the
+same new probe example is added to that export. No original checkout is changed.
+
+The Windows sampler brackets each cycle on its exact owned process. CPU counters
+have Windows scheduling quantization; zero does not prove zero CPU instructions.
+Logical reads/writes include policy/history, verification, backup and staging I/O;
+they are not physical disk traffic. For the offline Engine probe, known command
+and result pipe bytes are subtracted into separate logical-file counters; raw
+process counters remain alongside them. The native app counters remain process
+I/O and are not asserted to exclude OS IPC. The core's `filesScanned` counts traversal
+visits, including repeated scans; `filesHashed` counts full-file hash operations,
+including repeated verification, excluding hashes of individual option values.
+`bytesCopied` counts committed output payloads, excluding backup/history overhead.
+Pre-change operation counters do not exist and are NOT MEASURED. Its edit and
+conflict behavior is deliberately different, so those timings are not speedup
+claims. Compare converged and additive-copy workloads as qualified synthetic data.
+
+Idle Engine samples follow fixture creation/convergence and exclude mutation.
+Six repeated cycles expose retained working/private memory, not a long-duration
+leak proof. Native sampling uses a marked copy of the clean fixture, the optimized
+software renderer and explicit diagnostic root; it crosses a real minute tick.
+Report idle samples from seconds 8–55 separately from startup/cycle windows. Exact
+Popen handles are terminated after sampling. This is a real app boot but not
+Minecraft launch, authenticated play, physical visibility, or a clean-close test.
+
+Run sequentially after build/test activity finishes, retaining executable hashes,
+raw JSON and stderr. Results and precise coverage belong in
+`PANDORA_4_ACCEPTANCE.md` and `pandora4-results.json`. Unsupported measurements stay
+NOT MEASURED. No public downloads, GPU/frame-time tests or real worlds are used.

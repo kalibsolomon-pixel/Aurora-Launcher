@@ -16,20 +16,39 @@ Minecraft/loader pins, with an original-options backup. Bounded hash-only
 observations detect subsequent unique edits; initial differences and conflicting
 edits are kept. Busy/running peers retain pending edits for a later minute.
 Resource packs, shaders, screenshots and explicitly selected configuration use
-private additive copies and keep differing destination files. A 1 GiB per-cycle
-copy budget and bounded traversal limit work. Warm folder metadata hints avoid
-repeated hashing; actual copies still rehash their full internal plans.
+private copies and per-file acknowledged hashes. One changed variant updates a
+peer only when their previous hashes agreed and that peer remains unchanged.
+Initial differences and concurrent edits stay pending. Unavailable peers retain
+baselines; deletions never propagate. Native Settings offers hash-bound conflict
+choices with backups, and Instance Settings stores sparse category overrides,
+additional exclusions and pause in the existing schema-2 policy. Global defaults
+remain authoritative for inherited categories.
+
+Server lists use a bounded uncompressed named-NBT span reader. Local order and
+unknown tags stay intact. Only disjoint name/address additions merge; ambiguous
+matches, edits and duplicate identities defer the whole file. Server edit choices
+remain unsupported; resolve those in Minecraft. Worlds remain disabled.
+
+A 1 GiB per-cycle copy budget and bounded traversal limit work. Warm metadata
+hints avoid repeated hashing; each actual commit rehashes source, destination
+and staged output. The cache is per instance/category rather than every ordered
+pair. Operation counters distinguish traversal visits, full-file hash calls,
+payload bytes committed and elapsed cycle time.
 
 Reparse checks, Play reservations, lifecycle/content locks and policy checks
 protect commits. Schema-2 preferences live in `launcher/instance-sync.json`;
-hash-only baselines in `launcher/sync-observed.json`; receipts/options backups
-in `launcher/sync-backups`. A known manual schema-1 preference loads off with
+option hashes in `launcher/sync-observed.json`, file baselines/pending conflicts
+in schema-1 `launcher/sync-files.json` (16 MiB, 32,768 peer/path observations,
+1,024 pending conflicts); receipts and originals in `launcher/sync-backups`.
+A known manual schema-1 preference loads off with
 no selected instances until explicitly configured; unknown/damaged files fail.
 Disabling drops the timer; an entered per-file commit can finish. Game exclusion
 is process-local, so games left running by another launcher session must be
-closed. Worlds, server-list merging, delete propagation and automatic replacement
-of differing ordinary files are unsupported. Per-file completion is recoverable
-by inspection; this is not one atomic multi-file transaction.
+closed. World snapshot/restore and deletion propagation remain unsupported.
+Every output uses private staging and revalidation, followed by no-clobber creation
+or atomic replacement after a durable original backup. Per-file completion is
+recoverable by inspection; this is not one atomic multi-file transaction.
+See `PANDORA_4_ACCEPTANCE.md` for current evidence and limits.
 
 Rust readiness now reports `canPrepare` separately from `ready` when the sole
 blocker is missing exact managed Java. Native Play uses the existing verified

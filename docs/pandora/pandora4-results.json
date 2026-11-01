@@ -1,0 +1,2964 @@
+{
+  "method": "Single sequential optimized process per configuration/build; raw Windows process counters plus known probe pipe byte subtraction for logical file transfers. CPU scheduling quantization applies.",
+  "engine": {
+    "before": [
+      {
+        "count": 0,
+        "exeSha256": "bf5a10aaec2833db32e5ef4a523d1c0278597149ad9e5c3910ad25756a903954",
+        "fixture": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-pandora4-ee18e646-ee9d-429f-8357-2a08e4c936da\\pandora4-before-0",
+        "cold": {
+          "elapsedMicros": 5559,
+          "phase": "cold",
+          "status": {
+            "conflictsKept": 0,
+            "enabled": false,
+            "filesChanged": 0,
+            "lastRunUnixSeconds": null,
+            "message": "",
+            "running": false,
+            "skippedInstances": 0
+          }
+        },
+        "idle": {
+          "workingSet": 5472256.0,
+          "privateCommitted": 749568.0,
+          "cpuSeconds": 0.0,
+          "logicalReadBytes": 0,
+          "logicalWriteBytes": 0,
+          "sampleSeconds": 2.009139099973254
+        },
+        "cycles": [
+          {
+            "elapsedMicros": 265,
+            "phase": "converged",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": false,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 149,
+            "logicalWriteBytes": 180,
+            "wallSeconds": 0.00033000006806105375,
+            "workingSet": 5484544,
+            "privateCommitted": 765952,
+            "logicalFileReadBytes": 138,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 199,
+            "phase": "edit",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": false,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 144,
+            "logicalWriteBytes": 175,
+            "wallSeconds": 0.0002351000439375639,
+            "workingSet": 5484544,
+            "privateCommitted": 765952,
+            "logicalFileReadBytes": 138,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 251,
+            "phase": "conflict",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": false,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 148,
+            "logicalWriteBytes": 179,
+            "wallSeconds": 0.00031210004817694426,
+            "workingSet": 5484544,
+            "privateCommitted": 765952,
+            "logicalFileReadBytes": 138,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 237,
+            "phase": "copy",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": false,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 144,
+            "logicalWriteBytes": 175,
+            "wallSeconds": 0.0002793999155983329,
+            "workingSet": 5484544,
+            "privateCommitted": 765952,
+            "logicalFileReadBytes": 138,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 169,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": false,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 146,
+            "logicalWriteBytes": 177,
+            "wallSeconds": 0.00020110001787543297,
+            "workingSet": 5484544,
+            "privateCommitted": 765952,
+            "logicalFileReadBytes": 138,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 157,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": false,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 146,
+            "logicalWriteBytes": 177,
+            "wallSeconds": 0.00018630002159625292,
+            "workingSet": 5484544,
+            "privateCommitted": 765952,
+            "logicalFileReadBytes": 138,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 162,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": false,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 146,
+            "logicalWriteBytes": 177,
+            "wallSeconds": 0.00022549997083842754,
+            "workingSet": 5484544,
+            "privateCommitted": 765952,
+            "logicalFileReadBytes": 138,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 150,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": false,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 146,
+            "logicalWriteBytes": 177,
+            "wallSeconds": 0.00018660002388060093,
+            "workingSet": 5484544,
+            "privateCommitted": 765952,
+            "logicalFileReadBytes": 138,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 152,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": false,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 146,
+            "logicalWriteBytes": 177,
+            "wallSeconds": 0.00018159998580813408,
+            "workingSet": 5484544,
+            "privateCommitted": 765952,
+            "logicalFileReadBytes": 138,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 145,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": false,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 146,
+            "logicalWriteBytes": 177,
+            "wallSeconds": 0.00017239991575479507,
+            "workingSet": 5484544,
+            "privateCommitted": 765952,
+            "logicalFileReadBytes": 138,
+            "logicalFileWriteBytes": 0
+          }
+        ]
+      },
+      {
+        "count": 2,
+        "exeSha256": "bf5a10aaec2833db32e5ef4a523d1c0278597149ad9e5c3910ad25756a903954",
+        "fixture": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-pandora4-ee18e646-ee9d-429f-8357-2a08e4c936da\\pandora4-before-2",
+        "cold": {
+          "elapsedMicros": 70920,
+          "phase": "cold",
+          "status": {
+            "conflictsKept": 0,
+            "enabled": true,
+            "filesChanged": 0,
+            "lastRunUnixSeconds": null,
+            "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+            "running": false,
+            "skippedInstances": 0
+          }
+        },
+        "idle": {
+          "workingSet": 5107712.0,
+          "privateCommitted": 1097728.0,
+          "cpuSeconds": 0.0,
+          "logicalReadBytes": 0,
+          "logicalWriteBytes": 0,
+          "sampleSeconds": 1.9692957000806928
+        },
+        "cycles": [
+          {
+            "elapsedMicros": 9804,
+            "phase": "converged",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 5138,
+            "logicalWriteBytes": 275,
+            "wallSeconds": 0.009902199963107705,
+            "workingSet": 5115904,
+            "privateCommitted": 1097728,
+            "logicalFileReadBytes": 5127,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 35272,
+            "phase": "edit",
+            "status": {
+              "conflictsKept": 2,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 2 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.03125,
+            "logicalReadBytes": 275441,
+            "logicalWriteBytes": 271,
+            "wallSeconds": 0.03536320000421256,
+            "workingSet": 5373952,
+            "privateCommitted": 1540096,
+            "logicalFileReadBytes": 275435,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 36171,
+            "phase": "conflict",
+            "status": {
+              "conflictsKept": 4,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 4 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.046875,
+            "logicalReadBytes": 267337,
+            "logicalWriteBytes": 275,
+            "wallSeconds": 0.036381299956701696,
+            "workingSet": 5349376,
+            "privateCommitted": 1503232,
+            "logicalFileReadBytes": 267327,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 62246,
+            "phase": "copy",
+            "status": {
+              "conflictsKept": 4,
+              "enabled": true,
+              "filesChanged": 1,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 1 file(s). Kept 4 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0625,
+            "logicalReadBytes": 19142319,
+            "logicalWriteBytes": 2100337,
+            "wallSeconds": 0.0623989999294281,
+            "workingSet": 5406720,
+            "privateCommitted": 1617920,
+            "logicalFileReadBytes": 19142313,
+            "logicalFileWriteBytes": 2100066
+          },
+          {
+            "elapsedMicros": 44098,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 4,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 4 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.046875,
+            "logicalReadBytes": 17044551,
+            "logicalWriteBytes": 273,
+            "wallSeconds": 0.04421560000628233,
+            "workingSet": 5394432,
+            "privateCommitted": 1523712,
+            "logicalFileReadBytes": 17044543,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 4255,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 4,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 4 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 5135,
+            "logicalWriteBytes": 272,
+            "wallSeconds": 0.004371199989691377,
+            "workingSet": 5402624,
+            "privateCommitted": 1523712,
+            "logicalFileReadBytes": 5127,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 4206,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 4,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 4 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 5135,
+            "logicalWriteBytes": 272,
+            "wallSeconds": 0.004269200027920306,
+            "workingSet": 5419008,
+            "privateCommitted": 1552384,
+            "logicalFileReadBytes": 5127,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 4067,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 4,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 4 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 5135,
+            "logicalWriteBytes": 272,
+            "wallSeconds": 0.004123700084164739,
+            "workingSet": 5431296,
+            "privateCommitted": 1552384,
+            "logicalFileReadBytes": 5127,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 4365,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 4,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 4 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 5135,
+            "logicalWriteBytes": 272,
+            "wallSeconds": 0.004434000002220273,
+            "workingSet": 5431296,
+            "privateCommitted": 1552384,
+            "logicalFileReadBytes": 5127,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 4481,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 4,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 4 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 5135,
+            "logicalWriteBytes": 272,
+            "wallSeconds": 0.004541600006632507,
+            "workingSet": 5431296,
+            "privateCommitted": 1552384,
+            "logicalFileReadBytes": 5127,
+            "logicalFileWriteBytes": 0
+          }
+        ]
+      },
+      {
+        "count": 8,
+        "exeSha256": "bf5a10aaec2833db32e5ef4a523d1c0278597149ad9e5c3910ad25756a903954",
+        "fixture": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-pandora4-ee18e646-ee9d-429f-8357-2a08e4c936da\\pandora4-before-8",
+        "cold": {
+          "elapsedMicros": 1004980,
+          "phase": "cold",
+          "status": {
+            "conflictsKept": 0,
+            "enabled": true,
+            "filesChanged": 0,
+            "lastRunUnixSeconds": null,
+            "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+            "running": false,
+            "skippedInstances": 0
+          }
+        },
+        "idle": {
+          "workingSet": 5406720.0,
+          "privateCommitted": 1544192.0,
+          "cpuSeconds": 0.0,
+          "logicalReadBytes": 0,
+          "logicalWriteBytes": 0,
+          "sampleSeconds": 1.9738447000272572
+        },
+        "cycles": [
+          {
+            "elapsedMicros": 26697,
+            "phase": "converged",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 70850,
+            "logicalWriteBytes": 276,
+            "wallSeconds": 0.0268126999726519,
+            "workingSet": 5468160,
+            "privateCommitted": 1634304,
+            "logicalFileReadBytes": 70839,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 245234,
+            "phase": "edit",
+            "status": {
+              "conflictsKept": 14,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 14 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.234375,
+            "logicalReadBytes": 2182997,
+            "logicalWriteBytes": 274,
+            "wallSeconds": 0.24534060002770275,
+            "workingSet": 5505024,
+            "privateCommitted": 1634304,
+            "logicalFileReadBytes": 2182991,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 420527,
+            "phase": "conflict",
+            "status": {
+              "conflictsKept": 40,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 40 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.421875,
+            "logicalReadBytes": 3960901,
+            "logicalWriteBytes": 278,
+            "wallSeconds": 0.42063389997929335,
+            "workingSet": 5423104,
+            "privateCommitted": 1585152,
+            "logicalFileReadBytes": 3960891,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 380100,
+            "phase": "copy",
+            "status": {
+              "conflictsKept": 40,
+              "enabled": true,
+              "filesChanged": 7,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 7 file(s). Kept 40 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.265625,
+            "logicalReadBytes": 134279865,
+            "logicalWriteBytes": 14700736,
+            "wallSeconds": 0.3802101999754086,
+            "workingSet": 5545984,
+            "privateCommitted": 1654784,
+            "logicalFileReadBytes": 134279859,
+            "logicalFileWriteBytes": 14700462
+          },
+          {
+            "elapsedMicros": 1129030,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 40,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 40 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 1.09375,
+            "logicalReadBytes": 478309587,
+            "logicalWriteBytes": 277,
+            "wallSeconds": 1.1291551999747753,
+            "workingSet": 5619712,
+            "privateCommitted": 1732608,
+            "logicalFileReadBytes": 478309579,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 22551,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 40,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 40 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.03125,
+            "logicalReadBytes": 70847,
+            "logicalWriteBytes": 275,
+            "wallSeconds": 0.022656999994069338,
+            "workingSet": 5574656,
+            "privateCommitted": 1732608,
+            "logicalFileReadBytes": 70839,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 21702,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 40,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 40 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 70847,
+            "logicalWriteBytes": 275,
+            "wallSeconds": 0.021805499913170934,
+            "workingSet": 5574656,
+            "privateCommitted": 1732608,
+            "logicalFileReadBytes": 70839,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 22574,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 40,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 40 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.03125,
+            "logicalReadBytes": 70847,
+            "logicalWriteBytes": 275,
+            "wallSeconds": 0.02266290003899485,
+            "workingSet": 5574656,
+            "privateCommitted": 1732608,
+            "logicalFileReadBytes": 70839,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 22034,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 40,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 40 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 70847,
+            "logicalWriteBytes": 275,
+            "wallSeconds": 0.0221101000206545,
+            "workingSet": 5578752,
+            "privateCommitted": 1732608,
+            "logicalFileReadBytes": 70839,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 22791,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 40,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 40 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.03125,
+            "logicalReadBytes": 70847,
+            "logicalWriteBytes": 275,
+            "wallSeconds": 0.022873299894854426,
+            "workingSet": 5578752,
+            "privateCommitted": 1732608,
+            "logicalFileReadBytes": 70839,
+            "logicalFileWriteBytes": 0
+          }
+        ]
+      },
+      {
+        "count": 32,
+        "exeSha256": "bf5a10aaec2833db32e5ef4a523d1c0278597149ad9e5c3910ad25756a903954",
+        "fixture": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-pandora4-ee18e646-ee9d-429f-8357-2a08e4c936da\\pandora4-before-32",
+        "cold": {
+          "elapsedMicros": 16111341,
+          "phase": "cold",
+          "status": {
+            "conflictsKept": 0,
+            "enabled": true,
+            "filesChanged": 0,
+            "lastRunUnixSeconds": null,
+            "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+            "running": false,
+            "skippedInstances": 0
+          }
+        },
+        "idle": {
+          "workingSet": 6344704.0,
+          "privateCommitted": 2547712.0,
+          "cpuSeconds": 0.0,
+          "logicalReadBytes": 0,
+          "logicalWriteBytes": 0,
+          "sampleSeconds": 1.9735750999534503
+        },
+        "cycles": [
+          {
+            "elapsedMicros": 209448,
+            "phase": "converged",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.203125,
+            "logicalReadBytes": 1905464,
+            "logicalWriteBytes": 277,
+            "wallSeconds": 0.20956190000288188,
+            "workingSet": 6393856,
+            "privateCommitted": 2547712,
+            "logicalFileReadBytes": 1905453,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 1185180,
+            "phase": "edit",
+            "status": {
+              "conflictsKept": 62,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 62 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 1.15625,
+            "logicalReadBytes": 15161803,
+            "logicalWriteBytes": 275,
+            "wallSeconds": 1.1853039999259636,
+            "workingSet": 6475776,
+            "privateCommitted": 2580480,
+            "logicalFileReadBytes": 15161797,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 2112161,
+            "phase": "conflict",
+            "status": {
+              "conflictsKept": 184,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 184 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 2.03125,
+            "logicalReadBytes": 27860379,
+            "logicalWriteBytes": 281,
+            "wallSeconds": 2.1122861000476405,
+            "workingSet": 6533120,
+            "privateCommitted": 2641920,
+            "logicalFileReadBytes": 27860369,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 1807947,
+            "phase": "copy",
+            "status": {
+              "conflictsKept": 184,
+              "enabled": true,
+              "filesChanged": 31,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 31 file(s). Kept 184 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 1.578125,
+            "logicalReadBytes": 600254231,
+            "logicalWriteBytes": 65102325,
+            "wallSeconds": 1.8081030000466853,
+            "workingSet": 6496256,
+            "privateCommitted": 2654208,
+            "logicalFileReadBytes": 600254225,
+            "logicalFileWriteBytes": 65102046
+          },
+          {
+            "elapsedMicros": 20215996,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 184,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 184 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 19.84375,
+            "logicalReadBytes": 8537133353,
+            "logicalWriteBytes": 280,
+            "wallSeconds": 20.216124000027776,
+            "workingSet": 6516736,
+            "privateCommitted": 2605056,
+            "logicalFileReadBytes": 8537133345,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 207489,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 184,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 184 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.203125,
+            "logicalReadBytes": 1905461,
+            "logicalWriteBytes": 278,
+            "wallSeconds": 0.2076062000123784,
+            "workingSet": 6520832,
+            "privateCommitted": 2609152,
+            "logicalFileReadBytes": 1905453,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 206461,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 184,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 184 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.21875,
+            "logicalReadBytes": 1905461,
+            "logicalWriteBytes": 278,
+            "wallSeconds": 0.2065729999449104,
+            "workingSet": 6524928,
+            "privateCommitted": 2613248,
+            "logicalFileReadBytes": 1905453,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 206096,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 184,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 184 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.203125,
+            "logicalReadBytes": 1905461,
+            "logicalWriteBytes": 278,
+            "wallSeconds": 0.20620839996263385,
+            "workingSet": 6524928,
+            "privateCommitted": 2613248,
+            "logicalFileReadBytes": 1905453,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 202834,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 184,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 184 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.1875,
+            "logicalReadBytes": 1905461,
+            "logicalWriteBytes": 278,
+            "wallSeconds": 0.20295659999828786,
+            "workingSet": 6533120,
+            "privateCommitted": 2621440,
+            "logicalFileReadBytes": 1905453,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 198692,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 184,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 184 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.1875,
+            "logicalReadBytes": 1905461,
+            "logicalWriteBytes": 278,
+            "wallSeconds": 0.19880329992156476,
+            "workingSet": 6533120,
+            "privateCommitted": 2621440,
+            "logicalFileReadBytes": 1905453,
+            "logicalFileWriteBytes": 0
+          }
+        ]
+      },
+      {
+        "count": 64,
+        "exeSha256": "bf5a10aaec2833db32e5ef4a523d1c0278597149ad9e5c3910ad25756a903954",
+        "fixture": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-pandora4-ee18e646-ee9d-429f-8357-2a08e4c936da\\pandora4-before-64",
+        "cold": {
+          "elapsedMicros": 67170480,
+          "phase": "cold",
+          "status": {
+            "conflictsKept": 0,
+            "enabled": true,
+            "filesChanged": 0,
+            "lastRunUnixSeconds": null,
+            "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+            "running": false,
+            "skippedInstances": 0
+          }
+        },
+        "idle": {
+          "workingSet": 8699904.0,
+          "privateCommitted": 4812800.0,
+          "cpuSeconds": 0.0,
+          "logicalReadBytes": 0,
+          "logicalWriteBytes": 0,
+          "sampleSeconds": 1.9717595000984147
+        },
+        "cycles": [
+          {
+            "elapsedMicros": 750343,
+            "phase": "converged",
+            "status": {
+              "conflictsKept": 0,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.75,
+            "logicalReadBytes": 12152216,
+            "logicalWriteBytes": 277,
+            "wallSeconds": 0.750456599984318,
+            "workingSet": 8228864,
+            "privateCommitted": 4259840,
+            "logicalFileReadBytes": 12152205,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 2807706,
+            "phase": "edit",
+            "status": {
+              "conflictsKept": 126,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 126 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 2.78125,
+            "logicalReadBytes": 49668459,
+            "logicalWriteBytes": 277,
+            "wallSeconds": 2.807816099957563,
+            "workingSet": 8454144,
+            "privateCommitted": 4497408,
+            "logicalFileReadBytes": 49668453,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 4779850,
+            "phase": "conflict",
+            "status": {
+              "conflictsKept": 376,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 376 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 4.734375,
+            "logicalReadBytes": 86328891,
+            "logicalWriteBytes": 281,
+            "wallSeconds": 4.780068599968217,
+            "workingSet": 8376320,
+            "privateCommitted": 4411392,
+            "logicalFileReadBytes": 86328881,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 4070835,
+            "phase": "copy",
+            "status": {
+              "conflictsKept": 376,
+              "enabled": true,
+              "filesChanged": 63,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 63 file(s). Kept 376 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 3.578125,
+            "logicalReadBytes": 1238943127,
+            "logicalWriteBytes": 132304437,
+            "wallSeconds": 4.070949299959466,
+            "workingSet": 8450048,
+            "privateCommitted": 4521984,
+            "logicalFileReadBytes": 1238943121,
+            "logicalFileWriteBytes": 132304158
+          },
+          {
+            "elapsedMicros": 85370743,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 376,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 376 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 84.3125,
+            "logicalReadBytes": 35042918921,
+            "logicalWriteBytes": 280,
+            "wallSeconds": 85.3708618999226,
+            "workingSet": 9183232,
+            "privateCommitted": 5267456,
+            "logicalFileReadBytes": 35042918913,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 739122,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 376,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 376 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.734375,
+            "logicalReadBytes": 12152213,
+            "logicalWriteBytes": 278,
+            "wallSeconds": 0.7392437999369577,
+            "workingSet": 8237056,
+            "privateCommitted": 4243456,
+            "logicalFileReadBytes": 12152205,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 768389,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 376,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 376 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.765625,
+            "logicalReadBytes": 12152213,
+            "logicalWriteBytes": 278,
+            "wallSeconds": 0.7685066000558436,
+            "workingSet": 8241152,
+            "privateCommitted": 4247552,
+            "logicalFileReadBytes": 12152205,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 756639,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 376,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 376 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.765625,
+            "logicalReadBytes": 12152213,
+            "logicalWriteBytes": 278,
+            "wallSeconds": 0.7567502000601962,
+            "workingSet": 8257536,
+            "privateCommitted": 4263936,
+            "logicalFileReadBytes": 12152205,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 757492,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 376,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 376 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.75,
+            "logicalReadBytes": 12152213,
+            "logicalWriteBytes": 278,
+            "wallSeconds": 0.7576087999623269,
+            "workingSet": 8249344,
+            "privateCommitted": 4263936,
+            "logicalFileReadBytes": 12152205,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 759272,
+            "phase": "repeat",
+            "status": {
+              "conflictsKept": 376,
+              "enabled": true,
+              "filesChanged": 0,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 376 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.75,
+            "logicalReadBytes": 12152213,
+            "logicalWriteBytes": 278,
+            "wallSeconds": 0.7593905000248924,
+            "workingSet": 8232960,
+            "privateCommitted": 4239360,
+            "logicalFileReadBytes": 12152205,
+            "logicalFileWriteBytes": 0
+          }
+        ]
+      }
+    ],
+    "after": [
+      {
+        "count": 0,
+        "exeSha256": "a6213e218473922b303f1f7200277a48fad249d23295f5cbac2ad0867e0a5942",
+        "fixture": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-pandora4-ee18e646-ee9d-429f-8357-2a08e4c936da\\pandora4-after-0",
+        "cold": {
+          "elapsedMicros": 4747,
+          "phase": "cold",
+          "status": {
+            "bytesCopied": 0,
+            "conflictsKept": 0,
+            "cycleMicros": 4747,
+            "enabled": false,
+            "filesChanged": 0,
+            "filesHashed": 0,
+            "filesScanned": 0,
+            "lastRunUnixSeconds": null,
+            "message": "",
+            "running": false,
+            "skippedInstances": 0
+          }
+        },
+        "idle": {
+          "workingSet": 5640192.0,
+          "privateCommitted": 761856.0,
+          "cpuSeconds": 0.0,
+          "logicalReadBytes": 0,
+          "logicalWriteBytes": 0,
+          "sampleSeconds": 1.9692122999113053
+        },
+        "cycles": [
+          {
+            "elapsedMicros": 312,
+            "phase": "converged",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 312,
+              "enabled": false,
+              "filesChanged": 0,
+              "filesHashed": 0,
+              "filesScanned": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 164,
+            "logicalWriteBytes": 247,
+            "wallSeconds": 0.0004170999163761735,
+            "workingSet": 5640192,
+            "privateCommitted": 761856,
+            "logicalFileReadBytes": 153,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 269,
+            "phase": "edit",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 269,
+              "enabled": false,
+              "filesChanged": 0,
+              "filesHashed": 0,
+              "filesScanned": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 159,
+            "logicalWriteBytes": 242,
+            "wallSeconds": 0.00033930002246052027,
+            "workingSet": 5640192,
+            "privateCommitted": 761856,
+            "logicalFileReadBytes": 153,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 192,
+            "phase": "conflict",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 192,
+              "enabled": false,
+              "filesChanged": 0,
+              "filesHashed": 0,
+              "filesScanned": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 163,
+            "logicalWriteBytes": 246,
+            "wallSeconds": 0.00025459995958954096,
+            "workingSet": 5648384,
+            "privateCommitted": 774144,
+            "logicalFileReadBytes": 153,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 217,
+            "phase": "copy",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 217,
+              "enabled": false,
+              "filesChanged": 0,
+              "filesHashed": 0,
+              "filesScanned": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 159,
+            "logicalWriteBytes": 242,
+            "wallSeconds": 0.0002756000030785799,
+            "workingSet": 5648384,
+            "privateCommitted": 774144,
+            "logicalFileReadBytes": 153,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 164,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 164,
+              "enabled": false,
+              "filesChanged": 0,
+              "filesHashed": 0,
+              "filesScanned": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 161,
+            "logicalWriteBytes": 244,
+            "wallSeconds": 0.00020140002015978098,
+            "workingSet": 5648384,
+            "privateCommitted": 774144,
+            "logicalFileReadBytes": 153,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 158,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 158,
+              "enabled": false,
+              "filesChanged": 0,
+              "filesHashed": 0,
+              "filesScanned": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 161,
+            "logicalWriteBytes": 244,
+            "wallSeconds": 0.00018850003834813833,
+            "workingSet": 5648384,
+            "privateCommitted": 774144,
+            "logicalFileReadBytes": 153,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 153,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 153,
+              "enabled": false,
+              "filesChanged": 0,
+              "filesHashed": 0,
+              "filesScanned": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 161,
+            "logicalWriteBytes": 244,
+            "wallSeconds": 0.0001821999903768301,
+            "workingSet": 5648384,
+            "privateCommitted": 774144,
+            "logicalFileReadBytes": 153,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 150,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 149,
+              "enabled": false,
+              "filesChanged": 0,
+              "filesHashed": 0,
+              "filesScanned": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 161,
+            "logicalWriteBytes": 244,
+            "wallSeconds": 0.00017829996068030596,
+            "workingSet": 5648384,
+            "privateCommitted": 774144,
+            "logicalFileReadBytes": 153,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 142,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 142,
+              "enabled": false,
+              "filesChanged": 0,
+              "filesHashed": 0,
+              "filesScanned": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 161,
+            "logicalWriteBytes": 244,
+            "wallSeconds": 0.0001713000237941742,
+            "workingSet": 5648384,
+            "privateCommitted": 774144,
+            "logicalFileReadBytes": 153,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 147,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 147,
+              "enabled": false,
+              "filesChanged": 0,
+              "filesHashed": 0,
+              "filesScanned": 0,
+              "lastRunUnixSeconds": null,
+              "message": "",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 161,
+            "logicalWriteBytes": 244,
+            "wallSeconds": 0.000175100052729249,
+            "workingSet": 5648384,
+            "privateCommitted": 774144,
+            "logicalFileReadBytes": 153,
+            "logicalFileWriteBytes": 0
+          }
+        ]
+      },
+      {
+        "count": 2,
+        "exeSha256": "a6213e218473922b303f1f7200277a48fad249d23295f5cbac2ad0867e0a5942",
+        "fixture": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-pandora4-ee18e646-ee9d-429f-8357-2a08e4c936da\\pandora4-after-2",
+        "cold": {
+          "elapsedMicros": 146551,
+          "phase": "cold",
+          "status": {
+            "bytesCopied": 0,
+            "conflictsKept": 0,
+            "cycleMicros": 146551,
+            "enabled": true,
+            "filesChanged": 0,
+            "filesHashed": 66,
+            "filesScanned": 128,
+            "lastRunUnixSeconds": null,
+            "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+            "running": false,
+            "skippedInstances": 0
+          }
+        },
+        "idle": {
+          "workingSet": 5124096.0,
+          "privateCommitted": 921600.0,
+          "cpuSeconds": 0.0,
+          "logicalReadBytes": 0,
+          "logicalWriteBytes": 0,
+          "sampleSeconds": 2.0040076000150293
+        },
+        "cycles": [
+          {
+            "elapsedMicros": 13662,
+            "phase": "converged",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 13661,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 2,
+              "filesScanned": 64,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 33328,
+            "logicalWriteBytes": 346,
+            "wallSeconds": 0.013774699997156858,
+            "workingSet": 5337088,
+            "privateCommitted": 1200128,
+            "logicalFileReadBytes": 33317,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 24603,
+            "phase": "edit",
+            "status": {
+              "bytesCopied": 14,
+              "conflictsKept": 0,
+              "cycleMicros": 24602,
+              "enabled": true,
+              "filesChanged": 1,
+              "filesHashed": 45,
+              "filesScanned": 96,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 1 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 78826,
+            "logicalWriteBytes": 15401,
+            "wallSeconds": 0.02470450010150671,
+            "workingSet": 5410816,
+            "privateCommitted": 1220608,
+            "logicalFileReadBytes": 78820,
+            "logicalFileWriteBytes": 15058
+          },
+          {
+            "elapsedMicros": 23053,
+            "phase": "conflict",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 1,
+              "cycleMicros": 23052,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 66,
+              "filesScanned": 128,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 1 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 94816,
+            "logicalWriteBytes": 14305,
+            "wallSeconds": 0.023180099902674556,
+            "workingSet": 5398528,
+            "privateCommitted": 1208320,
+            "logicalFileReadBytes": 94806,
+            "logicalFileWriteBytes": 13958
+          },
+          {
+            "elapsedMicros": 39706,
+            "phase": "copy",
+            "status": {
+              "bytesCopied": 2097152,
+              "conflictsKept": 1,
+              "cycleMicros": 39705,
+              "enabled": true,
+              "filesChanged": 1,
+              "filesHashed": 41,
+              "filesScanned": 98,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 1 file(s). Kept 1 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.03125,
+            "logicalReadBytes": 16849383,
+            "logicalWriteBytes": 2112356,
+            "wallSeconds": 0.0398136000148952,
+            "workingSet": 5509120,
+            "privateCommitted": 1519616,
+            "logicalFileReadBytes": 16849377,
+            "logicalFileWriteBytes": 2112008
+          },
+          {
+            "elapsedMicros": 14049,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 1,
+              "cycleMicros": 14048,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 35,
+              "filesScanned": 99,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 1 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 2162884,
+            "logicalWriteBytes": 344,
+            "wallSeconds": 0.01415390009060502,
+            "workingSet": 5505024,
+            "privateCommitted": 1466368,
+            "logicalFileReadBytes": 2162876,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 5130,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 1,
+              "cycleMicros": 5130,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 2,
+              "filesScanned": 66,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 1 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 34987,
+            "logicalWriteBytes": 341,
+            "wallSeconds": 0.00521530001424253,
+            "workingSet": 5517312,
+            "privateCommitted": 1466368,
+            "logicalFileReadBytes": 34979,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 5225,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 1,
+              "cycleMicros": 5225,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 2,
+              "filesScanned": 66,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 1 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 34987,
+            "logicalWriteBytes": 341,
+            "wallSeconds": 0.005302499979734421,
+            "workingSet": 5509120,
+            "privateCommitted": 1458176,
+            "logicalFileReadBytes": 34979,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 5813,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 1,
+              "cycleMicros": 5813,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 2,
+              "filesScanned": 66,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 1 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 34987,
+            "logicalWriteBytes": 341,
+            "wallSeconds": 0.0059628000017255545,
+            "workingSet": 5529600,
+            "privateCommitted": 1478656,
+            "logicalFileReadBytes": 34979,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 5578,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 1,
+              "cycleMicros": 5577,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 2,
+              "filesScanned": 66,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 1 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0,
+            "logicalReadBytes": 34987,
+            "logicalWriteBytes": 341,
+            "wallSeconds": 0.005677100038155913,
+            "workingSet": 5529600,
+            "privateCommitted": 1478656,
+            "logicalFileReadBytes": 34979,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 5284,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 1,
+              "cycleMicros": 5284,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 2,
+              "filesScanned": 66,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 1 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 34987,
+            "logicalWriteBytes": 341,
+            "wallSeconds": 0.005356899928301573,
+            "workingSet": 5517312,
+            "privateCommitted": 1470464,
+            "logicalFileReadBytes": 34979,
+            "logicalFileWriteBytes": 0
+          }
+        ]
+      },
+      {
+        "count": 8,
+        "exeSha256": "a6213e218473922b303f1f7200277a48fad249d23295f5cbac2ad0867e0a5942",
+        "fixture": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-pandora4-ee18e646-ee9d-429f-8357-2a08e4c936da\\pandora4-after-8",
+        "cold": {
+          "elapsedMicros": 166162,
+          "phase": "cold",
+          "status": {
+            "bytesCopied": 0,
+            "conflictsKept": 0,
+            "cycleMicros": 166161,
+            "enabled": true,
+            "filesChanged": 0,
+            "filesHashed": 264,
+            "filesScanned": 512,
+            "lastRunUnixSeconds": null,
+            "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+            "running": false,
+            "skippedInstances": 0
+          }
+        },
+        "idle": {
+          "workingSet": 5361664.0,
+          "privateCommitted": 1163264.0,
+          "cpuSeconds": 0.0,
+          "logicalReadBytes": 0,
+          "logicalWriteBytes": 0,
+          "sampleSeconds": 1.9707503999816254
+        },
+        "cycles": [
+          {
+            "elapsedMicros": 25473,
+            "phase": "converged",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 25473,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 8,
+              "filesScanned": 256,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 119200,
+            "logicalWriteBytes": 347,
+            "wallSeconds": 0.025582199916243553,
+            "workingSet": 5459968,
+            "privateCommitted": 1298432,
+            "logicalFileReadBytes": 119189,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 102959,
+            "phase": "edit",
+            "status": {
+              "bytesCopied": 98,
+              "conflictsKept": 0,
+              "cycleMicros": 102959,
+              "enabled": true,
+              "filesChanged": 7,
+              "filesHashed": 117,
+              "filesScanned": 288,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 7 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0625,
+            "logicalReadBytes": 365986,
+            "logicalWriteBytes": 44043,
+            "wallSeconds": 0.10307269997429103,
+            "workingSet": 5611520,
+            "privateCommitted": 1613824,
+            "logicalFileReadBytes": 365980,
+            "logicalFileWriteBytes": 43696
+          },
+          {
+            "elapsedMicros": 51904,
+            "phase": "conflict",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 7,
+              "cycleMicros": 51904,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 264,
+              "filesScanned": 512,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 7 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.046875,
+            "logicalReadBytes": 371236,
+            "logicalWriteBytes": 36350,
+            "wallSeconds": 0.0520136000122875,
+            "workingSet": 5656576,
+            "privateCommitted": 1617920,
+            "logicalFileReadBytes": 371226,
+            "logicalFileWriteBytes": 36002
+          },
+          {
+            "elapsedMicros": 183722,
+            "phase": "copy",
+            "status": {
+              "bytesCopied": 14680064,
+              "conflictsKept": 7,
+              "cycleMicros": 183722,
+              "enabled": true,
+              "filesChanged": 7,
+              "filesHashed": 83,
+              "filesScanned": 290,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 7 file(s). Kept 7 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.171875,
+            "logicalReadBytes": 105181599,
+            "logicalWriteBytes": 14720784,
+            "wallSeconds": 0.18383480003103614,
+            "workingSet": 5668864,
+            "privateCommitted": 1757184,
+            "logicalFileReadBytes": 105181593,
+            "logicalFileWriteBytes": 14720432
+          },
+          {
+            "elapsedMicros": 55208,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 7,
+              "cycleMicros": 55207,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 239,
+              "filesScanned": 495,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 7 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.046875,
+            "logicalReadBytes": 15028360,
+            "logicalWriteBytes": 346,
+            "wallSeconds": 0.05532360007055104,
+            "workingSet": 5931008,
+            "privateCommitted": 1961984,
+            "logicalFileReadBytes": 15028352,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 17884,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 7,
+              "cycleMicros": 17884,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 8,
+              "filesScanned": 264,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 7 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.03125,
+            "logicalReadBytes": 127003,
+            "logicalWriteBytes": 344,
+            "wallSeconds": 0.017996500013396144,
+            "workingSet": 5795840,
+            "privateCommitted": 1798144,
+            "logicalFileReadBytes": 126995,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 16978,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 7,
+              "cycleMicros": 16978,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 8,
+              "filesScanned": 264,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 7 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 127003,
+            "logicalWriteBytes": 344,
+            "wallSeconds": 0.017125500016845763,
+            "workingSet": 5734400,
+            "privateCommitted": 1691648,
+            "logicalFileReadBytes": 126995,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 17991,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 7,
+              "cycleMicros": 17990,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 8,
+              "filesScanned": 264,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 7 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 127003,
+            "logicalWriteBytes": 344,
+            "wallSeconds": 0.018088200013153255,
+            "workingSet": 5779456,
+            "privateCommitted": 1806336,
+            "logicalFileReadBytes": 126995,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 17394,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 7,
+              "cycleMicros": 17393,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 8,
+              "filesScanned": 264,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 7 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 127003,
+            "logicalWriteBytes": 344,
+            "wallSeconds": 0.017496100044809282,
+            "workingSet": 5767168,
+            "privateCommitted": 1929216,
+            "logicalFileReadBytes": 126995,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 18249,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 7,
+              "cycleMicros": 18249,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 8,
+              "filesScanned": 264,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 7 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.015625,
+            "logicalReadBytes": 127003,
+            "logicalWriteBytes": 344,
+            "wallSeconds": 0.01834229996893555,
+            "workingSet": 5812224,
+            "privateCommitted": 1773568,
+            "logicalFileReadBytes": 126995,
+            "logicalFileWriteBytes": 0
+          }
+        ]
+      },
+      {
+        "count": 32,
+        "exeSha256": "a6213e218473922b303f1f7200277a48fad249d23295f5cbac2ad0867e0a5942",
+        "fixture": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-pandora4-ee18e646-ee9d-429f-8357-2a08e4c936da\\pandora4-after-32",
+        "cold": {
+          "elapsedMicros": 566120,
+          "phase": "cold",
+          "status": {
+            "bytesCopied": 0,
+            "conflictsKept": 0,
+            "cycleMicros": 566120,
+            "enabled": true,
+            "filesChanged": 0,
+            "filesHashed": 1056,
+            "filesScanned": 2048,
+            "lastRunUnixSeconds": null,
+            "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+            "running": false,
+            "skippedInstances": 0
+          }
+        },
+        "idle": {
+          "workingSet": 6029312.0,
+          "privateCommitted": 1839104.0,
+          "cpuSeconds": 0.0,
+          "logicalReadBytes": 0,
+          "logicalWriteBytes": 0,
+          "sampleSeconds": 1.9718234000029042
+        },
+        "cycles": [
+          {
+            "elapsedMicros": 77667,
+            "phase": "converged",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 77666,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 32,
+              "filesScanned": 1024,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0625,
+            "logicalReadBytes": 903356,
+            "logicalWriteBytes": 349,
+            "wallSeconds": 0.07780339999590069,
+            "workingSet": 6164480,
+            "privateCommitted": 2260992,
+            "logicalFileReadBytes": 903345,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 447248,
+            "phase": "edit",
+            "status": {
+              "bytesCopied": 434,
+              "conflictsKept": 0,
+              "cycleMicros": 447247,
+              "enabled": true,
+              "filesChanged": 31,
+              "filesHashed": 405,
+              "filesScanned": 1056,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 31 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.359375,
+            "logicalReadBytes": 3994902,
+            "logicalWriteBytes": 158599,
+            "wallSeconds": 0.44736530003137887,
+            "workingSet": 5853184,
+            "privateCommitted": 1822720,
+            "logicalFileReadBytes": 3994896,
+            "logicalFileWriteBytes": 158248
+          },
+          {
+            "elapsedMicros": 189569,
+            "phase": "conflict",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 31,
+              "cycleMicros": 189568,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 1056,
+              "filesScanned": 2048,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 31 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.203125,
+            "logicalReadBytes": 1917584,
+            "logicalWriteBytes": 124532,
+            "wallSeconds": 0.18967969994992018,
+            "workingSet": 6373376,
+            "privateCommitted": 2338816,
+            "logicalFileReadBytes": 1917574,
+            "logicalFileWriteBytes": 124178
+          },
+          {
+            "elapsedMicros": 753179,
+            "phase": "copy",
+            "status": {
+              "bytesCopied": 65011712,
+              "conflictsKept": 31,
+              "cycleMicros": 753178,
+              "enabled": true,
+              "filesChanged": 31,
+              "filesHashed": 251,
+              "filesScanned": 1058,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 31 file(s). Kept 31 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.53125,
+            "logicalReadBytes": 460965539,
+            "logicalWriteBytes": 65154486,
+            "wallSeconds": 0.7532894000178203,
+            "workingSet": 5881856,
+            "privateCommitted": 1810432,
+            "logicalFileReadBytes": 460965533,
+            "logicalFileWriteBytes": 65154128
+          },
+          {
+            "elapsedMicros": 219029,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 31,
+              "cycleMicros": 219029,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 1055,
+              "filesScanned": 2079,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 31 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.21875,
+            "logicalReadBytes": 66930932,
+            "logicalWriteBytes": 352,
+            "wallSeconds": 0.21915140002965927,
+            "workingSet": 6500352,
+            "privateCommitted": 2482176,
+            "logicalFileReadBytes": 66930924,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 71195,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 31,
+              "cycleMicros": 71195,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 32,
+              "filesScanned": 1056,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 31 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.078125,
+            "logicalReadBytes": 935735,
+            "logicalWriteBytes": 348,
+            "wallSeconds": 0.071323600015603,
+            "workingSet": 6672384,
+            "privateCommitted": 2650112,
+            "logicalFileReadBytes": 935727,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 69323,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 31,
+              "cycleMicros": 69323,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 32,
+              "filesScanned": 1056,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 31 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0625,
+            "logicalReadBytes": 935735,
+            "logicalWriteBytes": 348,
+            "wallSeconds": 0.06944230000954121,
+            "workingSet": 6524928,
+            "privateCommitted": 2461696,
+            "logicalFileReadBytes": 935727,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 71781,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 31,
+              "cycleMicros": 71781,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 32,
+              "filesScanned": 1056,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 31 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.078125,
+            "logicalReadBytes": 935735,
+            "logicalWriteBytes": 348,
+            "wallSeconds": 0.07191830000374466,
+            "workingSet": 6639616,
+            "privateCommitted": 2646016,
+            "logicalFileReadBytes": 935727,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 69960,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 31,
+              "cycleMicros": 69959,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 32,
+              "filesScanned": 1056,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 31 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0625,
+            "logicalReadBytes": 935735,
+            "logicalWriteBytes": 348,
+            "wallSeconds": 0.07013070001266897,
+            "workingSet": 6701056,
+            "privateCommitted": 2789376,
+            "logicalFileReadBytes": 935727,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 72881,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 31,
+              "cycleMicros": 72880,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 32,
+              "filesScanned": 1056,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 31 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.0625,
+            "logicalReadBytes": 935735,
+            "logicalWriteBytes": 348,
+            "wallSeconds": 0.07303420000243932,
+            "workingSet": 6987776,
+            "privateCommitted": 2928640,
+            "logicalFileReadBytes": 935727,
+            "logicalFileWriteBytes": 0
+          }
+        ]
+      },
+      {
+        "count": 64,
+        "exeSha256": "a6213e218473922b303f1f7200277a48fad249d23295f5cbac2ad0867e0a5942",
+        "fixture": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-pandora4-ee18e646-ee9d-429f-8357-2a08e4c936da\\pandora4-after-64",
+        "cold": {
+          "elapsedMicros": 1360995,
+          "phase": "cold",
+          "status": {
+            "bytesCopied": 0,
+            "conflictsKept": 0,
+            "cycleMicros": 1360995,
+            "enabled": true,
+            "filesChanged": 0,
+            "filesHashed": 2112,
+            "filesScanned": 4096,
+            "lastRunUnixSeconds": null,
+            "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+            "running": false,
+            "skippedInstances": 0
+          }
+        },
+        "idle": {
+          "workingSet": 6766592.0,
+          "privateCommitted": 2592768.0,
+          "cpuSeconds": 0.0,
+          "logicalReadBytes": 0,
+          "logicalWriteBytes": 0,
+          "sampleSeconds": 1.9664834999712184
+        },
+        "cycles": [
+          {
+            "elapsedMicros": 158867,
+            "phase": "converged",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 0,
+              "cycleMicros": 158866,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 64,
+              "filesScanned": 2048,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.125,
+            "logicalReadBytes": 3045628,
+            "logicalWriteBytes": 351,
+            "wallSeconds": 0.15899160003755242,
+            "workingSet": 6725632,
+            "privateCommitted": 2502656,
+            "logicalFileReadBytes": 3045617,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 972920,
+            "phase": "edit",
+            "status": {
+              "bytesCopied": 882,
+              "conflictsKept": 0,
+              "cycleMicros": 972919,
+              "enabled": true,
+              "filesChanged": 63,
+              "filesHashed": 789,
+              "filesScanned": 2080,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 63 file(s). Kept 0 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.765625,
+            "logicalReadBytes": 15006998,
+            "logicalWriteBytes": 311335,
+            "wallSeconds": 0.9731181000825018,
+            "workingSet": 6189056,
+            "privateCommitted": 2166784,
+            "logicalFileReadBytes": 15006992,
+            "logicalFileWriteBytes": 310984
+          },
+          {
+            "elapsedMicros": 384842,
+            "phase": "conflict",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 63,
+              "cycleMicros": 384842,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 2112,
+              "filesScanned": 4096,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 63 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.375,
+            "logicalReadBytes": 5076112,
+            "logicalWriteBytes": 242100,
+            "wallSeconds": 0.3849695000099018,
+            "workingSet": 7172096,
+            "privateCommitted": 3149824,
+            "logicalFileReadBytes": 5076102,
+            "logicalFileWriteBytes": 241746
+          },
+          {
+            "elapsedMicros": 1537560,
+            "phase": "copy",
+            "status": {
+              "bytesCopied": 132120576,
+              "conflictsKept": 63,
+              "cycleMicros": 1537559,
+              "enabled": true,
+              "filesChanged": 63,
+              "filesHashed": 475,
+              "filesScanned": 2082,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 63 file(s). Kept 63 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 1.1875,
+            "logicalReadBytes": 941454947,
+            "logicalWriteBytes": 132399417,
+            "wallSeconds": 1.5376729000126943,
+            "workingSet": 6307840,
+            "privateCommitted": 2240512,
+            "logicalFileReadBytes": 941454941,
+            "logicalFileWriteBytes": 132399056
+          },
+          {
+            "elapsedMicros": 451381,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 63,
+              "cycleMicros": 451380,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 2143,
+              "filesScanned": 4191,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 63 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.453125,
+            "logicalReadBytes": 137231092,
+            "logicalWriteBytes": 352,
+            "wallSeconds": 0.4515087000327185,
+            "workingSet": 7516160,
+            "privateCommitted": 3477504,
+            "logicalFileReadBytes": 137231084,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 151582,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 63,
+              "cycleMicros": 151582,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 64,
+              "filesScanned": 2112,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 63 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.140625,
+            "logicalReadBytes": 3110775,
+            "logicalWriteBytes": 350,
+            "wallSeconds": 0.15169710002373904,
+            "workingSet": 7811072,
+            "privateCommitted": 3776512,
+            "logicalFileReadBytes": 3110767,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 154698,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 63,
+              "cycleMicros": 154697,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 64,
+              "filesScanned": 2112,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 63 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.140625,
+            "logicalReadBytes": 3110775,
+            "logicalWriteBytes": 350,
+            "wallSeconds": 0.1548004999058321,
+            "workingSet": 8986624,
+            "privateCommitted": 5120000,
+            "logicalFileReadBytes": 3110767,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 145736,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 63,
+              "cycleMicros": 145736,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 64,
+              "filesScanned": 2112,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 63 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.15625,
+            "logicalReadBytes": 3110775,
+            "logicalWriteBytes": 350,
+            "wallSeconds": 0.14588440000079572,
+            "workingSet": 7782400,
+            "privateCommitted": 3784704,
+            "logicalFileReadBytes": 3110767,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 140949,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 63,
+              "cycleMicros": 140949,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 64,
+              "filesScanned": 2112,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 63 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.140625,
+            "logicalReadBytes": 3110775,
+            "logicalWriteBytes": 350,
+            "wallSeconds": 0.14107030001468956,
+            "workingSet": 7901184,
+            "privateCommitted": 3899392,
+            "logicalFileReadBytes": 3110767,
+            "logicalFileWriteBytes": 0
+          },
+          {
+            "elapsedMicros": 142522,
+            "phase": "repeat",
+            "status": {
+              "bytesCopied": 0,
+              "conflictsKept": 63,
+              "cycleMicros": 142522,
+              "enabled": true,
+              "filesChanged": 0,
+              "filesHashed": 64,
+              "filesScanned": 2112,
+              "lastRunUnixSeconds": null,
+              "message": "Synced 0 file(s). Kept 63 existing differences or conflicting edits. Busy instances are skipped.",
+              "running": false,
+              "skippedInstances": 0
+            },
+            "cpuSeconds": 0.140625,
+            "logicalReadBytes": 3110775,
+            "logicalWriteBytes": 350,
+            "wallSeconds": 0.1427038999972865,
+            "workingSet": 7770112,
+            "privateCommitted": 3674112,
+            "logicalFileReadBytes": 3110767,
+            "logicalFileWriteBytes": 0
+          }
+        ]
+      }
+    ]
+  },
+  "rawEvidenceRoot": "C:\\Users\\kalib\\AppData\\Local\\Temp\\aurora-pandora4-ee18e646-ee9d-429f-8357-2a08e4c936da",
+  "rawFileHashes": {
+    "before-results.json": "6f2613ee3857e221a9410a4cd4bf6d9e9547a984d3d7e7ca8786288eb57d6ba3",
+    "after-results.json": "d41dde7e1e61058a60921153e4f8e92719553f875c26cbf91ff12f0027fbb6c9",
+    "native-after-results.json": "2f99c211a17f0fbf12c093bcfc762ddb8758ac0f8f41598738cbbfdaa740529c",
+    "native-before-results.json": "d5f75a1c5197abb5290e9f6a79c011031a6e43c35b67d974c54e4b4fee4e14f3",
+    "native-before64-results.json": "2acbe92c301f287347452cd768754007e4f325afbefd640629b821ba0ef34791",
+    "native-after-repeat-results.json": "863f3f568efa2547f9abf1c0b217b04d16d5bfbe5417add228b784aeed7425c9"
+  },
+  "native": {
+    "native-after": [
+      {
+        "exeSha256": "1b6832cb7282d87cf08a45132fda4ac3015909f8a5d8e3931cec07fdc899c3e5",
+        "tickWindow": {
+          "sampleSeconds": 13.925442400039174,
+          "cpuSeconds": 0.015625,
+          "logicalReadBytes": 116356,
+          "logicalWriteBytes": 99616
+        },
+        "lastMemory": {
+          "workingSet": 49176576,
+          "privateCommitted": 11038720
+        },
+        "idle": {
+          "workingSet": 49225728,
+          "privateCommitted": 11141120,
+          "sampleSeconds": 46.97010070004035,
+          "cpuSeconds": 0.109375,
+          "logicalReadBytes": 814492,
+          "logicalWriteBytes": 697312
+        },
+        "wholeWindow": {
+          "cpuSeconds": 0.21875,
+          "logicalReadBytes": 1039471,
+          "logicalWriteBytes": 874909
+        },
+        "termination": "exact owned Popen handle",
+        "count": 0,
+        "sampleCount": 1417,
+        "peakWorkingSet": 49270784,
+        "peakSampledPrivate": 11350016
+      },
+      {
+        "exeSha256": "1b6832cb7282d87cf08a45132fda4ac3015909f8a5d8e3931cec07fdc899c3e5",
+        "tickWindow": {
+          "sampleSeconds": 13.934947500005364,
+          "cpuSeconds": 0.046875,
+          "logicalReadBytes": 229200,
+          "logicalWriteBytes": 99616
+        },
+        "lastMemory": {
+          "workingSet": 34172928,
+          "privateCommitted": 10719232
+        },
+        "idle": {
+          "workingSet": 33837056.0,
+          "privateCommitted": 10756096.0,
+          "sampleSeconds": 46.97658380004577,
+          "cpuSeconds": 0.0625,
+          "logicalReadBytes": 407246,
+          "logicalWriteBytes": 348656
+        },
+        "wholeWindow": {
+          "cpuSeconds": 0.203125,
+          "logicalReadBytes": 747950,
+          "logicalWriteBytes": 535645
+        },
+        "termination": "exact owned Popen handle",
+        "count": 2,
+        "sampleCount": 1419,
+        "peakWorkingSet": 34275328,
+        "peakSampledPrivate": 11038720
+      },
+      {
+        "exeSha256": "1b6832cb7282d87cf08a45132fda4ac3015909f8a5d8e3931cec07fdc899c3e5",
+        "tickWindow": {
+          "sampleSeconds": 13.95576559996698,
+          "cpuSeconds": 0.125,
+          "logicalReadBytes": 473506,
+          "logicalWriteBytes": 49808
+        },
+        "lastMemory": {
+          "workingSet": 35209216,
+          "privateCommitted": 11292672
+        },
+        "idle": {
+          "workingSet": 34721792.0,
+          "privateCommitted": 11177984.0,
+          "sampleSeconds": 46.94436540000606,
+          "cpuSeconds": 0.0625,
+          "logicalReadBytes": 552638,
+          "logicalWriteBytes": 473176
+        },
+        "wholeWindow": {
+          "cpuSeconds": 0.28125,
+          "logicalReadBytes": 1128951,
+          "logicalWriteBytes": 551158
+        },
+        "termination": "exact owned Popen handle",
+        "count": 8,
+        "sampleCount": 1420,
+        "peakWorkingSet": 35328000,
+        "peakSampledPrivate": 11464704
+      },
+      {
+        "exeSha256": "1b6832cb7282d87cf08a45132fda4ac3015909f8a5d8e3931cec07fdc899c3e5",
+        "tickWindow": {
+          "sampleSeconds": 13.935977200046182,
+          "cpuSeconds": 0.3125,
+          "logicalReadBytes": 2124110,
+          "logicalWriteBytes": 49808
+        },
+        "lastMemory": {
+          "workingSet": 35364864,
+          "privateCommitted": 12062720
+        },
+        "idle": {
+          "workingSet": 34222080,
+          "privateCommitted": 11304960,
+          "sampleSeconds": 46.94441710005049,
+          "cpuSeconds": 0.03125,
+          "logicalReadBytes": 290890,
+          "logicalWriteBytes": 249040
+        },
+        "wholeWindow": {
+          "cpuSeconds": 0.46875,
+          "logicalReadBytes": 3278098,
+          "logicalWriteBytes": 425957
+        },
+        "termination": "exact owned Popen handle",
+        "count": 32,
+        "sampleCount": 1421,
+        "peakWorkingSet": 35573760,
+        "peakSampledPrivate": 12206080
+      },
+      {
+        "exeSha256": "1b6832cb7282d87cf08a45132fda4ac3015909f8a5d8e3931cec07fdc899c3e5",
+        "tickWindow": {
+          "sampleSeconds": 13.91648949997034,
+          "cpuSeconds": 0.546875,
+          "logicalReadBytes": 5538002,
+          "logicalWriteBytes": 148836
+        },
+        "lastMemory": {
+          "workingSet": 36892672,
+          "privateCommitted": 13942784
+        },
+        "idle": {
+          "workingSet": 34500608.0,
+          "privateCommitted": 11472896.0,
+          "sampleSeconds": 46.903349899919704,
+          "cpuSeconds": 0.15625,
+          "logicalReadBytes": 726739,
+          "logicalWriteBytes": 620150
+        },
+        "wholeWindow": {
+          "cpuSeconds": 0.875,
+          "logicalReadBytes": 9010372,
+          "logicalWriteBytes": 811747
+        },
+        "termination": "exact owned Popen handle",
+        "count": 64,
+        "sampleCount": 1418,
+        "peakWorkingSet": 37482496,
+        "peakSampledPrivate": 14082048
+      }
+    ],
+    "native-before": [
+      {
+        "exeSha256": "ee2b9bac485ee77103cf1037f88adc5764458d9d06e42dece70b53772008d3a7",
+        "tickWindow": {
+          "sampleSeconds": 13.938292799983174,
+          "cpuSeconds": 0.0625,
+          "logicalReadBytes": 319979,
+          "logicalWriteBytes": 272866
+        },
+        "lastMemory": {
+          "workingSet": 47976448,
+          "privateCommitted": 10842112
+        },
+        "idle": {
+          "workingSet": 48001024.0,
+          "privateCommitted": 10944512.0,
+          "sampleSeconds": 46.947417100076564,
+          "cpuSeconds": 0.03125,
+          "logicalReadBytes": 174534,
+          "logicalWriteBytes": 148836
+        },
+        "wholeWindow": {
+          "cpuSeconds": 0.15625,
+          "logicalReadBytes": 598327,
+          "logicalWriteBytes": 498705
+        },
+        "termination": "exact owned Popen handle",
+        "count": 0,
+        "sampleCount": 1419,
+        "peakWorkingSet": 48074752,
+        "peakSampledPrivate": 11157504
+      }
+    ],
+    "native-before64": [
+      {
+        "exeSha256": "ee2b9bac485ee77103cf1037f88adc5764458d9d06e42dece70b53772008d3a7",
+        "tickWindow": {
+          "sampleSeconds": 86.94298260007054,
+          "cpuSeconds": 66.625,
+          "logicalReadBytes": 1235822106,
+          "logicalWriteBytes": 597696
+        },
+        "lastMemory": {
+          "workingSet": 38793216,
+          "privateCommitted": 15093760
+        },
+        "idle": {
+          "workingSet": 35303424,
+          "privateCommitted": 11833344,
+          "sampleSeconds": 46.95972010004334,
+          "cpuSeconds": 0.03125,
+          "logicalReadBytes": 232712,
+          "logicalWriteBytes": 199232
+        },
+        "wholeWindow": {
+          "cpuSeconds": 66.765625,
+          "logicalReadBytes": 1238899359,
+          "logicalWriteBytes": 926706
+        },
+        "termination": "exact owned Popen handle",
+        "count": 64,
+        "sampleCount": 2862,
+        "peakWorkingSet": 38912000,
+        "peakSampledPrivate": 15273984
+      }
+    ],
+    "native-after-repeat": [
+      {
+        "exeSha256": "1b6832cb7282d87cf08a45132fda4ac3015909f8a5d8e3931cec07fdc899c3e5",
+        "tickWindow": {
+          "sampleSeconds": 13.933248599991202,
+          "cpuSeconds": 0.03125,
+          "logicalReadBytes": 494513,
+          "logicalWriteBytes": 423368
+        },
+        "lastMemory": {
+          "workingSet": 33775616,
+          "privateCommitted": 10694656
+        },
+        "idle": {
+          "workingSet": 33812480,
+          "privateCommitted": 10768384,
+          "sampleSeconds": 46.909495200030506,
+          "cpuSeconds": 0.109375,
+          "logicalReadBytes": 203623,
+          "logicalWriteBytes": 174328
+        },
+        "wholeWindow": {
+          "cpuSeconds": 0.1875,
+          "logicalReadBytes": 889219,
+          "logicalWriteBytes": 749720
+        },
+        "termination": "exact owned Popen handle",
+        "count": 0,
+        "sampleCount": 1418,
+        "peakWorkingSet": 33894400,
+        "peakSampledPrivate": 11018240
+      }
+    ]
+  },
+  "machine": {
+    "measuredAtUtc": "2026-11-01T09:53:56.3566727Z",
+    "os": {
+      "Caption": "Microsoft Windows 11 Home",
+      "Version": "10.0.26300",
+      "BuildNumber": "26300",
+      "TotalVisibleMemorySize": 33304812
+    },
+    "cpu": {
+      "Name": "Intel(R) Core(TM) i7-14700F",
+      "NumberOfLogicalProcessors": 28
+    },
+    "rust": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+    "node": "v24.21.0"
+  },
+  "executableHashes": {
+    "accepted-native.exe": "1b6832cb7282d87cf08a45132fda4ac3015909f8a5d8e3931cec07fdc899c3e5",
+    "accepted-probe.exe": "a6213e218473922b303f1f7200277a48fad249d23295f5cbac2ad0867e0a5942",
+    "before-probe.exe": "bf5a10aaec2833db32e5ef4a523d1c0278597149ad9e5c3910ad25756a903954"
+  },
+  "baselineNative": {
+    "path": "C:\\Dev\\aurora-pandora-evidence-20261101\\automatic-native.exe",
+    "sha256": "ee2b9bac485ee77103cf1037f88adc5764458d9d06e42dece70b53772008d3a7",
+    "sourceCode": "65ab258a69c74a865f38c140546b3fbca2b923eb (1d7c307 is documentation-only)"
+  },
+  "sourceHashes": {
+    "src-tauri/src/instance_sync.rs": "57c675516b757ef249f560427f8be4d707d53e6f8606f7c307824793d7ce5928",
+    "src-tauri/src/instance_sync/automatic.rs": "2688b01ccbf0f8db509506e516d0447c8c67e5a379586e7eb3810b43de3e4aeb",
+    "src-tauri/src/instance_sync/files.rs": "0c69c8d2ea1a729ed752724ab3e2bf043abef8e9d46c4c5278c2ab246020b503",
+    "src-tauri/src/instance_sync/servers.rs": "7c85c0e20146893bab97c1bee6daa07aacf6c0f2b1112aa39b0b16b28724ea16",
+    "native/src/syncing.rs": "5b75a52cfbffd28d27665925152580262be439365e6154730a584aa10ec343ab",
+    "native/ui/syncing.slint": "82d6fca1a4c594ecdce523c1629b93ebb6a25f4d6a28c0724feedbf290e94607",
+    "native/ui/state.slint": "fed70eaedb557edda6fd75a8118b8eca32bce29871403f9d8b8745f6d3fa53b2",
+    "native/Cargo.lock": "fe9450a829a113e6f16fbf7b907aacc62e59a8e4e622a055b4c9a2f25fd391f9",
+    "src-tauri/Cargo.lock": "000f859383fc33e395cfae154ded4ddad977c4978849b48940247bfa050e0e78",
+    "package-lock.json": "0db7331b14df54709ba56a67426ef9804ded930ed50e84695c417ab8d8b85310"
+  },
+  "startingSha": "1d7c30738569b29fd6a32f85352aadce4ea69813",
+  "finalImplementationSha": "2f4fe1e9c1e7a3a712e5113ca77d9332a787109a",
+  "preservation": {
+    "missingOriginalTrackedFiles": [],
+    "lockfilesUnchanged": true,
+    "originalWorktrees": {
+      "webview": {
+        "statusUnchanged": true,
+        "trackedSetUnchanged": true,
+        "changedOrMissingHashedFiles": []
+      },
+      "original-native": {
+        "statusUnchanged": true,
+        "trackedSetUnchanged": true,
+        "changedOrMissingHashedFiles": []
+      }
+    }
+  },
+  "validationLogs": {
+    "core-tests.log": {
+      "sha256": "67f25e409c053dad23e3d78a0732000ca11a731af2d6b6e6bbce7962208fb117"
+    },
+    "sync-complete.log": {
+      "sha256": "842b5390d8b832150bf71e344ab3ccfe33f6cb62e19a3b8f43093a212f5f0198"
+    },
+    "native-accepted-final.log": {
+      "sha256": "0c74ef1e6aedcff2f212ce5166077b4c4cf17178dd5b3809986232c768fefe43"
+    },
+    "frontend-tests.log": {
+      "sha256": "baa63b5e38686a48b0fdf79bd6c847153e4bec0e92308bb250bdf16d83b46e70"
+    },
+    "frontend-check-final.log": {
+      "sha256": "fed4d18abb0c8d3f51e8f0a954fecb0c867fe36e2de6120e5bf3b14c18f99579"
+    },
+    "frontend-build.log": {
+      "sha256": "f8c8e2d9cec605ce814612038bcd9b656a4d52c35a023277fbf7938defc15d3a"
+    },
+    "core-check-complete.log": {
+      "sha256": "fac830914ba972cd7afc5c89cdb71f75479c3872b7451733e7ec5e8d81ef83d0"
+    },
+    "native-check-complete.log": {
+      "sha256": "f7537285d7d10a4e496195093a80d877e091000b0a993adbc5495096925ac058"
+    },
+    "native-release-accepted.log": {
+      "sha256": "81e291b6eefdeedcaadd24385eefb17f05f24871f00fec805459fd37caabcda2"
+    },
+    "core-release-accepted.log": {
+      "sha256": "24e4cfb7cccca2076efd6216bd8e8048e228ecc946245d9b19daa1a3391197ba"
+    }
+  }
+}

@@ -2,6 +2,9 @@
 
 2026-11-01 — **PARTIAL — IMPLEMENTATION IN PROGRESS**.
 
+Historical phase record. PANDORA-4 extends file updates, sparse overrides and
+server-list additions; see [current acceptance](PANDORA_4_ACCEPTANCE.md).
+
 The source investigation and the selective improvements below are implemented.
 Important parts of the larger initiative remain unfinished. This is not a full
 feature-parity, security-certification, gameplay or owner visual-acceptance claim.
