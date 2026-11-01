@@ -21,6 +21,7 @@
 //! refresh anywhere in this module.
 
 pub mod client;
+mod github;
 pub mod launcher;
 #[cfg(feature = "native-preview")]
 pub mod native;

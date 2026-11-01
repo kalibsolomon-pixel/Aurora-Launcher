@@ -1001,18 +1001,93 @@ pub async fn check_client_update(
     endpoints: &lifecycle::InstanceEndpoints,
     id: &InstanceId,
 ) -> UpdateAvailability {
-    check_client_update_with_url(managed, endpoints, id, PRODUCTION_MANIFEST_URL).await
+    crate::performance::measure(crate::performance::Event::ClientUpdateDiscovery, async {
+        match fetch_update_manifest(managed, endpoints, id).await {
+            Ok(remote) => match preview_update(managed, endpoints, id, &remote) {
+                Ok(preview) if preview.outcome == "updateAvailable" => {
+                    let candidate = preview.candidate.expect("outcome carries a candidate");
+                    UpdateAvailability::UpdateAvailable {
+                        current: preview.installed_version,
+                        candidate: candidate.version,
+                        notes: candidate.notes,
+                    }
+                }
+                Ok(_) => UpdateAvailability::UpToDate,
+                Err(ClientUpdateError::Inapplicable(reason)) => {
+                    UpdateAvailability::NotApplicable { reason }
+                }
+                Err(error) => UpdateAvailability::unavailable(error.message()),
+            },
+            Err(ClientUpdateError::Inapplicable(reason)) => {
+                UpdateAvailability::NotApplicable { reason }
+            }
+            Err(error) => UpdateAvailability::unavailable(error.message()),
+        }
+    })
+    .await
+}
+
+/// Check, review and apply resolve the same published source and re-verify bytes.
+pub async fn fetch_update_manifest(
+    managed: &ManagedPaths,
+    endpoints: &lifecycle::InstanceEndpoints,
+    id: &InstanceId,
+) -> Result<ReleaseManifest, ClientUpdateError> {
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())
+        .map_err(|e| ClientUpdateError::Inapplicable(e.to_string()))?;
+    let record = registry.find(id).ok_or_else(|| {
+        ClientUpdateError::Inapplicable("The selected instance is missing.".into())
+    })?;
+    let pin = record.installed().aurora.as_ref().ok_or_else(|| {
+        ClientUpdateError::Inapplicable("Aurora Client is not installed on this instance.".into())
+    })?;
+    if let Some(url) = option_env!("AURORA_CLIENT_MANIFEST_URL") {
+        return fetch_published_manifest(url, endpoints.download_options()).await;
+    }
+    let manifest = aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
+        .map_err(|e| ClientUpdateError::Inapplicable(e.to_string()))?;
+    let template = manifest
+        .resolve_exact(&pin.version, Some(pin.channel))
+        .ok_or_else(|| {
+            ClientUpdateError::Inapplicable("Installed Aurora release metadata is missing.".into())
+        })?;
+    fetch_github_release_manifest(managed, endpoints.download_options(), template).await
+}
+
+/// Pinned, public release source; also used by the explicit read-only release probe.
+pub async fn fetch_github_release_manifest(
+    managed: &ManagedPaths,
+    options: &DownloadOptions,
+    installed_release: &AuroraRelease,
+) -> Result<ReleaseManifest, ClientUpdateError> {
+    super::github::release_manifest(managed, options, installed_release).await
 }
 
 /// The same check against an explicit manifest URL; the production wrapper
 /// passes the compiled published endpoint. Crate-visible so deterministic
 /// tests exercise offline behavior against a dead loopback endpoint.
+#[cfg(test)]
 pub(crate) async fn check_client_update_with_url(
     managed: &ManagedPaths,
     endpoints: &lifecycle::InstanceEndpoints,
     id: &InstanceId,
     url: &str,
 ) -> UpdateAvailability {
+    // Applicability is local: an absent Client must not become a network error.
+    match InstanceRegistry::load(&managed.instance_registry_file()) {
+        Ok(registry) => match registry.find(id) {
+            Some(record) if record.installed().aurora.is_none() => {
+                return UpdateAvailability::NotApplicable {
+                    reason: "Aurora Client is not installed on this instance.".into(),
+                };
+            }
+            Some(_) => {}
+            None => return UpdateAvailability::unavailable("The selected instance is missing."),
+        },
+        Err(_) => {
+            return UpdateAvailability::unavailable("The instance registry could not be read.");
+        }
+    }
     crate::performance::measure(crate::performance::Event::ClientUpdateDiscovery, async {
         match fetch_published_manifest(url, endpoints.download_options()).await {
             Ok(remote) => match preview_update(managed, endpoints, id, &remote) {
@@ -1033,7 +1108,7 @@ pub(crate) async fn check_client_update_with_url(
                 Err(error) => UpdateAvailability::unavailable(error.message()),
             },
             Err(error) => UpdateAvailability::unavailable(format!(
-                "Could not check for updates: {}",
+                "Could not check for updates: {}. Published Aurora release metadata is required; try again after the publisher makes it available.",
                 error.message()
             )),
         }
@@ -2085,6 +2160,28 @@ mod tests {
                 .await
                 .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn clientless_instances_do_not_contact_the_update_service() {
+        let lab = Lab::new("clientless-check").await;
+        let mut registry =
+            InstanceRegistry::load(&lab.world.managed().instance_registry_file()).unwrap();
+        let record = registry.find_mut(&lab.instance).unwrap();
+        let mut installed = record.installed().clone();
+        installed.aurora = None;
+        record.set_installed(installed);
+        registry
+            .save(&lab.world.managed().instance_registry_file())
+            .unwrap();
+        let status = check_client_update_with_url(
+            lab.world.managed(),
+            &lab.endpoints(),
+            &lab.instance,
+            "http://127.0.0.1:1/never-requested",
+        )
+        .await;
+        assert!(matches!(status, UpdateAvailability::NotApplicable { .. }));
     }
 
     #[tokio::test]

@@ -534,6 +534,7 @@ mod tests {
             id: "future-widget".into(),
             enabled: true,
             size: crate::home_widgets::WidgetSize::Small,
+            grid: None,
         });
         config.set_home_widgets(layout.clone());
         config.set_discord(crate::discord::DiscordPreferences {

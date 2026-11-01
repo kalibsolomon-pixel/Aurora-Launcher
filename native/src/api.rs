@@ -534,6 +534,8 @@ pub struct ContentInventory {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentEntry {
+    #[serde(default)]
+    pub pack_owned: bool,
     pub entry_id: String,
     pub file_name: String,
     pub display_name: String,
@@ -684,10 +686,19 @@ pub async fn set_instance_icon(
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct WidgetGrid {
+    pub columns: u8,
+    pub rows: u8,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WidgetPlacement {
     pub id: String,
     pub enabled: bool,
     pub size: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grid: Option<WidgetGrid>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -712,6 +723,20 @@ pub struct Playtime {
     pub last_7_days_ms: u64,
     pub last_30_days_ms: u64,
     pub all_time_ms: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyPlaytime {
+    pub day: u64,
+    pub duration_ms: u64,
+}
+
+pub async fn daily_playtime(
+    host: Host,
+    instance_id: Option<String>,
+) -> ApiResult<Vec<DailyPlaytime>> {
+    blocking(move || convert(app::get_daily_playtime(host, instance_id, 30))).await?
 }
 
 pub async fn playtime(host: Host, instance_id: Option<String>) -> ApiResult<Playtime> {

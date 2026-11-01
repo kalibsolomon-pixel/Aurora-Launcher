@@ -158,6 +158,7 @@ pub fn bind(window: &AppWindow) {
     instances.on_content_refresh(|| {
         let tab = ui::with(|window, _| window.global::<Instances>().get_tab()).unwrap_or(0);
         load_tab(tab);
+        crate::content_updates::check();
     });
     instances.on_content_discover(|| {
         let Some((id, tab)) = ui::with(|window, state| {
@@ -959,7 +960,13 @@ fn load_tab(tab: i32) {
         let kind = CONTENT_KINDS[tab as usize];
         ui::spawn(
             api::instance_content(host, id.clone(), kind),
-            move |result| apply_content(&id, serial, result.map(pack_items)),
+            move |result| {
+                apply_content(
+                    &id,
+                    serial,
+                    result.map(|inventory| pack_items(inventory, tab == 1)),
+                )
+            },
         );
     }
 }
@@ -1030,10 +1037,11 @@ fn mod_items(inventory: api::ModInventory) -> Vec<ContentItem> {
         .collect()
 }
 
-fn pack_items(inventory: api::ContentInventory) -> Vec<ContentItem> {
+fn pack_items(inventory: api::ContentInventory, hide_bundled: bool) -> Vec<ContentItem> {
     inventory
         .entries
         .into_iter()
+        .filter(|entry| !hide_bundled || !entry.pack_owned)
         .map(|entry| {
             let size = entry
                 .size_bytes
@@ -1285,7 +1293,13 @@ fn toggle_content(entry: slint::SharedString, enabled: bool) {
         let kind = CONTENT_KINDS[tab as usize];
         ui::spawn(
             api::set_pack_enabled(host, id.clone(), kind, entry, enabled),
-            move |result| finish_mutation(&id, serial, result.map(pack_items)),
+            move |result| {
+                finish_mutation(
+                    &id,
+                    serial,
+                    result.map(|inventory| pack_items(inventory, tab == 1)),
+                )
+            },
         );
     }
 }
@@ -1316,7 +1330,13 @@ fn remove_content() {
         let kind = CONTENT_KINDS[tab as usize];
         ui::spawn(
             api::remove_content(host, id.clone(), kind, entry),
-            move |result| finish_mutation(&id, serial, result.map(pack_items)),
+            move |result| {
+                finish_mutation(
+                    &id,
+                    serial,
+                    result.map(|inventory| pack_items(inventory, tab == 1)),
+                )
+            },
         );
     }
 }
@@ -2086,6 +2106,21 @@ fn draft_platform(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bundled_resource_packs_are_hidden_while_personal_packs_remain() {
+        let entry = |name: &str, pack_owned: bool| serde_json::json!({"entryId":name,"fileName":name,"displayName":name,"packOwned":pack_owned,"management":{"canRemove":!pack_owned,"canToggle":true,"active":false,"activationManagedInGame":false}});
+        let inventory: api::ContentInventory = serde_json::from_value(serde_json::json!({"entries":[entry("Mod Menu Helper.zip",true),entry("Personal texture pack.zip",false)]})).unwrap();
+        assert_eq!(
+            pack_items(inventory.clone(), false).len(),
+            2,
+            "bundled shader entries remain visible"
+        );
+        let items = pack_items(inventory, true);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].row.title.as_str(), "Personal texture pack.zip");
+        assert!(items[0].row.removable);
+    }
 
     #[test]
     fn memory_entry_rejects_invalid_and_out_of_core_range_values() {

@@ -4,7 +4,7 @@ import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
 import { Button, ButtonKind, Dropdown, Glyph, StatusPill, Tone, EmptyState, FocusRing, KeyboardFocus, PageTitle, InstanceIcon } from "../components.slint";
 import { Home, Nav, Page, InstanceRow } from "../state.slint";
-import { WidgetGrid, Widgets, MediaGlyphs } from "../widgets.slint";
+import { WidgetGrid, WidgetLayoutEditor, Widgets, MediaGlyphs } from "../widgets.slint";
 
 /// One selectable instance tile.
 export component InstanceTile inherits Rectangle {
@@ -114,11 +114,10 @@ export component HomePage inherits ScrollView {
         }
         if Home.instances.length > 0: HorizontalLayout {
             spacing: Theme.space-2;
-            Button { text: "Manage instances"; icon: Icons.instances; kind: ButtonKind.ghost; clicked => { Nav.navigate(Page.instances); } }
-            Button { text: "Browse content"; icon: Icons.discover; kind: ButtonKind.ghost; clicked => { Nav.navigate(Page.discover); } }
             Rectangle { horizontal-stretch: 1; }
-            Button { text: Widgets.editing ? "Done" : "Customize"; icon: Widgets.editing ? Icons.check : MediaGlyphs.tune; kind: ButtonKind.ghost; accessible-description-text: "Add, remove or reorder Home widgets"; clicked => { Widgets.editing = !Widgets.editing; } }
+            Button { text: Widgets.editing ? "Done" : "Customize"; icon: Widgets.editing ? Icons.check : MediaGlyphs.tune; kind: ButtonKind.ghost; accessible-description-text: "Resize and arrange Home widgets"; clicked => { Widgets.editing = !Widgets.editing; } }
         }
+        if Widgets.editing: WidgetLayoutEditor {}
         WidgetGrid { }
     }
 }

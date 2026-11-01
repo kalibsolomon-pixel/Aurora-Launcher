@@ -6810,12 +6810,9 @@ pub async fn preview_client_update(
         let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
         let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
             .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
-        let remote = crate::updates::client::fetch_published_manifest(
-            crate::updates::client::PRODUCTION_MANIFEST_URL,
-            endpoints.download_options(),
-        )
-        .await
-        .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        let remote = crate::updates::client::fetch_update_manifest(&managed, &endpoints, &instance)
+            .await
+            .map_err(|error| CommandError::new(error.code(), error.message()))?;
         crate::updates::client::preview_update(&managed, &endpoints, &instance, &remote)
             .map_err(|error| CommandError::new(error.code(), error.message()))
     })
@@ -6856,12 +6853,9 @@ pub async fn apply_client_update(
         ));
     }
     let result = async {
-        let remote = crate::updates::client::fetch_published_manifest(
-            crate::updates::client::PRODUCTION_MANIFEST_URL,
-            endpoints.download_options(),
-        )
-        .await
-        .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        let remote = crate::updates::client::fetch_update_manifest(&managed, &endpoints, &instance)
+            .await
+            .map_err(|error| CommandError::new(error.code(), error.message()))?;
         let progress_app = app.clone();
         let mut progress = move |phase: crate::updates::ClientPhase| {
             let _ = progress_app.emit(
@@ -7059,6 +7053,7 @@ mod tests {
             id: "native-media".into(),
             enabled: false,
             size: crate::home_widgets::WidgetSize::Wide,
+            grid: None,
         });
         config.set_home_widgets(layout);
         crate::config::save(&managed.config_file(), &config).unwrap();

@@ -5,10 +5,11 @@
 // is used.
 import { Theme } from "theme.slint";
 import { Icon } from "icons.slint";
+import { FocusRing, KeyboardFocus } from "components.slint";
 
 export global Chrome {
     out property <length> sidebar-width: 72px;
-    out property <length> title-height: 36px;
+    out property <length> title-height: 44px;
     in property <bool> custom: false;
     in property <bool> maximized: false;
     // Pointer pressed in a drag area: Rust starts an OS move, or toggles
@@ -33,18 +34,26 @@ component CaptionButton inherits Rectangle {
     in property <string> label;
     in property <bool> danger: false;
     callback clicked();
-    width: 46px;
+    width: 52px;
     height: Chrome.title-height;
-    background: touch.has-hover ? (danger ? #c42b1c : Theme.hover) : transparent;
+    background: transparent;
     accessible-role: button;
     accessible-label: label;
     accessible-action-default => { clicked(); }
+    forward-focus: focus;
+    Rectangle {
+        x: 4px; y: 6px; width: parent.width - 8px; height: parent.height - 12px;
+        border-radius: Theme.radius-md;
+        background: touch.pressed ? (root.danger ? Theme.error-soft : Theme.accent-soft) : touch.has-hover ? (root.danger ? Theme.error-soft : Theme.hover) : Theme.surface;
+    }
     Icon {
         path: root.glyph;
-        size: 16px;
-        color: touch.has-hover && root.danger ? #ffffff : touch.has-hover ? Theme.text : Theme.text-secondary;
+        size: 22px;
+        color: root.danger && touch.has-hover ? Theme.error : touch.has-hover ? Theme.accent : Theme.text-secondary;
     }
-    touch := TouchArea { clicked => { root.clicked(); } }
+    touch := TouchArea { clicked => { focus.pointer-focus(); root.clicked(); } }
+    focus := KeyboardFocus { focus-on-click: false; key-pressed(event) => { if (event.text == " " || event.text == Key.Return) { root.clicked(); return accept; } reject } }
+    FocusRing { x: 4px; y: 6px; width: root.width - 8px; height: root.height - 12px; shown: focus.has-focus && focus.focus-visible; }
 }
 
 /// The caption strip above the page content.

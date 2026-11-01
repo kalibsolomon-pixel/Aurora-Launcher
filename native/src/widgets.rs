@@ -31,6 +31,9 @@ struct State {
     loading: bool,
     serial: u64,
     instance: Option<String>,
+    columns: i32,
+    saving: bool,
+    daily: Vec<api::DailyPlaytime>,
 }
 
 thread_local! {
@@ -42,6 +45,24 @@ pub fn bind(window: &crate::AppWindow) {
     widgets.on_add(|id| edit(|layout| set_enabled(layout, id.as_str(), true)));
     widgets.on_remove(|id| edit(|layout| set_enabled(layout, id.as_str(), false)));
     widgets.on_move(|id, delta| edit(|layout| move_widget(layout, id.as_str(), delta)));
+    widgets.on_place(|id, index| edit(|layout| place_widget(layout, id.as_str(), index)));
+    widgets.on_resize(|id, columns, rows| {
+        edit(|layout| {
+            if let Some(w) = layout.widgets.iter_mut().find(|w| w.id == id.as_str()) {
+                w.grid = Some(api::WidgetGrid {
+                    columns: columns.clamp(1, 6) as u8,
+                    rows: rows.clamp(1, 3) as u8,
+                });
+            }
+        })
+    });
+    widgets.on_columns_changed(|columns| {
+        // Slint layout may dispatch while another render owns UI state.
+        let _ = slint::invoke_from_event_loop(move || {
+            STATE.with(|s| s.borrow_mut().columns = columns.clamp(1, 6));
+            render();
+        });
+    });
     crate::media::bind(window);
 }
 
@@ -85,6 +106,7 @@ fn effective(saved: HomeLayout) -> HomeLayout {
                 id: id.into(),
                 enabled: false,
                 size: "small".into(),
+                grid: None,
             });
         }
     }
@@ -132,17 +154,82 @@ fn move_widget(layout: &mut HomeLayout, id: &str, delta: i32) {
     layout.widgets.swap(visible[at], visible[target as usize]);
 }
 
+fn place_widget(layout: &mut HomeLayout, id: &str, position: i32) {
+    let visible: Vec<_> = layout
+        .widgets
+        .iter()
+        .enumerate()
+        .filter(|(_, w)| w.enabled && is_native(&w.id))
+        .map(|(i, _)| i)
+        .collect();
+    let Some(from) = visible.iter().position(|&i| layout.widgets[i].id == id) else {
+        return;
+    };
+    let to = position.clamp(0, visible.len().saturating_sub(1) as i32) as usize;
+    if from < to {
+        for i in from..to {
+            layout.widgets.swap(visible[i], visible[i + 1]);
+        }
+    } else {
+        for i in (to..from).rev() {
+            layout.widgets.swap(visible[i], visible[i + 1]);
+        }
+    }
+}
+
 fn edit(change: impl FnOnce(&mut HomeLayout)) {
     let Some(mut layout) = STATE.with(|s| s.borrow().layout.clone()) else {
         return;
     };
+    let before = layout.clone();
     change(&mut layout);
+    if before == layout {
+        return;
+    }
+    let visibility_changed = before
+        .widgets
+        .iter()
+        .filter(|w| w.enabled)
+        .map(|w| &w.id)
+        .collect::<Vec<_>>()
+        != layout
+            .widgets
+            .iter()
+            .filter(|w| w.enabled)
+            .map(|w| &w.id)
+            .collect::<Vec<_>>();
     STATE.with(|s| s.borrow_mut().layout = Some(layout.clone()));
     render();
-    refresh();
-    ui::spawn(api::set_home_widgets(ui::host(), layout), |result| {
+    if visibility_changed {
+        refresh();
+    }
+    save_layout();
+}
+
+fn save_layout() {
+    let Some(layout) = STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        if s.saving {
+            return None;
+        }
+        let layout = s.layout.clone()?;
+        s.saving = true;
+        Some(layout)
+    }) else {
+        return;
+    };
+    let submitted = layout.clone();
+    ui::spawn(api::set_home_widgets(ui::host(), layout), move |result| {
+        let newer = STATE.with(|s| {
+            let mut s = s.borrow_mut();
+            s.saving = false;
+            s.layout.as_ref() != Some(&submitted)
+        });
         if let Err(error) = result {
             ui::error_toast(&error);
+        }
+        if newer {
+            save_layout();
         }
     });
 }
@@ -200,14 +287,15 @@ pub fn refresh() {
     ui::spawn(
         async move {
             let playtime = api::playtime(host.clone(), instance.clone()).await;
+            let daily = api::daily_playtime(host.clone(), instance.clone()).await;
             let servers = api::recent_servers(host.clone(), None, 5).await;
             let worlds = match &instance {
                 Some(id) => api::recent_worlds(host, Some(id.clone()), 5).await,
                 None => Ok(Vec::new()),
             };
-            (playtime, servers, worlds)
+            (playtime, daily, servers, worlds)
         },
-        move |(playtime, servers, worlds)| {
+        move |(playtime, daily, servers, worlds)| {
             let current = STATE.with(|s| s.borrow().serial == serial);
             if !current {
                 return;
@@ -222,6 +310,7 @@ pub fn refresh() {
             STATE.with(|s| {
                 let mut s = s.borrow_mut();
                 s.loading = false;
+                s.daily = daily.unwrap_or_default();
                 s.data.insert(
                     "playtime",
                     match playtime {
@@ -342,14 +431,26 @@ fn details() -> Vec<WidgetLine> {
 }
 
 pub fn render() {
-    let (layout, data, loading) = STATE.with(|s| {
+    let (layout, data, loading, columns, daily) = STATE.with(|s| {
         let s = s.borrow();
-        (s.layout.clone(), s.data.clone(), s.loading)
+        (
+            s.layout.clone(),
+            s.data.clone(),
+            s.loading,
+            if s.columns == 0 { 6 } else { s.columns },
+            s.daily.clone(),
+        )
     });
     let Some(layout) = layout else { return };
     let has_instance = ui::state(|s| s.selected_instance().is_some());
     let mut items = Vec::new();
-    for widget in layout.widgets.iter().filter(|w| w.enabled) {
+    let placements = grid_positions(&layout, columns);
+    for (widget, (column, row, width, height)) in layout
+        .widgets
+        .iter()
+        .filter(|w| w.enabled && is_native(&w.id))
+        .zip(placements.iter().copied())
+    {
         let Some((id, title, icon)) = NATIVE.iter().find(|(id, ..)| *id == widget.id) else {
             continue;
         };
@@ -383,6 +484,22 @@ pub fn render() {
             lines: ui::model(lines),
             empty: empty.into(),
             loading: busy,
+            column,
+            row,
+            width,
+            height,
+            requested_width: widget
+                .grid
+                .as_ref()
+                .map_or(if widget.size == "small" { 2 } else { 4 }, |g| {
+                    g.columns as i32
+                }),
+            requested_height: widget
+                .grid
+                .as_ref()
+                .map_or(if widget.size == "large" { 2 } else { 1 }, |g| {
+                    g.rows as i32
+                }),
         });
     }
     let available: Vec<WidgetChoice> = NATIVE
@@ -397,19 +514,205 @@ pub fn render() {
     ui::with(|window, _| {
         let widgets = window.global::<Widgets>();
         widgets.set_items(ui::model(items));
+        widgets.set_available_names(ui::model(
+            available
+                .iter()
+                .map(|w| w.title.clone())
+                .collect::<Vec<_>>(),
+        ));
         widgets.set_available(ui::model(available));
+        widgets.set_grid_rows(
+            placements
+                .iter()
+                .map(|(_, r, _, h)| r + h)
+                .max()
+                .unwrap_or(0),
+        );
+        widgets.set_names(ui::model(
+            layout
+                .widgets
+                .iter()
+                .filter(|w| w.enabled)
+                .filter_map(|w| {
+                    NATIVE
+                        .iter()
+                        .find(|(id, _, _)| *id == w.id)
+                        .map(|(_, title, _)| (*title).into())
+                })
+                .collect::<Vec<_>>(),
+        ));
+        widgets.set_positions(ui::model(
+            (1..=placements.len())
+                .map(|i| format!("Position {i}").into())
+                .collect::<Vec<_>>(),
+        ));
+        widgets.set_week(ui::model(chart_points(&daily, 7)));
+        widgets.set_month(ui::model(chart_points(&daily, 30)));
+        widgets.set_week_peak(
+            duration(
+                daily
+                    .iter()
+                    .rev()
+                    .take(7)
+                    .map(|d| d.duration_ms)
+                    .max()
+                    .unwrap_or(0)
+                    .max(60_000),
+            )
+            .into(),
+        );
+        widgets.set_month_peak(
+            duration(
+                daily
+                    .iter()
+                    .map(|d| d.duration_ms)
+                    .max()
+                    .unwrap_or(0)
+                    .max(60_000),
+            )
+            .into(),
+        );
     });
+}
+
+/// First-fit placement keeps custom dimensions while preventing overlaps at narrow widths.
+pub(crate) fn grid_positions(layout: &HomeLayout, columns: i32) -> Vec<(i32, i32, i32, i32)> {
+    let columns = columns.clamp(1, 6) as usize;
+    let mut occupied = vec![[false; 6]; 64 * 3];
+    let mut result = Vec::new();
+    for w in layout
+        .widgets
+        .iter()
+        .filter(|w| w.enabled && is_native(&w.id))
+    {
+        let width = w
+            .grid
+            .as_ref()
+            .map_or(if w.size == "small" { 2 } else { 4 }, |g| {
+                g.columns as usize
+            })
+            .clamp(1, columns);
+        let height = w
+            .grid
+            .as_ref()
+            .map_or(if w.size == "large" { 2 } else { 1 }, |g| g.rows as usize)
+            .clamp(1, 3);
+        'place: for row in 0..occupied.len() - height + 1 {
+            for col in 0..=columns - width {
+                if (row..row + height).all(|r| (col..col + width).all(|c| !occupied[r][c])) {
+                    for cells in &mut occupied[row..row + height] {
+                        cells[col..col + width].fill(true);
+                    }
+                    result.push((col as i32, row as i32, width as i32, height as i32));
+                    break 'place;
+                }
+            }
+        }
+    }
+    result
+}
+
+pub(crate) fn chart_points(
+    daily: &[api::DailyPlaytime],
+    count: usize,
+) -> Vec<crate::PlaytimePoint> {
+    let values = &daily[daily.len().saturating_sub(count)..];
+    let peak = values
+        .iter()
+        .map(|d| d.duration_ms)
+        .max()
+        .unwrap_or(0)
+        .max(60_000);
+    values
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            let back = values.len() - 1 - i;
+            let label = if back == 0 {
+                "Today".into()
+            } else {
+                ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][((d.day + 4) % 7) as usize]
+                    .to_string()
+            };
+            crate::PlaytimePoint {
+                label: label.clone().into(),
+                detail: format!("{label}, {back} days ago: {}", duration(d.duration_ms)).into(),
+                fraction: d.duration_ms as f32 / peak as f32,
+                value: duration(d.duration_ms).into(),
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[test]
+    fn custom_widget_geometry_survives_roundtrip_and_never_overlaps() {
+        let mut layout = effective(HomeLayout {
+            widgets: vec![
+                placement("playtime", true),
+                placement("media", true),
+                placement("recent-servers", true),
+            ],
+        });
+        layout.widgets[0].grid = Some(api::WidgetGrid {
+            columns: 5,
+            rows: 3,
+        });
+        let saved: HomeLayout =
+            serde_json::from_str(&serde_json::to_string(&layout).unwrap()).unwrap();
+        assert_eq!(saved, layout);
+        for columns in 1..=6 {
+            let positions = grid_positions(&saved, columns);
+            let mut cells = std::collections::HashSet::new();
+            for (col, row, width, height) in positions {
+                assert!(col + width <= columns);
+                for y in row..row + height {
+                    for x in col..col + width {
+                        assert!(cells.insert((x, y)), "overlapping widgets");
+                    }
+                }
+            }
+        }
+        assert_eq!(saved.widgets[0].grid.as_ref().unwrap().columns, 5);
+        place_widget(&mut layout, "playtime", 2);
+        assert_eq!(
+            layout
+                .widgets
+                .iter()
+                .filter(|w| w.enabled && is_native(&w.id))
+                .last()
+                .unwrap()
+                .id,
+            "playtime"
+        );
+    }
+
+    #[test]
+    fn playtime_graph_uses_daily_history_and_shared_scale_without_inventing_activity() {
+        let days: Vec<_> = (0..30)
+            .map(|day| api::DailyPlaytime {
+                day,
+                duration_ms: if day == 29 { 300_000 } else { 0 },
+            })
+            .collect();
+        let week = chart_points(&days, 7);
+        assert_eq!(week.len(), 7);
+        assert_eq!(week[6].value.as_str(), "5 min");
+        assert_eq!(week[6].fraction, 1.0);
+        assert!(week[..6].iter().all(|p| p.fraction == 0.0));
+        assert_eq!(chart_points(&days, 30).len(), 30);
+        assert!(chart_points(&[], 7).is_empty());
+    }
+
     fn placement(id: &str, enabled: bool) -> WidgetPlacement {
         WidgetPlacement {
             id: id.into(),
             enabled,
             size: "small".into(),
+            grid: None,
         }
     }
 

@@ -1260,6 +1260,7 @@ export interface ContentManagement {
 }
 
 export interface ContentEntry {
+  packOwned: boolean;
   entryId: string;
   contentType: ContentType;
   fileName: string;
@@ -2159,7 +2160,7 @@ export async function playInstance(
 
 
 export type WidgetSize = "small" | "wide" | "large";
-export interface WidgetPlacement { id: string; enabled: boolean; size: WidgetSize }
+export interface WidgetPlacement { id: string; enabled: boolean; size: WidgetSize; grid?: { columns: number; rows: number } }
 export interface HomeLayout { widgets: WidgetPlacement[] }
 export interface DiscordPreferences { enabled: boolean; instanceName: boolean; minecraftVersion: boolean; platform: boolean; auroraActive: boolean; elapsedTime: boolean; world: boolean; server: boolean; serverAddress: boolean }
 export interface DiscordState {

@@ -364,6 +364,7 @@ export global IconPicker {
 
 export struct OptionalPackFile { path: string, selected: bool }
 export global Discover {
+    in-out property <int> loader-index: 0;
     in property <[string]> category-names: ["All categories"];
     in-out property <int> category-index: 0;
     in-out property <int> sort-index: 1;

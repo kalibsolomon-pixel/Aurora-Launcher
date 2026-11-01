@@ -225,3 +225,26 @@ and `docs/native-ui/`.
   identity. NATIVE-6/7/8 executables used the production namespace; retain their
   credential warning even though NATIVE-9 preview builds are isolated.
 
+## Native controls and published Client discovery (2026-11-01)
+
+- The owner authorized the public `kalibsolomon-pixel/Aurora-Client` GitHub
+  releases repository as the Client update source, identifying v3.2.0 and SHA-256
+  `fb7a7c0c10c383fd55da13627614099b35501d831b9372cac196bbb73ffaebb8`.
+  Update discovery, review and apply share `updates::client::fetch_update_manifest`.
+  Accept only published stable version tags and the exact repository release JAR
+  with GitHub's expected SHA-256 digest. Acquire through the verified cache before
+  inspecting metadata. Check artifact identity, Minecraft, existing exact Loader,
+  Java, Fabric API and mixin Java requirements; never silently change the Loader
+  or infer compatibility from a release title. Branch/CI artifacts remain excluded.
+  Explicit diagnostic manifest overrides retain the deterministic loopback path.
+  This does not change new-instance release selection or launcher update authority.
+- Home widget placements may carry optional bounded `grid` dimensions (1–6 columns,
+  1–3 rows). Absent geometry preserves legacy size presets. Save through the core's
+  atomic configuration API; unknown widget entries survive. Native writes are
+  serialized/coalesced, and responsive layout clamps only rendered spans, never
+  saved dimensions. Older builds that reject the new optional field cannot read
+  customized geometry; do not strip it or rewrite malformed state for downgrade.
+- Playtime graphs consume the existing daily-history API and its UTC day buckets.
+  Never invent activity, poll for chart animation, or confuse a zero-day baseline
+  with recorded time. See `NATIVE_CONTROLS_WIDGETS_ACCEPTANCE.md`.
+

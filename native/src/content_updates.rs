@@ -170,10 +170,13 @@ pub fn summarize(entries: &[UpdateEntry], dependencies: usize) -> (String, i32) 
     (parts.join(" · "), available as i32)
 }
 
-fn check() {
+pub fn check() {
     let Some((id, tab, kind)) = ui::with(|w, s| {
         let workspace = s.workspace.as_ref()?;
         let instances = w.global::<Instances>();
+        if instances.get_updates_busy() {
+            return None;
+        }
         let tab = instances.get_tab();
         let kind = *CONTENT_KINDS.get(tab as usize)?;
         instances.set_updates_busy(true);

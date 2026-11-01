@@ -120,6 +120,7 @@ component ContentLine inherits Rectangle {
 
         }
         if root.item.note != "": IconButton {
+            size: 36px;
             icon: Icons.warning; label: root.item.note; tooltip-above: true;
         }
         if root.item.update-text != "": StatusPill {
@@ -140,14 +141,18 @@ component ContentLine inherits Rectangle {
             kind: ButtonKind.ghost;
             clicked => { Instances.content-unpin(root.item.id); }
         }
-        if root.item.is-mod || root.item.toggleable: Toggle {
-            enabled: root.item.toggleable && !Instances.installing;
-            y: (parent.height - self.height) / 2;
-            checked: root.item.enabled;
-            label: (root.item.enabled ? "Disable " : "Enable ") + root.item.title;
-            toggled(value) => { Instances.content-toggle(root.item.id, value); }
+        if root.item.is-mod || root.item.toggleable: Rectangle {
+            width: 40px; height: 36px;
+            Toggle {
+                y: (parent.height - self.height) / 2;
+                enabled: root.item.toggleable && !Instances.installing;
+                checked: root.item.enabled;
+                label: (root.item.enabled ? "Disable " : "Enable ") + root.item.title;
+                toggled(value) => { Instances.content-toggle(root.item.id, value); }
+            }
         }
         if root.item.is-mod || root.item.removable: IconButton {
+            size: 36px;
             enabled: root.item.removable && !Instances.installing;
             y: (parent.height - self.height) / 2;
             icon: Icons.delete;
@@ -411,7 +416,7 @@ component ContentTab inherits VerticalLayout {
         Button { text: "Find more"; icon: Icons.discover; clicked => { Instances.content-discover(); } }
         Button { text: "Import file"; enabled: !Instances.installing; clicked => { Instances.content-import(); } }
         IconButton { tooltip-above: true; icon: Icons.folder; label: "Open folder"; size: 36px; clicked => { Instances.content-open-folder(); } }
-        IconButton { tooltip-above: true; icon: Icons.refresh; label: "Refresh"; size: 36px; clicked => { Instances.content-refresh(); } }
+        IconButton { tooltip-above: true; icon: Icons.refresh; label: "Refresh"; accessible-description: "Reload content and check for compatible updates"; size: 36px; enabled: !Instances.content-loading && !Instances.updates-busy && !Instances.installing; clicked => { Instances.content-refresh(); } }
     }
     HorizontalLayout {
         spacing: Theme.space-2;
@@ -423,7 +428,7 @@ component ContentTab inherits VerticalLayout {
             font-size: Theme.text-secondary-size;
             wrap: word-wrap;
         }
-        Button { text: "Check for updates"; icon: Icons.refresh; loading: Instances.updates-busy; enabled: !Instances.content-loading; clicked => { Instances.check-updates(); } }
+        if Instances.updates-busy: Spinner { size: 18px; }
         if Instances.updates-count > 1: Button {
             text: "Update all (" + Instances.updates-count + ")";
             kind: ButtonKind.primary;

@@ -408,6 +408,106 @@ fn home_card(app: &AppWindow, attention: bool) {
 
 type Scene = fn(&AppWindow);
 
+fn dashboard(app: &AppWindow, editing: bool, enlarged: bool) {
+    home_card(app, false);
+    let widgets = app.global::<crate::Widgets>();
+    widgets.set_editing(editing);
+    let columns = (((app.window().size().width as f32 / app.window().scale_factor() - 120.0 + 14.0)
+        / 164.0)
+        .floor() as i32)
+        .clamp(1, 6);
+    let layout = crate::api::HomeLayout {
+        widgets: vec![
+            crate::api::WidgetPlacement {
+                id: "playtime".into(),
+                enabled: true,
+                size: "small".into(),
+                grid: Some(crate::api::WidgetGrid {
+                    columns: if enlarged { 4 } else { 2 },
+                    rows: if enlarged { 2 } else { 1 },
+                }),
+            },
+            crate::api::WidgetPlacement {
+                id: "media".into(),
+                enabled: true,
+                size: "small".into(),
+                grid: None,
+            },
+        ],
+    };
+    let positions = crate::widgets::grid_positions(&layout, columns);
+    widgets.set_grid_rows(
+        positions
+            .iter()
+            .map(|(_, r, _, h)| r + h)
+            .max()
+            .unwrap_or(0),
+    );
+    widgets.set_items(ui_model(
+        layout
+            .widgets
+            .iter()
+            .zip(&positions)
+            .map(|(w, (col, row, width, height))| crate::WidgetView {
+                id: w.id.clone().into(),
+                title: if w.id == "playtime" {
+                    "Playtime"
+                } else {
+                    "Media"
+                }
+                .into(),
+                column: *col,
+                row: *row,
+                width: *width,
+                height: *height,
+                requested_width: w.grid.as_ref().map_or(2, |g| g.columns as i32),
+                requested_height: w.grid.as_ref().map_or(1, |g| g.rows as i32),
+                lines: ui_model(
+                    ["12 min", "2 h", "8 h", "24 h"]
+                        .into_iter()
+                        .map(|value| crate::WidgetLine {
+                            value: value.into(),
+                            ..Default::default()
+                        })
+                        .collect(),
+                ),
+                ..Default::default()
+            })
+            .collect(),
+    ));
+    widgets.set_names(strings(&["Playtime", "Media"]));
+    widgets.set_positions(strings(&["Position 1", "Position 2"]));
+    widgets.set_available_names(strings(&["Servers"]));
+    widgets.set_available(ui_model(vec![crate::WidgetChoice {
+        id: "recent-servers".into(),
+        title: "Servers".into(),
+        ..Default::default()
+    }]));
+    let history: Vec<_> = (0..30)
+        .map(|day| crate::api::DailyPlaytime {
+            day: 20000 + day,
+            duration_ms: if day % 6 == 0 {
+                0
+            } else {
+                (day % 4 + 1) * 600_000
+            },
+        })
+        .collect();
+    widgets.set_week(ui_model(crate::widgets::chart_points(&history, 7)));
+    widgets.set_month(ui_model(crate::widgets::chart_points(&history, 30)));
+    widgets.set_week_peak("40 min".into());
+    widgets.set_month_peak("40 min".into());
+    widgets.set_media_supported(true);
+    widgets.set_media_active(true);
+    widgets.set_media_title("Synthetic track".into());
+    widgets.set_media_artist("Synthetic artist".into());
+    widgets.set_media_source("Media app".into());
+}
+
+fn ui_model<T: Clone + 'static>(items: Vec<T>) -> ModelRc<T> {
+    ModelRc::new(VecModel::from(items))
+}
+
 fn instance_cards(app: &AppWindow) {
     app.global::<Nav>().set_page(Page::Instances);
     app.global::<Nav>().set_workspace_open(false);
@@ -435,6 +535,18 @@ fn instance_cards(app: &AppWindow) {
 
 fn scenes() -> Vec<(&'static str, Scene)> {
     vec![
+        ("dashboard-compact", |app| dashboard(app, false, false)),
+        ("dashboard-large", |app| dashboard(app, false, true)),
+        ("dashboard-editor", |app| dashboard(app, true, true)),
+        ("window-controls", |app| {
+            app.global::<crate::Chrome>().set_custom(true);
+            home_card(app, false);
+        }),
+        ("modpack-loader-filter", |app| {
+            app.global::<Nav>().set_page(Page::Discover);
+            app.global::<Discover>().set_kind(3);
+            app.global::<Discover>().set_loader_index(3);
+        }),
         ("instance-cards-simple", instance_cards),
         ("mods-updates", |app| workspace(app, 0)),
         ("home-ready-simple", |app| home_card(app, false)),
@@ -663,7 +775,7 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     let instances = app.global::<Instances>();
     {
         let log = fired.clone();
-        instances.on_check_updates(move || log.borrow_mut().push("check".into()));
+        instances.on_content_refresh(move || log.borrow_mut().push("check".into()));
         let log = fired.clone();
         instances.on_update_all(move || log.borrow_mut().push("all".into()));
         let log = fired.clone();
@@ -832,7 +944,7 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
 mod targets {
     // Check for updates, Update all, Sodium Update, Lithium Unpin.
     pub const MODS: [(f32, f32); 4] = [
-        (855.0, 224.0),
+        (1070.0, 178.0),
         (1018.0, 224.0),
         (930.0, 280.0),
         (948.0, 341.0),

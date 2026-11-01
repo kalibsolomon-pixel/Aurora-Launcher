@@ -16,6 +16,16 @@ pub struct WidgetPlacement {
     pub id: String,
     pub enabled: bool,
     pub size: WidgetSize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grid: Option<WidgetGrid>,
+}
+
+/// Optional native grid dimensions. Existing layouts retain their size presets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WidgetGrid {
+    pub columns: u8,
+    pub rows: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,41 +54,49 @@ impl Default for HomeLayout {
                     id: "instance-details".into(),
                     enabled: true,
                     size: WidgetSize::Small,
+                    grid: None,
                 },
                 WidgetPlacement {
                     id: "content-summary".into(),
                     enabled: true,
                     size: WidgetSize::Small,
+                    grid: None,
                 },
                 WidgetPlacement {
                     id: "session".into(),
                     enabled: false,
                     size: WidgetSize::Small,
+                    grid: None,
                 },
                 WidgetPlacement {
                     id: "playtime".into(),
                     enabled: true,
                     size: WidgetSize::Small,
+                    grid: None,
                 },
                 WidgetPlacement {
                     id: "recent-worlds".into(),
                     enabled: true,
                     size: WidgetSize::Small,
+                    grid: None,
                 },
                 WidgetPlacement {
                     id: "recent-servers".into(),
                     enabled: true,
                     size: WidgetSize::Small,
+                    grid: None,
                 },
                 WidgetPlacement {
                     id: "skin-manager".into(),
                     enabled: true,
                     size: WidgetSize::Wide,
+                    grid: None,
                 },
                 WidgetPlacement {
                     id: "cape-selector".into(),
                     enabled: true,
                     size: WidgetSize::Small,
+                    grid: None,
                 },
             ],
         }
@@ -102,6 +120,12 @@ impl HomeLayout {
             {
                 return Err("Widget IDs must be unique bounded lowercase identifiers.");
             }
+            if widget
+                .grid
+                .is_some_and(|g| !(1..=6).contains(&g.columns) || !(1..=3).contains(&g.rows))
+            {
+                return Err("Widget grid dimensions must be 1–6 columns and 1–3 rows.");
+            }
             if supported_sizes(&widget.id).is_some_and(|sizes| !sizes.contains(&widget.size)) {
                 return Err("The requested widget size is outside its supported bounds.");
             }
@@ -113,6 +137,28 @@ impl HomeLayout {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn optional_grid_dimensions_preserve_legacy_layouts_and_validate_bounds() {
+        let legacy = r#"{"widgets":[{"id":"playtime","enabled":true,"size":"small"}]}"#;
+        let mut layout: HomeLayout = serde_json::from_str(legacy).unwrap();
+        assert!(layout.widgets[0].grid.is_none());
+        assert_eq!(serde_json::to_string(&layout).unwrap(), legacy);
+        layout.widgets[0].grid = Some(WidgetGrid {
+            columns: 6,
+            rows: 3,
+        });
+        layout.validate().unwrap();
+        let roundtrip: HomeLayout =
+            serde_json::from_str(&serde_json::to_string(&layout).unwrap()).unwrap();
+        assert_eq!(roundtrip, layout);
+        layout.widgets[0].grid.as_mut().unwrap().columns = 7;
+        assert!(layout.validate().is_err());
+        layout.widgets[0].grid = Some(WidgetGrid {
+            columns: 1,
+            rows: 0,
+        });
+        assert!(layout.validate().is_err());
+    }
     #[test]
     fn defaults_are_restrained_and_valid() {
         let layout = HomeLayout::default();
@@ -141,6 +187,7 @@ mod tests {
             id: "future-cosmetics".into(),
             enabled: true,
             size: WidgetSize::Wide,
+            grid: None,
         });
         layout.validate().unwrap();
         assert!(supported_sizes("future-cosmetics").is_none());

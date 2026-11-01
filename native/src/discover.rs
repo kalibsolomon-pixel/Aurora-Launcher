@@ -253,6 +253,15 @@ fn search(append: bool) {
                     .get(d.get_category_index().wrapping_sub(1) as usize)
                     .cloned()
                     .into_iter()
+                    .chain(
+                        (kind == "modpack")
+                            .then(|| {
+                                ["", "fabric", "forge", "neoforge"]
+                                    [d.get_loader_index().clamp(0, 3) as usize]
+                                    .to_owned()
+                            })
+                            .filter(|v| !v.is_empty()),
+                    )
                     .collect(),
                 ["relevance", "downloads", "follows", "newest", "updated"]
                     [d.get_sort_index().clamp(0, 4) as usize]

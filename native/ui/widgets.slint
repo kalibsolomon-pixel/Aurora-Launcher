@@ -3,7 +3,9 @@
 // state, system media sessions); cards never poll or compute on their own.
 import { Theme } from "theme.slint";
 import { Icon, Icons } from "icons.slint";
-import { Button, ButtonKind, IconButton, Spinner } from "components.slint";
+import { Button, ButtonKind, IconButton, Spinner, Dropdown, Tooltip } from "components.slint";
+
+export struct PlaytimePoint { label: string, value: string, detail: string, fraction: float }
 
 export struct WidgetLine {
     label: string,
@@ -18,6 +20,8 @@ export struct WidgetView {
     lines: [WidgetLine],
     empty: string,
     loading: bool,
+    column: int, row: int, width: int, height: int,
+    requested-width: int, requested-height: int,
 }
 
 export struct WidgetChoice {
@@ -29,10 +33,22 @@ export struct WidgetChoice {
 export global Widgets {
     in property <[WidgetView]> items;
     in property <[WidgetChoice]> available;
+    in property <[string]> available-names;
     in-out property <bool> editing: false;
     callback add(string);
     callback remove(string);
     callback move(string, int);
+    callback place(string, int);
+    callback resize(string, int, int);
+    callback columns-changed(int);
+    in property <int> grid-rows;
+    in property <[string]> names;
+    in property <[string]> positions;
+    in property <[PlaytimePoint]> week;
+    in property <[PlaytimePoint]> month;
+    in property <string> week-peak;
+    in property <string> month-peak;
+    in-out property <int> edit-index: 0;
 
     // System media session (Windows Global System Media Transport Controls).
     in property <bool> media-supported: false;
@@ -65,18 +81,6 @@ export global MediaGlyphs {
     out property <string> tune: "M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z";
 }
 
-component EditBar inherits HorizontalLayout {
-    in property <string> id;
-    in property <bool> first;
-    in property <bool> last;
-    in property <string> title;
-    spacing: 2px;
-    alignment: end;
-    if !root.first: IconButton { icon: MediaGlyphs.up; label: "Move " + root.title + " earlier"; size: 28px; clicked => { Widgets.move(root.id, -1); } }
-    if !root.last: IconButton { icon: MediaGlyphs.down; label: "Move " + root.title + " later"; size: 28px; clicked => { Widgets.move(root.id, 1); } }
-    IconButton { icon: Icons.close; label: "Remove " + root.title; size: 28px; clicked => { Widgets.remove(root.id); } }
-}
-
 component CardHeader inherits HorizontalLayout {
     in property <WidgetView> item;
     in property <bool> first;
@@ -86,7 +90,68 @@ component CardHeader inherits HorizontalLayout {
     Icon { y: (parent.height - self.height) / 2; path: root.item.icon; size: 18px; color: Theme.accent; }
     Text { horizontal-stretch: 1; text: root.item.title; font-size: Theme.text-body; font-weight: 600; color: Theme.text; vertical-alignment: center; overflow: elide; }
     if root.item.loading: Spinner { y: (parent.height - self.height) / 2; size: 14px; }
-    if Widgets.editing: EditBar { id: root.item.id; first: root.first; last: root.last; title: root.item.title; }
+    if Widgets.editing: IconButton { icon: Icons.close; label: "Remove " + root.item.title; size: 28px; clicked => { Widgets.remove(root.item.id); } }
+}
+
+export component WidgetLayoutEditor inherits Rectangle {
+    height: layout.preferred-height;
+    background: Theme.surface;
+    border-radius: Theme.radius-lg;
+    property <int> selected: min(max(Widgets.edit-index, 0), Widgets.items.length - 1);
+    layout := VerticalLayout {
+        padding: 14px; spacing: 10px;
+        HorizontalLayout {
+            spacing: 12px;
+            Text { text: "Arrange widgets"; font-size: Theme.text-body; font-weight: 600; color: Theme.text; vertical-alignment: center; }
+            Dropdown { horizontal-stretch: 1; model: Widgets.names; current-index: root.selected; label: "Widget to arrange"; selected(index) => { Widgets.edit-index = index; } }
+        }
+        if Widgets.items.length > 0: HorizontalLayout {
+            spacing: 8px;
+            Dropdown { horizontal-stretch: 1; min-width: 100px; model: ["Width: 1", "Width: 2", "Width: 3", "Width: 4", "Width: 5", "Width: 6"]; current-index: Widgets.items[root.selected].requested-width - 1; label: "Widget width in columns"; controlled: true; selected(index) => { Widgets.resize(Widgets.items[root.selected].id, index + 1, Widgets.items[root.selected].requested-height); } }
+            Dropdown { horizontal-stretch: 1; min-width: 100px; model: ["Height: 1", "Height: 2", "Height: 3"]; current-index: Widgets.items[root.selected].requested-height - 1; label: "Widget height in rows"; controlled: true; selected(index) => { Widgets.resize(Widgets.items[root.selected].id, Widgets.items[root.selected].requested-width, index + 1); } }
+            Dropdown { horizontal-stretch: 1; min-width: 100px; model: Widgets.positions; current-index: root.selected; label: "Widget position"; controlled: true; selected(index) => { Widgets.place(Widgets.items[root.selected].id, index); Widgets.edit-index = index; } }
+        }
+        if Widgets.available.length > 0: HorizontalLayout {
+            spacing: 8px;
+            Dropdown { horizontal-stretch: 1; model: Widgets.available-names; label: "Add a widget"; current-index: -1; placeholder: "Add widget"; selected(index) => { Widgets.add(Widgets.available[index].id); } }
+        }
+    }
+}
+
+component PlaytimeCard inherits Rectangle {
+    in property <WidgetView> item;
+    background: Theme.surface;
+    border-radius: Theme.radius-lg;
+    accessible-role: groupbox;
+    accessible-label: "Daily playtime graph";
+    property <bool> expanded: root.width > 440px || root.height > 240px;
+    property <[PlaytimePoint]> points: expanded ? Widgets.month : Widgets.week;
+    VerticalLayout {
+        padding: 14px; spacing: 8px;
+        CardHeader { item: root.item; }
+        HorizontalLayout {
+            Text { text: root.expanded ? "Last 30 days" : "Last 7 days"; font-size: Theme.text-metadata; color: Theme.text-secondary; horizontal-stretch: 1; }
+            if root.item.lines.length > 0: Text { text: root.item.lines[root.expanded ? 2 : 1].value; font-size: Theme.text-body; font-weight: 600; color: Theme.text; }
+        }
+        plot := Rectangle {
+            vertical-stretch: 1;
+            min-height: 48px;
+            property <length> cell-width: (self.width - 44px) / max(1, root.points.length);
+            Text { x: 0px; y: 0px; width: 40px; height: 14px; horizontal-alignment: left; text: root.expanded ? Widgets.month-peak : Widgets.week-peak; color: Theme.text-muted; font-size: Theme.text-label; }
+            Text { x: 0px; width: 40px; height: 14px; y: parent.height - self.height; horizontal-alignment: left; text: "0 min"; color: Theme.text-muted; font-size: Theme.text-label; }
+            for point[i] in root.points: Rectangle {
+                x: 44px + i * plot.cell-width; width: plot.cell-width; height: plot.height;
+                accessible-role: text; accessible-label: point.detail;
+                Rectangle { x: 2px; width: max(2px, parent.width - 4px); height: max(2px, point.fraction * (plot.height - 4px)); y: parent.height - self.height; border-radius: 2px; background: point.fraction > 0 ? (hover.has-hover ? Theme.accent-hover : Theme.accent) : Theme.hover; }
+                hover := TouchArea {}
+                if hover.has-hover: Tooltip { text: point.label + ": " + point.value; x: min(0px, plot.width - i * plot.cell-width - self.width); y: -self.height - 4px; }
+            }
+        }
+        HorizontalLayout {
+            Text { text: root.points.length > 0 ? root.points[0].label : ""; color: Theme.text-muted; font-size: Theme.text-label; horizontal-stretch: 1; }
+            Text { text: "Today · UTC"; color: Theme.text-muted; font-size: Theme.text-label; }
+        }
+    }
 }
 
 component ListCard inherits Rectangle {
@@ -170,46 +235,24 @@ component MediaCard inherits Rectangle {
             MediaButton { icon: MediaGlyphs.next; label: "Next track"; enabled: Widgets.media-can-next; clicked => { Widgets.media-next(); } }
             if Widgets.media-session-count > 1: MediaButton { icon: MediaGlyphs.swap; label: "Switch to another media app"; clicked => { Widgets.media-cycle(); } }
         }
-        if Widgets.media-supported: Text { text: "Volume is controlled in the media app; Windows media sessions do not expose per-app volume."; color: Theme.text-muted; font-size: Theme.text-label; wrap: word-wrap; }
     }
 }
 
-component AddCard inherits Rectangle {
-    background: transparent;
-    border-radius: Theme.radius-lg;
-    border-width: 1px;
-    border-color: Theme.border-strong;
-    accessible-role: groupbox;
-    accessible-label: "Add widget";
-    VerticalLayout {
-        padding: 14px;
-        spacing: 6px;
-        alignment: start;
-        Text { text: Widgets.available.length > 0 ? "Add widget" : "All widgets are on Home"; color: Theme.text-secondary; font-size: Theme.text-body; font-weight: 600; }
-        for choice in Widgets.available: Button { text: choice.title; icon: choice.icon; kind: ButtonKind.ghost; compact: true; clicked => { Widgets.add(choice.id); } }
-    }
-}
-
-/// The widget grid: equal-width columns, fixed-height cards.
+/// Responsive, non-overlapping grid; saved dimensions survive narrower windows.
 export component WidgetGrid inherits Rectangle {
     property <length> gap: 14px;
     property <length> card-height: 196px;
-    property <int> columns: max(1, floor((self.width + gap) / (300px + gap)));
+    property <int> columns: min(6, max(1, floor((self.width + gap) / (150px + gap))));
+    changed columns => { Widgets.columns-changed(root.columns); }
     property <length> card-width: (self.width - (columns - 1) * gap) / columns;
-    property <int> count: Widgets.items.length + (Widgets.editing ? 1 : 0);
-    height: ceil(count / columns) * (card-height + gap);
+    height: Widgets.grid-rows * (card-height + gap);
     for item[i] in Widgets.items: Rectangle {
-        x: mod(i, root.columns) * (root.card-width + root.gap);
-        y: floor(i / root.columns) * (root.card-height + root.gap);
-        width: root.card-width;
-        height: root.card-height;
+        x: item.column * (root.card-width + root.gap);
+        y: item.row * (root.card-height + root.gap);
+        width: item.width * (root.card-width + root.gap) - root.gap;
+        height: item.height * (root.card-height + root.gap) - root.gap;
         if item.id == "media": MediaCard { width: parent.width; height: parent.height; item: item; first: i == 0; last: i == Widgets.items.length - 1; }
-        if item.id != "media": ListCard { width: parent.width; height: parent.height; item: item; first: i == 0; last: i == Widgets.items.length - 1; }
-    }
-    if Widgets.editing: AddCard {
-        x: mod(Widgets.items.length, root.columns) * (root.card-width + root.gap);
-        y: floor(Widgets.items.length / root.columns) * (root.card-height + root.gap);
-        width: root.card-width;
-        height: root.card-height;
+        if item.id == "playtime": PlaytimeCard { width: parent.width; height: parent.height; item: item; }
+        if item.id != "media" && item.id != "playtime": ListCard { width: parent.width; height: parent.height; item: item; first: i == 0; last: i == Widgets.items.length - 1; }
     }
 }

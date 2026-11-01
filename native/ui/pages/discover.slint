@@ -83,6 +83,10 @@ export component DiscoverPage inherits Rectangle {
             Dropdown { width: 230px; model: Discover.category-names; label: "Modrinth category"; current-index <=> Discover.category-index; selected => { Discover.filters-changed(); } }
             Dropdown { width: 200px; model: ["Relevance", "Downloads", "Most followed", "Newest", "Recently updated"]; label: "Sort results"; current-index <=> Discover.sort-index; selected => { Discover.filters-changed(); } }
         }
+        if Discover.kind == 3: HorizontalLayout {
+            alignment: start;
+            Dropdown { width: 200px; model: ["All mod loaders", "Fabric", "Forge", "NeoForge"]; label: "Modpack loader"; current-index <=> Discover.loader-index; selected => { Discover.filters-changed(); } }
+        }
         if !Discover.has-instances && Discover.kind != 3: Rectangle {
             background: Theme.surface;
             border-radius: Theme.radius-lg;

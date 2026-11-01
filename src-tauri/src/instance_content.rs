@@ -936,6 +936,7 @@ pub struct ContentManagement {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentEntry {
+    pub pack_owned: bool,
     pub entry_id: String,
     pub content_type: ContentType,
     pub file_name: String,
@@ -1097,6 +1098,7 @@ pub fn scan(
                 .as_ref()
                 .filter(|pack| pack.owns_path(&format!("{}/{}", kind.directory_name(), name)))
             {
+                entry.pack_owned = true;
                 entry.management.can_remove = false;
                 entry.management.removal_path = RemovalPath::Blocked;
                 entry.management.removal_blocked_reason = Some(format!(
@@ -1280,6 +1282,7 @@ fn inspect(
     let display_name = name.strip_suffix(".zip").unwrap_or(&name).to_owned();
     let management = management_capabilities(kind, file_type, ownership, &name, activation);
     ContentEntry {
+        pack_owned: false,
         entry_id,
         content_type: kind,
         file_name: name,

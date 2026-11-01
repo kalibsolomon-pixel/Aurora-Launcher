@@ -23,6 +23,7 @@ const baseManagement: ContentManagement = {
 function entry(overrides: Partial<ContentEntry> & { management?: Partial<ContentManagement> }): ContentEntry {
   return {
     entryId: 'entry-1',
+    packOwned: false,
     contentType: 'resourcePack',
     fileName: 'Pack.zip',
     displayName: 'Pack',
