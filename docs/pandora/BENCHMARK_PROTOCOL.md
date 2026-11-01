@@ -29,6 +29,7 @@ Example (PowerShell; replace placeholders with explicit absolute paths):
 python tools/benchmark/pandora_resources.py <probe.exe> <new-absolute-pandora-evidence-root> archive <pandora-bench-32m.mrpack>
 python tools/benchmark/pandora_resources.py <probe.exe> <new-absolute-pandora-evidence-root> hosts
 python tools/benchmark/pandora_resources.py <acceptance-native.exe> <new-absolute-pandora-evidence-root> --idle --seconds 20
+python tools/benchmark/pandora_resources.py <automatic-native.exe> <new-absolute-pandora-evidence-root> --idle --seconds 75 --sync-fixture <owned-pandora-ui-fixture-root>
 ```
 
 The stored ZIP fixture has one 32 MiB override (`overrides/config/large-fixture.dat`),
@@ -63,6 +64,23 @@ restored Home, or Ready**. Whole-process wall arrival is a different clock.
 a new `pandora-ui-*` root. These entries deliberately have **no installed game**.
 They exercise the sync controls and preservation rules, never authorize launch,
 and are not evidence of an actual Minecraft installation or authenticated play.
+The automatic-pool sampler accepts only that marked synthetic fixture, and
+seeds only its two registry entries and bounded option files into a newly
+created root. It writes a schema-2 policy with both selected and five default
+categories. A 75-second run crosses one real 60-second tick. This is a tiny
+options-only workload; it does not establish overhead for large pack libraries.
+
+Current native acceptance enables syncing, selects both checkboxes, then leaves
+the UI alone. A missing screenshot fixture must copy on the first real minute.
+After that baseline, a unique options edit must propagate on the next minute
+without Review/Apply. Virtual-clock tests separately verify the 59/60/120-second
+boundaries, no overlap, and timer removal after disable. Games in another or a
+previous launcher session remain outside process-local supervision.
+
+`benchmark-results.json` retains the initial selective-integration measurements,
+whose native binary still had the subsequently rejected manual UI. Final
+automatic-build measurements are recorded separately so binary identities and
+historical outliers are not silently replaced.
 
 Cold/warm game installations, second-instance installation, large live modpack
 updates, public-CDN throughput, real duplication, populated/Borealis idle and

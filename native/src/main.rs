@@ -111,6 +111,12 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let _guard = runtime.enter();
         start_discord(&host);
+        let sync_host = host.clone();
+        host.spawn(async move {
+            if api::initialize_sync(sync_host).await.is_err() {
+                eprintln!("[aurora-native] automatic sync preferences unavailable; see Settings");
+            }
+        });
     }
     load();
     window.run()?;

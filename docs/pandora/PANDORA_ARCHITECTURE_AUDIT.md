@@ -53,8 +53,10 @@ channel at startup, loads all instances, and handles messages, filesystem events
 and a one-second tick. It also carries metadata state maps, content metadata,
 server pinging and persistent instance state. These support broader live-library
 features. Aurora's readiness is explicitly triggered, coalesced to one in-flight
-deep check and invalidated by input changes. The new sync adds no watcher, timer,
-permanent thread, index, metadata cache or startup scan.
+deep check and invalidated by input changes. Following the owner's correction,
+sync has one Rust-owned 60-second interval only while enabled with at least two
+selected instances and a category. It performs no network polling, permanent
+thread, watcher or background content index. Disabled sync drops its timer.
 
 ## Download, cache and scheduling findings
 
@@ -152,15 +154,22 @@ not an exploit validation or a claim that every deployment loses data.
 
 Aurora implements an independently authored, deliberately smaller first slice:
 
-- Off by default, persisted in a strict schema-1 `launcher/instance-sync.json`.
-  Enabling authorizes only explicit review/apply; it does not enable automatic
-  prelaunch or post-exit work. A source/destination pair selects participants
-  for that operation. Selection/category/exclusions are operation inputs.
+- Off by default, persisted in strict schema-2 `launcher/instance-sync.json`.
+  The owner selects any participating instances, categories and exclusions;
+  they sync every minute while the launcher is open. Native Review/Apply and
+  source/destination selectors were removed. A known schema-1 manual preference
+  loads as unselected/off without rewriting it; it cannot authorize automatic
+  participation. Unknown/malformed documents fail untouched.
 - Settings and controls are separate. Installed Minecraft and loader pins must
   match. Only keys already present in both option files transfer. Settings use
   a narrow allowlist for mouse/accessibility/chat/audio; controls use common
   `key_` keys. Data version, unknown mod settings, pack activation/order and
   missing/version-specific keys remain local. Duplicate/malformed input fails.
+  A hash-only, bounded `launcher/sync-observed.json` baseline detects new edits.
+  Initial differences and simultaneous different edits are preserved. A unique
+  subsequent edit propagates to unchanged compatible peers; acknowledged
+  baselines retain pending edits while a previously observed peer is busy or
+  running. The first minute establishes the initial options baseline.
 - Resource packs, shaders and screenshots: private copies of missing files;
   byte-identical files are skipped; existing different files are explicit
   keep-destination conflicts. There is no delete propagation or shared folder.
@@ -169,24 +178,31 @@ Aurora implements an independently authored, deliberately smaller first slice:
   Unselected configuration is not enumerated. Existing differing files are kept.
 - Exact path/prefix exclusions, bounded traversal (4,096 entries, depth 16,
   256 MiB/file, 1 GiB scanned source bytes), reparse/special-name rejection,
-  and 64 KiB file hashing. No content values enter the review DTO.
+  and 64 KiB file hashing. No content values enter the review DTO. A cycle has
+  a 1 GiB copy budget; excess work continues next minute. Path/size/mtime hints
+  avoid rehashing unchanged folder pairs after convergence, but every actual
+  copy still uses the full hash-bound plan. Hints never authorize launch/cache
+  integrity. Unchanged options observations are not rewritten each minute.
 - A SHA-256 review fingerprint binds request, registry records, source and
-  destination identities and planned output. Apply re-plans and rehashes.
+  destination identities, full selected policy and planned output. The automatic
+  worker applies this internal plan after re-planning and rehashing.
   These local consistency hashes do not create publisher trust.
 - Both Play preparations and source/destination writer operations are excluded
   during work. Registered IDs are checked before creating lock roots. The policy
-  lock serializes disable/apply. A racing disable can return busy; it does not
-  retroactively cancel an entered commit.
+  cycle lock excludes overlapping automatic work across launcher processes.
+  Policy writes have a separate lock. Policy is checked before each commit;
+  disabling or changing participants stops subsequent commits. An already
+  entered atomic per-file commit may finish. Process supervision remains local.
 - A review receipt precedes mutations. Options backup is durably written before
   atomic replacement. Missing-file commit uses a unique completed private temp
   and no-clobber link/unlink within that destination; it never links two
   instances or a cache object. Per-file commits can survive interruption; there
   is no claim of one atomic multi-file transaction or automatic rollback.
 
-Remaining sync work is significant: reusable multi-instance profiles,
-per-instance persistent overrides, NBT-aware
+Remaining sync work is significant: multiple independent pools,
+per-instance category overrides, NBT-aware
 server-list merging, explicit replacement/conflict resolution, world snapshots
-and recovery UI, launch/exit integration, and cancellable large sync jobs. Worlds
+and recovery UI, and explicit cancellation/progress for large sync jobs. Worlds
 and `servers.dat` are unsupported/off, not shared blindly. No safety assertion is
 made about orphaned games or older/external launchers that do not participate in
 the current process's Play reservation. Users must stop such games before sync.
@@ -221,7 +237,7 @@ E = insufficient comparative measurement. These are scoped judgments.
 | Download scheduling | Process-wide permits, retry and digest single flight | Content semaphore/per-file lock; separate launch task pools | transfer / metadata / install-content source; A scoped budget | Retain; add narrowly used completion window |
 | Modpack extraction | Bounded normalized plan; streaming review hash added | In-memory override maps, broader formats/providers | mrpack / mod-metadata source; C | Reduce Aurora allocation; preserve parser policy |
 | Instance duplication | No implemented user operation | Reflink, identity-aware hardlink, copy fallback | complete duplicate source and history; B capability | Separate ownership/recovery design, then implement |
-| File syncing | Reviewed, off-by-default safe subset | Prelaunch files/options and directory links | complete syncing source, backend call sites; C/D | Independent snapshot/copy model; worlds deferred |
+| File syncing | Selected pool, automatic minute cycle, hash-based options edits, additive private files | Prelaunch files/options and directory links | complete syncing source, backend call sites; C/D | Independent model; wider mutable-file/world semantics deferred |
 | Caching | Verified staging/promotion; explicit digest provenance | Rehashed library objects; typed metadata cache/fallback | cache / metadata-manager / install-content; A/C | Preserve trust, investigate bounded metadata reuse |
 | Recovery | Durable installed-state journals, ownership-based rollback | Best-effort writes and scoped failure cleanup in reviewed paths | install journal / persistent / duplicate source; A scoped | Keep durable core; do not port persistence fallback |
 | Security | Rust-only sessions/spec, narrow secret persistence, bounded archives | OS secret stores, log regex redaction, sandbox support | auth / log-reader / wrapper / core contracts; C/E overall | No blanket winner; preserve Aurora's boundaries |
@@ -234,7 +250,9 @@ E = insufficient comparative measurement. These are scoped judgments.
 
 No Pandora source was copied, translated or linked. The implementation is
 independent, informed by source-level concepts and Aurora-specific defects.
-No new dependency or lockfile change is required. Pandora's root license is MIT,
+No new production dependency or lockfile change is required. Tokio's existing
+dev dependency gains `test-util` for deterministic virtual-clock tests.
+Pandora's root license is MIT,
 copyright 2025 Moulberry. It is not a blanket license for every vendored crate:
 `reqwest_client/LICENSE-APACHE` names Zed Industries (Apache-2.0), and ftree's MIT
 notice names Bruno Rucy Carneiro Alves de Lima. Any later direct reuse must track

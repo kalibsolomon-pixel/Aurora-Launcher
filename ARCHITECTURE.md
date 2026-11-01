@@ -4,18 +4,32 @@
 
 ## PANDORA initiative — selective backend integration
 
-`instance_sync` provides off-by-default, on-demand source-to-destination review
-and apply. Settings/controls transfer common eligible keys only between matching
-installed Minecraft/loader pins, with an original-options backup. Resource packs,
-shaders, screenshots and explicitly selected configuration files/directories use
-private additive copies and keep differing destination files. Review fingerprints,
-bounded traversal/streaming hashes, reparse checks, Play reservations, lifecycle
-and content locks protect commits. Schema-1 sync preferences live separately in
-`launcher/instance-sync.json`; review receipts/backups live in `launcher/sync-backups`.
-No watcher, automatic launch/exit sync, shared world directory, delete propagation,
-server-list merge or background index is introduced. Native Settings uses the
-shared controls and typed application services. Per-file completion is recoverable
-by inspection/review; it is not an atomic multi-file sync transaction.
+`instance_sync` provides off-by-default automatic syncing for an explicitly
+selected pool of instances. One Rust-owned 60-second interval runs only while
+enabled with at least two participants and a category; it has no dedicated
+thread, watcher or network polling. Native Settings uses instance/category
+checkboxes and status events. Review/Apply buttons and directional selectors
+were removed following the owner's correction.
+
+Settings/controls transfer common eligible keys only between matching installed
+Minecraft/loader pins, with an original-options backup. Bounded hash-only
+observations detect subsequent unique edits; initial differences and conflicting
+edits are kept. Busy/running peers retain pending edits for a later minute.
+Resource packs, shaders, screenshots and explicitly selected configuration use
+private additive copies and keep differing destination files. A 1 GiB per-cycle
+copy budget and bounded traversal limit work. Warm folder metadata hints avoid
+repeated hashing; actual copies still rehash their full internal plans.
+
+Reparse checks, Play reservations, lifecycle/content locks and policy checks
+protect commits. Schema-2 preferences live in `launcher/instance-sync.json`;
+hash-only baselines in `launcher/sync-observed.json`; receipts/options backups
+in `launcher/sync-backups`. A known manual schema-1 preference loads off with
+no selected instances until explicitly configured; unknown/damaged files fail.
+Disabling drops the timer; an entered per-file commit can finish. Game exclusion
+is process-local, so games left running by another launcher session must be
+closed. Worlds, server-list merging, delete propagation and automatic replacement
+of differing ordinary files are unsupported. Per-file completion is recoverable
+by inspection; this is not one atomic multi-file transaction.
 
 Rust readiness now reports `canPrepare` separately from `ready` when the sole
 blocker is missing exact managed Java. Native Play uses the existing verified
@@ -27,8 +41,9 @@ Transfer slot leases reclaim completed host/digest coordination entries, includi
 cancelled waiters. An order-independent provider verification pass uses bounded
 completion-order scheduling; classpath/manifest ordering stays deterministic.
 Modpack review hashes override payloads in 64 KiB chunks while actual extraction
-retains its existing bounds and transactions. No dependency or release authority
-changes. Full scope, evidence and limitations:
+retains its existing bounds and transactions. No production dependency or release
+authority changes; existing Tokio test utilities verify the minute clock.
+Full scope, evidence and limitations:
 `docs/pandora/PANDORA_ARCHITECTURE_AUDIT.md` and
 `PANDORA_BACKEND_INTEGRATION_ACCEPTANCE.md`.
 

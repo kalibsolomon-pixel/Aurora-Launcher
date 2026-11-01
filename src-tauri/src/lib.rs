@@ -88,6 +88,10 @@ pub fn run() {
             // Optional integration failure never changes startup or Play authority.
             if let Ok(root) = app.path().app_local_data_dir() {
                 if let Ok(paths) = crate::paths::ManagedPaths::from_app_local_data_dir(root) {
+                    let sync_host = crate::host::Host::from_tauri(app.handle());
+                    let _ = tauri::async_runtime::spawn_blocking(move || {
+                        crate::application::initialize_instance_sync(sync_host)
+                    });
                     if let Ok(config) = crate::config::load(&paths.config_file()) {
                         crate::discord::initialize(
                             crate::host::Host::from_tauri(app.handle()),
@@ -99,6 +103,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            application::tauri_commands::save_instance_sync_policy,
+            application::tauri_commands::get_instance_sync_status,
             application::tauri_commands::get_instance_sync_policy,
             application::tauri_commands::set_instance_sync_enabled,
             application::tauri_commands::preview_instance_sync,

@@ -41,6 +41,7 @@ fn fixture() -> (ManagedPaths, Request) {
             category: Category::Settings,
             exclusions: vec![],
             selected_paths: vec![],
+            key_filter: None,
         },
     )
 }
@@ -472,4 +473,393 @@ fn configuration_requires_explicit_paths_and_keeps_existing_files() {
     );
     request.selected_paths = vec!["saves/private".into()];
     assert!(preview(&managed, &request).is_err());
+}
+
+fn automatic_policy(
+    managed: &ManagedPaths,
+    request: &Request,
+    categories: Vec<Category>,
+) -> Policy {
+    save_policy(
+        managed,
+        Policy {
+            enabled: true,
+            instances: vec![request.source_id.clone(), request.destination_id.clone()],
+            categories,
+            ..Policy::default()
+        },
+    )
+    .unwrap()
+}
+
+#[test]
+fn automatic_settings_follow_unique_edits_and_keep_simultaneous_conflicts() {
+    let (managed, request) = fixture();
+    automatic_policy(
+        &managed,
+        &request,
+        vec![Category::Settings, Category::Controls],
+    );
+    let original =
+        b"mouseSensitivity:0.25\nkey_jump:key.keyboard.space\nresourcePacks:[\"local\"]\n";
+    for id in [&request.source_id, &request.destination_id] {
+        put(&managed, id, "options.txt", original);
+    }
+    let mut engine = automatic::Engine::default();
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 0);
+    put(
+        &managed,
+        &request.source_id,
+        "options.txt",
+        b"mouseSensitivity:0.75\nkey_jump:key.keyboard.j\nresourcePacks:[\"source\"]\n",
+    );
+    assert!(engine.cycle(&managed).unwrap().files_changed > 0);
+    assert_eq!(
+        get(&managed, &request.destination_id, "options.txt"),
+        b"mouseSensitivity:0.75\nkey_jump:key.keyboard.j\nresourcePacks:[\"local\"]\n"
+    );
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 0);
+    put(
+        &managed,
+        &request.source_id,
+        "options.txt",
+        b"mouseSensitivity:0.6\nkey_jump:key.keyboard.j\n",
+    );
+    put(
+        &managed,
+        &request.destination_id,
+        "options.txt",
+        b"mouseSensitivity:0.4\nkey_jump:key.keyboard.j\nresourcePacks:[\"local\"]\n",
+    );
+    let conflict = engine.cycle(&managed).unwrap();
+    assert_eq!(conflict.files_changed, 0);
+    assert!(conflict.conflicts_kept > 0);
+    assert!(
+        String::from_utf8(get(&managed, &request.destination_id, "options.txt"))
+            .unwrap()
+            .contains("mouseSensitivity:0.4")
+    );
+    let history = fs::read_to_string(managed.launcher_dir().join("sync-observed.json")).unwrap();
+    assert!(!history.contains("0.75"));
+    assert!(!history.contains("key.keyboard.j"));
+}
+
+#[test]
+fn automatic_initial_differences_are_preserved_and_later_single_edits_propagate() {
+    let (managed, request) = fixture();
+    automatic_policy(&managed, &request, vec![Category::Settings]);
+    put(
+        &managed,
+        &request.source_id,
+        "options.txt",
+        b"mouseSensitivity:0.7\n",
+    );
+    put(
+        &managed,
+        &request.destination_id,
+        "options.txt",
+        b"mouseSensitivity:0.2\n",
+    );
+    let mut engine = automatic::Engine::default();
+    assert!(engine.cycle(&managed).unwrap().conflicts_kept > 0);
+    assert_eq!(
+        get(&managed, &request.destination_id, "options.txt"),
+        b"mouseSensitivity:0.2\n"
+    );
+    put(
+        &managed,
+        &request.source_id,
+        "options.txt",
+        b"mouseSensitivity:0.8\n",
+    );
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 1);
+    assert_eq!(
+        get(&managed, &request.destination_id, "options.txt"),
+        b"mouseSensitivity:0.8\n"
+    );
+}
+
+#[test]
+fn automatic_three_instance_pool_unions_missing_files_without_touching_unselected() {
+    let (managed, request) = fixture();
+    let mut registry = InstanceRegistry::load(&managed.instance_registry_file()).unwrap();
+    let third = crate::instances::generate_instance_id();
+    let extra = crate::instances::generate_instance_id();
+    for id in [&third, &extra] {
+        let mut configuration = InstanceConfiguration::for_minecraft_version("1.21.11");
+        configuration.set_aurora_enabled(false);
+        registry.instances_mut().push(
+            InstanceRecord::from_installed(
+                id.clone(),
+                "Pool fixture",
+                InstanceState::Ready,
+                InstalledConfiguration {
+                    minecraft_version: "1.21.11".into(),
+                    platform: PlatformPin::Vanilla {},
+                    aurora: None,
+                },
+                configuration,
+            )
+            .unwrap(),
+        );
+        fs::create_dir_all(managed.instance_paths(id).root()).unwrap();
+    }
+    registry.save(&managed.instance_registry_file()).unwrap();
+    let mut selected = automatic_policy(&managed, &request, vec![Category::Screenshots]);
+    selected.instances.push(third.clone());
+    save_policy(&managed, selected).unwrap();
+    for (id, name) in [
+        (&request.source_id, "a"),
+        (&request.destination_id, "b"),
+        (&third, "c"),
+    ] {
+        put(
+            &managed,
+            id,
+            &format!("screenshots/{name}.png"),
+            name.as_bytes(),
+        );
+    }
+    let mut engine = automatic::Engine::default();
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 6);
+    for id in [&request.source_id, &request.destination_id, &third] {
+        for name in ["a", "b", "c"] {
+            assert_eq!(
+                get(&managed, id, &format!("screenshots/{name}.png")),
+                name.as_bytes()
+            );
+        }
+    }
+    assert!(
+        !managed
+            .instance_paths(&extra)
+            .root()
+            .join("screenshots")
+            .exists()
+    );
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 0);
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 0);
+    put(&managed, &third, "screenshots/d.png", b"new");
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 2);
+    let mut selected = policy(&managed).unwrap();
+    selected.categories = vec![Category::Settings];
+    save_policy(&managed, selected).unwrap();
+    for id in [&request.source_id, &request.destination_id, &third] {
+        put(&managed, id, "options.txt", b"mouseSensitivity:0.5\n");
+    }
+    engine.cycle(&managed).unwrap();
+    let running = crate::launch::process::force_running(third.as_str());
+    put(
+        &managed,
+        &request.source_id,
+        "options.txt",
+        b"mouseSensitivity:0.8\n",
+    );
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 1);
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 0);
+    drop(running);
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 1);
+    assert_eq!(
+        get(&managed, &third, "options.txt"),
+        b"mouseSensitivity:0.8\n"
+    );
+}
+
+#[test]
+fn automatic_skips_running_instances_and_rejects_stale_participation_and_history() {
+    let (managed, request) = fixture();
+    let selected = automatic_policy(&managed, &request, vec![Category::Screenshots]);
+    put(
+        &managed,
+        &request.source_id,
+        "screenshots/new.png",
+        b"source",
+    );
+    let mut engine = automatic::Engine::default();
+    let running = crate::launch::process::force_running(request.destination_id.as_str());
+    assert!(engine.cycle(&managed).unwrap().skipped_instances > 0);
+    assert!(
+        !managed
+            .instance_paths(&request.destination_id)
+            .root()
+            .join("screenshots/new.png")
+            .exists()
+    );
+    drop(running);
+    let mut copy = request.clone();
+    copy.category = Category::Screenshots;
+    let review = preview(&managed, &copy).unwrap();
+    let mut changed = selected.clone();
+    changed.instances.pop();
+    save_policy(&managed, changed).unwrap();
+    assert!(automatic::apply_selected(&managed, &copy, &review.fingerprint, &selected).is_err());
+    save_policy(&managed, selected).unwrap();
+    let path = managed.launcher_dir().join("sync-observed.json");
+    fs::write(&path, b"{\"schemaVersion\":99,\"instances\":{}}").unwrap();
+    let before = fs::read(&path).unwrap();
+    assert!(engine.cycle(&managed).is_err());
+    assert_eq!(fs::read(&path).unwrap(), before);
+    assert!(
+        !managed
+            .instance_paths(&request.destination_id)
+            .root()
+            .join("screenshots/new.png")
+            .exists()
+    );
+}
+
+#[test]
+fn known_manual_preferences_never_silently_enable_automatic_participation() {
+    let (managed, _) = fixture();
+    fs::write(
+        policy_file(&managed),
+        br#"{"schemaVersion":1,"enabled":true}"#,
+    )
+    .unwrap();
+    let loaded = policy(&managed).unwrap();
+    assert!(!loaded.enabled);
+    assert!(loaded.instances.is_empty());
+    assert_eq!(
+        fs::read(policy_file(&managed)).unwrap(),
+        br#"{"schemaVersion":1,"enabled":true}"#
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn automatic_worker_waits_one_minute_and_releases_its_timer_when_disabled() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let (managed, request) = fixture();
+    let selected = automatic_policy(&managed, &request, vec![Category::Screenshots]);
+    put(
+        &managed,
+        &request.source_id,
+        "screenshots/automatic.png",
+        b"minute copy",
+    );
+    let cycles = Arc::new(AtomicUsize::new(0));
+    let observer = Arc::clone(&cycles);
+    let host = crate::host::Host::native(
+        Ok(managed.data_root().to_path_buf()),
+        "test",
+        tokio::runtime::Handle::current(),
+        move |_, payload| {
+            if payload["lastRunUnixSeconds"].is_u64() && payload["running"] == false {
+                observer.fetch_add(1, Ordering::SeqCst);
+            }
+        },
+    );
+    automatic::reconcile(host.clone(), managed.clone()).unwrap();
+    tokio::task::yield_now().await;
+    tokio::time::advance(std::time::Duration::from_secs(59)).await;
+    tokio::task::yield_now().await;
+    assert_eq!(cycles.load(Ordering::SeqCst), 0);
+    tokio::time::advance(std::time::Duration::from_secs(1)).await;
+    let deadline = std::time::Instant::now();
+    while cycles.load(Ordering::SeqCst) == 0 {
+        assert!(deadline.elapsed() < std::time::Duration::from_secs(3));
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(
+        get(
+            &managed,
+            &request.destination_id,
+            "screenshots/automatic.png"
+        ),
+        b"minute copy"
+    );
+    tokio::time::advance(std::time::Duration::from_secs(59)).await;
+    tokio::task::yield_now().await;
+    assert_eq!(cycles.load(Ordering::SeqCst), 1);
+    tokio::time::advance(std::time::Duration::from_secs(1)).await;
+    while cycles.load(Ordering::SeqCst) < 2 {
+        assert!(deadline.elapsed() < std::time::Duration::from_secs(3));
+        tokio::task::yield_now().await;
+    }
+    put(
+        &managed,
+        &request.source_id,
+        "screenshots/disabled.png",
+        b"must stay local",
+    );
+    let mut disabled = selected;
+    disabled.enabled = false;
+    save_policy(&managed, disabled).unwrap();
+    automatic::reconcile(host, managed.clone()).unwrap();
+    while automatic::worker_active() {
+        assert!(deadline.elapsed() < std::time::Duration::from_secs(3));
+        tokio::task::yield_now().await;
+    }
+    assert!(!automatic::status().enabled);
+    tokio::time::advance(std::time::Duration::from_secs(120)).await;
+    tokio::task::yield_now().await;
+    assert!(
+        !managed
+            .instance_paths(&request.destination_id)
+            .root()
+            .join("screenshots/disabled.png")
+            .exists()
+    );
+}
+
+#[test]
+fn automatic_combines_independent_setting_edits_from_both_instances() {
+    let (managed, request) = fixture();
+    automatic_policy(
+        &managed,
+        &request,
+        vec![Category::Settings, Category::Controls],
+    );
+    let initial = b"mouseSensitivity:0.5\nkey_jump:key.keyboard.space\n";
+    put(&managed, &request.source_id, "options.txt", initial);
+    put(&managed, &request.destination_id, "options.txt", initial);
+    let mut engine = automatic::Engine::default();
+    engine.cycle(&managed).unwrap();
+    put(
+        &managed,
+        &request.source_id,
+        "options.txt",
+        b"mouseSensitivity:0.8\nkey_jump:key.keyboard.space\n",
+    );
+    put(
+        &managed,
+        &request.destination_id,
+        "options.txt",
+        b"mouseSensitivity:0.5\nkey_jump:key.keyboard.j\n",
+    );
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 2);
+    for id in [&request.source_id, &request.destination_id] {
+        assert_eq!(
+            get(&managed, id, "options.txt"),
+            b"mouseSensitivity:0.8\nkey_jump:key.keyboard.j\n"
+        );
+    }
+}
+
+#[test]
+fn automatic_preserves_pending_edits_until_a_running_peer_stops() {
+    let (managed, request) = fixture();
+    automatic_policy(&managed, &request, vec![Category::Settings]);
+    for id in [&request.source_id, &request.destination_id] {
+        put(&managed, id, "options.txt", b"mouseSensitivity:0.5\n");
+    }
+    let mut engine = automatic::Engine::default();
+    engine.cycle(&managed).unwrap();
+    let running = crate::launch::process::force_running(request.destination_id.as_str());
+    put(
+        &managed,
+        &request.source_id,
+        "options.txt",
+        b"mouseSensitivity:0.8\n",
+    );
+    engine.cycle(&managed).unwrap();
+    engine.cycle(&managed).unwrap();
+    drop(running);
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 1);
+    assert_eq!(
+        get(&managed, &request.destination_id, "options.txt"),
+        b"mouseSensitivity:0.8\n"
+    );
 }

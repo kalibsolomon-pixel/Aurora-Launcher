@@ -148,7 +148,7 @@ libc = "0.2"
 # Deterministic async native tests. Icon invariants also use the PNG decoder
 # now shared with production avatar decoding above.
 [dev-dependencies]
-tokio = { version = "1", default-features = false, features = ["macros", "process", "rt", "time"] }
+tokio = { version = "1", default-features = false, features = ["macros", "process", "rt", "time", "test-util"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

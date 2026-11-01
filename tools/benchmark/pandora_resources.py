@@ -10,6 +10,7 @@ from ctypes import wintypes as w
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import time
@@ -99,12 +100,39 @@ def main():
     parser.add_argument("root", type=Path, help="new, absolute, disposable evidence directory")
     parser.add_argument("--idle", action="store_true")
     parser.add_argument("--seconds", type=float, default=20)
+    parser.add_argument("--sync-fixture", type=Path,
+        help="owned synthetic pandora-ui-* fixture; seeds only registry/options and automatic policy")
     parser.add_argument("args", nargs="*")
     args = parser.parse_args()
     if os.name != "nt" or not args.root.is_absolute() or "pandora" not in args.root.name.lower():
         parser.error("requires Windows and an explicitly named absolute Pandora disposable directory")
     args.root.mkdir(parents=True, exist_ok=False)
     (args.root / "PANDORA-DISPOSABLE.txt").write_text("Owned performance fixture; no real accounts or worlds.\n")
+    if args.sync_fixture:
+        seed = args.sync_fixture
+        if not args.idle or not seed.is_absolute() or not seed.name.startswith("pandora-ui-"):
+            parser.error("sync sampling requires an absolute synthetic pandora-ui-* root and --idle")
+        marker = seed / "PANDORA-DISPOSABLE.txt"
+        if marker.read_text().strip() != "Synthetic UI fixture: no installed game or accounts.":
+            parser.error("sync fixture is not the explicit owned synthetic fixture")
+        registry_bytes = (seed / "managed/launcher/instances.json").read_bytes()
+        registry = json.loads(registry_bytes)
+        ids = [row["id"] for row in registry["instances"]]
+        if len(ids) != 2 or any(not re.fullmatch(r"[a-f0-9]{32}", id) for id in ids):
+            parser.error("sync sample expects exactly two synthetic instance IDs")
+        launcher = args.root / "managed/launcher"
+        launcher.mkdir(parents=True)
+        (launcher / "instances.json").write_bytes(registry_bytes)
+        for id in ids:
+            options = (seed / f"managed/instances/{id}/options.txt").read_bytes()
+            if len(options) > 1048576:
+                parser.error("synthetic options exceed the limit")
+            destination = args.root / f"managed/instances/{id}"
+            destination.mkdir(parents=True)
+            (destination / "options.txt").write_bytes(options)
+        (launcher / "instance-sync.json").write_text(json.dumps(dict(schemaVersion=2,
+            enabled=True, instances=ids, categories=["settings", "controls", "resourcePacks",
+            "shaderPacks", "screenshots"], exclusions=[], selectedPaths=[])))
     env = os.environ.copy()
     if args.idle:
         if b"AURORA_DIAGNOSTIC_DATA_ROOT" not in args.exe.read_bytes():
@@ -139,6 +167,7 @@ def main():
         if "managed data root: " + expected not in reported:
             raise RuntimeError("the owned native process did not confirm its disposable managed root")
     result = dict(exeSha256=hashlib.sha256(args.exe.read_bytes()).hexdigest(), pid=process.pid,
+        syntheticAutomaticPool=bool(args.sync_fixture),
         descendantsObserved=sorted(children), samplePeriodMs=50, samples=samples,
         peakWorkingSet=max((s["peakWorkingSet"] for s in samples), default=0),
         peakSampledPrivate=max((s["privateCommitted"] for s in samples), default=0),

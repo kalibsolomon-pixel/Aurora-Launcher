@@ -1,4 +1,4 @@
-//! Explicit, reviewed synchronization. No watchers, shared mutable directories,
+//! Selected automatic synchronization over reviewed per-file commits. No watchers, shared mutable directories,
 //! timestamp winners, deletions, provider adoption or network work. Local hashes
 //! bind the review to observed bytes; they are not publisher verification.
 use std::collections::{BTreeMap, BTreeSet};
@@ -13,6 +13,8 @@ use crate::install::coordination::{TargetLock, checked_directory, ensure_directo
 use crate::instances::{InstanceId, InstanceRegistry, InstanceState};
 use crate::paths::ManagedPaths;
 
+pub mod automatic;
+
 const MAX_FILES: usize = 4096;
 const MAX_FILE: u64 = 256 * 1024 * 1024;
 const MAX_TOTAL: u64 = 1024 * 1024 * 1024;
@@ -23,12 +25,26 @@ const MAX_OPTIONS: u64 = 1024 * 1024;
 pub struct Policy {
     pub schema_version: u32,
     pub enabled: bool,
+    pub instances: Vec<InstanceId>,
+    pub categories: Vec<Category>,
+    pub exclusions: Vec<String>,
+    pub selected_paths: Vec<String>,
 }
 impl Default for Policy {
     fn default() -> Self {
         Self {
-            schema_version: 1,
+            schema_version: 2,
             enabled: false,
+            instances: vec![],
+            categories: vec![
+                Category::Settings,
+                Category::Controls,
+                Category::ResourcePacks,
+                Category::ShaderPacks,
+                Category::Screenshots,
+            ],
+            exclusions: vec![],
+            selected_paths: vec![],
         }
     }
 }
@@ -70,6 +86,8 @@ pub struct Request {
     /// must select exact config/... files or directory roots for this run.
     #[serde(default)]
     pub selected_paths: Vec<String>,
+    #[serde(default)]
+    pub key_filter: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -116,7 +134,7 @@ fn fail(code: &'static str, message: &'static str) -> SyncError {
 fn storage<T>(_: T) -> SyncError {
     fail(
         "sync_storage",
-        "Sync could not safely read or write its selected files. Any completed files and backups are retained; review again before retrying.",
+        "Sync could not safely read or write its selected files. Completed files and backups are retained; automatic syncing will retry on the next minute.",
     )
 }
 fn unsafe_path() -> SyncError {
@@ -128,7 +146,7 @@ fn unsafe_path() -> SyncError {
 fn stale() -> SyncError {
     fail(
         "sync_review_stale",
-        "Files, instances or sync preferences changed. Review the sync again.",
+        "Files, instances or sync preferences changed. Automatic syncing will retry on the next minute.",
     )
 }
 
@@ -140,28 +158,114 @@ pub fn policy(managed: &ManagedPaths) -> Result<Policy, SyncError> {
         return Ok(Policy::default());
     }
     checked_directory(managed.data_root(), &managed.launcher_dir()).map_err(storage)?;
-    let Some(bytes) = read_small(managed, &policy_file(managed), 4096)? else {
+    let Some(bytes) = read_small(managed, &policy_file(managed), 256 * 1024)? else {
         return Ok(Policy::default());
     };
-    let value: Policy = serde_json::from_slice(&bytes).map_err(|_| {
+    let raw: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| {
         fail(
             "sync_policy_invalid",
             "Sync preferences are malformed and were left unchanged.",
         )
     })?;
-    if value.schema_version != 1 {
+    if raw.get("schemaVersion").and_then(serde_json::Value::as_u64) == Some(1) {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Legacy {
+            schema_version: u32,
+            enabled: bool,
+        }
+        let legacy: Legacy = serde_json::from_value(raw).map_err(|_| {
+            fail(
+                "sync_policy_invalid",
+                "Sync preferences are malformed and were left unchanged.",
+            )
+        })?;
+        let _ = (legacy.schema_version, legacy.enabled);
+        // The known manual schema has no participant authority. The new
+        // automatic mode starts off until the owner explicitly selects it.
+        return Ok(Policy::default());
+    }
+    if raw.get("schemaVersion").and_then(serde_json::Value::as_u64) != Some(2) {
         return Err(fail(
             "sync_schema_unsupported",
             "This sync preference schema is unsupported and was left unchanged.",
         ));
     }
+    let value: Policy = serde_json::from_value(raw).map_err(|_| {
+        fail(
+            "sync_policy_invalid",
+            "Sync preferences are malformed and were left unchanged.",
+        )
+    })?;
+    if value.schema_version != 2 {
+        return Err(fail(
+            "sync_schema_unsupported",
+            "This sync preference schema is unsupported and was left unchanged.",
+        ));
+    }
+    validate_policy(&value)?;
     Ok(value)
+}
+fn validate_policy(value: &Policy) -> Result<(), SyncError> {
+    if value.schema_version != 2
+        || value.instances.len() > 64
+        || value.categories.len() > 6
+        || value.exclusions.len() > 128
+        || value.selected_paths.len() > 128
+    {
+        return Err(unsafe_path());
+    }
+    let unique: BTreeSet<_> = value.instances.iter().map(InstanceId::as_str).collect();
+    if unique.len() != value.instances.len() {
+        return Err(unsafe_path());
+    }
+    let mut categories = BTreeSet::new();
+    for category in &value.categories {
+        if !categories.insert(format!("{category:?}")) {
+            return Err(unsafe_path());
+        }
+    }
+    for path in value.exclusions.iter().chain(&value.selected_paths) {
+        validate_relative(path)?;
+    }
+    if value
+        .selected_paths
+        .iter()
+        .any(|path| !path.starts_with("config/"))
+    {
+        return Err(unsafe_path());
+    }
+    Ok(())
+}
+pub fn save_policy(managed: &ManagedPaths, proposed: Policy) -> Result<Policy, SyncError> {
+    validate_policy(&proposed)?;
+    let _guard = TargetLock::acquire(
+        managed.data_root(),
+        &managed.launcher_dir(),
+        ".sync-settings.lock",
+    )
+    .map_err(storage)?;
+    let current = policy(managed)?; // Never overwrite damaged/unknown preferences.
+    let registry = InstanceRegistry::load(&managed.instance_registry_file()).map_err(storage)?;
+    if proposed
+        .instances
+        .iter()
+        .any(|id| registry.find(id).is_none() && !current.instances.contains(id))
+    {
+        return Err(stale());
+    }
+    crate::install::journal::atomic_write(
+        &policy_file(managed),
+        &serde_json::to_vec(&proposed).map_err(storage)?,
+    )
+    .map_err(storage)?;
+    Ok(proposed)
 }
 pub fn set_enabled(managed: &ManagedPaths, enabled: bool) -> Result<Policy, SyncError> {
     let _lock = TargetLock::acquire(
         managed.data_root(),
         &managed.launcher_dir(),
-        ".instance-sync.lock",
+        ".sync-settings.lock",
     )
     .map_err(storage)?;
     let mut current = policy(managed)?;
@@ -467,6 +571,11 @@ fn collect(
 }
 
 fn plan(managed: &ManagedPaths, request: &Request) -> Result<(Preview, Vec<FilePlan>), SyncError> {
+    if request.key_filter.as_ref().is_some_and(|keys| {
+        !request.category.options() || keys.len() > 1024 || keys.iter().any(|key| key.len() > 256)
+    }) {
+        return Err(unsafe_path());
+    }
     if !policy(managed)?.enabled {
         return Err(fail(
             "sync_disabled",
@@ -548,6 +657,20 @@ fn plan(managed: &ManagedPaths, request: &Request) -> Result<(Preview, Vec<FileP
             if digest(&source) != hash || Some(digest(&target)) != old {
                 return Err(stale());
             }
+            let source = if let Some(filter) = &request.key_filter {
+                if filter.len() > 1024 {
+                    return Err(unsafe_path());
+                }
+                let (_, values) = options(&source)?;
+                values
+                    .into_iter()
+                    .filter(|(key, _)| filter.contains(key))
+                    .map(|(key, value)| format!("{key}:{value}\n"))
+                    .collect::<String>()
+                    .into_bytes()
+            } else {
+                source
+            };
             let (merged, keys) = merge_options(&source, &target, request.category)?;
             let action = if keys.is_empty() {
                 "identical"
@@ -577,8 +700,10 @@ fn plan(managed: &ManagedPaths, request: &Request) -> Result<(Preview, Vec<FileP
             changed_keys,
         });
     }
-    let fingerprint =
-        digest(&serde_json::to_vec(&(request, source, destination, &files)).map_err(storage)?);
+    let fingerprint = digest(
+        &serde_json::to_vec(&(request, policy(managed)?, source, destination, &files))
+            .map_err(storage)?,
+    );
     let preview = Preview {
         fingerprint,
         entries: files
@@ -689,6 +814,7 @@ fn apply_with_checkpoint(
     mut checkpoint: impl FnMut(&'static str) -> Result<(), SyncError>,
 ) -> Result<Receipt, SyncError> {
     locked(managed, request, || {
+        let active_policy = policy(managed)?;
         let (preview, files) = plan(managed, request)?;
         if preview.fingerprint != fingerprint {
             return Err(stale());
@@ -726,6 +852,9 @@ fn apply_with_checkpoint(
             .iter()
             .filter(|f| matches!(f.action, "copyMissing" | "mergeSettings"))
         {
+            if policy(managed)? != active_policy {
+                return Err(stale());
+            }
             if hash_file(managed, &source_root.join(&file.path))?
                 .map(|v| v.0)
                 .as_deref()

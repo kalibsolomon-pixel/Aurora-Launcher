@@ -10,6 +10,18 @@ use super::*;
 use crate::host::Host;
 
 #[tauri::command]
+pub fn save_instance_sync_policy(
+    app: tauri::AppHandle,
+    request: crate::instance_sync::Policy,
+) -> Result<crate::instance_sync::Policy, CommandError> {
+    super::save_instance_sync_policy(Host::from_tauri(&app), request)
+}
+#[tauri::command]
+pub fn get_instance_sync_status() -> crate::instance_sync::automatic::Status {
+    super::get_instance_sync_status()
+}
+
+#[tauri::command]
 pub fn get_instance_sync_policy(
     app: tauri::AppHandle,
 ) -> Result<crate::instance_sync::Policy, CommandError> {

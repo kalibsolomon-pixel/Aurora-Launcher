@@ -40,6 +40,24 @@ pub fn get_instance_sync_policy(app: Host) -> Result<crate::instance_sync::Polic
     Ok(crate::instance_sync::policy(&managed_paths(&app)?)?)
 }
 
+pub fn save_instance_sync_policy(
+    app: Host,
+    request: crate::instance_sync::Policy,
+) -> Result<crate::instance_sync::Policy, CommandError> {
+    let managed = managed_paths(&app)?;
+    let policy = crate::instance_sync::save_policy(&managed, request)?;
+    crate::instance_sync::automatic::reconcile(app, managed)?;
+    Ok(policy)
+}
+pub fn get_instance_sync_status() -> crate::instance_sync::automatic::Status {
+    crate::instance_sync::automatic::status()
+}
+pub fn initialize_instance_sync(app: Host) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::instance_sync::automatic::reconcile(app, managed)?;
+    Ok(())
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SyncEnabledRequest {
@@ -50,10 +68,10 @@ pub fn set_instance_sync_enabled(
     app: Host,
     request: SyncEnabledRequest,
 ) -> Result<crate::instance_sync::Policy, CommandError> {
-    Ok(crate::instance_sync::set_enabled(
-        &managed_paths(&app)?,
-        request.enabled,
-    )?)
+    let managed = managed_paths(&app)?;
+    let policy = crate::instance_sync::set_enabled(&managed, request.enabled)?;
+    crate::instance_sync::automatic::reconcile(app, managed)?;
+    Ok(policy)
 }
 
 pub async fn preview_instance_sync(

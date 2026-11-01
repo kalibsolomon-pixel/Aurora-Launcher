@@ -30,53 +30,35 @@ impl ApiError {
 }
 
 pub type ApiResult<T> = Result<T, ApiError>;
+pub async fn initialize_sync(host: Host) -> ApiResult<()> {
+    blocking(move || convert(app::initialize_instance_sync(host))).await?
+}
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncPolicy {
+    pub schema_version: u32,
     pub enabled: bool,
+    pub instances: Vec<String>,
+    pub categories: Vec<String>,
+    pub exclusions: Vec<String>,
+    pub selected_paths: Vec<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SyncEntry {
-    pub path: String,
-    pub action: String,
-    pub changed_keys: Vec<String>,
+pub struct SyncStatus {
+    pub message: String,
+    pub running: bool,
 }
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SyncPreview {
-    pub fingerprint: String,
-    pub entries: Vec<SyncEntry>,
-    pub changes: usize,
-    pub conflicts: usize,
-    pub bytes_to_copy: u64,
+pub async fn sync_save(host: Host, policy: SyncPolicy) -> ApiResult<SyncPolicy> {
+    let request = request(serde_json::to_value(policy).map_err(contract)?)?;
+    blocking(move || convert(app::save_instance_sync_policy(host, request))).await?
 }
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SyncReceipt {
-    pub copied: usize,
-    pub conflicts_kept: usize,
-    pub backup_id: Option<String>,
+pub async fn sync_status() -> ApiResult<SyncStatus> {
+    convert(Ok(app::get_instance_sync_status()))
 }
 pub async fn sync_policy(host: Host) -> ApiResult<SyncPolicy> {
     blocking(move || convert(app::get_instance_sync_policy(host))).await?
-}
-pub async fn sync_enabled(host: Host, enabled: bool) -> ApiResult<SyncPolicy> {
-    let request = request(json!({ "enabled": enabled }))?;
-    blocking(move || convert(app::set_instance_sync_enabled(host, request))).await?
-}
-pub async fn sync_preview(host: Host, value: Value) -> ApiResult<SyncPreview> {
-    convert(app::preview_instance_sync(host, request(value)?).await)
-}
-pub async fn sync_apply(host: Host, sync: Value, fingerprint: String) -> ApiResult<SyncReceipt> {
-    convert(
-        app::apply_instance_sync(
-            host,
-            request(json!({ "sync": sync, "fingerprint": fingerprint }))?,
-        )
-        .await,
-    )
 }
 
 fn contract(error: serde_json::Error) -> ApiError {
