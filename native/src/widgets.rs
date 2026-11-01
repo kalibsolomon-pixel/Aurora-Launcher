@@ -8,7 +8,7 @@
 
 use std::cell::RefCell;
 
-use slint::ComponentHandle;
+use slint::{ComponentHandle, Model};
 
 use crate::api::{self, HomeLayout, WidgetPlacement};
 use crate::{WidgetChoice, WidgetLine, WidgetView, Widgets, symbols, ui};
@@ -52,16 +52,22 @@ pub fn bind(window: &crate::AppWindow) {
                 w.grid = Some(api::WidgetGrid {
                     columns: columns.clamp(1, 6) as u8,
                     rows: rows.clamp(1, 3) as u8,
+                    position: None,
                 });
             }
         })
     });
     widgets.on_columns_changed(|columns| {
         // Slint layout may dispatch while another render owns UI state.
-        let _ = slint::invoke_from_event_loop(move || {
-            STATE.with(|s| s.borrow_mut().columns = columns.clamp(1, 6));
-            render();
-        });
+        // Record synchronously: an older queued render must not restore a
+        // transient narrow width after a newer layout has already arrived.
+        STATE.with(|s| s.borrow_mut().columns = columns.clamp(1, 6));
+        let _ = slint::invoke_from_event_loop(render);
+    });
+    widgets.on_arrange(|id, column, row, width, height, columns| {
+        let columns = columns.clamp(1, 6);
+        STATE.with(|s| s.borrow_mut().columns = columns);
+        edit(|layout| arrange(layout, id.as_str(), column, row, width, height, columns));
     });
     crate::media::bind(window);
 }
@@ -513,7 +519,23 @@ pub fn render() {
         .collect();
     ui::with(|window, _| {
         let widgets = window.global::<Widgets>();
-        widgets.set_items(ui::model(items));
+        let existing = widgets.get_items();
+        if existing.row_count() == items.len()
+            && items
+                .iter()
+                .enumerate()
+                .all(|(i, item)| existing.row_data(i).is_some_and(|old| old.id == item.id))
+            && let Some(model) = existing
+                .as_any()
+                .downcast_ref::<slint::VecModel<WidgetView>>()
+        {
+            // Preserve pointer capture and keyboard focus when data/layout refreshes.
+            for (i, item) in items.into_iter().enumerate() {
+                model.set_row_data(i, item);
+            }
+        } else {
+            widgets.set_items(ui::model(items));
+        }
         widgets.set_available_names(ui::model(
             available
                 .iter()
@@ -575,16 +597,74 @@ pub fn render() {
     });
 }
 
+/// Apply one completed gesture. Moving into another card displaces it without overlap.
+fn arrange(
+    layout: &mut HomeLayout,
+    id: &str,
+    column: i32,
+    row: i32,
+    width: i32,
+    height: i32,
+    columns: i32,
+) {
+    let Some(index) = layout
+        .widgets
+        .iter()
+        .position(|w| w.id == id && w.enabled && is_native(id))
+    else {
+        return;
+    };
+    let width = width.clamp(1, 6);
+    let max_column = (columns.clamp(1, 6) - width.min(columns.clamp(1, 6))).min(6 - width);
+    layout.widgets[index].grid = Some(api::WidgetGrid {
+        columns: width as u8,
+        rows: height.clamp(1, 3) as u8,
+        position: Some([column.clamp(0, max_column) as u8, row.clamp(0, 63) as u8]),
+    });
+    // Give the manipulated card first claim, while preserving the saved entry order.
+    let mut prioritized = layout.clone();
+    let moved = prioritized.widgets.remove(index);
+    prioritized.widgets.insert(0, moved);
+    let positions = grid_positions(&prioritized, columns);
+    for (widget, (c, r, w, h)) in prioritized
+        .widgets
+        .iter()
+        .filter(|w| w.enabled && is_native(&w.id))
+        .zip(positions)
+    {
+        let target = layout
+            .widgets
+            .iter_mut()
+            .find(|w| w.id == widget.id)
+            .unwrap();
+        let mut grid = target.grid.clone().unwrap_or(api::WidgetGrid {
+            columns: w as u8,
+            rows: h as u8,
+            position: None,
+        });
+        grid.position = Some([c as u8, r as u8]);
+        // A move on a narrow viewport must not erase the saved wider size.
+        if target.id == id {
+            grid.columns = width as u8;
+        }
+        target.grid = Some(grid);
+    }
+}
+
 /// First-fit placement keeps custom dimensions while preventing overlaps at narrow widths.
 pub(crate) fn grid_positions(layout: &HomeLayout, columns: i32) -> Vec<(i32, i32, i32, i32)> {
     let columns = columns.clamp(1, 6) as usize;
     let mut occupied = vec![[false; 6]; 64 * 3];
-    let mut result = Vec::new();
-    for w in layout
+    let widgets: Vec<_> = layout
         .widgets
         .iter()
         .filter(|w| w.enabled && is_native(&w.id))
-    {
+        .collect();
+    let mut result = vec![(0, 0, 1, 1); widgets.len()];
+    let mut order: Vec<_> = (0..widgets.len()).collect();
+    order.sort_by_key(|&i| widgets[i].grid.as_ref().and_then(|g| g.position).is_none());
+    for index in order {
+        let w = widgets[index];
         let width = w
             .grid
             .as_ref()
@@ -597,15 +677,22 @@ pub(crate) fn grid_positions(layout: &HomeLayout, columns: i32) -> Vec<(i32, i32
             .as_ref()
             .map_or(if w.size == "large" { 2 } else { 1 }, |g| g.rows as usize)
             .clamp(1, 3);
-        'place: for row in 0..occupied.len() - height + 1 {
-            for col in 0..=columns - width {
-                if (row..row + height).all(|r| (col..col + width).all(|c| !occupied[r][c])) {
-                    for cells in &mut occupied[row..row + height] {
-                        cells[col..col + width].fill(true);
-                    }
-                    result.push((col as i32, row as i32, width as i32, height as i32));
-                    break 'place;
+        let anchor = w
+            .grid
+            .as_ref()
+            .and_then(|g| g.position)
+            .map(|[c, r]| ((c as usize).min(columns - width), r as usize));
+        let candidates = anchor.into_iter().chain(
+            (0..occupied.len() - height + 1)
+                .flat_map(|r| (0..=columns - width).map(move |c| (c, r))),
+        );
+        for (col, row) in candidates {
+            if (row..row + height).all(|r| (col..col + width).all(|c| !occupied[r][c])) {
+                for cells in &mut occupied[row..row + height] {
+                    cells[col..col + width].fill(true);
                 }
+                result[index] = (col as i32, row as i32, width as i32, height as i32);
+                break;
             }
         }
     }
@@ -660,6 +747,7 @@ mod tests {
         layout.widgets[0].grid = Some(api::WidgetGrid {
             columns: 5,
             rows: 3,
+            position: None,
         });
         let saved: HomeLayout =
             serde_json::from_str(&serde_json::to_string(&layout).unwrap()).unwrap();
@@ -688,6 +776,38 @@ mod tests {
                 .id,
             "playtime"
         );
+    }
+
+    #[test]
+    fn dragging_displaces_collisions_and_preserves_unrecognized_widgets() {
+        let mut layout = HomeLayout {
+            widgets: vec![
+                placement("playtime", true),
+                placement("media", true),
+                placement("future-widget", true),
+            ],
+        };
+        let unknown = layout.widgets[2].clone();
+        arrange(&mut layout, "media", 0, 0, 3, 2, 6);
+        let positions = grid_positions(&layout, 6);
+        assert_eq!(positions[1], (0, 0, 3, 2));
+        assert_eq!(layout.widgets[2], unknown);
+        let mut cells = std::collections::HashSet::new();
+        for (c, r, w, h) in positions {
+            for y in r..r + h {
+                for x in c..c + w {
+                    assert!(cells.insert((x, y)));
+                }
+            }
+        }
+        let saved = serde_json::to_string(&layout).unwrap();
+        let restored: HomeLayout = serde_json::from_str(&saved).unwrap();
+        assert_eq!(restored, layout);
+        let core: aurora_launcher_lib::home_widgets::HomeLayout =
+            serde_json::from_str(&saved).unwrap();
+        core.validate().unwrap();
+        arrange(&mut layout, "media", 99, 99, 99, 99, 6);
+        assert_eq!(grid_positions(&layout, 6)[1], (0, 63, 6, 3));
     }
 
     #[test]

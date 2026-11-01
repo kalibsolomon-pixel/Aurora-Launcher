@@ -3,7 +3,7 @@
 // state, system media sessions); cards never poll or compute on their own.
 import { Theme } from "theme.slint";
 import { Icon, Icons } from "icons.slint";
-import { Button, ButtonKind, IconButton, Spinner, Dropdown, Tooltip } from "components.slint";
+import { Button, ButtonKind, IconButton, Spinner, Dropdown, Tooltip, KeyboardFocus, FocusRing } from "components.slint";
 
 export struct PlaytimePoint { label: string, value: string, detail: string, fraction: float }
 
@@ -40,7 +40,13 @@ export global Widgets {
     callback move(string, int);
     callback place(string, int);
     callback resize(string, int, int);
+    callback arrange(string, int, int, int, int, int);
     callback columns-changed(int);
+    in-out property <string> active-id;
+    in-out property <int> preview-column;
+    in-out property <int> preview-row;
+    in-out property <int> preview-width;
+    in-out property <int> preview-height;
     in property <int> grid-rows;
     in property <[string]> names;
     in property <[string]> positions;
@@ -97,25 +103,70 @@ export component WidgetLayoutEditor inherits Rectangle {
     height: layout.preferred-height;
     background: Theme.surface;
     border-radius: Theme.radius-lg;
-    property <int> selected: min(max(Widgets.edit-index, 0), Widgets.items.length - 1);
-    layout := VerticalLayout {
-        padding: 14px; spacing: 10px;
-        HorizontalLayout {
-            spacing: 12px;
-            Text { text: "Arrange widgets"; font-size: Theme.text-body; font-weight: 600; color: Theme.text; vertical-alignment: center; }
-            Dropdown { horizontal-stretch: 1; model: Widgets.names; current-index: root.selected; label: "Widget to arrange"; selected(index) => { Widgets.edit-index = index; } }
-        }
-        if Widgets.items.length > 0: HorizontalLayout {
-            spacing: 8px;
-            Dropdown { horizontal-stretch: 1; min-width: 100px; model: ["Width: 1", "Width: 2", "Width: 3", "Width: 4", "Width: 5", "Width: 6"]; current-index: Widgets.items[root.selected].requested-width - 1; label: "Widget width in columns"; controlled: true; selected(index) => { Widgets.resize(Widgets.items[root.selected].id, index + 1, Widgets.items[root.selected].requested-height); } }
-            Dropdown { horizontal-stretch: 1; min-width: 100px; model: ["Height: 1", "Height: 2", "Height: 3"]; current-index: Widgets.items[root.selected].requested-height - 1; label: "Widget height in rows"; controlled: true; selected(index) => { Widgets.resize(Widgets.items[root.selected].id, Widgets.items[root.selected].requested-width, index + 1); } }
-            Dropdown { horizontal-stretch: 1; min-width: 100px; model: Widgets.positions; current-index: root.selected; label: "Widget position"; controlled: true; selected(index) => { Widgets.place(Widgets.items[root.selected].id, index); Widgets.edit-index = index; } }
-        }
-        if Widgets.available.length > 0: HorizontalLayout {
-            spacing: 8px;
-            Dropdown { horizontal-stretch: 1; model: Widgets.available-names; label: "Add a widget"; current-index: -1; placeholder: "Add widget"; selected(index) => { Widgets.add(Widgets.available[index].id); } }
+    layout := HorizontalLayout {
+        padding: 14px; spacing: 12px;
+        Text { horizontal-stretch: 1; text: "Drag headers to move / Drag corners to resize"; wrap: word-wrap; font-size: Theme.text-metadata; color: Theme.text-secondary; vertical-alignment: center; }
+        if Widgets.available.length > 0: Dropdown { min-width: 160px; model: Widgets.available-names; label: "Add a widget"; current-index: -1; controlled: true; placeholder: "Add widget"; selected(index) => { Widgets.add(Widgets.available[index].id); } }
+    }
+}
+
+component WidgetGesture inherits Rectangle {
+    in property <WidgetView> item;
+    in property <bool> resizing;
+    in property <int> columns;
+    in property <length> column-pitch;
+    in property <length> row-pitch;
+    property <length> press-x;
+    property <length> press-y;
+    property <bool> canceled;
+    forward-focus: focus;
+    accessible-role: button;
+    accessible-label: (resizing ? "Resize " : "Move ") + item.title;
+    accessible-description: "Arrows move. Shift and arrows resize. Escape cancels.";
+    function preview() {
+        if root.resizing {
+            Widgets.preview-width = clamp(root.item.width + round((touch.mouse-x - root.press-x) / root.column-pitch), 1, root.columns - root.item.column);
+            Widgets.preview-height = clamp(root.item.height + round((touch.mouse-y - root.press-y) / root.row-pitch), 1, 3);
+        } else {
+            Widgets.preview-column = clamp(root.item.column + round((touch.mouse-x - root.press-x) / root.column-pitch), 0, root.columns - root.item.width);
+            Widgets.preview-row = clamp(root.item.row + round((touch.mouse-y - root.press-y) / root.row-pitch), 0, 63);
         }
     }
+    touch := TouchArea {
+        mouse-cursor: root.resizing ? nwse-resize : move;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                focus.pointer-focus(); root.canceled = false;
+                root.press-x = self.mouse-x; root.press-y = self.mouse-y;
+                Widgets.active-id = root.item.id;
+                Widgets.preview-column = root.item.column; Widgets.preview-row = root.item.row;
+                Widgets.preview-width = root.item.width; Widgets.preview-height = root.item.height;
+            }
+            if event.kind == PointerEventKind.up && event.button == PointerEventButton.left && Widgets.active-id == root.item.id {
+                root.preview(); Widgets.active-id = "";
+                if !root.canceled && (Widgets.preview-column != root.item.column || Widgets.preview-row != root.item.row || Widgets.preview-width != root.item.width || Widgets.preview-height != root.item.height) {
+                    Widgets.arrange(root.item.id, Widgets.preview-column, Widgets.preview-row, root.resizing ? Widgets.preview-width : root.item.requested-width, root.resizing ? Widgets.preview-height : root.item.requested-height, root.columns);
+                }
+            }
+            if event.kind == PointerEventKind.cancel { Widgets.active-id = ""; root.canceled = true; }
+        }
+        moved => { if self.pressed && !root.canceled { root.preview(); } }
+    }
+    focus := KeyboardFocus {
+        key-pressed(event) => {
+            if event.text == Key.Escape { root.canceled = true; Widgets.active-id = ""; return accept; }
+            if event.text == Key.LeftArrow || event.text == Key.RightArrow || event.text == Key.UpArrow || event.text == Key.DownArrow {
+                let dx = event.text == Key.LeftArrow ? -1 : (event.text == Key.RightArrow ? 1 : 0);
+                let dy = event.text == Key.UpArrow ? -1 : (event.text == Key.DownArrow ? 1 : 0);
+                let size = root.resizing || event.modifiers.shift;
+                Widgets.arrange(root.item.id, root.item.column + (size ? 0 : dx), root.item.row + (size ? 0 : dy), (size ? root.item.width + dx : root.item.requested-width), (size ? root.item.height + dy : root.item.requested-height), root.columns);
+                return accept;
+            }
+            reject
+        }
+    }
+    FocusRing { shown: focus.has-focus && focus.focus-visible; width: parent.width; height: parent.height; }
+    if root.resizing: Text { text: "◢"; color: touch.has-hover ? Theme.accent : Theme.text-muted; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
 }
 
 component PlaytimeCard inherits Rectangle {
@@ -245,7 +296,16 @@ export component WidgetGrid inherits Rectangle {
     property <int> columns: min(6, max(1, floor((self.width + gap) / (150px + gap))));
     changed columns => { Widgets.columns-changed(root.columns); }
     property <length> card-width: (self.width - (columns - 1) * gap) / columns;
-    height: Widgets.grid-rows * (card-height + gap);
+    height: (Widgets.editing ? max(Widgets.grid-rows + 2, Widgets.active-id != "" ? Widgets.preview-row + Widgets.preview-height + 1 : 3) : Widgets.grid-rows) * (card-height + gap);
+    if Widgets.editing: Rectangle {
+        for row in max(3, Widgets.grid-rows + 2): Rectangle {
+            y: row * (root.card-height + root.gap);
+            for col in root.columns: Rectangle {
+                x: col * (root.card-width + root.gap); width: root.card-width; height: root.card-height;
+                border-width: 1px; border-color: Theme.border; border-radius: Theme.radius-lg;
+            }
+        }
+    }
     for item[i] in Widgets.items: Rectangle {
         x: item.column * (root.card-width + root.gap);
         y: item.row * (root.card-height + root.gap);
@@ -254,5 +314,16 @@ export component WidgetGrid inherits Rectangle {
         if item.id == "media": MediaCard { width: parent.width; height: parent.height; item: item; first: i == 0; last: i == Widgets.items.length - 1; }
         if item.id == "playtime": PlaytimeCard { width: parent.width; height: parent.height; item: item; }
         if item.id != "media" && item.id != "playtime": ListCard { width: parent.width; height: parent.height; item: item; first: i == 0; last: i == Widgets.items.length - 1; }
+        if Widgets.editing: WidgetGesture { x: 8px; y: 8px; width: parent.width - 54px; height: 40px; item: item; columns: root.columns; column-pitch: root.card-width + root.gap; row-pitch: root.card-height + root.gap; }
+        if Widgets.editing: WidgetGesture { x: parent.width - 32px; y: parent.height - 32px; width: 32px; height: 32px; resizing: true; item: item; columns: root.columns; column-pitch: root.card-width + root.gap; row-pitch: root.card-height + root.gap; }
     }
+    if Widgets.editing && Widgets.active-id != "": Rectangle {
+        x: Widgets.preview-column * (root.card-width + root.gap);
+        y: Widgets.preview-row * (root.card-height + root.gap);
+        width: Widgets.preview-width * (root.card-width + root.gap) - root.gap;
+        height: Widgets.preview-height * (root.card-height + root.gap) - root.gap;
+        border-width: 2px; border-color: Theme.accent; border-radius: Theme.radius-lg;
+        background: Theme.accent.with-alpha(0.08);
+    }
+
 }

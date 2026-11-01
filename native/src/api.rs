@@ -689,6 +689,8 @@ pub async fn set_instance_icon(
 pub struct WidgetGrid {
     pub columns: u8,
     pub rows: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<[u8; 2]>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]

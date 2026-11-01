@@ -26,6 +26,8 @@ pub struct WidgetPlacement {
 pub struct WidgetGrid {
     pub columns: u8,
     pub rows: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<[u8; 2]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -120,10 +122,12 @@ impl HomeLayout {
             {
                 return Err("Widget IDs must be unique bounded lowercase identifiers.");
             }
-            if widget
-                .grid
-                .is_some_and(|g| !(1..=6).contains(&g.columns) || !(1..=3).contains(&g.rows))
-            {
+            if widget.grid.is_some_and(|g| {
+                !(1..=6).contains(&g.columns)
+                    || !(1..=3).contains(&g.rows)
+                    || g.position
+                        .is_some_and(|[c, r]| c as u16 + g.columns as u16 > 6 || r > 63)
+            }) {
                 return Err("Widget grid dimensions must be 1–6 columns and 1–3 rows.");
             }
             if supported_sizes(&widget.id).is_some_and(|sizes| !sizes.contains(&widget.size)) {
@@ -146,6 +150,7 @@ mod tests {
         layout.widgets[0].grid = Some(WidgetGrid {
             columns: 6,
             rows: 3,
+            position: None,
         });
         layout.validate().unwrap();
         let roundtrip: HomeLayout =
@@ -156,7 +161,22 @@ mod tests {
         layout.widgets[0].grid = Some(WidgetGrid {
             columns: 1,
             rows: 0,
+            position: None,
         });
+        assert!(layout.validate().is_err());
+    }
+    #[test]
+    fn snapped_positions_are_bounded_and_optional() {
+        let mut layout = HomeLayout::default();
+        layout.widgets[0].grid = Some(WidgetGrid {
+            columns: 2,
+            rows: 1,
+            position: Some([4, 63]),
+        });
+        layout.validate().unwrap();
+        layout.widgets[0].grid.as_mut().unwrap().position = Some([5, 0]);
+        assert!(layout.validate().is_err());
+        layout.widgets[0].grid.as_mut().unwrap().position = Some([0, 64]);
         assert!(layout.validate().is_err());
     }
     #[test]

@@ -425,6 +425,7 @@ fn dashboard(app: &AppWindow, editing: bool, enlarged: bool) {
                 grid: Some(crate::api::WidgetGrid {
                     columns: if enlarged { 4 } else { 2 },
                     rows: if enlarged { 2 } else { 1 },
+                    position: None,
                 }),
             },
             crate::api::WidgetPlacement {
@@ -735,6 +736,87 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
             );
         }
     }
+
+    // Real pointer capture: no writes while moving, snap once on release, Escape cancels.
+    let (app, adapter) = window((1120., 760.), 1.);
+    dashboard(&app, true, false);
+    let widgets = app.global::<crate::Widgets>();
+    let changes = Rc::new(RefCell::new(Vec::new()));
+    let observed = changes.clone();
+    widgets.on_arrange(move |id, c, r, w, h, columns| {
+        assert_eq!(columns, 6);
+        observed.borrow_mut().push((id.to_string(), c, r, w, h));
+    });
+    render(&app, &adapter, "drag-editor-before");
+    let y = 440.;
+    let from = LogicalPosition::new(200., y);
+    let to = LogicalPosition::new(380., y + 210.);
+    app.window().dispatch_event(WindowEvent::PointerPressed {
+        position: from,
+        button: PointerEventButton::Left,
+    });
+    app.window()
+        .dispatch_event(WindowEvent::PointerMoved { position: to });
+    assert_eq!(widgets.get_active_id(), "playtime");
+    assert_eq!(
+        (widgets.get_preview_column(), widgets.get_preview_row()),
+        (1, 1)
+    );
+    assert!(changes.borrow().is_empty(), "preview must not persist");
+    render(&app, &adapter, "drag-editor-preview");
+    app.window().dispatch_event(WindowEvent::PointerReleased {
+        position: to,
+        button: PointerEventButton::Left,
+    });
+    assert_eq!(*changes.borrow(), vec![("playtime".into(), 1, 1, 2, 1)]);
+    app.window()
+        .dispatch_event(WindowEvent::PointerMoved { position: from });
+    app.window().dispatch_event(WindowEvent::PointerPressed {
+        position: from,
+        button: PointerEventButton::Left,
+    });
+    app.window()
+        .dispatch_event(WindowEvent::PointerMoved { position: to });
+    key(&app, Key::Escape);
+    app.window().dispatch_event(WindowEvent::PointerReleased {
+        position: to,
+        button: PointerEventButton::Left,
+    });
+    assert_eq!(changes.borrow().len(), 1, "Escape cancels without saving");
+    assert_eq!(widgets.get_active_id(), "");
+    // Focus remains on the move handle for keyboard equivalents.
+    key(&app, Key::RightArrow);
+    assert_eq!(
+        changes.borrow().last().unwrap(),
+        &("playtime".into(), 1, 0, 2, 1)
+    );
+
+    // The actual corner handle snaps both dimensions and emits one final edit.
+    let corner = LogicalPosition::new(407., 592.);
+    let larger = LogicalPosition::new(573., 702.);
+    app.window()
+        .dispatch_event(WindowEvent::PointerMoved { position: corner });
+    app.window().dispatch_event(WindowEvent::PointerPressed {
+        position: corner,
+        button: PointerEventButton::Left,
+    });
+    app.window()
+        .dispatch_event(WindowEvent::PointerMoved { position: larger });
+    assert_eq!(
+        (widgets.get_preview_width(), widgets.get_preview_height()),
+        (3, 2)
+    );
+    assert_eq!(changes.borrow().len(), 2);
+    render(&app, &adapter, "drag-editor-resize");
+    app.window().dispatch_event(WindowEvent::PointerReleased {
+        position: larger,
+        button: PointerEventButton::Left,
+    });
+    assert_eq!(
+        changes.borrow().last().unwrap(),
+        &("playtime".into(), 0, 0, 3, 2)
+    );
+    assert_eq!(changes.borrow().len(), 3);
 
     // Rename a saved skin through the real editor and Enter action.
     let (app, adapter) = window((1120., 760.), 1.);

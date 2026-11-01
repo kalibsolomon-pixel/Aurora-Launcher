@@ -248,3 +248,15 @@ and `docs/native-ui/`.
   Never invent activity, poll for chart animation, or confuse a zero-day baseline
   with recorded time. See `NATIVE_CONTROLS_WIDGETS_ACCEPTANCE.md`.
 
+
+## Native drag widget layout (2026-11-01)
+
+Home customization uses header dragging and corner resizing with snapped outlines.
+The optional grid.position is a bounded [column,row] anchor (column plus span at
+most six; row 0–63). Absent anchors retain automatic placement. Rust resolves
+collisions and persists one completed gesture through the atomic Home API; pointer
+previews and canceled gestures never write. Responsive display does not rewrite
+saved geometry. Keep stable widget models so keyboard focus and pointer capture
+survive data refreshes. Gestures pass the live viewport column count; record width
+changes synchronously and defer only rendering, so queued events cannot reinstate
+an obsolete narrow layout. See NATIVE_WIDGET_DRAG_ACCEPTANCE.md.
