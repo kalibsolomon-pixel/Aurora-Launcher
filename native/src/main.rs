@@ -23,6 +23,8 @@ mod icons;
 mod instances;
 #[cfg(test)]
 mod interaction_tests;
+#[cfg(test)]
+mod layout_acceptance;
 mod media;
 mod player;
 mod preview;
