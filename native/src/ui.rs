@@ -47,6 +47,7 @@ pub struct AppState {
     pub icon_picker: crate::icons::PickerState,
     pub sync_policy: Option<crate::api::SyncPolicy>,
     pub sync_instance_ids: Vec<String>,
+    pub sync_conflicts: Vec<crate::api::SyncConflict>,
 }
 
 impl AppState {

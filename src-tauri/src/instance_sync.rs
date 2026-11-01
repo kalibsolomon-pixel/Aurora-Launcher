@@ -14,7 +14,27 @@ use crate::instances::{InstanceId, InstanceRegistry, InstanceState};
 use crate::paths::ManagedPaths;
 
 pub mod automatic;
+mod files;
+pub use files::{Conflict, conflicts, resolve as resolve_conflict};
+mod servers;
 
+// Internal hash-bound selection, never a frontend replacement authority.
+type FileSelection = BTreeMap<String, (String, Option<String>)>;
+
+#[derive(Clone, Copy, Default)]
+struct Counters {
+    scanned: u64,
+    hashed: u64,
+    copied: u64,
+}
+thread_local! { static COUNTERS: std::cell::Cell<Counters> = const { std::cell::Cell::new(Counters{scanned:0,hashed:0,copied:0}) }; }
+fn record_count(edit: impl FnOnce(&mut Counters)) {
+    COUNTERS.with(|c| {
+        let mut value = c.get();
+        edit(&mut value);
+        c.set(value);
+    });
+}
 const MAX_FILES: usize = 4096;
 const MAX_FILE: u64 = 256 * 1024 * 1024;
 const MAX_TOTAL: u64 = 1024 * 1024 * 1024;
@@ -29,6 +49,8 @@ pub struct Policy {
     pub categories: Vec<Category>,
     pub exclusions: Vec<String>,
     pub selected_paths: Vec<String>,
+    #[serde(default)]
+    pub overrides: BTreeMap<String, InstanceOverride>,
 }
 impl Default for Policy {
     fn default() -> Self {
@@ -45,11 +67,46 @@ impl Default for Policy {
             ],
             exclusions: vec![],
             selected_paths: vec![],
+            overrides: BTreeMap::new(),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InstanceOverride {
+    #[serde(default)]
+    pub disabled: bool,
+    #[serde(default)]
+    pub categories: BTreeMap<Category, bool>,
+    #[serde(default)]
+    pub exclusions: Vec<String>,
+}
+impl Policy {
+    fn effective(&self, id: &InstanceId) -> Self {
+        let mut result = self.clone();
+        if let Some(value) = self.overrides.get(id.as_str()) {
+            result.enabled &= !value.disabled;
+            for (category, enabled) in &value.categories {
+                result.categories.retain(|c| c != category);
+                if *enabled {
+                    result.categories.push(*category);
+                }
+            }
+            result.exclusions.extend(value.exclusions.clone());
+        }
+        result
+    }
+    fn has_content(&self) -> bool {
+        !self.categories.is_empty()
+            || self
+                .overrides
+                .values()
+                .any(|v| v.categories.values().any(|v| *v))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Category {
     Settings,
@@ -58,6 +115,7 @@ pub enum Category {
     ShaderPacks,
     Screenshots,
     Configuration,
+    Servers,
 }
 impl Category {
     fn root(self) -> &'static str {
@@ -67,6 +125,7 @@ impl Category {
             Self::ShaderPacks => "shaderpacks",
             Self::Screenshots => "screenshots",
             Self::Configuration => "config",
+            Self::Servers => "servers.dat",
         }
     }
     fn options(self) -> bool {
@@ -209,7 +268,8 @@ pub fn policy(managed: &ManagedPaths) -> Result<Policy, SyncError> {
 fn validate_policy(value: &Policy) -> Result<(), SyncError> {
     if value.schema_version != 2
         || value.instances.len() > 64
-        || value.categories.len() > 6
+        || value.categories.len() > 7
+        || value.overrides.len() > 64
         || value.exclusions.len() > 128
         || value.selected_paths.len() > 128
     {
@@ -218,6 +278,18 @@ fn validate_policy(value: &Policy) -> Result<(), SyncError> {
     let unique: BTreeSet<_> = value.instances.iter().map(InstanceId::as_str).collect();
     if unique.len() != value.instances.len() {
         return Err(unsafe_path());
+    }
+    for (id, overrides) in &value.overrides {
+        if InstanceId::new(id).is_err()
+            || !value.instances.iter().any(|v| v.as_str() == id)
+            || overrides.categories.len() > 7
+            || overrides.exclusions.len() > 128
+        {
+            return Err(unsafe_path());
+        }
+        for path in &overrides.exclusions {
+            validate_relative(path)?;
+        }
     }
     let mut categories = BTreeSet::new();
     for category in &value.categories {
@@ -380,6 +452,10 @@ fn read_small(
     }
     Ok(Some(bytes))
 }
+fn file_digest(bytes: &[u8]) -> String {
+    record_count(|c| c.hashed += 1);
+    digest(bytes)
+}
 fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
@@ -387,6 +463,7 @@ fn hash_file(managed: &ManagedPaths, path: &Path) -> Result<Option<(String, u64)
     let Some(mut file) = regular_file(managed, path)? else {
         return Ok(None);
     };
+    record_count(|c| c.hashed += 1);
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 64 * 1024];
     let mut total = 0;
@@ -493,11 +570,11 @@ fn collect(
     root: &Path,
     request: &Request,
 ) -> Result<Vec<String>, SyncError> {
-    if request.category.options() {
-        return Ok(if excluded(request, "options.txt") {
+    if request.category.options() || request.category == Category::Servers {
+        return Ok(if excluded(request, request.category.root()) {
             vec![]
         } else {
-            vec!["options.txt".into()]
+            vec![request.category.root().into()]
         });
     }
     let start = request.category.root().to_owned();
@@ -557,6 +634,7 @@ fn collect(
                 pending.push((format!("{relative}/{name}"), depth + 1));
             }
         } else if meta.is_file() {
+            record_count(|c| c.scanned += 1);
             result.push(relative);
         } else {
             return Err(unsafe_path());
@@ -571,6 +649,13 @@ fn collect(
 }
 
 fn plan(managed: &ManagedPaths, request: &Request) -> Result<(Preview, Vec<FilePlan>), SyncError> {
+    plan_files(managed, request, None)
+}
+fn plan_files(
+    managed: &ManagedPaths,
+    request: &Request,
+    selection: Option<&FileSelection>,
+) -> Result<(Preview, Vec<FilePlan>), SyncError> {
     if request.key_filter.as_ref().is_some_and(|keys| {
         !request.category.options() || keys.len() > 1024 || keys.iter().any(|key| key.len() > 256)
     }) {
@@ -583,7 +668,7 @@ fn plan(managed: &ManagedPaths, request: &Request) -> Result<(Preview, Vec<FileP
         ));
     }
     if request.source_id == request.destination_id
-        || request.exclusions.len() > 128
+        || request.exclusions.len() > 384
         || request.selected_paths.len() > 128
     {
         return Err(unsafe_path());
@@ -640,7 +725,28 @@ fn plan(managed: &ManagedPaths, request: &Request) -> Result<(Preview, Vec<FileP
     checked_directory(managed.data_root(), &destination_root).map_err(storage)?;
     let mut files = Vec::new();
     let mut total = 0;
-    for path in collect(managed, &source_root, request)? {
+    let paths = match selection {
+        Some(files) => files.keys().cloned().collect(),
+        None => collect(managed, &source_root, request)?,
+    };
+    for path in paths {
+        validate_relative(&path)?;
+        if path != request.category.root()
+            && !path.starts_with(&format!("{}/", request.category.root()))
+        {
+            return Err(unsafe_path());
+        }
+        if request.category == Category::Configuration
+            && !request
+                .selected_paths
+                .iter()
+                .any(|p| path == *p || path.starts_with(&format!("{p}/")))
+        {
+            return Err(unsafe_path());
+        }
+        if excluded(request, &path) {
+            return Err(stale());
+        }
         let Some((hash, size)) = hash_file(managed, &source_root.join(&path))? else {
             continue;
         };
@@ -649,12 +755,33 @@ fn plan(managed: &ManagedPaths, request: &Request) -> Result<(Preview, Vec<FileP
             return Err(unsafe_path());
         }
         let old = hash_file(managed, &destination_root.join(&path))?.map(|(h, _)| h);
-        let (merged, changed_keys, action) = if request.category.options() {
+        if let Some(selection) = selection {
+            if selection.get(&path) != Some(&(hash.clone(), old.clone())) {
+                return Err(stale());
+            }
+        }
+        let (merged, changed_keys, action) = if request.category == Category::Servers {
+            let source =
+                read_small(managed, &source_root.join(&path), MAX_OPTIONS)?.ok_or_else(stale)?;
+            let target = read_small(managed, &destination_root.join(&path), MAX_OPTIONS)?;
+            if file_digest(&source) != hash || target.as_ref().map(|b| file_digest(b)) != old {
+                return Err(stale());
+            }
+            let merged = servers::merge(&source, target.as_deref())?;
+            let action = if merged.conflicts > 0 {
+                "keepConflict"
+            } else if target.as_deref() == Some(merged.bytes.as_slice()) {
+                "identical"
+            } else {
+                "mergeServers"
+            };
+            (Some(merged.bytes), vec![], action)
+        } else if request.category.options() {
             let source =
                 read_small(managed, &source_root.join(&path), MAX_OPTIONS)?.ok_or_else(stale)?;
             let target = read_small(managed, &destination_root.join(&path), MAX_OPTIONS)?
                 .ok_or_else(|| fail("sync_options_missing", "Open the destination game once to create its version-specific options before syncing settings."))?;
-            if digest(&source) != hash || Some(digest(&target)) != old {
+            if file_digest(&source) != hash || Some(file_digest(&target)) != old {
                 return Err(stale());
             }
             let source = if let Some(filter) = &request.key_filter {
@@ -685,6 +812,7 @@ fn plan(managed: &ManagedPaths, request: &Request) -> Result<(Preview, Vec<FileP
                 match old.as_ref() {
                     None => "copyMissing",
                     Some(h) if h == &hash => "identical",
+                    Some(_) if selection.is_some() => "replaceFile",
                     Some(_) => "keepConflict",
                 },
             )
@@ -694,7 +822,7 @@ fn plan(managed: &ManagedPaths, request: &Request) -> Result<(Preview, Vec<FileP
             source: hash,
             destination: old,
             size,
-            output_hash: merged.as_ref().map(|b| digest(b)),
+            output_hash: merged.as_ref().map(|b| file_digest(b)),
             merged,
             action,
             changed_keys,
@@ -716,12 +844,22 @@ fn plan(managed: &ManagedPaths, request: &Request) -> Result<(Preview, Vec<FileP
             .collect(),
         changes: files
             .iter()
-            .filter(|f| matches!(f.action, "copyMissing" | "mergeSettings"))
+            .filter(|f| {
+                matches!(
+                    f.action,
+                    "copyMissing" | "mergeSettings" | "replaceFile" | "mergeServers"
+                )
+            })
             .count(),
         conflicts: files.iter().filter(|f| f.action == "keepConflict").count(),
         bytes_to_copy: files
             .iter()
-            .filter(|f| matches!(f.action, "copyMissing" | "mergeSettings"))
+            .filter(|f| {
+                matches!(
+                    f.action,
+                    "copyMissing" | "mergeSettings" | "replaceFile" | "mergeServers"
+                )
+            })
             .map(|f| f.merged.as_ref().map_or(f.size, |b| b.len() as u64))
             .sum(),
     };
@@ -813,9 +951,18 @@ fn apply_with_checkpoint(
     fingerprint: &str,
     mut checkpoint: impl FnMut(&'static str) -> Result<(), SyncError>,
 ) -> Result<Receipt, SyncError> {
+    apply_files(managed, request, fingerprint, None, &mut checkpoint)
+}
+fn apply_files(
+    managed: &ManagedPaths,
+    request: &Request,
+    fingerprint: &str,
+    selection: Option<&FileSelection>,
+    checkpoint: &mut impl FnMut(&'static str) -> Result<(), SyncError>,
+) -> Result<Receipt, SyncError> {
     locked(managed, request, || {
         let active_policy = policy(managed)?;
-        let (preview, files) = plan(managed, request)?;
+        let (preview, files) = plan_files(managed, request, selection)?;
         if preview.fingerprint != fingerprint {
             return Err(stale());
         }
@@ -848,10 +995,12 @@ fn apply_with_checkpoint(
         .map_err(storage)?;
         receipt.backup_id = Some(id);
         checkpoint("reviewSaved")?;
-        for file in files
-            .iter()
-            .filter(|f| matches!(f.action, "copyMissing" | "mergeSettings"))
-        {
+        for file in files.iter().filter(|f| {
+            matches!(
+                f.action,
+                "copyMissing" | "mergeSettings" | "replaceFile" | "mergeServers"
+            )
+        }) {
             if policy(managed)? != active_policy {
                 return Err(stale());
             }
@@ -870,59 +1019,87 @@ fn apply_with_checkpoint(
                 target.parent().ok_or_else(unsafe_path)?,
             )
             .map_err(storage)?;
-            if let Some(merged) = &file.merged {
-                let original = read_small(managed, &target, MAX_OPTIONS)?.ok_or_else(stale)?;
-                if Some(digest(&original)) != file.destination {
-                    return Err(stale());
-                }
-                let saved = backup.join("options.txt");
+            if file.destination.is_some() {
+                let saved = backup.join(&file.path);
+                ensure_directory(managed.data_root(), saved.parent().ok_or_else(unsafe_path)?)
+                    .map_err(storage)?;
                 let mut handle = OpenOptions::new()
                     .write(true)
                     .create_new(true)
                     .open(&saved)
                     .map_err(storage)?;
-                handle.write_all(&original).map_err(storage)?;
+                let input = regular_file(managed, &target)?.ok_or_else(stale)?;
+                std::io::copy(&mut input.take(MAX_FILE + 1), &mut handle).map_err(storage)?;
                 handle.sync_all().map_err(storage)?;
-                checkpoint("backupSaved")?;
-                if hash_file(managed, &target)?.map(|v| v.0) != file.destination {
+                drop(handle);
+                if hash_file(managed, &saved)?.map(|v| v.0) != file.destination {
                     return Err(stale());
                 }
-                crate::install::journal::atomic_write(&target, merged).map_err(storage)?;
-            } else {
-                // Create one private copy. Linking this unique completed temp
-                // into an absent destination gives portable no-clobber commit;
-                // the temporary name is then removed (no inter-instance link).
-                let temp = target
-                    .with_file_name(format!(".aurora-sync-{}", uuid::Uuid::new_v4().simple()));
-                let mut output = OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .open(&temp)
-                    .map_err(storage)?;
-                let result = (|| {
+                checkpoint("backupSaved")?;
+            }
+            // Every output is staged privately and rehashed before commit.
+            // An absent target uses no-clobber creation, including NBT merges.
+            let temp =
+                target.with_file_name(format!(".aurora-sync-{}", uuid::Uuid::new_v4().simple()));
+            let mut output = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temp)
+                .map_err(storage)?;
+            let committed = (|| {
+                let expected = if let Some(merged) = &file.merged {
+                    output.write_all(merged).map_err(storage)?;
+                    (
+                        file.output_hash.as_deref().ok_or_else(stale)?,
+                        merged.len() as u64,
+                    )
+                } else {
                     let input =
                         regular_file(managed, &source_root.join(&file.path))?.ok_or_else(stale)?;
-                    let count = std::io::copy(&mut input.take(MAX_FILE + 1), &mut output)
+                    let copied = std::io::copy(&mut input.take(MAX_FILE + 1), &mut output)
                         .map_err(storage)?;
-                    output.sync_all().map_err(storage)?;
-                    drop(output);
-                    if count != file.size
-                        || hash_file(managed, &temp)?.map(|v| v.0).as_deref() != Some(&file.source)
-                    {
+                    if copied != file.size {
                         return Err(stale());
                     }
-                    checked_directory(
-                        managed.data_root(),
-                        target.parent().ok_or_else(unsafe_path)?,
-                    )
-                    .map_err(storage)?;
+                    (&*file.source, file.size)
+                };
+                output.sync_all().map_err(storage)?;
+                drop(output);
+                if hash_file(managed, &temp)?
+                    .as_ref()
+                    .map(|(hash, size)| (hash.as_str(), *size))
+                    != Some(expected)
+                {
+                    return Err(stale());
+                }
+                checkpoint("copyStaged")?;
+                if policy(managed)? != active_policy
+                    || hash_file(managed, &target)?.map(|v| v.0) != file.destination
+                    || hash_file(managed, &source_root.join(&file.path))?
+                        .map(|v| v.0)
+                        .as_deref()
+                        != Some(&file.source)
+                {
+                    return Err(stale());
+                }
+                checked_directory(
+                    managed.data_root(),
+                    target.parent().ok_or_else(unsafe_path)?,
+                )
+                .map_err(storage)?;
+                if file.destination.is_some() {
+                    fs::rename(&temp, &target).map_err(storage)
+                } else {
                     fs::hard_link(&temp, &target).map_err(storage)
-                })();
-                // Only the exact unique file created above is disposable.
-                let _ = fs::remove_file(&temp);
-                result?;
-            }
+                }
+            })();
+            // This exact unique staging file is the only cleanup target.
+            let _ = fs::remove_file(&temp);
+            committed?;
             receipt.copied += 1;
+            record_count(|c| {
+                c.copied += file.merged.as_ref().map_or(file.size, |b| b.len() as u64)
+            });
             checkpoint("fileCommitted")?;
         }
         crate::install::journal::atomic_write(

@@ -1,26 +1,30 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export interface InstanceSyncPolicy { schemaVersion: 2; enabled: boolean; instances:string[]; categories:InstanceSyncRequest["category"][]; exclusions:string[]; selectedPaths:string[] }
+export interface InstanceSyncPolicy { schemaVersion: 2; enabled: boolean; instances:string[]; categories:InstanceSyncRequest["category"][]; exclusions:string[]; selectedPaths:string[]; overrides?:Record<string,{disabled:boolean;categories:Partial<Record<InstanceSyncRequest["category"],boolean>>;exclusions:string[]}> }
 export interface InstanceSyncRequest {
   sourceId: string; destinationId: string;
-  category: "settings" | "controls" | "resourcePacks" | "shaderPacks" | "screenshots" | "configuration";
+  category: "settings" | "controls" | "resourcePacks" | "shaderPacks" | "screenshots" | "configuration" | "servers";
   exclusions: string[];
   selectedPaths?: string[];
   keyFilter?: string[];
 }
 export interface InstanceSyncPreview {
   fingerprint: string;
-  entries: { path: string; action: "copyMissing" | "mergeSettings" | "identical" | "keepConflict"; changedKeys: string[] }[];
+  entries: { path: string; action: "copyMissing" | "mergeSettings" | "replaceFile" | "mergeServers" | "identical" | "keepConflict"; changedKeys: string[] }[];
   changes: number; conflicts: number; bytesToCopy: number;
 }
 export interface InstanceSyncReceipt { copied: number; conflictsKept: number; backupId: string | null }
 export const getInstanceSyncPolicy = (): Promise<InstanceSyncPolicy> => invoke("get_instance_sync_policy");
 export const saveInstanceSyncPolicy = (request:InstanceSyncPolicy):Promise<InstanceSyncPolicy> => invoke("save_instance_sync_policy",{request});
-export interface InstanceSyncStatus { enabled:boolean; running:boolean; lastRunUnixSeconds:number|null; filesChanged:number; conflictsKept:number; skippedInstances:number; message:string }
+export interface InstanceSyncStatus { enabled:boolean; running:boolean; lastRunUnixSeconds:number|null; filesChanged:number; conflictsKept:number; skippedInstances:number; filesScanned:number; filesHashed:number; bytesCopied:number; cycleMicros:number; message:string }
 export const getInstanceSyncStatus = ():Promise<InstanceSyncStatus> => invoke("get_instance_sync_status");
 export const setInstanceSyncEnabled = (enabled: boolean): Promise<InstanceSyncPolicy> => invoke("set_instance_sync_enabled", { request: { enabled } });
 export const previewInstanceSync = (request: InstanceSyncRequest): Promise<InstanceSyncPreview> => invoke("preview_instance_sync", { request });
 export const applyInstanceSync = (sync: InstanceSyncRequest, fingerprint: string): Promise<InstanceSyncReceipt> => invoke("apply_instance_sync", { request: { sync, fingerprint } });
+
+export interface InstanceSyncConflict { id:string; sourceId:string; destinationId:string; category:InstanceSyncRequest["category"]; path:string; sourceHash:string; destinationHash:string; key:string|null }
+export const getInstanceSyncConflicts = ():Promise<InstanceSyncConflict[]> => invoke("get_instance_sync_conflicts");
+export const resolveInstanceSyncConflict = (id:string,useSource:boolean):Promise<InstanceSyncReceipt> => invoke("resolve_instance_sync_conflict",{request:{id,useSource}});
 
 export interface LocalContentPreview {
   ticket: string; fingerprint: string; fileName: string; instanceName: string;

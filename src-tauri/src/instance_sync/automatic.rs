@@ -17,6 +17,10 @@ pub struct Status {
     pub conflicts_kept: usize,
     pub skipped_instances: usize,
     pub message: String,
+    pub files_scanned: u64,
+    pub files_hashed: u64,
+    pub bytes_copied: u64,
+    pub cycle_micros: u64,
 }
 #[derive(Default)]
 struct Manager {
@@ -38,7 +42,7 @@ pub(super) fn worker_active() -> bool {
 
 pub fn reconcile(host: Host, managed: ManagedPaths) -> Result<Status, SyncError> {
     let policy = policy(&managed)?;
-    let eligible = policy.enabled && policy.instances.len() >= 2 && !policy.categories.is_empty();
+    let eligible = policy.enabled && policy.instances.len() >= 2 && policy.has_content();
     let mut state = manager().lock().expect("sync manager");
     state.status.enabled = policy.enabled;
     if let Some(wake) = &state.wake {
@@ -77,7 +81,7 @@ async fn worker(
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         match policy(&managed) {
-            Ok(p) if p.enabled && p.instances.len() >= 2 && !p.categories.is_empty() => {}
+            Ok(p) if p.enabled && p.instances.len() >= 2 && p.has_content() => {}
             _ => break,
         }
         tokio::select! {
@@ -135,8 +139,8 @@ async fn worker(
         }
         .into();
         let _ = host.emit("instance-sync-state", &state.status);
-        restart = policy(&managed)
-            .is_ok_and(|p| p.enabled && p.instances.len() >= 2 && !p.categories.is_empty());
+        restart =
+            policy(&managed).is_ok_and(|p| p.enabled && p.instances.len() >= 2 && p.has_content());
     }
     drop(state);
     if restart {
@@ -179,10 +183,23 @@ struct Snapshot {
 #[derive(Default)]
 pub struct Engine {
     policy_hash: String,
-    folder_inputs: BTreeMap<String, (String, usize)>,
+    pub(super) files: files::Cache,
 }
 impl Engine {
     pub fn cycle(&mut self, managed: &ManagedPaths) -> Result<Status, SyncError> {
+        COUNTERS.with(|c| c.set(Counters::default()));
+        let started = std::time::Instant::now();
+        let mut result = self.cycle_inner(managed)?;
+        COUNTERS.with(|c| {
+            let c = c.get();
+            result.files_scanned = c.scanned;
+            result.files_hashed = c.hashed;
+            result.bytes_copied = c.copied;
+        });
+        result.cycle_micros = started.elapsed().as_micros() as u64;
+        Ok(result)
+    }
+    fn cycle_inner(&mut self, managed: &ManagedPaths) -> Result<Status, SyncError> {
         let selected = policy(managed)?;
         if !selected.enabled || selected.instances.len() < 2 {
             return Ok(Status::default());
@@ -195,7 +212,7 @@ impl Engine {
         .map_err(storage)?;
         let current_policy = digest(&serde_json::to_vec(&selected).map_err(storage)?);
         if self.policy_hash != current_policy {
-            self.folder_inputs.clear();
+            self.files.clear();
             self.policy_hash = current_policy;
         }
         let mut result = Status {
@@ -211,6 +228,7 @@ impl Engine {
                 registry
                     .find(id)
                     .is_some_and(|r| r.state() == InstanceState::Ready)
+                    && selected.effective(id).enabled
                     && !crate::launch::process::snapshot(id.as_str())
                         .status
                         .blocks_launch()
@@ -253,10 +271,17 @@ impl Engine {
                 "Automatic sync history is unsupported or malformed and was left unchanged.",
             ));
         }
-        if selected.categories.iter().any(|c| c.options()) {
+        let mut option_conflicts = Vec::new();
+        if ids.iter().any(|id| {
+            selected
+                .effective(id)
+                .categories
+                .iter()
+                .any(|c| c.options())
+        }) {
             let mut snapshots = BTreeMap::new();
             for id in &ids {
-                match snapshot(managed, id, &selected) {
+                match snapshot(managed, id, &selected.effective(id)) {
                     Ok(Some(value)) => {
                         snapshots.insert(id.to_string(), value);
                     }
@@ -268,7 +293,8 @@ impl Engine {
             }
             let mut batches: BTreeMap<(String, String, String), Vec<String>> = BTreeMap::new();
             let mut pending = Vec::new();
-            for category in selected.categories.iter().filter(|c| c.options()) {
+            let mut conflicting_keys = BTreeSet::new();
+            for category in [Category::Settings, Category::Controls].iter() {
                 let keys: BTreeSet<_> = snapshots
                     .values()
                     .flat_map(|s| s.values.keys())
@@ -284,7 +310,13 @@ impl Engine {
                     for group in groups {
                         let copies: Vec<_> = snapshots
                             .iter()
-                            .filter(|(_, s)| s.group == group && s.values.contains_key(&key))
+                            .filter(|(id, s)| {
+                                s.group == group
+                                    && s.values.contains_key(&key)
+                                    && InstanceId::new(id.as_str()).is_ok_and(|id| {
+                                        selected.effective(&id).categories.contains(category)
+                                    })
+                            })
                             .collect();
                         let values: BTreeSet<_> = copies
                             .iter()
@@ -318,6 +350,9 @@ impl Engine {
                             continue;
                         }
                         if changed_values.len() != 1 {
+                            for (id, _) in &copies {
+                                conflicting_keys.insert(((*id).clone(), key.clone()));
+                            }
                             result.conflicts_kept += 1;
                             continue;
                         }
@@ -360,7 +395,13 @@ impl Engine {
                     source_id: InstanceId::new(&source).map_err(storage)?,
                     destination_id: InstanceId::new(&target).map_err(storage)?,
                     category,
-                    exclusions: selected.exclusions.clone(),
+                    exclusions: pair(
+                        &selected,
+                        &InstanceId::new(&source).map_err(storage)?,
+                        &InstanceId::new(&target).map_err(storage)?,
+                        category,
+                    )
+                    .exclusions,
                     selected_paths: vec![],
                     key_filter: Some(keys),
                 };
@@ -385,9 +426,11 @@ impl Engine {
                 {
                     Ok(receipt) => {
                         result.files_changed += receipt.copied;
-                        if let Ok(Some(next)) =
-                            snapshot(managed, &request.destination_id, &selected)
-                        {
+                        if let Ok(Some(next)) = snapshot(
+                            managed,
+                            &request.destination_id,
+                            &selected.effective(&request.destination_id),
+                        ) {
                             snapshots.insert(target, next);
                         }
                     }
@@ -400,7 +443,53 @@ impl Engine {
                     .iter()
                     .any(|selected| selected.as_str() == id)
             });
-            let mut deferred = BTreeSet::new();
+            for (source_id, source) in &snapshots {
+                for (target_id, target) in snapshots.iter().filter(|(id, _)| *id > source_id) {
+                    if source.group != target.group {
+                        continue;
+                    }
+                    for (key, value) in &source.values {
+                        // One representative per compatible key avoids quadratic
+                        // duplicate conflicts for the 64-instance pool.
+                        if snapshots.iter().any(|(id, s)| {
+                            id < source_id && s.group == source.group && s.values.contains_key(key)
+                        }) {
+                            continue;
+                        }
+                        if !target.values.get(key).is_some_and(|other| other != value) {
+                            continue;
+                        }
+                        let category = if key.starts_with("key_") {
+                            Category::Controls
+                        } else {
+                            Category::Settings
+                        };
+                        if option_conflicts.len() >= 1024 {
+                            return Err(unsafe_path());
+                        }
+                        option_conflicts.push(Conflict {
+                            id: digest(
+                                &serde_json::to_vec(&(
+                                    source_id,
+                                    target_id,
+                                    key,
+                                    &source.file_hash,
+                                    &target.file_hash,
+                                ))
+                                .map_err(storage)?,
+                            ),
+                            source_id: InstanceId::new(source_id).map_err(storage)?,
+                            destination_id: InstanceId::new(target_id).map_err(storage)?,
+                            category,
+                            path: "options.txt".into(),
+                            source_hash: source.file_hash.clone(),
+                            destination_hash: target.file_hash.clone(),
+                            key: Some(key.clone()),
+                        });
+                    }
+                }
+            }
+            let mut deferred = conflicting_keys;
             for (source, key, group, winner) in pending {
                 // A stopped peer may return after several minutes. Keep the
                 // source's acknowledged baseline until every previously seen
@@ -418,7 +507,7 @@ impl Engine {
                                 && current
                                     .values
                                     .get(&key)
-                                    .is_some_and(|value| digest(value.as_bytes()) != winner)
+                                    .is_none_or(|value| digest(value.as_bytes()) != winner)
                         })
                 });
                 if outstanding {
@@ -431,12 +520,21 @@ impl Engine {
                     .into_iter()
                     .map(|(key, value)| (key, digest(value.as_bytes())))
                     .collect();
-                if let Some(old) = history.instances.get(&id) {
+                if let Some(old) = history
+                    .instances
+                    .get(&id)
+                    .filter(|old| old.group == snapshot.group)
+                {
                     for (key, hash) in &old.hashes {
-                        if deferred.contains(&(id.clone(), key.clone())) {
+                        if !hashes.contains_key(key)
+                            || deferred.contains(&(id.clone(), key.clone()))
+                        {
                             hashes.insert(key.clone(), hash.clone());
                         }
                     }
+                }
+                if hashes.len() > 512 {
+                    return Err(unsafe_path());
                 }
                 history.instances.insert(
                     id,
@@ -452,66 +550,14 @@ impl Engine {
                     .map_err(storage)?;
             }
         }
-        let mut remaining = MAX_TOTAL;
-        for category in selected.categories.iter().filter(|c| !c.options()) {
-            if *category == Category::Configuration && selected.selected_paths.is_empty() {
-                continue;
-            }
-            let mut signatures = BTreeMap::new();
-            for id in &ids {
-                let other = ids.iter().find(|other| *other != id).unwrap();
-                let request = pair(&selected, id, other, *category);
-                if let Ok(signature) = folder_signature(managed, &request) {
-                    signatures.insert(id.to_string(), signature);
-                }
-            }
-            for source in &ids {
-                for target in ids.iter().filter(|target| *target != source) {
-                    if policy(managed)? != selected {
-                        return Ok(result);
-                    }
-                    let (Some(a), Some(b)) = (
-                        signatures.get(source.as_str()),
-                        signatures.get(target.as_str()),
-                    ) else {
-                        continue;
-                    };
-                    let identity = format!("{category:?}:{}:{}", source.as_str(), target.as_str());
-                    let input = format!("{a}:{b}");
-                    if let Some((previous, conflicts)) = self.folder_inputs.get(&identity) {
-                        if previous == &input {
-                            result.conflicts_kept += conflicts;
-                            continue;
-                        }
-                    }
-                    let request = pair(&selected, source, target, *category);
-                    match preview(managed, &request) {
-                        Ok(review) if review.bytes_to_copy <= remaining => {
-                            result.conflicts_kept += review.conflicts;
-                            match apply_selected(managed, &request, &review.fingerprint, &selected)
-                            {
-                                Ok(receipt) => {
-                                    remaining -= review.bytes_to_copy;
-                                    result.files_changed += receipt.copied;
-                                    self.folder_inputs
-                                        .insert(identity, (input, review.conflicts));
-                                }
-                                Err(_) => {
-                                    result.skipped_instances += 1;
-                                }
-                            }
-                        }
-                        Ok(_) => {
-                            result.message =
-                                "Remaining copies will continue on the next minute.".into();
-                        }
-                        Err(_) => {
-                            result.skipped_instances += 1;
-                        }
-                    }
-                }
-            }
-        }
+        files::cycle(
+            &mut self.files,
+            managed,
+            &selected,
+            &ids,
+            &mut result,
+            option_conflicts,
+        )?;
         if result.message.is_empty() {
             result.message = format!(
                 "Synced {} file(s). Kept {} existing differences or conflicting edits. Busy instances are skipped.",
@@ -522,12 +568,23 @@ impl Engine {
     }
 }
 
-fn pair(policy: &Policy, source: &InstanceId, target: &InstanceId, category: Category) -> Request {
+pub(super) fn pair(
+    policy: &Policy,
+    source: &InstanceId,
+    target: &InstanceId,
+    category: Category,
+) -> Request {
     Request {
         source_id: source.clone(),
         destination_id: target.clone(),
         category,
-        exclusions: policy.exclusions.clone(),
+        exclusions: {
+            let mut paths = policy.effective(source).exclusions;
+            paths.extend(policy.effective(target).exclusions);
+            paths.sort();
+            paths.dedup();
+            paths
+        },
         selected_paths: if category == Category::Configuration {
             policy.selected_paths.clone()
         } else {
@@ -618,14 +675,17 @@ fn snapshot(
                     ))
                     .map_err(storage)?,
                 ),
-                file_hash: digest(&bytes),
+                file_hash: file_digest(&bytes),
                 values,
             }))
         })())
     })
     .map_err(storage)?
 }
-fn folder_signature(managed: &ManagedPaths, request: &Request) -> Result<String, SyncError> {
+pub(super) fn folder_signature(
+    managed: &ManagedPaths,
+    request: &Request,
+) -> Result<String, SyncError> {
     let root = managed
         .instance_paths(&request.source_id)
         .root()
@@ -633,7 +693,11 @@ fn folder_signature(managed: &ManagedPaths, request: &Request) -> Result<String,
     checked_directory(managed.data_root(), &root).map_err(storage)?;
     let mut signature = Sha256::new();
     for relative in collect(managed, &root, request)? {
-        let meta = fs::symlink_metadata(root.join(&relative)).map_err(storage)?;
+        let meta = match fs::symlink_metadata(root.join(&relative)) {
+            Ok(meta) => meta,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(storage(error)),
+        };
         if redirected(&meta) || !meta.is_file() {
             return Err(unsafe_path());
         }

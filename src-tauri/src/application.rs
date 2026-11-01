@@ -52,6 +52,27 @@ pub fn save_instance_sync_policy(
 pub fn get_instance_sync_status() -> crate::instance_sync::automatic::Status {
     crate::instance_sync::automatic::status()
 }
+pub fn get_instance_sync_conflicts(
+    app: Host,
+) -> Result<Vec<crate::instance_sync::Conflict>, CommandError> {
+    Ok(crate::instance_sync::conflicts(&managed_paths(&app)?)?)
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SyncResolveRequest {
+    pub id: String,
+    pub use_source: bool,
+}
+pub fn resolve_instance_sync_conflict(
+    app: Host,
+    request: SyncResolveRequest,
+) -> Result<crate::instance_sync::Receipt, CommandError> {
+    Ok(crate::instance_sync::resolve_conflict(
+        &managed_paths(&app)?,
+        &request.id,
+        request.use_source,
+    )?)
+}
 pub fn initialize_instance_sync(app: Host) -> Result<(), CommandError> {
     let managed = managed_paths(&app)?;
     crate::instance_sync::automatic::reconcile(app, managed)?;

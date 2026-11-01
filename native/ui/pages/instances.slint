@@ -1,5 +1,6 @@
 // Instances manages installations; each workspace manages one instance's
 // configuration and content.
+import { InstanceSyncSettings } from "../syncing.slint";
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
@@ -335,6 +336,7 @@ component ConfigurationTab inherits VerticalLayout {
             Button { text: "Open folder"; icon: Icons.folder; clicked => { Instances.open-folder(); } }
         }
     }
+    InstanceSyncSettings {}
     Group {
         title: "Delete instance";
         description: "Permanently removes this instance, including its worlds, mods and settings. Shared Java runtimes and downloads are kept.";

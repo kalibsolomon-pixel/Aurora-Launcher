@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { Group, SettingRow, Toggle, Checkbox, TextField, Label } from "components.slint";
+import { Group, SettingRow, Toggle, Checkbox, TextField, Label, Dropdown, Button } from "components.slint";
 import { InstanceSync } from "state.slint";
 import { ListView } from "std-widgets.slint";
 export component SyncSettings inherits Group {
@@ -22,7 +22,7 @@ export component SyncSettings inherits Group {
         }
         Label { text: "What to sync"; }
         for item[index] in InstanceSync.categories: Checkbox { text: item.name; checked: item.checked; enabled: !InstanceSync.busy; toggled(value) => { InstanceSync.category-changed(index,value); } }
-        Label { text: "Settings and controls follow new edits between matching game and loader versions. Existing differences and conflicting edits are kept. Other content adds missing files. Pack order, worlds and server lists stay local. Close games left running by another launcher session before syncing."; wrap: word-wrap; }
+        Label { text: "Settings and controls follow new edits between matching game and loader versions. Existing differences and conflicting edits are kept. Files with one changed copy update unchanged peers. Server lists add unambiguous new entries; edits stay pending. Pack order and worlds stay local. Close games left running by another launcher session before syncing."; wrap: word-wrap; }
         if InstanceSync.configuration-selected: VerticalLayout {
             spacing: Theme.space-3;
             Label { text: "Choose config/... files or directories (separated by semicolons)"; wrap: word-wrap; }
@@ -32,4 +32,44 @@ export component SyncSettings inherits Group {
         TextField { label: "Excluded relative paths"; text <=> InstanceSync.exclusions; placeholder: "resourcepacks/private; resourcepacks/local.zip"; max-length: 4096; enabled: !InstanceSync.busy; accepted => { InstanceSync.paths-changed(); } }
     }
     if InstanceSync.message != "": Label { text: InstanceSync.message; wrap: word-wrap; }
+    HorizontalLayout {
+        Label { text: "Pending conflicts"; horizontal-stretch: 1; }
+        Button { text: "Refresh"; enabled: !InstanceSync.busy; clicked => { InstanceSync.refresh-conflicts(); } }
+    }
+    if InstanceSync.conflicts.length == 0: Label { text: "No pending file conflicts."; }
+    ListView {
+        height: min(320px, InstanceSync.conflicts.length * 148px);
+        for item[index] in InstanceSync.conflicts: VerticalLayout {
+            padding-bottom: 12px; spacing: 4px;
+            Label { text: item.label; wrap: word-wrap; }
+            Label { text: item.peers; wrap: word-wrap; }
+            if !item.resolvable: Label { text: "Server edits are deferred. Resolve in Minecraft."; wrap: word-wrap; }
+            HorizontalLayout {
+                spacing: 8px;
+                if item.resolvable: Button { text: "Use first"; enabled: !InstanceSync.busy && InstanceSync.enabled; clicked => { InstanceSync.resolve-conflict(index,true); } }
+                if item.resolvable: Button { text: "Use second"; enabled: !InstanceSync.busy && InstanceSync.enabled; clicked => { InstanceSync.resolve-conflict(index,false); } }
+                Button { text: "Defer"; enabled: !InstanceSync.busy; clicked => { InstanceSync.defer-conflict(); } }
+            }
+        }
+    }
+}
+
+export component InstanceSyncSettings inherits Group {
+    title: "Instance syncing";
+    description: "Join the sync pool in Launcher Settings. Changes here save immediately.";
+    if !InstanceSync.instance-participating: Label { text: "This instance is not selected for syncing."; wrap: word-wrap; }
+    if InstanceSync.instance-participating: VerticalLayout {
+        spacing: Theme.space-3;
+        SettingRow {
+            label: "Pause this instance";
+            detail: "Keep its policy and history while temporarily skipping synchronization.";
+            Toggle { label: "Pause instance syncing"; checked: InstanceSync.instance-disabled; enabled: InstanceSync.loaded && !InstanceSync.busy; toggled(value) => { InstanceSync.instance-disabled-changed(value); } }
+        }
+        for item[index] in InstanceSync.instance-categories: SettingRow {
+            label: item.name;
+            Dropdown { label: item.name + " synchronization"; model: ["Inherit global", "Enabled", "Disabled"]; controlled: true; current-index: item.mode; enabled: InstanceSync.loaded && !InstanceSync.busy; selected(value) => { InstanceSync.instance-category-changed(index,value); } }
+        }
+        Label { text: "Additional excluded paths (semicolon separated; Enter saves)"; wrap: word-wrap; }
+        TextField { label: "Instance sync exclusions"; text <=> InstanceSync.instance-exclusions; max-length: 4096; enabled: InstanceSync.loaded && !InstanceSync.busy; accepted => { InstanceSync.instance-paths-changed(); } }
+    }
 }

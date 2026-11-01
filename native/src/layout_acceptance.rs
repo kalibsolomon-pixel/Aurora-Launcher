@@ -365,6 +365,48 @@ type Scene = fn(&AppWindow);
 fn scenes() -> Vec<(&'static str, Scene)> {
     vec![
         ("mods-updates", |app| workspace(app, 0)),
+        ("pandora4-instance-overrides", |app| {
+            workspace(app, 3);
+            let sync = app.global::<crate::InstanceSync>();
+            sync.set_loaded(true);
+            sync.set_instance_participating(true);
+            sync.set_instance_categories(ModelRc::new(VecModel::from(vec![
+                crate::SyncOverrideChoice {
+                    name: "Resource packs".into(),
+                    mode: 0,
+                },
+                crate::SyncOverrideChoice {
+                    name: "Controls".into(),
+                    mode: 1,
+                },
+                crate::SyncOverrideChoice {
+                    name: "Server list".into(),
+                    mode: 2,
+                },
+            ])));
+            sync.set_instance_exclusions("resourcepacks/private; config/local".into());
+            scroll_down(app, 1150.);
+        }),
+        ("pandora4-conflicts", |app| {
+            app.global::<Nav>().set_page(Page::Settings);
+            let sync = app.global::<crate::InstanceSync>();
+            sync.set_loaded(true);
+            sync.set_enabled(true);
+            sync.set_message("Synced 2 files. 2 conflicts remain pending.".into());
+            sync.set_conflicts(ModelRc::new(VecModel::from(vec![
+                crate::SyncConflictRow {
+                    label: "resourcepacks/Shared-Pack.zip".into(),
+                    peers: "First: Survival · Second: Creative".into(),
+                    resolvable: true,
+                },
+                crate::SyncConflictRow {
+                    label: "servers.dat".into(),
+                    peers: "First: Survival · Second: Creative".into(),
+                    resolvable: false,
+                },
+            ])));
+            scroll_down(app, 1000.);
+        }),
         ("settings-game", |app| workspace(app, 3)),
         ("create-loader", |app| create_dialog(app)),
         ("update-review", |app| {
@@ -485,6 +527,27 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
         0,
         "reset works with one click"
     );
+    // The conflict actions use the real scrollable layout at minimum size.
+    let (app, adapter) = window((720., 520.), 1.);
+    scenes()
+        .into_iter()
+        .find(|(name, _)| *name == "pandora4-conflicts")
+        .unwrap()
+        .1(&app);
+    render(&app, &adapter, "pandora4-conflict-input-baseline");
+    let choices: Rc<RefCell<Vec<(i32, bool)>>> = Rc::default();
+    let log = choices.clone();
+    app.global::<crate::InstanceSync>()
+        .on_resolve_conflict(move |index, use_source| log.borrow_mut().push((index, use_source)));
+    click(&app, 180., 344.);
+    click(&app, 390., 344.);
+    assert_eq!(*choices.borrow(), [(0, true), (0, false)]);
+    // Tab transfers focus between native buttons and Return activates the next.
+    click(&app, 180., 344.);
+    key(&app, Key::Tab);
+    key(&app, Key::Return);
+    assert_eq!(choices.borrow().last(), Some(&(0, false)));
+    render(&app, &adapter, "pandora4-conflict-keyboard-focus");
 }
 
 /// Logical click targets measured from the 1120×760 `input-baseline` render.

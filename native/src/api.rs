@@ -43,6 +43,37 @@ pub struct SyncPolicy {
     pub categories: Vec<String>,
     pub exclusions: Vec<String>,
     pub selected_paths: Vec<String>,
+    #[serde(default)]
+    pub overrides: std::collections::BTreeMap<String, SyncOverride>,
+}
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncOverride {
+    pub disabled: bool,
+    pub categories: std::collections::BTreeMap<String, bool>,
+    pub exclusions: Vec<String>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncConflict {
+    pub id: String,
+    pub source_id: String,
+    pub destination_id: String,
+    pub category: String,
+    pub path: String,
+    pub key: Option<String>,
+}
+pub async fn sync_conflicts(host: Host) -> ApiResult<Vec<SyncConflict>> {
+    blocking(move || convert(app::get_instance_sync_conflicts(host))).await?
+}
+pub async fn sync_resolve(host: Host, id: String, use_source: bool) -> ApiResult<Value> {
+    blocking(move || {
+        convert(app::resolve_instance_sync_conflict(
+            host,
+            request(json!({"id":id,"useSource":use_source}))?,
+        ))
+    })
+    .await?
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

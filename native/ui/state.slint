@@ -493,6 +493,8 @@ export global Skins {
 }
 
 export struct SyncChoice { name:string, checked:bool }
+export struct SyncOverrideChoice { name:string, mode:int }
+export struct SyncConflictRow { label:string, peers:string, resolvable:bool }
 export global InstanceSync {
     in property <[SyncChoice]> instances;
     in property <[SyncChoice]> categories;
@@ -507,6 +509,17 @@ export global InstanceSync {
     callback participant-changed(int,bool);
     callback category-changed(int,bool);
     callback paths-changed();
+    in property <bool> instance-participating: false;
+    in property <bool> instance-disabled: false;
+    in property <[SyncOverrideChoice]> instance-categories;
+    in-out property <string> instance-exclusions;
+    callback instance-disabled-changed(bool);
+    callback instance-category-changed(int,int);
+    callback instance-paths-changed();
+    in property <[SyncConflictRow]> conflicts;
+    callback resolve-conflict(int,bool);
+    callback defer-conflict();
+    callback refresh-conflicts();
 }
 
 export global Settings {

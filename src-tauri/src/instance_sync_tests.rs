@@ -276,7 +276,10 @@ fn unsafe_names_and_unsupported_categories_are_rejected() {
         assert!(validate_relative(path).is_err(), "{path}");
     }
     assert!(serde_json::from_str::<Category>("\"worlds\"").is_err());
-    assert!(serde_json::from_str::<Category>("\"servers\"").is_err());
+    assert_eq!(
+        serde_json::from_str::<Category>("\"servers\"").unwrap(),
+        Category::Servers
+    );
 }
 
 #[cfg(windows)]
@@ -862,4 +865,548 @@ fn automatic_preserves_pending_edits_until_a_running_peer_stops() {
         get(&managed, &request.destination_id, "options.txt"),
         b"mouseSensitivity:0.8\n"
     );
+}
+
+#[test]
+fn file_edits_propagate_backup_and_concurrent_conflicts_persist_until_explicit_choice() {
+    let (managed, request) = fixture();
+    automatic_policy(&managed, &request, vec![Category::Screenshots]);
+    for id in [&request.source_id, &request.destination_id] {
+        put(&managed, id, "screenshots/a.png", b"base");
+    }
+    let mut engine = automatic::Engine::default();
+    engine.cycle(&managed).unwrap();
+    put(&managed, &request.source_id, "screenshots/a.png", b"edited");
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 1);
+    assert_eq!(
+        get(&managed, &request.destination_id, "screenshots/a.png"),
+        b"edited"
+    );
+    put(&managed, &request.source_id, "screenshots/a.png", b"left");
+    put(
+        &managed,
+        &request.destination_id,
+        "screenshots/a.png",
+        b"right",
+    );
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 0);
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 0);
+    let c = conflicts(&managed).unwrap().pop().unwrap();
+    let receipt = resolve_conflict(&managed, &c.id, true).unwrap();
+    assert_eq!(
+        get(&managed, &c.destination_id, "screenshots/a.png"),
+        get(&managed, &c.source_id, "screenshots/a.png")
+    );
+    let saved = managed
+        .launcher_dir()
+        .join("sync-backups")
+        .join(receipt.backup_id.unwrap())
+        .join("screenshots/a.png");
+    assert!(
+        fs::read(saved).unwrap() == b"left"
+            || get(&managed, &c.source_id, "screenshots/a.png") == b"left"
+    );
+    assert!(conflicts(&managed).unwrap().is_empty());
+    assert_eq!(engine.cycle(&managed).unwrap().files_changed, 0);
+}
+#[test]
+fn file_edit_waits_across_restart_and_unavailable_third_peer_without_deleting() {
+    let (managed, request) = fixture();
+    let mut p = automatic_policy(&managed, &request, vec![Category::Screenshots]);
+    let mut registry = InstanceRegistry::load(&managed.instance_registry_file()).unwrap();
+    let third = crate::instances::generate_instance_id();
+    let r = registry.instances()[0].clone();
+    registry.instances_mut().push(
+        InstanceRecord::from_installed(
+            third.clone(),
+            "third",
+            InstanceState::Ready,
+            r.installed().clone(),
+            r.configuration().clone(),
+        )
+        .unwrap(),
+    );
+    registry.save(&managed.instance_registry_file()).unwrap();
+    p.instances.push(third.clone());
+    save_policy(&managed, p).unwrap();
+    for id in [&request.source_id, &request.destination_id, &third] {
+        put(&managed, id, "screenshots/a.png", b"base");
+    }
+    let mut engine = automatic::Engine::default();
+    engine.cycle(&managed).unwrap();
+    let running = crate::launch::process::force_running(third.as_str());
+    put(&managed, &request.source_id, "screenshots/a.png", b"edit");
+    engine.cycle(&managed).unwrap();
+    let mut engine = automatic::Engine::default();
+    engine.cycle(&managed).unwrap();
+    drop(running);
+    engine.cycle(&managed).unwrap();
+    assert_eq!(get(&managed, &third, "screenshots/a.png"), b"edit");
+    fs::remove_file(
+        managed
+            .instance_paths(&request.destination_id)
+            .root()
+            .join("screenshots/a.png"),
+    )
+    .unwrap();
+    engine.cycle(&managed).unwrap();
+    assert_eq!(
+        get(&managed, &request.destination_id, "screenshots/a.png"),
+        b"edit"
+    );
+}
+#[test]
+fn stale_conflict_choice_and_disabled_policy_never_replace() {
+    let (managed, request) = fixture();
+    automatic_policy(&managed, &request, vec![Category::Screenshots]);
+    put(&managed, &request.source_id, "screenshots/a.png", b"a");
+    put(&managed, &request.destination_id, "screenshots/a.png", b"b");
+    automatic::Engine::default().cycle(&managed).unwrap();
+    let c = conflicts(&managed).unwrap().pop().unwrap();
+    put(&managed, &c.source_id, "screenshots/a.png", b"later");
+    assert!(resolve_conflict(&managed, &c.id, true).is_err());
+    assert_eq!(
+        get(&managed, &c.destination_id, "screenshots/a.png"),
+        if c.destination_id == request.source_id {
+            b"a"
+        } else {
+            b"b"
+        }
+    );
+    set_enabled(&managed, false).unwrap();
+    assert!(resolve_conflict(&managed, &c.id, false).is_err());
+}
+#[test]
+fn interrupted_replacement_and_stale_staging_preserve_original_and_recover() {
+    let (managed, mut request) = fixture();
+    request.category = Category::Screenshots;
+    let selected = automatic_policy(&managed, &request, vec![Category::Screenshots]);
+    put(&managed, &request.source_id, "screenshots/a.png", b"new");
+    put(
+        &managed,
+        &request.destination_id,
+        "screenshots/a.png",
+        b"old",
+    );
+    let selection = BTreeMap::from([(
+        "screenshots/a.png".into(),
+        (digest(b"new"), Some(digest(b"old"))),
+    )]);
+    let p = locked(&managed, &request, || {
+        plan_files(&managed, &request, Some(&selection)).map(|p| p.0)
+    })
+    .unwrap();
+    assert!(
+        apply_files(
+            &managed,
+            &request,
+            &p.fingerprint,
+            Some(&selection),
+            &mut |at| if at == "copyStaged" {
+                Err(storage(()))
+            } else {
+                Ok(())
+            }
+        )
+        .is_err()
+    );
+    assert_eq!(
+        get(&managed, &request.destination_id, "screenshots/a.png"),
+        b"old"
+    );
+    assert!(
+        apply_files(
+            &managed,
+            &request,
+            &p.fingerprint,
+            Some(&selection),
+            &mut |at| {
+                if at == "copyStaged" {
+                    put(
+                        &managed,
+                        &request.destination_id,
+                        "screenshots/a.png",
+                        b"racing",
+                    );
+                }
+                Ok(())
+            }
+        )
+        .is_err()
+    );
+    assert_eq!(
+        get(&managed, &request.destination_id, "screenshots/a.png"),
+        b"racing"
+    );
+    put(
+        &managed,
+        &request.destination_id,
+        "screenshots/a.png",
+        b"old",
+    );
+    apply_files(
+        &managed,
+        &request,
+        &p.fingerprint,
+        Some(&selection),
+        &mut |_| {
+            if policy(&managed)? == selected {
+                Ok(())
+            } else {
+                Err(stale())
+            }
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        get(&managed, &request.destination_id, "screenshots/a.png"),
+        b"new"
+    );
+}
+#[test]
+fn overrides_inherit_persist_invalidate_and_pause_without_losing_history() {
+    let (managed, request) = fixture();
+    let mut p = automatic_policy(&managed, &request, vec![Category::Screenshots]);
+    assert_eq!(p.effective(&request.source_id).categories, p.categories);
+    p.overrides.insert(
+        request.destination_id.to_string(),
+        InstanceOverride {
+            disabled: false,
+            categories: BTreeMap::from([(Category::Screenshots, false), (Category::Servers, true)]),
+            exclusions: vec!["resourcepacks/private".into()],
+        },
+    );
+    save_policy(&managed, p.clone()).unwrap();
+    assert_eq!(policy(&managed).unwrap(), p);
+    assert!(
+        !p.effective(&request.destination_id)
+            .categories
+            .contains(&Category::Screenshots)
+    );
+    assert!(
+        p.effective(&request.destination_id)
+            .categories
+            .contains(&Category::Servers)
+    );
+    put(&managed, &request.source_id, "screenshots/a.png", b"base");
+    let mut e = automatic::Engine::default();
+    assert_eq!(e.cycle(&managed).unwrap().files_changed, 0);
+    p.overrides.clear();
+    save_policy(&managed, p.clone()).unwrap();
+    assert_eq!(e.cycle(&managed).unwrap().files_changed, 1);
+    p.overrides.insert(
+        request.destination_id.to_string(),
+        InstanceOverride {
+            disabled: true,
+            ..Default::default()
+        },
+    );
+    save_policy(&managed, p.clone()).unwrap();
+    put(
+        &managed,
+        &request.source_id,
+        "screenshots/a.png",
+        b"changed",
+    );
+    assert_eq!(e.cycle(&managed).unwrap().files_changed, 0);
+    p.overrides.clear();
+    save_policy(&managed, p.clone()).unwrap();
+    e.cycle(&managed).unwrap();
+    assert_eq!(
+        get(&managed, &request.destination_id, "screenshots/a.png"),
+        b"changed"
+    );
+    p.categories.clear();
+    save_policy(&managed, p.clone()).unwrap();
+    put(&managed, &request.source_id, "screenshots/a.png", b"other");
+    assert_eq!(e.cycle(&managed).unwrap().files_changed, 0);
+    p.instances.pop();
+    p.overrides.insert(
+        request.destination_id.to_string(),
+        InstanceOverride::default(),
+    );
+    assert!(save_policy(&managed, p).is_err());
+}
+#[test]
+fn server_lists_add_both_directions_defer_edits_and_refuse_truncation() {
+    let (managed, mut request) = fixture();
+    request.category = Category::Servers;
+    automatic_policy(&managed, &request, vec![Category::Servers]);
+    let a = servers::tests::fixture(&[("A", "a", 1)]);
+    let b = servers::tests::fixture(&[("B", "b", 2)]);
+    put(&managed, &request.source_id, "servers.dat", &a);
+    put(&managed, &request.destination_id, "servers.dat", &b);
+    let mut e = automatic::Engine::default();
+    assert!(e.cycle(&managed).unwrap().files_changed >= 2);
+    assert_eq!(
+        servers::merge(
+            &get(&managed, &request.source_id, "servers.dat"),
+            Some(&get(&managed, &request.destination_id, "servers.dat"))
+        )
+        .unwrap()
+        .conflicts,
+        0
+    );
+    let edited = servers::tests::fixture(&[("A", "changed", 1)]);
+    put(&managed, &request.source_id, "servers.dat", &edited);
+    e.cycle(&managed).unwrap();
+    let c = conflicts(&managed)
+        .unwrap()
+        .into_iter()
+        .find(|c| c.category == Category::Servers)
+        .unwrap();
+    assert!(resolve_conflict(&managed, &c.id, true).is_err());
+    assert_eq!(get(&managed, &request.source_id, "servers.dat"), edited);
+    put(
+        &managed,
+        &request.source_id,
+        "servers.dat",
+        &a[..a.len() - 1],
+    );
+    assert!(preview(&managed, &request).is_err());
+}
+
+#[test]
+fn option_conflict_choice_only_merges_selected_key_and_preserves_pack_order() {
+    let (managed, request) = fixture();
+    automatic_policy(&managed, &request, vec![Category::Settings]);
+    for id in [&request.source_id, &request.destination_id] {
+        put(
+            &managed,
+            id,
+            "options.txt",
+            b"mouseSensitivity:1\nresourcePacks:[local]\n",
+        );
+    }
+    let mut e = automatic::Engine::default();
+    e.cycle(&managed).unwrap();
+    put(
+        &managed,
+        &request.source_id,
+        "options.txt",
+        b"mouseSensitivity:2\nresourcePacks:[first]\n",
+    );
+    put(
+        &managed,
+        &request.destination_id,
+        "options.txt",
+        b"mouseSensitivity:3\nresourcePacks:[second]\n",
+    );
+    e.cycle(&managed).unwrap();
+    e.cycle(&managed).unwrap();
+    let c = conflicts(&managed).unwrap().pop().unwrap();
+    assert_eq!(c.key.as_deref(), Some("mouseSensitivity"));
+    let before = get(&managed, &c.destination_id, "options.txt");
+    resolve_conflict(&managed, &c.id, true).unwrap();
+    let (_, before) = options(&before).unwrap();
+    let (_, after) = options(&get(&managed, &c.destination_id, "options.txt")).unwrap();
+    assert_eq!(before["resourcePacks"], after["resourcePacks"]);
+    e.cycle(&managed).unwrap();
+    assert!(conflicts(&managed).unwrap().is_empty());
+}
+#[test]
+fn server_sync_excludes_running_games_and_interrupted_merge_keeps_backup() {
+    let (managed, mut request) = fixture();
+    request.category = Category::Servers;
+    automatic_policy(&managed, &request, vec![Category::Servers]);
+    let a = servers::tests::fixture(&[("A", "a", 1)]);
+    let b = servers::tests::fixture(&[]);
+    put(&managed, &request.source_id, "servers.dat", &a);
+    put(&managed, &request.destination_id, "servers.dat", &b);
+    let running = crate::launch::process::force_running(request.destination_id.as_str());
+    assert!(preview(&managed, &request).is_err());
+    drop(running);
+    let p = preview(&managed, &request).unwrap();
+    assert!(
+        apply_with_checkpoint(&managed, &request, &p.fingerprint, |at| {
+            if at == "backupSaved" {
+                Err(storage(()))
+            } else {
+                Ok(())
+            }
+        })
+        .is_err()
+    );
+    assert_eq!(get(&managed, &request.destination_id, "servers.dat"), b);
+    apply(&managed, &request, &p.fingerprint).unwrap();
+    assert_eq!(get(&managed, &request.destination_id, "servers.dat"), a);
+}
+
+#[test]
+fn server_list_missing_destination_uses_no_clobber_commit() {
+    let (managed, mut request) = fixture();
+    request.category = Category::Servers;
+    automatic_policy(&managed, &request, vec![Category::Servers]);
+    let a = servers::tests::fixture(&[("A", "a", 1)]);
+    put(&managed, &request.source_id, "servers.dat", &a);
+    let p = preview(&managed, &request).unwrap();
+    assert!(
+        apply_with_checkpoint(&managed, &request, &p.fingerprint, |at| {
+            if at == "copyStaged" {
+                put(
+                    &managed,
+                    &request.destination_id,
+                    "servers.dat",
+                    &servers::tests::fixture(&[("Local", "local", 2)]),
+                );
+            }
+            Ok(())
+        })
+        .is_err()
+    );
+    assert_ne!(get(&managed, &request.destination_id, "servers.dat"), a);
+    fs::remove_file(
+        managed
+            .instance_paths(&request.destination_id)
+            .root()
+            .join("servers.dat"),
+    )
+    .unwrap();
+    let mut e = automatic::Engine::default();
+    assert_eq!(e.cycle(&managed).unwrap().files_changed, 1);
+    assert_eq!(get(&managed, &request.destination_id, "servers.dat"), a);
+}
+
+#[test]
+fn per_instance_paths_global_changes_removal_and_damaged_history_are_safe() {
+    let (managed, request) = fixture();
+    let mut p = automatic_policy(&managed, &request, vec![Category::ResourcePacks]);
+    p.overrides.insert(
+        request.destination_id.to_string(),
+        InstanceOverride {
+            exclusions: vec!["resourcepacks/private".into()],
+            ..Default::default()
+        },
+    );
+    save_policy(&managed, p.clone()).unwrap();
+    put(
+        &managed,
+        &request.source_id,
+        "resourcepacks/private/a.zip",
+        b"private",
+    );
+    put(
+        &managed,
+        &request.source_id,
+        "resourcepacks/public.zip",
+        b"public",
+    );
+    let mut e = automatic::Engine::default();
+    assert_eq!(e.cycle(&managed).unwrap().files_changed, 1);
+    assert!(
+        !managed
+            .instance_paths(&request.destination_id)
+            .root()
+            .join("resourcepacks/private/a.zip")
+            .exists()
+    );
+    p.exclusions.push("resourcepacks/public.zip".into());
+    save_policy(&managed, p.clone()).unwrap();
+    put(
+        &managed,
+        &request.source_id,
+        "resourcepacks/public.zip",
+        b"new public",
+    );
+    assert_eq!(e.cycle(&managed).unwrap().files_changed, 0);
+    let history = managed.launcher_dir().join("sync-files.json");
+    let bad = b"{\"schemaVersion\":99,\"tracks\":{},\"conflicts\":[]}";
+    fs::write(&history, bad).unwrap();
+    assert!(e.cycle(&managed).is_err());
+    assert_eq!(fs::read(&history).unwrap(), bad);
+    fs::write(
+        &history,
+        b"{\"schemaVersion\":1,\"tracks\":{},\"conflicts\":[]}",
+    )
+    .unwrap();
+    let mut registry = InstanceRegistry::load(&managed.instance_registry_file()).unwrap();
+    registry
+        .instances_mut()
+        .retain(|r| r.id() != &request.destination_id);
+    registry.save(&managed.instance_registry_file()).unwrap();
+    assert!(e.cycle(&managed).unwrap().skipped_instances > 0);
+    assert_eq!(
+        get(
+            &managed,
+            &request.destination_id,
+            "resourcepacks/public.zip"
+        ),
+        b"public"
+    );
+}
+
+#[test]
+fn temporarily_disabled_settings_category_retains_pending_baseline() {
+    let (managed, request) = fixture();
+    let mut p = automatic_policy(
+        &managed,
+        &request,
+        vec![Category::Settings, Category::Controls],
+    );
+    for id in [&request.source_id, &request.destination_id] {
+        put(
+            &managed,
+            id,
+            "options.txt",
+            b"mouseSensitivity:1\nkey_jump:key.keyboard.space\n",
+        );
+    }
+    let mut e = automatic::Engine::default();
+    e.cycle(&managed).unwrap();
+    p.overrides.insert(
+        request.destination_id.to_string(),
+        InstanceOverride {
+            categories: BTreeMap::from([(Category::Settings, false)]),
+            ..Default::default()
+        },
+    );
+    save_policy(&managed, p.clone()).unwrap();
+    put(
+        &managed,
+        &request.source_id,
+        "options.txt",
+        b"mouseSensitivity:2\nkey_jump:key.keyboard.space\n",
+    );
+    e.cycle(&managed).unwrap();
+    e.cycle(&managed).unwrap();
+    assert!(
+        String::from_utf8(get(&managed, &request.destination_id, "options.txt"))
+            .unwrap()
+            .contains("mouseSensitivity:1")
+    );
+    p.overrides.clear();
+    save_policy(&managed, p).unwrap();
+    e.cycle(&managed).unwrap();
+    assert!(
+        String::from_utf8(get(&managed, &request.destination_id, "options.txt"))
+            .unwrap()
+            .contains("mouseSensitivity:2")
+    );
+}
+
+#[test]
+fn retained_option_baselines_cannot_overflow_the_persisted_history_bound() {
+    let (managed, request) = fixture();
+    automatic_policy(&managed, &request, vec![Category::Controls]);
+    let old = (0..512)
+        .map(|i| format!("key_old_{i}:key.keyboard.a\n"))
+        .collect::<String>();
+    for id in [&request.source_id, &request.destination_id] {
+        put(&managed, id, "options.txt", old.as_bytes());
+    }
+    let mut e = automatic::Engine::default();
+    e.cycle(&managed).unwrap();
+    let path = managed.launcher_dir().join("sync-observed.json");
+    let before = fs::read(&path).unwrap();
+    let new = (0..512)
+        .map(|i| format!("key_new_{i}:key.keyboard.b\n"))
+        .collect::<String>();
+    for id in [&request.source_id, &request.destination_id] {
+        put(&managed, id, "options.txt", new.as_bytes());
+    }
+    assert!(e.cycle(&managed).is_err());
+    assert_eq!(fs::read(&path).unwrap(), before);
+    for id in [&request.source_id, &request.destination_id] {
+        assert_eq!(get(&managed, id, "options.txt"), new.as_bytes());
+    }
 }

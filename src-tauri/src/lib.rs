@@ -106,6 +106,8 @@ pub fn run() {
             application::tauri_commands::save_instance_sync_policy,
             application::tauri_commands::get_instance_sync_status,
             application::tauri_commands::get_instance_sync_policy,
+            application::tauri_commands::get_instance_sync_conflicts,
+            application::tauri_commands::resolve_instance_sync_conflict,
             application::tauri_commands::set_instance_sync_enabled,
             application::tauri_commands::preview_instance_sync,
             application::tauri_commands::apply_instance_sync,

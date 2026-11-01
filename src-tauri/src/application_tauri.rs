@@ -974,3 +974,22 @@ pub async fn launcher_update_install(
 ) -> Result<launcher_updates::LauncherUpdateStatus, CommandError> {
     super::launcher_update_install(Host::from_tauri(&app), request).await
 }
+
+#[tauri::command]
+pub fn get_instance_sync_conflicts(
+    app: tauri::AppHandle,
+) -> Result<Vec<crate::instance_sync::Conflict>, super::CommandError> {
+    super::get_instance_sync_conflicts(Host::from_tauri(&app))
+}
+#[tauri::command]
+pub async fn resolve_instance_sync_conflict(
+    app: tauri::AppHandle,
+    request: super::SyncResolveRequest,
+) -> Result<crate::instance_sync::Receipt, super::CommandError> {
+    let host = Host::from_tauri(&app);
+    tokio::task::spawn_blocking(move || super::resolve_instance_sync_conflict(host, request))
+        .await
+        .map_err(|_| {
+            super::CommandError::new("sync_worker_failed", "The sync worker did not complete.")
+        })?
+}

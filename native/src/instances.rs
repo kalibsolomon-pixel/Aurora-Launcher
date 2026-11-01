@@ -282,6 +282,7 @@ pub fn open_workspace(id: String, tab: i32) {
     if found.is_none() {
         return;
     }
+    crate::syncing::load();
     seed_game_settings();
     render_workspace_header();
     render_dirty();
