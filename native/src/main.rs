@@ -15,6 +15,7 @@ mod api;
 mod borealis;
 mod chrome;
 mod content_import;
+mod content_updates;
 mod discover;
 mod events;
 mod home;
@@ -84,6 +85,7 @@ fn main() -> Result<(), slint::PlatformError> {
     widgets::bind(&window);
     activity::bind(&window);
     content_import::bind(&window);
+    content_updates::bind(&window);
     discover::bind(&window);
     accounts::bind(&window);
     settings::bind(&window);

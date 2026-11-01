@@ -38,6 +38,9 @@ pub struct DiscoverState {
     pub optional_files: Vec<String>,
     pub selected_optional: HashSet<String>,
     pub origin: Option<(String, i32)>,
+    /// A recognized local `.mrpack`: (exact version id, banner text). Taken
+    /// by the next details load so it never leaks into later browsing.
+    pub local_pack: Option<(String, String)>,
 }
 
 pub fn bind(window: &AppWindow) {
@@ -81,9 +84,11 @@ pub fn bind(window: &AppWindow) {
             }
             s.discover.detail_serial += 1;
             s.discover.review = None;
+            s.discover.local_pack = None;
             let d = w.global::<Discover>();
             d.set_details_loading(false);
             d.set_details_open(false);
+            d.set_local_pack_note("".into());
         });
     });
     d.on_return_to_instance(|| {
@@ -103,6 +108,19 @@ pub fn open_for(instance_id: String, kind: i32) {
     });
     render_targets();
     search(false);
+}
+
+/// Opens the reviewed modpack workflow for a local archive that Modrinth
+/// recognized as `project`/`version`. Review, optional files, new-instance or
+/// merge choice and the queued install are the hosted workflow unchanged.
+pub fn open_local_pack(project: String, version: String, note: String) {
+    ui::with(|window, state| {
+        state.discover.local_pack = Some((version, note));
+        window.global::<Discover>().set_kind(3);
+        window.global::<Nav>().set_page(Page::Discover);
+    });
+    render_targets();
+    details(project.into());
 }
 
 pub fn on_shown() {
@@ -328,11 +346,20 @@ fn invalidate_review() {
 }
 
 fn details(project: slint::SharedString) {
-    let Some((target, kind, serial)) = ui::with(|w, s| {
+    let Some((target, kind, serial, preferred)) = ui::with(|w, s| {
         let d = w.global::<Discover>();
         if d.get_install_busy() {
             return None;
         }
+        let local = s.discover.local_pack.take();
+        d.set_local_pack_note(
+            local
+                .as_ref()
+                .map(|(_, note)| note.clone())
+                .unwrap_or_default()
+                .into(),
+        );
+        let preferred = local.map(|(version, _)| version);
         s.discover.detail_serial += 1;
         s.discover.details = None;
         s.discover.review = None;
@@ -358,6 +385,7 @@ fn details(project: slint::SharedString) {
             },
             kind,
             s.discover.detail_serial,
+            preferred,
         ))
     })
     .flatten() else {
@@ -403,14 +431,22 @@ fn details(project: slint::SharedString) {
                                 })
                                 .collect(),
                         ));
-                        let index = p
-                            .default_version_id
-                            .as_ref()
-                            .and_then(|id| p.versions.iter().position(|v| &v.id == id))
-                            .or_else(|| (!p.versions.is_empty()).then_some(0));
+                        let index = match &preferred {
+                            // A local archive installs exactly its own version, never a substitute.
+                            Some(version) => p.versions.iter().position(|v| &v.id == version),
+                            None => p
+                                .default_version_id
+                                .as_ref()
+                                .and_then(|id| p.versions.iter().position(|v| &v.id == id))
+                                .or_else(|| (!p.versions.is_empty()).then_some(0)),
+                        };
                         d.set_version_index(index.map(|i| i as i32).unwrap_or(-1));
                         if index.is_none() {
-                            d.set_detail_error("No supported installable versions. Modpacks require Fabric and a supported .mrpack archive.".into());
+                            d.set_detail_error(if preferred.is_some() {
+                                "This archive's exact pack version is not installable by Aurora. Modpacks require Fabric and a supported .mrpack archive."
+                            } else {
+                                "No supported installable versions. Modpacks require Fabric and a supported .mrpack archive."
+                            }.into());
                         }
                         s.discover.details = Some(p);
                     }
@@ -700,6 +736,7 @@ fn review_description(value: &Value, kind: &str, merge: bool) -> (String, bool, 
 pub fn after_install() {
     load_installed();
     crate::instances::reload(crate::home::refresh_readiness);
+    crate::instances::after_content_change();
 }
 
 /// Re-renders result rows so queued/running projects show as busy.

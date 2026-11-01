@@ -23,6 +23,60 @@ fn size_label(bytes: u64) -> String {
     }
 }
 
+/// Local `.mrpack`: owned picker, then exact identification by Rust. A
+/// recognized archive opens the reviewed hosted pack workflow for its exact
+/// version (new isolated instance or merge); nothing installs before review.
+fn import_modpack() {
+    let busy = ui::with(|w, _| {
+        let instances = w.global::<Instances>();
+        let busy = instances.get_pack_import_busy();
+        instances.set_pack_import_busy(true);
+        busy
+    })
+    .unwrap_or(true);
+    if busy {
+        return;
+    }
+    let owner = crate::chrome::dialog_owner();
+    let host = ui::host();
+    ui::spawn(
+        async move {
+            let Some(path) = crate::skin_import::choose_modpack_path(owner).await? else {
+                return Ok(None);
+            };
+            api::identify_local_modpack(host, path).await.map(Some)
+        },
+        |result| {
+            ui::with(|w, _| w.global::<Instances>().set_pack_import_busy(false));
+            match result {
+                Ok(Some(found)) => {
+                    let text = |key: &str| found[key].as_str().unwrap_or("").to_owned();
+                    let note = local_pack_note(&found);
+                    crate::discover::open_local_pack(text("projectId"), text("versionId"), note);
+                }
+                Ok(None) => {}
+                Err(error) => ui::error_toast(&error),
+            }
+        },
+    );
+}
+
+/// The banner shown above the hosted review for a recognized local archive.
+pub fn local_pack_note(found: &serde_json::Value) -> String {
+    let text = |key: &str| found[key].as_str().unwrap_or("");
+    format!(
+        "Local file {} is {} {} on Modrinth (exact SHA-512 match). Its verified local bytes are used for this version; choosing another version downloads that one from Modrinth instead.\nPack: {} {} · Minecraft {} · Fabric {} · {}",
+        text("fileName"),
+        text("title"),
+        text("versionNumber"),
+        text("name"),
+        text("packVersion"),
+        text("minecraftVersion"),
+        text("fabricLoaderVersion"),
+        size_label(found["sizeBytes"].as_u64().unwrap_or(0)),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -36,9 +90,23 @@ mod tests {
         assert_eq!(size_label(192), "0.2 KiB");
         assert_eq!(size_label(3 * 1024 * 1024 + 512 * 1024), "3.5 MiB");
     }
+
+    #[test]
+    fn local_pack_banner_names_the_exact_match() {
+        let note = local_pack_note(&serde_json::json!({
+            "fileName": "pack.mrpack", "title": "Fixture Pack", "versionNumber": "1.0.0",
+            "name": "Fixture", "packVersion": "1.0.0", "minecraftVersion": "1.21.1",
+            "fabricLoaderVersion": "0.16.0", "sizeBytes": 2048
+        }));
+        assert!(note.starts_with("Local file pack.mrpack is Fixture Pack 1.0.0 on Modrinth"));
+        assert!(note.ends_with("Minecraft 1.21.1 · Fabric 0.16.0 · 2.0 KiB"));
+    }
 }
 
 pub fn bind(window: &crate::AppWindow) {
+    window
+        .global::<Instances>()
+        .on_import_modpack(import_modpack);
     window.global::<ContentImport>().on_dismiss(|| {
         ui::with(|w, _| w.global::<ContentImport>().set_open(false));
         if let Some((instance, preview)) = REVIEW.with(|s| s.borrow_mut().take()) {

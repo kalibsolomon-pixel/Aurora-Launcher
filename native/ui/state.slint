@@ -37,6 +37,11 @@ export struct ContentRow {
     toggleable: bool,
     removable: bool,
     note: string,
+    // Update availability after an explicit check ("" when unchecked).
+    update-text: string,
+    update-tone: Tone,
+    can-update: bool,
+    can-unpin: bool,
 }
 
 export struct ProjectRow {
@@ -195,6 +200,53 @@ export global Instances {
     callback content-refresh();
     callback content-discover();
 
+    // Content updates: explicit check, then per-item or all eligible items.
+    in property <bool> updates-busy: false;
+    in property <string> updates-summary;
+    in property <int> updates-count: 0;
+    callback check-updates();
+    callback update-all();
+    callback content-update(string);
+    callback content-unpin(string);
+    // Review shown only when an update changes dependencies or warns.
+    in-out property <bool> update-review-open: false;
+    in property <string> update-review-title;
+    in property <string> update-review-text;
+    callback update-review-confirm();
+    callback update-review-dismiss();
+
+    // Game version and loader of an existing instance (saved as a draft,
+    // applied by an explicit install).
+    in property <[string]> cfg-versions;
+    in-out property <int> cfg-version-index: -1;
+    in property <[string]> cfg-loaders;
+    in-out property <int> cfg-loader-index: -1;
+    in property <bool> cfg-loader-kind-enabled: true;
+    in property <string> cfg-loader-kind-note;
+    in property <bool> cfg-has-loader: false;
+    in property <string> cfg-loader-label: "Loader version";
+    in property <[string]> cfg-loader-versions;
+    in-out property <int> cfg-loader-version-index: 0;
+    in property <bool> cfg-loader-loading: false;
+    in property <string> cfg-loader-note;
+    in property <bool> cfg-needs-install: false;
+    callback cfg-platform-changed();
+    callback install-configuration();
+
+    // Managed modpack instance updates.
+    in property <string> pack-name;
+    in property <string> pack-update-text;
+    in property <bool> pack-update-busy: false;
+    in property <bool> pack-update-available: false;
+    callback pack-check-update();
+    callback pack-review-update();
+    in-out property <bool> pack-review-open: false;
+    in property <string> pack-review-text;
+    in property <int> pack-review-conflicts: 0;
+    in-out property <bool> pack-keep-local: false;
+    in property <bool> pack-review-allowed: false;
+    callback pack-review-confirm();
+
     // Rename.
     in-out property <bool> rename-open: false;
     in-out property <string> rename-text;
@@ -237,8 +289,19 @@ export global Instances {
     in property <string> create-icon-label;
     callback create-choose-icon();
     callback create-changed();
+    callback create-platform-changed();
     callback snapshots-changed(bool);
     callback create-confirm();
+    // Exact loader version: index 0 is the automatic compatible version.
+    in property <bool> create-has-loader: false;
+    in property <string> create-loader-label: "Loader version";
+    in property <[string]> create-loader-versions;
+    in-out property <int> create-loader-index: 0;
+    in property <bool> create-loader-loading: false;
+    in property <string> create-loader-note;
+    // Local Modrinth modpack (.mrpack) import.
+    in property <bool> pack-import-busy: false;
+    callback import-modpack();
 }
 
 export global ContentImport {
@@ -273,6 +336,8 @@ export global IconPicker {
 
 export struct OptionalPackFile { path: string, selected: bool }
 export global Discover {
+    // Set when the open pack review came from a recognized local .mrpack.
+    in property <string> local-pack-note;
     in property <[OptionalPackFile]> optional-files;
     callback toggle-optional(string);
     in-out property <int> kind: 0;

@@ -101,6 +101,8 @@ pub struct ConfigSummary {
 pub struct PlatformCapability {
     pub kind: String,
     pub can_create: bool,
+    #[serde(default)]
+    pub can_install: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -420,6 +422,16 @@ pub struct ModEntry {
     pub removal_blocked_reason: Option<String>,
     #[serde(default)]
     pub action_blocked_reason: Option<String>,
+    #[serde(default)]
+    pub provenance: Option<Provenance>,
+}
+
+/// The managed provider identity of an installed file, when it has one.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Provenance {
+    pub provider: String,
+    pub project_id: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -452,6 +464,8 @@ pub struct ContentEntry {
     #[serde(default)]
     pub warnings: Vec<Warning>,
     pub management: ContentManagement,
+    #[serde(default)]
+    pub provenance: Option<Provenance>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1030,6 +1044,165 @@ pub async fn install_pack(host: Host, merge: bool, value: Value) -> ApiResult<Va
     } else {
         convert(app::install_modrinth_pack(host, request(value)?).await)
     }
+}
+
+// ------------------------------------------------- loader versions
+
+/// One installable loader version for an exact Minecraft version.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LoaderVersion {
+    pub version: String,
+    pub stable: bool,
+}
+
+/// The official catalog for one platform, newest first. Vanilla has none.
+pub async fn loader_versions(kind: String, minecraft: String) -> ApiResult<Vec<LoaderVersion>> {
+    match kind.as_str() {
+        "fabric" => convert(app::list_fabric_loader_versions(minecraft).await),
+        "forge" => convert(app::list_forge_versions(minecraft).await),
+        "neoForge" => convert(app::list_neoforge_versions(minecraft).await),
+        _ => Ok(Vec::new()),
+    }
+}
+
+// ------------------------------------------------- content updates
+
+/// The candidate version an update would install.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCandidate {
+    pub id: String,
+    pub version_number: String,
+    #[serde(default)]
+    pub version_type: String,
+}
+
+/// One managed record's update availability (`content_updates.rs`).
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateEntry {
+    pub content_type: String,
+    pub project_id: String,
+    pub current_version: String,
+    pub status: String,
+    #[serde(default)]
+    pub block: Option<String>,
+    #[serde(default)]
+    pub candidate: Option<UpdateCandidate>,
+    pub pinned: bool,
+    #[serde(default)]
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdatesReport {
+    pub entries: Vec<UpdateEntry>,
+    #[serde(default)]
+    pub dependency_managed: usize,
+}
+
+/// Explicit, read-only availability check for one content kind.
+pub async fn check_updates(
+    host: Host,
+    instance: String,
+    kind: &'static str,
+) -> ApiResult<UpdatesReport> {
+    let request = request(json!({ "instanceId": instance, "contentType": kind }))?;
+    convert(app::check_instance_updates(host, request).await)
+}
+
+fn update_targets(kind: &str, projects: &[String]) -> Value {
+    Value::Array(
+        projects
+            .iter()
+            .map(|project| json!({ "contentType": kind, "projectId": project }))
+            .collect(),
+    )
+}
+
+/// One coherent reviewed preview for one or more roots of one kind.
+pub async fn preview_updates(
+    host: Host,
+    instance: String,
+    kind: &'static str,
+    projects: Vec<String>,
+) -> ApiResult<Value> {
+    let request =
+        request(json!({ "instanceId": instance, "targets": update_targets(kind, &projects) }))?;
+    convert(app::preview_modrinth_bulk_update(host, request).await)
+}
+
+/// Re-resolves the same targets and applies them only if the preview is unchanged.
+pub async fn apply_updates(
+    host: Host,
+    instance: String,
+    kind: &'static str,
+    projects: Vec<String>,
+    fingerprint: String,
+) -> ApiResult<Value> {
+    let request = request(json!({
+        "instanceId": instance,
+        "targets": update_targets(kind, &projects),
+        "previewFingerprint": fingerprint,
+    }))?;
+    convert(
+        app::apply_modrinth_bulk_update(host, request)
+            .await
+            .map(|()| Value::Null),
+    )
+}
+
+/// Changes only the persisted pin of one managed record.
+pub async fn set_update_pinned(
+    host: Host,
+    instance: String,
+    kind: &'static str,
+    project: String,
+    pinned: bool,
+) -> ApiResult<Value> {
+    let request = request(json!({
+        "instanceId": instance, "contentType": kind, "projectId": project, "pinned": pinned, "channel": null,
+    }))?;
+    blocking(move || convert(app::set_provider_update_policy(host, request))).await?
+}
+
+// ------------------------------------------------- managed modpack updates
+
+pub async fn check_modpack_update(host: Host, instance: String) -> ApiResult<Value> {
+    let request = request(json!({ "instanceId": instance }))?;
+    convert(app::check_modpack_update(host, request).await)
+}
+
+pub async fn preview_modpack_update(host: Host, instance: String) -> ApiResult<Value> {
+    let request = request(json!({ "instanceId": instance }))?;
+    convert(app::preview_modpack_update(host, request).await)
+}
+
+/// `resolutions` are (path, resolution) pairs re-validated by Rust.
+pub async fn apply_modpack_update(
+    host: Host,
+    instance: String,
+    fingerprint: String,
+    resolutions: Vec<(String, String)>,
+) -> ApiResult<Value> {
+    let resolutions: Vec<Value> = resolutions
+        .into_iter()
+        .map(|(path, resolution)| json!({ "path": path, "resolution": resolution }))
+        .collect();
+    let request = request(
+        json!({ "instanceId": instance, "fingerprint": fingerprint, "resolutions": resolutions }),
+    )?;
+    convert(app::apply_modpack_update(host, request).await)
+}
+
+// ------------------------------------------------- local .mrpack
+
+/// Identifies a selected local archive as an exact published pack version.
+pub async fn identify_local_modpack(host: Host, path: String) -> ApiResult<Value> {
+    let request = request(json!({ "sourcePath": path }))?;
+    convert(app::identify_local_modpack(host, request).await)
 }
 
 pub async fn skin_preview(host: Host, preset: String) -> ApiResult<HeadAvatar> {

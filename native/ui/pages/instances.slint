@@ -6,7 +6,7 @@ import { Icon, Icons } from "../icons.slint";
 import {
     Button, ButtonKind, IconButton, Glyph, StatusPill, Tone, Toggle, Slider, TextField, Tabs,
     Group, SettingRow, Divider, EmptyState, Spinner, PageTitle, FocusRing, KeyboardFocus,
-    InstanceIcon,
+    InstanceIcon, Dropdown,
 } from "../components.slint";
 import { Instances, ContentRow, InstanceRow } from "../state.slint";
 
@@ -52,6 +52,7 @@ export component InstancesPage inherits Rectangle {
         spacing: Theme.space-4;
         HorizontalLayout {
             PageTitle { text: "Instances"; horizontal-stretch: 1; vertical-alignment: center; }
+            Button { text: "Import modpack"; icon: Icons.download; loading: Instances.pack-import-busy; clicked => { Instances.import-modpack(); } }
             Button { text: "New instance"; icon: Icons.add; kind: ButtonKind.primary; clicked => { Instances.create(); } }
         }
         if Instances.loading: HorizontalLayout { alignment: center; padding: Theme.space-6; Spinner { size: 24px; } }
@@ -100,7 +101,7 @@ component ContentLine inherits Rectangle {
     background: touch.has-hover ? Theme.hover : Theme.surface;
     accessible-role: list-item;
     accessible-label: root.item.title;
-    accessible-description: root.item.detail;
+    accessible-description: root.item.detail + (root.item.update-text != "" ? ". " + root.item.update-text : "");
     touch := TouchArea { }
     layout := HorizontalLayout {
         padding-left: 14px;
@@ -115,6 +116,24 @@ component ContentLine inherits Rectangle {
             Text { text: root.item.title; font-size: Theme.text-body; color: root.item.enabled ? Theme.text : Theme.text-muted; overflow: elide; }
             Text { text: root.item.detail; font-size: Theme.text-metadata; color: Theme.text-muted; overflow: elide; }
             if root.item.note != "": Text { text: root.item.note; font-size: Theme.text-metadata; color: Theme.warning; wrap: word-wrap; }
+        }
+        if root.item.update-text != "": StatusPill {
+            y: (parent.height - self.height) / 2;
+            text: root.item.update-text;
+            tone: root.item.update-tone;
+        }
+        if root.item.can-update: Button {
+            y: (parent.height - self.height) / 2;
+            text: "Update";
+            icon: Icons.download;
+            enabled: !Instances.installing;
+            clicked => { Instances.content-update(root.item.id); }
+        }
+        if root.item.can-unpin: Button {
+            y: (parent.height - self.height) / 2;
+            text: "Unpin";
+            kind: ButtonKind.ghost;
+            clicked => { Instances.content-unpin(root.item.id); }
         }
         if root.item.toggleable: Toggle {
             y: (parent.height - self.height) / 2;
@@ -133,6 +152,48 @@ component ContentLine inherits Rectangle {
 
 component ConfigurationTab inherits VerticalLayout {
     spacing: Theme.space-4;
+    Group {
+        title: "Game";
+        description: "Changes are saved first, then installed explicitly. Installed content is never changed by a selection alone.";
+        SettingRow {
+            label: "Minecraft version";
+            detail: "Changing this requires installing new game files.";
+            Dropdown {
+                width: 220px;
+                label: "Minecraft version";
+                model: Instances.cfg-versions;
+                current-index <=> Instances.cfg-version-index;
+                enabled: Instances.cfg-versions.length > 0 && !Instances.config-busy && !Instances.installing;
+                placeholder: "Loading…";
+                selected => { Instances.cfg-platform-changed(); }
+            }
+        }
+        SettingRow {
+            label: "Mod loader";
+            detail: Instances.cfg-loader-kind-note;
+            Dropdown {
+                width: 220px;
+                label: "Mod loader";
+                model: Instances.cfg-loaders;
+                current-index <=> Instances.cfg-loader-index;
+                enabled: Instances.cfg-loader-kind-enabled && !Instances.config-busy && !Instances.installing;
+                selected => { Instances.cfg-platform-changed(); }
+            }
+        }
+        if Instances.cfg-has-loader: SettingRow {
+            label: Instances.cfg-loader-label;
+            detail: Instances.cfg-loader-note;
+            Dropdown {
+                width: 220px;
+                label: Instances.cfg-loader-label;
+                model: Instances.cfg-loader-versions;
+                current-index <=> Instances.cfg-loader-version-index;
+                enabled: !Instances.cfg-loader-loading && !Instances.config-busy && !Instances.installing;
+                placeholder: "Loading…";
+                selected => { Instances.config-edited(); }
+            }
+        }
+    }
     Group {
         title: "Memory";
         description: Instances.memory-hint;
@@ -209,6 +270,20 @@ component ConfigurationTab inherits VerticalLayout {
                 if Instances.can-repair: Button { text: "Repair"; kind: ButtonKind.primary; enabled: !Instances.health-busy; clicked => { Instances.repair(); } }
             }
         }
+        if Instances.cfg-needs-install: SettingRow {
+            label: "Saved settings not installed";
+            detail: "The saved Minecraft version or loader differs from the installed game. Install them to apply.";
+            Button { text: "Install now"; kind: ButtonKind.primary; loading: Instances.health-busy; enabled: !Instances.config-dirty; clicked => { Instances.install-configuration(); } }
+        }
+        if Instances.pack-name != "": SettingRow {
+            label: "Modpack";
+            detail: Instances.pack-update-text != "" ? Instances.pack-name + " · " + Instances.pack-update-text : Instances.pack-name;
+            HorizontalLayout {
+                spacing: 8px;
+                Button { text: "Check for update"; icon: Icons.refresh; loading: Instances.pack-update-busy; enabled: !Instances.installing; clicked => { Instances.pack-check-update(); } }
+                if Instances.pack-update-available: Button { text: "Review update"; kind: ButtonKind.primary; enabled: !Instances.pack-update-busy && !Instances.installing; clicked => { Instances.pack-review-update(); } }
+            }
+        }
         if Instances.runtime-text != "": SettingRow { label: "Java"; detail: Instances.runtime-text; }
         SettingRow {
             label: "Instance folder";
@@ -243,6 +318,25 @@ component ContentTab inherits VerticalLayout {
         Button { text: "Import file"; enabled: !Instances.installing; clicked => { Instances.content-import(); } }
         IconButton { icon: Icons.folder; label: "Open folder"; size: 36px; clicked => { Instances.content-open-folder(); } }
         IconButton { icon: Icons.refresh; label: "Refresh"; size: 36px; clicked => { Instances.content-refresh(); } }
+    }
+    HorizontalLayout {
+        spacing: Theme.space-2;
+        Text {
+            horizontal-stretch: 1;
+            vertical-alignment: center;
+            text: Instances.updates-summary != "" ? Instances.updates-summary : "Check Modrinth for compatible updates to content installed from it.";
+            color: Instances.updates-count > 0 ? Theme.text : Theme.text-muted;
+            font-size: Theme.text-secondary-size;
+            wrap: word-wrap;
+        }
+        Button { text: "Check for updates"; icon: Icons.refresh; loading: Instances.updates-busy; enabled: !Instances.content-loading; clicked => { Instances.check-updates(); } }
+        if Instances.updates-count > 1: Button {
+            text: "Update all (" + Instances.updates-count + ")";
+            kind: ButtonKind.primary;
+            icon: Icons.download;
+            enabled: !Instances.updates-busy && !Instances.installing;
+            clicked => { Instances.update-all(); }
+        }
     }
     if Instances.content-loading: HorizontalLayout { alignment: center; padding: Theme.space-5; Spinner { size: 22px; } }
     if Instances.content-error != "": Text { text: Instances.content-error; color: Theme.error; wrap: word-wrap; }

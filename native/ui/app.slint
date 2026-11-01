@@ -263,6 +263,11 @@ export component AppWindow inherits Window {
             VerticalLayout {
                 spacing: 12px;
                 alignment: start;
+                if Discover.local-pack-note != "": Rectangle {
+                    background: Theme.surface;
+                    border-radius: Theme.radius-md;
+                    VerticalLayout { padding: 10px; Text { text: Discover.local-pack-note; color: Theme.text; wrap: word-wrap; font-size: Theme.text-secondary-size; } }
+                }
                 Text { text: Discover.project-summary; color: Theme.text-secondary; wrap: word-wrap; }
                 Text { text: Discover.compatibility; color: Theme.text-muted; wrap: word-wrap; font-size: Theme.text-metadata; }
                 Dropdown { label: "Project version"; model: Discover.versions; current-index <=> Discover.version-index; enabled: !Discover.install-busy && !Discover.details-loading; selected => { Discover.version-changed(); } }
@@ -334,6 +339,47 @@ export component AppWindow inherits Window {
             spacing: 8px;
             if Accounts.login-busy: Button { text: "Cancel sign-in"; clicked => { Accounts.cancel-sign-in(); } }
             if !Accounts.login-busy: Button { text: Accounts.rows.length == 0 ? "Sign in with Microsoft" : "Add account"; icon: Icons.open-external; kind: ButtonKind.primary; clicked => { Accounts.sign-in(); } }
+        }
+    }
+
+    if Instances.update-review-open: Dialog {
+        title: Instances.update-review-title;
+        dismissed => { Instances.update-review-dismiss(); }
+        ScrollView {
+            height: min(300px, max(120px, root.height - 240px));
+            VerticalLayout {
+                padding-right: 8px;
+                Text { text: Instances.update-review-text; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
+            }
+        }
+        HorizontalLayout { alignment: end; spacing: 8px;
+            Button { text: "Cancel"; clicked => { Instances.update-review-dismiss(); } }
+            Button { text: "Update"; kind: ButtonKind.primary; clicked => { Instances.update-review-confirm(); } }
+        }
+    }
+
+    if Instances.pack-review-open: Dialog {
+        title: "Review modpack update";
+        dismissed => { Instances.pack-review-open = false; }
+        ScrollView {
+            height: min(300px, max(120px, root.height - 260px));
+            VerticalLayout {
+                padding-right: 8px;
+                Text { text: Instances.pack-review-text; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
+            }
+        }
+        if Instances.pack-review-conflicts > 0: Checkbox {
+            text: "Keep my local copies of the " + Instances.pack-review-conflicts + " changed file(s)";
+            checked <=> Instances.pack-keep-local;
+        }
+        HorizontalLayout { alignment: end; spacing: 8px;
+            Button { text: "Cancel"; clicked => { Instances.pack-review-open = false; } }
+            Button {
+                text: "Update modpack";
+                kind: ButtonKind.primary;
+                enabled: Instances.pack-review-allowed && (Instances.pack-review-conflicts == 0 || Instances.pack-keep-local);
+                clicked => { Instances.pack-review-confirm(); }
+            }
         }
     }
 
@@ -419,7 +465,7 @@ export component AppWindow inherits Window {
                     current-index <=> Instances.version-index;
                     enabled: !Instances.create-busy && !Instances.versions-loading && Instances.versions.length > 0;
                     placeholder: Instances.versions-loading ? "Loading…" : "Unavailable";
-                    selected => { Instances.create-changed(); }
+                    selected => { Instances.create-platform-changed(); }
                 }
             }
             VerticalLayout {
@@ -431,9 +477,22 @@ export component AppWindow inherits Window {
                     model: Instances.loaders;
                     current-index <=> Instances.loader-index;
                     enabled: !Instances.create-busy;
-                    selected => { Instances.create-changed(); }
+                    selected => { Instances.create-platform-changed(); }
                 }
             }
+        }
+        if Instances.create-has-loader: VerticalLayout {
+            spacing: 4px;
+            Text { text: Instances.create-loader-label; color: Theme.text-secondary; font-size: Theme.text-metadata; }
+            Dropdown {
+                label: Instances.create-loader-label;
+                model: Instances.create-loader-versions;
+                current-index <=> Instances.create-loader-index;
+                enabled: !Instances.create-busy && !Instances.create-loader-loading;
+                placeholder: "Loading…";
+                selected => { Instances.create-changed(); }
+            }
+            if Instances.create-loader-note != "": Text { text: Instances.create-loader-note; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
         }
         Checkbox { text: "Include snapshots"; checked <=> Instances.include-snapshots; enabled: !Instances.create-busy; toggled(value) => { Instances.snapshots-changed(value); } }
         HorizontalLayout {

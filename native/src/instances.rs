@@ -17,18 +17,27 @@ pub struct Workspace {
     pub content_serial: u64,
     pub filter: String,
     pub pending_remove: Option<(String, String)>,
+    /// The last explicit update check of the current content tab.
+    pub updates: crate::content_updates::Updates,
+    /// Option values behind the Game settings selectors, in display order.
+    /// Loader versions start with "" (automatic) then exact versions.
+    pub cfg_versions: Vec<String>,
+    pub cfg_kinds: Vec<String>,
+    pub cfg_loader_versions: Vec<String>,
 }
 
 #[derive(Clone)]
 pub struct ContentItem {
     pub row: ContentRow,
+    /// Modrinth project id when the file is provider-managed.
+    pub project: Option<String>,
 }
 
 /// Workspace tabs. Content tabs come first and their index equals the
 /// content kind index; Settings is always last.
 pub const TAB_MODS: i32 = 0;
 pub const TAB_SETTINGS: i32 = 3;
-const CONTENT_KINDS: [&str; 3] = ["mod", "resourcePack", "shaderPack"];
+pub const CONTENT_KINDS: [&str; 3] = ["mod", "resourcePack", "shaderPack"];
 
 /// The same content-status wording every surface shows (instanceStatus.ts).
 pub fn content_status(instance: &InstanceSummary) -> (String, Tone) {
@@ -91,11 +100,12 @@ pub fn bind(window: &AppWindow) {
                 write_draft(window, &base);
             }
         });
+        seed_game_settings();
         render_dirty();
     });
     instances.on_save_config(save_configuration);
     instances.on_validate(validate);
-    instances.on_repair(repair);
+    instances.on_repair(|| install_or_repair(false));
     instances.on_content_filter_changed(|text| {
         ui::with(|_, state| {
             if let Some(workspace) = state.workspace.as_mut() {
@@ -178,8 +188,14 @@ pub fn bind(window: &AppWindow) {
     });
     instances.on_delete_confirm(delete_instance);
     instances.on_create_changed(refresh_aurora_compatibility);
+    instances.on_create_platform_changed(|| {
+        load_create_loader_versions();
+        refresh_aurora_compatibility();
+    });
     instances.on_snapshots_changed(|_| load_versions());
     instances.on_create_confirm(create);
+    instances.on_cfg_platform_changed(cfg_platform_changed);
+    instances.on_install_configuration(|| install_or_repair(true));
 }
 
 fn report_error(result: api::ApiResult<()>) {
@@ -237,6 +253,9 @@ pub fn open_workspace(id: String, tab: i32) {
         });
         let instances = window.global::<Instances>();
         write_draft(window, &instance.configuration);
+        instances.set_pack_update_text("".into());
+        instances.set_pack_update_available(false);
+        instances.set_pack_review_open(false);
         instances.set_tab(tab);
         instances.set_config_error("".into());
         instances.set_health_text("Not checked yet.".into());
@@ -253,6 +272,7 @@ pub fn open_workspace(id: String, tab: i32) {
     if found.is_none() {
         return;
     }
+    seed_game_settings();
     render_workspace_header();
     render_dirty();
     load_memory_hint(id);
@@ -287,6 +307,15 @@ fn render_workspace_header() {
         instances.set_status(status.into());
         instances.set_tone(tone);
         instances.set_installing(instance.state == "installing");
+        instances.set_cfg_needs_install(needs_install(instance));
+        instances.set_pack_name(
+            instance
+                .pack
+                .as_ref()
+                .map(|pack| format!("{} {}", pack.name, pack.pack_version))
+                .unwrap_or_default()
+                .into(),
+        );
         let selected = state
             .launcher
             .as_ref()
@@ -314,9 +343,13 @@ fn write_draft(window: &AppWindow, configuration: &InstanceConfiguration) {
 fn read_draft(
     window: &AppWindow,
     base: &InstanceConfiguration,
+    workspace: &Workspace,
 ) -> Result<InstanceConfiguration, String> {
     let instances = window.global::<Instances>();
     let mut draft = base.clone();
+    let (version, loader) = draft_platform(window, workspace, base);
+    draft.minecraft_version = version;
+    draft.loader = loader;
     draft.memory_mib = ((instances.get_memory_gib() * 2.0).round() / 2.0 * 1024.0) as u32;
     draft.additional_jvm_arguments = instances.get_jvm_args().to_string();
     draft.window = if instances.get_custom_window() {
@@ -341,11 +374,14 @@ fn read_draft(
 
 fn render_dirty() {
     ui::with(|window, state| {
-        let Some(base) = state.workspace.as_ref().and_then(|w| w.base.clone()) else {
+        let Some(workspace) = state.workspace.as_ref() else {
+            return;
+        };
+        let Some(base) = workspace.base.clone() else {
             return;
         };
         let instances = window.global::<Instances>();
-        match read_draft(window, &base) {
+        match read_draft(window, &base, workspace) {
             Ok(draft) => {
                 instances.set_config_dirty(draft != base);
                 instances.set_config_error("".into());
@@ -363,7 +399,7 @@ fn save_configuration() {
         let workspace = state.workspace.as_ref()?;
         let base = workspace.base.clone()?;
         let instances = window.global::<Instances>();
-        match read_draft(window, &base) {
+        match read_draft(window, &base, workspace) {
             Ok(draft) => {
                 instances.set_config_busy(true);
                 Some((workspace.id.clone(), base, draft))
@@ -391,12 +427,22 @@ fn save_configuration() {
                         }
                         write_draft(window, &updated.configuration);
                         instances.set_config_dirty(false);
-                        ui::toast("Settings saved.", Tone::Success);
+                        ui::toast(
+                            if needs_install(&updated) {
+                                "Settings saved. Install them to apply the new game version or loader."
+                            } else {
+                                "Settings saved."
+                            },
+                            Tone::Success,
+                        );
                     }
                     Err(error) => instances.set_config_error(error.message.into()),
                 }
             });
-            reload(crate::home::refresh_readiness);
+            reload(|| {
+                seed_game_settings();
+                crate::home::refresh_readiness();
+            });
         },
     );
 }
@@ -492,7 +538,9 @@ fn validate() {
     );
 }
 
-fn repair() {
+/// `install`: apply saved settings that differ from the installed game.
+/// Otherwise repair (or retry an interrupted install). Same Rust services.
+fn install_or_repair(install: bool) {
     let Some((id, installing)) = ui::state(|s| {
         let workspace = s.workspace.as_ref()?;
         let instance = s.instance(&workspace.id)?;
@@ -509,14 +557,22 @@ fn repair() {
             api::install_configuration(host, id).await
         }
     };
-    ui::spawn(work, |result| {
+    ui::spawn(work, move |result| {
         crate::home::clear_progress();
         ui::with(|window, _| window.global::<Instances>().set_health_busy(false));
         match result {
             Ok(_) => {
-                ui::toast("Installation repaired.", Tone::Success);
+                ui::toast(
+                    if install {
+                        "Saved settings installed and verified."
+                    } else {
+                        "Installation repaired."
+                    },
+                    Tone::Success,
+                );
                 reload(|| {
                     validate();
+                    seed_game_settings();
                     crate::home::refresh_readiness();
                 });
             }
@@ -536,6 +592,9 @@ fn load_tab(tab: i32) {
         let workspace = state.workspace.as_mut()?;
         workspace.content_serial += 1;
         workspace.content.clear();
+        if workspace.updates.tab != tab {
+            workspace.updates = crate::content_updates::Updates::default();
+        }
         let instances = window.global::<Instances>();
         instances.set_content_loading(true);
         instances.set_content_error("".into());
@@ -602,6 +661,7 @@ fn mod_items(inventory: api::ModInventory) -> Vec<ContentItem> {
                 })
                 .unwrap_or_default();
             ContentItem {
+                project: modrinth_project(entry.provenance.as_ref()),
                 row: ContentRow {
                     id: entry.entry_id.into(),
                     title: entry.display_name.into(),
@@ -610,6 +670,7 @@ fn mod_items(inventory: api::ModInventory) -> Vec<ContentItem> {
                     toggleable: entry.can_toggle,
                     removable: entry.can_remove,
                     note: note.into(),
+                    ..Default::default()
                 },
             }
         })
@@ -633,6 +694,7 @@ fn pack_items(inventory: api::ContentInventory) -> Vec<ContentItem> {
                 detail.push("Selected in game".into());
             }
             ContentItem {
+                project: modrinth_project(entry.provenance.as_ref()),
                 row: ContentRow {
                     id: entry.entry_id.into(),
                     title: entry.display_name.into(),
@@ -659,10 +721,17 @@ fn pack_items(inventory: api::ContentInventory) -> Vec<ContentItem> {
                         })
                         .unwrap_or_default()
                         .into(),
+                    ..Default::default()
                 },
             }
         })
         .collect()
+}
+
+fn modrinth_project(provenance: Option<&api::Provenance>) -> Option<String> {
+    provenance
+        .filter(|p| p.provider == "modrinth")
+        .map(|p| p.project_id.clone())
 }
 
 fn apply_content(serial: u64, result: api::ApiResult<Vec<ContentItem>>) {
@@ -683,9 +752,17 @@ fn apply_content(serial: u64, result: api::ApiResult<Vec<ContentItem>>) {
     render_content();
 }
 
-fn render_content() {
+pub fn render_content() {
     ui::with(|window, state| {
         let instances = window.global::<Instances>();
+        let tab = instances.get_tab();
+        let empty = crate::content_updates::Updates::default();
+        let updates = state
+            .workspace
+            .as_ref()
+            .map(|w| &w.updates)
+            .filter(|u| u.tab == tab)
+            .unwrap_or(&empty);
         let rows: Vec<ContentRow> = state
             .workspace
             .as_ref()
@@ -699,12 +776,41 @@ fn render_content() {
                             || item.row.title.to_lowercase().contains(&filter)
                             || item.row.detail.to_lowercase().contains(&filter)
                     })
-                    .map(|item| item.row.clone())
+                    .map(|item| {
+                        let mut row = item.row.clone();
+                        crate::content_updates::decorate(
+                            &mut row,
+                            item.project.as_deref(),
+                            updates,
+                        );
+                        row
+                    })
                     .collect()
             })
             .unwrap_or_default();
+        let count = updates
+            .entries
+            .values()
+            .filter(|e| crate::content_updates::eligible(e))
+            .count();
+        instances.set_updates_summary(updates.summary.clone().into());
+        instances.set_updates_count(count as i32);
         instances.set_content(ui::model(rows));
     });
+}
+
+/// After a queued install or update settles: reload the open content tab and
+/// refresh update badges that described the superseded files.
+pub fn after_content_change() {
+    let tab = ui::with(|window, state| {
+        state.workspace.as_ref()?;
+        Some(window.global::<Instances>().get_tab())
+    })
+    .flatten();
+    if let Some(tab) = tab.filter(|tab| (TAB_MODS..TAB_SETTINGS).contains(tab)) {
+        load_tab(tab);
+    }
+    crate::content_updates::after_change();
 }
 
 fn toggle_content(entry: slint::SharedString, enabled: bool) {
@@ -885,6 +991,10 @@ fn delete_instance() {
 thread_local! {
     static LOADER_KINDS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
     static VERSIONS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// (request serial, option values): "" is the automatic policy.
+    static CREATE_LOADER: std::cell::RefCell<(u64, Vec<String>)> = const { std::cell::RefCell::new((0, Vec::new())) };
+    /// Official release catalog for the Game settings selector.
+    static RELEASES: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 fn open_create() {
@@ -918,6 +1028,7 @@ fn open_create() {
     if empty {
         load_versions();
     } else {
+        load_create_loader_versions();
         refresh_aurora_compatibility();
     }
 }
@@ -979,6 +1090,7 @@ fn load_versions() {
                     Err(error) => instances.set_create_error(error.message.into()),
                 }
             });
+            load_create_loader_versions();
             refresh_aurora_compatibility();
         },
     );
@@ -997,12 +1109,13 @@ fn creation_choice() -> Option<(String, serde_json::Value)> {
                 .get(instances.get_loader_index() as usize)
                 .cloned()
         })?;
-        let loader = if kind == "vanilla" {
-            serde_json::json!({ "kind": "vanilla" })
-        } else {
-            serde_json::json!({ "kind": kind, "policy": { "type": "automatic" } })
-        };
-        Some((version, loader))
+        let pinned = CREATE_LOADER.with(|slot| {
+            slot.borrow()
+                .1
+                .get(instances.get_create_loader_index() as usize)
+                .cloned()
+        });
+        Some((version, loader_json(&kind, pinned.as_deref())))
     })
     .flatten()
 }
@@ -1108,4 +1221,458 @@ pub fn on_create_progress(text: &str, fraction: f32) {
             instances.set_create_fraction(fraction);
         }
     });
+}
+
+// ------------------------------------------------------------ loader versions
+
+thread_local! {
+    /// Latest Game-settings catalog request; older responses are ignored.
+    static CFG_LOADER_SERIAL: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// The persisted loader shape. Vanilla has no policy; no pin is automatic.
+pub fn loader_json(kind: &str, pinned: Option<&str>) -> serde_json::Value {
+    match (kind, pinned.filter(|version| !version.is_empty())) {
+        ("vanilla", _) => serde_json::json!({ "kind": "vanilla" }),
+        (kind, Some(version)) => {
+            serde_json::json!({ "kind": kind, "policy": { "type": "pinned", "version": version } })
+        }
+        (kind, None) => serde_json::json!({ "kind": kind, "policy": { "type": "automatic" } }),
+    }
+}
+
+fn loader_kind(loader: &serde_json::Value) -> String {
+    loader["kind"].as_str().unwrap_or("vanilla").to_owned()
+}
+
+fn loader_pin(loader: &serde_json::Value) -> Option<String> {
+    if loader["policy"]["type"] == "pinned" {
+        loader["policy"]["version"].as_str().map(str::to_owned)
+    } else {
+        None
+    }
+}
+
+fn loader_version_label(kind: &str) -> &'static str {
+    match kind {
+        "forge" => "Forge version",
+        "neoForge" => "NeoForge version",
+        "quilt" => "Quilt Loader version",
+        _ => "Fabric Loader version",
+    }
+}
+
+/// Option values and labels: automatic first, a saved pin missing from the
+/// catalog kept visible, then the official versions newest first.
+pub fn loader_options(
+    versions: &[api::LoaderVersion],
+    keep: Option<&str>,
+    aurora: bool,
+) -> (Vec<String>, Vec<slint::SharedString>) {
+    let mut values = vec![String::new()];
+    let mut labels: Vec<slint::SharedString> = vec![
+        if aurora {
+            "Aurora release version (automatic)"
+        } else {
+            "Automatic compatible version (recommended)"
+        }
+        .into(),
+    ];
+    if let Some(keep) = keep.filter(|k| !k.is_empty() && !versions.iter().any(|v| v.version == *k))
+    {
+        values.push(keep.to_owned());
+        labels.push(format!("{keep} (saved)").into());
+    }
+    for version in versions {
+        values.push(version.version.clone());
+        labels.push(if version.stable {
+            version.version.clone().into()
+        } else {
+            format!("{} (unstable)", version.version).into()
+        });
+    }
+    (values, labels)
+}
+
+fn selected_index(values: &[String], pin: Option<&str>) -> i32 {
+    pin.and_then(|pin| values.iter().position(|v| v == pin))
+        .unwrap_or(0) as i32
+}
+
+/// The saved configuration differs from the installed game (instanceStatus.ts).
+pub fn needs_install(instance: &InstanceSummary) -> bool {
+    let configuration = &instance.configuration;
+    instance.state == "ready"
+        && (configuration.minecraft_version != instance.minecraft_version
+            || loader_kind(&configuration.loader) != instance.platform.kind
+            || configuration.aurora_enabled != instance.aurora.is_some()
+            || loader_pin(&configuration.loader)
+                .is_some_and(|pin| Some(&pin) != instance.platform.version.as_ref()))
+}
+
+fn load_create_loader_versions() {
+    let Some((version, kind, serial)) = ui::with(|window, _| {
+        let instances = window.global::<Instances>();
+        let version = VERSIONS.with(|v| {
+            v.borrow()
+                .get(instances.get_version_index() as usize)
+                .cloned()
+        })?;
+        let kind = LOADER_KINDS.with(|k| {
+            k.borrow()
+                .get(instances.get_loader_index() as usize)
+                .cloned()
+        })?;
+        let has = kind != "vanilla";
+        instances.set_create_has_loader(has);
+        instances.set_create_loader_label(loader_version_label(&kind).into());
+        instances.set_create_loader_note("".into());
+        let (values, labels) = loader_options(&[], None, false);
+        let serial = CREATE_LOADER.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            slot.0 += 1;
+            slot.1 = values;
+            slot.0
+        });
+        instances.set_create_loader_versions(ui::model(labels));
+        instances.set_create_loader_index(0);
+        instances.set_create_loader_loading(has);
+        Some((version, kind, serial))
+    })
+    .flatten() else {
+        return;
+    };
+    if kind == "vanilla" {
+        return;
+    }
+    let label = loader_version_label(&kind);
+    let minecraft = version.clone();
+    ui::spawn(api::loader_versions(kind, version), move |result| {
+        ui::with(|window, _| {
+            if CREATE_LOADER.with(|slot| slot.borrow().0) != serial {
+                return;
+            }
+            let instances = window.global::<Instances>();
+            instances.set_create_loader_loading(false);
+            match result {
+                Ok(versions) => {
+                    if versions.is_empty() {
+                        instances.set_create_loader_note(
+                            format!(
+                                "No {label} supports Minecraft {minecraft}. Choose another version or loader."
+                            )
+                            .into(),
+                        );
+                    }
+                    let (values, labels) = loader_options(&versions, None, false);
+                    CREATE_LOADER.with(|slot| slot.borrow_mut().1 = values);
+                    instances.set_create_loader_versions(ui::model(labels));
+                }
+                Err(error) => instances.set_create_loader_note(
+                    format!(
+                        "Exact versions are unavailable ({}). The automatic version is resolved during installation.",
+                        error.message
+                    )
+                    .into(),
+                ),
+            }
+        });
+    });
+}
+
+/// Seeds the Game selectors from the saved configuration and loads catalogs.
+fn seed_game_settings() {
+    let request = ui::with(|window, state| {
+        let base = state.workspace.as_ref()?.base.clone()?;
+        let kind = loader_kind(&base.loader);
+        let mut kinds: Vec<String> = state
+            .launcher
+            .as_ref()
+            .map(|l| {
+                l.platform_capabilities
+                    .iter()
+                    .filter(|c| c.can_install || c.can_create)
+                    .map(|c| c.kind.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !kinds.contains(&kind) {
+            kinds.push(kind.clone());
+        }
+        let instances = window.global::<Instances>();
+        instances.set_cfg_loaders(ui::model(
+            kinds.iter().map(|k| platform_label(k).into()).collect(),
+        ));
+        instances.set_cfg_loader_index(
+            kinds
+                .iter()
+                .position(|k| *k == kind)
+                .map(|i| i as i32)
+                .unwrap_or(-1),
+        );
+        instances.set_cfg_loader_kind_enabled(!base.aurora_enabled);
+        instances.set_cfg_loader_kind_note(
+            if base.aurora_enabled {
+                "Aurora Client requires Fabric. Manage Aurora content in Mods."
+            } else {
+                "Changing the loader requires installing new content."
+            }
+            .into(),
+        );
+        let workspace = state.workspace.as_mut()?;
+        workspace.cfg_kinds = kinds;
+        workspace.cfg_versions.clear();
+        Some((
+            base.minecraft_version.clone(),
+            kind,
+            loader_pin(&base.loader),
+            base.aurora_enabled,
+        ))
+    })
+    .flatten();
+    let Some((version, kind, pin, aurora)) = request else {
+        return;
+    };
+    refresh_version_list(Some(version.clone()));
+    load_cfg_loader_versions(version, kind, pin, aurora);
+    if RELEASES.with(|r| r.borrow().is_empty()) {
+        ui::spawn(api::minecraft_versions(false), |result| {
+            if let Ok(versions) = result {
+                RELEASES.with(|r| *r.borrow_mut() = versions.into_iter().map(|v| v.id).collect());
+                refresh_version_list(None);
+            }
+        });
+    }
+}
+
+/// Rebuilds the version list from the release catalog, keeping the saved
+/// version and the current draft choice (`select` overrides it) visible.
+fn refresh_version_list(select: Option<String>) {
+    ui::with(|window, state| {
+        let Some(workspace) = state.workspace.as_mut() else {
+            return;
+        };
+        let Some(base) = workspace.base.clone() else {
+            return;
+        };
+        let instances = window.global::<Instances>();
+        let current = select
+            .or_else(|| {
+                workspace
+                    .cfg_versions
+                    .get(instances.get_cfg_version_index() as usize)
+                    .cloned()
+            })
+            .unwrap_or_else(|| base.minecraft_version.clone());
+        let catalog = RELEASES.with(|r| r.borrow().clone());
+        let mut versions = catalog.clone();
+        for keep in [&current, &base.minecraft_version] {
+            if !versions.contains(keep) {
+                versions.insert(0, keep.clone());
+            }
+        }
+        let labels = versions
+            .iter()
+            .map(|v| {
+                if !catalog.is_empty() && !catalog.contains(v) {
+                    format!("{v} (saved)").into()
+                } else {
+                    v.clone().into()
+                }
+            })
+            .collect();
+        instances.set_cfg_versions(ui::model(labels));
+        instances.set_cfg_version_index(
+            versions
+                .iter()
+                .position(|v| *v == current)
+                .map(|i| i as i32)
+                .unwrap_or(0),
+        );
+        workspace.cfg_versions = versions;
+    });
+}
+
+fn cfg_platform_changed() {
+    let request = ui::with(|window, state| {
+        let workspace = state.workspace.as_ref()?;
+        let base = workspace.base.as_ref()?;
+        let instances = window.global::<Instances>();
+        let version = workspace
+            .cfg_versions
+            .get(instances.get_cfg_version_index() as usize)?
+            .clone();
+        let kind = workspace
+            .cfg_kinds
+            .get(instances.get_cfg_loader_index() as usize)?
+            .clone();
+        // A saved pin applies only to the saved version and loader.
+        let pin = (version == base.minecraft_version && kind == loader_kind(&base.loader))
+            .then(|| loader_pin(&base.loader))
+            .flatten();
+        Some((version, kind, pin, base.aurora_enabled))
+    })
+    .flatten();
+    if let Some((version, kind, pin, aurora)) = request {
+        load_cfg_loader_versions(version, kind, pin, aurora);
+    }
+    render_dirty();
+}
+
+fn load_cfg_loader_versions(version: String, kind: String, pin: Option<String>, aurora: bool) {
+    let serial = CFG_LOADER_SERIAL.with(|s| {
+        s.set(s.get() + 1);
+        s.get()
+    });
+    let started = ui::with(|window, state| {
+        let workspace = state.workspace.as_mut()?;
+        let instances = window.global::<Instances>();
+        let has = kind != "vanilla";
+        instances.set_cfg_has_loader(has);
+        instances.set_cfg_loader_label(loader_version_label(&kind).into());
+        instances.set_cfg_loader_note(
+            if aurora {
+                "Automatic uses the exact loader the Aurora release requires."
+            } else {
+                "Automatic resolves a compatible loader when installed; an exact version stays pinned."
+            }
+            .into(),
+        );
+        let (values, labels) = loader_options(&[], pin.as_deref(), aurora);
+        instances.set_cfg_loader_versions(ui::model(labels));
+        instances.set_cfg_loader_version_index(selected_index(&values, pin.as_deref()));
+        workspace.cfg_loader_versions = values;
+        instances.set_cfg_loader_loading(has);
+        Some(())
+    })
+    .flatten();
+    if started.is_none() || kind == "vanilla" {
+        return;
+    }
+    let label = loader_version_label(&kind);
+    let minecraft = version.clone();
+    ui::spawn(api::loader_versions(kind, version), move |result| {
+        ui::with(|window, state| {
+            if CFG_LOADER_SERIAL.with(|s| s.get()) != serial {
+                return;
+            }
+            let Some(workspace) = state.workspace.as_mut() else {
+                return;
+            };
+            let instances = window.global::<Instances>();
+            instances.set_cfg_loader_loading(false);
+            let current = workspace
+                .cfg_loader_versions
+                .get(instances.get_cfg_loader_version_index() as usize)
+                .cloned()
+                .filter(|v| !v.is_empty())
+                .or(pin);
+            match result {
+                Ok(versions) => {
+                    if versions.is_empty() {
+                        instances.set_cfg_loader_note(
+                            format!("No {label} supports Minecraft {minecraft}.").into(),
+                        );
+                    }
+                    let (values, labels) = loader_options(&versions, current.as_deref(), aurora);
+                    instances.set_cfg_loader_versions(ui::model(labels));
+                    instances
+                        .set_cfg_loader_version_index(selected_index(&values, current.as_deref()));
+                    workspace.cfg_loader_versions = values;
+                }
+                Err(error) => instances.set_cfg_loader_note(
+                    format!("Exact versions are unavailable: {}", error.message).into(),
+                ),
+            }
+        });
+        render_dirty();
+    });
+}
+
+/// Minecraft version and loader as edited, keeping the exact persisted JSON
+/// when the choice is unchanged. Unloaded selectors keep the saved values.
+fn draft_platform(
+    window: &AppWindow,
+    workspace: &Workspace,
+    base: &InstanceConfiguration,
+) -> (String, serde_json::Value) {
+    let instances = window.global::<Instances>();
+    let version = workspace
+        .cfg_versions
+        .get(instances.get_cfg_version_index() as usize)
+        .cloned()
+        .unwrap_or_else(|| base.minecraft_version.clone());
+    let kind = workspace
+        .cfg_kinds
+        .get(instances.get_cfg_loader_index() as usize)
+        .cloned()
+        .unwrap_or_else(|| loader_kind(&base.loader));
+    let pin = match workspace
+        .cfg_loader_versions
+        .get(instances.get_cfg_loader_version_index() as usize)
+    {
+        Some(value) => Some(value.clone()).filter(|v| !v.is_empty()),
+        None => loader_pin(&base.loader).filter(|_| kind == loader_kind(&base.loader)),
+    };
+    let loader = loader_json(&kind, pin.as_deref());
+    let unchanged = loader_kind(&loader) == loader_kind(&base.loader)
+        && loader_pin(&loader) == loader_pin(&base.loader);
+    (
+        version,
+        if unchanged {
+            base.loader.clone()
+        } else {
+            loader
+        },
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loader_shapes_match_the_persisted_schema() {
+        assert_eq!(
+            loader_json("vanilla", Some("1")),
+            serde_json::json!({"kind": "vanilla"})
+        );
+        assert_eq!(
+            loader_json("fabric", None),
+            serde_json::json!({"kind": "fabric", "policy": {"type": "automatic"}})
+        );
+        assert_eq!(
+            loader_json("fabric", Some("")),
+            serde_json::json!({"kind": "fabric", "policy": {"type": "automatic"}})
+        );
+        let pinned = loader_json("neoForge", Some("21.1.200"));
+        assert_eq!(loader_pin(&pinned).as_deref(), Some("21.1.200"));
+        assert_eq!(loader_kind(&pinned), "neoForge");
+    }
+
+    #[test]
+    fn options_keep_automatic_first_and_never_drop_a_saved_pin() {
+        let catalog = vec![
+            api::LoaderVersion {
+                version: "0.17.3".into(),
+                stable: true,
+            },
+            api::LoaderVersion {
+                version: "0.17.4-beta".into(),
+                stable: false,
+            },
+        ];
+        let (values, labels) = loader_options(&catalog, Some("0.16.0"), false);
+        assert_eq!(values, ["", "0.16.0", "0.17.3", "0.17.4-beta"]);
+        assert_eq!(labels[0], "Automatic compatible version (recommended)");
+        assert_eq!(labels[1], "0.16.0 (saved)");
+        assert_eq!(labels[3], "0.17.4-beta (unstable)");
+        assert_eq!(selected_index(&values, Some("0.17.3")), 2);
+        assert_eq!(selected_index(&values, None), 0);
+        let (values, _) = loader_options(&catalog, Some("0.17.3"), true);
+        assert_eq!(values, ["", "0.17.3", "0.17.4-beta"]);
+        // Network failure: the saved pin stays selectable and selected.
+        let (values, _) = loader_options(&[], Some("0.16.0"), false);
+        assert_eq!(selected_index(&values, Some("0.16.0")), 1);
+    }
 }

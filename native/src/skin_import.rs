@@ -5,7 +5,7 @@ use crate::api::{ApiError, ApiResult};
 pub async fn choose(owner: Option<isize>) -> ApiResult<Option<Vec<u8>>> {
     tokio::task::spawn_blocking(move || {
         use std::io::Read;
-        let Some(path) = choose_path_blocking(true, owner)? else {
+        let Some(path) = choose_path_blocking(Picker::Skin, owner)? else {
             return Ok(None);
         };
         let file = std::fs::File::open(path).map_err(|_| {
@@ -39,13 +39,28 @@ pub async fn choose(owner: Option<isize>) -> ApiResult<Option<Vec<u8>>> {
 }
 
 pub async fn choose_content_path(owner: Option<isize>) -> ApiResult<Option<String>> {
-    tokio::task::spawn_blocking(move || choose_path_blocking(false, owner))
+    tokio::task::spawn_blocking(move || choose_path_blocking(Picker::Content, owner))
+        .await
+        .map_err(|_| ApiError::new("local_import_failed", "The file chooser did not complete."))?
+}
+
+/// What the owned picker is selecting; each has its own title and filter.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Picker {
+    Skin,
+    Content,
+    Modpack,
+}
+
+/// Local Modrinth modpack archive (`.mrpack`), through the same owned picker.
+pub async fn choose_modpack_path(owner: Option<isize>) -> ApiResult<Option<String>> {
+    tokio::task::spawn_blocking(move || choose_path_blocking(Picker::Modpack, owner))
         .await
         .map_err(|_| ApiError::new("local_import_failed", "The file chooser did not complete."))?
 }
 
 #[cfg(not(windows))]
-fn choose_path_blocking(_skin: bool, _owner: Option<isize>) -> ApiResult<Option<String>> {
+fn choose_path_blocking(_kind: Picker, _owner: Option<isize>) -> ApiResult<Option<String>> {
     Err(ApiError::new(
         "skin_import_unsupported",
         "Native file import is not available on this platform yet.",
@@ -53,7 +68,7 @@ fn choose_path_blocking(_skin: bool, _owner: Option<isize>) -> ApiResult<Option<
 }
 
 #[cfg(windows)]
-fn choose_path_blocking(skin: bool, owner: Option<isize>) -> ApiResult<Option<String>> {
+fn choose_path_blocking(kind: Picker, owner: Option<isize>) -> ApiResult<Option<String>> {
     use windows::{
         Win32::{
             System::Com::{
@@ -81,13 +96,13 @@ fn choose_path_blocking(skin: bool, owner: Option<isize>) -> ApiResult<Option<St
             "Finish the open file picker first.",
         ));
     }
-    struct Picker;
-    impl Drop for Picker {
+    struct OpenGuard;
+    impl Drop for OpenGuard {
         fn drop(&mut self) {
             OPEN.store(false, std::sync::atomic::Ordering::SeqCst);
         }
     }
-    let _picker = Picker;
+    let _picker = OpenGuard;
     let owner =
         windows::Win32::Foundation::HWND(owner.ok_or_else(failed)? as *mut std::ffi::c_void);
     let mut owner_pid = 0;
@@ -117,20 +132,24 @@ fn choose_path_blocking(skin: bool, owner: Option<isize>) -> ApiResult<Option<St
             .map_err(|_| failed())?;
     unsafe {
         dialog
-            .SetTitle(if skin {
-                w!("Import Minecraft skin (PNG)")
-            } else {
-                w!("Import local mod, resource pack or shader")
+            .SetTitle(match kind {
+                Picker::Skin => w!("Import Minecraft skin (PNG)"),
+                Picker::Content => w!("Import local mod, resource pack or shader"),
+                Picker::Modpack => w!("Import Modrinth modpack (.mrpack)"),
             })
             .map_err(|_| failed())?;
         dialog
             .SetFileTypes(&[COMDLG_FILTERSPEC {
-                pszName: if skin {
-                    w!("PNG skin")
-                } else {
-                    w!("Content archive")
+                pszName: match kind {
+                    Picker::Skin => w!("PNG skin"),
+                    Picker::Content => w!("Content archive"),
+                    Picker::Modpack => w!("Modrinth modpack"),
                 },
-                pszSpec: if skin { w!("*.png") } else { w!("*.jar;*.zip") },
+                pszSpec: match kind {
+                    Picker::Skin => w!("*.png"),
+                    Picker::Content => w!("*.jar;*.zip"),
+                    Picker::Modpack => w!("*.mrpack"),
+                },
             }])
             .map_err(|_| failed())?;
         dialog
