@@ -25,6 +25,8 @@ mod instances;
 mod interaction_tests;
 #[cfg(test)]
 mod layout_acceptance;
+#[cfg(test)]
+mod loading_tests;
 mod media;
 mod player;
 mod preview;

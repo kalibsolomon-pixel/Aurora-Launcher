@@ -42,22 +42,24 @@ export component Tooltip inherits Rectangle {
     label := Text { text: root.text; font-size: Theme.text-label; color: Theme.text; }
 }
 
-/// A small busy indicator. Static (no animation) under reduced motion.
+/// Busy dots use opacity only, which works in the software renderer too.
+/// Reduced motion keeps all three dots steady without reading the frame clock.
 export component Spinner inherits Rectangle {
     in property <length> size: 18px;
+    private property <float> phase: Theme.reduce-motion ? 0 : mod(animation-tick() / 180ms, 3);
     width: size;
     height: size;
     accessible-role: progress-indicator;
     accessible-label: "Working";
-    Path {
-        width: root.size;
-        height: root.size;
-        viewbox-width: 24;
-        viewbox-height: 24;
-        stroke: Theme.accent;
-        stroke-width: 2.5px;
-        commands: "M12 3a9 9 0 0 1 9 9";
-        transform-rotation: Theme.reduce-motion ? 0deg : mod(animation-tick() / 2.4ms, 360) * 1deg;
+    for step in [0, 1, 2]: Rectangle {
+        x: step * root.size * 0.4;
+        y: (root.height - self.height) / 2;
+        width: root.size * 0.2;
+        height: self.width;
+        border-radius: self.width / 2;
+        background: Theme.accent;
+        opacity: Theme.reduce-motion ? 0.7 : (root.phase >= step && root.phase < step + 1 ? 1 : 0.3);
+        animate opacity { duration: Theme.motion-fast; }
     }
 }
 
@@ -565,7 +567,8 @@ export component StatusPill inherits Rectangle {
     }
 }
 
-/// Determinate progress. `progress` < 0 renders a static indeterminate bar.
+/// Known totals fill the track; unknown totals move a segment without inventing a percentage.
+/// Reduced motion keeps the unknown segment centered and static.
 export component ProgressBar inherits Rectangle {
     in property <float> progress: -1;
     in property <string> label;
@@ -577,8 +580,17 @@ export component ProgressBar inherits Rectangle {
     accessible-value: progress >= 0 ? round(progress * 100) : -1;
     accessible-value-minimum: 0;
     accessible-value-maximum: 100;
+    if root.progress < 0: Rectangle {
+        private property <float> phase: Theme.reduce-motion ? 0.5 : mod(animation-tick() / 1200ms, 2);
+        x: (parent.width - self.width) * (self.phase <= 1 ? self.phase : 2 - self.phase);
+        width: parent.width * 0.32;
+        height: parent.height;
+        border-radius: 2px;
+        background: Theme.accent;
+    }
     if root.progress >= 0: Rectangle {
         x: 0;
+        height: parent.height;
         width: parent.width * clamp(root.progress, 0, 1);
         border-radius: 2px;
         background: Theme.accent;
