@@ -79,8 +79,10 @@ previous launcher session remain outside process-local supervision.
 
 `benchmark-results.json` retains the initial selective-integration measurements,
 whose native binary still had the subsequently rejected manual UI. Final
-automatic-build measurements are recorded separately so binary identities and
-historical outliers are not silently replaced.
+automatic-build resource measurements were deferred when the owner asked to move
+on. Future results must be recorded separately so binary identities and historical
+outliers are not silently replaced. Real automatic minute propagation was tested;
+that functional result does not establish resource overhead.
 
 Cold/warm game installations, second-instance installation, large live modpack
 updates, public-CDN throughput, real duplication, populated/Borealis idle and
