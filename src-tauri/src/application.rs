@@ -392,6 +392,11 @@ impl From<crate::instance_content::ContentError> for CommandError {
         if let crate::instance_content::ContentError::DependencyBlocked(ref reason) = error {
             return Self::new("mod_dependency_blocked", reason.clone());
         }
+        // Reasons are fixed, app-authored sentences (local import validation,
+        // inventory block reasons), never paths or remote bodies. Keep the code.
+        if let crate::instance_content::ContentError::UnsupportedActionWith(reason) = error {
+            return Self::new("unsupported_content_action", reason);
+        }
         let code = error.code();
         eprintln!("[aurora-launcher] content operation failed ({code}): {error}");
         Self::new(
@@ -6595,6 +6600,25 @@ pub async fn launcher_update_install(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native9_specific_content_refusals_keep_their_code_and_explain_the_reason() {
+        use crate::instance_content::ContentError;
+        let specific = CommandError::from(ContentError::UnsupportedActionWith(
+            "The selected file is not a valid ZIP/JAR archive.".into(),
+        ));
+        assert_eq!(specific.code, "unsupported_content_action");
+        assert_eq!(
+            specific.message,
+            "The selected file is not a valid ZIP/JAR archive."
+        );
+        let generic = CommandError::from(ContentError::UnsupportedAction);
+        assert_eq!(generic.code, "unsupported_content_action");
+        assert_eq!(
+            generic.message,
+            "This content entry cannot be changed here."
+        );
+    }
 
     #[tokio::test]
     async fn native9_disposable_webview_data_copy_preserves_documents_and_user_sentinels() {

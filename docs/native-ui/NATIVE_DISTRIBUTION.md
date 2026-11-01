@@ -82,10 +82,17 @@ Before handoff the core fetches/authenticates the offer again and compares every
 field, including same-version drift, then rehashes/reverifies the retained file.
 It permits automatic installation only from the fixed installed native preview
 location. Structured process arguments hand off the exact live launcher PID to
-NSIS. The installer opens that process once and waits for its handle; it never
-finds/kills a process by name or overwrites a running executable. The native UI
-exits only after installer spawn succeeds. NSIS can restart the native executable
-after successful `/RESTART` installation.
+NSIS. The installer validates that PID as a positive integer, opens that process
+once and waits up to 30 seconds for its handle; it never finds/kills a process by
+name or overwrites a running executable. The native UI exits only after installer
+spawn succeeds, and nothing else normally holds the launcher's handle, so the
+launcher can exit before NSIS opens it. NSIS therefore treats `OpenProcess`
+failing with `ERROR_INVALID_PARAMETER` (no process has that PID) as "already
+exited" and continues; any other open failure aborts. The sharing-violation probe
+on the installed executable still runs afterwards and refuses while it is in use.
+Residual risk: if Windows reuses the PID within that window, NSIS waits on the
+unrelated process for at most 30 seconds and aborts, unchanged, unless it exits. NSIS can restart the
+native executable after successful `/RESTART` installation.
 
 The old executable is retained until activation succeeds. Rename failure attempts
 restoration. Interrupted `.new`/`.previous` evidence is a deliberate conflict,

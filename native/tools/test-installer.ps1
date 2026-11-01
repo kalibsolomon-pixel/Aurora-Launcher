@@ -73,6 +73,25 @@ $clock=[Diagnostics.Stopwatch]::StartNew()
 $results.handoffExit=Run-Setup @('/S',("/UPDATEPID="+$owned.Id))
 $clock.Stop();$results.handoffMilliseconds=$clock.Elapsed.TotalMilliseconds
 if ($results.handoffExit -ne 0 -or !$owned.HasExited -or $clock.Elapsed.TotalSeconds -lt 3) { throw 'Installer did not wait for its exact owned process' }
+$results.malformedPidExit=Run-Setup @('/S','/UPDATEPID=12x')
+if ($results.malformedPidExit -eq 0) { throw 'A malformed handoff PID was accepted' }
+# The real launcher exits right after spawning the installer, and nothing else
+# holds its handle. Start the mirror fixture through WMI so this script holds no
+# handle either; the PID is then gone before NSIS opens it. A completed install
+# restores the removed notice file.
+$exitFixture=Join-Path $root 'exit-fixture.exe'
+& rustc (Join-Path $PSScriptRoot 'update-exit-fixture.rs') -o $exitFixture
+if ($LASTEXITCODE) { throw 'Exit fixture build failed' }
+$notice=Join-Path $installation 'THIRD_PARTY_NOTICES.txt'
+Remove-Item -LiteralPath $notice
+$created=Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine=('"'+$exitFixture+'" "'+$installer+'"') }
+if ($created.ReturnValue -ne 0) { throw 'Exit fixture could not start' }
+$installerName=[IO.Path]::GetFileName($installer).Replace("'","''")
+$deadline=[DateTime]::UtcNow.AddSeconds(60)
+do { Start-Sleep -Milliseconds 250; $active=Get-CimInstance Win32_Process -Filter ("Name='"+$installerName+"' or ProcessId="+$created.ProcessId) } while ($active -and [DateTime]::UtcNow -lt $deadline)
+if ($active) { throw 'Fast-exit handoff installer did not finish' }
+$results.fastExitHandoffCompleted=(Test-Path -LiteralPath $notice) -and (Get-FileHash -LiteralPath $exe).Hash -eq $expectedHash
+if (!$results.fastExitHandoffCompleted) { throw 'Installer aborted when the launcher exited before it could be opened' }
 $results.uninstallExit=Uninstall-Owned
 $results.startShortcutRemoved=!(Test-Path -LiteralPath $link)
 if (!$results.startShortcutRemoved -or [IO.File]::ReadAllText($sentinel) -ne 'NATIVE9 user content must survive') { throw 'Uninstall preservation failed' }

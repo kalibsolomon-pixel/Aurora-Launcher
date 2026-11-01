@@ -278,9 +278,15 @@ fn status(app: &Host, offer: &Offer, phase: LauncherPhase) -> LauncherUpdateStat
     }
 }
 
+/// Only a strictly newer offer can be shown, downloaded or installed. Equal,
+/// older or unparsable versions (on either side) never count as an upgrade.
+fn is_upgrade(candidate: &str, installed: &str) -> bool {
+    matches!((version(candidate), version(installed)), (Ok(c), Ok(i)) if c > i)
+}
+
 pub async fn check(app: &Host) -> UpdateAvailability {
     match discover(app).await {
-        Ok(offer) if version(&offer.version).ok() > version(&app.version()).ok() => {
+        Ok(offer) if is_upgrade(&offer.version, &app.version()) => {
             status(app, &offer, LauncherPhase::Checking).availability
         }
         Ok(_) => UpdateAvailability::UpToDate,
@@ -347,7 +353,7 @@ pub async fn download(
     mut progress: impl FnMut(u64, Option<u64>) + Send,
 ) -> Result<LauncherUpdateStatus, Error> {
     let offer = discover(app).await?;
-    if offer.version != presented || version(presented)? <= version(&app.version())? {
+    if offer.version != presented || !is_upgrade(presented, &app.version()) {
         return Err(Error::gone("The native update changed. Check again."));
     }
     let managed = crate::paths::ManagedPaths::from_app_local_data_dir(
@@ -441,7 +447,7 @@ pub async fn install(app: &Host, presented: &str) -> Result<LauncherUpdateStatus
         .ok_or_else(|| Error::new("update_not_downloaded", "Download the native update first."))?;
     if candidate.offer != offer
         || presented != offer.version
-        || version(presented)? <= version(&app.version())?
+        || !is_upgrade(presented, &app.version())
     {
         return Err(Error::gone("The native update changed. Download it again."));
     }
@@ -534,6 +540,25 @@ mod tests {
         assert!(verify_installer(&path, &offer, public_key).is_err());
         std::fs::remove_file(&path).unwrap();
         std::fs::remove_dir(&root).unwrap();
+    }
+
+    #[test]
+    fn native9_only_strictly_newer_offers_are_upgrades() {
+        assert!(is_upgrade("1.4.3", "1.4.2"));
+        assert!(is_upgrade("2.0.0", "1.9.9"));
+        assert!(!is_upgrade("1.4.2", "1.4.2"));
+        assert!(!is_upgrade("1.4.1", "1.4.2"));
+        assert!(!is_upgrade("1.4.3+build", "1.4.2"));
+        assert!(!is_upgrade("1.4.3-rc.1", "1.4.2"));
+        assert!(!is_upgrade("1.4.3", "not-a-version"));
+        assert!(!is_upgrade("garbage", "1.4.2"));
+        // A validly signed offer for the installed version or older passes
+        // field validation; the upgrade rule is what refuses it.
+        let fixture = fixture();
+        let valid = serde_json::to_vec(&fixture["valid"]).unwrap();
+        let offer = verify_offer(&valid, fixture["key"].as_str().unwrap(), "1.4.3").unwrap();
+        assert!(!is_upgrade(&offer.version, "1.4.3"));
+        assert!(!is_upgrade(&offer.version, "1.4.4"));
     }
 
     #[tokio::test]

@@ -3,6 +3,41 @@ use crate::{ContentImport, Instances, Tone, api, ui};
 use slint::ComponentHandle;
 thread_local! { static REVIEW: std::cell::RefCell<Option<(String, serde_json::Value)>> = const { std::cell::RefCell::new(None) }; }
 
+/// Reader-facing names for the core's camelCase `ContentType` values.
+fn type_label(kind: &str) -> &'static str {
+    match kind {
+        "mod" => "Mod",
+        "resourcePack" => "Resource pack",
+        "shaderPack" => "Shader pack",
+        _ => "Content",
+    }
+}
+
+/// Small archives would otherwise read as "0.0 MiB".
+fn size_label(bytes: u64) -> String {
+    const MIB: u64 = 1024 * 1024;
+    if bytes < MIB {
+        format!("{:.1} KiB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MiB", bytes as f64 / MIB as f64)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn review_labels_are_readable() {
+        assert_eq!(type_label("resourcePack"), "Resource pack");
+        assert_eq!(type_label("shaderPack"), "Shader pack");
+        assert_eq!(type_label("mod"), "Mod");
+        assert_eq!(type_label("unexpected"), "Content");
+        assert_eq!(size_label(192), "0.2 KiB");
+        assert_eq!(size_label(3 * 1024 * 1024 + 512 * 1024), "3.5 MiB");
+    }
+}
+
 pub fn bind(window: &crate::AppWindow) {
     window.global::<ContentImport>().on_dismiss(|| {
         ui::with(|w, _| w.global::<ContentImport>().set_open(false));
@@ -33,11 +68,11 @@ pub fn bind(window: &crate::AppWindow) {
             move |result| match result {
                 Ok(Some(preview)) => {
                     let mut text = format!(
-                        "{}\nTarget: {}\nType: {} · {:.1} MiB\n{}",
+                        "{}\nTarget: {}\nType: {} · {}\n{}",
                         preview["fileName"].as_str().unwrap_or("File"),
                         preview["instanceName"].as_str().unwrap_or("Instance"),
-                        preview["contentType"].as_str().unwrap_or("Content"),
-                        preview["sizeBytes"].as_u64().unwrap_or(0) as f64 / 1048576.0,
+                        type_label(preview["contentType"].as_str().unwrap_or_default()),
+                        size_label(preview["sizeBytes"].as_u64().unwrap_or(0)),
                         preview["note"].as_str().unwrap_or("")
                     );
                     let blocked = preview["blockers"].as_array().is_none_or(|b| !b.is_empty());

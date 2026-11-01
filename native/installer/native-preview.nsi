@@ -130,16 +130,28 @@ Function .onInit
   ${GetParameters} $Parameters
   ${GetOptions} $Parameters "/UPDATEPID=" $6
   ${If} $6 != ""
-    ; Open the still-live launcher once. Wait on that handle, never discover or
-    ; terminate by name. The caller exits after successful installer handoff.
-    System::Call 'kernel32::OpenProcess(i 0x100000, i 0, i r6) p.r7'
-    ${If} $7 P= 0
+    IntOp $7 $6 + 0
+    ${If} $7 != $6
+    ${OrIf} $7 < 1
       Abort "The updating launcher could not be identified. Install manually."
     ${EndIf}
-    System::Call 'kernel32::WaitForSingleObject(p r7, i 30000) i.r8'
-    System::Call 'kernel32::CloseHandle(p r7)'
-    ${If} $8 != 0
-      Abort "The launcher did not exit. Its installation is unchanged."
+    ; Open the launcher once by its exact PID. Wait on that handle, never
+    ; discover or terminate by name. The caller exits right after spawning us.
+    System::Call 'kernel32::OpenProcess(i 0x100000, i 0, i r6) p.r7 ?e'
+    Pop $9
+    ${If} $7 P= 0
+      ; 87: no process has this PID any more, so the launcher already exited
+      ; before we could open it. Any other failure is unexplained: stop. The
+      ; in-use probe below still refuses while the installed executable runs.
+      ${If} $9 != 87
+        Abort "The updating launcher could not be identified. Install manually."
+      ${EndIf}
+    ${Else}
+      System::Call 'kernel32::WaitForSingleObject(p r7, i 30000) i.r8'
+      System::Call 'kernel32::CloseHandle(p r7)'
+      ${If} $8 != 0
+        Abort "The launcher did not exit. Its installation is unchanged."
+      ${EndIf}
     ${EndIf}
   ${EndIf}
   IfFileExists "$INSTDIR\*" 0 slots
