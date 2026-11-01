@@ -1,14 +1,12 @@
 # Aurora Launcher — NATIVE-10 functional parity and preview acceptance
 
-**Verdict: PARTIAL — FUNCTIONAL PARITY INCOMPLETE.** Three of the four required
-features are implemented and pass live end-to-end acceptance: content updates,
-exact loader versions and local `.mrpack` import. Managed-modpack updates were
-added with them. The fourth, **custom Java executable selection, is not
-implemented**: it requires an owner decision, because `AGENTS.md` forbids it
-and the WebView host never offered it (see §5). The interactive native-window
-pass was declined at the desktop-control prompt; layout and input were
-verified headlessly on the real Slint components instead (§12). Nothing was
-published or released.
+**Verdict: PASS — LOCAL FUNCTIONAL PARITY ACCEPTED.** All four requested
+NATIVE-10 features are implemented and locally verified. This continuation
+completes the owner-authorized custom Java capability over the retained work;
+the earlier content-update, exact-loader and local `.mrpack` evidence below
+remains valid. Actual native picker/DPI click-through and authenticated gameplay
+remain owner-attended acceptance. Protected distribution remains separate.
+Nothing was pushed, merged, tagged, published or production-released.
 
 Windows 11 x64, 2026-11-01. Branch `codex/native-ui-migration`, worktree
 `C:\Dev\aurora-launcher-native`.
@@ -17,7 +15,7 @@ Windows 11 x64, 2026-11-01. Branch `codex/native-ui-migration`, worktree
 
 | Item | Value |
 | --- | --- |
-| Starting HEAD | `e6e74ee7a9ca05cb6ab96da170b1f17bfcea2614` (NATIVE-9 final), clean index and tree |
+| Original NATIVE-10 starting HEAD | `e6e74ee7a9ca05cb6ab96da170b1f17bfcea2614` (NATIVE-9 final), clean index and tree |
 | Tracked files at start | 3,190 |
 | Final commits | listed in §19 (local only) |
 | Main checkout `C:\Dev\aurora-launcher` | HEAD `9b99db3`; its 10 pre-existing changed/untracked entries untouched |
@@ -27,8 +25,35 @@ Windows 11 x64, 2026-11-01. Branch `codex/native-ui-migration`, worktree
 No tracked file was deleted or renamed. `git clean`, `cargo clean`, resets,
 recursive cleanup and process-name termination were not used. Every process
 ended during this work was one this session started, identified by exact PID
-and command line. All test state lives in marked `aurora-native10-*` disposable
-roots under `%TEMP%`, which were kept rather than deleted.
+and command line. The original live acceptance used marked `aurora-native10-*` disposable roots
+under `%TEMP%`. The continuation also uses unique `aurora-custom-java-*` unit
+fixtures and a separate marked root for each preview smoke; none opens real data.
+
+### Final continuation preservation (2026-11-01)
+
+- Start: `96cc205b15dfcd8c418294894af8c8cdf3960396`.
+- Ending implementation HEAD (full): `69ac4d5321a911f5660d2d92d6177eec93c1b995`.
+- Branch: `codex/native-ui-migration`, `C:\Dev\aurora-launcher-native`.
+- The index was empty. Twelve modified tracked Java-integration files and
+  untracked `src-tauri/src/runtime/external.rs` were preserved and completed.
+  Full tracked-file inventory, byte hashes, staged/unstaged patches, untracked
+  names, history and all worktree identities were recorded before editing in a
+  unique `aurora-native10-continuation-*` temporary evidence root. The baseline
+  contains 3,206 tracked files plus the one existing untracked module; all
+  3,207 original files remain. Full local scripts/logs are retained under
+  `%TEMP%/aurora-native10-continuation-4f0d7e49-ef93-4706-b304-08dd65142daa`.
+  Unscoped byte changes: zero. Main checkout
+  status and complete binary diff match the recorded baseline exactly.
+- Production EXE full SHA-256:
+  `42c34fbab45ece1c88727374b52751067d5aeebb419a705f72f6e16dd6a2387c`
+  Final identity/preservation check recorded below.
+- Retained optimized NATIVE-10 baseline SHA-256:
+  `f1dace8fcd41ad86c82c806f4ba551022662bb81928e049b7076e476f216494c`.
+- The stable WebView source/working changes and its production binary were not
+  edited. Both compiled update endpoints, production manifests, keys/configuration,
+  signing and publication authority retain their prior identities. Native offers
+  remain unconfigured without separately supplied owner build authority.
+
 
 ## 4. Mod and content update controls
 
@@ -82,27 +107,81 @@ Not exercised end-to-end: applying the managed-pack update (a large download),
 and an interactive cancel/retry of an update job. Both use the unchanged
 NATIVE-9 queue and engines.
 
-## 5. Custom Java path — not implemented (owner decision required)
+## 5. Custom Java — implemented and locally verified
 
-The brief asks to "restore the existing custom Java path control". **None ever
-existed:** the WebView Settings row is fixed text, "Automatic — managed by
-Aurora". `ARCHITECTURE.md` records custom executables as *deliberately
-deferred*. `AGENTS.md` (repository rules) says "custom Java paths … remain out
-of scope" and "never use … frontend-provided paths, system Java". Implementing
-it changes the launch trust model, so it was not done unilaterally.
+The owner explicitly approved **“Yes, implement it.”** This supersedes the old
+blanket prohibition. `AGENTS.md` now permits narrowly scoped, per-instance,
+validated external executables; `ARCHITECTURE.md` records the implemented model.
 
-If approved, the proposed design is:
+**Configuration:** optional `configuration.java = {kind: "custom", path: …}`;
+absent/null remains managed. Saving retains the path even if runtime eligibility
+fails, so it stays editable; malformed path/configuration shapes are refused.
+Use managed Java plus Save removes it. Existing atomic saves, original-value
+checks, memory, JVM-argument validation, performance mode, window options and
+installed identity remain intact. No global registry schema change or redundant
+runtime copy is introduced. Installer tools still use their managed Java.
 
-- An optional per-instance `java` field (managed | custom absolute path). This
-  is a registry schema change: older launchers fail deliberately on it, so it
-  needs a schema bump and a downgrade note.
-- Validation in Rust by executing the selected file: absolute path, regular
-  file, no reparse ancestor, executable, a bounded structured `-version` /
-  `-XshowSettings:properties` probe, Java major equal to the game plan's
-  requirement, and x64.
-- Launch blocked while invalid; no silent fallback; one-click reset to managed.
-- `launch::resolve` accepts the separately validated external executable;
-  `AGENTS.md` updated to permit it.
+**Validation:** `runtime::external` checks absolute plain path/name, regular file,
+access, no links/reparse ancestors, native Windows PE architecture (Unix execute
+permissions elsewhere), then the existing process-tree supervisor runs a structured
+properties/version diagnostic. It clears the environment, disables crash reports
+and core dumps, hides the Windows console, bounds execution to 15 seconds plus
+one-second drain grace, and retains at most 64 KiB per stream. Truncated,
+unreadable, ambiguous, malformed, nonzero and timed-out output fails. Exact game
+major (from the normalized composed Minecraft/loader plan) and host architecture
+must agree. Selecting a file is a local decision to trust running it; this does
+not establish that arbitrary executable code is harmless. External installations
+are never modified or repaired.
+
+**Readiness and launch:** runtime status and Play read the saved selection;
+custom failures produce `launch_custom_java_invalid` and open Settings. There is
+no managed fallback. Readiness caches successful diagnostics by selected path,
+executable SHA-256 and required major, after fresh file/ancestor checks. Failures
+are not cached. No idle polling or recurring Java subprocess is added. Every
+launch runs a fresh diagnostic; assembly checks the game major and executable
+identity again. The final Windows boundary holds a read handle denying ordinary
+write/delete replacement through spawn, including time spent restoring the
+session. Runtime DLL changes can invalidate a cached readiness verdict without
+changing the EXE; Check and launch deliberately run the probe again. This does
+not claim publisher authenticity, complete DLL identity, malicious same-user
+namespace protection or offline metadata resolution.
+
+**Actual process selection:** a native compiled fixture passed validation outside
+managed runtimes, flowed through `resolve_launch_spec_with_java`, and was started
+by the established supervisor. The fixture recorded exact argument strings and
+the derived instance working directory; its supervised terminal state reported
+exit 0. A token validated for another game major and a subsequently removed file
+were refused. No account or real Minecraft game was used for this proof; normal
+classpath ordering, memory/JVM options, token redaction and supervision remain
+covered by existing launch tests.
+
+**Compatibility tested, not assumed:** a disposable harness compiled the actual
+older WebView core from `C:\Dev\aurora-launcher`, HEAD
+`9b99db3ac226854c8ae96a86eed4c8d3084defa7`, with its lockfile. Its real registry
+reader accepted managed configuration, rejected the added `java` field on
+load/migration **and save**, preserved the custom document byte-for-byte, and
+accepted it again after reset to managed. **Custom configuration blocks downgrade
+until reset using a supporting launcher.** It is not silently ignored or erased.
+Native DTO extra fields are preserved; unknown persisted core fields remain
+errors. The updated WebView DTO round-trips `java` on unrelated edits, but this
+phase provides selection UI only in the native host.
+
+**Tests:** registry save/restart/unrelated edits/reset and damaged-state
+preservation; managed default; malformed selections; native Unicode/spaced-path
+fixture; wrong major/architecture; missing/non-native file; junction; malformed
+and duplicate properties; nonzero exit; deadline; excessive output; removed or
+same-size/same-timestamp changed EXE; probe-cache reuse; explicit custom readiness
+blocker; selected executable/arguments/CWD and normal supervisor exit. Real Eclipse
+Adoptium 25.0.4.1 `java.exe` and `javaw.exe` also passed an explicit local check.
+
+**UI:** existing draft/Save semantics; managed/custom selector; full-width editable
+path; owned single-click Choose; explicit Check; wrapped detected version or
+problem; Use managed Java. Choosing does not execute the file. Stale async checks
+are discarded on path, mode, instance or saved/draft game changes. The shared
+picker preserves its owner, modality, single-picker guard, cancel/focus behavior
+and lifetime checks. Missing/invalid window-owner rejection and retry after refusal pass without
+opening a dialog. New Java controls were driven headlessly; actual Windows
+picker cancellation and keyboard traversal remain owner-attended (see §12).
 
 ## 6. Exact loader-version selection
 
@@ -181,12 +260,18 @@ packs would be a separate owner decision about local provenance.
   open real data). It records pre-existing Aurora processes without touching
   them, plus the exe SHA-256, PID, creation time and the one owned app HWND.
   It verifies the data root the process itself reports.
-- Before interactive work, other Aurora processes and desktop idle time were
-  checked. The perf smoke ran only after 7 minutes idle.
+- In the original session, other Aurora processes and desktop idle time were
+  checked before interactive work; that original perf smoke followed 7 minutes
+  idle. Final continuation conditions are stated separately in §16.
 - `native/tools/test-shutdown.ps1` is a bounded exact-process shutdown test.
-  **5/5 runs**, plus 2 more in the perf smoke, closed through the exact HWND
+  **5/5 runs**, plus 2 more in the original perf smoke, closed through the exact HWND
   with "window closed" and "exited cleanly" within 15 s. The NATIVE-9
-  lingering-close observation did not recur. Two harness bugs were found and
+  lingering-close observation did not recur in those original runs. The final
+  continuation also encountered lingering processes with its first resource
+  wrapper. Direct-file-handle negative controls isolated this to inherited
+  output pipes in that wrapper, rather than a product shutdown defect. The
+  product close path remains unchanged; corrected final measurements and
+  clean-close controls are recorded below. Two original harness bugs were found and
   fixed while building it: a pipe inherited by the launched app blocked output
   capture, and `Start-Process -Wait` waits for the whole process tree.
 
@@ -203,7 +288,7 @@ packs would be a separate owner decision about local provenance.
   fixed fast-exit handoff) still applies, because the NSIS script and updater
   are unchanged in NATIVE-10.
 
-## 12. Small-window and DPI acceptance
+## 12. Small-window and DPI acceptance (retained plus final continuation)
 
 The interactive native-window pass was declined at the desktop-control prompt
 and not retried. Instead, a headless test (`native/src/layout_acceptance.rs`)
@@ -223,6 +308,28 @@ window. Renders are in [`docs/native-ui/native10/`](docs/native-ui/native10/).
 These are software renders of the real components, not screenshots of a
 desktop window.
 
+The final continuation adds valid/invalid Java Settings scenes. The complete real
+Slint test renders 10 scenes at 720×520, 1120×760 and 1600×1000 plus minimum-size
+100/125/150/200% scales: 70 scene renders, with minimum 100% repeated, and 3 input
+frames (63 distinct files). Choose, Check and Reset dispatch on one pointer click;
+End plus text input edits the long path. The mode selector, three actions and
+wrapped error remain visible at minimum 150% and 200%; the full Settings page
+scrolls normally. Long paths are keyboard inspectable in the shared text field.
+Representative final renders:
+
+- [Minimum 150%, incompatible Java](docs/native-ui/native10/custom-java-invalid-minimum-150.png)
+- [Minimum 200%, incompatible Java](docs/native-ui/native10/custom-java-invalid-minimum-200.png)
+- [Typical, compatible Java](docs/native-ui/native10/custom-java-valid-typical.png)
+
+No new decorative treatment or control variants were added. The redundant status
+pill was removed; the wrapped result carries the status. These are software
+renders and dispatched headless input, **not desktop click-through acceptance**.
+The retained interactive desktop-control refusal was respected. Actual dialog
+selection/cancel, native focus traversal, DPI behavior and a screen-reader pass
+remain owner-attended. No baseline Java screenshot was available before the
+continuation; the original fixed-width clipping defect was evident in source.
+Machine-readable final checks: [custom-java-verification.json](docs/native-ui/native10/custom-java-verification.json).
+
 ## 13. Accessibility findings
 
 New controls use the existing accessible components (labelled buttons,
@@ -238,23 +345,44 @@ update address in development builds, signed native-only offers, strict
 upgrade rule, and the fixed fast-exit handoff with its regression test. Updater
 unit tests pass inside the core suites. No release work was performed.
 
-## 15. Test results (final source)
+## 15. Test results — final continuation
 
-| Command | Result |
+| Command | Actual result |
 | --- | --- |
-| `cargo fmt --check` (native, core) | clean |
-| `cargo test --manifest-path native/Cargo.toml --locked --all-targets` | 41 + 12 + 4 + 4 + 4 passed, 0 failed |
-| core `--no-default-features --features native-preview` | **1,038 passed**, 6 icon, 0 failed, 31 ignored |
-| core ordinary Tauri | **1,040 passed**, 6 icon, 0 failed, 31 ignored |
-| core `--no-default-features` | **1,034 passed**, 6 icon, 0 failed, 31 ignored |
-| `npm run check` / `npm test` | 0 errors, 0 warnings / 301 passed |
-| optimized acceptance build | exit 0, SHA-256 `f1dace8f…6494c` |
-| shutdown test | 5/5 clean |
-| live end-to-end driver (`native10_acceptance`) | all steps pass; one initial failure was a wrong test expectation (NeoForge 1.21.1), corrected and documented in §6 |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check` and native equivalent | clean |
+| `cargo check --manifest-path src-tauri/Cargo.toml --locked --all-targets` | pass |
+| `cargo test --manifest-path native/Cargo.toml --locked --all-targets` | 42 + 5 + 12 + 4 + 4 + 4 passed (71 total), 0 failed |
+| `cargo test --manifest-path src-tauri/Cargo.toml --locked --no-default-features --features native-preview` | 1,047 + 6 icon passed, 31 ignored, 0 failed |
+| `cargo test --manifest-path src-tauri/Cargo.toml --locked` | 1,049 + 6 icon passed, 31 ignored, 0 failed |
+| `cargo test --manifest-path src-tauri/Cargo.toml --locked --no-default-features` | 1,043 + 6 icon passed, 31 ignored, 0 failed |
+| `cargo test --manifest-path src-tauri/Cargo.toml --locked --no-default-features --features native-preview runtime::external` (after cache race guard) | 6 passed, 0 failed |
+| `npm run check` | 0 errors, 0 warnings |
+| `npm test` | 301 passed, 0 failed, 0 skipped |
+| `npm run build` | pass |
+| explicit real Java25 diagnostic (`custom_java_acceptance`) | java.exe and javaw.exe pass |
+| actual older WebView core registry harness | managed accepted; custom read/save refused, bytes preserved; reset accepted |
+| optimized acceptance build / isolated native boot / resource smoke | final results in §16 |
 
-The 31 ignored tests are existing explicit opt-ins and are not counted.
-Machine-readable live results are in
-[`live-acceptance.json`](docs/native-ui/native10/live-acceptance.json).
+The 31 ignored core tests remain opt-in and are **not counted as passes**. No
+security test was disabled. Broad suites include runtime, config, readiness,
+launch, loaders, installer containment/retention and updater boundaries. The three
+completed features retain the earlier live evidence; no large network install
+was repeated.
+
+Resolved investigation failures: an initial supervisor fixture used the wrong log
+root (correctly refused; fixed to the derived instance logs); a native async
+callback had an invalid `Option::flatten` (corrected); Vite SSR tests watched
+locked native build products (`EBUSY`). `vite.config.js` now excludes those build
+folders; the complete frontend suite then passed in about 26 seconds. The older
+WebView harness initially resolved newer unlocked dependencies, then needed its
+original lockfile and Tauri's static-runtime link settings. Those were harness
+corrections in a disposable root, with no old-source or dependency-file edits.
+The new PowerShell harness also normalized parsed DateTime values to UTC for
+identity checks. Its initial redirected-output wrapper could keep previews
+lingering; a native CreateProcess test helper with direct inherited file handles
+for stdout/stderr removed the pipe dependency. The baseline then closed cleanly.
+Failed wrapper runs were retained, and only their exact recorded processes were
+ended after diagnostics. Native close behavior was left unchanged.
 
 ## 16. Resource measurements
 
@@ -271,9 +399,44 @@ band. The window appeared in 97 ms (enumerated window, not settled startup).
 Navigation, browsing, update and import resource runs need UI input and were
 not measured.
 
+
+### Final continuation optimized smoke
+
+The final release-profile acceptance binary was built with
+`cargo build --manifest-path native/Cargo.toml --locked --release --features disposable-data-root`.
+SHA-256: `bd0594696ad6c7abea9285f355c143bf4d2ac429659aafdd70a42d3eaf80c6bc`.
+
+Matched fresh empty roots, Simple background, no account or instances. A native
+CreateProcess helper gives stdout/stderr direct file handles, records the exact
+executable/PID/creation time/window, verifies the app-reported disposable data
+root, and closes only that window. Visible sampling is about 12 seconds,
+minimized sampling about 10 seconds, after bounded settling. This is a bounded
+idle observation, not a game/frame-time benchmark.
+
+| Build | Visible CPU, one core | Visible WS / private MiB | Minimized CPU | Minimized WS / private MiB |
+| --- | ---: | ---: | ---: | ---: |
+| Retained NATIVE-10 baseline | 0.00% | 29.78 / 9.73 | 0.00% | 24.75 / 4.61 |
+| Final custom Java build | 0.00% | 29.70 / 9.60 | 0.00% | 24.66 / 4.48 |
+
+No material idle memory regression was observed. Reported zero CPU is limited to
+these sample windows and counter resolution. These empty/Simple conditions differ
+from the earlier populated/Borealis 44/36 MiB observations; those are historical
+context, not targets. GPU counters returned no usable per-process values.
+
+The final owned window was enumerated in 109 ms (not settled Home
+paint or physical visibility). It exited cleanly after the resource run; two
+additional exact-HWND visible/minimized close controls also exited cleanly:
+**3/3 final optimized shutdowns**, with the original product close path. No Java
+or other direct child was present at the end of the final idle sample. The failed initial
+pipe-based resource wrappers are excluded; their evidence was preserved.
+
+
 ## 17. Native screenshots
 
-See §12. No desktop screenshots were taken in this phase.
+See §12. The Java acceptance images are headless real-component renders. An
+owned-window PrintWindow diagnostic during harness investigation was blank and
+was not counted as a valid product screenshot or UI acceptance. No desktop
+Settings click-through acceptance is claimed.
 
 ## 18. Functional parity matrix
 
@@ -286,7 +449,7 @@ native-window interaction.
 | Home, selection, Play readiness | VERIFIED (earlier phases) | N |
 | Instance creation | VERIFIED | L (created with exact pin), R |
 | Exact loader version (create + existing) | VERIFIED | L, S, R |
-| Custom Java executable | MISSING (owner decision) | — |
+| Custom Java executable | VERIFIED locally; native dialog/gameplay attended pass outstanding | S, R, real Java diagnostic |
 | Managed Java install/reuse | VERIFIED (earlier phases) | N, S |
 | Instance icons | VERIFIED (NATIVE-8) | N |
 | Content updates | VERIFIED (apply not driven through the native window) | L, S, R |
@@ -300,7 +463,7 @@ native-window interaction.
 | Skin/cape account mutation | BLOCKED (owner authorization) | S |
 | Accounts, sign-in, authenticated Play | BLOCKED (owner sign-in in preview namespace) | historical N |
 | Appearance, Borealis, widgets, media, Discord prefs | VERIFIED (NATIVE-8/9) | N, S |
-| Normal shutdown | VERIFIED | L (7/7 clean) |
+| Normal shutdown | VERIFIED | retained L (7/7); final optimized L (3/3), corrected harness |
 | Native installer | VERIFIED in disposable roots; real install BLOCKED (owner approval) | L |
 | Native updater | IMPLEMENTED, fail-closed; signed E2E BLOCKED (protected) | S |
 | Small window / DPI | VERIFIED headlessly (no native-window pass this phase) | R |
@@ -317,19 +480,30 @@ tag or publication):
    local `.mrpack` import UI.
 3. `d9e7320` — native acceptance tooling: headless layout test, live driver,
    session and shutdown tools.
-4. The commit containing this report, the parity matrix and sanitized evidence
-   (its SHA is reported alongside, since a commit cannot name itself).
+4. `96cc205b15dfcd8c418294894af8c8cdf3960396` — original NATIVE-10 report,
+   parity matrix and sanitized evidence.
 
-## 20. Next recommended phase
+5. `69ac4d5321a911f5660d2d92d6177eec93c1b995` — complete validated per-instance custom Java selection,
+   responsive native controls, policy/architecture, tests and native-build watcher exclusion.
+6. The documentation/evidence commit containing the final continuation results
+   (local only; full SHA reported in the final chat).
+A report commit cannot embed its own SHA; its full hash is reported in the final
+chat and can be found with `git log -1 -- NATIVE_10_ACCEPTANCE.md`.
 
-1. **Owner decision on custom Java** (§5). If approved: schema bump, Rust
-   validation, launch-path change and an `AGENTS.md` update, as one scoped phase.
-2. **Owner-attended preview session:** approve desktop control or drive it
-   yourself; install the preview package; sign in in the preview namespace;
-   play; authorize any skin/cape mutation.
-3. Optional: apply a managed-pack update end-to-end; interactive cancel/retry
-   of an update job; a screen-reader pass.
-4. The protected release chain from NATIVE-9 (signing, authority, CI,
-   publication) remains separately gated.
+## 20. Remaining owner-attended acceptance and production gates
+
+1. Native preview Settings click-through: actual Choose/cancel/focus/close,
+   keyboard traversal, 150/200% display scaling and screen-reader behavior.
+2. Sign in through the isolated preview namespace and exercise authenticated
+   gameplay with the chosen custom Java, normal exit and return to Ready.
+   Skin/cape account mutations still require their own explicit action.
+3. Optional retained areas: apply a managed-pack update end-to-end and exercise
+   interactive update cancel/retry; no completed feature was reimplemented.
+4. Preview installation on the owner's machine and the protected NATIVE-9
+   signing/authority/CI/publication chain remain separately gated. This local
+   acceptance does not authorize or claim production distribution.
+
+No new development phase, client change, release action or additional experiment
+is started by this report.
 
 **AURORA CLIENT HANDOFF: NOT YET REQUIRED**

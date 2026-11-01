@@ -1,0 +1,249 @@
+{
+  "corePreview": {
+    "results": [
+      {
+        "passed": 1047,
+        "failed": 0,
+        "ignored": 31
+      },
+      {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "passed": 1053,
+    "ignored": 31
+  },
+  "coreTauri": {
+    "results": [
+      {
+        "passed": 1049,
+        "failed": 0,
+        "ignored": 31
+      },
+      {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "passed": 1055,
+    "ignored": 31
+  },
+  "coreMinimal": {
+    "results": [
+      {
+        "passed": 1043,
+        "failed": 0,
+        "ignored": 31
+      },
+      {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "passed": 1049,
+    "ignored": 31
+  },
+  "native": {
+    "results": [
+      {
+        "passed": 42,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "passed": 71,
+    "ignored": 0
+  },
+  "externalJavaFinal": {
+    "results": [
+      {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "passed": 6,
+    "ignored": 0
+  },
+  "frontend": {
+    "passed": 301,
+    "failed": 0,
+    "skipped": 0,
+    "checkErrors": 0,
+    "checkWarnings": 0,
+    "productionBuild": "pass"
+  },
+  "realJava": {
+    "major": 25,
+    "version": "25.0.4.1",
+    "vendor": "Eclipse Adoptium",
+    "architecture": "amd64",
+    "javaExe": "pass",
+    "javawExe": "pass"
+  },
+  "olderWebView": {
+    "head": "9b99db3ac226854c8ae96a86eed4c8d3084defa7",
+    "managed": "accepted",
+    "customRead": "refused",
+    "customSave": "refused",
+    "customBytes": "unchanged",
+    "resetToManaged": "accepted"
+  },
+  "visual": {
+    "realSlintSceneRenders": 70,
+    "inputFrames": 3,
+    "distinctFrames": 63,
+    "scales": [
+      100,
+      125,
+      150,
+      200
+    ],
+    "desktopClickThrough": false,
+    "javaChooseCheckResetSingleClick": "pass",
+    "longPathEndKeyEditing": "pass"
+  },
+  "preservation": {
+    "originalFiles": 3207,
+    "missingOriginalFiles": [],
+    "unexpectedByteChanges": [],
+    "mainStatusUnchanged": true,
+    "mainDiffUnchanged": true,
+    "mainHead": "9b99db3ac226854c8ae96a86eed4c8d3084defa7",
+    "productionSha256": "42c34fbab45ece1c88727374b52751067d5aeebb419a705f72f6e16dd6a2387c",
+    "productionUnchanged": true
+  },
+  "sourceStart": "96cc205b15dfcd8c418294894af8c8cdf3960396",
+  "pickerOwnership": {
+    "missingOwner": "refused before UI",
+    "invalidOwner": "refused before UI",
+    "retryAfterRefusal": "pass",
+    "realDialogClickThrough": false
+  },
+  "sourceEnd": "69ac4d5321a911f5660d2d92d6177eec93c1b995",
+  "optimizedBuild": {
+    "profile": "release",
+    "features": [
+      "disposable-data-root"
+    ],
+    "sha256": "bd0594696ad6c7abea9285f355c143bf4d2ac429659aafdd70a42d3eaf80c6bc",
+    "boot": "pass",
+    "shutdownRuns": [
+      {
+        "minimized": false,
+        "posted": true,
+        "exited": true,
+        "clean": true,
+        "exeSha256": "BD0594696AD6C7ABEA9285F355C143BF4D2AC429659AAFDD70A42D3EAF80C6BC"
+      },
+      {
+        "minimized": true,
+        "posted": true,
+        "exited": true,
+        "clean": true,
+        "exeSha256": "BD0594696AD6C7ABEA9285F355C143BF4D2AC429659AAFDD70A42D3EAF80C6BC"
+      }
+    ],
+    "stockClosePathUnchanged": true
+  },
+  "resourceSmoke": {
+    "conditions": "fresh unique empty roots; Simple background; no account or instances; exact owned process/window; direct file handles for stdout/stderr",
+    "baseline": {
+      "exeSha256": "f1dace8fcd41ad86c82c806f4ba551022662bb81928e049b7076e476f216494c",
+      "windowEnumerationMs": 110.172,
+      "cleanExit": true,
+      "childCount": null,
+      "visible": {
+        "seconds": 12.1630248,
+        "cpuPercentOneCore": 0.0,
+        "workingSetMiB": 29.776154891304348,
+        "privateMiB": 9.73046875
+      },
+      "minimized": {
+        "seconds": 10.0149376,
+        "cpuPercentOneCore": 0.0,
+        "workingSetMiB": 24.75390625,
+        "privateMiB": 4.61328125
+      }
+    },
+    "final": {
+      "exeSha256": "bd0594696ad6c7abea9285f355c143bf4d2ac429659aafdd70a42d3eaf80c6bc",
+      "windowEnumerationMs": 108.5691,
+      "cleanExit": true,
+      "childCount": 0,
+      "visible": {
+        "seconds": 12.1222602,
+        "cpuPercentOneCore": 0.0,
+        "workingSetMiB": 29.6953125,
+        "privateMiB": 9.6015625
+      },
+      "minimized": {
+        "seconds": 10.1761051,
+        "cpuPercentOneCore": 0.0,
+        "workingSetMiB": 24.6640625,
+        "privateMiB": 4.48046875
+      }
+    },
+    "gpuMeasured": false,
+    "physicalVisibilityMeasured": false
+  }
+}
