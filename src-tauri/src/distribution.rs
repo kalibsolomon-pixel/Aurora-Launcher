@@ -82,6 +82,26 @@ impl ReleaseManifest {
         Ok(manifest)
     }
 
+    /// Explicit owner-requested latest stable candidate, never an automatic upgrade.
+    pub fn latest_compatible(
+        &self,
+        minecraft: &str,
+        loader: Option<&str>,
+    ) -> Option<&AuroraRelease> {
+        self.releases
+            .iter()
+            .filter(|r| {
+                r.channel() == ReleaseChannel::Stable
+                    && r.minecraft_version() == minecraft
+                    && loader.is_none_or(|v| r.fabric_loader_version() == v)
+            })
+            .filter_map(|r| {
+                crate::updates::parse_release_version(r.aurora_version()).map(|v| (v, r))
+            })
+            .max_by(|(a, _), (b, _)| a.cmp(b))
+            .map(|(_, r)| r)
+    }
+
     pub fn schema_version(&self) -> u32 {
         self.schema_version
     }
@@ -500,6 +520,43 @@ mod tests {
             }
         ]
     }"#;
+
+    #[test]
+    fn latest_compatible_is_numeric_ordered_stable_and_exactly_pinned() {
+        let mut value: serde_json::Value = serde_json::from_str(VALID_MANIFEST).unwrap();
+        let mut newer = value["releases"][0].clone();
+        newer["auroraVersion"] = serde_json::json!("0.10.0");
+        let mut middle = newer.clone();
+        middle["auroraVersion"] = serde_json::json!("0.9.0");
+        value["releases"]
+            .as_array_mut()
+            .unwrap()
+            .extend([newer, middle]);
+        let manifest = ReleaseManifest::from_json(&value.to_string()).unwrap();
+        assert_eq!(
+            manifest
+                .latest_compatible("1.21.11", Some("0.17.3"))
+                .unwrap()
+                .aurora_version(),
+            "0.10.0"
+        );
+        assert_eq!(
+            manifest
+                .latest_compatible("1.21.11", None)
+                .unwrap()
+                .aurora_version(),
+            "0.10.0"
+        );
+        assert!(
+            manifest
+                .latest_compatible("1.21.11", Some("0.19.3"))
+                .is_none()
+        );
+        assert!(
+            manifest.latest_compatible("1.21.9", None).is_none(),
+            "beta is not a stable candidate"
+        );
+    }
 
     #[test]
     fn parses_a_valid_manifest_with_all_channels() {

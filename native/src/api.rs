@@ -483,6 +483,8 @@ pub struct ModInventory {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModEntry {
+    #[serde(default)]
+    pub sha256: Option<String>,
     pub entry_id: String,
     pub file_name: String,
     pub display_name: String,
@@ -905,6 +907,40 @@ pub struct AuroraRelease {
     pub minecraft_version: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuroraTransition {
+    pub instance_id: String,
+    pub target: AuroraTarget,
+    pub requirements_added: Vec<String>,
+    pub requirements_removed: Vec<String>,
+    pub warnings: Vec<String>,
+    pub blockers: Vec<String>,
+    pub fingerprint: String,
+}
+#[derive(Debug, Clone, Deserialize)]
+pub struct AuroraTarget {
+    pub aurora: Option<AuroraPin>,
+}
+pub async fn preview_aurora(
+    host: Host,
+    instance: String,
+    enabled: bool,
+) -> ApiResult<AuroraTransition> {
+    let request = request(json!({"instanceId": instance, "enabled": enabled}))?;
+    blocking(move || convert(app::preview_aurora_transition(host, request))).await?
+}
+pub async fn apply_aurora(
+    host: Host,
+    instance: String,
+    enabled: bool,
+    fingerprint: String,
+) -> ApiResult<InstanceSummary> {
+    let request =
+        request(json!({"instanceId": instance, "enabled": enabled, "fingerprint": fingerprint}))?;
+    convert(app::apply_aurora_transition(host, request).await)
+}
+
 pub async fn aurora_releases() -> ApiResult<Vec<AuroraRelease>> {
     blocking(|| convert(app::list_aurora_releases())).await?
 }
@@ -916,6 +952,34 @@ pub async fn minecraft_versions(include_snapshots: bool) -> ApiResult<Vec<Minecr
 pub async fn instance_mods(host: Host, instance_id: String) -> ApiResult<ModInventory> {
     let request = request(json!({ "instanceId": instance_id }))?;
     convert(app::get_instance_mods(host, request).await)
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModIconRequest {
+    pub file_name: String,
+    pub sha256: String,
+}
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModIconBitmap {
+    pub width: u32,
+    pub height: u32,
+    pub rgba_base64: String,
+}
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModIconResult {
+    pub sha256: String,
+    pub bitmap: Option<ModIconBitmap>,
+}
+pub async fn mod_icons(
+    host: Host,
+    id: String,
+    files: Vec<ModIconRequest>,
+) -> ApiResult<Vec<ModIconResult>> {
+    let request = request(json!({"instanceId": id, "files": files}))?;
+    convert(app::get_installed_mod_icons(host, request).await)
 }
 
 pub async fn set_mod_enabled(

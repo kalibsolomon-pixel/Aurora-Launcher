@@ -366,6 +366,14 @@ pub fn open_instance_folder(
 }
 
 #[tauri::command]
+pub async fn get_installed_mod_icons(
+    app: tauri::AppHandle,
+    request: InstalledModIconsRequest,
+) -> Result<Vec<crate::mod_icons::IconResult>, CommandError> {
+    super::get_installed_mod_icons(Host::from_tauri(&app), request).await
+}
+
+#[tauri::command]
 pub async fn get_instance_mods(
     app: tauri::AppHandle,
     request: InstanceModsRequest,

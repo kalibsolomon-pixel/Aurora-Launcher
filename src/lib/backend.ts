@@ -1013,6 +1013,12 @@ export interface ModEntry {
   actionBlockedReason: string | null;
 }
 
+export interface InstalledModIconRequest { fileName: string; sha256: string; }
+export interface InstalledModIcon { sha256: string; bitmap: { width: number; height: number; rgbaBase64: string } | null; }
+export async function getInstalledModIcons(instanceId: string, files: InstalledModIconRequest[]): Promise<InstalledModIcon[]> {
+  return await invoke<InstalledModIcon[]>("get_installed_mod_icons", { request: { instanceId, files } });
+}
+
 export interface ModInventory {
   instanceId: string;
   entries: ModEntry[];

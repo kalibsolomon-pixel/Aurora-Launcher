@@ -4120,14 +4120,13 @@ mod tests {
             .iter()
             .find(|e| e.file_name == "local-custom-name.jar")
             .unwrap();
-        assert!(matches!(
-            crate::instance_mods::remove(
-                &fixture.managed,
-                &fixture.instance,
-                &local_entry.entry_id
-            ),
-            Err(crate::instance_mods::ModError::DependencyBlocked(_))
-        ));
+        assert!(local_entry.can_toggle && local_entry.can_remove);
+        assert!(
+            local_entry
+                .warnings
+                .iter()
+                .any(|warning| warning.code == "required_by_other_mods")
+        );
         assert!(matches!(
             update_provider_graph(
                 &fixture.managed,
@@ -4818,7 +4817,8 @@ mod tests {
         let inventory = crate::instance_mods::scan(&fixture.managed, &fixture.instance).unwrap();
         assert!(inventory.entries.iter().all(|entry| entry.ownership
             == crate::instance_mods::ModOwnership::LauncherManagedRequired
-            && !entry.can_remove));
+            && entry.can_remove
+            && entry.can_toggle));
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
         let parent = install_provider_plans(
             &fixture.managed,

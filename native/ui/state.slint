@@ -30,6 +30,10 @@ export struct BlockerRow {
 }
 
 export struct ContentRow {
+    is-mod: bool,
+    letter: string,
+    picture: image,
+    has-picture: bool,
     id: string,
     title: string,
     detail: string,
@@ -180,6 +184,17 @@ export global Instances {
     callback config-edited();
     callback save-config();
     callback revert-config();
+
+    // Explicitly reviewed Aurora addition/removal on the installed game.
+    in property <bool> client-installed: false;
+    in property <bool> client-available: false;
+    in property <bool> client-busy: false;
+    in property <string> client-note;
+    callback client-review();
+    in-out property <bool> client-review-open: false;
+    in property <string> client-review-text;
+    in property <bool> client-review-allowed: false;
+    callback client-confirm();
 
     // Health.
     in property <string> health-text;

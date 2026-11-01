@@ -357,6 +357,24 @@ export component AppWindow inherits Window {
         }
     }
 
+    if Instances.client-review-open: Dialog {
+        title: Instances.client-installed ? "Remove Aurora Client" : "Add Aurora Client";
+        dismissed => { Instances.client-review-open = false; }
+        ScrollView {
+            height: min(300px, root.height * 0.45);
+            VerticalLayout {
+                padding: 4px;
+                Text { text: Instances.client-review-text; color: Theme.text-secondary; wrap: word-wrap; font-size: Theme.text-secondary-size; }
+            }
+        }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button { text: "Cancel"; clicked => { Instances.client-review-open = false; } }
+            Button { text: Instances.client-installed ? "Remove" : "Install"; kind: ButtonKind.primary; enabled: Instances.client-review-allowed && !Instances.client-busy; clicked => { Instances.client-confirm(); } }
+        }
+    }
+
     if Instances.pack-review-open: Dialog {
         title: "Review modpack update";
         dismissed => { Instances.pack-review-open = false; }

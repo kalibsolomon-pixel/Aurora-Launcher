@@ -1804,19 +1804,25 @@ pub(crate) fn validate_instance_under_game_lock(
                 }
                 let expected_api = release.fabric_api();
                 let installed_api = aurora.fabric_api();
-                if expected_api.map(|api| {
-                    (
-                        api.version(),
-                        api.artifact().sha256(),
-                        api.artifact().size_bytes(),
-                    )
-                }) != installed_api.map(|api| {
-                    (
-                        api.version(),
-                        api.artifact().sha256(),
-                        Some(api.artifact().size_bytes()),
-                    )
-                }) {
+                let external_api = installed_api.is_none()
+                    && expected_api.is_some()
+                    && crate::aurora::compatible_provider_api(managed, record.id(), release)
+                        .unwrap_or(false);
+                if !external_api
+                    && expected_api.map(|api| {
+                        (
+                            api.version(),
+                            api.artifact().sha256(),
+                            api.artifact().size_bytes(),
+                        )
+                    }) != installed_api.map(|api| {
+                        (
+                            api.version(),
+                            api.artifact().sha256(),
+                            Some(api.artifact().size_bytes()),
+                        )
+                    })
+                {
                     problems.push(InstanceProblem {
                         component: "aurora",
                         reason: "the release-required Fabric API installation does not match published metadata".to_owned(),
@@ -4977,6 +4983,141 @@ pub(crate) mod tests {
                     .to_string_lossy()
                     .starts_with(".aurora-transition")
             }));
+        }
+    }
+
+    #[tokio::test]
+    async fn aurora_can_be_added_to_a_pack_reusing_its_verified_provider_api() {
+        use super::super::transition::{apply, preview};
+        use crate::instance_content::{
+            ContentCompatibility, ContentState, ContentType, ProviderOrigin, ProviderRecord,
+            UpdateChannel,
+        };
+        use crate::pack_state::{InstalledPack, OwnedComponent, PackIdentity};
+        use sha2::Digest;
+        let world = SyntheticWorld::with_api("pack-add-client", true);
+        let record = world.create("Pack with optional Aurora").await.unwrap();
+        let paths = world.managed.instance_paths(record.id());
+        let api_bytes = std::fs::read(paths.mods().join("fabric-api-1.jar")).unwrap();
+        let remove = preview(&world.managed, &world.endpoints(), record.id(), false).unwrap();
+        apply(
+            &world.managed,
+            &world.endpoints(),
+            record.id(),
+            false,
+            &remove.fingerprint,
+            Default::default(),
+        )
+        .await
+        .unwrap();
+        std::fs::write(paths.mods().join("pack-api.jar"), &api_bytes).unwrap();
+        let hash = format!("{:x}", sha2::Sha256::digest(&api_bytes));
+        let sha512 = format!("{:x}", sha2::Sha512::digest(&api_bytes));
+        let mut content = ContentState::empty();
+        content.entries.push(ProviderRecord {
+            content_type: ContentType::Mod,
+            provider: "modrinth".into(),
+            project_id: "P7dR8mSH".into(),
+            version_id: "APIVERS1".into(),
+            file_id: sha512.clone(),
+            file_name: "pack-api.jar".into(),
+            sha256: hash.clone(),
+            display_version: Some("1".into()),
+            compatibility: ContentCompatibility {
+                minecraft_versions: vec!["26.2".into()],
+                loader: Some("fabric".into()),
+                environment: Some("client".into()),
+            },
+            dependencies: vec![],
+            explicitly_retained: false,
+            requires: vec![],
+            origin: ProviderOrigin::Pack,
+            installed_at_unix_seconds: None,
+            pinned: false,
+            update_channel: UpdateChannel::Stable,
+        });
+        content.save(&world.managed, record.id()).unwrap();
+        let mut registry = world.load_registry();
+        registry
+            .find_mut(record.id())
+            .unwrap()
+            .set_pack(super::super::PackRegistryIdentity {
+                provider: "modrinth".into(),
+                project_id: "PACK0001".into(),
+                version_id: "PACKVERS".into(),
+                name: "Pack".into(),
+                pack_version: "1".into(),
+            })
+            .unwrap();
+        registry.save(&world.registry_path()).unwrap();
+        let pack = InstalledPack::new(
+            record.id().clone(),
+            PackIdentity {
+                provider: "modrinth".into(),
+                project_id: "PACK0001".into(),
+                version_id: "PACKVERS".into(),
+                name: "Pack".into(),
+                pack_version: "1".into(),
+                artifact_sha512: "a".repeat(128),
+                artifact_sha256: "b".repeat(64),
+                minecraft_version: "26.2".into(),
+                fabric_loader_version: "0.19.5".into(),
+                installed_at_unix_seconds: 1,
+            },
+            vec![OwnedComponent {
+                path: "mods/pack-api.jar".into(),
+                sha256: hash,
+                sha512,
+                provider: Some(content.entries[0].identity()),
+                provider_version_id: Some("APIVERS1".into()),
+            }],
+            vec![],
+            vec![],
+        )
+        .unwrap();
+        pack.save(&world.managed).unwrap();
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        let before = std::fs::read(paths.root().join("content-managed.json")).unwrap();
+        for enabled in [true, false, true] {
+            let plan = preview(&world.managed, &world.endpoints(), record.id(), enabled).unwrap();
+            assert!(plan.blockers.is_empty(), "{:?}", plan.blockers);
+            if enabled {
+                assert_eq!(plan.install.len(), 1, "provider API must not be duplicated");
+            }
+            apply(
+                &world.managed,
+                &world.endpoints(),
+                record.id(),
+                enabled,
+                &plan.fingerprint,
+                Default::default(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+            assert_eq!(
+                world
+                    .load_registry()
+                    .find(record.id())
+                    .unwrap()
+                    .installed()
+                    .aurora
+                    .is_some(),
+                enabled
+            );
+            assert_eq!(
+                std::fs::read(paths.mods().join("pack-api.jar")).unwrap(),
+                api_bytes
+            );
+            assert_eq!(
+                std::fs::read(paths.root().join("content-managed.json")).unwrap(),
+                before
+            );
+            assert_eq!(
+                InstalledPack::load(&world.managed, record.id()).unwrap(),
+                Some(pack.clone())
+            );
+            assert!(!paths.mods().join("fabric-api-1.jar").exists());
         }
     }
 

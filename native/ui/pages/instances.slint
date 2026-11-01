@@ -110,6 +110,7 @@ component ContentLine inherits Rectangle {
         padding-top: 8px;
         padding-bottom: 8px;
         spacing: 12px;
+        if root.item.is-mod: Glyph { y: (parent.height - self.height) / 2; size: 32px; letter: root.item.letter; picture: root.item.picture; has-picture: root.item.has-picture; }
         VerticalLayout {
             horizontal-stretch: 1;
             alignment: center;
@@ -139,13 +140,15 @@ component ContentLine inherits Rectangle {
             kind: ButtonKind.ghost;
             clicked => { Instances.content-unpin(root.item.id); }
         }
-        if root.item.toggleable: Toggle {
+        if root.item.is-mod || root.item.toggleable: Toggle {
+            enabled: root.item.toggleable && !Instances.installing;
             y: (parent.height - self.height) / 2;
             checked: root.item.enabled;
             label: (root.item.enabled ? "Disable " : "Enable ") + root.item.title;
             toggled(value) => { Instances.content-toggle(root.item.id, value); }
         }
-        if root.item.removable: IconButton {
+        if root.item.is-mod || root.item.removable: IconButton {
+            enabled: root.item.removable && !Instances.installing;
             y: (parent.height - self.height) / 2;
             icon: Icons.delete;
             label: "Remove " + root.item.title;
@@ -293,6 +296,19 @@ component ConfigurationTab inherits VerticalLayout {
         spacing: Theme.space-2;
         Button { text: "Revert"; kind: ButtonKind.ghost; enabled: Instances.config-dirty && !Instances.config-busy; clicked => { Instances.revert-config(); } }
         Button { text: "Save"; kind: ButtonKind.primary; enabled: Instances.config-dirty; loading: Instances.config-busy; clicked => { Instances.save-config(); } }
+    }
+    Group {
+        title: "Aurora Client";
+        SettingRow {
+            label: Instances.client-installed ? "Installed" : "Add to this instance";
+            detail: Instances.client-note;
+            Button {
+                text: Instances.client-installed ? "Remove Aurora Client" : "Add Aurora Client";
+                loading: Instances.client-busy;
+                enabled: (Instances.client-installed || Instances.client-available) && !Instances.client-busy && !Instances.config-busy && !Instances.config-dirty && !Instances.installing && !Instances.cfg-needs-install;
+                clicked => { Instances.client-review(); }
+            }
+        }
     }
     Group {
         title: "Identity";

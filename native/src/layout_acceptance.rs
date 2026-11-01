@@ -142,6 +142,9 @@ fn row(
         update_tone: tone,
         can_update,
         can_unpin,
+        is_mod: true,
+        letter: crate::ui::letter(title).into(),
+        ..Default::default()
     }
 }
 
@@ -365,6 +368,49 @@ type Scene = fn(&AppWindow);
 fn scenes() -> Vec<(&'static str, Scene)> {
     vec![
         ("mods-updates", |app| workspace(app, 0)),
+        ("mods-icons-controls", |app| {
+            workspace(app, 0);
+            let mut icon_row = row(
+                "icon",
+                "Fabric API",
+                "0.141.6 · FabricMC",
+                "",
+                Tone::Neutral,
+                false,
+                false,
+            );
+            icon_row.picture =
+                crate::ui::rectangular_image(&[96, 160, 220, 255].repeat(32 * 32), 32, 32).unwrap();
+            icon_row.has_picture = true;
+            let mut local = row(
+                "fallback",
+                "Local mod without icon",
+                "1.0",
+                "",
+                Tone::Neutral,
+                false,
+                false,
+            );
+            local.note =
+                "Another mod requires this dependency. Disabling it may prevent launch.".into();
+            app.global::<Instances>()
+                .set_content(ModelRc::new(VecModel::from(vec![icon_row, local])));
+        }),
+        ("aurora-add-settings", |app| {
+            workspace(app, 3);
+            app.global::<Instances>().set_client_available(true);
+            app.global::<Instances>().set_cfg_needs_install(false);
+            app.global::<Instances>()
+                .set_client_note("Latest compatible: 3.0.0".into());
+            scroll_down(app, 650.);
+        }),
+        ("aurora-review", |app| {
+            workspace(app, 3);
+            let instances = app.global::<Instances>();
+            instances.set_client_review_text("Add: Aurora Client 3.0.0\n\nThe existing verified Fabric API remains provider-managed.".into());
+            instances.set_client_review_allowed(true);
+            instances.set_client_review_open(true);
+        }),
         ("refinement-discover-filters", |app| {
             app.global::<Nav>().set_page(Page::Discover);
             let discover = app.global::<Discover>();
@@ -545,6 +591,29 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     render(&app, &adapter, "input-review-open");
     key(&app, Key::Escape);
     assert_eq!(fired.borrow().last().map(String::as_str), Some("dismiss"));
+
+    // The optional Client action and review are keyboard/pointer reachable.
+    let (app, adapter) = window((1120.0, 760.0), 1.0);
+    scenes()
+        .into_iter()
+        .find(|(name, _)| *name == "aurora-add-settings")
+        .unwrap()
+        .1(&app);
+    render(&app, &adapter, "aurora-add-input");
+    let client_actions = Rc::new(RefCell::new(0));
+    let actions = client_actions.clone();
+    app.global::<Instances>()
+        .on_client_review(move || *actions.borrow_mut() += 1);
+    click(&app, 1000., 377.);
+    assert_eq!(*client_actions.borrow(), 1);
+    scenes()
+        .into_iter()
+        .find(|(name, _)| *name == "aurora-review")
+        .unwrap()
+        .1(&app);
+    render(&app, &adapter, "aurora-review-input");
+    key(&app, Key::Escape);
+    assert!(!app.global::<Instances>().get_client_review_open());
 
     // Exercise the Java controls on the real layout, including keyboard
     // inspection/editing of a long path. The chooser callback is observed;

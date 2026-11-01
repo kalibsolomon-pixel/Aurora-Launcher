@@ -237,12 +237,7 @@ pub fn preview(
             .map_err(invalid)?;
         let release = endpoints
             .release_manifest()
-            .releases()
-            .iter()
-            .find(|release| {
-                release.minecraft_version() == record.installed().minecraft_version
-                    && release.fabric_loader_version() == loader
-            });
+            .latest_compatible(&record.installed().minecraft_version, Some(loader));
         if let Some(release) = release {
             release_identity = Some(serde_json::to_value(release).map_err(invalid)?);
             result.target.aurora = Some(AuroraPin {
@@ -285,6 +280,14 @@ pub fn preview(
                 } else {
                     "fabric-api"
                 };
+                if id_hint == "fabric-api"
+                    && aurora::compatible_provider_api(managed, id, release).map_err(invalid)?
+                {
+                    result
+                        .warnings
+                        .push("The existing verified Fabric API remains provider-managed.".into());
+                    continue;
+                }
                 let previous = retained.iter().find(|old| {
                     old.relative_path == file.relative_path
                         && old.sha256 == file.sha256
@@ -698,10 +701,11 @@ fn commit(
             for file in &approved.install {
                 verify(managed, id, file)?;
             }
-            let state = aurora::AuroraInstalledState::for_verified_release(
+            let state = aurora::AuroraInstalledState::for_verified_release_with_provider_api(
                 release,
                 approved.install[0].size_bytes,
                 approved.install.get(1).map(|file| file.size_bytes),
+                aurora::compatible_provider_api(managed, id, release).map_err(invalid)?,
             )
             .map_err(invalid)?;
             atomic_write(&state_path, Some(state.to_json().as_bytes()))?;

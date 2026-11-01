@@ -128,6 +128,69 @@ pub(crate) fn validate(bytes: &[u8], policy: Policy) -> Option<ValidatedPng> {
     Some(ValidatedPng(output.bytes))
 }
 
+/// Decode one bounded static PNG directly to a small RGBA thumbnail.
+/// Used for installed mod icons; no original-size image reaches the UI.
+pub(crate) fn thumbnail_rgba(bytes: &[u8], side: u32) -> Option<(u32, u32, Vec<u8>)> {
+    if bytes.is_empty()
+        || bytes.len() > ARTWORK.max_encoded_bytes
+        || !bytes.starts_with(b"\x89PNG\r\n\x1a\n")
+        || !(1..=64).contains(&side)
+    {
+        return None;
+    }
+    let mut options = png::DecodeOptions::default();
+    options.set_ignore_checksums(false);
+    options.set_ignore_text_chunk(true);
+    options.set_ignore_iccp_chunk(true);
+    let mut decoder = png::Decoder::new_with_options(Cursor::new(bytes), options);
+    decoder.set_limits(png::Limits {
+        bytes: ARTWORK.max_decoded_bytes,
+    });
+    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
+    let mut reader = decoder.read_info().ok()?;
+    let info = reader.info();
+    ARTWORK.surface_bound(info.width, info.height)?;
+    if info.animation_control.is_some() || info.frame_control.is_some() {
+        return None;
+    }
+    let size = reader.output_buffer_size();
+    if size > ARTWORK.max_decoded_bytes {
+        return None;
+    }
+    let mut pixels = vec![0; size];
+    let frame = reader.next_frame(&mut pixels).ok()?;
+    reader.finish().ok()?;
+    if reader.info().animation_control.is_some() || reader.info().frame_control.is_some() {
+        return None;
+    }
+    let channels = match frame.color_type {
+        png::ColorType::Rgba => 4,
+        png::ColorType::Rgb => 3,
+        png::ColorType::GrayscaleAlpha => 2,
+        png::ColorType::Grayscale => 1,
+        _ => return None,
+    };
+    let longest = frame.width.max(frame.height);
+    let bound = side.min(longest);
+    let width = (frame.width * bound / longest).max(1);
+    let height = (frame.height * bound / longest).max(1);
+    let mut out = Vec::with_capacity((width * height * 4) as usize);
+    for y in 0..height {
+        for x in 0..width {
+            let sx = (x as u64 * frame.width as u64 / width as u64) as usize;
+            let sy = (y as u64 * frame.height as u64 / height as u64) as usize;
+            let i = (sy * frame.width as usize + sx) * channels;
+            match channels {
+                4 => out.extend_from_slice(&pixels[i..i + 4]),
+                3 => out.extend_from_slice(&[pixels[i], pixels[i + 1], pixels[i + 2], 255]),
+                2 => out.extend_from_slice(&[pixels[i], pixels[i], pixels[i], pixels[i + 1]]),
+                _ => out.extend_from_slice(&[pixels[i], pixels[i], pixels[i], 255]),
+            }
+        }
+    }
+    Some((width, height, out))
+}
+
 /// Provider artwork additionally admits static WebP and static GIF snapshots.
 /// Browser input and stored output remain canonical PNG; server favicons retain
 /// their PNG-only policy.

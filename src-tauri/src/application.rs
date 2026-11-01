@@ -2281,13 +2281,13 @@ pub fn get_aurora_compatibility(
     let manifest = crate::distribution::creation_manifest()
         .map_err(|e| CommandError::new("aurora_manifest_invalid", e.to_string()))?;
     let release = match &request.loader {
-        LoaderConfiguration::Fabric { policy } => manifest.releases().iter().find(|release| {
-            release.minecraft_version() == request.minecraft_version
-                && match policy {
-                    LoaderPolicy::Automatic {} => true,
-                    LoaderPolicy::Pinned { version } => release.fabric_loader_version() == version,
-                }
-        }),
+        LoaderConfiguration::Fabric { policy } => manifest.latest_compatible(
+            &request.minecraft_version,
+            match policy {
+                LoaderPolicy::Automatic {} => None,
+                LoaderPolicy::Pinned { version } => Some(version.as_str()),
+            },
+        ),
         _ => None,
     };
     Ok(AuroraCompatibility {
@@ -2775,6 +2775,29 @@ pub async fn get_instance_mods(
         result.map_err(CommandError::from)
     })
     .await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InstalledModIconsRequest {
+    instance_id: String,
+    files: Vec<crate::mod_icons::IconRequest>,
+}
+pub async fn get_installed_mod_icons(
+    app: Host,
+    request: InstalledModIconsRequest,
+) -> Result<Vec<crate::mod_icons::IconResult>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = registered_instance(&managed, &request.instance_id)?;
+    if request.files.len() > 128 {
+        return Err(CommandError::new(
+            "mod_icons_invalid_request",
+            "Too many icons requested.",
+        ));
+    }
+    tokio::task::spawn_blocking(move || crate::mod_icons::load(&managed, &id, &request.files))
+        .await
+        .map_err(|_| CommandError::new("mod_icons_unavailable", "Icon loading did not complete."))
 }
 
 /// Enables or disables one current user-managed JAR through a same-directory

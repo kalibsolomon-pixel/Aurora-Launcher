@@ -106,6 +106,15 @@ impl AuroraInstalledState {
         bytes: u64,
         api_bytes: Option<u64>,
     ) -> Result<Self, AuroraInstallError> {
+        Self::for_verified_release_with_provider_api(release, bytes, api_bytes, false)
+    }
+
+    pub(crate) fn for_verified_release_with_provider_api(
+        release: &AuroraRelease,
+        bytes: u64,
+        api_bytes: Option<u64>,
+        provider_api: bool,
+    ) -> Result<Self, AuroraInstallError> {
         let artifact = AuroraInstalledArtifact {
             relative_path: managed_artifact_relative_path(release)?,
             size_bytes: bytes,
@@ -121,6 +130,7 @@ impl AuroraInstalledState {
                 },
             }),
             (None, None) => None,
+            (Some(_), None) if provider_api => None,
             _ => {
                 return Err(AuroraInstallError::ReleaseInvalid(
                     "verified requirements do not match release".into(),
@@ -648,12 +658,9 @@ pub(crate) fn compatible_provider_api(
     instance: &InstanceId,
     release: &AuroraRelease,
 ) -> Result<bool, AuroraInstallError> {
-    // Only reuse an explicitly provider-owned active replacement in an existing
-    // bootstrap installation. Never manufacture provenance for a local file.
-    if release.fabric_api().is_none()
-        || load_installed_state(managed, instance)?.is_none()
-        || !managed.instance_paths(instance).mods().is_dir()
-    {
+    // Reuse only a verified active provider-owned API. Never adopt local files
+    // or fabricate a launcher ownership receipt for the provider's artifact.
+    if release.fabric_api().is_none() || !managed.instance_paths(instance).mods().is_dir() {
         return Ok(false);
     }
     let state = crate::instance_content::ContentState::load(managed, instance)
@@ -661,11 +668,12 @@ pub(crate) fn compatible_provider_api(
     for record in state.entries.iter().filter(|record| {
         record.content_type == crate::instance_content::ContentType::Mod
             && record.compatibility.loader.as_deref() == Some("fabric")
-            && record
-                .compatibility
-                .minecraft_versions
-                .iter()
-                .any(|version| version == release.minecraft_version())
+            && (record.origin == crate::instance_content::ProviderOrigin::Pack
+                || record
+                    .compatibility
+                    .minecraft_versions
+                    .iter()
+                    .any(|version| version == release.minecraft_version()))
     }) {
         let path = crate::instance_content::validate_provider_file(managed, instance, record)
             .map_err(|error| AuroraInstallError::ReleaseInvalid(error.to_string()))?;

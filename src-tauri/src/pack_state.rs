@@ -338,7 +338,6 @@ impl InstalledPack {
         }
         if record.installed().minecraft_version != self.identity.minecraft_version
             || record.installed().platform.version() != Some(&self.identity.fabric_loader_version)
-            || record.installed().aurora.is_some()
         {
             return Err(PackStateError::InstanceMismatch);
         }

@@ -14,6 +14,9 @@ pub struct Workspace {
     pub id: String,
     pub base: Option<InstanceConfiguration>,
     pub content: Vec<ContentItem>,
+    pub mod_icons: std::collections::HashMap<String, Option<slint::Image>>,
+    pub client_preview: Option<api::AuroraTransition>,
+    pub icons_pending: std::collections::HashSet<String>,
     pub content_serial: u64,
     pub filter: String,
     pub pending_remove: Option<(String, String)>,
@@ -28,6 +31,7 @@ pub struct Workspace {
 
 #[derive(Clone)]
 pub struct ContentItem {
+    pub icon_source: Option<api::ModIconRequest>,
     pub row: ContentRow,
     /// Modrinth project id when the file is provider-managed.
     pub project: Option<String>,
@@ -108,6 +112,8 @@ pub fn bind(window: &AppWindow) {
         render_dirty();
     });
     instances.on_save_config(save_configuration);
+    instances.on_client_review(review_client);
+    instances.on_client_confirm(confirm_client);
     instances.on_validate(validate);
     instances.on_repair(|| install_or_repair(false));
     instances.on_content_filter_changed(|text| {
@@ -270,6 +276,11 @@ pub fn open_workspace(id: String, tab: i32) {
         instances.set_pack_update_text("".into());
         instances.set_pack_update_available(false);
         instances.set_pack_review_open(false);
+        instances.set_client_review_open(false);
+        instances.set_client_busy(false);
+        instances.set_config_busy(false);
+        instances.set_client_available(false);
+        instances.set_client_note("Checking compatible release…".into());
         instances.set_tab(tab);
         instances.set_config_error("".into());
         instances.set_health_text("Not checked yet.".into());
@@ -290,8 +301,168 @@ pub fn open_workspace(id: String, tab: i32) {
     seed_game_settings();
     render_workspace_header();
     render_dirty();
+    refresh_client_option();
     load_memory_hint(id);
     load_tab(tab);
+}
+
+fn refresh_client_option() {
+    let request = ui::with(|window, state| {
+        let workspace = state.workspace.as_ref()?;
+        let instance = state.instance(&workspace.id)?;
+        let instances = window.global::<Instances>();
+        instances.set_client_installed(instance.aurora.is_some());
+        if let Some(pin) = &instance.aurora {
+            instances.set_client_note(format!("Aurora Client {}", pin.version).into());
+            return None;
+        }
+        if instance.platform.kind != "fabric" {
+            instances.set_client_note("Aurora Client requires Fabric.".into());
+            return None;
+        }
+        let version = instance.platform.version.as_ref()?;
+        Some((
+            workspace.id.clone(),
+            instance.minecraft_version.clone(),
+            serde_json::json!({"kind":"fabric", "policy":{"type":"pinned", "version":version}}),
+        ))
+    })
+    .flatten();
+    let Some((id, minecraft, loader)) = request else {
+        return;
+    };
+    ui::spawn(
+        api::aurora_compatibility(minecraft, loader),
+        move |result| {
+            ui::with(|window, state| {
+                if state.workspace.as_ref().map(|w| w.id.as_str()) != Some(&id) {
+                    return;
+                }
+                let instances = window.global::<Instances>();
+                match result {
+                    Ok(value) => {
+                        instances.set_client_available(value.available);
+                        instances.set_client_note(
+                            if value.available {
+                                format!("Latest compatible: {}", value.version.unwrap_or_default())
+                            } else {
+                                value.reason
+                            }
+                            .into(),
+                        );
+                    }
+                    Err(error) => {
+                        instances.set_client_available(false);
+                        instances.set_client_note(error.message.into());
+                    }
+                }
+            });
+        },
+    );
+}
+
+fn review_client() {
+    let request = ui::with(|window, state| {
+        let instances = window.global::<Instances>();
+        if instances.get_client_busy()
+            || instances.get_config_dirty()
+            || instances.get_config_busy()
+            || instances.get_installing()
+            || instances.get_cfg_needs_install()
+        {
+            return None;
+        }
+        let workspace = state.workspace.as_mut()?;
+        workspace.client_preview = None;
+        instances.set_client_busy(true);
+        instances.set_config_busy(true);
+        Some((workspace.id.clone(), !instances.get_client_installed()))
+    })
+    .flatten();
+    let Some((id, enabled)) = request else {
+        return;
+    };
+    ui::spawn(
+        api::preview_aurora(ui::host(), id.clone(), enabled),
+        move |result| {
+            ui::with(|window, state| {
+                let Some(workspace) = state.workspace.as_mut().filter(|w| w.id == id) else {
+                    return;
+                };
+                let instances = window.global::<Instances>();
+                instances.set_client_busy(false);
+                instances.set_config_busy(false);
+                match result {
+                    Ok(preview) => {
+                        if preview.instance_id != id {
+                            return;
+                        }
+                        let mut lines = preview
+                            .requirements_added
+                            .iter()
+                            .map(|s| format!("Add: {s}"))
+                            .chain(
+                                preview
+                                    .requirements_removed
+                                    .iter()
+                                    .map(|s| format!("Remove: {s}")),
+                            )
+                            .collect::<Vec<_>>();
+                        lines.extend(preview.warnings.iter().cloned());
+                        lines.extend(preview.blockers.iter().cloned());
+                        instances.set_client_review_text(lines.join("\n\n").into());
+                        instances.set_client_review_allowed(preview.blockers.is_empty());
+                        workspace.client_preview = Some(preview);
+                        instances.set_client_review_open(true);
+                    }
+                    Err(error) => instances.set_client_note(error.message.into()),
+                }
+            });
+        },
+    );
+}
+
+fn confirm_client() {
+    let request = ui::with(|window, state| {
+        let instances = window.global::<Instances>();
+        if instances.get_client_busy()
+            || !instances.get_client_review_open()
+            || !instances.get_client_review_allowed()
+            || instances.get_config_dirty()
+            || instances.get_config_busy()
+            || instances.get_installing()
+        {
+            return None;
+        }
+        let workspace = state.workspace.as_mut()?;
+        let preview = workspace.client_preview.take()?;
+        instances.set_client_review_open(false);
+        instances.set_client_busy(true);
+        instances.set_config_busy(true);
+        Some((
+            workspace.id.clone(),
+            preview.target.aurora.is_some(),
+            preview.fingerprint,
+        ))
+    })
+    .flatten();
+    let Some((id, enabled, fingerprint)) = request else {
+        return;
+    };
+    ui::spawn(
+        api::apply_aurora(ui::host(), id.clone(), enabled, fingerprint),
+        move |result| {
+            if let Err(error) = result {
+                ui::error_toast(&error);
+            }
+            reload(move || {
+                if ui::state(|s| s.workspace.as_ref().is_some_and(|w| w.id == id)) {
+                    open_workspace(id, TAB_SETTINGS);
+                }
+                crate::home::refresh_readiness();
+            });
+        },
+    );
 }
 
 fn render_workspace_header() {
@@ -746,6 +917,7 @@ fn load_tab(tab: i32) {
         let workspace = state.workspace.as_mut()?;
         workspace.content_serial += 1;
         workspace.content.clear();
+        workspace.icons_pending.clear();
         if workspace.updates.tab != tab {
             workspace.updates = crate::content_updates::Updates::default();
         }
@@ -760,14 +932,15 @@ fn load_tab(tab: i32) {
     render_content();
     let host = ui::host();
     if tab == TAB_MODS {
-        ui::spawn(api::instance_mods(host, id), move |result| {
-            apply_content(serial, result.map(mod_items))
+        ui::spawn(api::instance_mods(host, id.clone()), move |result| {
+            apply_content(&id, serial, result.map(mod_items))
         });
     } else {
         let kind = CONTENT_KINDS[tab as usize];
-        ui::spawn(api::instance_content(host, id, kind), move |result| {
-            apply_content(serial, result.map(pack_items))
-        });
+        ui::spawn(
+            api::instance_content(host, id.clone(), kind),
+            move |result| apply_content(&id, serial, result.map(pack_items)),
+        );
     }
 }
 
@@ -815,8 +988,14 @@ fn mod_items(inventory: api::ModInventory) -> Vec<ContentItem> {
                 })
                 .unwrap_or_default();
             ContentItem {
+                icon_source: entry.sha256.as_ref().map(|hash| api::ModIconRequest {
+                    file_name: entry.file_name.clone(),
+                    sha256: hash.clone(),
+                }),
                 project: modrinth_project(entry.provenance.as_ref()),
                 row: ContentRow {
+                    is_mod: true,
+                    letter: ui::letter(&entry.display_name).into(),
                     id: entry.entry_id.into(),
                     title: entry.display_name.into(),
                     detail: detail.join(" · ").into(),
@@ -848,6 +1027,7 @@ fn pack_items(inventory: api::ContentInventory) -> Vec<ContentItem> {
                 detail.push("Selected in game".into());
             }
             ContentItem {
+                icon_source: None,
                 project: modrinth_project(entry.provenance.as_ref()),
                 row: ContentRow {
                     id: entry.entry_id.into(),
@@ -888,22 +1068,107 @@ fn modrinth_project(provenance: Option<&api::Provenance>) -> Option<String> {
         .map(|p| p.project_id.clone())
 }
 
-fn apply_content(serial: u64, result: api::ApiResult<Vec<ContentItem>>) {
+fn apply_content(id: &str, serial: u64, result: api::ApiResult<Vec<ContentItem>>) {
     ui::with(|window, state| {
         let Some(workspace) = state.workspace.as_mut() else {
             return;
         };
-        if workspace.content_serial != serial {
+        if workspace.id != id || workspace.content_serial != serial {
             return;
         }
         let instances = window.global::<Instances>();
         instances.set_content_loading(false);
+        workspace.icons_pending.clear();
         match result {
-            Ok(items) => workspace.content = items,
+            Ok(items) => {
+                workspace.content = items;
+                let hashes: std::collections::HashSet<_> = workspace
+                    .content
+                    .iter()
+                    .filter_map(|item| item.icon_source.as_ref().map(|i| i.sha256.clone()))
+                    .collect();
+                workspace.mod_icons.retain(|key, _| hashes.contains(key));
+            }
             Err(error) => instances.set_content_error(error.message.into()),
         }
     });
     render_content();
+    load_mod_icons(serial);
+}
+
+fn load_mod_icons(serial: u64) {
+    let request = ui::with(|window, state| {
+        if window.global::<Instances>().get_tab() != TAB_MODS {
+            return None;
+        }
+        let workspace = state.workspace.as_mut()?;
+        if workspace.content_serial != serial {
+            return None;
+        }
+        let mut files = Vec::new();
+        for item in &workspace.content {
+            if let Some(source) = &item.icon_source {
+                if !workspace.mod_icons.contains_key(&source.sha256)
+                    && workspace.icons_pending.insert(source.sha256.clone())
+                {
+                    files.push(source.clone());
+                }
+            }
+        }
+        if files.is_empty() {
+            return None;
+        }
+        Some((workspace.id.clone(), files))
+    })
+    .flatten();
+    let Some((id, files)) = request else {
+        return;
+    };
+    let host = ui::host();
+    let expected_id = id.clone();
+    ui::spawn(
+        async move {
+            use base64::Engine;
+            let mut icons = Vec::new();
+            for batch in files.chunks(128) {
+                for result in api::mod_icons(host.clone(), id.clone(), batch.to_vec()).await? {
+                    let pixels = result.bitmap.and_then(|b| {
+                        if b.width > 48 || b.height > 48 {
+                            return None;
+                        }
+                        let bytes = base64::engine::general_purpose::STANDARD
+                            .decode(&b.rgba_base64)
+                            .ok()?;
+                        Some((b.width, b.height, bytes))
+                    });
+                    icons.push((result.sha256, pixels));
+                }
+            }
+            Ok::<_, api::ApiError>((id, icons))
+        },
+        move |result| {
+            ui::with(|_, state| {
+                let Some(workspace) = state.workspace.as_mut() else {
+                    return;
+                };
+                if workspace.id != expected_id || workspace.content_serial != serial {
+                    return;
+                }
+                workspace.icons_pending.clear();
+                if let Ok((id, icons)) = result {
+                    if workspace.id != id {
+                        return;
+                    }
+                    for (hash, pixels) in icons {
+                        let image =
+                            pixels.and_then(|(w, h, bytes)| ui::rectangular_image(&bytes, w, h));
+                        workspace.mod_icons.insert(hash, image);
+                    }
+                }
+            });
+            render_content();
+        },
+    );
 }
 
 pub fn render_content() {
@@ -932,6 +1197,15 @@ pub fn render_content() {
                     })
                     .map(|item| {
                         let mut row = item.row.clone();
+                        if let Some(image) = item
+                            .icon_source
+                            .as_ref()
+                            .and_then(|source| workspace.mod_icons.get(&source.sha256))
+                            .and_then(|image| image.as_ref())
+                        {
+                            row.picture = image.clone();
+                            row.has_picture = true;
+                        }
                         crate::content_updates::decorate(
                             &mut row,
                             item.project.as_deref(),
@@ -984,14 +1258,14 @@ fn toggle_content(entry: slint::SharedString, enabled: bool) {
     let entry = entry.to_string();
     if tab == TAB_MODS {
         ui::spawn(
-            api::set_mod_enabled(host, id, entry, enabled),
-            move |result| finish_mutation(serial, result.map(mod_items)),
+            api::set_mod_enabled(host, id.clone(), entry, enabled),
+            move |result| finish_mutation(&id, serial, result.map(mod_items)),
         );
     } else if (1..TAB_SETTINGS).contains(&tab) {
         let kind = CONTENT_KINDS[tab as usize];
         ui::spawn(
-            api::set_pack_enabled(host, id, kind, entry, enabled),
-            move |result| finish_mutation(serial, result.map(pack_items)),
+            api::set_pack_enabled(host, id.clone(), kind, entry, enabled),
+            move |result| finish_mutation(&id, serial, result.map(pack_items)),
         );
     }
 }
@@ -1015,23 +1289,31 @@ fn remove_content() {
     };
     let host = ui::host();
     if tab == TAB_MODS {
-        ui::spawn(api::remove_mod(host, id, entry), move |result| {
-            finish_mutation(serial, result.map(mod_items))
+        ui::spawn(api::remove_mod(host, id.clone(), entry), move |result| {
+            finish_mutation(&id, serial, result.map(mod_items))
         });
     } else if (1..TAB_SETTINGS).contains(&tab) {
         let kind = CONTENT_KINDS[tab as usize];
-        ui::spawn(api::remove_content(host, id, kind, entry), move |result| {
-            finish_mutation(serial, result.map(pack_items))
-        });
+        ui::spawn(
+            api::remove_content(host, id.clone(), kind, entry),
+            move |result| finish_mutation(&id, serial, result.map(pack_items)),
+        );
     }
 }
 
 /// Applies the authoritative inventory returned by a content mutation. On
 /// failure the list is re-read so the UI never shows an optimistic state.
-fn finish_mutation(serial: u64, result: api::ApiResult<Vec<ContentItem>>) {
+fn finish_mutation(id: &str, serial: u64, result: api::ApiResult<Vec<ContentItem>>) {
+    if !ui::state(|s| {
+        s.workspace
+            .as_ref()
+            .is_some_and(|w| w.id == id && w.content_serial == serial)
+    }) {
+        return;
+    }
     match result {
         Ok(items) => {
-            apply_content(serial, Ok(items));
+            apply_content(id, serial, Ok(items));
             crate::home::refresh_readiness();
         }
         Err(error) => {

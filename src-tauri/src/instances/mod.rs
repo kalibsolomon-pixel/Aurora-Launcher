@@ -311,11 +311,6 @@ impl InstanceRecord {
 
     pub fn set_pack(&mut self, pack: PackRegistryIdentity) -> Result<(), InvalidInstanceRecord> {
         pack.validate()?;
-        if self.installed.aurora.is_some() {
-            return Err(InvalidInstanceRecord::Configuration(
-                "a modpack instance cannot contain Aurora Client".into(),
-            ));
-        }
         self.pack = Some(pack);
         self.validate_content()
     }
@@ -357,9 +352,9 @@ impl InstanceRecord {
             .map_err(InvalidInstanceRecord::Configuration)?;
         if let Some(pack) = &self.pack {
             pack.validate()?;
-            if self.installed.aurora.is_some() || self.installed.platform.kind() != "fabric" {
+            if self.installed.platform.kind() != "fabric" {
                 return Err(InvalidInstanceRecord::Configuration(
-                    "modpacks require independent Fabric instances".into(),
+                    "modpacks require Fabric instances".into(),
                 ));
             }
         }

@@ -656,6 +656,12 @@ pub async fn build_plan(
             .platform
             .version()
             .is_none_or(|version| version != target_loader);
+    if game_transition && context.record.installed().aurora.is_some() {
+        return Err(fail(
+            "pack_client_transition_required",
+            "Remove Aurora Client before a modpack update that changes Minecraft or Fabric Loader.",
+        ));
+    }
     if game_transition {
         // Prove the target combination is installable before offering it.
         resolve_target_configuration(endpoints, &target_minecraft, &target_loader)
@@ -2563,14 +2569,14 @@ fn commit_steps(
             version: reconciliation.target_loader.clone(),
         },
     });
-    configuration.set_aurora_enabled(false);
+    configuration.set_aurora_enabled(reconciliation.old_record.configuration().aurora_enabled());
     stored.set_configuration(configuration);
     stored.set_installed(crate::instances::platform::InstalledConfiguration {
         minecraft_version: reconciliation.target_minecraft.clone(),
         platform: crate::instances::platform::PlatformPin::Fabric {
             version: reconciliation.target_loader.clone(),
         },
-        aurora: None,
+        aurora: reconciliation.old_record.installed().aurora.clone(),
     });
     stored
         .set_pack(crate::instances::PackRegistryIdentity {

@@ -222,6 +222,31 @@ async fn run(host: Host, scenarios: &[String], results: &mut Vec<Value>) -> api:
         )
         .await?;
     }
+    if scenarios.iter().any(|s| s == "mod-icons") {
+        let state = api::launcher_state(host.clone()).await?;
+        for instance in state.instances.iter().filter(|i| i.state == "ready") {
+            let inventory = api::instance_mods(host.clone(), instance.id.clone()).await?;
+            let files: Vec<_> = inventory
+                .entries
+                .iter()
+                .filter_map(|entry| {
+                    entry.sha256.as_ref().map(|hash| {
+                        assert!(
+                            entry.can_toggle && entry.can_remove,
+                            "every regular mod needs both controls"
+                        );
+                        api::ModIconRequest {
+                            file_name: entry.file_name.clone(),
+                            sha256: hash.clone(),
+                        }
+                    })
+                })
+                .collect();
+            for label in ["cold", "warm"] {
+                timed(results,&format!("{label} installed icons for {}",instance.display_name),api::mod_icons(host.clone(),instance.id.clone(),files.clone()),|icons|json!({"files":files.len(),"icons":icons.iter().filter(|r|r.bitmap.is_some()).count(),"maxDimension":icons.iter().filter_map(|r|r.bitmap.as_ref().map(|b|b.width.max(b.height))).max()})).await?;
+            }
+        }
+    }
     if enabled(scenarios, "pack-controls") {
         let state = api::launcher_state(host.clone()).await?;
         let instance = state

@@ -43,6 +43,7 @@ pub mod integrity;
 pub mod launch;
 pub mod minecraft;
 pub mod mod_compatibility;
+pub mod mod_icons;
 pub mod modpacks;
 pub mod modrinth;
 pub mod mrpack;
@@ -163,6 +164,7 @@ pub fn run() {
             application::tauri_commands::select_instance,
             application::tauri_commands::open_instance_folder,
             application::tauri_commands::get_instance_mods,
+            application::tauri_commands::get_installed_mod_icons,
             application::tauri_commands::set_instance_mod_enabled,
             application::tauri_commands::remove_instance_mod,
             application::tauri_commands::open_instance_mods_folder,

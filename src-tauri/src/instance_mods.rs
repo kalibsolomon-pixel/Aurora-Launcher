@@ -177,7 +177,7 @@ impl ModWarning {
 }
 
 #[derive(Debug, Deserialize)]
-struct FabricMetadataDocument {
+pub(crate) struct FabricMetadataDocument {
     id: Option<String>,
     name: Option<String>,
     version: Option<String>,
@@ -195,7 +195,7 @@ struct FabricMetadataDocument {
     conflicts: serde_json::Map<String, serde_json::Value>,
     #[serde(default)]
     breaks: serde_json::Map<String, serde_json::Value>,
-    icon: Option<serde_json::Value>,
+    pub(crate) icon: Option<serde_json::Value>,
     #[serde(default)]
     jars: Vec<NestedJarDeclaration>,
     #[serde(default)]
@@ -496,6 +496,42 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
             }
         }
     }
+    for entry in &mut inventory.entries {
+        if matches!(
+            entry.file_type,
+            ModFileType::EnabledJar | ModFileType::DisabledJar
+        ) {
+            let Ok(path) = validate_current_regular_file(&mods, &entry.file_name) else {
+                entry.can_toggle = false;
+                entry.can_remove = false;
+                entry.action_blocked_reason =
+                    Some("The file changed during scanning. Refresh and retry.".into());
+                continue;
+            };
+            // Ownership hashes remain provenance; mutations use the current
+            // inspected bytes and a hash-bearing opaque entry id.
+            if entry.sha256.is_none() {
+                match file_digest(&path) {
+                    Ok(hash) => entry.sha256 = Some(hash),
+                    Err(_) => {
+                        entry.can_toggle = false;
+                        entry.can_remove = false;
+                        entry.action_blocked_reason =
+                            Some("The file cannot be read. Check file access and refresh.".into());
+                        continue;
+                    }
+                }
+            }
+            entry.can_toggle = true;
+            entry.can_remove = true;
+            entry.action_blocked_reason = None;
+            if let Some(reason) = entry.removal_blocked_reason.take() {
+                entry
+                    .warnings
+                    .push(ModWarning::new("required_by_other_mods", reason));
+            }
+        }
+    }
     Ok(inventory)
 }
 
@@ -693,19 +729,23 @@ pub(crate) fn verified_required_mods_with_manifest(
                     .map_err(|error| ModError::InstalledState(error.to_string()))?
             || installed.artifact().sha256() != release.artifact().sha256()
             || Some(installed.artifact().size_bytes()) != release.artifact().size_bytes()
-            || installed.fabric_api().map(|api| {
-                (
-                    api.version(),
-                    api.artifact().sha256(),
-                    Some(api.artifact().size_bytes()),
-                )
-            }) != release.fabric_api().map(|api| {
-                (
-                    api.version(),
-                    api.artifact().sha256(),
-                    api.artifact().size_bytes(),
-                )
-            })
+            || (!(installed.fabric_api().is_none()
+                && release.fabric_api().is_some()
+                && aurora::compatible_provider_api(managed, instance, release)
+                    .map_err(|e| ModError::InstalledState(e.to_string()))?)
+                && installed.fabric_api().map(|api| {
+                    (
+                        api.version(),
+                        api.artifact().sha256(),
+                        Some(api.artifact().size_bytes()),
+                    )
+                }) != release.fabric_api().map(|api| {
+                    (
+                        api.version(),
+                        api.artifact().sha256(),
+                        api.artifact().size_bytes(),
+                    )
+                }))
         {
             return Err(ModError::InstalledState(
                 "managed requirements do not match active release metadata".into(),
@@ -865,11 +905,10 @@ fn inspect_entry(
     ) {
         if let Ok(hash) = file_digest(path) {
             id_material.extend_from_slice(hash.as_bytes());
-            if sha256.is_none() {
-                sha256 = Some(hash);
-            }
+            sha256 = Some(hash);
         } else {
             ownership = ModOwnership::Unknown;
+            sha256 = None;
         }
     }
     let entry_id = opaque_id(&id_material);
@@ -907,7 +946,7 @@ fn inspect_entry(
     if provider_mismatch {
         warnings.push(ModWarning::new(
             "content_hash_mismatch",
-            "This file no longer matches its provider-managed record. Actions are blocked.",
+            "This file differs from its provider record. Launch validation may require attention.",
         ));
     }
     let blocked_reason = match ownership {
@@ -1770,7 +1809,9 @@ fn inspect_declared_nested_jars<R: Read + Seek>(
 // one before an object's `}`, so only the array form is tolerated here.
 /// Normalize only literal JSON string controls accepted by Fabric's JsonReader.
 /// Structure, types, UTF-8, escapes and the existing bounded reads stay strict.
-fn fabric_metadata_json(bytes: &[u8]) -> Result<FabricMetadataDocument, serde_json::Error> {
+pub(crate) fn fabric_metadata_json(
+    bytes: &[u8],
+) -> Result<FabricMetadataDocument, serde_json::Error> {
     let mut normalized = Vec::with_capacity(bytes.len());
     let (mut quoted, mut escaped) = (false, false);
     for &byte in bytes {
@@ -2192,51 +2233,8 @@ fn set_enabled_with_commit(
         if entry.enabled == enabled {
             return Ok(inventory);
         }
-        if !enabled {
-            if !pack_owned_mod(managed, instance, &entry.file_name)? {
-                dependency_blockers(&inventory, entry, &platform_kind_of(managed, instance))?;
-            }
-        } else {
-            let mut proposed = inventory.entries.clone();
-            proposed
-                .iter_mut()
-                .find(|candidate| candidate.entry_id == entry.entry_id)
-                .expect("resolved entry")
-                .enabled = true;
-            let loader_modules: Vec<String> = loader_builtin_entry(managed, instance)
-                .and_then(|entry| entry.metadata)
-                .map(|metadata| metadata.nested_mod_versions.into_keys().collect())
-                .unwrap_or_default();
-            derive_local_warnings(
-                &mut proposed,
-                &platform_kind_of(managed, instance),
-                &loader_modules,
-            );
-            let candidate = proposed
-                .iter()
-                .find(|candidate| candidate.entry_id == entry.entry_id)
-                .expect("resolved entry");
-            if let Some(warning) = candidate
-                .warnings
-                .iter()
-                .find(|warning| warning.code == "required_dependency_missing")
-            {
-                return Err(ModError::DependencyBlocked(warning.message.clone()));
-            }
-            if let Some(provider) = &candidate.provenance {
-                for required in &provider.requires {
-                    if !proposed.iter().any(|entry| {
-                        entry.enabled
-                            && entry
-                                .provenance
-                                .as_ref()
-                                .is_some_and(|dependency| dependency.identity() == *required)
-                    }) {
-                        return Err(ModError::DependencyBlocked("A required provider dependency is disabled or missing. Re-enable or install it first.".into()));
-                    }
-                }
-            }
-        }
+        // The owner may deliberately change any mod, including dependencies.
+        // Inventory warnings and final launch validation describe the result.
         let mods = validate_mods_directory(managed, instance)?;
         let source = validate_current_regular_file(&mods, &entry.file_name)?;
         let target_name = if enabled {
@@ -2357,24 +2355,9 @@ impl DisabledState {
     }
 }
 
-/// Permanently removes one exact current user-owned local JAR, then returns
+/// Permanently removes one exact current contained mod JAR, then returns
 /// a fresh authoritative inventory. UI confirmation is required by product
-/// policy; this backend still revalidates identity and ownership itself.
-fn pack_owned_mod(
-    managed: &ManagedPaths,
-    instance: &InstanceId,
-    file_name: &str,
-) -> Result<bool, ModError> {
-    Ok(crate::pack_state::InstalledPack::load(managed, instance)
-        .map_err(|e| ModError::State(e.to_string()))?
-        .is_some_and(|p| {
-            p.owns_path(&format!(
-                "mods/{}",
-                file_name.strip_suffix(".disabled").unwrap_or(file_name)
-            ))
-        }))
-}
-
+/// policy; this backend still revalidates identity and containment itself.
 pub fn remove(
     managed: &ManagedPaths,
     instance: &InstanceId,
@@ -2383,9 +2366,6 @@ pub fn remove(
     with_mutation_lock(instance, || {
         let inventory = scan(managed, instance)?;
         let entry = resolve_mutable_entry(&inventory, entry_id, false)?;
-        if !pack_owned_mod(managed, instance, &entry.file_name)? {
-            dependency_blockers(&inventory, entry, &platform_kind_of(managed, instance))?;
-        }
         let mods = validate_mods_directory(managed, instance)?;
         let target = validate_current_regular_file(&mods, &entry.file_name)?;
         if let Some(hash) = &entry.sha256 {
@@ -2483,9 +2463,6 @@ fn resolve_mutable_entry<'a>(
         .iter()
         .find(|entry| entry.entry_id == entry_id)
         .ok_or(ModError::StaleEntry)?;
-    if entry.ownership == ModOwnership::LauncherManagedRequired {
-        return Err(ModError::RequiredArtifact);
-    }
     if (toggle && !entry.can_toggle) || (!toggle && !entry.can_remove) {
         return Err(ModError::UnsafeEntry);
     }
@@ -2631,8 +2608,14 @@ fn with_mutation_lock<T>(
     instance: &InstanceId,
     operation: impl FnOnce() -> Result<T, ModError>,
 ) -> Result<T, ModError> {
-    crate::instance_content::with_instance_lock(instance, || Ok(operation()))
-        .map_err(|_| ModError::MutationInProgress)?
+    crate::instance_content::with_instance_lock(instance, || {
+        Ok((|| {
+            let _process = crate::launch::process::lock_stopped(instance.as_str())
+                .map_err(|e| ModError::State(e.to_string()))?;
+            operation()
+        })())
+    })
+    .map_err(|_| ModError::MutationInProgress)?
 }
 
 fn is_enabled_jar(name: &str) -> bool {
@@ -2751,10 +2734,9 @@ impl fmt::Display for ModError {
                 formatter,
                 "a required launcher-managed mod cannot be disabled or removed from Mods"
             ),
-            Self::UnsafeEntry => write!(
-                formatter,
-                "this entry is not a regular user-managed mod file"
-            ),
+            Self::UnsafeEntry => {
+                write!(formatter, "this entry is not a regular, contained mod JAR")
+            }
             Self::TargetConflict(name) => write!(
                 formatter,
                 "the target filename '{name}' already exists; nothing was overwritten"
@@ -2923,7 +2905,7 @@ versionRange="[1,2)"
     }
 
     #[test]
-    fn disabling_known_dependency_is_blocked_and_changed_disabled_bytes_never_activate() {
+    fn dependencies_warn_but_allow_controls_and_stale_disabled_bytes_never_activate() {
         let fixture = Fixture::new("dependency-toggle");
         jar(
             &fixture.mods().join("api.jar"),
@@ -2945,18 +2927,26 @@ versionRange="[1,2)"
                     .is_some_and(|meta| meta.id == "fabric-api")
             })
             .unwrap();
+        assert!(api.can_toggle && api.can_remove);
         assert!(
-            api.removal_blocked_reason
-                .as_deref()
-                .unwrap()
-                .contains("parent requires fabric-api")
+            api.warnings
+                .iter()
+                .any(|w| w.message.contains("parent requires fabric-api"))
         );
-        assert_eq!(
-            set_enabled(&fixture.managed, &fixture.instance, &api.entry_id, false)
-                .unwrap_err()
-                .code(),
-            "mod_dependency_blocked"
+        let disabled =
+            set_enabled(&fixture.managed, &fixture.instance, &api.entry_id, false).unwrap();
+        assert!(!fixture.mods().join("api.jar").exists());
+        assert!(
+            crate::mod_compatibility::validate(&disabled, "1.21.11", "0.19.5", Some(21), "fabric")
+                .iter()
+                .any(|p| p.mod_id == "parent")
         );
+        let api = disabled
+            .entries
+            .iter()
+            .find(|e| e.file_name == "api.jar.disabled")
+            .unwrap();
+        set_enabled(&fixture.managed, &fixture.instance, &api.entry_id, true).unwrap();
         assert_eq!(
             std::fs::read(fixture.mods().join("api.jar")).unwrap(),
             before
@@ -3492,35 +3482,48 @@ versionRange="[1,2)"
     }
 
     #[test]
-    fn installed_state_protects_the_required_artifact() {
+    fn installed_state_keeps_ownership_but_allows_explicit_mod_controls() {
         let fixture = Fixture::new("managed");
-        std::fs::write(fixture.mods().join("aurora-0.3.0.jar"), b"tiny").unwrap();
+        let path = fixture.mods().join("aurora-0.3.0.jar");
+        std::fs::write(&path, b"tiny").unwrap();
+        let receipt = fixture
+            .managed
+            .instance_paths(&fixture.instance)
+            .root()
+            .join(aurora::AURORA_INSTALLED_FILE_NAME);
+        let evidence = std::fs::read(&receipt).unwrap();
         let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
         let required = &inventory.entries[0];
         assert_eq!(required.ownership, ModOwnership::LauncherManagedRequired);
-        assert!(!required.can_toggle && !required.can_remove);
-        assert_eq!(
-            set_enabled(
-                &fixture.managed,
-                &fixture.instance,
-                &required.entry_id,
-                false
-            )
-            .unwrap_err()
-            .code(),
-            "mod_required_artifact"
-        );
-        assert_eq!(
-            remove(&fixture.managed, &fixture.instance, &required.entry_id)
-                .unwrap_err()
-                .code(),
-            "mod_required_artifact"
-        );
-        assert!(fixture.mods().join("aurora-0.3.0.jar").is_file());
+        assert!(required.can_toggle && required.can_remove);
+        let disabled = set_enabled(
+            &fixture.managed,
+            &fixture.instance,
+            &required.entry_id,
+            false,
+        )
+        .unwrap();
+        assert!(!path.exists());
+        let enabled = set_enabled(
+            &fixture.managed,
+            &fixture.instance,
+            &disabled.entries[0].entry_id,
+            true,
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"tiny");
+        remove(
+            &fixture.managed,
+            &fixture.instance,
+            &enabled.entries[0].entry_id,
+        )
+        .unwrap();
+        assert!(!path.exists());
+        assert_eq!(std::fs::read(receipt).unwrap(), evidence);
     }
 
     #[test]
-    fn installed_state_also_protects_required_fabric_api() {
+    fn required_fabric_api_has_delete_and_toggle_without_rewriting_ownership() {
         let fixture = Fixture::new("fabric-api-managed");
         let state_path = fixture
             .managed
@@ -3547,14 +3550,9 @@ versionRange="[1,2)"
             .find(|entry| entry.file_name == "fabric-api-0.141.6+1.21.11.jar")
             .unwrap();
         assert_eq!(required.ownership, ModOwnership::LauncherManagedRequired);
-        assert!(!required.can_toggle && !required.can_remove);
-        assert_eq!(
-            remove(&fixture.managed, &fixture.instance, &required.entry_id)
-                .unwrap_err()
-                .code(),
-            "mod_required_artifact"
-        );
-        assert!(path.is_file());
+        assert!(required.can_toggle && required.can_remove);
+        remove(&fixture.managed, &fixture.instance, &required.entry_id).unwrap();
+        assert!(!path.exists());
     }
 
     #[test]
@@ -3596,7 +3594,7 @@ versionRange="[1,2)"
             entry.provenance.as_ref().unwrap().project_id,
             "project-opaque"
         );
-        assert!(entry.can_toggle && !entry.can_remove);
+        assert!(entry.can_toggle && entry.can_remove);
         let before = std::fs::read(
             fixture
                 .managed
@@ -3631,7 +3629,7 @@ versionRange="[1,2)"
         std::fs::write(&path, b"tampered").unwrap();
         let tampered = scan(&fixture.managed, &fixture.instance).unwrap();
         assert_eq!(tampered.entries[0].ownership, ModOwnership::Unknown);
-        assert!(!tampered.entries[0].can_remove);
+        assert!(tampered.entries[0].can_remove && tampered.entries[0].can_toggle);
         std::fs::remove_file(path).unwrap();
         assert_eq!(
             scan(&fixture.managed, &fixture.instance)
@@ -3904,7 +3902,12 @@ versionRange="[1,2)"
             outer_entry.metadata.as_ref().unwrap().nested_mod_ids,
             ["fabric-resource-loader-v1"]
         );
-        assert!(outer_entry.warnings.is_empty());
+        assert!(
+            outer_entry
+                .warnings
+                .iter()
+                .all(|w| w.code == "required_by_other_mods")
+        );
         let consumer = inventory
             .entries
             .iter()

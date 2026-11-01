@@ -3,6 +3,8 @@
 Branch `codex/instance-tiles-icons` (from `codex/java-validation-private-rc` at `39c8a03`).
 Local commits only; nothing pushed, merged or published.
 
+**2026-11-01 follow-up:** [Installed mod controls, icons and optional Aurora](../../MOD_CONTROLS_AURORA_ACCEPTANCE.md) supersedes the historical prohibition on adding Aurora to a pack-owned instance. Verified existing provider Fabric API ownership can be retained. The older merge flow below still intentionally produces ordinary content; it does not follow pack updates.
+
 ## What changed
 
 | Area | Change |
@@ -21,7 +23,7 @@ Local commits only; nothing pushed, merged or published.
 
 ## Adding a modpack to an existing instance
 
-`pack_merge.rs` (`preview_modrinth_pack_merge`, `install_modrinth_pack_merge`). The pack's content becomes **ordinary content** of the instance (direct, retained, removable provider records; no pack ownership), because pack-owned instances cannot contain Aurora Client by registry rule. The instance does not follow pack updates.
+`pack_merge.rs` (`preview_modrinth_pack_merge`, `install_modrinth_pack_merge`). The pack's content becomes **ordinary content** of the instance (direct, retained, removable provider records; no pack ownership), as designed in this original phase (the historical registry prohibition on pack/Aurora coexistence has since been removed). The instance does not follow pack updates.
 
 Rules, all decided in a read-only plan shared by preview and install (install re-plans and compares a fingerprint):
 
