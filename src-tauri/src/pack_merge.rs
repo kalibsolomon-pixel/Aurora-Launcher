@@ -570,6 +570,12 @@ pub async fn install(
         .zip(crate::modpacks::acquire_externals(&cache, &external_refs).await?)
         .collect();
 
+    let _commit = crate::content_jobs::commit().map_err(|_| {
+        fail(
+            "installation_cancelled",
+            "Installation cancelled before activation.",
+        )
+    })?;
     progress("installingComponents");
     let records: Vec<ProviderRecord> = if merge.provider_plans.is_empty() {
         Vec::new()

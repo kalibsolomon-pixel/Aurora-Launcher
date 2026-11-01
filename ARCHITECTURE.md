@@ -2,6 +2,28 @@
 
 # Aurora Launcher architecture
 
+## NATIVE-9 preview distribution and content jobs
+
+The native crate now explicitly enables the core's `native-preview` feature:
+separate per-user installation, application-data, Credential Manager and shortcut
+identities. The production Tauri identity and update authority are unchanged.
+Native offers authenticate their complete payload and installer with the existing
+minisign public-key format, then enforce native product/channel/runtime/platform/
+architecture/package/version/source/hash constraints. Native authority activation
+and publication remain separate owner decisions. Current operational contract:
+`docs/native-ui/NATIVE_DISTRIBUTION.md`; bounded evidence: `NATIVE_9_ACCEPTANCE.md`.
+
+`content_jobs` provides one cooperative context per native content operation.
+Acquisition settles active writes into verified shared cache objects and stops
+new work. Commit shields serialize cancellation against activation; a commit
+already entered finishes to its actual result. Domain transactions still own
+locks, staging and rollback. `local_content` reviews selected JAR/ZIP bytes,
+rejects unsafe archives/conflicts, binds a Rust-owned expiring ticket to exact
+bytes and inventory, imports through the SHA-256 store and activates a verified
+private copy without provider adoption or overwrite. Local `.mrpack` remains
+unsupported; hosted Modrinth packs retain their separate reviewed engines and
+now expose optional-file selection in the native UI. No persisted schema changes.
+
 ## Native host and host-neutral services (2026-10-31)
 
 `application.rs` now implements every operation against `host::Host`
@@ -9,8 +31,8 @@
 The Tauri host registers generated wrappers (`application_tauri.rs`) with
 unchanged IPC names, arguments, DTOs, error codes and events. A native Slint
 host (`native/`) builds the same core with `--no-default-features` (no Tauri,
-no WebView2) and is a side-by-side preview: it shares the identifier, data
-directory and schemas, and reports launcher self-update as unavailable.
+no WebView2). NATIVE-9 isolates its preview identity while retaining the same
+persisted schemas. Updates remain unavailable without owner build configuration.
 Details: `docs/native-ui/ARCHITECTURE.md`; results:
 `NATIVE_UI_MIGRATION_ACCEPTANCE.md`.
 

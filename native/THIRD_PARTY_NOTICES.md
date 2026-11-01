@@ -21,3 +21,6 @@ which keeps its existing dependency notices.
 * **base64** and **windows** — MIT and/or Apache-2.0; versions already used by
   the launcher dependency tree, now direct native dependencies for artwork data
   decoding and the Windows PNG file chooser respectively.
+* **minisign-verify** 0.2.5 — MIT; the native preview core uses it to verify
+  authenticated update offers and installers. Private signing material is not
+  included. See https://crates.io/crates/minisign-verify for its source/license.

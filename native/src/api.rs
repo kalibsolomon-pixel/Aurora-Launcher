@@ -954,6 +954,39 @@ pub async fn provider_inventory(host: Host, instance: String) -> ApiResult<Value
     blocking(move || convert(app::get_provider_lifecycle(host, request))).await?
 }
 
+pub async fn discard_local_content_review(
+    host: Host,
+    instance: String,
+    ticket: String,
+) -> ApiResult<()> {
+    let request = request(json!({"instanceId":instance,"ticket":ticket}))?;
+    blocking(move || convert(app::discard_local_content_review(host, request))).await?
+}
+
+pub async fn preview_local_content(host: Host, instance: String, path: String) -> ApiResult<Value> {
+    convert(
+        app::preview_local_content(
+            host,
+            request(json!({"instanceId":instance,"sourcePath":path}))?,
+        )
+        .await,
+    )
+}
+pub async fn install_local_content(
+    host: Host,
+    instance: String,
+    ticket: String,
+    fingerprint: String,
+) -> ApiResult<Value> {
+    convert(
+        app::install_local_content(
+            host,
+            request(json!({"instanceId":instance,"ticket":ticket,"fingerprint":fingerprint}))?,
+        )
+        .await,
+    )
+}
+
 pub async fn preview_content(
     host: Host,
     instance: String,
@@ -1096,6 +1129,14 @@ pub async fn startup_update_check(host: Host) -> ApiResult<UpdateOverview> {
 
 pub async fn check_for_updates(host: Host) -> ApiResult<UpdateOverview> {
     convert(app::check_for_updates(host).await)
+}
+
+pub async fn download_launcher_update(host: Host, version: String) -> ApiResult<Value> {
+    convert(app::launcher_update_download(host, request(json!({"version":version}))?).await)
+}
+
+pub async fn install_launcher_update(host: Host, version: String) -> ApiResult<Value> {
+    convert(app::launcher_update_install(host, request(json!({"version":version}))?).await)
 }
 
 pub async fn cosmetics(host: Host, account_id: String) -> ApiResult<Cosmetics> {

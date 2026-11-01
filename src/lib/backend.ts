@@ -1,4 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
+
+export interface LocalContentPreview {
+  ticket: string; fingerprint: string; fileName: string; instanceName: string;
+  contentType: "mod" | "resourcePack" | "shaderPack";
+  sizeBytes: number; sha256: string; blockers: string[]; note: string;
+}
+export const previewLocalContent = (instanceId: string, sourcePath: string): Promise<LocalContentPreview> => invoke("preview_local_content", { request: { instanceId, sourcePath } });
+export const installLocalContent = (instanceId: string, ticket: string, fingerprint: string): Promise<void> => invoke("install_local_content", { request: { instanceId, ticket, fingerprint } });
+export const discardLocalContentReview = (instanceId: string, ticket: string): Promise<void> => invoke("discard_local_content_review", { request: { instanceId, ticket } });
 // @ts-expect-error Node's native TypeScript tests require the explicit extension.
 import { startProbe, endProbe } from "./launcher/performance.ts";
 

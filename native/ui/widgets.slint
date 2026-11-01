@@ -141,7 +141,7 @@ component MediaCard inherits Rectangle {
         alignment: start;
         CardHeader { item: root.item; first: root.first; last: root.last; }
         if !Widgets.media-supported: Text { text: "Media controls are available on Windows."; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
-        if Widgets.media-supported && !Widgets.media-active: Text { text: "Nothing is playing. Apps that share playback with Windows, such as Spotify or a browser playing YouTube, appear here."; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
+        if Widgets.media-supported && !Widgets.media-active: Text { text: "Nothing is playing. Apps that publish media sessions to Windows appear here."; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
         if Widgets.media-supported && Widgets.media-active: HorizontalLayout {
             spacing: 12px;
             Rectangle {
@@ -170,6 +170,7 @@ component MediaCard inherits Rectangle {
             MediaButton { icon: MediaGlyphs.next; label: "Next track"; enabled: Widgets.media-can-next; clicked => { Widgets.media-next(); } }
             if Widgets.media-session-count > 1: MediaButton { icon: MediaGlyphs.swap; label: "Switch to another media app"; clicked => { Widgets.media-cycle(); } }
         }
+        if Widgets.media-supported: Text { text: "Volume is controlled in the media app; Windows media sessions do not expose per-app volume."; color: Theme.text-muted; font-size: Theme.text-label; wrap: word-wrap; }
     }
 }
 

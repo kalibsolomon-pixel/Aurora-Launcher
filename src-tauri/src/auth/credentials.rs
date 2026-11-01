@@ -177,8 +177,10 @@ pub struct OsCredentialStore;
 fn entry_target(account_id: &str) -> String {
     #[cfg(feature = "private-candidate")]
     const NAMESPACE: &str = "com.aurora.launcher.private-candidate";
-    #[cfg(not(feature = "private-candidate"))]
+    #[cfg(all(not(feature = "private-candidate"), not(feature = "native-preview")))]
     const NAMESPACE: &str = "com.aurora.launcher";
+    #[cfg(all(not(feature = "private-candidate"), feature = "native-preview"))]
+    const NAMESPACE: &str = "com.aurora.launcher.native-preview";
     format!("{NAMESPACE}/account/{account_id}")
 }
 
@@ -497,12 +499,21 @@ mod tests {
         ));
     }
 
-    #[cfg(not(feature = "private-candidate"))]
+    #[cfg(all(not(feature = "private-candidate"), not(feature = "native-preview")))]
     #[test]
     fn entry_targets_derive_from_account_ids_only() {
         assert_eq!(
             entry_target("986dec87b7ec47ff89ff033fdb95c4b5"),
             "com.aurora.launcher/account/986dec87b7ec47ff89ff033fdb95c4b5"
+        );
+    }
+
+    #[cfg(all(feature = "native-preview", not(feature = "private-candidate")))]
+    #[test]
+    fn native_preview_credentials_cannot_address_production() {
+        assert_eq!(
+            entry_target("synthetic-account"),
+            "com.aurora.launcher.native-preview/account/synthetic-account"
         );
     }
 

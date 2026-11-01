@@ -226,6 +226,7 @@ dependencies = [
  "gif",
  "image-webp",
  "libc",
+ "minisign-verify",
  "png 0.17.16",
  "reqwest",
  "rustls",

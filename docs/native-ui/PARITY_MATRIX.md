@@ -1,5 +1,9 @@
 # Functional parity matrix (native host vs WebView host)
 
+**NATIVE-9:** current additions, the complete surface audit and explicit remaining
+release blockers are in [NATIVE_9_ACCEPTANCE](../../NATIVE_9_ACCEPTANCE.md).
+Historical "Done" rows never imply owner-attended account or installer acceptance.
+
 **NATIVE-8 continuation:** the current status of shared installation/downloads,
 native cards/navigation/icons, widgets/media, custom accent, Discord, chrome and
 Borealis is recorded in [NATIVE_8_ACCEPTANCE](../../NATIVE_8_ACCEPTANCE.md).

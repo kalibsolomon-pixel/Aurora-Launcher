@@ -131,14 +131,14 @@ pub struct LauncherUpdateError {
 }
 
 impl LauncherUpdateError {
-    fn new(code: &'static str, message: impl Into<String>) -> Self {
+    pub(super) fn new(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),
         }
     }
 
-    fn gone(message: &str) -> Self {
+    pub(super) fn gone(message: &str) -> Self {
         Self::new("update_stale", message.to_owned())
     }
 }
@@ -367,6 +367,10 @@ pub async fn check_launcher_update(app: &Host) -> UpdateAvailability {
     if let Some(app) = app.tauri() {
         return check_launcher_update_tauri(app).await;
     }
+    #[cfg(feature = "native-preview")]
+    if app.is_native() {
+        return super::native::check(app).await;
+    }
     let _ = app;
     UpdateAvailability::unavailable(NATIVE_HOST_UPDATES)
 }
@@ -380,6 +384,10 @@ pub async fn download(
     #[cfg(feature = "tauri-host")]
     if let Some(app) = app.tauri() {
         return download_tauri(app, presented_version, progress).await;
+    }
+    #[cfg(feature = "native-preview")]
+    if app.is_native() {
+        return super::native::download(app, presented_version, progress).await;
     }
     let _ = (app, presented_version, progress);
     Err(LauncherUpdateError::new(
@@ -397,6 +405,10 @@ pub async fn install(
     if let Some(app) = app.tauri() {
         return install_tauri(app, presented_version).await;
     }
+    #[cfg(feature = "native-preview")]
+    if app.is_native() {
+        return super::native::install(app, presented_version).await;
+    }
     let _ = (app, presented_version);
     Err(LauncherUpdateError::new(
         "updater_unconfigured",
@@ -406,6 +418,10 @@ pub async fn install(
 
 /// Whether a downloaded update is waiting to be installed, and its version.
 pub fn pending_version() -> Option<String> {
+    #[cfg(feature = "native-preview")]
+    if let Some(version) = super::native::pending_version() {
+        return Some(version);
+    }
     #[cfg(not(feature = "tauri-host"))]
     return None;
     #[cfg(feature = "tauri-host")]

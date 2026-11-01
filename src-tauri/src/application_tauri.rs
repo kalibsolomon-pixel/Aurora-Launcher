@@ -10,6 +10,29 @@ use super::*;
 use crate::host::Host;
 
 #[tauri::command]
+pub fn discard_local_content_review(
+    app: tauri::AppHandle,
+    request: LocalContentDiscardRequest,
+) -> Result<(), CommandError> {
+    super::discard_local_content_review(Host::from_tauri(&app), request)
+}
+
+#[tauri::command]
+pub async fn preview_local_content(
+    app: tauri::AppHandle,
+    request: LocalContentPreviewRequest,
+) -> Result<crate::local_content::Preview, CommandError> {
+    super::preview_local_content(Host::from_tauri(&app), request).await
+}
+#[tauri::command]
+pub async fn install_local_content(
+    app: tauri::AppHandle,
+    request: LocalContentInstallRequest,
+) -> Result<(), CommandError> {
+    super::install_local_content(Host::from_tauri(&app), request).await
+}
+
+#[tauri::command]
 pub fn get_application_status(app: tauri::AppHandle) -> Result<ApplicationStatus, CommandError> {
     super::get_application_status(Host::from_tauri(&app))
 }

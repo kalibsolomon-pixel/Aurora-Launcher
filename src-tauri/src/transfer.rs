@@ -178,6 +178,7 @@ pub async fn permit(host: &str) -> TransferPermit {
 /// (digest mismatch, observed drift) and policy refusals are final.
 pub fn is_transient(error: &DownloadError) -> bool {
     match error {
+        DownloadError::Cancelled => false,
         DownloadError::Network(_) | DownloadError::Timeout(_) => true,
         DownloadError::HttpStatus { status } => {
             matches!(status, 408 | 425 | 429 | 500 | 502 | 503 | 504)
@@ -233,9 +234,12 @@ where
     let stats = &coordinator().stats;
     let mut tries = 0u32;
     loop {
+        crate::content_jobs::checkpoint().map_err(|_| DownloadError::Cancelled)?;
+        crate::content_jobs::phase(crate::content_jobs::Phase::Downloading);
         tries += 1;
         let outcome = {
             let _permit = permit(host).await;
+            crate::content_jobs::checkpoint().map_err(|_| DownloadError::Cancelled)?;
             stats.transfers_started.fetch_add(1, Ordering::Relaxed);
             attempt().await
         };
@@ -246,6 +250,7 @@ where
                 return Ok(value);
             }
             Err(error) if tries < MAX_ATTEMPTS && is_transient(&error) => {
+                crate::content_jobs::checkpoint().map_err(|_| DownloadError::Cancelled)?;
                 stats.retries.fetch_add(1, Ordering::Relaxed);
                 let delay = backoff(tries, &error);
                 eprintln!(

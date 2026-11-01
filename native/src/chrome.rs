@@ -30,6 +30,18 @@ pub fn is_focused() -> bool {
     FOCUSED.with(Cell::get)
 }
 
+/// Capture on the UI thread, then revalidate before a blocking native dialog.
+pub fn dialog_owner() -> Option<isize> {
+    #[cfg(windows)]
+    {
+        hwnd().map(|handle| handle.0 as isize)
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 /// Whether the window is minimized or fully covered.
 pub fn is_occluded() -> bool {
     OCCLUDED.with(Cell::get)

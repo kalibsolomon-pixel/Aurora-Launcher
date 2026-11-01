@@ -959,6 +959,7 @@ impl std::error::Error for RedirectPolicyViolation {}
 /// staged bytes as untrusted debris.
 #[derive(Debug)]
 pub enum DownloadError {
+    Cancelled,
     /// The host could not be reached or the connection broke mid-transfer.
     Network(reqwest::Error),
     /// A configured time limit was exceeded.
@@ -1056,6 +1057,7 @@ fn find_redirect_refusal(error: &reqwest::Error) -> Option<RedirectRefusal> {
 impl fmt::Display for DownloadError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Cancelled => formatter.write_str("installation cancelled before activation"),
             Self::Network(error) => {
                 write!(formatter, "the artifact host could not be reached: {error}")
             }

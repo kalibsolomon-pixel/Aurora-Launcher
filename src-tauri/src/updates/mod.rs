@@ -22,6 +22,8 @@
 
 pub mod client;
 pub mod launcher;
+#[cfg(feature = "native-preview")]
+pub mod native;
 
 use std::sync::Mutex;
 use std::sync::OnceLock;

@@ -155,6 +155,7 @@ export component SettingsPage inherits ScrollView {
             SettingRow {
                 label: "Launcher";
                 detail: Settings.launcher-update;
+                if Settings.launcher-update-available: Button { text: "Review native update"; clicked => { Settings.review-launcher-update(); } }
             }
             SettingRow {
                 label: "Aurora Client";

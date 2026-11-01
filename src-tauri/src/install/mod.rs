@@ -1698,6 +1698,9 @@ fn validated_index_file_stem(requirement: &AssetIndexRequirement) -> Result<Stri
 }
 
 fn check_cancel(context: &InstallContext) -> Result<(), InstallError> {
+    if crate::content_jobs::checkpoint().is_err() {
+        return Err(InstallError::Cancelled);
+    }
     if context.processor_cancel.is_cancelled() {
         Err(InstallError::Cancelled)
     } else {

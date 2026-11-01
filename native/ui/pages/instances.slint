@@ -240,6 +240,7 @@ component ContentTab inherits VerticalLayout {
             edited(text) => { Instances.content-filter-changed(text); }
         }
         Button { text: "Find more"; icon: Icons.discover; clicked => { Instances.content-discover(); } }
+        Button { text: "Import file"; enabled: !Instances.installing; clicked => { Instances.content-import(); } }
         IconButton { icon: Icons.folder; label: "Open folder"; size: 36px; clicked => { Instances.content-open-folder(); } }
         IconButton { icon: Icons.refresh; label: "Refresh"; size: 36px; clicked => { Instances.content-refresh(); } }
     }

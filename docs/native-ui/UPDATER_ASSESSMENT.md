@@ -1,5 +1,14 @@
 # Updater integration assessment
 
+**NATIVE-9 supersedes the proposed shared-channel migration below.** The current
+implementation uses a distinct native preview identity, a separate proposed
+authority, and signed native-only metadata as well as installer signatures.
+Neither channel silently migrates to the other. The authority remains disabled
+without owner build configuration; no publication is authorized by this source.
+See [native distribution](NATIVE_DISTRIBUTION.md) and
+[NATIVE-9 evidence](../../NATIVE_9_ACCEPTANCE.md). The original assessment and
+unapproved migration proposal below are preserved as historical evidence.
+
 ## Current authority (unchanged)
 
 * Manifest: `https://raw.githubusercontent.com/kalibsolomon-pixel/Aurora-Launcher/launcher-update-authority/launcher-update.json`

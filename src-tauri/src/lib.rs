@@ -5,11 +5,21 @@ pub mod aurora;
 pub mod auth;
 pub mod cache;
 pub mod config;
+pub mod content_jobs;
 pub mod content_recognition;
 pub mod content_updates;
 mod cosmetic_image;
 #[cfg(all(debug_assertions, feature = "f3ra-desktop-acceptance"))]
 mod desktop_acceptance;
+pub mod local_content;
+
+#[cfg(all(
+    feature = "native-preview",
+    any(feature = "tauri-host", feature = "private-candidate")
+))]
+compile_error!(
+    "native-preview is a separate host identity; build it with --no-default-features and without private-candidate"
+);
 pub use cosmetic_image::run_artwork_decoder_if_requested;
 pub mod cosmetics;
 pub mod discord;
@@ -167,6 +177,9 @@ pub fn run() {
             application::tauri_commands::preview_modrinth_install,
             application::tauri_commands::install_modrinth,
             application::tauri_commands::quick_install_modrinth,
+            application::tauri_commands::preview_local_content,
+            application::tauri_commands::install_local_content,
+            application::tauri_commands::discard_local_content_review,
             application::tauri_commands::get_provider_lifecycle,
             application::tauri_commands::check_modrinth_update,
             application::tauri_commands::preview_modrinth_update,

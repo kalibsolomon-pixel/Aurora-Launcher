@@ -524,6 +524,7 @@ impl From<AcquisitionError> for CommandError {
     fn from(error: AcquisitionError) -> Self {
         let code = match &error {
             AcquisitionError::Download(download) => match download {
+                DownloadError::Cancelled => "installation_cancelled",
                 DownloadError::Network(_) => "network_unavailable",
                 DownloadError::Timeout(_) => "download_timeout",
                 DownloadError::Redirect(_) => "download_redirect_failure",
@@ -3708,6 +3709,12 @@ async fn install_resolved_provider_plans(
     resolved: crate::modrinth::Resolved,
 ) -> Result<Vec<crate::instance_content::ProviderRecord>, CommandError> {
     if resolved.plans.is_empty() {
+        let _commit = crate::content_jobs::commit().map_err(|_| {
+            CommandError::new(
+                "installation_cancelled",
+                "Installation cancelled before activation.",
+            )
+        })?;
         let identity = crate::instance_content::ProviderIdentity {
             content_type: resolved.preview.content_type,
             provider: "modrinth".into(),
@@ -3750,6 +3757,68 @@ async fn install_resolved_provider_plans(
 
 /// One-click UX over the same resolution, fingerprint, and transaction path as
 /// the reviewed install. No search-result metadata becomes install authority.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalContentPreviewRequest {
+    instance_id: String,
+    source_path: String,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalContentInstallRequest {
+    instance_id: String,
+    ticket: String,
+    fingerprint: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalContentDiscardRequest {
+    instance_id: String,
+    ticket: String,
+}
+pub fn discard_local_content_review(
+    app: Host,
+    request: LocalContentDiscardRequest,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id)
+        .map_err(|_| CommandError::new("instance_id_invalid", "The target instance is invalid."))?;
+    crate::local_content::discard(&managed, &instance, &request.ticket).map_err(CommandError::from)
+}
+
+pub async fn preview_local_content(
+    app: Host,
+    request: LocalContentPreviewRequest,
+) -> Result<crate::local_content::Preview, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id)
+        .map_err(|_| CommandError::new("instance_id_invalid", "The target instance is invalid."))?;
+    tokio::task::spawn_blocking(move || {
+        crate::local_content::preview(&managed, instance, request.source_path.into())
+            .map_err(CommandError::from)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "local_import_failed",
+            "The local file review did not complete.",
+        )
+    })?
+}
+
+pub async fn install_local_content(
+    app: Host,
+    request: LocalContentInstallRequest,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id)
+        .map_err(|_| CommandError::new("instance_id_invalid", "The target instance is invalid."))?;
+    crate::local_content::install(&managed, &instance, &request.ticket, &request.fingerprint)
+        .await
+        .map_err(CommandError::from)
+}
+
 pub async fn quick_install_modrinth(
     app: Host,
     request: ModrinthQuickInstallRequest,
@@ -3762,6 +3831,12 @@ pub async fn quick_install_modrinth(
             && record.content_type == request.content_type
             && record.project_id == request.project_id
     }) {
+        let _commit = crate::content_jobs::commit().map_err(|_| {
+            CommandError::new(
+                "installation_cancelled",
+                "Installation cancelled before activation.",
+            )
+        })?;
         if !record.explicitly_retained {
             return Ok(vec![crate::instance_content::retain_provider(
                 &managed,
@@ -6520,6 +6595,113 @@ pub async fn launcher_update_install(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn native9_disposable_webview_data_copy_preserves_documents_and_user_sentinels() {
+        use crate::instances::lifecycle::tests::SyntheticWorld;
+        fn snapshot(
+            root: &std::path::Path,
+        ) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+            fn walk(
+                root: &std::path::Path,
+                path: &std::path::Path,
+                out: &mut std::collections::BTreeMap<std::path::PathBuf, Vec<u8>>,
+            ) {
+                for entry in std::fs::read_dir(path).unwrap() {
+                    let entry = entry.unwrap();
+                    let path = entry.path();
+                    let meta = entry.file_type().unwrap();
+                    assert!(!meta.is_symlink());
+                    if meta.is_dir() {
+                        walk(root, &path, out);
+                    } else {
+                        out.insert(
+                            path.strip_prefix(root).unwrap().to_path_buf(),
+                            std::fs::read(&path).unwrap(),
+                        );
+                    }
+                }
+            }
+            let mut out = std::collections::BTreeMap::new();
+            walk(root, root, &mut out);
+            out
+        }
+        let world = SyntheticWorld::new("native9-data-upgrade");
+        let record = world.create("Preserved instance").await.unwrap();
+        let managed = world.managed();
+        crate::instance_icons::set(managed, record.id(), Some("swords")).unwrap();
+        for path in [
+            "saves/Synthetic World/level.dat",
+            "mods/user-sentinel.jar",
+            "config/user-sentinel.json",
+            "resourcepacks/user-sentinel.zip",
+        ] {
+            let path = managed.instance_paths(record.id()).root().join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"NATIVE9 owner data sentinel").unwrap();
+        }
+        let accounts=crate::auth::accounts::AccountsDocument::from_json(&serde_json::json!({"schemaVersion":1,"selectedAccountId":"11111111111141118111111111111111","accounts":[{"accountId":"11111111111141118111111111111111","minecraftName":"SyntheticUser"}]}).to_string()).unwrap();
+        crate::auth::accounts::save(&managed.accounts_file(), &accounts).unwrap();
+        let mut config = crate::config::load(&managed.config_file())
+            .unwrap()
+            .unwrap();
+        let mut layout = config.home_widgets().clone();
+        layout.widgets.push(crate::home_widgets::WidgetPlacement {
+            id: "native-media".into(),
+            enabled: false,
+            size: crate::home_widgets::WidgetSize::Wide,
+        });
+        config.set_home_widgets(layout);
+        crate::config::save(&managed.config_file(), &config).unwrap();
+        let before = snapshot(managed.data_root());
+        let copy =
+            std::env::temp_dir().join(format!("aurora-native9-data-copy-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&copy).unwrap();
+        for (relative, bytes) in &before {
+            let path = copy.join(relative);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        let copied = ManagedPaths::from_app_local_data_dir(copy).unwrap();
+        let state = load_launcher_state(&copied).unwrap();
+        assert_eq!(state.instances.len(), 1);
+        assert_eq!(state.instances[0].display_name, "Preserved instance");
+        let after = snapshot(copied.data_root());
+        for (path, bytes) in &before {
+            assert_eq!(
+                after.get(path),
+                Some(bytes),
+                "existing data changed: {}",
+                path.display()
+            );
+        }
+        assert_eq!(
+            crate::auth::accounts::load(&copied.accounts_file()).unwrap(),
+            accounts
+        );
+        let registry = InstanceRegistry::load(&copied.instance_registry_file()).unwrap();
+        assert_eq!(
+            crate::instances::lifecycle::validate_instance(&copied, &registry, record.id())
+                .unwrap()
+                .status,
+            crate::instances::lifecycle::InstanceStatus::Ready
+        );
+        let mut config = crate::config::load(&copied.config_file()).unwrap().unwrap();
+        let value = serde_json::json!({"schemaVersion":7,"selectedInstanceId":record.id(),"appearance":{"theme":"oled","accent":{"type":"custom","hex":"#58b8dc"},"background":"simple","auroraMotionSpeed":0},"homeWidgets":config.home_widgets(),"discord":config.discord()});
+        let changed = crate::config::LauncherConfig::from_json(&value.to_string()).unwrap();
+        config.set_appearance(changed.appearance().clone());
+        crate::config::save(&copied.config_file(), &config).unwrap();
+        let round_trip = crate::config::load(&copied.config_file()).unwrap().unwrap();
+        assert_eq!(
+            round_trip.home_widgets().widgets.last().unwrap().id,
+            "native-media"
+        );
+        assert_eq!(
+            snapshot(managed.data_root()),
+            before,
+            "source WebView fixture must stay byte-identical"
+        );
+    }
 
     #[test]
     fn state_loading_exposes_recovery_errors_without_trusting_stored_ready() {

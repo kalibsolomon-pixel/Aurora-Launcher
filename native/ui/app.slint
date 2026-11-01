@@ -9,7 +9,7 @@ import {
     Avatar, StatusPill, Spinner, ProgressBar, FocusRing, KeyboardFocus, EmptyState, Divider,
     Tooltip, InstanceIcon,
 } from "components.slint";
-import { Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, AccountRow, IconPicker, AccentPicker, Activity, ActivityRow } from "state.slint";
+import { Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, AccountRow, IconPicker, AccentPicker, Activity, ActivityRow, ContentImport } from "state.slint";
 import { IdentityDialog, IconPickerDialog } from "dialogs.slint";
 import { AccentPickerPopover } from "popovers.slint";
 import { Chrome, TitleBar, DragArea, ResizeEdges } from "chrome.slint";
@@ -20,7 +20,7 @@ import { DiscoverPage } from "pages/discover.slint";
 import { SettingsPage } from "pages/settings.slint";
 import { SkinsPage } from "pages/skins.slint";
 
-export { Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, Tone, IconPicker, AccentPicker, Chrome, Widgets, WidgetChoice, WidgetLine, WidgetView, Activity, ActivityRow }
+export { Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, Skins, Tone, IconPicker, AccentPicker, Chrome, Widgets, WidgetChoice, WidgetLine, WidgetView, Activity, ActivityRow, ContentImport }
 
 component NavItem inherits Rectangle {
     in property <string> label;
@@ -269,6 +269,12 @@ export component AppWindow inherits Window {
                 if Discover.kind == 3: Dropdown { label: "Modpack installation workflow"; model: ["New modpack instance", "Add to target instance"]; current-index <=> Discover.pack-mode; enabled: !Discover.install-busy && !Discover.details-loading; selected => { Discover.version-changed(); } }
                 if Discover.kind == 3 && Discover.pack-mode == 1: Text { text: "Target: " + (Discover.instance-index >= 0 ? Discover.instance-names[Discover.instance-index] : "Choose an instance in Discover first"); color: Theme.text-secondary; wrap: word-wrap; }
                 if Discover.review-text != "": Text { text: Discover.review-text; color: Theme.text-secondary; wrap: word-wrap; font-size: Theme.text-secondary-size; }
+                for file in Discover.optional-files: Checkbox {
+                    text: file.path;
+                    checked: file.selected;
+                    enabled: !Discover.details-loading && !Discover.install-busy;
+                    toggled => { Discover.toggle-optional(file.path); }
+                }
                 if Discover.detail-error != "": Text { text: Discover.detail-error; color: Theme.error; wrap: word-wrap; }
             }
         }
@@ -280,6 +286,20 @@ export component AppWindow inherits Window {
             Button { text: "Close"; enabled: !Discover.install-busy; clicked => { Discover.close-details(); } }
             Button { text: "Review installation"; enabled: !Discover.details-loading && !Discover.install-busy && Discover.version-index >= 0; clicked => { Discover.review(); } }
             Button { text: "Install reviewed content"; kind: ButtonKind.primary; enabled: Discover.can-install; loading: Discover.install-busy; clicked => { Discover.confirm-install(); } }
+        }
+    }
+
+    if Settings.launcher-dialog-open: Dialog {
+        title: "Native preview update";
+        dismissible: !Settings.launcher-update-busy;
+        dismissed => { Settings.launcher-dialog-open = false; }
+        Text { text: Settings.launcher-update-detail; color: Theme.text-secondary; wrap: word-wrap; }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button { text: "Close"; enabled: !Settings.launcher-update-busy; clicked => { Settings.launcher-dialog-open = false; } }
+            if !Settings.launcher-ready-to-install: Button { text: "Download and verify"; kind: ButtonKind.primary; loading: Settings.launcher-update-busy; clicked => { Settings.download-launcher-update(); } }
+            if Settings.launcher-ready-to-install: Button { text: "Exit and install"; kind: ButtonKind.primary; loading: Settings.launcher-update-busy; clicked => { Settings.install-launcher-update(); } }
         }
     }
 
@@ -314,6 +334,35 @@ export component AppWindow inherits Window {
             spacing: 8px;
             if Accounts.login-busy: Button { text: "Cancel sign-in"; clicked => { Accounts.cancel-sign-in(); } }
             if !Accounts.login-busy: Button { text: Accounts.rows.length == 0 ? "Sign in with Microsoft" : "Add account"; icon: Icons.open-external; kind: ButtonKind.primary; clicked => { Accounts.sign-in(); } }
+        }
+    }
+
+    if ContentImport.open: Dialog {
+        title: "Review local import";
+        dismissed => { ContentImport.dismiss(); }
+        local-review := ScrollView {
+            height: min(300px, max(120px, root.height - 240px));
+            VerticalLayout {
+                width: local-review.visible-width;
+                alignment: start;
+                Text { text: ContentImport.description; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
+            }
+        }
+        HorizontalLayout { alignment: end; spacing: 8px;
+            Button { text: "Cancel"; clicked => { ContentImport.dismiss(); } }
+            Button { text: "Install reviewed file"; kind: ButtonKind.primary; enabled: ContentImport.allowed; clicked => { ContentImport.confirm(); } }
+        }
+    }
+
+    if Accounts.remove-open: Dialog {
+        title: "Remove preview account";
+        dismissed => { Accounts.remove-open = false; }
+        Text { text: Accounts.remove-label; color: Theme.text-secondary; wrap: word-wrap; }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button { text: "Cancel"; clicked => { Accounts.remove-open = false; } }
+            Button { text: "Remove account"; kind: ButtonKind.danger; clicked => { Accounts.confirm-remove(); } }
         }
     }
 

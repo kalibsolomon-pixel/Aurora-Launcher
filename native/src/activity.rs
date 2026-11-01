@@ -5,10 +5,8 @@
 //!   instances, and new modpack instances, run concurrently.
 //! - Network concurrency is bounded once, process-wide, by the core's
 //!   transfer permits; this queue never opens connections itself.
-//! - Queued tasks can be cancelled. A running install cannot be cancelled
-//!   because the core exposes no cancellation for content or pack installs,
-//!   so no Cancel control is shown for it. Failed tasks can be retried
-//!   without touching other tasks.
+//! - Cancellation is cooperative through the shared core content-job scope.
+//!   Active cache writes settle; commit boundaries finish to their real result.
 //! - While anything runs, a 1 s timer shows aggregate transfer counters;
 //!   it stops when the queue is idle.
 
@@ -21,6 +19,7 @@ use slint::ComponentHandle;
 
 use crate::api::ApiResult;
 use crate::{Activity, ActivityRow, ui};
+use aurora_launcher_lib::content_jobs::{Control, Phase as JobPhase};
 
 type Job = Rc<dyn Fn() -> Pin<Box<dyn Future<Output = ApiResult<serde_json::Value>> + Send>>>;
 
@@ -45,6 +44,7 @@ struct Task {
     job: Job,
     /// Automatic waits after transient instance-lock contention.
     lock_waits: u8,
+    control: Control,
 }
 
 #[derive(Default)]
@@ -63,26 +63,32 @@ pub fn bind(window: &crate::AppWindow) {
     let activity = window.global::<Activity>();
     activity.on_cancel(|id| {
         QUEUE.with(|q| {
-            if let Some(task) = q
-                .borrow_mut()
-                .tasks
-                .iter_mut()
-                .find(|t| t.id == id as u64 && t.phase == Phase::Pending)
+            if let Some(task) =
+                q.borrow_mut().tasks.iter_mut().find(|t| {
+                    t.id == id as u64 && matches!(t.phase, Phase::Pending | Phase::Running)
+                })
             {
-                task.phase = Phase::Cancelled;
-                task.message = "Cancelled before it started.".into();
+                task.control.cancel();
+                if task.phase == Phase::Pending {
+                    task.phase = Phase::Cancelled;
+                    task.message = "Cancelled before it started.".into();
+                } else {
+                    task.message =
+                        "Cancelling… Active writes and any commit in progress must finish safely."
+                            .into();
+                }
             }
         });
         render();
     });
     activity.on_retry(|id| {
         QUEUE.with(|q| {
-            if let Some(task) = q
-                .borrow_mut()
-                .tasks
-                .iter_mut()
-                .find(|t| t.id == id as u64 && t.phase == Phase::Failed)
+            if let Some(task) =
+                q.borrow_mut().tasks.iter_mut().find(|t| {
+                    t.id == id as u64 && matches!(t.phase, Phase::Failed | Phase::Cancelled)
+                })
             {
+                task.control = Control::default();
                 task.lock_waits = 0;
                 task.phase = Phase::Pending;
                 task.message = "Waiting to retry.".into();
@@ -123,6 +129,7 @@ pub fn submit(
             message: "Queued.".into(),
             job: Rc::new(job),
             lock_waits: 0,
+            control: Control::default(),
         });
         // Keep the panel bounded: drop the oldest finished entries.
         while q.tasks.len() > 30 {
@@ -154,7 +161,7 @@ pub fn busy_projects() -> Vec<String> {
 
 /// Starts every pending task whose instance has nothing running.
 fn pump() {
-    let start: Vec<(u64, Job)> = QUEUE.with(|q| {
+    let start: Vec<(u64, Job, Control)> = QUEUE.with(|q| {
         let mut q = q.borrow_mut();
         let mut started = Vec::new();
         let mut running_keys: Vec<Option<String>> = q
@@ -173,12 +180,40 @@ fn pump() {
             if task.key.is_some() {
                 running_keys.push(task.key.clone());
             }
-            started.push((task.id, Rc::clone(&task.job)));
+            started.push((task.id, Rc::clone(&task.job), task.control.clone()));
         }
         started
     });
-    for (id, job) in start {
-        ui::spawn(job(), move |result| finish(id, result));
+    for (id, job, control) in start {
+        let work = job();
+        ui::spawn(
+            async move {
+                control
+                    .run(async {
+                        aurora_launcher_lib::content_jobs::checkpoint().map_err(|_| {
+                            crate::api::ApiError::new(
+                                "installation_cancelled",
+                                "Installation cancelled before activation.",
+                            )
+                        })?;
+                        let result = work.await;
+                        match result {
+                            Err(error)
+                                if control.cancellation_observed()
+                                    && !error.code.contains("rollback") =>
+                            {
+                                Err(crate::api::ApiError::new(
+                                    "installation_cancelled",
+                                    "Installation cancelled. No uncommitted content was activated.",
+                                ))
+                            }
+                            result => result,
+                        }
+                    })
+                    .await
+            },
+            move |result| finish(id, result),
+        );
     }
     sync_timer();
     render();
@@ -195,6 +230,11 @@ fn finish(id: u64, result: ApiResult<serde_json::Value>) {
         let mut q = q.borrow_mut();
         let task = q.tasks.iter_mut().find(|t| t.id == id)?;
         match &result {
+            Err(error) if error.code == "installation_cancelled" => {
+                task.phase = Phase::Cancelled;
+                task.message = error.message.clone();
+                None
+            }
             Err(error) if error.code == LOCK_CONTENTION && task.lock_waits < MAX_LOCK_WAITS => {
                 task.lock_waits += 1;
                 task.phase = Phase::Pending;
@@ -223,6 +263,9 @@ fn finish(id: u64, result: ApiResult<serde_json::Value>) {
     }
     match &result {
         Ok(_) => ui::toast("Installation completed and verified.", crate::Tone::Success),
+        Err(error) if error.code == "installation_cancelled" => {
+            ui::toast("Installation cancelled.", crate::Tone::Neutral)
+        }
         Err(error) => ui::error_toast(error),
     }
     crate::discover::after_install();
@@ -254,7 +297,7 @@ fn sync_timer() {
 
 fn phase_label(phase: Phase) -> &'static str {
     match phase {
-        Phase::Pending => "Pending",
+        Phase::Pending => "Queued",
         Phase::Running => "Downloading",
         Phase::Completed => "Completed",
         Phase::Failed => "Failed",
@@ -273,7 +316,14 @@ fn render() {
                 id: t.id as i32,
                 title: t.title.clone().into(),
                 detail: t.detail.clone().into(),
-                phase: phase_label(t.phase).into(),
+                phase: (if t.phase == Phase::Running {
+                    match t.control.phase() {
+                        JobPhase::Queued | JobPhase::Downloading => "Downloading",
+                        JobPhase::Verifying => "Verifying",
+                        JobPhase::Installing => "Installing",
+                        JobPhase::Cancelling => "Cancelling",
+                    }
+                } else { phase_label(t.phase) }).into(),
                 message: t.message.clone().into(),
                 tone: match t.phase {
                     Phase::Completed => crate::Tone::Success,
@@ -282,8 +332,8 @@ fn render() {
                     Phase::Pending => crate::Tone::Neutral,
                     Phase::Cancelled => crate::Tone::Neutral,
                 },
-                can_cancel: t.phase == Phase::Pending,
-                can_retry: t.phase == Phase::Failed,
+                can_cancel: matches!(t.phase, Phase::Pending | Phase::Running) && t.control.phase() != JobPhase::Cancelling,
+                can_retry: matches!(t.phase, Phase::Failed | Phase::Cancelled),
                 running: t.phase == Phase::Running,
             })
             .collect();

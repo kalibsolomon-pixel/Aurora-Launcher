@@ -6,15 +6,16 @@
 //!   is no polling.
 //! - Started only while the Media widget is on Home; removing the widget
 //!   unregisters every handler and ends the worker.
-//! - Only apps that publish a system media session appear (Spotify,
-//!   browsers playing YouTube/Twitch, and similar). Nothing is injected into
-//!   browsers and no browser data is read.
+//! - Only apps that publish a system media session appear. Nothing is injected
+//!   into browsers and no browser data is read. Player interoperability is
+//!   claimed only for the sessions actually exercised in acceptance.
 //! - Thumbnails come from the session, are capped at 2 MiB, and are decoded
 //!   by the Windows imaging component into at most 96x96 RGBA.
 //! - Volume is not offered: sessions expose no per-app volume, and the
 //!   launcher never changes the system master volume.
 
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 
 use slint::ComponentHandle;
@@ -47,6 +48,7 @@ pub enum Command {
 }
 
 static WORKER: Mutex<Option<Sender<Command>>> = Mutex::new(None);
+static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 pub fn supported() -> bool {
     cfg!(windows)
@@ -71,8 +73,9 @@ fn send(command: Command) {
 pub fn set_enabled(enabled: bool) {
     let mut slot = WORKER.lock().expect("media worker slot");
     match (enabled && supported(), slot.is_some()) {
-        (true, false) => *slot = imp::start(),
+        (true, false) => *slot = imp::start(GENERATION.fetch_add(1, Ordering::SeqCst) + 1),
         (false, true) => {
+            GENERATION.fetch_add(1, Ordering::SeqCst);
             if let Some(sender) = slot.take() {
                 let _ = sender.send(Command::Stop);
             }
@@ -154,12 +157,12 @@ mod imp {
     const MAX_ART_BYTES: u64 = 2 * 1024 * 1024;
     const ART_SIZE: u32 = 96;
 
-    pub fn start() -> Option<Sender<Command>> {
+    pub fn start(generation: u64) -> Option<Sender<Command>> {
         let (sender, receiver) = mpsc::channel();
         let events = sender.clone();
         std::thread::Builder::new()
             .name("aurora-media".into())
-            .spawn(move || run(events, receiver))
+            .spawn(move || run(events, receiver, generation))
             .ok()?;
         let _ = sender.send(Command::Refresh);
         Some(sender)
@@ -171,9 +174,20 @@ mod imp {
         playback: i64,
     }
 
-    fn run(events: Sender<Command>, commands: Receiver<Command>) {
-        use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize};
-        let _ = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
+    fn run(events: Sender<Command>, commands: Receiver<Command>, generation: u64) {
+        use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize, RoUninitialize};
+        if unsafe { RoInitialize(RO_INIT_MULTITHREADED) }.is_err() {
+            return;
+        }
+        struct Apartment;
+        impl Drop for Apartment {
+            fn drop(&mut self) {
+                unsafe {
+                    RoUninitialize();
+                }
+            }
+        }
+        let _apartment = Apartment;
         let Ok(manager) = Manager::RequestAsync().and_then(|op| op.get()) else {
             eprintln!("[aurora-native] media sessions are unavailable on this system");
             return;
@@ -208,7 +222,10 @@ mod imp {
             let sessions = all_sessions(&manager);
             if command == Command::Cycle && sessions.len() > 1 {
                 let ids: Vec<String> = sessions.iter().map(app_id).collect();
-                let current = chosen
+                let current_id = chosen
+                    .clone()
+                    .or_else(|| manager.GetCurrentSession().ok().map(|s| app_id(&s)));
+                let current = current_id
                     .as_ref()
                     .and_then(|c| ids.iter().position(|id| id == c))
                     .unwrap_or(0);
@@ -222,7 +239,20 @@ mod imp {
             if let Some(session) = &session {
                 match command {
                     Command::Toggle => {
-                        let _ = session.TryTogglePlayPauseAsync().and_then(|op| op.get());
+                        if let Ok(info) = session.GetPlaybackInfo() {
+                            if let Ok(controls) = info.Controls() {
+                                if controls.IsPlayPauseToggleEnabled().unwrap_or(false) {
+                                    let _ =
+                                        session.TryTogglePlayPauseAsync().and_then(|op| op.get());
+                                } else if info.PlaybackStatus().is_ok_and(|s| s == Status::Playing)
+                                    && controls.IsPauseEnabled().unwrap_or(false)
+                                {
+                                    let _ = session.TryPauseAsync().and_then(|op| op.get());
+                                } else if controls.IsPlayEnabled().unwrap_or(false) {
+                                    let _ = session.TryPlayAsync().and_then(|op| op.get());
+                                }
+                            }
+                        }
                     }
                     Command::Next => {
                         let _ = session.TrySkipNextAsync().and_then(|op| op.get());
@@ -247,7 +277,11 @@ mod imp {
                 .as_ref()
                 .map(|s| read(s, sessions.len()))
                 .unwrap_or_default();
-            let _ = slint::invoke_from_event_loop(move || apply(snapshot));
+            let _ = slint::invoke_from_event_loop(move || {
+                if super::GENERATION.load(super::Ordering::SeqCst) == generation {
+                    apply(snapshot);
+                }
+            });
         }
         unsubscribe(subscription.take());
         if let Some(token) = sessions_token {
@@ -281,12 +315,16 @@ mod imp {
             }))
             .ok()?;
         let notify = events.clone();
-        let playback = session
-            .PlaybackInfoChanged(&TypedEventHandler::new(move |_, _| {
-                let _ = notify.send(Command::Refresh);
-                Ok(())
-            }))
-            .ok()?;
+        let playback = match session.PlaybackInfoChanged(&TypedEventHandler::new(move |_, _| {
+            let _ = notify.send(Command::Refresh);
+            Ok(())
+        })) {
+            Ok(token) => token,
+            Err(_) => {
+                let _ = session.RemoveMediaPropertiesChanged(properties);
+                return None;
+            }
+        };
         Some(Subscription {
             session: session.clone(),
             properties,
@@ -319,7 +357,12 @@ mod imp {
         if let Ok(info) = session.GetPlaybackInfo() {
             snapshot.playing = info.PlaybackStatus().is_ok_and(|s| s == Status::Playing);
             if let Ok(controls) = info.Controls() {
-                snapshot.can_toggle = controls.IsPlayPauseToggleEnabled().unwrap_or(false);
+                snapshot.can_toggle = controls.IsPlayPauseToggleEnabled().unwrap_or(false)
+                    || if snapshot.playing {
+                        controls.IsPauseEnabled().unwrap_or(false)
+                    } else {
+                        controls.IsPlayEnabled().unwrap_or(false)
+                    };
                 snapshot.can_next = controls.IsNextEnabled().unwrap_or(false);
                 snapshot.can_previous = controls.IsPreviousEnabled().unwrap_or(false);
             }
@@ -346,7 +389,7 @@ mod imp {
     ) -> windows::core::Result<(Vec<u8>, u32, u32)> {
         let decoder = BitmapDecoder::CreateAsync(stream)?.get()?;
         let (width, height) = (decoder.PixelWidth()?, decoder.PixelHeight()?);
-        if width == 0 || height == 0 {
+        if width == 0 || height == 0 || width > 4096 || height > 4096 {
             return Err(windows::core::Error::empty());
         }
         let scale = (ART_SIZE as f64 / width.max(height) as f64).min(1.0);
@@ -377,7 +420,7 @@ mod imp {
 
 #[cfg(not(windows))]
 mod imp {
-    pub fn start() -> Option<std::sync::mpsc::Sender<super::Command>> {
+    pub fn start(_: u64) -> Option<std::sync::mpsc::Sender<super::Command>> {
         None
     }
 }

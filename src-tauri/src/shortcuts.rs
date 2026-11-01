@@ -48,8 +48,10 @@ use std::path::{Path, PathBuf};
 ///
 /// This is the compatibility contract with the installers (both name their
 /// shortcuts after the product name) and with the Settings page copy.
-#[cfg(not(feature = "private-candidate"))]
+#[cfg(all(not(feature = "private-candidate"), not(feature = "native-preview")))]
 pub const PRODUCT_NAME: &str = "Aurora Launcher";
+#[cfg(all(not(feature = "private-candidate"), feature = "native-preview"))]
+pub const PRODUCT_NAME: &str = "Aurora Launcher Native Preview";
 #[cfg(feature = "private-candidate")]
 pub const PRODUCT_NAME: &str = "Aurora Launcher Private Test Candidate";
 

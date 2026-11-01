@@ -186,7 +186,10 @@ pub const LAUNCHER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The application identifier that names the platform data directory. It is
 /// a compatibility contract shared by both hosts (see AGENTS.md).
+#[cfg(not(feature = "native-preview"))]
 pub const APPLICATION_IDENTIFIER: &str = "com.aurora.launcher";
+#[cfg(feature = "native-preview")]
+pub const APPLICATION_IDENTIFIER: &str = "com.aurora.launcher.native-preview";
 
 /// Resolves `<platform local data>/<identifier>` the same way Tauri's
 /// `app_local_data_dir` does: the OS known folder (Windows

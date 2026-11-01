@@ -24,6 +24,9 @@ default = ["tauri-host"]
 tauri-host = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-opener", "dep:tauri-plugin-updater"]
 # Local side-by-side candidate only; requires the matching Tauri overlay.
 private-candidate = []
+# Side-by-side Slint preview: separate data, credentials, shortcut identity and
+# a signed native-only updater. Never changes the WebView production channel.
+native-preview = ["dep:minisign-verify"]
 # Explicit research build only; absent from ordinary development/release builds.
 performance-p0-2 = []
 # Native-host acceptance builds only: honor AURORA_DIAGNOSTIC_DATA_ROOT in
@@ -93,6 +96,7 @@ png = "0.17"
 # release channels gate candidates, and "newer" is semver precedence, never
 # lexical string comparison. Focused, universally maintained implementation.
 semver = "1"
+minisign-verify = { version = "0.2.5", optional = true }
 # Official Tauri 2 updater plugin (Phase L launcher self-update): signed
 # update manifests (minisign-style pubkey trust), verified downloads, and the
 # platform install lifecycle. >= 2.12 required (CVE-2026-95624 fixed there);

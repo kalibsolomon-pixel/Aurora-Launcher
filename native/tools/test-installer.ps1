@@ -1,0 +1,86 @@
+param([Parameter(Mandatory)][string]$Binary)
+$ErrorActionPreference = 'Stop'
+$root = Join-Path ([IO.Path]::GetTempPath()) ('aurora-native9-installer-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $root | Out-Null
+$id = [guid]::NewGuid().ToString('N')
+$source = (Resolve-Path -LiteralPath $Binary).Path
+$payload = Join-Path $root 'accepted-payload.exe'
+Copy-Item -LiteralPath $source -Destination $payload
+& (Join-Path $PSScriptRoot 'package-windows.ps1') -Binary $payload -OutputDirectory (Join-Path $root 'artifacts') -AcceptanceRoot $root -AcceptanceId $id > (Join-Path $root 'packaging.txt') 2>&1
+if (!$?) { throw 'Acceptance packaging failed' }
+$installer = (Get-ChildItem -LiteralPath (Join-Path $root 'artifacts') -Filter '*setup.exe').FullName
+$installation = Join-Path $root 'installation'
+$exe = Join-Path $installation 'aurora-native.exe'
+$marker = Join-Path $installation 'native-package.ini'
+$link = Join-Path $root 'start.lnk'
+$registry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\com.aurora.launcher.native-preview.acceptance.' + $id
+$results = [ordered]@{ sourceSha256=(Get-FileHash -LiteralPath $payload).Hash; packageSha256=(Get-FileHash -LiteralPath $installer).Hash }
+function Run-Setup([string[]]$Arguments = @('/S')) {
+    $process=Start-Process -FilePath $installer -ArgumentList $Arguments -WindowStyle Hidden -PassThru -Wait
+    return $process.ExitCode
+}
+function Uninstall-Owned {
+    $uninstaller = Join-Path $installation 'uninstall.exe'
+    $process=Start-Process -FilePath $uninstaller -ArgumentList '/S' -WindowStyle Hidden -PassThru -Wait
+    for($attempt=0; $attempt -lt 50 -and (Test-Path -LiteralPath $exe); $attempt++) { Start-Sleep -Milliseconds 100 }
+    if ((Test-Path -LiteralPath $exe) -or (Test-Path -LiteralPath $registry)) { throw 'Uninstall did not remove its exact package' }
+    return $process.ExitCode
+}
+$results.installExit=Run-Setup
+if ($results.installExit -ne 0 -or !(Test-Path -LiteralPath $exe)) { throw 'Install failed' }
+$sentinel=Join-Path $installation 'user-sentinel.txt'
+[IO.File]::WriteAllText($sentinel,'NATIVE9 user content must survive')
+$results.reinstallExit=Run-Setup
+if ($results.reinstallExit -ne 0) { throw 'Reinstall failed' }
+$expectedHash=(Get-FileHash -LiteralPath $exe).Hash
+$createdMutex=$false
+$installerMutex=[Threading.Mutex]::new($true,('Local\AuroraNativeInstaller.com.aurora.launcher.native-preview.acceptance.'+$id),[ref]$createdMutex)
+try {
+    if (!$createdMutex) { throw 'Acceptance mutex unexpectedly exists' }
+    $results.concurrentInstallExit=Run-Setup
+    # Run this blocked probe in place: the normal NSIS self-copy wrapper's
+    # exit code does not report the copied uninstaller's preflight refusal.
+    $blockedUninstall=Start-Process -FilePath (Join-Path $installation 'uninstall.exe') -ArgumentList @('/S',('_?='+$installation)) -WindowStyle Hidden -PassThru -Wait
+    $results.concurrentUninstallExit=$blockedUninstall.ExitCode
+    if ($results.concurrentInstallExit -eq 0 -or $results.concurrentUninstallExit -eq 0 -or (Get-FileHash -LiteralPath $exe).Hash -ne $expectedHash) { $results | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'failed-results.json'); throw 'Concurrent package mutation was not refused' }
+} finally {
+    if ($createdMutex) { $installerMutex.ReleaseMutex() }
+    $installerMutex.Dispose()
+}
+$shell=New-Object -ComObject WScript.Shell
+$results.startShortcutTarget=$shell.CreateShortcut($link).TargetPath
+if ($results.startShortcutTarget -ne $exe) { throw 'Start shortcut target mismatch' }
+$linkBytes=[IO.File]::ReadAllBytes($link)
+$foreign=$shell.CreateShortcut($link);$foreign.TargetPath=Join-Path $env:WINDIR 'notepad.exe';$foreign.Save()
+$foreignHash=(Get-FileHash -LiteralPath $link).Hash
+$results.foreignShortcutExit=Run-Setup
+if ($results.foreignShortcutExit -eq 0 -or (Get-FileHash -LiteralPath $link).Hash -ne $foreignHash) { throw 'Foreign shortcut was not preserved/refused' }
+[IO.File]::WriteAllBytes($link,$linkBytes)
+$markerBytes=[IO.File]::ReadAllBytes($marker)
+$text=[IO.File]::ReadAllText($marker) -replace 'Version=[^\r\n]+','Version=9.0.0'
+[IO.File]::WriteAllText($marker,$text)
+$results.downgradeExit=Run-Setup
+if ($results.downgradeExit -eq 0 -or (Get-FileHash -LiteralPath $exe).Hash -ne $expectedHash) { throw 'Downgrade was not refused safely' }
+[IO.File]::WriteAllBytes($marker,$markerBytes)
+$lock=[IO.File]::Open($exe,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+try { $results.inUseExit=Run-Setup } finally { $lock.Dispose() }
+if ($results.inUseExit -eq 0 -or (Get-FileHash -LiteralPath $exe).Hash -ne $expectedHash) { throw 'In-use executable was changed' }
+$helper=Join-Path $root 'wait-fixture.exe'
+& rustc (Join-Path $PSScriptRoot 'update-wait-fixture.rs') -o $helper
+if ($LASTEXITCODE) { throw 'Wait fixture build failed' }
+$owned=Start-Process -FilePath $helper -WindowStyle Hidden -PassThru
+$clock=[Diagnostics.Stopwatch]::StartNew()
+$results.handoffExit=Run-Setup @('/S',("/UPDATEPID="+$owned.Id))
+$clock.Stop();$results.handoffMilliseconds=$clock.Elapsed.TotalMilliseconds
+if ($results.handoffExit -ne 0 -or !$owned.HasExited -or $clock.Elapsed.TotalSeconds -lt 3) { throw 'Installer did not wait for its exact owned process' }
+$results.uninstallExit=Uninstall-Owned
+$results.startShortcutRemoved=!(Test-Path -LiteralPath $link)
+if (!$results.startShortcutRemoved -or [IO.File]::ReadAllText($sentinel) -ne 'NATIVE9 user content must survive') { throw 'Uninstall preservation failed' }
+$results.reinstallAfterUninstallExit=Run-Setup
+if ($results.reinstallAfterUninstallExit -ne 0) { throw 'Reinstall into a sentinel-preserving directory failed' }
+$results.finalUninstallExit=Uninstall-Owned
+$results.sentinelPreserved=[IO.File]::ReadAllText($sentinel) -eq 'NATIVE9 user content must survive'
+$results.authenticode=(Get-AuthenticodeSignature -LiteralPath $installer).Status.ToString()
+$results | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'results.json')
+Write-Output $root
+$results | ConvertTo-Json

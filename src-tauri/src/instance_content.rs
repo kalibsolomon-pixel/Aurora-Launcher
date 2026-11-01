@@ -2113,6 +2113,7 @@ pub(crate) async fn acquire_provider_plans(
     managed: &ManagedPaths,
     plans: Vec<ProviderInstallPlan>,
 ) -> Result<Vec<(ProviderRecord, PathBuf, u64)>, ContentError> {
+    crate::content_jobs::checkpoint().map_err(|_| ContentError::Cancelled)?;
     if plans.is_empty() || plans.len() > 64 {
         return Err(ContentError::StateMalformed(
             "provider plan size is invalid".into(),
@@ -2161,6 +2162,8 @@ pub(crate) async fn acquire_provider_plans(
     .collect::<Vec<_>>()
     .await;
     let acquired = acquired.into_iter().collect::<Result<Vec<_>, _>>()?;
+    crate::content_jobs::phase(crate::content_jobs::Phase::Verifying);
+    crate::content_jobs::checkpoint().map_err(|_| ContentError::Cancelled)?;
     plans
         .into_iter()
         .zip(indices)
@@ -2221,6 +2224,7 @@ fn activate_provider_transaction_with_revision(
     commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
 ) -> Result<Vec<ProviderRecord>, ContentError> {
     with_instance_lock(instance, || {
+        let _commit = crate::content_jobs::commit().map_err(|_| ContentError::Cancelled)?;
         if revision.is_some_and(|expected| {
             !local_inventory_revision(managed, instance).is_ok_and(|current| current == expected)
         }) {
@@ -3093,6 +3097,58 @@ fn validate_provider_mod_artifact(
     Ok(())
 }
 
+/// Local imports share the same identity, protected-mod and dependency checks.
+/// The provisional record is validation input only; it is never persisted and
+/// never grants provider ownership to user-selected bytes.
+pub(crate) fn validate_local_import(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    kind: ContentType,
+    name: &str,
+    digest: &str,
+    path: &Path,
+    bytes: u64,
+) -> Result<(), ContentError> {
+    let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
+        .map_err(|e| ContentError::StateMalformed(e.to_string()))?;
+    let installed = registry
+        .find(instance)
+        .ok_or(ContentError::UnsafePath)?
+        .installed();
+    let record = ProviderRecord {
+        content_type: kind,
+        provider: "local-validation".into(),
+        project_id: digest.into(),
+        version_id: digest.into(),
+        file_id: digest.into(),
+        file_name: name.into(),
+        sha256: digest.into(),
+        display_version: None,
+        compatibility: ContentCompatibility {
+            minecraft_versions: vec![installed.minecraft_version.clone()],
+            loader: installed.platform.provider_loader().ok().map(str::to_owned),
+            environment: Some("client".into()),
+        },
+        dependencies: vec![],
+        explicitly_retained: true,
+        requires: vec![],
+        origin: ProviderOrigin::Direct,
+        installed_at_unix_seconds: None,
+        pinned: false,
+        update_channel: UpdateChannel::Stable,
+    };
+    validate_provider_mod_artifact(managed, instance, &record, path, bytes)?;
+    if kind == ContentType::Mod {
+        validate_projected_artifacts(
+            managed,
+            instance,
+            &[(record, path.to_path_buf(), bytes)],
+            None,
+        )?;
+    }
+    Ok(())
+}
+
 /// The one install-time identity conflict Fabric Loader also refuses: two
 /// top-level jars with the same mod id. A top-level mod matching another
 /// mod's bundled (jar-in-jar) module, or two bundled copies, are alternatives
@@ -3149,6 +3205,7 @@ fn activate_verified_with_commit(
     commit: impl FnOnce(&ContentState) -> Result<(), ContentError>,
 ) -> Result<ContentInventory, ContentError> {
     with_instance_lock(instance, || {
+        let _commit = crate::content_jobs::commit().map_err(|_| ContentError::Cancelled)?;
         record.validate()?;
         let digest =
             ArtifactDigest::parse(&record.sha256).map_err(|_| ContentError::HashMismatch)?;
@@ -3223,6 +3280,7 @@ fn is_reparse_point(_: &std::fs::Metadata) -> bool {
 
 #[derive(Debug)]
 pub enum ContentError {
+    Cancelled,
     DependencyBlocked(String),
     Io(std::io::Error),
     UnsafePath,
@@ -3244,6 +3302,7 @@ pub enum ContentError {
 impl ContentError {
     pub fn code(&self) -> &'static str {
         match self {
+            Self::Cancelled => "installation_cancelled",
             Self::DependencyBlocked(_) => "mod_dependency_blocked",
             Self::Io(_) => "content_unavailable",
             Self::UnsafePath => "content_unsafe_path",
@@ -3266,6 +3325,7 @@ impl ContentError {
 impl fmt::Display for ContentError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Cancelled => formatter.write_str("Installation cancelled before activation."),
             Self::DependencyBlocked(reason) => formatter.write_str(reason),
             Self::Io(error) => write!(formatter, "content I/O failed: {error}"),
             Self::UnsafePath => formatter.write_str("content path is unsafe"),
@@ -5035,6 +5095,164 @@ mod tests {
                 .entries
                 .is_empty()
         );
+    }
+
+    #[tokio::test]
+    async fn native9_cancelled_shared_consumer_settles_cache_and_other_instance_completes() {
+        let fixture = Fixture::new();
+        let control = crate::content_jobs::Control::default();
+        let request_control = control.clone();
+        let bytes = b"synthetic shader content";
+        let server = TestServer::spawn(Arc::new(move |_| {
+            request_control.cancel();
+            std::thread::sleep(std::time::Duration::from_millis(80));
+            TestResponse::ok(bytes)
+        }));
+        let record = transaction_record(ContentType::ShaderPack, "fixture.zip", bytes);
+        let plan = ProviderInstallPlan {
+            content_type: record.content_type,
+            provider: record.provider,
+            project_id: record.project_id,
+            version_id: record.version_id,
+            file_id: record.file_id,
+            file_name: record.file_name,
+            display_version: record.display_version,
+            compatibility: record.compatibility,
+            dependencies: vec![],
+            source: ProviderArtifactSource::Sha512(
+                Sha512ArtifactSource::loopback_http_for_testing(
+                    &format!("{}/file", server.base_url()),
+                    &format!("{:x}", Sha512::digest(bytes)),
+                    Some(bytes.len() as u64),
+                )
+                .unwrap(),
+            ),
+        };
+        let other = InstanceId::new("native9-other").unwrap();
+        let before_download = crate::content_jobs::Control::default();
+        before_download.cancel();
+        assert!(matches!(
+            before_download
+                .run(install_provider_plans(
+                    &fixture.managed,
+                    &fixture.instance,
+                    vec![plan.clone()]
+                ))
+                .await,
+            Err(ContentError::Cancelled)
+        ));
+        assert_eq!(
+            server.request_count(),
+            0,
+            "cancellation before acquisition must make no request"
+        );
+        std::fs::create_dir_all(fixture.managed.instance_paths(&other).root()).unwrap();
+        let untouched = fixture.dir(ContentType::ShaderPack).join("user.zip");
+        std::fs::write(&untouched, b"user sentinel").unwrap();
+        let second = crate::content_jobs::Control::default();
+        let (cancelled, completed) = tokio::join!(
+            control.run(install_provider_plans(
+                &fixture.managed,
+                &fixture.instance,
+                vec![plan.clone()]
+            )),
+            second.run(install_provider_plans(
+                &fixture.managed,
+                &other,
+                vec![plan.clone()]
+            )),
+        );
+        assert!(matches!(cancelled, Err(ContentError::Cancelled)));
+        assert!(control.cancellation_observed());
+        assert_eq!(completed.unwrap().len(), 1);
+        assert_eq!(
+            server.request_count(),
+            1,
+            "shared in-flight response survives cancellation"
+        );
+        assert!(
+            !fixture
+                .dir(ContentType::ShaderPack)
+                .join("fixture.zip")
+                .exists()
+        );
+        assert_eq!(std::fs::read(&untouched).unwrap(), b"user sentinel");
+        assert!(
+            ContentState::load(&fixture.managed, &fixture.instance)
+                .unwrap()
+                .entries
+                .is_empty()
+        );
+        let retried = crate::content_jobs::Control::default()
+            .run(install_provider_plans(
+                &fixture.managed,
+                &fixture.instance,
+                vec![plan],
+            ))
+            .await
+            .unwrap();
+        assert_eq!(retried.len(), 1);
+        assert_eq!(
+            server.request_count(),
+            1,
+            "retry rehashes the verified shared cache"
+        );
+    }
+
+    #[tokio::test]
+    async fn native9_cancel_before_activation_preserves_files_and_commit_cannot_be_interrupted() {
+        for kind in [
+            ContentType::Mod,
+            ContentType::ResourcePack,
+            ContentType::ShaderPack,
+        ] {
+            let fixture = Fixture::new();
+            let bytes = fabric_jar_with_id("native9fixture");
+            let source = fixture.root.join("verified");
+            std::fs::write(&source, &bytes).unwrap();
+            let name = if kind == ContentType::Mod {
+                "fixture.jar"
+            } else {
+                "fixture.zip"
+            };
+            let acquired = vec![(
+                transaction_record(kind, name, &bytes),
+                source,
+                bytes.len() as u64,
+            )];
+            let cancelled = crate::content_jobs::Control::default();
+            cancelled.cancel();
+            let result = cancelled
+                .run(async {
+                    activate_provider_transaction(
+                        &fixture.managed,
+                        &fixture.instance,
+                        acquired.clone(),
+                        |_| panic!("cancelled before commit"),
+                    )
+                })
+                .await;
+            assert!(matches!(result, Err(ContentError::Cancelled)));
+            assert!(!fixture.dir(kind).join(name).exists());
+            let control = crate::content_jobs::Control::default();
+            let result = control
+                .run(async {
+                    activate_provider_transaction(
+                        &fixture.managed,
+                        &fixture.instance,
+                        acquired,
+                        |state| {
+                            control.cancel();
+                            state.save(&fixture.managed, &fixture.instance)
+                        },
+                    )
+                })
+                .await
+                .unwrap();
+            assert_eq!(result.len(), 1);
+            assert!(!control.cancellation_observed());
+            assert_eq!(std::fs::read(fixture.dir(kind).join(name)).unwrap(), bytes);
+        }
     }
 
     #[test]

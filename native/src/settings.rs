@@ -79,6 +79,15 @@ pub fn bind(window: &AppWindow) {
     });
     settings.on_review_client_update(review_client_update);
     settings.on_client_update_apply(apply_client_update);
+    settings.on_review_launcher_update(|| {
+        ui::with(|w, _| {
+            let settings = w.global::<Settings>();
+            settings.set_launcher_dialog_open(true);
+            settings.set_launcher_update_detail("Download the signed native preview installer, then choose Exit and install. The installer preserves preview data and restarts the native application. WebView stable uses a separate installation and update authority.".into());
+        });
+    });
+    settings.on_download_launcher_update(|| launcher_operation(false));
+    settings.on_install_launcher_update(|| launcher_operation(true));
     settings.on_check_updates(|| {
         ui::with(|window, _| window.global::<Settings>().set_update_busy(true));
         ui::spawn(api::check_for_updates(ui::host()), |result| {
@@ -590,6 +599,20 @@ fn availability_text(value: &serde_json::Value) -> String {
 pub fn apply_updates(overview: &UpdateOverview) {
     ui::with(|window, state| {
         let settings = window.global::<Settings>();
+        let launcher_offer = (overview.launcher.availability["kind"] == "updateAvailable")
+            .then(|| {
+                overview.launcher.availability["candidate"]
+                    .as_str()
+                    .map(str::to_owned)
+            })
+            .flatten();
+        LAUNCHER_OFFER.with(|slot| {
+            if *slot.borrow() != launcher_offer {
+                settings.set_launcher_ready_to_install(false);
+            }
+            *slot.borrow_mut() = launcher_offer.clone();
+        });
+        settings.set_launcher_update_available(launcher_offer.is_some());
         let available =
             overview.client.get("kind").and_then(|k| k.as_str()) == Some("updateAvailable");
         state.client_update = match (&overview.client_instance_id, available) {
@@ -623,7 +646,72 @@ pub fn apply_updates(overview: &UpdateOverview) {
 }
 
 thread_local! {
+    static LAUNCHER_OFFER: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
     static CLIENT_FINGERPRINT: std::cell::RefCell<Option<(String, String)>> = const { std::cell::RefCell::new(None) };
+}
+
+fn launcher_operation(install: bool) {
+    let Some(version) = LAUNCHER_OFFER.with(|slot| slot.borrow().clone()) else {
+        return;
+    };
+    let allowed = ui::with(|w, s| {
+        let settings = w.global::<Settings>();
+        if settings.get_launcher_update_busy() { return false; }
+        let running = s.play_busy || s.process.as_ref().is_some_and(|p| matches!(p.status.as_str(), "starting" | "running"));
+        if install && (running || w.global::<crate::Activity>().get_active() > 0 || w.global::<crate::Instances>().get_create_busy() || w.global::<crate::Accounts>().get_login_busy()) {
+            settings.set_launcher_update_detail("Finish running games, installations and sign-in before exiting to install an update.".into());
+            return false;
+        }
+        settings.set_launcher_update_busy(true);
+        settings.set_launcher_update_detail(if install { "Revalidating the signed offer and installer…" } else { "Downloading the native installer…" }.into());
+        true
+    }).unwrap_or(false);
+    if !allowed {
+        return;
+    }
+    let host = ui::host();
+    ui::spawn(
+        async move {
+            if install {
+                api::install_launcher_update(host, version).await
+            } else {
+                api::download_launcher_update(host, version).await
+            }
+        },
+        move |result| {
+            ui::with(|w, _| {
+                let settings = w.global::<Settings>();
+                settings.set_launcher_update_busy(false);
+                match result {
+                    Ok(_) if install => {
+                        let _ = slint::quit_event_loop();
+                    }
+                    Ok(_) => {
+                        settings.set_launcher_ready_to_install(true);
+                        settings.set_launcher_update_detail("Signature, hash, package identity and compatibility verified. Exit and install will close Aurora and hand off to the native installer.".into());
+                    }
+                    Err(error) => {
+                        settings.set_launcher_update_detail(error.message.into());
+                    }
+                }
+            });
+        },
+    );
+}
+
+pub fn launcher_download_progress(done: u64, total: Option<u64>) {
+    ui::with(|w, _| {
+        let text = match total {
+            Some(total) => format!(
+                "Downloading: {:.1} / {:.1} MiB",
+                done as f64 / 1048576.0,
+                total as f64 / 1048576.0
+            ),
+            None => format!("Downloading: {done} bytes"),
+        };
+        w.global::<Settings>()
+            .set_launcher_update_detail(text.into());
+    });
 }
 
 /// Fetches the fingerprinted, read-only Aurora Client update preview and

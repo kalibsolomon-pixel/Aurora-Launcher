@@ -80,6 +80,13 @@ pub struct VerifiedArtifact {
     pub origin: ArtifactOrigin,
 }
 
+/// User-selected local bytes verified against the identity explicitly reviewed
+/// by the user. This carries no download origin or publisher-authenticity claim.
+pub struct VerifiedLocalArtifact {
+    pub path: PathBuf,
+    pub bytes: u64,
+}
+
 /// An official Mojang artifact verified against its expected SHA-1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedSha1Artifact {
@@ -252,6 +259,44 @@ impl Expected<'_> {
 }
 
 impl ArtifactCache {
+    /// Explicitly selected local bytes, pinned by a previously reviewed SHA-256.
+    /// This proves the selected byte identity, never a publisher signature.
+    pub async fn import_local(
+        &self,
+        source: &Path,
+        digest: &ArtifactDigest,
+        size: u64,
+    ) -> Result<VerifiedLocalArtifact, AcquisitionError> {
+        crate::content_jobs::checkpoint()
+            .map_err(|_| AcquisitionError::Download(DownloadError::Cancelled))?;
+        self.prepare_staging(&self.store_dir())?;
+        let staging = self.new_staging_path();
+        let result = (|| {
+            std::fs::copy(source, &staging).map_err(AcquisitionError::StoreIo)?;
+            verify_file(&staging, digest, Some(size)).map_err(|_| {
+                AcquisitionError::Download(DownloadError::Sha256Mismatch {
+                    expected: digest.as_hex(),
+                    actual: "local file changed since review".into(),
+                })
+            })?;
+            Ok::<_, AcquisitionError>(())
+        })();
+        if let Err(error) = result {
+            let _ = std::fs::remove_file(&staging);
+            return Err(error);
+        }
+        let path = self.verified_path(digest);
+        self.promote(
+            &staging,
+            &path,
+            Expected::Sha256 {
+                digest,
+                size_bytes: Some(size),
+            },
+        )
+        .await?;
+        Ok(VerifiedLocalArtifact { path, bytes: size })
+    }
     pub fn new(managed: ManagedPaths) -> Self {
         Self {
             managed,
@@ -332,6 +377,8 @@ impl ArtifactCache {
         &self,
         source: &ArtifactSource,
     ) -> Result<VerifiedArtifact, AcquisitionError> {
+        crate::content_jobs::checkpoint()
+            .map_err(|_| AcquisitionError::Download(DownloadError::Cancelled))?;
         self.acquire_with(source, &DownloadOptions::default()).await
     }
 
@@ -342,6 +389,8 @@ impl ArtifactCache {
         &self,
         source: &Sha512ArtifactSource,
     ) -> Result<VerifiedArtifact, AcquisitionError> {
+        crate::content_jobs::checkpoint()
+            .map_err(|_| AcquisitionError::Download(DownloadError::Cancelled))?;
         let map_dir = self
             .managed
             .cache_dir()
@@ -350,6 +399,9 @@ impl ArtifactCache {
         let map_path = map_dir.join(source.sha512().as_hex());
         let _flight =
             crate::transfer::single_flight(format!("sha512:{}", source.sha512().as_hex())).await;
+        crate::content_jobs::checkpoint()
+            .map_err(|_| AcquisitionError::Download(DownloadError::Cancelled))?;
+        crate::content_jobs::phase(crate::content_jobs::Phase::Verifying);
         if let Ok(text) = std::fs::read_to_string(&map_path) {
             if let Ok(sha256) = ArtifactDigest::parse(text.trim()) {
                 let path = self.verified_path(&sha256);
@@ -412,6 +464,8 @@ impl ArtifactCache {
         source: &ArtifactSource,
         options: &DownloadOptions,
     ) -> Result<VerifiedArtifact, AcquisitionError> {
+        crate::content_jobs::checkpoint()
+            .map_err(|_| AcquisitionError::Download(DownloadError::Cancelled))?;
         let verified_path = self.verified_path(source.sha256());
         let expected = Expected::Sha256 {
             digest: source.sha256(),
@@ -419,6 +473,8 @@ impl ArtifactCache {
         };
         let _flight =
             crate::transfer::single_flight(format!("sha256:{}", source.sha256().as_hex())).await;
+        crate::content_jobs::checkpoint()
+            .map_err(|_| AcquisitionError::Download(DownloadError::Cancelled))?;
 
         if let Some(bytes) = self.validate_existing(&verified_path, expected).await? {
             return Ok(VerifiedArtifact {
@@ -461,6 +517,8 @@ impl ArtifactCache {
         source: &Sha1ArtifactSource,
         options: &DownloadOptions,
     ) -> Result<VerifiedSha1Artifact, AcquisitionError> {
+        crate::content_jobs::checkpoint()
+            .map_err(|_| AcquisitionError::Download(DownloadError::Cancelled))?;
         let verified_path = self.verified_sha1_path(source.sha1());
         let expected = Expected::Sha1 {
             digest: source.sha1(),
@@ -468,6 +526,8 @@ impl ArtifactCache {
         };
         let _flight =
             crate::transfer::single_flight(format!("sha1:{}", source.sha1().as_hex())).await;
+        crate::content_jobs::checkpoint()
+            .map_err(|_| AcquisitionError::Download(DownloadError::Cancelled))?;
 
         if let Some(bytes) = self.validate_existing(&verified_path, expected).await? {
             return Ok(VerifiedSha1Artifact {
@@ -513,6 +573,8 @@ impl ArtifactCache {
         source: &ObservedArtifactSource,
         options: &DownloadOptions,
     ) -> Result<ObservedArtifact, AcquisitionError> {
+        crate::content_jobs::checkpoint()
+            .map_err(|_| AcquisitionError::Download(DownloadError::Cancelled))?;
         // First-observation publication is mutable authority keyed by source,
         // unlike expected-digest publication. Serialize that exact source so
         // competing processes cannot establish two different first pins.

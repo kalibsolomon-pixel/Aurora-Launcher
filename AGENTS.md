@@ -209,11 +209,16 @@ and `docs/native-ui/`.
 - Play readiness deep-verifies installed files: trigger it only when its inputs
   change or on explicit refresh, never on navigation, and keep at most one
   check in flight.
-- The native host does not self-update; changing the update authority to a
-  native artifact needs an owner-approved migration
-  (`docs/native-ui/UPDATER_ASSESSMENT.md`).
+- NATIVE-9's `native-preview` core feature uses separate application-data,
+  credential and shortcut identities (`com.aurora.launcher.native-preview`).
+  Never combine it with `tauri-host` or `private-candidate`. Native updates use
+  a separately signed native-only offer and remain unconfigured unless the
+  owner enables the proposed native authority at build time. Do not change the
+  existing WebView authority. See `docs/native-ui/NATIVE_DISTRIBUTION.md`.
 - Native acceptance uses `AURORA_DIAGNOSTIC_DATA_ROOT` (debug builds, or release
   with the `disposable-data-root` feature only). Windows credential targets are
-  global per account: never sign out in a disposable root of an account also
-  used in production.
+  global per account within each compiled identity: never sign out in a
+  disposable root of an account also used by another installation of that
+  identity. NATIVE-6/7/8 executables used the production namespace; retain their
+  credential warning even though NATIVE-9 preview builds are isolated.
 

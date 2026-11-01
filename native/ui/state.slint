@@ -135,6 +135,7 @@ export global Home {
 }
 
 export global Instances {
+    callback content-import();
     in property <[InstanceRow]> rows;
     in property <bool> loading: false;
     callback open(string);
@@ -240,6 +241,14 @@ export global Instances {
     callback create-confirm();
 }
 
+export global ContentImport {
+    in-out property <bool> open: false;
+    in property <string> description;
+    in property <bool> allowed: false;
+    callback confirm();
+    callback dismiss();
+}
+
 /// The searchable Material Symbols picker. Rust performs the bounded search;
 /// the grid renders only the returned cells.
 export global IconPicker {
@@ -262,7 +271,10 @@ export global IconPicker {
     callback cancel();
 }
 
+export struct OptionalPackFile { path: string, selected: bool }
 export global Discover {
+    in property <[OptionalPackFile]> optional-files;
+    callback toggle-optional(string);
     in-out property <int> kind: 0;
     in-out property <string> query;
     in property <[ProjectRow]> results;
@@ -346,6 +358,9 @@ export global Activity {
 }
 
 export global Accounts {
+    in-out property <bool> remove-open: false;
+    in property <string> remove-label;
+    callback confirm-remove();
     in property <[AccountRow]> rows;
     in property <bool> has-account: false;
     in property <string> name;
@@ -449,6 +464,14 @@ export global Settings {
     callback open-launcher-folder();
 
     in property <string> launcher-update;
+    in property <bool> launcher-update-available: false;
+    in-out property <bool> launcher-dialog-open: false;
+    in property <bool> launcher-ready-to-install: false;
+    in property <bool> launcher-update-busy: false;
+    in property <string> launcher-update-detail;
+    callback review-launcher-update();
+    callback download-launcher-update();
+    callback install-launcher-update();
     in property <string> client-update;
     in property <bool> update-busy: false;
     callback check-updates();

@@ -335,9 +335,10 @@ pub fn bind(window: &AppWindow) {
             return;
         };
         let host = ui::host();
+        let owner = crate::chrome::dialog_owner();
         ui::spawn(
             async move {
-                match crate::skin_import::choose().await? {
+                match crate::skin_import::choose(owner).await? {
                     Some(bytes) => api::import_skin(host, "Imported skin".into(), model, bytes)
                         .await
                         .map(Some),

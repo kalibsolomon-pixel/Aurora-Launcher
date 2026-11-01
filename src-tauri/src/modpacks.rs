@@ -41,6 +41,15 @@ fn fail(code: &'static str, message: impl Into<String>) -> PackInstallError {
     }
 }
 
+fn checkpoint() -> Result<(), PackInstallError> {
+    crate::content_jobs::checkpoint().map_err(|_| {
+        fail(
+            "installation_cancelled",
+            "Installation cancelled before activation.",
+        )
+    })
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PackPreview {
@@ -264,6 +273,7 @@ pub(crate) async fn resolve(
     if !unconfirmed.is_empty() {
         confirm_with_fabric_metadata(managed, &pack, &provider_plans, &unresolved, &unconfirmed)
             .await?;
+        checkpoint()?;
     }
     let mut excluded = pack.excluded_paths.clone();
     excluded.extend(
@@ -327,6 +337,7 @@ pub async fn install(
     fingerprint: &str,
     progress: &mut (dyn FnMut(&'static str) + Send),
 ) -> Result<InstanceRecord, PackInstallError> {
+    checkpoint()?;
     progress("resolvingPack");
     let resolved = resolve(managed, provider, project_id, version_id, selected_optional).await?;
     if fingerprint != resolved.preview.fingerprint {
@@ -343,7 +354,7 @@ pub async fn install(
     crate::transfer::settled_window(
         &resolved.unresolved,
         PACK_DOWNLOAD_CONCURRENCY,
-        || true,
+        || crate::content_jobs::checkpoint().is_ok(),
         |file| {
             let cache = &cache;
             async move {
@@ -374,10 +385,11 @@ pub async fn install(
         },
     )
     .await?;
+    checkpoint()?;
     crate::transfer::settled_window(
         &resolved.provider_plans,
         PACK_DOWNLOAD_CONCURRENCY,
-        || true,
+        || crate::content_jobs::checkpoint().is_ok(),
         |planned| {
             let (cache, resolved) = (&cache, &resolved);
             async move {
@@ -408,6 +420,7 @@ pub async fn install(
         |_, ()| {},
     )
     .await?;
+    checkpoint()?;
     progress("preparingInstance");
     let mut configuration = InstanceConfiguration::from_parts(
         &resolved.pack.minecraft_version,
@@ -451,6 +464,12 @@ pub async fn install(
     )
     .await
     .map_err(|e| fail("pack_instance_failed", e.to_string()))?;
+    let _commit = crate::content_jobs::commit().map_err(|_| {
+        fail(
+            "installation_cancelled",
+            "Installation cancelled before activation.",
+        )
+    })?;
     let root = managed.instance_paths(record.id()).root().to_path_buf();
     let mut created: Vec<(PathBuf, String)> = Vec::new();
     let result = (|| -> Result<InstalledPack, PackInstallError> {
@@ -693,7 +712,7 @@ pub(crate) async fn acquire_externals(
     crate::transfer::settled_window(
         files,
         PACK_DOWNLOAD_CONCURRENCY,
-        || true,
+        || crate::content_jobs::checkpoint().is_ok(),
         |file| async move {
             let source = Sha512ArtifactSource::mrpack_fallback(
                 &file.downloads[0],
@@ -716,6 +735,7 @@ pub(crate) async fn acquire_externals(
         |_, artifact| artifacts.push(artifact),
     )
     .await?;
+    checkpoint()?;
     Ok(artifacts)
 }
 
@@ -728,7 +748,7 @@ pub(crate) async fn acquire_provider_artifacts(
     crate::transfer::settled_window(
         plans,
         PACK_DOWNLOAD_CONCURRENCY,
-        || true,
+        || crate::content_jobs::checkpoint().is_ok(),
         |plan| async move {
             match &plan.source {
                 ProviderArtifactSource::Sha512(source) => cache.acquire_sha512(source).await,
@@ -739,6 +759,7 @@ pub(crate) async fn acquire_provider_artifacts(
         |_, artifact| artifacts.push(artifact),
     )
     .await?;
+    checkpoint()?;
     Ok(artifacts)
 }
 

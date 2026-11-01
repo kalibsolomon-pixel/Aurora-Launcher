@@ -4,6 +4,17 @@ Follow `UPDATE_AUTHORITY.md`. Immutable installers and the separately gated Git 
 
 # Aurora Launcher release baseline
 
+## Native preview candidate (NATIVE-9)
+
+The standalone Slint package is built with `native/tools/package-windows.ps1`,
+using NSIS directly. It has a separate per-user installation/data/credential/
+shortcut identity and never enters the existing stable Tauri update authority.
+The new manual `native-preview-candidate.yml` prepares a private CI artifact only;
+it has no publication or signing credentials and has not been dispatched here.
+Native signing, proposed authority setup, exact final installer acceptance and
+public distribution require separate owner decisions. There is no Authenticode
+publisher configuration. Follow [the native distribution contract](docs/native-ui/NATIVE_DISTRIBUTION.md).
+
 ## Accepted 1.4.0 and historical preparation
 
 Aurora Launcher **1.4.0** is now the accepted public immutable release, built

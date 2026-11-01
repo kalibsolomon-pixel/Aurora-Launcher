@@ -35,6 +35,8 @@ pub struct DiscoverState {
     pub details: Option<ProjectDetails>,
     pub detail_serial: u64,
     pub review: Option<Review>,
+    pub optional_files: Vec<String>,
+    pub selected_optional: HashSet<String>,
     pub origin: Option<(String, i32)>,
 }
 
@@ -53,6 +55,24 @@ pub fn bind(window: &AppWindow) {
     d.on_details(details);
     d.on_version_changed(invalidate_review);
     d.on_review(review);
+    d.on_toggle_optional(|path| {
+        ui::with(|w, s| {
+            if !s.discover.optional_files.iter().any(|p| p == path.as_str()) {
+                return;
+            }
+            if !s.discover.selected_optional.remove(path.as_str()) {
+                s.discover.selected_optional.insert(path.to_string());
+            }
+            s.discover.detail_serial += 1;
+            s.discover.review = None;
+            let d = w.global::<Discover>();
+            d.set_can_install(false);
+            d.set_review_text(
+                "Optional selection changed. Review installation again before installing.".into(),
+            );
+            render_optional(w, &s.discover);
+        });
+    });
     d.on_confirm_install(confirm_install);
     d.on_close_details(|| {
         ui::with(|w, s| {
@@ -296,6 +316,9 @@ fn invalidate_review() {
     ui::with(|w, s| {
         s.discover.detail_serial += 1;
         s.discover.review = None;
+        s.discover.optional_files.clear();
+        s.discover.selected_optional.clear();
+        render_optional(w, &s.discover);
         let d = w.global::<Discover>();
         d.set_details_loading(false);
         d.set_can_install(false);
@@ -313,6 +336,9 @@ fn details(project: slint::SharedString) {
         s.discover.detail_serial += 1;
         s.discover.details = None;
         s.discover.review = None;
+        s.discover.optional_files.clear();
+        s.discover.selected_optional.clear();
+        render_optional(w, &s.discover);
         d.set_details_open(true);
         d.set_details_loading(true);
         d.set_detail_error("".into());
@@ -395,6 +421,19 @@ fn details(project: slint::SharedString) {
     );
 }
 
+fn render_optional(window: &AppWindow, state: &DiscoverState) {
+    window.global::<Discover>().set_optional_files(ui::model(
+        state
+            .optional_files
+            .iter()
+            .map(|path| crate::OptionalPackFile {
+                path: path.clone().into(),
+                selected: state.selected_optional.contains(path),
+            })
+            .collect(),
+    ));
+}
+
 fn review() {
     let Some((mut snapshot,serial))=ui::with(|w,s| {
         let d=w.global::<Discover>();
@@ -408,7 +447,8 @@ fn review() {
         s.discover.detail_serial+=1;
         s.discover.review=None;
         d.set_can_install(false); d.set_details_loading(true);d.set_detail_error("".into());
-        let mut request=json!({"projectId":p.project_id,"versionId":v.id,"selectedOptional":[],"fingerprint":null});
+        let selected: Vec<_> = s.discover.optional_files.iter().filter(|p| s.discover.selected_optional.contains(*p)).cloned().collect();
+        let mut request=json!({"projectId":p.project_id,"versionId":v.id,"selectedOptional":selected,"fingerprint":null});
         if merge {request["instanceId"]=json!(target);}
         Some((Review{target,kind,project:p.project_id.clone(),version:v.id.clone(),merge,request,fingerprint:String::new()},s.discover.detail_serial))
     }).flatten() else {return};
@@ -431,6 +471,20 @@ fn review() {
                 d.set_details_loading(false);
                 match result {
                     Ok(value) => {
+                        if snapshot.kind == "modpack" {
+                            let pack = if snapshot.merge {
+                                &value["pack"]
+                            } else {
+                                &value
+                            };
+                            s.discover.optional_files = pack["optional"]
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .filter_map(|v| v.as_str().map(str::to_owned))
+                                .collect();
+                            render_optional(w, &s.discover);
+                        }
                         let (fingerprint, allowed, text) =
                             review_description(&value, snapshot.kind, snapshot.merge);
                         snapshot.fingerprint = fingerprint;
@@ -581,7 +635,10 @@ fn review_description(value: &Value, kind: &str, merge: bool) -> (String, bool, 
                 ("Recognized files", array(pack, "recognized")),
                 ("Verified external files", array(pack, "unresolved")),
                 ("Overrides", array(pack, "overrides")),
-                ("Optional files omitted", array(pack, "optional")),
+                (
+                    "Optional client files (choose below)",
+                    array(pack, "optional"),
+                ),
                 ("Excluded files", array(pack, "excluded")),
                 ("Pack files not installed", array(pack, "skippedOverrides")),
             ]

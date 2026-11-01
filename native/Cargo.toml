@@ -28,7 +28,7 @@ renderer-femtovg = ["slint/renderer-femtovg"]
 
 [dependencies]
 # The launcher core without Tauri or WebView2.
-aurora-launcher = { path = "../src-tauri", default-features = false }
+aurora-launcher = { path = "../src-tauri", default-features = false, features = ["native-preview"] }
 slint = { version = "1.18", default-features = false, features = [
     "std",
     "backend-winit",
@@ -51,6 +51,10 @@ windows = { version = "0.61", default-features = false, features = ["std", "Win3
 
 [build-dependencies]
 slint-build = "1.18"
+
+[target.'cfg(windows)'.dev-dependencies]
+# Synthetic media-session acceptance only, absent from distribution bindings.
+windows = { version = "0.61", default-features = false, features = ["std", "Media_Playback", "Media_Core", "Media", "Storage"] }
 
 [target.'cfg(windows)'.build-dependencies]
 # Embeds the Aurora icon and version resource into the executable.
