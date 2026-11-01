@@ -191,6 +191,22 @@ fn instance_play_navigation_does_not_reborrow_ui_state() {
         !crate::ui::state(|state| state.play_busy),
         "an invalid instance must not launch a child"
     );
+    app.global::<crate::Instances>()
+        .set_memory_mib_text("8192".into());
+    app.global::<crate::Instances>().set_config_dirty(true);
+    crate::instances::show_settings("navigation-fixture".into());
+    assert_eq!(
+        app.global::<crate::Instances>()
+            .get_memory_mib_text()
+            .as_str(),
+        "8192",
+        "opening settings must retain the memory draft"
+    );
+    assert!(app.global::<crate::Instances>().get_config_dirty());
+    assert_eq!(
+        app.global::<crate::Instances>().get_tab(),
+        crate::instances::TAB_SETTINGS
+    );
     crate::ui::release();
     runtime.shutdown_timeout(std::time::Duration::from_secs(1));
 }

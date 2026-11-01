@@ -363,11 +363,88 @@ const SIZES: [(&str, (f32, f32)); 3] = [
 ];
 const SCALES: [f32; 4] = [1.0, 1.25, 1.5, 2.0];
 
+fn home_card(app: &AppWindow, attention: bool) {
+    app.global::<Nav>().set_page(Page::Home);
+    app.global::<Nav>().set_workspace_open(false);
+    let home = app.global::<crate::Home>();
+    home.set_instances(ModelRc::new(VecModel::from(vec![crate::InstanceRow {
+        id: "home-instance".into(),
+        name: "Vulkan 11".into(),
+        ..Default::default()
+    }])));
+    home.set_has_instance(true);
+    home.set_name("Vulkan 11".into());
+    home.set_instance_names(strings(&["Vulkan 11"]));
+    home.set_instance_index(0);
+    home.set_status(
+        if attention {
+            "Needs Attention"
+        } else {
+            "Ready"
+        }
+        .into(),
+    );
+    home.set_tone(if attention {
+        Tone::Warning
+    } else {
+        Tone::Success
+    });
+    home.set_can_play(!attention);
+    home.set_message(
+        if attention {
+            "A detailed launch failure belongs in instance settings."
+        } else {
+            "Last game exited with code 0."
+        }
+        .into(),
+    );
+    home.set_blockers(ModelRc::new(VecModel::from(vec![crate::BlockerRow {
+        code: "launch_instance_damaged".into(),
+        message: "Detailed repair warning belongs in instance settings.".into(),
+        action: "Review recovery".into(),
+    }])));
+    home.set_progress_text("Detailed installation status belongs in settings.".into());
+}
+
 type Scene = fn(&AppWindow);
+
+fn instance_cards(app: &AppWindow) {
+    app.global::<Nav>().set_page(Page::Instances);
+    app.global::<Nav>().set_workspace_open(false);
+    app.global::<Instances>()
+        .set_rows(ModelRc::new(VecModel::from(vec![
+            crate::InstanceRow {
+                id: "vulkan".into(),
+                name: "Vulkan 11".into(),
+                subtitle: "Minecraft 1.21.11".into(),
+                status: "Installed".into(),
+                icon: crate::symbols::path_or_fallback(Some("bolt")).into(),
+                selected: true,
+                ..Default::default()
+            },
+            crate::InstanceRow {
+                id: "optimized".into(),
+                name: "Fabulously Optimized".into(),
+                subtitle: "Minecraft 1.21.11".into(),
+                status: "Needs repair".into(),
+                icon: crate::symbols::path_or_fallback(None).into(),
+                ..Default::default()
+            },
+        ])));
+}
 
 fn scenes() -> Vec<(&'static str, Scene)> {
     vec![
+        ("instance-cards-simple", instance_cards),
         ("mods-updates", |app| workspace(app, 0)),
+        ("home-ready-simple", |app| home_card(app, false)),
+        ("home-attention-simple", |app| home_card(app, true)),
+        ("settings-launch-details", |app| {
+            home_card(app, true);
+            workspace(app, 3);
+            app.global::<Instances>().set_selected(true);
+            scroll_down(app, 1050.);
+        }),
         ("recovery-local-edits", |app| {
             workspace(app, 3);
             let recovery = app.global::<crate::Recovery>();
@@ -662,6 +739,31 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     render(&app, &adapter, "recovery-input-confirmed");
     key(&app, Key::Escape);
     assert!(!app.global::<crate::Recovery>().get_open());
+
+    // Home's visible frame must not depend on diagnostic strings. Settings
+    // retains those same fields; this catches accidental warning/exit leakage.
+    let (app, adapter) = window((1120., 760.), 1.);
+    home_card(&app, false);
+    let diagnostic_frame = render(&app, &adapter, "home-diagnostics-hidden");
+    let home = app.global::<crate::Home>();
+    home.set_message("".into());
+    home.set_blockers(ModelRc::default());
+    home.set_progress_text("".into());
+    let clean_frame = render(&app, &adapter, "home-clean-frame");
+    assert!(
+        diagnostic_frame == clean_frame,
+        "Home must not render launch details, warnings or exit messages"
+    );
+    let opens = Rc::new(RefCell::new(0));
+    let seen = opens.clone();
+    app.global::<crate::Home>()
+        .on_open_settings(move || *seen.borrow_mut() += 1);
+    click(&app, 398., 192.);
+    assert_eq!(
+        *opens.borrow(),
+        1,
+        "the Home gear opens instance settings once"
+    );
 
     // Exercise the Java controls on the real layout, including keyboard
     // inspection/editing of a long path. The chooser callback is observed;

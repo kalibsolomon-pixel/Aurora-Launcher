@@ -266,6 +266,23 @@ pub fn select(id: String) {
     });
 }
 
+/// Return to an existing settings draft without replacing it during navigation.
+pub fn show_settings(id: String) {
+    let resumed = ui::with(|window, state| {
+        if !state.workspace.as_ref().is_some_and(|w| w.id == id) {
+            return false;
+        }
+        window.global::<Instances>().set_tab(TAB_SETTINGS);
+        window.global::<Nav>().set_page(Page::Instances);
+        window.global::<Nav>().set_workspace_open(true);
+        true
+    })
+    .unwrap_or(false);
+    if !resumed {
+        open_workspace(id, TAB_SETTINGS);
+    }
+}
+
 pub fn open_workspace(id: String, tab: i32) {
     let found = ui::with(|window, state| {
         let instance = state.instance(&id)?.clone();

@@ -8,12 +8,12 @@ import { Icon, Icons } from "../icons.slint";
 import {
     Button, ButtonKind, IconButton, Glyph, StatusPill, Tone, Toggle, Slider, TextField, Tabs,
     Group, SettingRow, Divider, EmptyState, Spinner, PageTitle, FocusRing, KeyboardFocus,
-    InstanceIcon, Dropdown,
+    InstanceIcon, Dropdown, ProgressBar,
 } from "../components.slint";
-import { Instances, ContentRow, InstanceRow } from "../state.slint";
+import { Home, Instances, ContentRow, InstanceRow, BlockerRow } from "../state.slint";
 
 /// One near-square instance card: a large identity icon, the name, the
-/// essential versions and readiness. The Home selection is shown by the
+/// Minecraft version. The Home selection is shown by the
 /// accent icon and name, never by a thick border.
 component InstanceCard inherits Rectangle {
     in property <InstanceRow> item;
@@ -22,7 +22,7 @@ component InstanceCard inherits Rectangle {
     background: touch.has-hover ? Theme.hover : Theme.surface;
     accessible-role: list-item;
     accessible-label: root.item.name;
-    accessible-description: root.item.subtitle + ". " + root.item.status + (root.item.selected ? ". Selected on Home" : "");
+    accessible-description: root.item.subtitle + (root.item.selected ? ". Selected on Home" : "");
     accessible-item-selected: root.item.selected;
     accessible-action-default => { activated(); }
     forward-focus: focus;
@@ -34,8 +34,7 @@ component InstanceCard inherits Rectangle {
         HorizontalLayout { alignment: center; InstanceIcon { path: root.item.icon; size: min(76px, root.width * 0.42); active: root.item.selected; } }
         Rectangle { height: 6px; }
         Text { text: root.item.name; font-size: Theme.text-body; font-weight: 600; color: root.item.selected ? Theme.accent : Theme.text; horizontal-alignment: center; overflow: elide; }
-        Text { text: root.item.subtitle; font-size: Theme.text-metadata; color: Theme.text-muted; horizontal-alignment: center; wrap: word-wrap; min-height: 34px; max-height: 34px; overflow: elide; }
-        HorizontalLayout { alignment: center; StatusPill { text: root.item.status; tone: root.item.tone; } }
+        Text { text: root.item.subtitle; font-size: Theme.text-metadata; color: Theme.text-muted; horizontal-alignment: center; overflow: elide; }
     }
     touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); root.activated(); } }
     focus := KeyboardFocus {
@@ -53,6 +52,7 @@ export component InstancesPage inherits Rectangle {
         padding: Theme.space-6;
         spacing: Theme.space-4;
         HorizontalLayout {
+            spacing: Theme.space-4;
             PageTitle { text: "Instances"; horizontal-stretch: 1; vertical-alignment: center; }
             Button { text: "Import modpack"; icon: Icons.download; loading: Instances.pack-import-busy; clicked => { Instances.import-modpack(); } }
             Button { text: "New instance"; icon: Icons.add; kind: ButtonKind.primary; clicked => { Instances.create(); } }
@@ -73,9 +73,8 @@ export component InstancesPage inherits Rectangle {
             property <length> gap: 14px;
             property <int> columns: max(1, floor((self.visible-width - 8px + gap) / (168px + gap)));
             property <length> card-width: min(220px, (self.visible-width - 8px - (columns - 1) * gap) / columns);
-            // Reserve icon, two version lines and the status pill at every
-            // responsive column width; intrinsic text height must not overflow.
-            property <length> card-height: max(232px, card-width + 12px);
+            // Keep the identity stack compact at every responsive width.
+            property <length> card-height: max(180px, card-width);
             Rectangle {
                 x: 0;
                 y: 0;
@@ -156,6 +155,16 @@ component ContentLine inherits Rectangle {
             clicked => { Instances.content-remove(root.item.id, root.item.title); }
         }
     }
+}
+
+component LaunchBlockerLine inherits HorizontalLayout {
+    in property <BlockerRow> item;
+    spacing: Theme.space-3;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    Icon { y: (parent.height - self.height) / 2; path: Icons.info; size: 18px; color: Theme.warning; }
+    Text { horizontal-stretch: 1; text: root.item.message; font-size: Theme.text-secondary-size; color: Theme.text-secondary; wrap: word-wrap; vertical-alignment: center; }
+    if root.item.action != "": Button { text: root.item.action; compact: true; enabled: !Instances.config-dirty; clicked => { Home.blocker-action(root.item.code); } }
 }
 
 component ConfigurationTab inherits VerticalLayout {
@@ -354,6 +363,25 @@ component ConfigurationTab inherits VerticalLayout {
             label: "Instance folder";
             detail: "Worlds, mods and settings for this instance.";
             Button { text: "Open folder"; icon: Icons.folder; clicked => { Instances.open-folder(); } }
+        }
+    }
+    if Instances.selected: Group {
+        title: "Launch details";
+        HorizontalLayout {
+            alignment: end;
+            Button { text: "Refresh readiness"; icon: Icons.refresh; enabled: !Home.busy; clicked => { Home.refresh(); } }
+        }
+        for blocker in Home.blockers: LaunchBlockerLine { item: blocker; }
+        if Home.progress-text != "": VerticalLayout {
+            spacing: 6px;
+            Text { text: Home.progress-text; font-size: Theme.text-metadata; color: Theme.text-muted; wrap: word-wrap; }
+            ProgressBar { progress: Home.progress; label: Home.progress-text; }
+        }
+        if Home.message != "": Text {
+            text: Home.message;
+            font-size: Theme.text-secondary-size;
+            color: Home.message-tone == Tone.error ? Theme.error : Theme.text-secondary;
+            wrap: word-wrap;
         }
     }
     InstanceSyncSettings {}

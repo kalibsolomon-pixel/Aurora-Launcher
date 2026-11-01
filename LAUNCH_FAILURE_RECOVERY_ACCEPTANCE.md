@@ -2,6 +2,8 @@
 
 2026-11-01. Native-preview follow-up on `codex/pandora-backend` from `f88ec53`.
 
+The later [Home card simplification](HOME_CARD_SIMPLIFICATION_ACCEPTANCE.md) moves visible launch messages and recovery management into instance settings. The diagnosis and verified repair behavior documented here is retained.
+
 ## Cause and instance findings
 
 The native workspace Play callback invoked navigation from inside `ui::with`, while navigation's callback entered `ui::with` again. This caused `RefCell already borrowed` at `native/src/ui.rs:114` before Minecraft could start. A regression test reproduced this exact panic on the original code. The fixed test now drives the actual header button with a pointer press/release and reaches Home without the panic.

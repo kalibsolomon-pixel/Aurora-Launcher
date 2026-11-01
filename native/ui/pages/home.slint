@@ -1,10 +1,9 @@
-import { Recovery } from "../state.slint";
 // Home: select an instance and launch it. Nothing else competes here.
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
-import { Button, ButtonKind, Dropdown, Glyph, StatusPill, Tone, ProgressBar, EmptyState, FocusRing, KeyboardFocus, Spinner, PageTitle, InstanceIcon } from "../components.slint";
-import { Home, Nav, Page, InstanceRow, BlockerRow } from "../state.slint";
+import { Button, ButtonKind, Dropdown, Glyph, StatusPill, Tone, EmptyState, FocusRing, KeyboardFocus, PageTitle, InstanceIcon } from "../components.slint";
+import { Home, Nav, Page, InstanceRow } from "../state.slint";
 import { WidgetGrid, Widgets, MediaGlyphs } from "../widgets.slint";
 
 /// One selectable instance tile.
@@ -42,16 +41,6 @@ export component InstanceTile inherits Rectangle {
         }
     }
     FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; }
-}
-
-component BlockerLine inherits HorizontalLayout {
-    in property <BlockerRow> item;
-    spacing: Theme.space-3;
-    padding-top: 6px;
-    padding-bottom: 6px;
-    Icon { y: (parent.height - self.height) / 2; path: Icons.info; size: 18px; color: Theme.warning; }
-    Text { horizontal-stretch: 1; text: root.item.message; font-size: Theme.text-secondary-size; color: Theme.text-secondary; wrap: word-wrap; vertical-alignment: center; }
-    if root.item.action != "": Button { text: root.item.action; compact: true; clicked => { Home.blocker-action(root.item.code); } }
 }
 
 export component HomePage inherits ScrollView {
@@ -96,7 +85,6 @@ export component HomePage inherits ScrollView {
                         HorizontalLayout {
                             spacing: 8px;
                             alignment: start;
-                            if Home.checking: Spinner { y: (parent.height - self.height) / 2; size: 16px; }
                             StatusPill { text: Home.status; tone: Home.tone; }
                         }
                     }
@@ -105,39 +93,23 @@ export component HomePage inherits ScrollView {
                         Dropdown { model: Home.instance-names; current-index: Home.instance-index; controlled: true; label: "Selected instance"; placeholder: "Choose an instance"; min-width: 220px; selected(index) => { Home.select-index(index); } }
                     }
                 }
-                for blocker in Home.blockers: BlockerLine { item: blocker; }
                 HorizontalLayout {
                     spacing: Theme.space-3;
                     alignment: start;
                     Button {
-                        text: Home.play-label;
+                        text: "Play";
                         icon: Home.running ? "" : Icons.play;
                         kind: ButtonKind.primary;
                         enabled: Home.can-play;
                         loading: Home.busy;
                         min-width: 240px;
                         control-height: 48px;
-                        accessible-description-text: Home.status;
+                        accessible-description-text: Home.play-label;
                         clicked => { Home.play(); }
                     }
-                    Button { text: ""; icon: Icons.refresh; kind: ButtonKind.ghost; control-height: 48px; accessible-description-text: "Check again"; enabled: !Home.busy; clicked => { Home.refresh(); } }
+                    Button { text: ""; icon: Icons.settings; kind: ButtonKind.ghost; control-height: 48px; accessible-description-text: "Instance settings"; clicked => { Home.open-settings(); } }
                 }
-                if Home.progress-text != "": VerticalLayout {
-                    spacing: 6px;
-                    Text { text: Home.progress-text; font-size: Theme.text-metadata; color: Theme.text-muted; }
-                    ProgressBar { progress: Home.progress; label: Home.progress-text; }
-                }
-                if Home.message != "" && Home.message-tone == Tone.error && !Home.busy && !Home.running: Button {
-                    text: "Review failure";
-                    enabled: !Recovery.busy;
-                    clicked => { Recovery.inspect(); }
-                }
-                if Home.message != "": Text {
-                    text: Home.message;
-                    font-size: Theme.text-secondary-size;
-                    color: Home.message-tone == Tone.error ? Theme.error : Theme.text-secondary;
-                    wrap: word-wrap;
-                }
+
             }
         }
         if Home.instances.length > 0: HorizontalLayout {

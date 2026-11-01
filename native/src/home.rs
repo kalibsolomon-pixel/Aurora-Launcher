@@ -11,6 +11,11 @@ use crate::{AppWindow, BlockerRow, Home, InstanceRow, Tone};
 pub fn bind(window: &AppWindow) {
     let home = window.global::<Home>();
     home.on_play(play);
+    home.on_open_settings(|| {
+        if let Some(id) = ui::state(|s| s.selected_instance().map(|i| i.id.clone())) {
+            crate::instances::show_settings(id);
+        }
+    });
     home.on_select_index(|index| {
         if let Some(id) = ui::state(|s| s.instances().get(index as usize).map(|i| i.id.clone())) {
             crate::instances::select(id);
@@ -37,7 +42,7 @@ pub fn instance_rows(state: &AppState) -> Vec<InstanceRow> {
             InstanceRow {
                 id: instance.id.clone().into(),
                 name: instance.display_name.clone().into(),
-                subtitle: instance.subtitle().into(),
+                subtitle: format!("Minecraft {}", instance.minecraft_version).into(),
                 letter: ui::letter(&instance.display_name).into(),
                 status: status.into(),
                 tone,
@@ -92,7 +97,7 @@ fn blocker_action(code: &str) {
         }
         _ => {
             if let Some(id) = ui::state(|s| s.selected_instance().map(|i| i.id.clone())) {
-                crate::instances::open_workspace(id, crate::instances::TAB_SETTINGS);
+                crate::instances::show_settings(id);
             }
         }
     }
@@ -242,15 +247,7 @@ fn continue_requested_play() {
     .flatten();
     match action {
         Some((_, true, _)) => play(),
-        Some((id, false, Some(code)))
-            if matches!(
-                code.as_str(),
-                "launch_instance_not_ready" | "launch_instance_damaged"
-            ) =>
-        {
-            crate::recovery::inspect(id, true)
-        }
-        Some((_, false, Some(code))) => blocker_action(&code),
+        Some((id, false, _)) => crate::instances::show_settings(id),
         _ => {}
     }
 }
@@ -367,7 +364,7 @@ pub fn render() {
         let Some(instance) = state.selected_instance().cloned() else {
             home.set_has_instance(false);
             home.set_can_play(false);
-            home.set_status("Choose an instance".into());
+            home.set_status("Needs Attention".into());
             home.set_tone(Tone::Neutral);
             home.set_subtitle("".into());
             home.set_blockers(ui::model(Vec::new()));
@@ -408,18 +405,17 @@ pub fn render() {
         let ready = decision.is_some_and(|d| d.ready);
         let preparable = decision.is_some_and(|d| d.can_prepare);
 
-        let (status, tone) = if running {
-            ("Running", Tone::Success)
-        } else if starting {
-            ("Starting…", Tone::Working)
-        } else if checking {
-            ("Checking…", Tone::Working)
-        } else if ready {
-            ("Ready", Tone::Success)
-        } else if preparable {
-            ("Play will prepare Java", Tone::Neutral)
+        // Home communicates only whether attention is needed. Detailed
+        // lifecycle, runtime, failure and exit information belongs in Settings.
+        let attention = !running
+            && !starting
+            && (state.play_error.is_some()
+                || child.is_some_and(|p| p.status == "failed")
+                || !(ready || preparable));
+        let (status, tone) = if attention {
+            ("Needs Attention", Tone::Warning)
         } else {
-            ("Needs attention", Tone::Warning)
+            ("Ready", Tone::Success)
         };
         home.set_status(status.into());
         home.set_tone(tone);
