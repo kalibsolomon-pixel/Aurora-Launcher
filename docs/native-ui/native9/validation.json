@@ -1,0 +1,130 @@
+{
+  "schema": "native9-validation-1",
+  "host": { "os": "Windows 11 x64", "logicalProcessors": 28, "scale": 1.25 },
+  "source": {
+    "baseCommit": "1eb5ad3f3799618c80cdcc049f68d0beae841c95",
+    "workingPatchSha256": "059e934d8b46434b3063d94f58ae139b01cf357bcde213b5a1b9d0f6ddcdb766",
+    "note": "Builds and tests below ran on the base commit plus the continuation code patch (native/ and src-tauri/ only), which is committed unchanged in the continuation commits."
+  },
+  "artifacts": {
+    "distributionExecutable": {
+      "build": "cargo build --manifest-path native/Cargo.toml --locked --release",
+      "sha256": "5c693e75ee49fd17a636bc6c22e455db746421e0b8adf2ba3e91ac469f7fcdb9",
+      "bytes": 29891072,
+      "productName": "Aurora Launcher (native preview)",
+      "productVersion": "1.4.2",
+      "machine": "x64",
+      "nativePreviewIdentity": true,
+      "acceptanceFeatureStrings": false,
+      "updaterConfiguration": "neither AURORA_NATIVE_UPDATE_AUTHORITY nor AURORA_UPDATER_PUBKEY set: native updates compile as unconfigured",
+      "authenticode": "NotSigned"
+    },
+    "distributionInstaller": {
+      "build": "native/tools/package-windows.ps1 -Binary <distribution exe> -OutputDirectory <new dir>",
+      "fileName": "Aurora.Native.Preview_1.4.2_x64-setup.exe",
+      "sha256": "dc12abb91964f69c61ad20f5498ef557ec7ff93572d2d84b39cf4a99d727f51c",
+      "bytes": 9294111,
+      "productName": "Aurora Launcher Native Preview",
+      "productVersion": "1.4.2",
+      "fileDescription": "Aurora native preview installer",
+      "authenticode": "NotSigned",
+      "installed": false,
+      "note": "Inspected only. It targets the real per-user preview location and was not installed."
+    },
+    "acceptanceExecutable": {
+      "build": "cargo build --manifest-path native/Cargo.toml --locked --release --features disposable-data-root",
+      "sha256": "50c8e862a704acd8747a005f7898c048c873cdf1c570da8e1b0440de9f73d354",
+      "bytes": 29920256,
+      "note": "Honors AURORA_DIAGNOSTIC_DATA_ROOT; used only against disposable roots."
+    },
+    "codexHeadReferences": {
+      "acceptanceExecutableSha256": "c80adc8e66f5860d429cb0724618b2bae7c487a87518a05e5a9ee7c6abdec63c",
+      "distributionExecutableSha256": "a44c03c9de7bbca5b0ca18bf4d5cd06528d56d617b14583362f58416d0f473f6"
+    }
+  },
+  "installerAcceptance": {
+    "command": "native/tools/test-installer.ps1 -Binary <distribution exe>",
+    "exitCode": 0,
+    "payloadSha256": "5c693e75ee49fd17a636bc6c22e455db746421e0b8adf2ba3e91ac469f7fcdb9",
+    "acceptancePackageSha256": "4b435b5cf941aa9dead3a81896f935d420f2938dc76c9f04e76c16e54e0767e8",
+    "results": {
+      "installExit": 0,
+      "reinstallExit": 0,
+      "concurrentInstallExit": 2,
+      "concurrentUninstallExit": 2,
+      "foreignShortcutExit": 2,
+      "downgradeExit": 2,
+      "inUseExit": 2,
+      "handoffExit": 0,
+      "handoffMilliseconds": 6032,
+      "malformedPidExit": 2,
+      "fastExitHandoffCompleted": true,
+      "uninstallExit": 0,
+      "startShortcutRemoved": true,
+      "reinstallAfterUninstallExit": 0,
+      "finalUninstallExit": 0,
+      "sentinelPreserved": true,
+      "authenticode": "NotSigned"
+    },
+    "installedInspection": {
+      "installedExecutableMatchesPayload": true,
+      "files": ["aurora-native.exe", "LICENSE.txt", "MaterialSymbols-LICENSE.txt", "native-package.ini", "THIRD_PARTY_NOTICES.txt", "uninstall.exe"],
+      "uninstallRegistration": { "displayName": "Aurora Launcher Native Preview", "displayVersion": "1.4.2", "publisher": "Aurora Launcher contributors", "noModify": 1, "noRepair": 1 },
+      "embeddedIcon": true
+    },
+    "handoffRaceReproduction": {
+      "beforeFix": "6 of 6 handoffs aborted when the launcher exited immediately after spawning NSIS with no surviving handle; 2 of 2 controls that waited 3 s succeeded",
+      "afterFix": "fastExitHandoffCompleted true in two complete acceptance runs"
+    },
+    "realRunningExecutableProbe": "The NSIS in-use probe (GENERIC_READ|DELETE, FILE_SHARE_READ) returned ERROR_SHARING_VIOLATION against a genuinely running executable, not only a file lock."
+  },
+  "tests": [
+    { "command": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check", "exit": 0 },
+    { "command": "cargo fmt --manifest-path native/Cargo.toml --all -- --check", "exit": 0 },
+    { "command": "cargo test --manifest-path native/Cargo.toml --locked --all-targets", "exit": 0, "passed": { "main": 32, "appearance": 12, "native8Install": 4, "provider": 4 }, "failed": 0, "ignored": 0 },
+    { "command": "cargo test --manifest-path src-tauri/Cargo.toml --locked --no-default-features --features native-preview", "exit": 0, "passed": 1034, "iconTests": 6, "failed": 0, "ignored": 31 },
+    { "command": "cargo test --manifest-path src-tauri/Cargo.toml --locked", "exit": 0, "passed": 1036, "iconTests": 6, "failed": 0, "ignored": 31 },
+    { "command": "cargo test --manifest-path src-tauri/Cargo.toml --locked --no-default-features", "exit": 0, "passed": 1030, "iconTests": 6, "failed": 0, "ignored": 31 },
+    { "command": "npm run check", "exit": 0, "errors": 0, "warnings": 0 },
+    { "command": "npm test", "exit": 0, "passed": 301, "failed": 0 },
+    { "command": "node --test tools/release/native-update.test.mjs", "exit": 0, "passed": 2, "failed": 0 }
+  ],
+  "pickerAndImportGui": {
+    "build": "Codex HEAD optimized acceptance executable c80adc8e…",
+    "results": {
+      "singleClickOpens": true,
+      "dialogOwnedByLauncherWindow": true,
+      "launcherWindowDisabledWhileOpen": true,
+      "clickOnLauncherPlayIgnored": true,
+      "closeLauncherWhileOpenIgnored": true,
+      "minimizeParentHidesDialogRestoreReturnsSameDialog": true,
+      "rapidDoubleClickOpensExactlyOneDialog": true,
+      "cancelLeavesStateUnchanged": true,
+      "keyboardFocusReturnsToImportButton": true,
+      "secondLauncherProcessDoesNotTakeDialog": true,
+      "invalidFakeJarRefused": true,
+      "validLongNamedResourcePackReviewedInstalledAndListed": true,
+      "duplicateRefusedInstallDisabledExistingBytesUnchanged": true
+    },
+    "notCaptured": "Minimum-size and higher-scale captures of the review dialog were not taken: the desktop user became active in another Aurora window and the interactive pass was stopped. The review text sits in a height-bounded ScrollView; minimum-size and below-minimum windows were exercised programmatically without the dialog."
+  },
+  "performanceSmoke": {
+    "conditions": "Copy of the NATIVE-8 populated disposable root (Borealis), 1120x760 logical, exact application HWND, 25 s settle, 3 x ~10 s intervals, 250 ms memory sampling; window held foreground in every interval",
+    "cpuUnit": "percent of one logical processor",
+    "final": {
+      "borealisForeground": { "cpu": [1.09, 2.33, 1.4], "workingSetMiB": 44.5, "privateMiB": 18.4 },
+      "minimized": { "cpu": [0, 0, 0], "workingSetMiB": 36.5, "privateMiB": 10.3 },
+      "restored": { "cpu": [1.24, 1.55, 1.09], "workingSetMiB": 44.4, "privateMiB": 18.2 },
+      "windowEnumeratedMs": 88,
+      "closedCleanly": true
+    },
+    "codexHead": {
+      "borealisForeground": { "cpu": [1.08, 1.71, 0.93], "workingSetMiB": 43.8, "privateMiB": 18.0 },
+      "minimized": { "cpu": [0, 0, 0], "workingSetMiB": 35.9, "privateMiB": 10.0 },
+      "restored": { "cpu": [0.16, 2.95, 2.33], "workingSetMiB": 43.8, "privateMiB": 17.9 },
+      "windowEnumeratedMs": 39,
+      "closedCleanly": true
+    },
+    "rejected": "An earlier run targeted Process.MainWindowHandle, which can be winit's event-target window; it is retained privately and not used."
+  }
+}
