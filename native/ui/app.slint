@@ -1,3 +1,4 @@
+import { Recovery } from "state.slint";
 // Aurora Launcher native shell: compact navigation, one content region, and
 // overlays (dialogs, notifications). Rendering is event-driven: nothing here
 // animates while idle.
@@ -20,7 +21,7 @@ import { DiscoverPage } from "pages/discover.slint";
 import { SettingsPage } from "pages/settings.slint";
 import { SkinsPage } from "pages/skins.slint";
 
-export { Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, InstanceSync, SyncChoice, Skins, Tone, IconPicker, AccentPicker, Chrome, Widgets, WidgetChoice, WidgetLine, WidgetView, Activity, ActivityRow, ContentImport }
+export { Recovery, Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, InstanceSync, SyncChoice, Skins, Tone, IconPicker, AccentPicker, Chrome, Widgets, WidgetChoice, WidgetLine, WidgetView, Activity, ActivityRow, ContentImport }
 
 component NavItem inherits Rectangle {
     in property <string> label;
@@ -338,6 +339,29 @@ export component AppWindow inherits Window {
             spacing: 8px;
             if Accounts.login-busy: Button { text: "Cancel sign-in"; clicked => { Accounts.cancel-sign-in(); } }
             if !Accounts.login-busy: Button { text: Accounts.rows.length == 0 ? "Sign in with Microsoft" : "Add account"; icon: Icons.open-external; kind: ButtonKind.primary; clicked => { Accounts.sign-in(); } }
+        }
+    }
+
+    if Recovery.open: Dialog {
+        title: Recovery.title;
+        dismissed => { if !Recovery.busy { Recovery.open = false; } }
+        ScrollView {
+            height: min(300px, max(120px, root.height - 280px));
+            VerticalLayout {
+                padding-right: 8px;
+                Text { text: Recovery.text; color: Theme.text-secondary; wrap: word-wrap; font-size: Theme.text-secondary-size; }
+            }
+        }
+        if Recovery.removed-count > 0: Checkbox {
+            text: "Keep the " + Recovery.removed-count + " listed mod(s) removed";
+            checked <=> Recovery.keep-removed;
+            enabled: !Recovery.busy;
+        }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            Button { text: "Close"; enabled: !Recovery.busy; clicked => { Recovery.open = false; } }
+            Button { text: "Apply safe recovery"; kind: ButtonKind.primary; loading: Recovery.busy; enabled: Recovery.allowed && !Recovery.busy && (Recovery.removed-count == 0 || Recovery.keep-removed); clicked => { Recovery.confirm(); } }
         }
     }
 

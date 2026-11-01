@@ -368,6 +368,24 @@ type Scene = fn(&AppWindow);
 fn scenes() -> Vec<(&'static str, Scene)> {
     vec![
         ("mods-updates", |app| workspace(app, 0)),
+        ("recovery-local-edits", |app| {
+            workspace(app, 3);
+            let recovery = app.global::<crate::Recovery>();
+            recovery.set_title("Recovery: Vulkan 11".into());
+            recovery.set_text("Keep 10 changed settings file(s), review 1 removed mod(s), then verify the installation. No game files will be overwritten.\n\nPreserve local settings:\nconfig/asyncparticles/asyncparticles-mixin.properties\nconfig/c2me.toml\nconfig/fabric/indigo-renderer.properties\nconfig/ferritecore.mixin.properties\nconfig/ixeris.toml\nconfig/packetfixer.properties\nconfig/vmp.properties\nconfig/vulkanmod_settings.json\nconfig/zfastnoise.mixin.toml\noptions.txt\n\nRemoved mods (kept removed only if you confirm below):\nmods/clientsort-fabric-2.2.2+1.21.11.jar".into());
+            recovery.set_removed_count(1);
+            recovery.set_keep_removed(false);
+            recovery.set_allowed(true);
+            recovery.set_open(true);
+        }),
+        ("recovery-blocked", |app| {
+            workspace(app, 0);
+            let recovery = app.global::<crate::Recovery>();
+            recovery.set_title("Recovery: test instance".into());
+            recovery.set_text("Recovery found issues requiring attention. Your files remain unchanged.\n\nNeeds attention:\nmods/changed.jar: installed bytes changed. Restore or review this file explicitly; recovery will not trust changed mod artifacts.".into());
+            recovery.set_allowed(false);
+            recovery.set_open(true);
+        }),
         ("mods-icons-controls", |app| {
             workspace(app, 0);
             let mut icon_row = row(
@@ -614,6 +632,36 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     render(&app, &adapter, "aurora-review-input");
     key(&app, Key::Escape);
     assert!(!app.global::<Instances>().get_client_review_open());
+
+    let (app, adapter) = window((1120., 760.), 1.);
+    scenes()
+        .into_iter()
+        .find(|(name, _)| *name == "recovery-local-edits")
+        .unwrap()
+        .1(&app);
+    render(&app, &adapter, "recovery-input-baseline");
+    assert!(!app.global::<crate::Recovery>().get_keep_removed());
+    let recovery_actions = Rc::new(RefCell::new(0));
+    let seen = recovery_actions.clone();
+    app.global::<crate::Recovery>()
+        .on_confirm(move || *seen.borrow_mut() += 1);
+    click(&app, 695., 581.);
+    assert_eq!(
+        *recovery_actions.borrow(),
+        0,
+        "removed mods require explicit confirmation"
+    );
+    click(&app, 353., 534.);
+    assert!(app.global::<crate::Recovery>().get_keep_removed());
+    click(&app, 695., 581.);
+    assert_eq!(
+        *recovery_actions.borrow(),
+        1,
+        "one approval dispatches one recovery"
+    );
+    render(&app, &adapter, "recovery-input-confirmed");
+    key(&app, Key::Escape);
+    assert!(!app.global::<crate::Recovery>().get_open());
 
     // Exercise the Java controls on the real layout, including keyboard
     // inspection/editing of a long path. The chooser callback is observed;

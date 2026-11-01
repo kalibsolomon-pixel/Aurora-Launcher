@@ -2779,6 +2779,61 @@ pub async fn get_instance_mods(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InstanceRecoveryRequest {
+    instance_id: String,
+    fingerprint: Option<String>,
+    #[serde(default)]
+    keep_removed_mods: bool,
+}
+impl From<crate::instances::recovery::RecoveryError> for CommandError {
+    fn from(error: crate::instances::recovery::RecoveryError) -> Self {
+        Self::new(error.0, error.1)
+    }
+}
+pub async fn inspect_instance_recovery(
+    app: Host,
+    request: InstanceRecoveryRequest,
+) -> Result<crate::instances::recovery::RecoveryPreview, CommandError> {
+    let paths = managed_paths(&app)?;
+    let id = registered_instance(&paths, &request.instance_id)?;
+    tokio::task::spawn_blocking(move || {
+        crate::instances::recovery::inspect(&paths, &id).map_err(CommandError::from)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "instance_recovery_unavailable",
+            "Recovery inspection did not complete; no files were changed.",
+        )
+    })?
+}
+pub async fn apply_instance_recovery(
+    app: Host,
+    request: InstanceRecoveryRequest,
+) -> Result<crate::instances::recovery::RecoveryPreview, CommandError> {
+    let paths = managed_paths(&app)?;
+    let id = registered_instance(&paths, &request.instance_id)?;
+    let fingerprint = request.fingerprint.ok_or_else(|| {
+        CommandError::new(
+            "instance_recovery_stale",
+            "Inspect and approve recovery first.",
+        )
+    })?;
+    tokio::task::spawn_blocking(move || {
+        crate::instances::recovery::apply(&paths, &id, &fingerprint, request.keep_removed_mods)
+            .map_err(CommandError::from)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "instance_recovery_unavailable",
+            "Recovery did not complete. Inspect this instance again before retrying.",
+        )
+    })?
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstalledModIconsRequest {
     instance_id: String,
     files: Vec<crate::mod_icons::IconRequest>,

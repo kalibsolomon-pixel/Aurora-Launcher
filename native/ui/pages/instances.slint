@@ -1,3 +1,4 @@
+import { Recovery } from "../state.slint";
 // Instances manages installations; each workspace manages one instance's
 // configuration and content.
 import { InstanceSyncSettings } from "../syncing.slint";
@@ -330,6 +331,7 @@ component ConfigurationTab inherits VerticalLayout {
             HorizontalLayout {
                 spacing: 8px;
                 Button { text: "Check"; icon: Icons.refresh; loading: Instances.health-busy; clicked => { Instances.validate(); } }
+                Button { text: "Smart recovery"; enabled: !Recovery.busy && !Instances.installing && !Instances.config-dirty; clicked => { Recovery.inspect(); } }
                 if Instances.can-repair: Button { text: "Repair"; kind: ButtonKind.primary; enabled: !Instances.health-busy; clicked => { Instances.repair(); } }
             }
         }

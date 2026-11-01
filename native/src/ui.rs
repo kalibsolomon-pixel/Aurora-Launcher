@@ -33,6 +33,11 @@ pub struct AppState {
     pub readiness_in_flight: bool,
     pub readiness_pending: bool,
     pub play_busy: bool,
+    pub pending_play: Option<String>,
+    pub recovery_preview: Option<crate::api::RecoveryPreview>,
+    pub recovery_serial: u64,
+    pub recovery_target: Option<String>,
+    pub recovery_pending: Option<(String, bool)>,
     pub play_progress: Option<String>,
     pub play_error: Option<String>,
     pub install_progress: Option<(String, f32)>,
@@ -115,6 +120,15 @@ pub fn with<R>(f: impl FnOnce(&AppWindow, &mut AppState) -> R) -> Option<R> {
     })
 }
 
+/// Dispatch callbacks after releasing both window and state borrows. Native
+/// callbacks may enter `with` themselves (navigation is one such callback).
+pub fn navigate(page: crate::Page) {
+    let window = WINDOW.with(|slot| slot.borrow().as_ref().map(ComponentHandle::clone_strong));
+    if let Some(window) = window {
+        window.global::<crate::Nav>().invoke_navigate(page);
+    }
+}
+
 pub fn state<R>(f: impl FnOnce(&AppState) -> R) -> R {
     STATE.with(|state| f(&state.borrow()))
 }
@@ -148,6 +162,27 @@ where
         let value = work.await;
         let _ = slint::invoke_from_event_loop(move || done(value));
     });
+}
+
+/// A panicking worker still completes the UI request with a sanitized error.
+/// Guarding only Rust worker tasks never pretends an unsafe UI callback can
+/// continue after a state-borrow violation.
+async fn guarded_api<F, T>(work: F) -> crate::api::ApiResult<T>
+where
+    F: Future<Output = crate::api::ApiResult<T>> + Send + 'static,
+    T: Send + 'static,
+{
+    match tokio::spawn(work).await {
+        Ok(value)=>value,
+        Err(_)=>Err(ApiError{code:"native_operation_failed".into(),message:"The operation stopped unexpectedly. Check the game status and review recovery before retrying.".into()}),
+    }
+}
+pub fn spawn_api<F, T>(work: F, done: impl FnOnce(crate::api::ApiResult<T>) + Send + 'static)
+where
+    F: Future<Output = crate::api::ApiResult<T>> + Send + 'static,
+    T: Send + 'static,
+{
+    spawn(guarded_api(work), done);
 }
 
 /// Parks a UI-thread continuation (which need not be `Send`) until a
@@ -235,4 +270,20 @@ pub fn rectangular_image(rgba: &[u8], width: u32, height: u32) -> Option<slint::
     >::clone_from_slice(
         rgba, width, height
     )))
+}
+
+#[cfg(test)]
+mod failure_tests {
+    #[tokio::test]
+    async fn worker_panic_returns_a_sanitized_error_instead_of_losing_completion() {
+        let result = super::guarded_api(async {
+            panic!("sensitive sentinel must not enter the error DTO");
+            #[allow(unreachable_code)]
+            Ok::<(), crate::api::ApiError>(())
+        })
+        .await;
+        let error = result.unwrap_err();
+        assert_eq!(error.code, "native_operation_failed");
+        assert!(!error.message.contains("sentinel"));
+    }
 }

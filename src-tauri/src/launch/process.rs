@@ -123,6 +123,13 @@ fn preparations() -> &'static Mutex<HashSet<String>> {
     PREPARATIONS.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
+pub(crate) fn is_preparing(instance_id: &str) -> bool {
+    preparations()
+        .lock()
+        .expect("preparations not poisoned")
+        .contains(instance_id)
+}
+
 /// A logical per-instance Play reservation, not a filesystem lock. It may
 /// survive awaits; dropping on error or cancellation permits another attempt.
 pub(crate) struct PreparationGuard(String);

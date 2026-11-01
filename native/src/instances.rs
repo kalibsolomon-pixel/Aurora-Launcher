@@ -87,8 +87,7 @@ pub fn bind(window: &AppWindow) {
     instances.on_play(|| {
         let id = ui::state(|s| s.workspace.as_ref().map(|w| w.id.clone()));
         if let Some(id) = id {
-            select(id);
-            ui::with(|window, _| window.global::<Nav>().invoke_navigate(Page::Home));
+            crate::home::request_play(id);
         }
     });
     instances.on_make_selected(|| {
@@ -255,6 +254,10 @@ pub fn render_list() {
 
 /// Persists the Home selection, then re-reads state and readiness.
 pub fn select(id: String) {
+    ui::with(|_, state| {
+        state.pending_play = None;
+        state.play_error = None;
+    });
     ui::spawn(api::select_instance(ui::host(), id), |result| {
         if let Err(error) = result {
             ui::error_toast(&error);
@@ -797,7 +800,7 @@ fn load_memory_hint(id: String) {
     });
 }
 
-fn validate() {
+pub(crate) fn validate() {
     let Some(id) = ui::state(|s| s.workspace.as_ref().map(|w| w.id.clone())) else {
         return;
     };

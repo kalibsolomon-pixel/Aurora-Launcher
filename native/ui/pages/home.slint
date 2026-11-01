@@ -1,3 +1,4 @@
+import { Recovery } from "../state.slint";
 // Home: select an instance and launch it. Nothing else competes here.
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
@@ -125,6 +126,11 @@ export component HomePage inherits ScrollView {
                     spacing: 6px;
                     Text { text: Home.progress-text; font-size: Theme.text-metadata; color: Theme.text-muted; }
                     ProgressBar { progress: Home.progress; label: Home.progress-text; }
+                }
+                if Home.message != "" && Home.message-tone == Tone.error && !Home.busy && !Home.running: Button {
+                    text: "Review failure";
+                    enabled: !Recovery.busy;
+                    clicked => { Recovery.inspect(); }
                 }
                 if Home.message != "": Text {
                     text: Home.message;

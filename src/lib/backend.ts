@@ -2307,3 +2307,19 @@ export function previewModrinthPackMerge(instanceId: string, projectId: string, 
 export function installModrinthPackMerge(instanceId: string, projectId: string, versionId: string, selectedOptional: string[], fingerprint: string): Promise<ModrinthPackMergeResult> {
   return contentInvoke("install_modrinth_pack_merge", { instanceId, projectId, versionId, selectedOptional, fingerprint });
 }
+
+export interface InstanceRecoveryPreview {
+  instanceId: string;
+  summary: string;
+  keptSettings: string[];
+  removedMods: string[];
+  blockers: string[];
+  canApply: boolean;
+  fingerprint: string;
+}
+export async function inspectInstanceRecovery(instanceId: string): Promise<InstanceRecoveryPreview> {
+  return await invoke("inspect_instance_recovery", { request: { instanceId } });
+}
+export async function applyInstanceRecovery(instanceId: string, fingerprint: string, keepRemovedMods: boolean): Promise<InstanceRecoveryPreview> {
+  return await invoke("apply_instance_recovery", { request: { instanceId, fingerprint, keepRemovedMods } });
+}

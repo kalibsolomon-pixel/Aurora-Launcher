@@ -165,6 +165,8 @@ pub fn run() {
             application::tauri_commands::open_instance_folder,
             application::tauri_commands::get_instance_mods,
             application::tauri_commands::get_installed_mod_icons,
+            application::tauri_commands::inspect_instance_recovery,
+            application::tauri_commands::apply_instance_recovery,
             application::tauri_commands::set_instance_mod_enabled,
             application::tauri_commands::remove_instance_mod,
             application::tauri_commands::open_instance_mods_folder,

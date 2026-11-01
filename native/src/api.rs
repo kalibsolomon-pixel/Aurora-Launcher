@@ -1648,3 +1648,30 @@ mod tests {
         );
     }
 }
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryPreview {
+    pub instance_id: String,
+    pub summary: String,
+    pub kept_settings: Vec<String>,
+    pub removed_mods: Vec<String>,
+    pub blockers: Vec<String>,
+    pub can_apply: bool,
+    pub fingerprint: String,
+}
+pub async fn inspect_recovery(host: Host, id: String) -> ApiResult<RecoveryPreview> {
+    let request = request(json!({"instanceId":id}))?;
+    convert(app::inspect_instance_recovery(host, request).await)
+}
+pub async fn apply_recovery(
+    host: Host,
+    id: String,
+    fingerprint: String,
+    keep_removed_mods: bool,
+) -> ApiResult<RecoveryPreview> {
+    let request = request(
+        json!({"instanceId":id,"fingerprint":fingerprint,"keepRemovedMods":keep_removed_mods}),
+    )?;
+    convert(app::apply_instance_recovery(host, request).await)
+}

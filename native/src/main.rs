@@ -32,6 +32,7 @@ mod player;
 mod preview;
 #[cfg(feature = "disposable-data-root")]
 mod preview_probe;
+mod recovery;
 mod settings;
 mod skin_import;
 mod skins;
@@ -85,6 +86,7 @@ fn main() -> Result<(), slint::PlatformError> {
     chrome::install(&window);
     bind_navigation(&window);
     home::bind(&window);
+    recovery::bind(&window);
     instances::bind(&window);
     icons::bind(&window);
     widgets::bind(&window);
@@ -152,6 +154,9 @@ fn bind_navigation(window: &AppWindow) {
     window.global::<Nav>().on_navigate(|page| {
         ui::with(|window, state| {
             let nav = window.global::<Nav>();
+            if page != Page::Home {
+                state.pending_play = None;
+            }
             if page == Page::Instances && nav.get_page() == Page::Instances {
                 // Activating Instances again returns to the list.
                 state.workspace = None;

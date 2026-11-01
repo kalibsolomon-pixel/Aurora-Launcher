@@ -1001,3 +1001,18 @@ pub async fn resolve_instance_sync_conflict(
             super::CommandError::new("sync_worker_failed", "The sync worker did not complete.")
         })?
 }
+
+#[tauri::command]
+pub async fn inspect_instance_recovery(
+    app: tauri::AppHandle,
+    request: InstanceRecoveryRequest,
+) -> Result<crate::instances::recovery::RecoveryPreview, CommandError> {
+    super::inspect_instance_recovery(Host::from_tauri(&app), request).await
+}
+#[tauri::command]
+pub async fn apply_instance_recovery(
+    app: tauri::AppHandle,
+    request: InstanceRecoveryRequest,
+) -> Result<crate::instances::recovery::RecoveryPreview, CommandError> {
+    super::apply_instance_recovery(Host::from_tauri(&app), request).await
+}

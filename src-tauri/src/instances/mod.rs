@@ -26,6 +26,7 @@ pub mod deletion;
 pub mod lifecycle;
 pub mod performance;
 pub mod platform;
+pub mod recovery;
 pub mod settings;
 pub mod transition;
 

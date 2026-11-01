@@ -53,9 +53,8 @@ fn blocker_label(code: &str) -> &'static str {
         "launch_authentication_required" => "Sign in",
         "launch_runtime_not_ready" => "Install Java",
         "launch_custom_java_invalid" => "Java settings",
-        "launch_instance_not_ready"
-        | "launch_instance_damaged"
-        | "launch_configuration_changed" => "Open instance",
+        "launch_instance_not_ready" | "launch_instance_damaged" => "Review recovery",
+        "launch_configuration_changed" => "Open instance",
         "launch_mod_incompatible" => "Review mods",
         _ => "",
     }
@@ -80,6 +79,11 @@ fn blocker_action(code: &str) {
                 }
                 refresh_readiness();
             });
+        }
+        "launch_instance_not_ready" | "launch_instance_damaged" => {
+            if let Some(id) = ui::state(|s| s.selected_instance().map(|i| i.id.clone())) {
+                crate::recovery::inspect(id, true);
+            }
         }
         "launch_mod_incompatible" => {
             if let Some(id) = ui::state(|s| s.selected_instance().map(|i| i.id.clone())) {
@@ -154,7 +158,6 @@ pub fn refresh_readiness() {
                 match readiness {
                     Ok(decision) => {
                         state.readiness = Some(decision);
-                        state.play_error = None;
                     }
                     Err(error) => {
                         state.readiness = None;
@@ -176,12 +179,80 @@ pub fn refresh_readiness() {
             })
             .unwrap_or(false);
             render();
+            continue_requested_play();
+            if let Some(id) = ui::state(|s| {
+                s.readiness
+                    .as_ref()
+                    .filter(|d| matches!(d.instance_status.as_str(), "installing" | "damaged"))
+                    .map(|d| d.instance_id.clone())
+            }) {
+                if !ui::state(|s| {
+                    s.recovery_preview
+                        .as_ref()
+                        .is_some_and(|p| p.instance_id == id)
+                }) {
+                    crate::recovery::inspect(id, false);
+                }
+            }
             if recheck {
                 // The supervisor reported exit before its readiness state settled.
                 slint::Timer::single_shot(std::time::Duration::from_millis(750), refresh_readiness);
             }
         },
     );
+}
+
+/// The workspace Play button selects its exact target, then waits for the
+/// winning readiness check before launching or presenting recovery.
+pub fn request_play(id: String) {
+    ui::navigate(crate::Page::Home);
+    ui::with(|_, state| {
+        state.pending_play = Some(id.clone());
+        state.readiness = None;
+    });
+    ui::spawn_api(
+        api::select_instance(ui::host(), id.clone()),
+        move |result| match result {
+            Ok(()) => crate::instances::reload(refresh_readiness),
+            Err(error) => {
+                ui::with(|_, state| {
+                    state.pending_play = None;
+                    state.play_error = Some(error.message);
+                });
+                render();
+            }
+        },
+    );
+}
+fn continue_requested_play() {
+    let action = ui::with(|window, state| {
+        let id = state.pending_play.as_ref()?;
+        if window.global::<crate::Nav>().get_page() != crate::Page::Home {
+            state.pending_play = None;
+            return None;
+        }
+        let decision = state.readiness.as_ref()?;
+        if decision.instance_id != *id {
+            return None;
+        }
+        let ready = decision.ready || decision.can_prepare;
+        let blocker = decision.blockers.first().map(|b| b.code.clone());
+        Some((state.pending_play.take()?, ready, blocker))
+    })
+    .flatten();
+    match action {
+        Some((_, true, _)) => play(),
+        Some((id, false, Some(code)))
+            if matches!(
+                code.as_str(),
+                "launch_instance_not_ready" | "launch_instance_damaged"
+            ) =>
+        {
+            crate::recovery::inspect(id, true)
+        }
+        Some((_, false, Some(code))) => blocker_action(&code),
+        _ => {}
+    }
 }
 
 fn play() {
@@ -207,7 +278,9 @@ fn play() {
         return;
     };
     render();
-    ui::spawn(api::play(ui::host(), instance, account), |result| {
+    let failed_id = instance.clone();
+    ui::spawn_api(api::play(ui::host(), instance, account), move |result| {
+        let failed = result.is_err();
         ui::with(|_, state| {
             state.play_busy = false;
             state.play_progress = None;
@@ -217,6 +290,9 @@ fn play() {
             }
         });
         render();
+        if failed {
+            crate::recovery::inspect(failed_id, false);
+        }
         refresh_readiness();
     });
 }
@@ -243,8 +319,12 @@ pub fn on_launch_progress(phase: &str) {
 /// `launch-state` event: the supervised child changed state.
 pub fn on_launch_state(process: LaunchProcess) {
     let finished = matches!(process.status.as_str(), "exited" | "failed");
+    let failed_id = (process.status == "failed").then(|| process.instance_id.clone());
     ui::with(|_, state| state.process = Some(process));
     render();
+    if let Some(id) = failed_id {
+        crate::recovery::inspect(id, false);
+    }
     if finished {
         refresh_readiness();
     }

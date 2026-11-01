@@ -152,3 +152,45 @@ fn one_primary_click_dispatches_exactly_once_with_and_without_window_focus() {
         }
     }
 }
+
+#[test]
+fn instance_play_navigation_does_not_reborrow_ui_state() {
+    slint::platform::set_platform(Box::new(TestPlatform)).unwrap();
+    let app = crate::AppWindow::new().unwrap();
+    app.window().set_size(LogicalSize::new(1120., 760.));
+    app.global::<crate::Shell>().set_loaded(true);
+    app.show().unwrap();
+    let root = std::env::temp_dir().join(format!("aurora-navigation-test-{}", std::process::id()));
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    let host = aurora_launcher_lib::host::Host::native(
+        Ok(root),
+        "1.4.2",
+        runtime.handle().clone(),
+        |_, _| {},
+    );
+    crate::ui::install(app.clone_strong(), host, runtime.handle().clone());
+    crate::bind_navigation(&app);
+    crate::instances::bind(&app);
+    crate::ui::with(|window, state| {
+        state.workspace = Some(crate::instances::Workspace {
+            id: "navigation-fixture".into(),
+            ..Default::default()
+        });
+        window
+            .global::<crate::Nav>()
+            .set_page(crate::Page::Instances);
+        window.global::<crate::Nav>().set_workspace_open(true);
+    });
+    click(app.window(), 1050., 60.);
+    assert_eq!(app.global::<crate::Nav>().get_page(), crate::Page::Home);
+    assert!(
+        !crate::ui::state(|state| state.play_busy),
+        "an invalid instance must not launch a child"
+    );
+    crate::ui::release();
+    runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+}

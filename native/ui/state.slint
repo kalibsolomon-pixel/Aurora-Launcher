@@ -615,3 +615,15 @@ export global Settings {
     in property <string> data-root;
     in property <string> renderer;
 }
+
+export global Recovery {
+    in property <string> title: "Instance recovery";
+    in-out property <bool> open: false;
+    in property <bool> busy: false;
+    in property <bool> allowed: false;
+    in property <string> text;
+    in property <int> removed-count: 0;
+    in-out property <bool> keep-removed: false;
+    callback inspect();
+    callback confirm();
+}

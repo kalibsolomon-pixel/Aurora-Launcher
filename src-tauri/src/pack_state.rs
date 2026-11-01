@@ -438,7 +438,7 @@ fn state_path(managed: &ManagedPaths, instance: &InstanceId) -> Result<PathBuf, 
     }
 }
 
-fn safe_file(root: &Path, relative: &str) -> Result<PathBuf, PackStateError> {
+pub(crate) fn safe_file(root: &Path, relative: &str) -> Result<PathBuf, PackStateError> {
     crate::mrpack::destination_path(relative).map_err(|_| PackStateError::UnsafePath)?;
     let mut path = root.to_path_buf();
     for part in relative.split('/') {
