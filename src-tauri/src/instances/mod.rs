@@ -1373,6 +1373,68 @@ mod tests {
     }
 
     #[test]
+    fn custom_java_survives_registry_restart_unrelated_edits_and_reset() {
+        use settings::JavaSelection;
+        let root =
+            std::env::temp_dir().join(format!("aurora-native10-config-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("instances.json");
+        let mut registry =
+            InstanceRegistry::from_json(include_str!("fixtures/registry-v3-production.json"))
+                .unwrap();
+        assert!(registry.instances()[0].configuration().java().is_none());
+        let selected = if cfg!(windows) {
+            r"C:\Java with spaces 日本語\bin\java.exe"
+        } else {
+            "/opt/Java with spaces 日本語/bin/java"
+        };
+        let mut configuration = registry.instances()[0].configuration().clone();
+        configuration.set_java(Some(JavaSelection::Custom {
+            path: selected.into(),
+        }));
+        registry.instances_mut()[0].set_configuration(configuration.clone());
+        registry.save(&path).unwrap();
+        let mut restarted = InstanceRegistry::load(&path).unwrap();
+        assert_eq!(restarted.instances()[0].configuration(), &configuration);
+        configuration.set_memory_mib(5120);
+        restarted.instances_mut()[0].set_configuration(configuration.clone());
+        restarted.save(&path).unwrap();
+        let mut restarted = InstanceRegistry::load(&path).unwrap();
+        assert_eq!(
+            restarted.instances()[0]
+                .configuration()
+                .java()
+                .unwrap()
+                .custom_path(),
+            selected
+        );
+        configuration.set_java(None);
+        restarted.instances_mut()[0].set_configuration(configuration);
+        restarted.save(&path).unwrap();
+        assert!(
+            InstanceRegistry::load(&path).unwrap().instances()[0]
+                .configuration()
+                .java()
+                .is_none()
+        );
+        let valid = std::fs::read_to_string(&path).unwrap();
+        for java in [
+            serde_json::json!({"kind":"custom","path":"relative/java"}),
+            serde_json::json!({"kind":"system"}),
+            serde_json::json!({"kind":"custom","path":selected,"unexpected":true}),
+        ] {
+            let mut invalid: serde_json::Value = serde_json::from_str(&valid).unwrap();
+            invalid["instances"][0]["configuration"]["java"] = java;
+            let bytes = invalid.to_string();
+            std::fs::write(&path, &bytes).unwrap();
+            assert!(InstanceRegistry::load_and_migrate(&path).is_err());
+            assert!(restarted.save(&path).is_err());
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), bytes);
+        }
+        // Keep the unique disposable fixture for inspection.
+    }
+
+    #[test]
     fn independently_loaded_registry_changes_merge_and_same_record_races_fail() {
         let root =
             std::env::temp_dir().join(format!("aurora-f3r-registry-{}", uuid::Uuid::new_v4()));

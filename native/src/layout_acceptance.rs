@@ -246,6 +246,40 @@ fn workspace(app: &AppWindow, tab: i32) {
     instances.set_health_text("All installed files match their verified records.".into());
 }
 
+/// Settings scrolled to the Java group, with a custom selection.
+fn java_settings(app: &AppWindow, valid: bool) {
+    workspace(app, 3);
+    let instances = app.global::<Instances>();
+    instances.set_cfg_java_index(1);
+    if valid {
+        instances.set_cfg_java_path(
+            r"C:\Program Files\Eclipse Adoptium\jdk-21.0.4.7-hotspot\bin\javaw.exe".into(),
+        );
+        instances.set_cfg_java_status(
+            "Java 21 (Eclipse Adoptium 21.0.4, amd64). Matches the Java 21 this game requires."
+                .into(),
+        );
+        instances.set_cfg_java_tone(Tone::Success);
+    } else {
+        instances.set_cfg_java_path(
+            r"C:\Users\Example\Very Long Folder Name For Testing Narrow Layouts\Java Installations\jdk-25.0.4.101-hotspot\bin\java.exe".into(),
+        );
+        instances.set_cfg_java_status(
+            "This Java is version 25; this Minecraft version requires Java 21. Choose a Java 21 installation or use managed Java.".into(),
+        );
+        instances.set_cfg_java_tone(Tone::Error);
+    }
+}
+
+fn scroll_down(app: &AppWindow, pixels: f32) {
+    let size = app.window().size().to_logical(app.window().scale_factor());
+    app.window().dispatch_event(WindowEvent::PointerScrolled {
+        position: LogicalPosition::new(size.width / 2.0, size.height / 2.0),
+        delta_x: 0.0,
+        delta_y: -pixels,
+    });
+}
+
 fn update_review(app: &AppWindow) {
     let instances = app.global::<Instances>();
     instances.set_update_review_title("Update 3 mods".into());
@@ -350,6 +384,14 @@ fn scenes() -> Vec<(&'static str, Scene)> {
             import_review(app, false);
         }),
         ("local-mrpack-review", |app| local_pack(app)),
+        ("settings-java-valid", |app| {
+            java_settings(app, true);
+            scroll_down(app, 330.0);
+        }),
+        ("settings-java-invalid", |app| {
+            java_settings(app, false);
+            scroll_down(app, 330.0);
+        }),
     ]
 }
 
@@ -411,6 +453,38 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     render(&app, &adapter, "input-review-open");
     key(&app, Key::Escape);
     assert_eq!(fired.borrow().last().map(String::as_str), Some("dismiss"));
+
+    // Exercise the Java controls on the real layout, including keyboard
+    // inspection/editing of a long path. The chooser callback is observed;
+    // this headless test does not pretend to operate the Windows dialog.
+    let (app, adapter) = window((1120.0, 760.0), 1.0);
+    java_settings(&app, true);
+    scroll_down(&app, 330.0);
+    render(&app, &adapter, "java-input-baseline");
+    let java_fired: Rc<RefCell<Vec<&str>>> = Rc::default();
+    let instances = app.global::<Instances>();
+    let log = java_fired.clone();
+    instances.on_cfg_java_choose(move || log.borrow_mut().push("choose"));
+    let log = java_fired.clone();
+    instances.on_cfg_java_check(move || log.borrow_mut().push("check"));
+    let log = java_fired.clone();
+    instances.on_cfg_java_changed(move || log.borrow_mut().push("changed"));
+    click(&app, 175.0, 340.0);
+    click(&app, 290.0, 340.0);
+    assert_eq!(*java_fired.borrow(), ["choose", "check"]);
+    click(&app, 350.0, 296.0);
+    key(&app, Key::End);
+    app.window()
+        .dispatch_event(WindowEvent::KeyPressed { text: "x".into() });
+    app.window()
+        .dispatch_event(WindowEvent::KeyReleased { text: "x".into() });
+    assert!(instances.get_cfg_java_path().ends_with('x'));
+    click(&app, 430.0, 340.0);
+    assert_eq!(
+        instances.get_cfg_java_index(),
+        0,
+        "reset works with one click"
+    );
 }
 
 /// Logical click targets measured from the 1120×760 `input-baseline` render.

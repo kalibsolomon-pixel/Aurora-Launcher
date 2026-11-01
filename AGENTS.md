@@ -97,7 +97,10 @@ npm run tauri build
 - Mojang runtime manifests and files use their published expected SHA-1 and the existing SHA-1-addressed verified store. Never call HTTPS alone verification and never install directly from network staging.
 - A runtime becomes complete only when `runtime-installed.json` is written last inside staging and the whole staged tree is promoted. Replace only an exact path whose valid state proves launcher ownership; malformed or unknown-schema state is never overwritten.
 - Runtime validation is read-only and network-free once a plan is resolved: verify the complete state against the plan, every recorded file/size/SHA-1, directories, links, executable semantics, and the bounded structured `java -version` diagnostic when requested. Never select or launch with a damaged or unvalidated runtime.
-- Only one install of the same runtime identity may mutate it within a process. Cross-process coordination, runtime garbage collection, system-Java discovery, custom Java paths, JVM tuning, and generalized repair remain out of scope.
+- Only one install of the same runtime identity may mutate it within a process. Cross-process coordination, runtime garbage collection, system-Java discovery, JVM tuning, and generalized repair remain out of scope.
+- Managed Java remains the default. The owner's NATIVE-10 decision permits an explicitly selected, per-instance external Java executable (`configuration.java`, absent means managed). Rust must check path/file/executable access, native architecture and exact resolved game-plan major using bounded supervised diagnostics, with structured arguments, cleared environment and sanitized bounded output. Selection authorizes running that local executable; validation establishes eligibility, not that arbitrary local code is harmless.
+- Custom Java never silently falls back to managed Java. Readiness and launch use the saved selection; launch executes a fresh diagnostic and rechecks executable byte identity at final assembly/spawn. On Windows retain write/delete exclusion through spawn. Do not modify, install into, repair or remove the external Java installation; managed installer tooling remains separate.
+- Persist custom selection through existing atomic configuration writes. Validate malformed/unknown shapes deliberately. Registry schema 6 remains: old WebView readers reject the unknown `java` field and refuse rewriting it, so custom selections block downgrade until reset to managed with a supporting launcher. Native mirror DTOs preserve unknown fields; the authoritative core continues to reject unknown persisted fields.
 
 ## Authentication
 
@@ -111,11 +114,11 @@ npm run tauri build
 
 ## Launch assembly and supervision
 
-- Launch only a deeply validated `ready` instance, with a matching validated managed Java executable and a usable authenticated/entitled Rust-owned Minecraft session. Stored flags or frontend state never authorize launch by themselves.
+- Launch only a deeply validated `ready` instance, with a matching validated managed Java executable or explicitly selected validated custom Java, and a usable authenticated/entitled Rust-owned Minecraft session. Stored flags or frontend state never authorize launch by themselves.
 - Build classpaths only from the exact normalized composed plan plus installed-manifest roles, in deterministic order, with the Minecraft client last. Never scan library directories, never include user mods in the classpath, and never re-resolve Maven coordinates in the process layer.
 - Unknown or unresolved launch placeholders are hard failures. Substitute into individual argument strings and spawn with structured executable/argument APIs; never construct, log, or execute a shell command string.
 - `LaunchSpec` and the Minecraft access token remain Rust-only and non-serializable. Never return argument arrays or tokens to the frontend, persistence, events, diagnostics, or logs. The unavoidable child argument is sensitive and all Debug/output paths must redact it.
-- Derive the game directory, assets, natives, logging configuration, classpath, and Java executable only from validated managed state. Never use `.minecraft`, frontend-provided paths, system Java, `PATH`, or `JAVA_HOME`.
+- Derive the game directory, assets, natives, logging configuration and classpath only from validated managed state. Java comes from validated managed state or the saved, explicitly selected per-instance external executable admitted by `runtime::external`. Never use `.minecraft`, arbitrary frontend paths, system-Java discovery, `PATH`, or `JAVA_HOME` to select a runtime.
 - The instance root is user/game state during execution. User mods, config, saves, resource packs, screenshots, logs, and future instance-root content remain user-owned; never enumerate them for readiness and never delete, repair, or roll them back because launch failed.
 - Supervise only the exact child handle returned by spawn. Never find or terminate Java by process name. Same-instance `Starting`/`Running` launches are excluded process-locally; do not imply cross-process exclusion exists.
 

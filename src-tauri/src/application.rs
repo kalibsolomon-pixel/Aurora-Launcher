@@ -203,6 +203,9 @@ pub struct InstanceConfigurationDto {
     pub memory_mib: u32,
     pub additional_jvm_arguments: String,
     pub window: Option<InstanceWindowDto>,
+    /// Absent: Aurora's managed Java. `{ "kind": "custom", "path": … }`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub java: Option<crate::instances::settings::JavaSelection>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -227,6 +230,7 @@ impl InstanceConfigurationDto {
                 width: window.width(),
                 height: window.height(),
             }),
+            java: configuration.java().cloned(),
         }
     }
 
@@ -244,6 +248,7 @@ impl InstanceConfigurationDto {
         );
         configuration.set_aurora_enabled(self.aurora_enabled);
         configuration.set_performance_mode(self.performance_mode);
+        configuration.set_java(self.java);
         Ok(configuration)
     }
 }
@@ -3762,6 +3767,40 @@ async fn install_resolved_provider_plans(
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CustomJavaRequest {
+    instance_id: String,
+    path: String,
+}
+
+/// Executes and checks a candidate custom Java for one instance's game
+/// without saving anything. The required major comes from the instance's
+/// resolved runtime requirement, never from the frontend.
+pub async fn check_custom_java(
+    app: Host,
+    request: CustomJavaRequest,
+) -> Result<crate::runtime::external::ExternalJavaReport, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+    let plan = crate::instances::lifecycle::resolve_instance_game_plan(
+        &managed,
+        &managed.instance_registry_file(),
+        &endpoints,
+        &instance,
+    )
+    .await?;
+    let required = plan.java().major_version();
+    let result = crate::runtime::external::validate(&request.path, required).await;
+    Ok(crate::runtime::external::ExternalJavaReport::from_result(
+        &request.path,
+        required,
+        &result,
+    ))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LocalModpackRequest {
     source_path: String,
 }
@@ -4893,6 +4932,48 @@ pub async fn get_instance_runtime_status(
         let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
             .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
         let runtime_endpoints = crate::runtime::metadata::RuntimeMetadataEndpoints::official();
+        let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+        if let Some(java) = registry
+            .find(&instance)
+            .and_then(|record| record.configuration().java())
+        {
+            let game = crate::instances::lifecycle::resolve_instance_game_plan(
+                &managed,
+                &managed.instance_registry_file(),
+                &endpoints,
+                &instance,
+            )
+            .await?;
+            let required = game.java().major_version();
+            let result =
+                crate::runtime::external::validate_for_readiness(java.custom_path(), required)
+                    .await;
+            let facts = result.as_ref().ok().map(|java| java.facts());
+            return Ok(RuntimeStatusDto {
+                instance_id: instance.to_string(),
+                content_status: "ready",
+                status: if result.is_ok() { "ready" } else { "damaged" }.into(),
+                component: "Custom Java".into(),
+                required_major_version: required,
+                runtime_version: facts.map(|f| f.version.clone()),
+                runtime_root: std::path::Path::new(java.custom_path())
+                    .parent()
+                    .unwrap_or(std::path::Path::new(""))
+                    .to_string_lossy()
+                    .into_owned(),
+                launch_executable: result
+                    .as_ref()
+                    .ok()
+                    .map(|v| v.path().to_string_lossy().into_owned()),
+                checked_files: 1,
+                verified_bytes: 0,
+                reported_major_version: facts.map(|f| f.major_version),
+                diagnostic_summary: facts
+                    .map(|f| format!("Java {} · {} · {}", f.version, f.vendor, f.architecture)),
+                problems: result.err().map(|e| vec![e.message]).unwrap_or_default(),
+                reused: None,
+            });
+        }
         let validation = crate::instances::lifecycle::validate_instance_runtime(
             &managed,
             &managed.instance_registry_file(),
@@ -5880,14 +5961,35 @@ async fn calculate_play_readiness(
             );
         }
     }
+    // A custom Java selection replaces the managed runtime for launch only;
+    // it is never silently swapped back while selected.
+    let custom_java = registry
+        .find(instance_id)
+        .and_then(|record| record.configuration().java().cloned());
+    let mut custom_problem = None;
     let runtime = if let Some(plan) = runtime_plan {
-        match crate::runtime::install::validate_runtime_eligibility(managed, &plan)
-            .await?
-            .status
-        {
-            RuntimeValidationStatus::Ready => LaunchRuntimeStatus::Ready,
-            RuntimeValidationStatus::Missing => LaunchRuntimeStatus::Missing,
-            RuntimeValidationStatus::Damaged => LaunchRuntimeStatus::Damaged,
+        if let Some(java) = &custom_java {
+            match crate::runtime::external::validate_for_readiness(
+                java.custom_path(),
+                plan.required_major_version(),
+            )
+            .await
+            {
+                Ok(_) => LaunchRuntimeStatus::Ready,
+                Err(error) => {
+                    custom_problem = Some(error.message);
+                    LaunchRuntimeStatus::CustomInvalid
+                }
+            }
+        } else {
+            match crate::runtime::install::validate_runtime_eligibility(managed, &plan)
+                .await?
+                .status
+            {
+                RuntimeValidationStatus::Ready => LaunchRuntimeStatus::Ready,
+                RuntimeValidationStatus::Missing => LaunchRuntimeStatus::Missing,
+                RuntimeValidationStatus::Damaged => LaunchRuntimeStatus::Damaged,
+            }
         }
     } else {
         LaunchRuntimeStatus::Unresolved
@@ -5895,6 +5997,15 @@ async fn calculate_play_readiness(
 
     let (account, account_name) = launch_account_status(managed, account_id)?;
     let mut readiness = PlayReadiness::evaluate(instance, runtime, account, process.status);
+    if let Some(problem) = custom_problem {
+        for blocker in readiness
+            .blockers
+            .iter_mut()
+            .filter(|b| b.code == "launch_custom_java_invalid")
+        {
+            blocker.message = format!("{} {problem}", blocker.message);
+        }
+    }
     for problem in mod_issues {
         readiness
             .blockers
@@ -6059,23 +6170,49 @@ async fn play_instance_with_target(
         );
         let features = launch_options.feature_profile();
 
-        let runtime =
-            crate::runtime::install::validate_runtime_eligibility(&managed, &runtime_plan).await?;
-        if runtime.status != RuntimeValidationStatus::Ready {
-            return Err(CommandError::new(
-                "launch_runtime_not_ready",
-                format!(
-                    "The exact managed Java runtime is {}.",
-                    runtime.status.as_str()
-                ),
-            ));
-        }
-        let java_executable = runtime.launch_executable.ok_or_else(|| {
-            CommandError::new(
-                "launch_runtime_not_ready",
-                "The validated runtime has no launch executable.",
-            )
-        })?;
+        // Custom Java is executed and validated afresh for every launch;
+        // otherwise the exact managed runtime must validate as before.
+        let custom_java = match configuration.java() {
+            Some(java) => Some(
+                crate::runtime::external::validate(
+                    java.custom_path(),
+                    runtime_plan.required_major_version(),
+                )
+                .await
+                .map_err(|error| {
+                    CommandError::new(
+                        "launch_custom_java_invalid",
+                        format!(
+                            "The custom Java for this instance is not usable: {}",
+                            error.message
+                        ),
+                    )
+                })?,
+            ),
+            None => None,
+        };
+        let managed_java = if custom_java.is_some() {
+            None
+        } else {
+            let runtime =
+                crate::runtime::install::validate_runtime_eligibility(&managed, &runtime_plan)
+                    .await?;
+            if runtime.status != RuntimeValidationStatus::Ready {
+                return Err(CommandError::new(
+                    "launch_runtime_not_ready",
+                    format!(
+                        "The exact managed Java runtime is {}.",
+                        runtime.status.as_str()
+                    ),
+                ));
+            }
+            Some(runtime.launch_executable.ok_or_else(|| {
+                CommandError::new(
+                    "launch_runtime_not_ready",
+                    "The validated runtime has no launch executable.",
+                )
+            })?)
+        };
 
         emit_launch_phase(&app, "restoringSession");
         let session = crate::performance::measure(crate::performance::Event::Session, async {
@@ -6128,6 +6265,12 @@ async fn play_instance_with_target(
             crate::minecraft::rules::PlatformProfile::current()?,
         );
         prepared.with_validated(&managed, |installed| {
+            // Retain Windows write/delete exclusion through the normal spawn.
+            let _custom_java_guard = custom_java
+                .as_ref()
+                .map(|java| java.lock_for_launch())
+                .transpose()
+                .map_err(|error| CommandError::new("launch_custom_java_invalid", error.message))?;
             let validated_loader_family = record.installed().platform.kind();
             if matches!(validated_loader_family, "fabric" | "neoForge")
                 && managed.instance_paths(&instance).mods().is_dir()
@@ -6149,12 +6292,22 @@ async fn play_instance_with_target(
                     ));
                 }
             }
-            let spec = crate::launch::resolve::resolve_launch_spec(
+            let java = match (&custom_java, &managed_java) {
+                (Some(external), _) => crate::launch::resolve::LaunchJava::External(external),
+                (None, Some(path)) => crate::launch::resolve::LaunchJava::Managed(path),
+                (None, None) => {
+                    return Err(CommandError::new(
+                        "launch_runtime_not_ready",
+                        "No validated Java is available for this launch.",
+                    ));
+                }
+            };
+            let spec = crate::launch::resolve::resolve_launch_spec_with_java(
                 &managed,
                 &instance,
                 &launch_plan,
                 installed,
-                &java_executable,
+                java,
                 &session,
                 &features,
                 &launch_options,

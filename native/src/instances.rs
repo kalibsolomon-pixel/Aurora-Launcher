@@ -196,6 +196,16 @@ pub fn bind(window: &AppWindow) {
     instances.on_create_confirm(create);
     instances.on_cfg_platform_changed(cfg_platform_changed);
     instances.on_install_configuration(|| install_or_repair(true));
+    instances.on_cfg_java_changed(|| {
+        ui::with(|window, _| {
+            let instances = window.global::<Instances>();
+            instances.set_cfg_java_status("".into());
+            instances.set_cfg_java_tone(Tone::Neutral);
+        });
+        render_dirty();
+    });
+    instances.on_cfg_java_check(check_custom_java);
+    instances.on_cfg_java_choose(choose_custom_java);
 }
 
 fn report_error(result: api::ApiResult<()>) {
@@ -327,6 +337,11 @@ fn render_workspace_header() {
 
 fn write_draft(window: &AppWindow, configuration: &InstanceConfiguration) {
     let instances = window.global::<Instances>();
+    let custom = configuration.custom_java();
+    instances.set_cfg_java_index(i32::from(custom.is_some()));
+    instances.set_cfg_java_path(custom.unwrap_or_default().into());
+    instances.set_cfg_java_status("".into());
+    instances.set_cfg_java_tone(Tone::Neutral);
     instances.set_memory_gib(configuration.memory_mib as f32 / 1024.0);
     instances.set_jvm_args(configuration.additional_jvm_arguments.clone().into());
     instances.set_custom_window(configuration.window.is_some());
@@ -350,6 +365,7 @@ fn read_draft(
     let (version, loader) = draft_platform(window, workspace, base);
     draft.minecraft_version = version;
     draft.loader = loader;
+    draft.java = draft_java(window, base)?;
     draft.memory_mib = ((instances.get_memory_gib() * 2.0).round() / 2.0 * 1024.0) as u32;
     draft.additional_jvm_arguments = instances.get_jvm_args().to_string();
     draft.window = if instances.get_custom_window() {
@@ -370,6 +386,130 @@ fn read_draft(
         None
     };
     Ok(draft)
+}
+
+/// The edited Java selection; the exact persisted JSON when unchanged.
+fn draft_java(
+    window: &AppWindow,
+    base: &InstanceConfiguration,
+) -> Result<Option<serde_json::Value>, String> {
+    let instances = window.global::<Instances>();
+    if instances.get_cfg_java_index() != 1 {
+        return Ok(None);
+    }
+    let path = instances.get_cfg_java_path().trim().to_owned();
+    if path.is_empty() {
+        return Err("Choose a Java executable, or switch back to managed Java.".into());
+    }
+    if base.custom_java() == Some(path.as_str()) {
+        return Ok(base.java.clone());
+    }
+    Ok(Some(serde_json::json!({ "kind": "custom", "path": path })))
+}
+
+/// One line describing an executed custom Java check.
+pub fn java_report_text(report: &api::JavaReport) -> (String, Tone) {
+    match (&report.facts, &report.problem) {
+        (Some(facts), _) if report.valid => (
+            format!(
+                "Java {} ({}{}{}, {}). Matches the Java {} this game requires.",
+                facts.major_version,
+                facts.vendor,
+                if facts.vendor.is_empty() { "" } else { " " },
+                facts.version,
+                facts.architecture,
+                report.required_major_version
+            ),
+            Tone::Success,
+        ),
+        (_, Some(problem)) => (problem.clone(), Tone::Error),
+        _ => ("The Java check did not finish.".into(), Tone::Error),
+    }
+}
+
+fn check_custom_java() {
+    let Some((id, path, base)) = ui::with(|window, state| {
+        let workspace = state.workspace.as_ref()?;
+        let base = workspace.base.as_ref()?;
+        let instances = window.global::<Instances>();
+        let path = instances.get_cfg_java_path().trim().to_owned();
+        if path.is_empty() || instances.get_cfg_java_busy() {
+            return None;
+        }
+        let (version, loader) = draft_platform(window, workspace, base);
+        if version != base.minecraft_version || loader != base.loader {
+            instances
+                .set_cfg_java_status("Save and install game changes before checking Java.".into());
+            instances.set_cfg_java_tone(Tone::Warning);
+            return None;
+        }
+        instances.set_cfg_java_busy(true);
+        instances.set_cfg_java_status("Running the selected Java…".into());
+        instances.set_cfg_java_tone(Tone::Working);
+        Some((workspace.id.clone(), path, base.clone()))
+    })
+    .flatten() else {
+        return;
+    };
+    let checked = path.clone();
+    let checked_id = id.clone();
+    ui::spawn(
+        api::check_custom_java(ui::host(), id, path),
+        move |result| {
+            ui::with(|window, state| {
+                let instances = window.global::<Instances>();
+                instances.set_cfg_java_busy(false);
+                let draft_matches = state.workspace.as_ref().is_some_and(|workspace| {
+                    let (version, loader) = draft_platform(window, workspace, &base);
+                    version == base.minecraft_version && loader == base.loader
+                });
+                // A path edited during the check gets no stale verdict.
+                if state.workspace.as_ref().map(|w| w.id.as_str()) != Some(checked_id.as_str())
+                    || state.workspace.as_ref().and_then(|w| w.base.as_ref()) != Some(&base)
+                    || !draft_matches
+                    || instances.get_cfg_java_index() != 1
+                    || instances.get_cfg_java_path().trim() != checked
+                {
+                    instances.set_cfg_java_status("".into());
+                    instances.set_cfg_java_tone(Tone::Neutral);
+                    return;
+                }
+                let (text, tone) = match result {
+                    Ok(report) => java_report_text(&report),
+                    Err(error) => (error.message, Tone::Error),
+                };
+                instances.set_cfg_java_status(text.into());
+                instances.set_cfg_java_tone(tone);
+            });
+        },
+    );
+}
+
+fn choose_custom_java() {
+    let owner = crate::chrome::dialog_owner();
+    let target = ui::state(|state| state.workspace.as_ref().map(|w| w.id.clone()));
+    ui::spawn(
+        crate::skin_import::choose_java_path(owner),
+        move |result| match result {
+            Ok(Some(path)) => {
+                ui::with(|window, state| {
+                    if state.workspace.as_ref().map(|w| &w.id) != target.as_ref() {
+                        return;
+                    }
+                    let instances = window.global::<Instances>();
+                    instances.set_cfg_java_index(1);
+                    instances.set_cfg_java_path(path.into());
+                    instances.set_cfg_java_status(
+                        "Not checked yet. Check runs the selected executable.".into(),
+                    );
+                    instances.set_cfg_java_tone(Tone::Neutral);
+                });
+                render_dirty();
+            }
+            Ok(None) => {}
+            Err(error) => ui::error_toast(&error),
+        },
+    );
 }
 
 fn render_dirty() {
@@ -523,6 +663,8 @@ fn validate() {
                         status.component,
                         status.required_major_version,
                         match status.status.as_str() {
+                            "ready" if status.component == "Custom Java" =>
+                                "checked and compatible".to_owned(),
                             "ready" => "installed and verified".to_owned(),
                             "missing" =>
                                 "not installed yet; installed automatically when needed".to_owned(),
@@ -1630,6 +1772,38 @@ fn draft_platform(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_java_reports_read_as_one_clear_line() {
+        let valid = api::JavaReport {
+            path: "C:/jdk/bin/javaw.exe".into(),
+            required_major_version: 21,
+            valid: true,
+            facts: Some(api::JavaFacts {
+                major_version: 21,
+                version: "21.0.4".into(),
+                vendor: "Eclipse Adoptium".into(),
+                architecture: "amd64".into(),
+            }),
+            problem: None,
+        };
+        let (text, tone) = java_report_text(&valid);
+        assert_eq!(
+            text,
+            "Java 21 (Eclipse Adoptium 21.0.4, amd64). Matches the Java 21 this game requires."
+        );
+        assert_eq!(tone, Tone::Success);
+        let invalid = api::JavaReport {
+            valid: false,
+            facts: None,
+            problem: Some("This Java is version 25.".into()),
+            ..valid
+        };
+        assert_eq!(
+            java_report_text(&invalid),
+            ("This Java is version 25.".to_owned(), Tone::Error)
+        );
+    }
 
     #[test]
     fn loader_shapes_match_the_persisted_schema() {

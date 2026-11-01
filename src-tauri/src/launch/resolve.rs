@@ -258,6 +258,7 @@ impl fmt::Debug for LaunchSpec {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchPlan {
+    required_java_major: u32,
     minecraft_version: String,
     platform_contribution: crate::instances::platform::PlatformPin,
     version_type: String,
@@ -280,6 +281,7 @@ impl LaunchPlan {
     pub fn from_game_plan(plan: &GameInstallPlan, platform: PlatformProfile) -> Self {
         let minecraft = plan.minecraft();
         Self {
+            required_java_major: plan.java().major_version(),
             minecraft_version: minecraft.minecraft_version().to_owned(),
             platform_contribution: plan.platform(),
             version_type: minecraft.version_type().as_mojang_str().to_owned(),
@@ -324,6 +326,39 @@ pub fn resolve_launch_spec(
     features: &FeatureProfile,
     options: &LaunchOptions,
 ) -> Result<LaunchSpec, LaunchResolveError> {
+    resolve_launch_spec_with_java(
+        managed,
+        instance_id,
+        plan,
+        installed,
+        LaunchJava::Managed(java_executable),
+        session,
+        features,
+        options,
+    )
+}
+
+/// The Java a launch uses: the exact validated managed runtime executable,
+/// or a user-selected external executable that `runtime::external::validate`
+/// executed and accepted for this game's required major.
+#[derive(Debug, Clone, Copy)]
+pub enum LaunchJava<'a> {
+    Managed(&'a Path),
+    External(&'a crate::runtime::external::ValidatedExternalJava),
+}
+
+/// [`resolve_launch_spec`] with an explicit Java source.
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_launch_spec_with_java(
+    managed: &ManagedPaths,
+    instance_id: &InstanceId,
+    plan: &LaunchPlan,
+    installed: &InstalledGameManifest,
+    java: LaunchJava<'_>,
+    session: &MinecraftSession,
+    features: &FeatureProfile,
+    options: &LaunchOptions,
+) -> Result<LaunchSpec, LaunchResolveError> {
     // LaunchOptions can also be constructed by native callers. Reuse the
     // saved-configuration bounds before substituting any metadata argument.
     let window = options
@@ -364,21 +399,49 @@ pub fn resolve_launch_spec(
     prove_real_directory(&instance_root, "instance game directory")?;
     prove_real_directory(&game_root, "managed game installation")?;
 
-    if !java_executable.is_absolute()
-        || !java_executable.starts_with(managed.runtimes_dir())
-        || !java_executable.is_file()
-    {
-        return Err(LaunchResolveError::Runtime(
-            "the validated managed Java executable is missing or outside managed runtimes"
-                .to_owned(),
-        ));
-    }
-    prove_canonical_containment_as(
-        &managed.runtimes_dir(),
-        java_executable,
-        "managed Java executable",
-        LaunchResolveError::Runtime,
-    )?;
+    let java_executable: &Path = match java {
+        LaunchJava::Managed(java_executable) => {
+            if !java_executable.is_absolute()
+                || !java_executable.starts_with(managed.runtimes_dir())
+                || !java_executable.is_file()
+            {
+                return Err(LaunchResolveError::Runtime(
+                    "the validated managed Java executable is missing or outside managed runtimes"
+                        .to_owned(),
+                ));
+            }
+            prove_canonical_containment_as(
+                &managed.runtimes_dir(),
+                java_executable,
+                "managed Java executable",
+                LaunchResolveError::Runtime,
+            )?;
+            java_executable
+        }
+        LaunchJava::External(validated) => {
+            if validated.facts().major_version != plan.required_java_major {
+                return Err(LaunchResolveError::Runtime(
+                    "the custom Java does not match this game's Java requirement".into(),
+                ));
+            }
+            let _identity = validated
+                .lock_for_launch()
+                .map_err(|error| LaunchResolveError::Runtime(error.message))?;
+            // Executed and accepted moments ago; re-prove the file is still
+            // the same plain, unredirected native executable.
+            let path = validated.path().to_str().ok_or_else(|| {
+                LaunchResolveError::Runtime("the custom Java path is not representable".to_owned())
+            })?;
+            let rechecked = crate::runtime::external::check_file(path)
+                .map_err(|error| LaunchResolveError::Runtime(error.message))?;
+            if rechecked != validated.path() {
+                return Err(LaunchResolveError::Runtime(
+                    "the custom Java executable changed before launch".to_owned(),
+                ));
+            }
+            validated.path()
+        }
+    };
 
     let libraries_root = game_root.join("libraries");
     prove_real_directory(&libraries_root, "managed library directory")?;
@@ -898,6 +961,7 @@ mod tests {
 
     fn plan() -> LaunchPlan {
         LaunchPlan {
+            required_java_major: 25,
             minecraft_version: "26.2".to_owned(),
             platform_contribution: crate::instances::platform::PlatformPin::Fabric {
                 version: "0.19.5".into(),
@@ -1095,6 +1159,81 @@ mod tests {
                 .command_arguments()
                 .iter()
                 .any(|a| a.expose().contains("${"))
+        );
+    }
+
+    #[tokio::test]
+    async fn custom_java_spec_and_normal_supervisor_use_the_selected_executable() {
+        use crate::launch::process::{snapshot, spawn_supervised};
+        use crate::runtime::external;
+        let fixture = Fixture::new();
+        let executable = external::tests::fixture("valid");
+        let validated = external::validate(executable.to_str().unwrap(), 21)
+            .await
+            .unwrap();
+        let mut game = plan();
+        game.required_java_major = 21;
+        let resolve = |game: &LaunchPlan| {
+            resolve_launch_spec_with_java(
+                &fixture.managed,
+                &fixture.id,
+                game,
+                &fixture.manifest,
+                LaunchJava::External(&validated),
+                &session(),
+                &FeatureProfile::none(),
+                &LaunchOptions::default(),
+            )
+        };
+        assert!(
+            resolve(&plan()).is_err(),
+            "validation for another Java requirement cannot authorize this game"
+        );
+        let spec = resolve(&game).unwrap();
+        assert_eq!(spec.java_executable(), executable);
+        assert_eq!(
+            spec.working_directory(),
+            fixture.managed.instance_paths(&fixture.id).root()
+        );
+        let expected: Vec<_> = spec
+            .command_arguments()
+            .iter()
+            .map(|a| a.expose().to_owned())
+            .collect();
+        let _guard = validated.lock_for_launch().unwrap();
+        let started = spawn_supervised(
+            spec,
+            &fixture.managed.instance_paths(&fixture.id).logs(),
+            std::sync::Arc::new(|_| {}),
+        )
+        .unwrap();
+        assert!(started.process_id.is_some());
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while snapshot(fixture.id.as_str()).status.blocks_launch() {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(snapshot(fixture.id.as_str()).exit_code, Some(0));
+        assert_eq!(
+            std::fs::read_to_string(executable.with_file_name("launch-args.txt")).unwrap(),
+            expected.join("\n")
+        );
+        assert_eq!(
+            std::fs::read_to_string(executable.with_file_name("launch-cwd.txt")).unwrap(),
+            fixture
+                .managed
+                .instance_paths(&fixture.id)
+                .root()
+                .to_str()
+                .unwrap()
+        );
+        drop(_guard);
+        std::fs::remove_file(&executable).unwrap();
+        assert!(
+            resolve(&game).is_err(),
+            "no managed fallback when selected executable disappears"
         );
     }
 

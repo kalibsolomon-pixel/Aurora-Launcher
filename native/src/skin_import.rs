@@ -50,6 +50,14 @@ enum Picker {
     Skin,
     Content,
     Modpack,
+    Java,
+}
+
+/// A Java launcher executable for an instance's custom Java selection.
+pub async fn choose_java_path(owner: Option<isize>) -> ApiResult<Option<String>> {
+    tokio::task::spawn_blocking(move || choose_path_blocking(Picker::Java, owner))
+        .await
+        .map_err(|_| ApiError::new("local_import_failed", "The file chooser did not complete."))?
 }
 
 /// Local Modrinth modpack archive (`.mrpack`), through the same owned picker.
@@ -136,6 +144,7 @@ fn choose_path_blocking(kind: Picker, owner: Option<isize>) -> ApiResult<Option<
                 Picker::Skin => w!("Import Minecraft skin (PNG)"),
                 Picker::Content => w!("Import local mod, resource pack or shader"),
                 Picker::Modpack => w!("Import Modrinth modpack (.mrpack)"),
+                Picker::Java => w!("Choose Java for this instance (java.exe or javaw.exe)"),
             })
             .map_err(|_| failed())?;
         dialog
@@ -144,11 +153,13 @@ fn choose_path_blocking(kind: Picker, owner: Option<isize>) -> ApiResult<Option<
                     Picker::Skin => w!("PNG skin"),
                     Picker::Content => w!("Content archive"),
                     Picker::Modpack => w!("Modrinth modpack"),
+                    Picker::Java => w!("Java launcher"),
                 },
                 pszSpec: match kind {
                     Picker::Skin => w!("*.png"),
                     Picker::Content => w!("*.jar;*.zip"),
                     Picker::Modpack => w!("*.mrpack"),
+                    Picker::Java => w!("java.exe;javaw.exe"),
                 },
             }])
             .map_err(|_| failed())?;

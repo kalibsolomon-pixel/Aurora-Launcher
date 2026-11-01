@@ -233,6 +233,16 @@ export global Instances {
     callback cfg-platform-changed();
     callback install-configuration();
 
+    // Java: 0 = managed by Aurora, 1 = custom executable (draft until saved).
+    in-out property <int> cfg-java-index: 0;
+    in-out property <string> cfg-java-path;
+    in property <string> cfg-java-status;
+    in property <Tone> cfg-java-tone: Tone.neutral;
+    in property <bool> cfg-java-busy: false;
+    callback cfg-java-changed();
+    callback cfg-java-choose();
+    callback cfg-java-check();
+
     // Managed modpack instance updates.
     in property <string> pack-name;
     in property <string> pack-update-text;

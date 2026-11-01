@@ -195,6 +195,50 @@ component ConfigurationTab inherits VerticalLayout {
         }
     }
     Group {
+        title: "Java";
+        description: "Aurora's managed Java is recommended. A custom Java is checked by running it, and is checked again before every launch.";
+        SettingRow {
+            label: "Runtime";
+            detail: Instances.cfg-java-index == 0 ? "Managed by Aurora: the exact version this game requires, verified and installed automatically." : "Your own Java installation, used to launch this instance only.";
+            Dropdown {
+                width: 260px;
+                label: "Java runtime";
+                model: ["Managed by Aurora (recommended)", "Custom Java executable"];
+                current-index <=> Instances.cfg-java-index;
+                enabled: !Instances.config-busy;
+                selected => { Instances.cfg-java-changed(); }
+            }
+        }
+        if Instances.cfg-java-index == 1: VerticalLayout {
+            spacing: 8px;
+            Text { text: "Java executable"; color: Theme.text; font-size: Theme.text-body; }
+            Text { text: "Choose java.exe or javaw.exe from an installation you trust. Check runs that executable for the saved game version."; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
+                TextField {
+                    horizontal-stretch: 1;
+                    height: Theme.control-height;
+                    max-length: 4096;
+                    label: "Custom Java executable path";
+                    placeholder: "C:\\Program Files\\Java\\…\\bin\\javaw.exe";
+                    text <=> Instances.cfg-java-path;
+                    enabled: !Instances.config-busy;
+                    edited => { Instances.cfg-java-changed(); }
+                }
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                Button { text: "Choose…"; icon: Icons.folder; enabled: !Instances.config-busy && !Instances.cfg-java-busy; clicked => { Instances.cfg-java-choose(); } }
+                Button { text: "Check"; icon: Icons.refresh; loading: Instances.cfg-java-busy; enabled: Instances.cfg-java-path != "" && !Instances.config-busy; clicked => { Instances.cfg-java-check(); } }
+                Button { text: "Use managed Java"; kind: ButtonKind.ghost; enabled: !Instances.config-busy; clicked => { Instances.cfg-java-index = 0; Instances.cfg-java-changed(); } }
+            }
+            Text {
+                text: Instances.cfg-java-status != "" ? Instances.cfg-java-status : "Not checked yet. Save applies the selection; Play checks it again.";
+                color: Instances.cfg-java-tone == Tone.error ? Theme.error : Instances.cfg-java-tone == Tone.success ? Theme.success : Theme.text-muted;
+                font-size: Theme.text-metadata;
+                wrap: word-wrap;
+            }
+        }
+    }
+    Group {
         title: "Memory";
         description: Instances.memory-hint;
         SettingRow {

@@ -52,6 +52,7 @@ fn blocker_label(code: &str) -> &'static str {
     match code {
         "launch_authentication_required" => "Sign in",
         "launch_runtime_not_ready" => "Install Java",
+        "launch_custom_java_invalid" => "Java settings",
         "launch_instance_not_ready"
         | "launch_instance_damaged"
         | "launch_configuration_changed" => "Open instance",

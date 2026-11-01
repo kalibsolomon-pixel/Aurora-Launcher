@@ -163,8 +163,21 @@ pub struct InstanceConfiguration {
     pub memory_mib: u32,
     pub additional_jvm_arguments: String,
     pub window: Option<WindowSize>,
+    /// Absent: managed Java. `{ "kind": "custom", "path": … }` otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub java: Option<Value>,
     #[serde(flatten)]
     pub other: serde_json::Map<String, Value>,
+}
+
+impl InstanceConfiguration {
+    /// The selected custom Java path, if any.
+    pub fn custom_java(&self) -> Option<&str> {
+        self.java
+            .as_ref()
+            .filter(|java| java["kind"] == "custom")
+            .and_then(|java| java["path"].as_str())
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq)]
@@ -1197,6 +1210,40 @@ pub async fn apply_modpack_update(
     convert(app::apply_modpack_update(host, request).await)
 }
 
+// ------------------------------------------------- custom Java
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct JavaFacts {
+    pub major_version: u32,
+    pub version: String,
+    pub vendor: String,
+    pub architecture: String,
+}
+
+/// The executed check of one candidate custom Java (`runtime::external`).
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct JavaReport {
+    pub path: String,
+    pub required_major_version: u32,
+    pub valid: bool,
+    #[serde(default)]
+    pub facts: Option<JavaFacts>,
+    #[serde(default)]
+    pub problem: Option<String>,
+}
+
+/// Executes and checks a candidate without saving anything.
+pub async fn check_custom_java(
+    host: Host,
+    instance: String,
+    path: String,
+) -> ApiResult<JavaReport> {
+    let request = request(json!({ "instanceId": instance, "path": path }))?;
+    convert(app::check_custom_java(host, request).await)
+}
+
 // ------------------------------------------------- local .mrpack
 
 /// Identifies a selected local archive as an exact published pack version.
@@ -1393,6 +1440,7 @@ mod tests {
     fn configuration_round_trips_unknown_fields() {
         let original = json!({
             "performanceMode": "balanced",
+            "java": { "kind": "custom", "path": "C:\\Java with spaces 日本語\\bin\\java.exe" },
             "minecraftVersion": "1.21.10",
             "auroraEnabled": true,
             "loader": { "kind": "fabric", "policy": { "type": "automatic" } },

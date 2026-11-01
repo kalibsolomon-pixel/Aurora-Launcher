@@ -2,6 +2,70 @@
 
 # Aurora Launcher architecture
 
+## NATIVE-10 — explicit per-instance custom Java (current)
+
+The owner approved this new capability during NATIVE-10. Managed Java remains
+the default; optional `InstanceConfiguration.java` is either absent/null or
+`{"kind":"custom","path":"<absolute Java executable>"}`. Only the selection
+is persisted, using the existing original-value comparison and atomic registry
+writes. Memory, JVM text, performance mode, window settings and installed pins
+remain independent. Returning to managed removes the field. Unknown core
+configuration fields remain errors; the native mirror preserves extra fields.
+
+`runtime::external` admits a regular, unredirected Java executable, checks
+Windows PE architecture (Unix executable permissions elsewhere), then uses the
+existing process-tree supervisor for a structured properties/version diagnostic.
+The environment is cleared except required platform variables; crash files go
+to the null device, core dumps are disabled, and Windows has no console window.
+The process has a 15-second deadline, one-second drain grace and 64 KiB retained
+per stream; truncated, malformed, ambiguous and nonzero results are failures.
+The reported major must equal the normalized composed game's requirement,
+including its loader requirement, and the reported architecture must match the
+host. Managed runtime eligibility uses the same exact-major policy. This is a
+local trust decision to run chosen code, not a safety certification of that code.
+
+Settings Check resolves the saved game's requirement without executing managed
+Java. The native owned picker only selects a path; Check explicitly runs it.
+Event-driven readiness checks the saved selection. A successful readiness
+diagnostic is cached by path, SHA-256 of the
+executable and required major (bounded 65-entry process-local cache), with file
+and ancestor checks before reuse. Failures are not cached. There is no idle
+polling, runtime scanner or background Java process. DLL/runtime dependency
+changes without EXE changes may invalidate a cached verdict; explicit Check and
+every launch always execute a fresh diagnostic.
+
+Runtime status, Play readiness and final launch consume the saved selection.
+Invalid custom Java blocks Play with `launch_custom_java_invalid` and an action
+opening instance Settings; managed Java is never substituted. Launch still
+resolves official game/runtime metadata through the existing lifecycle; custom
+selection does not add offline launch support. Managed Java remains available
+for installer tools and is never copied into an instance or external runtime.
+
+`launch::resolve::LaunchJava::External` accepts only the Rust-validated type,
+checks its game major and executable SHA-256 again, and feeds the same private
+`LaunchSpec` and exact-child supervisor as managed Java. The final application
+boundary retains a Windows read handle denying write/delete sharing through
+spawn, including session-restoration delays. A byte change, removal, redirect
+or failed fresh diagnostic blocks launch. This observes executable identity,
+not a publisher-supplied digest; it does not claim atomic execution of every
+external DLL or protection against malicious same-user directory replacement.
+
+Native Settings reuses existing tokens, dropdown, text field and buttons. The
+path fills a separate row (4096 UTF-16-unit core limit); Choose, Check and Use
+managed Java occupy the following row, and status text wraps below. The editable
+single-line path supports keyboard inspection/selection of long paths. Drafts
+are saved explicitly and stale checks cannot update a different instance/path.
+
+Registry schema remains 6. **Custom selections are not downgrade compatible.**
+The actual older WebView core at `9b99db3` was tested: it accepts the original
+managed document, rejects `java` as an unknown field on load/migration and save,
+leaves those bytes unchanged, and accepts the document after reset to managed.
+Thus an older client cannot silently erase this preference; use a supporting
+launcher to reset it before downgrading. The updated WebView DTO also round-trips
+the field on unrelated edits, but this phase adds its selection controls only
+to the native host. Historical managed-only statements below are superseded
+by this section. Acceptance: `NATIVE_10_ACCEPTANCE.md`.
+
 ## NATIVE-9 preview distribution and content jobs
 
 The native crate now explicitly enables the core's `native-preview` feature:

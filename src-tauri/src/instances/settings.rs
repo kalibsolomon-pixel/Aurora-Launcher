@@ -85,6 +85,81 @@ pub struct InstanceConfiguration {
     /// Optional windowed resolution; `None` keeps Minecraft's default
     /// behavior (Mojang's `has_custom_resolution` feature stays off).
     window: Option<WindowConfiguration>,
+    /// Which Java launches the game. Absent means Aurora's managed runtime,
+    /// so existing documents serialize unchanged. A custom selection is a
+    /// user-chosen external executable that Rust validates by executing it
+    /// before readiness and again at every launch (`runtime::external`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    java: Option<JavaSelection>,
+}
+
+/// A user-selected external Java executable for launching the game. Only the
+/// path is persisted; its version and architecture are always re-derived by
+/// executing it, never trusted from storage or from the folder name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum JavaSelection {
+    Custom { path: String },
+}
+
+/// Longest accepted custom Java path, in UTF-16 units (Windows long paths).
+pub const MAX_JAVA_PATH_UNITS: usize = 4096;
+
+/// File names accepted as a Java launcher executable on this platform.
+pub fn java_executable_name_allowed(name: &str) -> bool {
+    if cfg!(windows) {
+        name.eq_ignore_ascii_case("java.exe") || name.eq_ignore_ascii_case("javaw.exe")
+    } else {
+        name == "java"
+    }
+}
+
+impl JavaSelection {
+    pub fn custom_path(&self) -> &str {
+        match self {
+            Self::Custom { path } => path,
+        }
+    }
+
+    /// Shape-only validation (absolute, representable, a Java launcher file
+    /// name). Existence, version and architecture are checked by execution.
+    pub fn validate(&self) -> Result<(), InvalidInstanceConfiguration> {
+        let path = self.custom_path();
+        let invalid = |reason: &str| InvalidInstanceConfiguration::JavaPath(reason.to_owned());
+        if path.is_empty() || path.trim() != path {
+            return Err(invalid(
+                "the custom Java path is empty or has surrounding whitespace",
+            ));
+        }
+        if path.encode_utf16().count() > MAX_JAVA_PATH_UNITS {
+            return Err(invalid("the custom Java path is too long"));
+        }
+        if path.chars().any(char::is_control) {
+            return Err(invalid("the custom Java path contains control characters"));
+        }
+        let candidate = std::path::Path::new(path);
+        if !candidate.is_absolute()
+            || candidate.components().any(|c| {
+                matches!(
+                    c,
+                    std::path::Component::ParentDir | std::path::Component::CurDir
+                )
+            })
+        {
+            return Err(invalid(
+                "the custom Java path must be a plain absolute path",
+            ));
+        }
+        let name = candidate.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if !java_executable_name_allowed(name) {
+            return Err(invalid(if cfg!(windows) {
+                "choose java.exe or javaw.exe"
+            } else {
+                "choose the java executable"
+            }));
+        }
+        Ok(())
+    }
 }
 
 /// Desired platform policy, separate from the concrete installed platform pin.
@@ -181,6 +256,7 @@ impl Default for InstanceConfiguration {
             memory_mib: DEFAULT_MEMORY_MIB,
             additional_jvm_arguments: String::new(),
             window: None,
+            java: None,
         }
     }
 }
@@ -212,6 +288,7 @@ impl InstanceConfiguration {
             memory_mib,
             additional_jvm_arguments: additional_jvm_arguments.into(),
             window,
+            java: None,
         }
     }
 
@@ -262,6 +339,13 @@ impl InstanceConfiguration {
 
     pub fn performance_mode(&self) -> Option<super::performance::PerformanceMode> {
         self.performance_mode
+    }
+    /// `None` is Aurora's managed runtime.
+    pub fn java(&self) -> Option<&JavaSelection> {
+        self.java.as_ref()
+    }
+    pub fn set_java(&mut self, java: Option<JavaSelection>) {
+        self.java = java;
     }
     pub fn set_performance_mode(&mut self, mode: Option<super::performance::PerformanceMode>) {
         self.performance_mode = mode;
@@ -358,6 +442,9 @@ impl InstanceConfiguration {
         self.validated_jvm_arguments()?;
         if let Some(window) = self.window {
             window.validate()?;
+        }
+        if let Some(java) = &self.java {
+            java.validate()?;
         }
         Ok(())
     }
@@ -643,6 +730,7 @@ pub enum InvalidInstanceConfiguration {
         max: u16,
     },
     JvmArguments(InvalidJvmArguments),
+    JavaPath(String),
 }
 
 impl fmt::Display for InvalidInstanceConfiguration {
@@ -679,6 +767,7 @@ impl fmt::Display for InvalidInstanceConfiguration {
                 "window {name} must be between {min} and {max} pixels, but is {value}"
             ),
             Self::JvmArguments(error) => write!(formatter, "{error}"),
+            Self::JavaPath(reason) => write!(formatter, "{reason}"),
         }
     }
 }
@@ -739,6 +828,52 @@ impl std::error::Error for InvalidJvmArguments {}
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn custom_java_is_optional_persisted_and_shape_checked() {
+        use super::*;
+        let managed = InstanceConfiguration::for_minecraft_version("1.21.11");
+        let text = serde_json::to_string(&managed).unwrap();
+        assert!(
+            !text.contains("java"),
+            "managed Java must not change existing documents"
+        );
+        let path = if cfg!(windows) {
+            r"C:\Java\jdk-21\bin\javaw.exe"
+        } else {
+            "/opt/jdk-21/bin/java"
+        };
+        let mut custom = managed.clone();
+        custom.set_java(Some(JavaSelection::Custom { path: path.into() }));
+        custom.validate().unwrap();
+        let round: InstanceConfiguration =
+            serde_json::from_str(&serde_json::to_string(&custom).unwrap()).unwrap();
+        assert_eq!(round, custom);
+        assert_eq!(round.java().unwrap().custom_path(), path);
+        // Unrelated edits keep the selection.
+        let mut edited = round.clone();
+        edited.set_memory_mib(4096);
+        assert_eq!(edited.java(), round.java());
+        for bad in [
+            "relative/java",
+            "",
+            " C:\\Java\\bin\\java.exe",
+            "C:\\Java\\..\\bin\\java.exe",
+            "C:\\Java\\bin\\notepad.exe",
+        ] {
+            let mut invalid = managed.clone();
+            invalid.set_java(Some(JavaSelection::Custom { path: bad.into() }));
+            assert!(
+                matches!(
+                    invalid.validate(),
+                    Err(InvalidInstanceConfiguration::JavaPath(_))
+                ),
+                "{bad:?}"
+            );
+        }
+        let unknown = r#"{"minecraftVersion":"1.21.11","auroraEnabled":false,"loader":{"kind":"vanilla"},"memoryMib":2048,"additionalJvmArguments":"","window":null,"java":{"kind":"system"}}"#;
+        assert!(serde_json::from_str::<InstanceConfiguration>(unknown).is_err());
+    }
+
     #[test]
     fn unimplemented_family_configurations_stay_persistable_but_are_marked_unsupported() {
         // The persistence contract: a represented-but-unimplemented family

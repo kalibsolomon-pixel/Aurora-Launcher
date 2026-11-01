@@ -596,6 +596,7 @@ export interface InstanceWindow {
 
 /** The desired configuration of one instance: what the user wants it to be. */
 export interface InstanceConfiguration {
+  java?: { kind: "custom"; path: string } | null;
   performanceMode?: PerformanceMode | null;
   minecraftVersion: string;
   auroraEnabled: boolean;
@@ -2032,7 +2033,7 @@ export type LaunchInstanceStatus =
   | "installing"
   | "damaged"
   | "stale";
-export type LaunchRuntimeStatus = "ready" | "missing" | "damaged" | "unresolved";
+export type LaunchRuntimeStatus = "ready" | "missing" | "damaged" | "unresolved" | "customInvalid";
 export type LaunchAccountStatus =
   | "ready"
   | "missing"

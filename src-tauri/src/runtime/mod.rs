@@ -5,6 +5,7 @@
 //! plan, and a versioned state document is the sole completion marker for a
 //! shared runtime. Instance content never owns or embeds a Java installation.
 
+pub mod external;
 pub mod install;
 pub mod metadata;
 pub mod plan;

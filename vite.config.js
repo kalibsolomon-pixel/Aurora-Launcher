@@ -25,8 +25,9 @@ export default defineConfig(() => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // Native build products can be locked while Rust links/runs tests on
+      // Windows. They are never web source and must not enter Vite's watcher.
+      ignored: ["**/src-tauri/**", "**/native/target/**", "**/native/prototypes/**/target/**"],
     },
   },
 }));

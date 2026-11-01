@@ -29,6 +29,9 @@ pub enum LaunchRuntimeStatus {
     Missing,
     Damaged,
     Unresolved,
+    /// The instance's selected custom Java failed validation. Never
+    /// replaced by managed Java while the custom selection is active.
+    CustomInvalid,
 }
 
 impl LaunchRuntimeStatus {
@@ -38,6 +41,7 @@ impl LaunchRuntimeStatus {
             Self::Missing => "missing",
             Self::Damaged => "damaged",
             Self::Unresolved => "unresolved",
+            Self::CustomInvalid => "customInvalid",
         }
     }
 }
@@ -142,6 +146,10 @@ impl PlayReadiness {
                 code: "launch_runtime_not_ready",
                 message: "The required managed Java runtime could not be resolved.".to_owned(),
             }),
+            LaunchRuntimeStatus::CustomInvalid => blockers.push(LaunchBlocker {
+                code: "launch_custom_java_invalid",
+                message: "The custom Java selected for this instance is not usable. Fix it in the instance's Settings or switch back to managed Java.".to_owned(),
+            }),
         }
         match account {
             LaunchAccountStatus::Ready => {}
@@ -194,6 +202,13 @@ mod tests {
         assert!(ready.ready());
 
         for (instance, runtime, account, process, code) in [
+            (
+                LaunchInstanceStatus::Ready,
+                LaunchRuntimeStatus::CustomInvalid,
+                LaunchAccountStatus::Ready,
+                LaunchProcessStatus::Stopped,
+                "launch_custom_java_invalid",
+            ),
             (
                 LaunchInstanceStatus::Missing,
                 LaunchRuntimeStatus::Ready,
