@@ -145,8 +145,16 @@ pub fn activity(preferences: &DiscordPreferences, game: Option<&GameActivity>) -
     })
 }
 
+/// Owner-provided public application identity; no private credential is needed
+/// for activity-only local IPC. Shared by native and WebView builds.
+const AURORA_APPLICATION_ID: &str = "1553653987545317396";
+
 pub fn application_id() -> Option<&'static str> {
-    option_env!("AURORA_DISCORD_APPLICATION_ID")
+    configured_application_id(option_env!("AURORA_DISCORD_APPLICATION_ID"))
+}
+
+fn configured_application_id(build_override: Option<&'static str>) -> Option<&'static str> {
+    Some(build_override.unwrap_or(AURORA_APPLICATION_ID))
         .map(str::trim)
         .filter(|id| {
             (17..=20).contains(&id.len())
@@ -175,6 +183,23 @@ mod tests {
             status: LaunchProcessStatus::Running,
             started_at: Some(123),
             gameplay: None,
+        }
+    }
+    #[test]
+    fn ordinary_builds_have_the_owner_provided_discord_application() {
+        assert_eq!(configured_application_id(None), Some("1553653987545317396"));
+        let state = DiscordState::default();
+        assert_eq!(state.configured, application_id().is_some());
+        assert!(!state.preferences.enabled);
+    }
+    #[test]
+    fn explicit_build_id_is_validated_without_silently_falling_back() {
+        assert_eq!(
+            configured_application_id(Some(" 1553653987545317396 ")),
+            Some(AURORA_APPLICATION_ID)
+        );
+        for invalid in ["", "0", "155365398754531739x", "18446744073709551616"] {
+            assert_eq!(configured_application_id(Some(invalid)), None);
         }
     }
     #[test]

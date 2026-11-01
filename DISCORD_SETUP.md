@@ -1,18 +1,23 @@
 # Discord Rich Presence setup
 
-Aurora implements optional local desktop IPC presence, without Discord account linking or OAuth tokens. The **Aurora Client** Discord application uses the registered **aurora-logo** Rich Presence asset. Its public numeric Application ID is supplied to the build environment for each production build; registration alone does not configure an executable.
+Aurora implements optional local desktop IPC presence, without Discord account linking or OAuth tokens. The **Aurora Client** Discord application uses the registered **aurora-logo** Rich Presence asset. Its owner-approved public Application ID, **1553653987545317396**, is built in for native and WebView builds. Activity sharing remains off until enabled in Settings.
 
 1. Create/select an Aurora-owned application in the [Discord Developer Portal](https://discord.com/developers/applications), named **Aurora Client**. Never borrow another application's ID.
 2. Copy its public Application ID. Activity-only IPC needs no bot token, client secret or redirect registration.
 3. Under **Rich Presence → Art Assets**, confirm the registered **aurora-logo** key and wait for availability. The launcher requests that exact key. See [Discord's asset guide](https://discord.com/developers/discord-social-sdk/development-guides/setting-rich-presence#uploading-assets).
-4. Set `AURORA_DISCORD_APPLICATION_ID` to that legitimate public ID in the build environment, then run `npm run tauri build`. Users do not supply arbitrary application identities or IPC paths through Settings. A public ID may later be checked in after ownership review; no secret belongs in source/config.
+4. Build the launcher normally. `AURORA_DISCORD_APPLICATION_ID` is an optional compile-time override for owner-managed builds; an explicitly invalid override fails closed. Users do not supply arbitrary application identities or IPC paths through Settings. No secret belongs in source/config.
 5. In **Settings → Discord & privacy**, enable **Discord Rich Presence**. Aurora connects automatically through local desktop IPC. Connected requires actual READY/command acknowledgement. Discord being absent is an ordinary status; retries wait 15, 30, 60 and then at most 120 seconds. State changes do not bypass that backoff. Successful publication resets it; an enabled connected actor checks IPC every 15 seconds. Startup is detached and never waits for Discord.
 6. Verify Aurora Client/In Launcher/logo in Discord. Exercise Starting/Running/normal exit with the supervised game. Extra details default off and opt in separately. Turning the master off clears activity once, disconnects, and stops connection/publication timers. Re-enabling tries immediately. Discord's own activity visibility settings also apply.
 7. Complete real Discord acceptance before treating this feature as publication-ready. IPC acknowledgement alone does not prove the remote profile/logo rendered.
 
-For a Windows PowerShell production build, set `$env:AURORA_DISCORD_APPLICATION_ID = '1553653987545317396'`, then run `npm run tauri build` in the same session. Rust reads this public ID at compile time through `option_env!`; setting it only when launching an already-built executable has no effect. Use the generated `src-tauri/target/release/aurora-launcher.exe`, MSI and NSIS bundles for acceptance. No private credential or persistent environment setting is needed.
+Ordinary developer and release builds now use the built-in ID, including the
+Slint native launcher. An existing executable must be rebuilt and restarted to
+receive this change; setting an environment variable only when launching it has
+no effect. Existing release workflows may continue supplying the same public ID.
 
-The official `.github/workflows/launcher-release.yml` build job supplies this public ID to its Rust/Tauri compilation and checks the exact value before building. MSI and NSIS are packaged from that same configured executable; publication transfers and verifies those bytes without rebuilding. Ordinary developer builds may omit the ID.
+The supplied Discord Public Key is not required or stored: activity-only desktop
+IPC uses the Application ID, not incoming-interaction signature verification.
+No bot token, client secret, OAuth account link or new permissions are added.
 
 Settings now exposes **Show World**, **Show Server** and **Show Server Address**, all defaulting off. Address sharing additionally requires Show Server. They use only authenticated native snapshots from the reviewed client protocol v1; nothing is inferred from arguments or logs. Missing bridge data leaves generic presence. World paths are never published. Raw addresses require explicit address consent, and display names containing the address/host are suppressed while that consent is off. There is no Unlink control because there is no account link.
 

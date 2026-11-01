@@ -487,7 +487,7 @@ fn discord_status(state: &api::DiscordState) -> String {
         return "This build has no Discord application ID, so presence cannot connect. Choices are saved; nothing is sent.".into();
     }
     match (state.preferences.enabled, state.connection.as_str()) {
-        (false, _) => "Off. Nothing is sent to Discord.".into(),
+        (false, _) => "Ready. Aurora's Discord application is configured. Turn on Rich Presence to share activity.".into(),
         (true, "connected") => "Connected to the Discord app on this computer.".into(),
         (true, "notDetected") => {
             "Discord is not running. Aurora checks again occasionally while this is on.".into()
