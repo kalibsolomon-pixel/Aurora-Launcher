@@ -60,7 +60,11 @@ pub fn content_status(instance: &InstanceSummary) -> (String, Tone) {
         }
     }
     if instance.state == "installing" {
-        return ("Installing".into(), Tone::Working);
+        return if crate::activity::instance_busy(&instance.id) {
+            ("Installing".into(), Tone::Working)
+        } else {
+            ("Incomplete".into(), Tone::Warning)
+        };
     }
     ("Installed".into(), Tone::Success)
 }
@@ -317,7 +321,7 @@ fn render_workspace_header() {
         instances.set_letter(ui::letter(&instance.display_name).into());
         instances.set_status(status.into());
         instances.set_tone(tone);
-        instances.set_installing(instance.state == "installing");
+        instances.set_installing(crate::activity::instance_busy(&instance.id));
         instances.set_cfg_needs_install(needs_install(instance));
         instances.set_pack_name(
             instance
@@ -343,6 +347,7 @@ fn write_draft(window: &AppWindow, configuration: &InstanceConfiguration) {
     instances.set_cfg_java_path(custom.unwrap_or_default().into());
     instances.set_cfg_java_status("".into());
     instances.set_cfg_java_tone(Tone::Neutral);
+    instances.set_memory_mib_text(configuration.memory_mib.to_string().into());
     instances.set_memory_gib(configuration.memory_mib as f32 / 1024.0);
     instances.set_jvm_args(configuration.additional_jvm_arguments.clone().into());
     instances.set_custom_window(configuration.window.is_some());
@@ -356,6 +361,17 @@ fn write_draft(window: &AppWindow, configuration: &InstanceConfiguration) {
 
 /// Builds the edited configuration from the drafts. Unrendered fields
 /// (loader, version, Aurora, unknown future fields) are carried unchanged.
+fn memory_mib(text: &str) -> Result<u32, String> {
+    use aurora_launcher_lib::instances::settings::{MAX_MEMORY_MIB, MIN_MEMORY_MIB};
+    text.trim()
+        .parse::<u32>()
+        .ok()
+        .filter(|m| (MIN_MEMORY_MIB..=MAX_MEMORY_MIB).contains(m))
+        .ok_or_else(|| {
+            format!("Enter a whole number from {MIN_MEMORY_MIB} to {MAX_MEMORY_MIB} MiB.")
+        })
+}
+
 fn read_draft(
     window: &AppWindow,
     base: &InstanceConfiguration,
@@ -367,7 +383,7 @@ fn read_draft(
     draft.minecraft_version = version;
     draft.loader = loader;
     draft.java = draft_java(window, base)?;
-    draft.memory_mib = ((instances.get_memory_gib() * 2.0).round() / 2.0 * 1024.0) as u32;
+    draft.memory_mib = memory_mib(&instances.get_memory_mib_text())?;
     draft.additional_jvm_arguments = instances.get_jvm_args().to_string();
     draft.window = if instances.get_custom_window() {
         let parse = |text: &str, what: &str| {
@@ -603,11 +619,6 @@ fn load_memory_hint(id: String) {
                         None => advice.explanation,
                     };
                     instances.set_memory_hint(hint.into());
-                    if let Some(total) = advice.facts.total_mib {
-                        instances.set_memory_max_gib(
-                            ((total as f32 / 1024.0) * 0.75).floor().clamp(2.0, 64.0),
-                        );
-                    }
                 }
                 Err(_) => instances.set_memory_hint("".into()),
             }
@@ -1773,6 +1784,27 @@ fn draft_platform(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn memory_entry_rejects_invalid_and_out_of_core_range_values() {
+        for value in [
+            "",
+            "-1",
+            "NaN",
+            "inf",
+            "0",
+            "511",
+            "32769",
+            "65536",
+            "999999999999999",
+            "4.5",
+        ] {
+            assert!(memory_mib(value).is_err(), "{value}");
+        }
+        for value in [512, 2048, 4096, 32768] {
+            assert_eq!(memory_mib(&format!(" {value} ")).unwrap(), value);
+        }
+    }
 
     #[test]
     fn custom_java_reports_read_as_one_clear_line() {

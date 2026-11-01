@@ -29,7 +29,7 @@ export component InstanceTile inherits Rectangle {
             alignment: center;
             spacing: 2px;
             Text { text: root.item.name; font-size: Theme.text-body; font-weight: 600; color: root.item.selected ? Theme.accent : Theme.text-secondary; overflow: elide; }
-            Text { text: root.item.subtitle; font-size: Theme.text-metadata; color: Theme.text-muted; overflow: elide; }
+
         }
     }
     touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); root.activated(); } }
@@ -91,7 +91,7 @@ export component HomePage inherits ScrollView {
                         horizontal-stretch: 1;
                         alignment: center;
                         Text { text: Home.has-instance ? Home.name : "Choose an instance"; font-size: Theme.text-page-title; font-weight: 600; color: Theme.text; overflow: elide; }
-                        if Home.has-instance: Text { text: Home.subtitle; font-size: Theme.text-secondary-size; color: Theme.text-secondary; overflow: elide; }
+
                         HorizontalLayout {
                             spacing: 8px;
                             alignment: start;

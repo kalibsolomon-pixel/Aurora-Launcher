@@ -985,6 +985,18 @@ pub async fn open_content_folder(
     blocking(move || convert::<_, ()>(app::open_instance_content_folder(host, request))).await?
 }
 
+#[derive(Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderCategory {
+    pub name: String,
+    pub project_type: String,
+}
+pub async fn browse_categories() -> ApiResult<Vec<ProviderCategory>> {
+    let request = request(json!({"provider": "modrinth"}))?;
+    convert(app::browse_modrinth_tags(request).await)
+}
+
+#[allow(dead_code)]
 pub async fn browse(
     host: Host,
     instance_id: String,
@@ -992,13 +1004,31 @@ pub async fn browse(
     search: String,
     offset: u32,
 ) -> ApiResult<SearchPage> {
+    let sort = if search.trim().is_empty() {
+        "downloads"
+    } else {
+        "relevance"
+    }
+    .to_owned();
+    browse_filtered(host, instance_id, kind, search, offset, Vec::new(), sort).await
+}
+
+pub async fn browse_filtered(
+    host: Host,
+    instance_id: String,
+    kind: &'static str,
+    search: String,
+    offset: u32,
+    categories: Vec<String>,
+    sort: String,
+) -> ApiResult<SearchPage> {
     let request = request(json!({
         "instanceId": instance_id,
         "provider": "modrinth",
         "contentType": kind,
         "search": search,
-        "categories": [],
-        "sort": if search.trim().is_empty() { "downloads" } else { "relevance" },
+        "categories": categories,
+        "sort": sort,
         "offset": offset,
     }))?;
     convert(app::browse_modrinth(host, request).await)
@@ -1116,9 +1146,9 @@ pub async fn preview_pack(host: Host, merge: bool, value: Value) -> ApiResult<Va
 
 pub async fn install_pack(host: Host, merge: bool, value: Value) -> ApiResult<Value> {
     if merge {
-        convert(app::install_modrinth_pack_merge(host, request(value)?).await)
+        convert(Box::pin(app::install_modrinth_pack_merge(host, request(value)?)).await)
     } else {
-        convert(app::install_modrinth_pack(host, request(value)?).await)
+        convert(Box::pin(app::install_modrinth_pack(host, request(value)?)).await)
     }
 }
 
@@ -1439,6 +1469,15 @@ pub async fn skin_thumbnail(host: Host, preset_id: String) -> ApiResult<Option<T
 pub async fn save_current_skin(host: Host, account_id: String) -> ApiResult<Value> {
     let request = request(json!({ "accountId": account_id }))?;
     convert(app::save_current_skin(host, request).await)
+}
+
+pub async fn rename_skin_preset(
+    host: Host,
+    preset_id: String,
+    name: String,
+) -> ApiResult<Vec<SkinPreset>> {
+    let request = request(json!({"presetId": preset_id, "changes": {"name": name}}))?;
+    blocking(move || convert(app::update_skin_preset(host, request))).await?
 }
 
 pub async fn remove_skin_preset(host: Host, preset_id: String) -> ApiResult<()> {

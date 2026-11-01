@@ -2,11 +2,13 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icons } from "../icons.slint";
-import { Button, ButtonKind, IconButton, EmptyState, Spinner, PageTitle, FocusRing, KeyboardFocus, Checkbox, Dropdown, Tabs } from "../components.slint";
+import { Button, ButtonKind, IconButton, EmptyState, Spinner, PageTitle, FocusRing, KeyboardFocus, Checkbox, Dropdown, Tabs, TextField } from "../components.slint";
 import { Skins, SkinRow, CapeRow, Accounts } from "../state.slint";
 
 component PresetLine inherits Rectangle {
     in property <SkinRow> item;
+    private property <bool> renaming: false;
+    private property <string> draft;
     height: 80px; border-radius: Theme.radius-md;
     background: touch.pressed ? Theme.pressed : touch.has-hover ? Theme.hover : Theme.surface;
     accessible-role: list-item;
@@ -25,9 +27,11 @@ component PresetLine inherits Rectangle {
         }
         VerticalLayout {
             horizontal-stretch: 1; alignment: center; spacing: 4px;
-            Text { text: root.item.name; color: root.item.previewed ? Theme.accent : Theme.text; font-size: Theme.text-body; font-weight: 600; overflow: elide; }
+            if !root.renaming: Text { text: root.item.name; color: root.item.previewed ? Theme.accent : Theme.text; font-size: Theme.text-body; font-weight: 600; overflow: elide; }
             Text { text: root.item.model; color: Theme.text-muted; font-size: Theme.text-metadata; }
         }
+        if root.renaming: TextField { y: (parent.height - self.height) / 2; width: 200px; label: "Skin name"; text <=> root.draft; max-length: 80; accepted => { Skins.rename(root.item.id, root.draft); root.renaming = false; } escaped => { root.renaming = false; } }
+        IconButton { y: (parent.height - self.height) / 2; icon: root.renaming ? Icons.check : Icons.edit; label: root.renaming ? "Save skin name" : "Rename skin"; enabled: !Skins.busy; clicked => { if root.renaming { Skins.rename(root.item.id, root.draft); root.renaming = false; } else { root.draft = root.item.edit-name; root.renaming = true; } } }
         Button { y: (parent.height - self.height) / 2; text: "Apply"; compact: true; enabled: !Skins.busy && Skins.has-account; accessible-description-text: root.item.name; clicked => { Skins.apply(root.item.id); } }
         IconButton { y: (parent.height - self.height) / 2; icon: Icons.delete; label: "Remove " + root.item.name + " from the library"; enabled: !Skins.busy; clicked => { Skins.remove(root.item.id); } }
     }
@@ -107,7 +111,7 @@ export component SkinsPage inherits Rectangle {
         padding: root.width < 760px ? Theme.space-5 : Theme.space-6;
         spacing: Theme.space-5;
         HorizontalLayout {
-            PageTitle { text: "Skins & capes"; horizontal-stretch: 1; vertical-alignment: center; }
+            PageTitle { text: "Skins & Capes"; horizontal-stretch: 1; vertical-alignment: center; }
             IconButton { icon: Icons.refresh; label: "Reload skins and capes"; size: 36px; enabled: !Skins.loading; clicked => { Skins.refresh(); } }
         }
         HorizontalLayout {

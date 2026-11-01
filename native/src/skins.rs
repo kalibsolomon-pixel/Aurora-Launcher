@@ -485,6 +485,14 @@ pub fn bind(window: &AppWindow) {
         render_presets();
         schedule_render();
     });
+    skins.on_rename(|preset, name| {
+        mutate(
+            api::rename_skin_preset(ui::host(), preset.to_string(), name.to_string()),
+            |_| {
+                load_presets();
+            },
+        );
+    });
     skins.on_remove(|preset| {
         mutate(
             api::remove_skin_preset(ui::host(), preset.to_string()),
@@ -742,6 +750,7 @@ fn render_presets() {
             .map(|preset: &SkinPreset| {
                 let thumb = state.skin_thumbnails.get(&preset.id).cloned();
                 SkinRow {
+                    edit_name: preset.name.clone().into(),
                     id: preset.id.clone().into(),
                     name: if preset.favorite {
                         format!("★ {}", preset.name)

@@ -147,11 +147,10 @@ export component AppWindow inherits Window {
     default-font-family: "Segoe UI";
 
     // Borealis: one static, pre-blurred layer under translucent surfaces.
-    // Rust nudges `drift` a few pixels at a low rate only while the window
-    // is shown and focused with motion allowed; otherwise nothing repaints.
+    // No decorative timer: this image never requests a redraw by itself.
     if Theme.borealis: Image {
-        x: -24px + Theme.drift;
-        y: -16px + Theme.drift * 0.4;
+        x: -24px;
+        y: -16px;
         width: root.width + 48px;
         height: root.height + 32px;
         source: @image-url("../assets/borealis-bands.png");

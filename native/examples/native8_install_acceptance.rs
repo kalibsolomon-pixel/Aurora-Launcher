@@ -203,6 +203,103 @@ async fn fabric_instance(
 }
 
 async fn run(host: Host, scenarios: &[String], results: &mut Vec<Value>) -> api::ApiResult<()> {
+    if enabled(scenarios, "fabulously") {
+        let installed = review_and_install(
+            &host,
+            results,
+            "Fabulously Optimized 12.3.0 new instance",
+            None,
+            "1KVo5zza",
+            "K0lc692U",
+        )
+        .await?;
+        let id = installed["id"].as_str().unwrap_or_default().to_owned();
+        timed(
+            results,
+            "Fabulously Optimized instance validation",
+            api::validate_instance(host.clone(), id),
+            |v| json!({"status": v.status, "problems": v.problems.len()}),
+        )
+        .await?;
+    }
+    if enabled(scenarios, "pack-controls") {
+        let state = api::launcher_state(host.clone()).await?;
+        let instance = state
+            .instances
+            .iter()
+            .rev()
+            .find(|i| i.display_name == "Fabulously Optimized" && i.state == "ready")
+            .expect("finished disposable FO instance");
+        let id = instance.id.clone();
+        let mut memory = instance.configuration.clone();
+        memory.memory_mib = 8192;
+        api::update_configuration(
+            host.clone(),
+            id.clone(),
+            instance.configuration.clone(),
+            memory.clone(),
+        )
+        .await?;
+        let mut invalid = memory.clone();
+        invalid.memory_mib = 32769;
+        assert!(
+            api::update_configuration(host.clone(), id.clone(), memory.clone(), invalid)
+                .await
+                .is_err()
+        );
+        api::update_configuration(
+            host.clone(),
+            id.clone(),
+            memory,
+            instance.configuration.clone(),
+        )
+        .await?;
+        for failed in state.instances.iter().filter(|i| i.state == "installing") {
+            timed(
+                results,
+                "Delete stopped failed FO installation",
+                api::delete_instance(host.clone(), failed.id.clone(), failed.display_name.clone()),
+                |_| json!({"deleted":true}),
+            )
+            .await?;
+        }
+        let inventory = api::instance_mods(host.clone(), id.clone()).await?;
+        let entry = inventory
+            .entries
+            .iter()
+            .find(|e| e.display_name == "BetterGrassify")
+            .expect("FO grass component");
+        assert!(entry.can_toggle && entry.can_remove);
+        let disabled =
+            api::set_mod_enabled(host.clone(), id.clone(), entry.entry_id.clone(), false).await?;
+        timed(
+            results,
+            "FO validation after disabling pack mod",
+            api::validate_instance(host.clone(), id.clone()),
+            |v| json!({"status": v.status, "problems": v.problems.len()}),
+        )
+        .await?;
+        let entry = disabled
+            .entries
+            .iter()
+            .find(|e| e.display_name == "BetterGrassify")
+            .unwrap();
+        let active =
+            api::set_mod_enabled(host.clone(), id.clone(), entry.entry_id.clone(), true).await?;
+        let entry = active
+            .entries
+            .iter()
+            .find(|e| e.display_name == "BetterGrassify")
+            .unwrap();
+        api::remove_mod(host.clone(), id.clone(), entry.entry_id.clone()).await?;
+        timed(
+            results,
+            "FO validation after deleting pack mod",
+            api::validate_instance(host.clone(), id),
+            |v| json!({"status": v.status, "problems": v.problems.len()}),
+        )
+        .await?;
+    }
     if enabled(scenarios, "vulkan") {
         let installed = review_and_install(
             &host,

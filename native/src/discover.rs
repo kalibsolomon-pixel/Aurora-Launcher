@@ -24,6 +24,9 @@ pub struct Review {
 
 #[derive(Default)]
 pub struct DiscoverState {
+    pub categories: Vec<api::ProviderCategory>,
+    pub category_values: Vec<String>,
+    pub categories_requested: bool,
     pub target: Option<String>,
     pub results: Vec<ProjectSummary>,
     pub installed: HashSet<String>,
@@ -47,7 +50,11 @@ pub fn bind(window: &AppWindow) {
     let d = window.global::<Discover>();
     d.on_search(|| search(false));
     d.on_more(|| search(true));
-    d.on_kind_changed(|_| search(false));
+    d.on_kind_changed(|_| {
+        render_categories();
+        search(false);
+    });
+    d.on_filters_changed(|| search(false));
     d.on_instance_changed(|index| {
         let id = ui::state(|s| s.instances().get(index as usize).map(|i| i.id.clone()));
         ui::with(|_, state| state.discover.target = id);
@@ -99,6 +106,7 @@ pub fn bind(window: &AppWindow) {
 }
 
 pub fn open_for(instance_id: String, kind: i32) {
+    load_categories();
     ui::with(|window, state| {
         // Content tabs share the content kind index, so the origin tab is the kind.
         state.discover.origin = Some((instance_id.clone(), kind));
@@ -106,6 +114,7 @@ pub fn open_for(instance_id: String, kind: i32) {
         window.global::<Discover>().set_kind(kind.clamp(0, 3));
         window.global::<Nav>().set_page(Page::Discover);
     });
+    render_categories();
     render_targets();
     search(false);
 }
@@ -123,7 +132,29 @@ pub fn open_local_pack(project: String, version: String, note: String) {
     details(project.into());
 }
 
+fn load_categories() {
+    let load = ui::with(|_, state| {
+        let load = !state.discover.categories_requested;
+        state.discover.categories_requested = true;
+        load
+    })
+    .unwrap_or(false);
+    if load {
+        ui::spawn(api::browse_categories(), |result| match result {
+            Ok(categories) => {
+                ui::with(|_, s| s.discover.categories = categories);
+                render_categories();
+            }
+            Err(error) => {
+                ui::with(|_, s| s.discover.categories_requested = false);
+                ui::error_toast(&error);
+            }
+        });
+    }
+}
+
 pub fn on_shown() {
+    load_categories();
     render_targets();
     if ui::state(|s| s.discover.serial == 0) {
         search(false);
@@ -162,48 +193,81 @@ pub fn render_targets() {
     });
 }
 
+fn render_categories() {
+    ui::with(|w, s| {
+        let d = w.global::<Discover>();
+        let kind = ["mod", "resourcepack", "shader", "modpack"][d.get_kind().clamp(0, 3) as usize];
+        let mut values: Vec<String> = s
+            .discover
+            .categories
+            .iter()
+            .filter(|c| c.project_type == kind)
+            .map(|c| c.name.clone())
+            .collect();
+        values.sort();
+        values.dedup();
+        let mut names = vec!["All categories".into()];
+        names.extend(values.iter().map(|v| v.replace('-', " ").into()));
+        s.discover.category_values = values;
+        d.set_category_index(0);
+        d.set_category_names(ui::model(names));
+    });
+}
+
 fn search(append: bool) {
-    let Some((target, kind, query, offset, serial)) = ui::with(|window, state| {
-        let d = window.global::<Discover>();
-        if append && (d.get_loading() || state.discover.results.len() >= MAX_RESULTS) {
-            return None;
-        }
-        let kind = KINDS[d.get_kind().clamp(0, 3) as usize];
-        state.discover.serial += 1;
-        if !append {
-            state.discover.results.clear();
-            state.discover.next_offset = 0;
-            state.discover.total = 0;
-            state.discover.installed.clear();
-        }
-        d.set_error("".into());
-        let target = if kind == "modpack" {
-            String::new()
-        } else {
-            state.discover.target.clone().unwrap_or_default()
-        };
-        if kind != "modpack" && target.is_empty() {
-            d.set_loading(false);
-            d.set_error("Choose a target instance to browse compatible content.".into());
-            return None;
-        }
-        d.set_loading(true);
-        Some((
-            target,
-            kind,
-            d.get_query().to_string(),
-            state.discover.next_offset,
-            state.discover.serial,
-        ))
-    })
-    .flatten() else {
+    let Some((target, kind, query, offset, serial, categories, sort)) =
+        ui::with(|window, state| {
+            let d = window.global::<Discover>();
+            if append && (d.get_loading() || state.discover.results.len() >= MAX_RESULTS) {
+                return None;
+            }
+            let kind = KINDS[d.get_kind().clamp(0, 3) as usize];
+            state.discover.serial += 1;
+            if !append {
+                state.discover.results.clear();
+                state.discover.next_offset = 0;
+                state.discover.total = 0;
+                state.discover.installed.clear();
+            }
+            d.set_error("".into());
+            let target = if kind == "modpack" {
+                String::new()
+            } else {
+                state.discover.target.clone().unwrap_or_default()
+            };
+            if kind != "modpack" && target.is_empty() {
+                d.set_loading(false);
+                d.set_error("Choose a target instance to browse compatible content.".into());
+                return None;
+            }
+            d.set_loading(true);
+            Some((
+                target,
+                kind,
+                d.get_query().to_string(),
+                state.discover.next_offset,
+                state.discover.serial,
+                state
+                    .discover
+                    .category_values
+                    .get(d.get_category_index().wrapping_sub(1) as usize)
+                    .cloned()
+                    .into_iter()
+                    .collect(),
+                ["relevance", "downloads", "follows", "newest", "updated"]
+                    [d.get_sort_index().clamp(0, 4) as usize]
+                    .to_owned(),
+            ))
+        })
+        .flatten()
+    else {
         render();
         return;
     };
     render();
     load_installed();
     ui::spawn(
-        api::browse(ui::host(), target, kind, query, offset),
+        api::browse_filtered(ui::host(), target, kind, query, offset, categories, sort),
         move |result| {
             let current = ui::with(|window, state| {
                 if state.discover.serial != serial {

@@ -365,6 +365,25 @@ type Scene = fn(&AppWindow);
 fn scenes() -> Vec<(&'static str, Scene)> {
     vec![
         ("mods-updates", |app| workspace(app, 0)),
+        ("refinement-discover-filters", |app| {
+            app.global::<Nav>().set_page(Page::Discover);
+            let discover = app.global::<Discover>();
+            discover.set_kind(3);
+            discover.set_category_names(strings(&["All categories", "optimization", "adventure"]));
+            discover.set_category_index(1);
+            discover.set_sort_index(4);
+        }),
+        ("refinement-saved-skin", |app| {
+            app.global::<Nav>().set_page(Page::Skins);
+            app.global::<crate::Skins>()
+                .set_presets(ModelRc::new(VecModel::from(vec![crate::SkinRow {
+                    id: "saved-one".into(),
+                    name: "Saved skin".into(),
+                    edit_name: "Saved skin".into(),
+                    model: "Slim".into(),
+                    ..Default::default()
+                }])));
+        }),
         ("pandora4-instance-overrides", |app| {
             workspace(app, 3);
             let sync = app.global::<crate::InstanceSync>();
@@ -464,6 +483,37 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
         }
     }
 
+    // Rename a saved skin through the real editor and Enter action.
+    let (app, adapter) = window((1120., 760.), 1.);
+    scenes()
+        .into_iter()
+        .find(|(name, _)| *name == "refinement-saved-skin")
+        .unwrap()
+        .1(&app);
+    let renamed: Rc<RefCell<Vec<(String, String)>>> = Rc::default();
+    let observed = renamed.clone();
+    app.global::<crate::Skins>().on_rename(move |id, name| {
+        observed
+            .borrow_mut()
+            .push((id.to_string(), name.to_string()))
+    });
+    render(&app, &adapter, "refinement-skin-before-rename");
+    click(&app, 951., 294.);
+    render(&app, &adapter, "refinement-skin-name-editor");
+    click(&app, 820., 294.);
+    key(&app, Key::End);
+    app.window().dispatch_event(WindowEvent::KeyPressed {
+        text: " New".into(),
+    });
+    app.window().dispatch_event(WindowEvent::KeyReleased {
+        text: " New".into(),
+    });
+    key(&app, Key::Return);
+    assert_eq!(
+        *renamed.borrow(),
+        [("saved-one".into(), "Saved skin New".into())]
+    );
+
     // Input: the new actions fire exactly once from real pointer events.
     let (app, adapter) = window((1120.0, 760.0), 1.0);
     workspace(&app, 0);
@@ -511,17 +561,26 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     instances.on_cfg_java_check(move || log.borrow_mut().push("check"));
     let log = java_fired.clone();
     instances.on_cfg_java_changed(move || log.borrow_mut().push("changed"));
-    click(&app, 175.0, 340.0);
-    click(&app, 290.0, 340.0);
+    click(&app, 175.0, 320.0);
+    click(&app, 290.0, 320.0);
     assert_eq!(*java_fired.borrow(), ["choose", "check"]);
-    click(&app, 350.0, 296.0);
+    click(&app, 350.0, 276.0);
     key(&app, Key::End);
     app.window()
         .dispatch_event(WindowEvent::KeyPressed { text: "x".into() });
     app.window()
         .dispatch_event(WindowEvent::KeyReleased { text: "x".into() });
     assert!(instances.get_cfg_java_path().ends_with('x'));
-    click(&app, 430.0, 340.0);
+    // The real numeric memory control accepts pointer focus and keyboard edits.
+    click(&app, 975.0, 484.0);
+    key(&app, Key::End);
+    key(&app, Key::Backspace);
+    app.window()
+        .dispatch_event(WindowEvent::KeyPressed { text: "8".into() });
+    app.window()
+        .dispatch_event(WindowEvent::KeyReleased { text: "8".into() });
+    assert_eq!(instances.get_memory_mib_text().as_str(), "4098");
+    click(&app, 430.0, 320.0);
     assert_eq!(
         instances.get_cfg_java_index(),
         0,

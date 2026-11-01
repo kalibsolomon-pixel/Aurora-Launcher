@@ -125,3 +125,33 @@ fn shared_busy_indicators_animate_in_software_and_stop_under_reduced_motion() {
         "idle UI must stop animation work"
     );
 }
+
+#[test]
+fn borealis_background_requests_no_idle_frames() {
+    slint::platform::set_platform(Box::new(TestPlatform)).unwrap();
+    let app = crate::AppWindow::new().unwrap();
+    app.window().set_size(LogicalSize::new(1120., 760.));
+    app.global::<crate::Shell>().set_loaded(true);
+    app.global::<crate::Theme>().set_borealis(true);
+    app.show().unwrap();
+    let paints = Cell::new(0);
+    for at in [1000, 1300, 4000, 8000] {
+        NOW.with(|now| now.set(Duration::from_millis(at)));
+        slint::platform::update_timers_and_animations();
+        ADAPTER.with(|slot| {
+            slot.borrow().as_ref().unwrap().draw_if_needed(|renderer| {
+                paints.set(paints.get() + 1);
+                renderer.render(&mut vec![Rgb8Pixel::default(); 1120 * 760], 1120);
+            })
+        });
+        assert!(!app.window().has_active_animations());
+        if at == 1300 {
+            paints.set(0);
+        }
+    }
+    assert_eq!(
+        paints.get(),
+        0,
+        "Static Borealis must not schedule idle frames"
+    );
+}

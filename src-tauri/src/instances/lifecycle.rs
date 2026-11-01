@@ -407,7 +407,7 @@ pub async fn begin_pack_instance(
     request: CreateInstanceRequest,
     pack_identity: super::PackRegistryIdentity,
     progress: &mut (dyn FnMut(InstanceProgress) + Send),
-) -> Result<InstanceRecord, InstanceError> {
+) -> Result<(InstanceRecord, InstanceOperationGuard), InstanceError> {
     request.configuration().validate()?;
     if request.configuration().aurora_enabled()
         || request.configuration().loader().kind() != super::settings::LoaderKind::Fabric
@@ -428,7 +428,7 @@ pub async fn begin_pack_instance(
         request.configuration,
     )?;
     record.set_pack(pack_identity)?;
-    let _operation = lock_instance_operation(managed, record.id())?;
+    let operation = lock_instance_operation(managed, record.id())?;
     {
         let _guard = registry_lock();
         let mut registry = InstanceRegistry::load(registry_path)?;
@@ -445,7 +445,7 @@ pub async fn begin_pack_instance(
         false,
     )
     .await?;
-    Ok(record)
+    Ok((record, operation))
 }
 
 /// The pack marker and all owned bytes must already be present. This is the
@@ -455,8 +455,13 @@ pub fn complete_pack_instance(
     registry_path: &Path,
     config_path: &Path,
     instance: &InstanceId,
+    operation: &InstanceOperationGuard,
 ) -> Result<InstanceRecord, InstanceError> {
-    let _operation = lock_instance_operation(managed, instance)?;
+    if &operation.instance != instance {
+        return Err(InstanceError::ReleaseInvalid(
+            "Pack installation ownership does not match the instance.".into(),
+        ));
+    }
     let _game_guard = crate::install::lock_game_target(managed, instance)?;
     let pack = crate::pack_state::InstalledPack::load(managed, instance)
         .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?
@@ -1922,17 +1927,23 @@ pub(crate) fn validate_instance_under_game_lock(
     })
 }
 
-/// The process-wide registry mutation lock: registry read-modify-write
-/// windows are serialized so concurrent operations cannot lose updates.
-/// Long installations run outside it.
-pub(crate) fn lock_instance_operation(
+/// Exclusive lifecycle ownership, retaining both parent and legacy rendezvous locks.
+#[derive(Debug)]
+pub struct InstanceOperationGuard {
+    instance: InstanceId,
+    _parent: crate::install::coordination::TargetLock,
+    _legacy: crate::install::coordination::TargetLock,
+}
+
+/// Outside the instance so deletion can hold ownership until its root is gone.
+pub(crate) fn lock_instance_parent(
     managed: &ManagedPaths,
     instance: &InstanceId,
 ) -> Result<crate::install::coordination::TargetLock, InstallError> {
     crate::install::coordination::TargetLock::acquire(
         managed.data_root(),
-        managed.instance_paths(instance).root(),
-        ".instance-operation.lock",
+        &managed.instances_dir(),
+        &format!(".{}.operation.lock", instance.as_str()),
     )
     .map_err(|error| match error {
         crate::install::coordination::LockError::Busy => InstallError::AlreadyInProgress {
@@ -1942,6 +1953,30 @@ pub(crate) fn lock_instance_operation(
     })
 }
 
+pub(crate) fn lock_instance_operation(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<InstanceOperationGuard, InstallError> {
+    let parent = lock_instance_parent(managed, instance)?;
+    let legacy = crate::install::coordination::TargetLock::acquire(
+        managed.data_root(),
+        managed.instance_paths(instance).root(),
+        ".instance-operation.lock",
+    )
+    .map_err(|error| match error {
+        crate::install::coordination::LockError::Busy => InstallError::AlreadyInProgress {
+            instance_id: instance.to_string(),
+        },
+        crate::install::coordination::LockError::Io(error) => InstallError::Storage(error),
+    })?;
+    Ok(InstanceOperationGuard {
+        instance: instance.clone(),
+        _parent: parent,
+        _legacy: legacy,
+    })
+}
+
+/// Serialize registry read-modify-write windows; long installations run outside it.
 pub(crate) fn registry_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     let lock = LOCK.get_or_init(|| Mutex::new(()));

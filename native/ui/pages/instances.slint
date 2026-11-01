@@ -116,7 +116,10 @@ component ContentLine inherits Rectangle {
             spacing: 2px;
             Text { text: root.item.title; font-size: Theme.text-body; color: root.item.enabled ? Theme.text : Theme.text-muted; overflow: elide; }
             Text { text: root.item.detail; font-size: Theme.text-metadata; color: Theme.text-muted; overflow: elide; }
-            if root.item.note != "": Text { text: root.item.note; font-size: Theme.text-metadata; color: Theme.warning; wrap: word-wrap; }
+
+        }
+        if root.item.note != "": IconButton {
+            icon: Icons.warning; label: root.item.note; tooltip-above: true;
         }
         if root.item.update-text != "": StatusPill {
             y: (parent.height - self.height) / 2;
@@ -155,7 +158,7 @@ component ConfigurationTab inherits VerticalLayout {
     spacing: Theme.space-4;
     Group {
         title: "Game";
-        description: "Changes are saved first, then installed explicitly. Installed content is never changed by a selection alone.";
+
         SettingRow {
             label: "Minecraft version";
             detail: "Changing this requires installing new game files.";
@@ -244,20 +247,19 @@ component ConfigurationTab inherits VerticalLayout {
         description: Instances.memory-hint;
         SettingRow {
             label: "Maximum memory";
-            detail: round(Instances.memory-gib * 2) / 2 + " GB";
-            Slider {
-                width: 260px;
-                minimum: 1;
-                maximum: Instances.memory-max-gib;
-                step: 0.5;
-                label: "Maximum memory in gigabytes";
-                value <=> Instances.memory-gib;
-                changed => { Instances.config-edited(); }
+            detail: "MiB (512–32768)";
+            TextField {
+                width: 160px;
+                label: "Maximum memory in MiB";
+                text <=> Instances.memory-mib-text;
+                max-length: 5;
+                edited => { Instances.config-edited(); }
+                accepted => { Instances.config-edited(); }
             }
         }
         SettingRow {
             label: "Java arguments";
-            detail: "Extra JVM arguments. Aurora validates them before launch.";
+            detail: "Optional";
             TextField {
                 width: 320px;
                 label: "Additional Java arguments";
@@ -342,7 +344,7 @@ component ConfigurationTab inherits VerticalLayout {
         description: "Permanently removes this instance, including its worlds, mods and settings. Shared Java runtimes and downloads are kept.";
         HorizontalLayout {
             alignment: end;
-            Button { text: "Delete instance…"; kind: ButtonKind.danger; icon: Icons.delete; enabled: !Instances.installing; clicked => { Instances.delete-start(); } }
+            Button { text: "Delete instance…"; kind: ButtonKind.danger; icon: Icons.delete; enabled: !Instances.config-busy; clicked => { Instances.delete-start(); } }
         }
     }
 }
@@ -362,15 +364,15 @@ component ContentTab inherits VerticalLayout {
         }
         Button { text: "Find more"; icon: Icons.discover; clicked => { Instances.content-discover(); } }
         Button { text: "Import file"; enabled: !Instances.installing; clicked => { Instances.content-import(); } }
-        IconButton { icon: Icons.folder; label: "Open folder"; size: 36px; clicked => { Instances.content-open-folder(); } }
-        IconButton { icon: Icons.refresh; label: "Refresh"; size: 36px; clicked => { Instances.content-refresh(); } }
+        IconButton { tooltip-above: true; icon: Icons.folder; label: "Open folder"; size: 36px; clicked => { Instances.content-open-folder(); } }
+        IconButton { tooltip-above: true; icon: Icons.refresh; label: "Refresh"; size: 36px; clicked => { Instances.content-refresh(); } }
     }
     HorizontalLayout {
         spacing: Theme.space-2;
         Text {
             horizontal-stretch: 1;
             vertical-alignment: center;
-            text: Instances.updates-summary != "" ? Instances.updates-summary : "Check Modrinth for compatible updates to content installed from it.";
+            text: Instances.updates-summary;
             color: Instances.updates-count > 0 ? Theme.text : Theme.text-muted;
             font-size: Theme.text-secondary-size;
             wrap: word-wrap;

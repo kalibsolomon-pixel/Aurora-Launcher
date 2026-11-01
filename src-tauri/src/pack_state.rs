@@ -347,7 +347,16 @@ impl InstalledPack {
         let provider = ContentState::load(managed, &self.instance_id)
             .map_err(|_| PackStateError::ProviderMismatch)?;
         for component in &self.components {
-            let path = safe_file(&root, &component.path)?;
+            let path = match safe_file(&root, &component.path) {
+                Ok(path) => path,
+                Err(PackStateError::Io(error))
+                    if error.kind() == std::io::ErrorKind::NotFound
+                        && component.path.starts_with("mods/") =>
+                {
+                    safe_file(&root, &format!("{}.disabled", component.path))?
+                }
+                Err(error) => return Err(error),
+            };
             let digest =
                 ArtifactDigest::parse(&component.sha256).map_err(|_| PackStateError::Malformed)?;
             verify_file(&path, &digest, None).map_err(|_| PackStateError::Integrity)?;
@@ -373,7 +382,16 @@ impl InstalledPack {
             }
         }
         for item in &self.overrides {
-            let path = safe_file(&root, &item.path)?;
+            let path = match safe_file(&root, &item.path) {
+                Ok(path) => path,
+                Err(PackStateError::Io(error))
+                    if error.kind() == std::io::ErrorKind::NotFound
+                        && item.path.starts_with("mods/") =>
+                {
+                    safe_file(&root, &format!("{}.disabled", item.path))?
+                }
+                Err(error) => return Err(error),
+            };
             let digest =
                 ArtifactDigest::parse(&item.sha256).map_err(|_| PackStateError::Malformed)?;
             verify_file(&path, &digest, None).map_err(|_| PackStateError::Integrity)?;

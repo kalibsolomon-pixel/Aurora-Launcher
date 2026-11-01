@@ -1325,12 +1325,13 @@ export function browseKindNoun(kind: BrowseKind): string {
 }
 
 /** Provider-supported sort orders only. */
-export type BrowseSort = "relevance" | "downloads" | "newest" | "updated";
+export type BrowseSort = "relevance" | "downloads" | "follows" | "newest" | "updated";
 
-export const BROWSE_SORTS: BrowseSort[] = ["relevance", "downloads", "newest", "updated"];
+export const BROWSE_SORTS: BrowseSort[] = ["relevance", "downloads", "follows", "newest", "updated"];
 
 export function browseSortLabel(sort: BrowseSort): string {
   if (sort === "downloads") return "Most downloaded";
+  if (sort === "follows") return "Most followed";
   if (sort === "newest") return "Newest";
   if (sort === "updated") return "Recently updated";
   return "Relevance";

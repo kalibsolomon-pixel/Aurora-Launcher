@@ -74,6 +74,7 @@ export struct Swatch {
 }
 
 export struct SkinRow {
+    edit-name: string,
     id: string,
     name: string,
     model: string,
@@ -165,6 +166,7 @@ export global Instances {
     callback close-workspace();
 
     // Configuration.
+    in-out property <string> memory-mib-text: "4096";
     in-out property <float> memory-gib: 4;
     in property <float> memory-max-gib: 16;
     in property <string> memory-hint;
@@ -346,6 +348,10 @@ export global IconPicker {
 
 export struct OptionalPackFile { path: string, selected: bool }
 export global Discover {
+    in property <[string]> category-names: ["All categories"];
+    in-out property <int> category-index: 0;
+    in-out property <int> sort-index: 1;
+    callback filters-changed();
     // Set when the open pack review came from a recognized local .mrpack.
     in property <string> local-pack-note;
     in property <[OptionalPackFile]> optional-files;
@@ -456,6 +462,7 @@ export global Accounts {
 }
 
 export global Skins {
+    callback rename(string, string);
     in property <bool> has-account: false;
     in property <string> account-name;
     in property <image> current;

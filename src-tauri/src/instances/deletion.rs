@@ -1,6 +1,8 @@
 //! Deliberate deletion of one registered, isolated instance. Shared cache,
 //! runtime, account and launcher preference data are never deletion targets.
-use super::{InstanceId, InstanceRegistry, InstanceState};
+#[cfg(test)]
+use super::InstanceState;
+use super::{InstanceId, InstanceRegistry};
 use crate::{config, instance_content, launch, paths::ManagedPaths};
 use std::path::Path;
 
@@ -53,6 +55,12 @@ pub fn delete(
 ) -> Result<(), DeleteError> {
     instance_content::with_instance_lock(id, || {
         Ok((|| {
+            let _operation = super::lifecycle::lock_instance_parent(managed, id).map_err(|_| {
+                DeleteError(
+                    "instance_delete_busy",
+                    "An installation is still using this instance.".into(),
+                )
+            })?;
             let _registry = super::lifecycle::registry_lock();
             let mut registry =
                 InstanceRegistry::load(&managed.instance_registry_file()).map_err(failed)?;
@@ -66,12 +74,6 @@ pub fn delete(
                 return Err(DeleteError(
                     "instance_delete_confirmation",
                     "Type the current instance name to confirm deletion.".into(),
-                ));
-            }
-            if record.state() != InstanceState::Ready {
-                return Err(DeleteError(
-                    "instance_delete_busy",
-                    "Finish instance installation before deleting it.".into(),
                 ));
             }
             let _process = launch::process::lock_stopped(id.as_str()).map_err(|_| {
@@ -199,6 +201,38 @@ mod tests {
             let _ = std::fs::remove_dir_all(self.managed.data_root());
         }
     }
+    #[test]
+    fn failed_installation_can_be_deleted_but_live_installation_cannot() {
+        let world = World::new();
+        let mut registry = InstanceRegistry::load(&world.managed.instance_registry_file()).unwrap();
+        registry.instances_mut()[0].set_state(InstanceState::Installing);
+        registry
+            .save(&world.managed.instance_registry_file())
+            .unwrap();
+        let operation =
+            super::super::lifecycle::lock_instance_operation(&world.managed, &world.id).unwrap();
+        assert_eq!(
+            delete(&world.managed, &world.id, "Disposable")
+                .unwrap_err()
+                .0,
+            "instance_delete_busy"
+        );
+        let foreign = super::super::generate_instance_id();
+        assert!(
+            super::super::lifecycle::complete_pack_instance(
+                &world.managed,
+                &world.managed.instance_registry_file(),
+                &world.managed.config_file(),
+                &foreign,
+                &operation
+            )
+            .is_err()
+        );
+        drop(operation);
+        delete(&world.managed, &world.id, "Disposable").unwrap();
+        assert!(!world.managed.instance_paths(&world.id).root().exists());
+    }
+
     #[test]
     fn deletion_removes_only_registered_root_and_clears_selection() {
         let world = World::new();

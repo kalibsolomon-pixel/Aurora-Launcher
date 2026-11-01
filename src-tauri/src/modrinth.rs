@@ -77,6 +77,7 @@ impl BrowseKind {
 pub enum BrowseSort {
     Relevance,
     Downloads,
+    Follows,
     Newest,
     Updated,
 }
@@ -86,6 +87,7 @@ impl BrowseSort {
         match self {
             Self::Relevance => None,
             Self::Downloads => Some("downloads"),
+            Self::Follows => Some("follows"),
             Self::Newest => Some("newest"),
             Self::Updated => Some("updated"),
         }
@@ -301,7 +303,7 @@ impl Client {
                 &serde_json::to_string(&facets).expect("facets serialize"),
             );
             if let Some(sort_value) = sort.query_value() {
-                pairs.append_pair("sort", sort_value);
+                pairs.append_pair("index", sort_value);
             }
             pairs.append_pair("limit", "20");
             pairs.append_pair("offset", &offset.to_string());
@@ -3217,6 +3219,7 @@ mod tests {
             ),
             (BrowseKind::ResourcePack, vec![], BrowseSort::Newest),
             (BrowseKind::ShaderPack, vec!["cartoon"], BrowseSort::Updated),
+            (BrowseKind::Mod, vec![], BrowseSort::Follows),
         ];
         for (kind, categories, sort) in cases {
             client
@@ -3248,12 +3251,14 @@ mod tests {
                 .unwrap();
                 let sort = url
                     .query_pairs()
-                    .find(|(key, _)| key == "sort")
+                    .find(|(key, _)| key == "index")
                     .map(|(_, value)| value.to_string());
                 (url.path().to_owned(), facets, sort)
             })
             .collect();
         assert!(parsed.iter().all(|(path, _, _)| path == "/v2/search"));
+        assert_eq!(parsed[4].2.as_deref(), Some("follows"));
+        assert!(requests.iter().all(|path| !path.contains("sort=")));
         let (mod_facets, mod_sort) = (&parsed[0].1, &parsed[0].2);
         assert!(
             mod_facets

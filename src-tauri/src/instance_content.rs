@@ -2304,6 +2304,21 @@ fn activate_provider_transaction_with_revision(
             targets.push(target);
         }
         validate_projected_artifacts(managed, instance, &acquired, None)?;
+        // All instance mutations share this lock; compare incoming mods with
+        // one verified installed snapshot instead of rescanning after each copy.
+        let installed_mods = if acquired
+            .iter()
+            .any(|(r, _, _)| r.content_type == ContentType::Mod)
+        {
+            crate::instance_mods::verified_required_mods(managed, instance)
+                .map_err(|e| ContentError::StateMalformed(e.to_string()))?;
+            Some(
+                crate::instance_mods::scan(managed, instance)
+                    .map_err(|e| ContentError::StateMalformed(e.to_string()))?,
+            )
+        } else {
+            None
+        };
         let mut created = Vec::new();
         let result = (|| {
             for ((record, source, bytes), target) in acquired.iter().zip(targets.iter()) {
@@ -2311,7 +2326,11 @@ fn activate_provider_transaction_with_revision(
                     .map_err(|_| ContentError::HashMismatch)?;
                 verify_file(source, &digest, Some(*bytes))
                     .map_err(|_| ContentError::HashMismatch)?;
-                validate_provider_mod_artifact(managed, instance, record, source, *bytes)?;
+                if let Some(inventory) = &installed_mods {
+                    validate_provider_mod_against_inventory(
+                        managed, instance, record, source, *bytes, inventory,
+                    )?;
+                }
                 let temporary =
                     target.with_file_name(format!(".content-installing-{}", uuid::Uuid::new_v4()));
                 if let Err(error) = std::fs::copy(source, &temporary) {
@@ -3029,6 +3048,24 @@ fn validate_provider_mod_artifact(
     if record.content_type != ContentType::Mod {
         return Ok(());
     }
+    crate::instance_mods::verified_required_mods(managed, instance)
+        .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
+    let inventory = crate::instance_mods::scan(managed, instance)
+        .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
+    validate_provider_mod_against_inventory(managed, instance, record, path, bytes, &inventory)
+}
+
+fn validate_provider_mod_against_inventory(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    record: &ProviderRecord,
+    path: &Path,
+    bytes: u64,
+    inventory: &crate::instance_mods::ModInventory,
+) -> Result<(), ContentError> {
+    if record.content_type != ContentType::Mod {
+        return Ok(());
+    }
     let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
         .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
     let platform_kind = crate::instance_mods::platform_kind_of(managed, instance);
@@ -3038,11 +3075,15 @@ fn validate_provider_mod_artifact(
             .platform
             .provider_loader()
             .map_err(|_| ContentError::UnsupportedAction)?;
+        // A verified exact mrpack may intentionally reuse a file whose provider
+        // release tags predate this game. Preserve those tags as provenance;
+        // whole-pack projection checks the JAR's actual Minecraft constraints.
         if record.compatibility.loader.as_deref() != Some(loader)
-            || !record
-                .compatibility
-                .minecraft_versions
-                .contains(&installed.minecraft_version)
+            || (record.origin != ProviderOrigin::Pack
+                && !record
+                    .compatibility
+                    .minecraft_versions
+                    .contains(&installed.minecraft_version))
         {
             return Err(ContentError::UnsupportedAction);
         }
@@ -3053,10 +3094,6 @@ fn validate_provider_mod_artifact(
     };
     // Ownership is configuration-derived. A provider may supply any otherwise
     // compatible mod identity unless a verified active launcher requirement owns it.
-    crate::instance_mods::verified_required_mods(managed, instance)
-        .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
-    let inventory = crate::instance_mods::scan(managed, instance)
-        .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
     for entry in &inventory.entries {
         // Lifecycle updates may replace only their own verified provider record.
         if entry.ownership == crate::instance_mods::ModOwnership::ProviderManaged
@@ -3819,6 +3856,58 @@ mod tests {
         registry
             .save(&fixture.managed.instance_registry_file())
             .unwrap();
+    }
+
+    #[test]
+    fn exact_pack_files_use_fabric_constraints_instead_of_provider_release_tags() {
+        let fixture = no_aurora_fixture();
+        std::fs::create_dir_all(fixture.dir(ContentType::Mod)).unwrap();
+        let compatible = document_jar(
+            serde_json::json!({"id":"packmod", "version":"1", "depends":{"minecraft":">=1.21.9"}}),
+        );
+        let file = fixture.root.join("component.jar");
+        std::fs::write(&file, &compatible).unwrap();
+        let mut record = transaction_record(ContentType::Mod, "component.jar", &compatible);
+        record.compatibility.minecraft_versions = vec!["1.21.9".into()];
+        assert!(
+            validate_provider_mod_artifact(
+                &fixture.managed,
+                &fixture.instance,
+                &record,
+                &file,
+                compatible.len() as u64
+            )
+            .is_err()
+        );
+        record.origin = ProviderOrigin::Pack;
+        validate_provider_mod_artifact(
+            &fixture.managed,
+            &fixture.instance,
+            &record,
+            &file,
+            compatible.len() as u64,
+        )
+        .unwrap();
+        validate_projected_artifacts(
+            &fixture.managed,
+            &fixture.instance,
+            &[(record.clone(), file.clone(), compatible.len() as u64)],
+            None,
+        )
+        .unwrap();
+        let incompatible = document_jar(
+            serde_json::json!({"id":"packmod", "version":"1", "depends":{"minecraft":"<1.21"}}),
+        );
+        std::fs::write(&file, &incompatible).unwrap();
+        assert!(
+            validate_projected_artifacts(
+                &fixture.managed,
+                &fixture.instance,
+                &[(record, file, incompatible.len() as u64)],
+                None
+            )
+            .is_err()
+        );
     }
 
     fn no_aurora_fixture() -> Fixture {

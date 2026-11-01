@@ -1,0 +1,21 @@
+{
+  "before": {
+    "executableSha256": "1b6832cb7282d87cf08a45132fda4ac3015909f8a5d8e3931cec07fdc899c3e5",
+    "seconds": 15.042419499950483,
+    "cpuSeconds": 0.171875,
+    "percentOneCore": 1.14260209270567,
+    "workingSetMiB": 47.4296875,
+    "privateMiB": 12.53125,
+    "context": "empty profile, Borealis, visible without activation, forced old decorative timer, 1120x760; startup excluded"
+  },
+  "afterRendererFixCandidate": {
+    "executableSha256": "93f5a525fa9bb799f4ae316c6ae0d0e43fdbc82f0e91e06e758a340d772d487b",
+    "seconds": 15.036689099972136,
+    "cpuSeconds": 0.078125,
+    "percentOneCore": 0.5195625145973443,
+    "workingSetMiB": 48.58984375,
+    "privateMiB": 12.47265625,
+    "context": "same empty profile and Borealis appearance, visible without activation, static background, 1120x760; startup excluded. Before/after release builds; before fat LTO, after ThinLTO. One short sample; no frame latency or game performance claim."
+  },
+  "limits": "One 15-second empty-profile sample per binary; startup excluded. Different release LTO modes; final sort addition postdates the after candidate. No input-latency, game-performance, or download-speed claim."
+}

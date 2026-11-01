@@ -148,6 +148,14 @@ pub fn submit(
 }
 
 /// Projects with a queued or running install (shown as busy in results).
+pub fn instance_busy(id: &str) -> bool {
+    QUEUE.with(|q| {
+        q.borrow().tasks.iter().any(|t| {
+            t.key.as_deref() == Some(id) && matches!(t.phase, Phase::Pending | Phase::Running)
+        })
+    })
+}
+
 pub fn busy_projects() -> Vec<String> {
     QUEUE.with(|q| {
         q.borrow()

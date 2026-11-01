@@ -42,10 +42,9 @@ export global Theme {
     out property <color> scrim: #000000a6;
 
     // Borealis: a pre-blurred static aurora layer behind translucent
-    // surfaces. `drift` is a small offset Rust advances at a low rate only
-    // while the window is visible, focused and motion is allowed.
+    // surfaces. Static by design: no continuous background redraws.
     in-out property <bool> borealis: false;
-    in-out property <length> drift: 0px;
+
 
     // Motion: short and purposeful; zero under reduced motion.
     in-out property <bool> reduce-motion: false;

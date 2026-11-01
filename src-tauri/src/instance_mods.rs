@@ -464,15 +464,35 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
                 .file_name
                 .strip_suffix(".disabled")
                 .unwrap_or(&entry.file_name);
-            if pack.owns_path(&format!("mods/{base}")) {
-                let reason = format!(
-                    "Required by {} {}. Modpack components are updated through Update Modpack on the instance's Overview page.",
-                    pack.identity.name, pack.identity.pack_version
-                );
-                entry.can_remove = false;
-                entry.can_toggle = false;
-                entry.removal_blocked_reason = Some(reason.clone());
-                entry.action_blocked_reason = Some(reason);
+            let relative = format!("mods/{base}");
+            let expected = pack
+                .components
+                .iter()
+                .find(|c| c.path.eq_ignore_ascii_case(&relative))
+                .map(|c| &c.sha256)
+                .or_else(|| {
+                    pack.overrides
+                        .iter()
+                        .find(|c| c.path.eq_ignore_ascii_case(&relative))
+                        .map(|c| &c.sha256)
+                });
+            if let Some(expected) = expected {
+                if matches!(entry.ownership, ModOwnership::LauncherManagedRequired) {
+                    continue;
+                }
+                let valid = matches!(
+                    entry.file_type,
+                    ModFileType::EnabledJar | ModFileType::DisabledJar
+                ) && ArtifactDigest::parse(expected).is_ok_and(|digest| {
+                    verify_file(&mods.join(&entry.file_name), &digest, entry.size_bytes).is_ok()
+                });
+                entry.can_remove = valid;
+                entry.can_toggle = valid;
+                if valid {
+                    entry.sha256 = Some(expected.clone());
+                    entry.action_blocked_reason = None;
+                    entry.removal_blocked_reason = None;
+                }
             }
         }
     }
@@ -1437,7 +1457,7 @@ pub(crate) fn inspect_fabric_metadata(
             )],
         );
     }
-    let document: FabricMetadataDocument = match serde_json::from_slice(&bytes) {
+    let document: FabricMetadataDocument = match fabric_metadata_json(&bytes) {
         Ok(document) => document,
         Err(error) => {
             return (
@@ -1748,6 +1768,28 @@ fn inspect_declared_nested_jars<R: Read + Seek>(
 // Gson's lenient mode also accepts one trailing comma before an array's `]`
 // (read as an omitted element; C2ME ships such a config) but still rejects
 // one before an object's `}`, so only the array form is tolerated here.
+/// Normalize only literal JSON string controls accepted by Fabric's JsonReader.
+/// Structure, types, UTF-8, escapes and the existing bounded reads stay strict.
+fn fabric_metadata_json(bytes: &[u8]) -> Result<FabricMetadataDocument, serde_json::Error> {
+    let mut normalized = Vec::with_capacity(bytes.len());
+    let (mut quoted, mut escaped) = (false, false);
+    for &byte in bytes {
+        if quoted && !escaped && byte < 0x20 {
+            normalized.extend_from_slice(format!("\\u{byte:04x}").as_bytes());
+            continue;
+        }
+        normalized.push(byte);
+        if escaped {
+            escaped = false;
+        } else if quoted && byte == b'\\' {
+            escaped = true;
+        } else if byte == b'"' {
+            quoted = !quoted;
+        }
+    }
+    serde_json::from_slice(&normalized)
+}
+
 fn mixin_json(bytes: &[u8]) -> Result<serde_json::Value, &'static str> {
     let mut normalized = bytes.to_vec();
     let mut i = 0;
@@ -2151,7 +2193,9 @@ fn set_enabled_with_commit(
             return Ok(inventory);
         }
         if !enabled {
-            dependency_blockers(&inventory, entry, &platform_kind_of(managed, instance))?;
+            if !pack_owned_mod(managed, instance, &entry.file_name)? {
+                dependency_blockers(&inventory, entry, &platform_kind_of(managed, instance))?;
+            }
         } else {
             let mut proposed = inventory.entries.clone();
             proposed
@@ -2316,6 +2360,21 @@ impl DisabledState {
 /// Permanently removes one exact current user-owned local JAR, then returns
 /// a fresh authoritative inventory. UI confirmation is required by product
 /// policy; this backend still revalidates identity and ownership itself.
+fn pack_owned_mod(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    file_name: &str,
+) -> Result<bool, ModError> {
+    Ok(crate::pack_state::InstalledPack::load(managed, instance)
+        .map_err(|e| ModError::State(e.to_string()))?
+        .is_some_and(|p| {
+            p.owns_path(&format!(
+                "mods/{}",
+                file_name.strip_suffix(".disabled").unwrap_or(file_name)
+            ))
+        }))
+}
+
 pub fn remove(
     managed: &ManagedPaths,
     instance: &InstanceId,
@@ -2324,7 +2383,9 @@ pub fn remove(
     with_mutation_lock(instance, || {
         let inventory = scan(managed, instance)?;
         let entry = resolve_mutable_entry(&inventory, entry_id, false)?;
-        dependency_blockers(&inventory, entry, &platform_kind_of(managed, instance))?;
+        if !pack_owned_mod(managed, instance, &entry.file_name)? {
+            dependency_blockers(&inventory, entry, &platform_kind_of(managed, instance))?;
+        }
         let mods = validate_mods_directory(managed, instance)?;
         let target = validate_current_regular_file(&mods, &entry.file_name)?;
         if let Some(hash) = &entry.sha256 {
@@ -2335,7 +2396,79 @@ pub fn remove(
             )
             .map_err(|_| ModError::StaleEntry)?;
         }
-        std::fs::remove_file(target).map_err(|source| ModError::MutationIo { source })?;
+        // Move exact inspected bytes aside, then commit both ownership documents.
+        // On a write failure restore the old documents and filename.
+        let previous_content = crate::instance_content::ContentState::load(managed, instance)
+            .map_err(|e| ModError::State(e.to_string()))?;
+        let previous_pack = crate::pack_state::InstalledPack::load(managed, instance)
+            .map_err(|e| ModError::State(e.to_string()))?;
+        let mut content = previous_content.clone();
+        let base = entry
+            .file_name
+            .strip_suffix(".disabled")
+            .unwrap_or(&entry.file_name);
+        let relative = format!("mods/{base}");
+        content.entries.retain(|r| {
+            !(r.content_type == crate::instance_content::ContentType::Mod
+                && r.file_name.eq_ignore_ascii_case(base))
+        });
+        let identities: HashSet<_> = content
+            .entries
+            .iter()
+            .map(ProviderRecord::identity)
+            .collect();
+        for record in &mut content.entries {
+            record.requires.retain(|id| identities.contains(id));
+        }
+        let mut pack = previous_pack.clone();
+        if let Some(pack) = &mut pack {
+            if pack.owns_path(&relative) {
+                pack.components
+                    .retain(|c| !c.path.eq_ignore_ascii_case(&relative));
+                pack.overrides
+                    .retain(|c| !c.path.eq_ignore_ascii_case(&relative));
+                pack.divergences
+                    .retain(|c| !c.path.eq_ignore_ascii_case(&relative));
+                if !pack
+                    .excluded_paths
+                    .iter()
+                    .any(|p| p.eq_ignore_ascii_case(&relative))
+                {
+                    pack.excluded_paths.push(relative);
+                }
+            }
+        }
+        let parked = mods.join(format!(".aurora-remove-{}.tmp", uuid::Uuid::new_v4()));
+        std::fs::rename(&target, &parked).map_err(|source| ModError::MutationIo { source })?;
+        let commit = (|| -> Result<(), ModError> {
+            content
+                .save(managed, instance)
+                .map_err(|e| ModError::State(e.to_string()))?;
+            if let (Some(next), Some(old)) = (&pack, &previous_pack) {
+                next.replace(managed, old)
+                    .map_err(|e| ModError::State(e.to_string()))?;
+            }
+            std::fs::remove_file(&parked).map_err(|source| ModError::MutationIo { source })?;
+            Ok(())
+        })();
+        if let Err(error) = commit {
+            previous_content
+                .save(managed, instance)
+                .map_err(|e| ModError::State(e.to_string()))?;
+            if let (Some(next), Some(old)) = (&pack, &previous_pack) {
+                if crate::pack_state::InstalledPack::load(managed, instance)
+                    .ok()
+                    .flatten()
+                    .as_ref()
+                    == Some(next)
+                {
+                    old.replace(managed, next)
+                        .map_err(|e| ModError::State(e.to_string()))?;
+                }
+            }
+            std::fs::rename(&parked, &target).map_err(|source| ModError::MutationIo { source })?;
+            return Err(error);
+        }
         scan(managed, instance)
     })
 }
@@ -3217,6 +3350,87 @@ versionRange="[1,2)"
             "icon": "assets/fixture/icon.png"
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn fabric_description_accepts_literal_newlines_without_relaxing_structure() {
+        let fixture = Fixture::new("fabric-newline");
+        jar(
+            &fixture.mods().join("grass.jar"),
+            Some(
+                b"{\"id\":\"bettergrass\",\"version\":\"1.8.7\",\"description\":\"First line\nSecond line\"}",
+            ),
+        );
+        let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+        let metadata = inventory.entries[0].metadata.as_ref().unwrap();
+        assert_eq!(metadata.id, "bettergrass");
+        assert_eq!(
+            metadata.description.as_deref(),
+            Some("First line\nSecond line")
+        );
+        assert!(fabric_metadata_json(b"{\"id\":\"x\" trailing}").is_err());
+        assert!(fabric_metadata_json(b"{\"id\":123}").is_err());
+    }
+
+    #[test]
+    fn pack_mods_have_real_toggle_and_delete_with_exact_ownership_updates() {
+        use crate::pack_state::{InstalledPack, OwnedComponent, PackIdentity};
+        let fixture = Fixture::new("pack-controls");
+        let file = fixture.mods().join("pack.jar");
+        jar(&file, Some(&metadata("packmod", "Pack mod", "{}")));
+        let hash = file_digest(&file).unwrap();
+        let state = InstalledPack::new(
+            fixture.instance.clone(),
+            PackIdentity {
+                provider: "modrinth".into(),
+                project_id: "PACK0001".into(),
+                version_id: "VERS0001".into(),
+                name: "Pack".into(),
+                pack_version: "1".into(),
+                artifact_sha512: "a".repeat(128),
+                artifact_sha256: "b".repeat(64),
+                minecraft_version: "26.2".into(),
+                fabric_loader_version: "0.19.5".into(),
+                installed_at_unix_seconds: 1,
+            },
+            vec![OwnedComponent {
+                path: "mods/pack.jar".into(),
+                sha256: hash,
+                sha512: "c".repeat(128),
+                provider: None,
+                provider_version_id: None,
+            }],
+            vec![],
+            vec![],
+        )
+        .unwrap();
+        state.save(&fixture.managed).unwrap();
+        let inventory = scan(&fixture.managed, &fixture.instance).unwrap();
+        let entry = &inventory.entries[0];
+        assert!(entry.can_toggle && entry.can_remove);
+        let disabled =
+            set_enabled(&fixture.managed, &fixture.instance, &entry.entry_id, false).unwrap();
+        let entry = &disabled.entries[0];
+        assert!(!entry.enabled && entry.can_toggle && entry.can_remove);
+        let enabled =
+            set_enabled(&fixture.managed, &fixture.instance, &entry.entry_id, true).unwrap();
+        std::fs::write(fixture.mods().join("unrelated.txt"), b"keep").unwrap();
+        remove(
+            &fixture.managed,
+            &fixture.instance,
+            &enabled.entries[0].entry_id,
+        )
+        .unwrap();
+        let state = InstalledPack::load(&fixture.managed, &fixture.instance)
+            .unwrap()
+            .unwrap();
+        assert!(state.components.is_empty());
+        assert_eq!(state.excluded_paths, ["mods/pack.jar"]);
+        assert_eq!(
+            std::fs::read(fixture.mods().join("unrelated.txt")).unwrap(),
+            b"keep"
+        );
+        assert!(!file.exists());
     }
 
     #[test]

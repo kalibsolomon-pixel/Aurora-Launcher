@@ -83,9 +83,10 @@ describe("provider browse vocabulary", () => {
   });
 
   it("exposes only provider-supported sort orders with readable labels", () => {
-    assert.deepEqual([...BROWSE_SORTS], ["relevance", "downloads", "newest", "updated"]);
+    assert.deepEqual([...BROWSE_SORTS], ["relevance", "downloads", "follows", "newest", "updated"]);
     assert.equal(browseSortLabel("relevance"), "Relevance");
     assert.equal(browseSortLabel("downloads"), "Most downloaded");
+    assert.equal(browseSortLabel("follows"), "Most followed");
     assert.equal(browseSortLabel("newest"), "Newest");
     assert.equal(browseSortLabel("updated"), "Recently updated");
   });

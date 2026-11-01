@@ -36,10 +36,10 @@ export component Tooltip inherits Rectangle {
     border-radius: Theme.radius-sm;
     border-width: 1px;
     border-color: Theme.border-strong;
-    width: label.preferred-width + 16px;
+    width: min(label.preferred-width + 16px, 360px);
     height: label.preferred-height + 8px;
     accessible-role: none;
-    label := Text { text: root.text; font-size: Theme.text-label; color: Theme.text; }
+    label := Text { x: 8px; y: 4px; width: parent.width - 16px; text: root.text; wrap: word-wrap; font-size: Theme.text-label; color: Theme.text; }
 }
 
 /// Busy dots use opacity only, which works in the software renderer too.
@@ -137,6 +137,7 @@ export component Button inherits Rectangle {
 
 /// An icon-only button. `label` is its accessible name and tooltip text.
 export component IconButton inherits Rectangle {
+    in property <bool> tooltip-above: false;
     in property <string> icon;
     in property <string> label;
     in property <bool> enabled: true;
@@ -162,7 +163,7 @@ export component IconButton inherits Rectangle {
             reject
         }
     }
-    if touch.has-hover && root.label != "": Tooltip { text: root.label; x: (root.width - self.width) / 2; y: root.height + 6px; }
+    if (touch.has-hover || focus.has-focus) && root.label != "": Tooltip { text: root.label; x: (root.width - self.width) / 2; y: root.tooltip-above ? -self.height - 6px : root.height + 6px; }
     FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; radius: root.border-radius; }
 }
 
@@ -550,7 +551,7 @@ export component StatusPill inherits Rectangle {
     in property <string> text;
     in property <Tone> tone: neutral;
     height: 22px;
-    width: label.preferred-width + 16px;
+    width: min(label.preferred-width + 16px, 360px);
     border-radius: 11px;
     background: tone == Tone.success ? Theme.success-soft : tone == Tone.warning ? Theme.warning-soft
         : tone == Tone.error ? Theme.error-soft : tone == Tone.working ? Theme.working-soft

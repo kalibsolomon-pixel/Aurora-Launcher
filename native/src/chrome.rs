@@ -26,6 +26,7 @@ thread_local! {
 }
 
 /// Whether the window currently has keyboard focus.
+#[allow(dead_code)]
 pub fn is_focused() -> bool {
     FOCUSED.with(Cell::get)
 }
@@ -43,6 +44,7 @@ pub fn dialog_owner() -> Option<isize> {
 }
 
 /// Whether the window is minimized or fully covered.
+#[allow(dead_code)]
 pub fn is_occluded() -> bool {
     OCCLUDED.with(Cell::get)
 }
@@ -65,6 +67,7 @@ fn hwnd() -> Option<windows::Win32::Foundation::HWND> {
 
 /// Visible, not minimized, and not reported occluded. Unknown Windows handles
 /// fail closed. Windows does not report arbitrary overlap as winit occlusion.
+#[allow(dead_code)]
 pub fn is_visible() -> bool {
     #[cfg(windows)]
     {
@@ -91,6 +94,7 @@ pub fn is_visible() -> bool {
 }
 
 /// The foreground window (or, without an OS handle, last reported focused).
+#[allow(dead_code)]
 pub fn is_foreground() -> bool {
     #[cfg(windows)]
     if let Some(hwnd) = hwnd() {
@@ -188,18 +192,6 @@ pub fn install(window: &AppWindow) {
                     OCCLUDED.with(|value| value.set(true));
                 }
                 _ => {}
-            }
-            if matches!(
-                event,
-                WindowEvent::Focused(_)
-                    | WindowEvent::Occluded(_)
-                    | WindowEvent::Resized(_)
-                    | WindowEvent::RedrawRequested
-                    | WindowEvent::Destroyed
-            ) {
-                // The adapter callback precedes Slint's handling of the event.
-                // Reconcile after propagation, against current OS state.
-                let _ = slint::invoke_from_event_loop(crate::borealis::sync);
             }
             EventResult::Propagate
         });

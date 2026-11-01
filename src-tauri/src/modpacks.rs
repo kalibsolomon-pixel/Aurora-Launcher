@@ -205,10 +205,17 @@ pub(crate) async fn resolve(
     let mut provider_preview = Vec::new();
     let mut unresolved = Vec::new();
     let mut project_set = HashSet::new();
-    for file in files {
-        if let Some(item) = identities.get(&file.sha512) {
-            let planned = provider
-                .pack_component_plan(item, &file.path, file.file_size, &pack.minecraft_version)
+    let recognized_files: Vec<_> = files
+        .iter()
+        .filter_map(|file| identities.get(&file.sha512).map(|item| (*file, item)))
+        .collect();
+    let mut planned_files = Vec::new();
+    let minecraft_version = &pack.minecraft_version;
+    crate::transfer::settled_window(&recognized_files, PACK_DOWNLOAD_CONCURRENCY,
+        || crate::content_jobs::checkpoint().is_ok(),
+        |(file, item)| async move {
+            provider
+                .pack_component_plan(item, &file.path, file.file_size, minecraft_version)
                 .await
                 .map_err(|e| {
                     if matches!(e, crate::modrinth::Error::DependencyConflict) {
@@ -222,16 +229,23 @@ pub(crate) async fn resolve(
                     } else {
                         fail("pack_identity_conflict", format!("{}: {e}", file.path))
                     }
-                })?;
-            project_set.insert(planned.project_id.clone());
-            provider_preview.push(RecognizedPreview {
-                path: file.path.clone(),
-                project_id: planned.project_id.clone(),
-                version_id: planned.version_id.clone(),
-                title: item.version_name.clone(),
-            });
-            provider_plans.push(planned);
-        } else {
+                })
+
+        },
+        |(file, item), planned| planned_files.push((*file, *item, planned)),
+    ).await?;
+    for (file, item, planned) in planned_files {
+        project_set.insert(planned.project_id.clone());
+        provider_preview.push(RecognizedPreview {
+            path: file.path.clone(),
+            project_id: planned.project_id.clone(),
+            version_id: planned.version_id.clone(),
+            title: item.version_name.clone(),
+        });
+        provider_plans.push(planned);
+    }
+    for file in files {
+        if !identities.contains_key(&file.sha512) {
             unresolved.push(file.clone());
         }
     }
@@ -448,7 +462,7 @@ pub async fn install(
     let mut game_progress = |_event: InstanceProgress| {
         progress("installingGame");
     };
-    let record = crate::instances::lifecycle::begin_pack_instance(
+    let (record, operation) = Box::pin(crate::instances::lifecycle::begin_pack_instance(
         managed,
         &managed.instance_registry_file(),
         endpoints,
@@ -461,7 +475,7 @@ pub async fn install(
             pack_version: resolved.pack.pack_version.clone(),
         },
         &mut game_progress,
-    )
+    ))
     .await
     .map_err(|e| fail("pack_instance_failed", e.to_string()))?;
     let _commit = crate::content_jobs::commit().map_err(|_| {
@@ -598,6 +612,7 @@ pub async fn install(
         &managed.instance_registry_file(),
         &managed.config_file(),
         record.id(),
+        &operation,
     ) {
         Ok(record) => record,
         Err(error) => {

@@ -3530,7 +3530,7 @@ pub async fn install_modrinth_pack(
     let managed = managed_paths(&app)?;
     let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
         .map_err(|error| CommandError::new("pack_configuration_invalid", error.to_string()))?;
-    let record = crate::modpacks::install(
+    let record = Box::pin(crate::modpacks::install(
         &managed,
         &endpoints,
         &crate::modrinth::Client::official(),
@@ -3541,7 +3541,7 @@ pub async fn install_modrinth_pack(
         &mut |phase| {
             let _ = app.emit("modpack-progress", serde_json::json!({ "phase": phase }));
         },
-    )
+    ))
     .await
     .map_err(|error| CommandError::new(error.code, error.message))?;
     Ok(InstanceSummary::from_record(&record))
