@@ -1,0 +1,152 @@
+{
+  "native10-acceptance": {
+    "failures": 1,
+    "steps": [
+      {
+        "detail": "255 versions, newest Some(\"0.20.1\")",
+        "pass": true,
+        "step": "loader catalog fabric 1.21.11"
+      },
+      {
+        "detail": "1 versions, recommended None",
+        "pass": true,
+        "step": "loader catalog forge 1.20.1"
+      },
+      {
+        "detail": "0 versions",
+        "pass": false,
+        "step": "loader catalog neoforge 1.21.1"
+      },
+      {
+        "detail": "refused: official Fabric metadata answered HTTP 400 (fabric_combination_unsupported)",
+        "pass": true,
+        "step": "loader catalog unsupported version"
+      },
+      {
+        "detail": "vanilla has no loader versions",
+        "pass": true,
+        "step": "loader catalog vanilla"
+      },
+      {
+        "detail": "\"Adrenaline\" \"26.5.1+mc1.21.11.fabric\" \u2192 \"BYN9yKrV\"/\"JBUK3TRN\"",
+        "pass": true,
+        "step": "local mrpack recognized"
+      },
+      {
+        "detail": "Modrinth does not publish this exact file as a modpack version. Aurora installs local packs only when Modrinth recognizes the exact archive, so its contents, updates and provenance stay verifiable. Download the pack from Modrinth or install it from Discover. (local_pack_unrecognized)",
+        "pass": true,
+        "step": "unpublished local mrpack refused"
+      },
+      {
+        "detail": "The pack ZIP structure is invalid or contains unsupported entries. (pack_invalid_archive)",
+        "pass": true,
+        "step": "malformed local mrpack refused"
+      },
+      {
+        "detail": "27 recognized, 0 external, 7 overrides",
+        "pass": true,
+        "step": "local mrpack new-instance review"
+      },
+      {
+        "detail": "Minecraft 1.21.11 \u00b7 Fabric 0.19.5 \u00b7 Adrenaline 26.5.1+mc1.21.11.fabric \u00b7 state ready \u00b7 validation ready",
+        "pass": true,
+        "step": "local mrpack installed as managed pack instance"
+      },
+      {
+        "detail": "{\"noNewerUnderPolicy\": 1, \"upToDate\": 17, \"updateAvailable\": 7}, 0 dependency-managed",
+        "pass": true,
+        "step": "content update check (merged ordinary instance)"
+      },
+      {
+        "detail": "p8RJPJIC \u2192 Some(\"4.6.11+1.21.11-fabric\"); changed files [(\"Ixeris-4.6.11+1.21.11-fabric.jar\", 786367)]",
+        "pass": true,
+        "step": "content update applied"
+      },
+      {
+        "detail": "No newer compatible version under the current release-channel policy. (provider_no_update)",
+        "pass": true,
+        "step": "reapplying a superseded review is refused"
+      },
+      {
+        "detail": "upToDate",
+        "pass": true,
+        "step": "updated item re-checks as current"
+      },
+      {
+        "detail": "25 pack-owned records of 25",
+        "pass": true,
+        "step": "pack-owned content is never individually updated"
+      },
+      {
+        "detail": "status \"updateAvailable\" \u00b7 installed \"1.21.11-4.1\" \u00b7 candidate \"26.1.2-1.1\"",
+        "pass": true,
+        "step": "managed modpack update check"
+      },
+      {
+        "detail": "counts {\"added\":26,\"conflicts\":0,\"preserved\":25,\"removed\":25,\"updated\":10} \u00b7 game transition true",
+        "pass": true,
+        "step": "managed modpack update review"
+      },
+      {
+        "detail": "installed still Some(\"0.19.3\")",
+        "pass": true,
+        "step": "exact loader pin saved without installing"
+      },
+      {
+        "detail": "installed Some(\"0.19.2\"), validation ready, user mods unchanged",
+        "pass": true,
+        "step": "exact loader pin installed"
+      },
+      {
+        "detail": "install refused: no mod loader version could be selected for Minecraft 1.21.11: the requested Fabric Loader policy has no compatible version (fabric_loader_not_found)",
+        "pass": true,
+        "step": "unsupported loader pin refused without damage"
+      },
+      {
+        "detail": "Minecraft 1.21.11 \u00b7 Fabric 0.19.2",
+        "pass": true,
+        "step": "instance created with exact loader pin"
+      }
+    ]
+  },
+  "native10-acceptance-followup": {
+    "failures": 0,
+    "steps": [
+      {
+        "detail": "123 versions, newest Some(\"26.1.2.125\")",
+        "pass": true,
+        "step": "loader catalog neoforge 26.1.2"
+      },
+      {
+        "detail": "0 versions, none invented",
+        "pass": true,
+        "step": "loader catalog neoforge 1.21.1 (outside installable generation)"
+      },
+      {
+        "detail": "N8 concurrent A (Minecraft 1.21.10 \u00b7 Vanilla): blockers [\"Modrinth modpacks need a Fabric instance; this instance uses another platform.\",\"This pack is for Minecraft 1.21.11; this instance has Minecraft 1.21.10.\"]",
+        "pass": true,
+        "step": "local mrpack merge into incompatible instance blocked"
+      }
+    ]
+  },
+  "native10-acceptance-merge": {
+    "failures": 0,
+    "steps": [
+      {
+        "detail": "Minecraft 1.21.11 \u00b7 Fabric 0.19.5",
+        "pass": true,
+        "step": "existing exact pin changed 0.19.2 \u2192 0.19.5"
+      },
+      {
+        "detail": "27 added \u00b7 0 kept existing \u00b7 blockers []",
+        "pass": true,
+        "step": "local mrpack compatible merge review"
+      },
+      {
+        "detail": "mods 0 \u2192 27; user config kept; stays an ordinary (unmanaged) instance: true",
+        "pass": true,
+        "step": "local mrpack compatible merge installed"
+      }
+    ]
+  }
+}

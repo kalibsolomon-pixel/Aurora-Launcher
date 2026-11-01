@@ -1,5 +1,12 @@
 # Functional parity matrix (native host vs WebView host)
 
+**NATIVE-10:** content updates, exact loader versions, managed-modpack updates
+and local `.mrpack` import are implemented; the current classification of every
+workflow, with synthetic versus live evidence, is in
+[NATIVE_10_ACCEPTANCE](../../NATIVE_10_ACCEPTANCE.md). Custom Java executables
+remain unimplemented pending an owner decision (they are out of scope in
+`AGENTS.md` and were never offered by the WebView host).
+
 **NATIVE-9:** current additions, the complete surface audit and explicit remaining
 release blockers are in [NATIVE_9_ACCEPTANCE](../../NATIVE_9_ACCEPTANCE.md).
 Historical "Done" rows never imply owner-attended account or installer acceptance.
@@ -46,7 +53,7 @@ screenshots are in [`screens/`](screens/).
 | Workflow | Native status | Test | Result |
 | --- | --- | --- | --- |
 | Create (Minecraft version, platform, Aurora) | Done — platforms from `platformCapabilities`, default version from the newest Aurora release | created Fabric + Aurora 3.0.0 instance with real downloads (4677 files) | `dev-create-progress.png`, `dev-after-create.png` |
-| Loader version pinning | Missing (Automatic only) | — | WebView offers "choose version" |
+| Loader version pinning | Done (NATIVE-10) — exact selector in creation and instance Settings; save, then explicit install | live: Fabric/Forge/NeoForge catalogs, pin saved without install, pin installed, unsupported pin refused, instance created with pin | `docs/native-ui/native10/` |
 | Snapshot versions | Done | — | checkbox reloads list |
 | Select | Done | auto-selected first instance | — |
 | Rename | Done (unexercised) | — | expected-name concurrency check in Rust |
@@ -82,8 +89,8 @@ screenshots are in [`screens/`](screens/).
 | Discover: search, kinds, install into chosen instance | Done — browsing exercised with live Modrinth results; install not exercised | `screens/discover.png` |
 | Categories, sorting, project details, version choice | Missing | — |
 | Project artwork | Missing | letter/placeholder glyphs |
-| Modpacks (browse, install, merge, update) | Missing | backend commands exist |
-| Content updates (check, apply, bulk, policy) | Missing | backend commands exist |
+| Modpacks (browse, install, merge, update) | Done — browse/install/merge (NATIVE-8/9); managed-pack update check/review/apply and local `.mrpack` import of published archives (NATIVE-10) | live: local archive recognized, installed as managed pack, merged into ordinary instance; update check and review |
+| Content updates (check, apply, bulk, policy) | Done (NATIVE-10) — explicit check, per-item, update all, unpin; dependency changes reviewed | live: check on merged instance, one update applied, stale review refused, pack-owned files blocked |
 | Conflict detection / Fabric aliases | Done (core) | enforced in Rust on install and readiness |
 
 ## Accounts and appearance
