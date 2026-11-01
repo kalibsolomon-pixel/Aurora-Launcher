@@ -33,6 +33,12 @@ Aurora already downloaded and parsed its verified archive first. This change rep
 
 The warm-cache **debug** acceptance took 6.43 s to review, 69.46 s to install, and 7.50 s to validate, with zero transferred bytes. These are functional timings, not a cold-download comparison or a claim of parity with Pandora.
 
+## Final desktop boot
+
+The current optimized executable opened the owner's native profile with Borealis and the selected Vulkan 11 instance. SHA-256: `7bf103050eac90fc8a065d69df730bf204169aacdaf79415d828b6abea0bbf53`. The binary contains the final Most followed control. Boot screenshot and executable metadata are local run evidence.
+
+That existing Vulkan instance reports a missing `mods/clientsort-fabric-2.2.2+1.21.11.jar` and ten changed pack overrides/configuration files, including options.txt. Its readiness therefore remains blocked, and the dependent managed-Java check cannot resolve. Those owner instance files were not modified by this task; no repair or replacement was performed. This is separate from the successfully installed and validated disposable Fabulously Optimized instance.
+
 ## Borealis resource sample
 
 An empty 1120×760 profile was sampled for 15 seconds after five seconds of startup. Both binaries used the same Borealis appearance. The old decorative timer was confirmed active; the changed candidate kept it static.
