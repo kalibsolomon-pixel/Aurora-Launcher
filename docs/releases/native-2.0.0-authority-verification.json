@@ -1,0 +1,8 @@
+{
+  "endpoint": "https://raw.githubusercontent.com/kalibsolomon-pixel/Aurora-Launcher/launcher-native-update-authority/native-update.json",
+  "version": "2.0.0",
+  "sourceSha": "33af6a6b619c375ed84b7ff495ff125c282386cd",
+  "sha256": "63e1187c2528aaff4344e6f034815d675324799c7e193d2d46690658b1b0ba10",
+  "signatureVerified": true,
+  "exactReleaseBytes": true
+}

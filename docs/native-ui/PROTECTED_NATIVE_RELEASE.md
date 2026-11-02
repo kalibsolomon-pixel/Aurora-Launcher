@@ -14,14 +14,13 @@ prepared native environments have the same owner reviewer, exact `main` branch
 policy, and prohibition on administrator bypass. Existing secrets stay in
 their protected environments; no new signing identity or secret copy is needed.
 
-The native authority ref is still absent. Its creation restriction admits no
-writer, including the routine authority App. First initialization therefore
-requires the legitimate owner setup described by the authority contract; this
-release does not add an initializer exception or bypass that restriction.
-Supply the exact reviewed empty-root commit as `authority_parent`, and complete
-its owner-controlled initialization before approving the authority job. The
-publisher validates the canonical empty tree and exact zero-parent message.
-It never creates or recreates the authority ref itself.
+Native 2.0.0 is now published and its authority verified. The owner-authorized
+bootstrap created root `a2e1a1c641d3d57c141abe724a82c9f14cab614a`; temporary
+exact-owner creation/update exceptions were immediately removed. Normal native
+authority is `c663d66f28fee33d611021200fae5f00b42668e8` after workflow attempt 2.
+The creation restriction again admits no writer, including the routine App;
+the publisher never creates or recreates the ref. Future releases must pass the
+then-current observed authority parent, not reuse this bootstrap root.
 
 This prepares the existing native updater, standalone NSIS package and GitHub
 release/authority protocol. It does not authorize a workflow dispatch, push,

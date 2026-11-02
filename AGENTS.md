@@ -1,5 +1,22 @@
 # Agent operating guide
 
+## Repository authorship and attribution
+
+- Work performed with assistant tools belongs to the repository owner. Do not
+  identify an AI system, model, vendor or assistant as an author, co-author,
+  collaborator, contributor or maintainer in commits, pull requests, release
+  notes, documentation credits or repository metadata.
+- Never add AI `Co-authored-by`, `Signed-off-by`, `Generated-by` or similar
+  credit trailers. Technical references to tools, APIs and evidence paths remain
+  appropriate when they explain implemented behavior; they are not credits.
+- Before committing, inspect both the effective Git author and committer
+  identities. Use the owner's verified repository identity; never fall back to
+  synthetic assistant names or addresses. Preserve genuine human attribution
+  and third-party license notices.
+- Do not rewrite published history, move immutable release tags or change
+  signed release provenance to remove old attribution. Use canonical author
+  mapping where supported and report any historical display limitations.
+
 ## Independent Client releases (owner decision, 2026-10-20)
 
 Launcher 1.5.1 discovers the latest published stable Aurora Client directly from

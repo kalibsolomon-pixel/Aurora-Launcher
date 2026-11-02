@@ -19,8 +19,7 @@ and update authority; it does not automatically replace or migrate WebView
 installations. Keep a backup before manually moving data between versions.
 Updater signatures authenticate updates; Windows Authenticode publisher signing
 is currently unavailable, so Windows can show an unknown-publisher warning.
-Native automatic update discovery is awaiting its protected authority setup;
-the signed manual installer is available now.
+Native automatic update discovery is active through its separate signed channel.
 
 ## Features
 

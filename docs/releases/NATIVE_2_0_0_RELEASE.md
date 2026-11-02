@@ -1,6 +1,6 @@
 # Aurora Launcher Native 2.0.0 release record
 
-**PUBLISHED — ACCEPTANCE INCOMPLETE**
+**RELEASED — AURORA LAUNCHER NATIVE 2.0.0**
 
 Source integration, requested widget/icon inclusion, documentation organization,
 versioning and independent validation are complete. Protected CI has built and
@@ -8,9 +8,11 @@ signed the exact 2.0.0 installer and update envelope. Their downloaded bytes pas
 independent signature, inventory and executable-identity verification. Publication
 passed its owner gate. The immutable public release and every public asset have
 been independently verified. The owner reports manually running the installer
-and that it looks fine. Native update authority remains blocked by its protected
-one-time initialization and authority-only retry; website deployment also
-lacks its configured Cloudflare credential/account/project.
+and that it looks fine. Native update authority is active and independently
+verified against the immutable release. The protected workflow completed
+successfully on attempt 2, reusing the original signed artifacts. Distribution
+works through GitHub and the repository README. Standalone website deployment
+remains unavailable because its Cloudflare credential/account/project are absent.
 
 The owner authorized Native 2.0.0, tag `native-v2.0.0`, and explicitly included
 the existing responsive-widget and icon improvements. The original in-progress
@@ -67,8 +69,9 @@ stays 1.5.1. No legacy tag is repurposed.
 | CI signing verification | Passed independently on the exact downloaded CI installer and envelope using the established production public key |
 | Public signing verification | Passed for all six immutable public assets, exact source/tag, installer signature and signed update envelope |
 | Installed-release smoke | Owner reports manually running the installer and that it looks fine; environment and detailed startup/update results were not supplied |
-| Authority job | Owner-approved attempt failed safely with `Native API HTTP 404` because the native authority ref remains absent; retry only this job after initialization |
-| Native authority | Still absent, protected from creation; no authority mutation performed |
+| Authority job | Passed on attempt 2 after owner-authorized bootstrap; no build or publication repeated |
+| Native authority | `c663d66f28fee33d611021200fae5f00b42668e8`, sole parent `a2e1a1c641d3d57c141abe724a82c9f14cab614a` |
+| Public native discovery | Exact accepted envelope bytes and production signature independently verified; SHA-256 `63e1187c2528aaff4344e6f034815d675324799c7e193d2d46690658b1b0ba10` |
 | Authenticode | Executable and local installer `NotSigned`, under the accepted unsigned-publisher policy |
 
 The first dispatch attempt returned workflow-not-found during GitHub registration
@@ -100,6 +103,12 @@ There was no uncertain duplicate release or tag creation.
   points to the reviewed source, and GitHub confirms an immutable prerelease.
   [Public verification record](native-2.0.0-public-verification.json) preserves
   release identity, installer/envelope signatures and all signed-content hashes.
+- The public native discovery endpoint now returns that same accepted envelope.
+  Its signature, version 2.0.0 and reviewed source SHA were independently checked.
+  [Authority verification](native-2.0.0-authority-verification.json) records the
+  result. Workflow attempt 2 is green for all jobs. Existing native test-key
+  update/restart evidence is retained; no real strictly-newer production-trust
+  installed update/restart is claimed from this first native publication.
 - Core: 1,117 tests and six integration tests passed; 31 existing opt-in tests
   remained ignored. A merge-introduced duplicate WebView test block was removed,
   retaining the original feature-gated tests; default-host all-target checking
@@ -141,7 +150,8 @@ The repository README links the verified public native installer. The separate
 `10713d5bb44c0132100fef76fab37364e7357d47`, was merged as
 `19fb07f74acaa71eb58a135de99eab8bd62c3e0b`. It links the real immutable installer,
 checksum, detached signature and release notes within existing styles, retaining
-the WebView fallback and accurately noting pending automatic update discovery.
+the WebView fallback. A follow-up removes the now-obsolete pending-authority
+notice and adds the owner's attribution policy to the website's agent guide.
 Local `npm run validate` and both GitHub validation checks passed, including ten static tests. The native download
 section was visually inspected in the local browser. No dependency/style/runtime
 change or new performance claim was introduced. Production deployment is not
@@ -151,35 +161,51 @@ configured: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and
 Cloudflare session. No deployment or invented hosting URL is
 claimed. GitHub's public release page already provides working distribution.
 
-## Exact protected actions and remaining limitations
+## Completed authority setup and remaining limitations
 
 1. Build/sign and publication reviews were approved and both jobs passed in
    [run 41374244252](https://github.com/kalibsolomon-pixel/Aurora-Launcher/actions/runs/41374244252).
    The owner supplied manual installer acceptance. Review protections remain
    intact; the agent did not approve its own protected operation.
-2. Before approving native authority advancement, the owner/administrator must
-   complete the separately controlled initial-ref procedure. Native ruleset
-   `26335822` has **no creation bypass actors**; routine App credentials cannot
-   initialize it. Preserve history-integrity rules and restore strict creation
-   protection after legitimate one-time initialization, as described by the
-   authority contract. No policy exception was introduced by this task.
-3. The exact reviewed local initialization proposal is
+2. The owner explicitly authorized completing the documented one-time setup and
+   protected review. After confirming that the owner is the sole administrator,
+   initialization used temporary exceptions for the exact owner user ID
+   `288523859` in native rulesets B/C only. Both exceptions were removed
+   immediately after the non-forced creation. B again permits only authority App
+   `5182303`; C has no bypass actors. A remained active and unchanged, with no
+   bypass, deletion restriction, non-fast-forward blocking and linear history.
+3. The exact reviewed and now initialized root is
    `a2e1a1c641d3d57c141abe724a82c9f14cab614a`, zero parents, canonical empty tree
    `4b825dc642cb6eb9a060e54bf8d69288fbee4904`, message
    `Initialize Aurora native preview update authority`. The workflow's
    `authority_parent` is pinned to that proposal. Its Git bundle and inspection
    record are retained outside Git under
    `C:\Dev\aurora-pandora-evidence-20261101\native-200-release-correction`.
-   This proposal does not create a remote authority or authorize a different root.
-4. Approve the authority gate only when the intended root and restored
-   protections have been verified. The first approved attempt encountered the
-   absent ref and failed with HTTP 404 before any authority write. After the
-   root exists, retry only the failed authority job; do not rebuild, republish
-   or replace any immutable release asset. Native discovery bytes and production-trust
-   installed-update/restart acceptance remain outstanding. Configure the actual
-   Cloudflare production credential/account/project before website deployment.
-   Prior test-key lifecycle and owner gameplay acceptance are reused, not
-   relabelled as production installed-update acceptance.
+   Remote commit inspection confirms its exact tree, zero parents and message.
+4. The first approved authority attempt encountered the absent ref and failed
+   with HTTP 404 before any authority write. After root/protection verification,
+   only the failed authority job was retried. Its normal environment review was
+   approved under the owner's explicit instruction. The dedicated App advanced
+   the native ref without force, verified the public CDN bytes and completed
+   successfully. No immutable asset or tag was rebuilt, replaced or moved.
+5. A production-trust installed upgrade/restart has not been newly exercised;
+   the owner supplied manual installer acceptance, and prior isolated test-key
+   lifecycle evidence remains the update-mechanics acceptance. No safe isolated
+   production-update environment was available here. Website hosting also needs
+   a real Cloudflare credential/account/project before its established protected
+   deployment can run. The signed GitHub installer remains publicly accessible.
+
+## Repository attribution
+
+There are no AI accounts among repository collaborators. Historical assistant
+author aliases and co-author trailers were found in existing Git history.
+Repository-local author/committer configuration now uses the owner's verified
+GitHub identity. `.mailmap` canonicalizes the observed assistant aliases for Git
+tools that honor it, and `AGENTS.md` forbids future AI author/contributor credits
+or attribution trailers. Genuine human attribution and licenses are preserved.
+Raw published commit metadata/messages are intentionally unchanged: removing
+those historical fields would rewrite history and disrupt immutable release
+provenance. No GitHub contributor-display refresh or historical erasure is claimed.
 
 WebView release `v1.5.1`, its immutable artifact identity, and authority ref
 `df7e824b2e49f8a5b9d2447ca2314bcafa21d119` remain unchanged. Neither
