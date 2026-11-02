@@ -239,8 +239,11 @@ export component AppWindow inherits Window {
     }
 
     if Shell.toast-visible: Toast {
-        x: (root.width - self.width) / 2 + Chrome.sidebar-width / 2;
-        y: root.height - self.height - 20px;
+        // A single bounded notification, inside this window (logical pixels).
+        // On Discover leave the centered pagination action clear even at 720px.
+        available-width: Nav.page == Page.discover ? min(560px, (root.width - Chrome.sidebar-width) / 2 - 80px) : min(560px, root.width - Chrome.sidebar-width - 2 * Theme.space-4);
+        x: root.width - self.width - Theme.space-4;
+        y: root.height - self.height - Theme.space-4;
         text: Shell.toast-text;
         tone: Shell.toast-tone;
         dismissed => { Shell.dismiss-toast(); }
