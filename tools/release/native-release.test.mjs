@@ -55,9 +55,11 @@ test('native publication uploads verified draft bytes and preserves WebView late
   const f=fixture(),d=await directory(f),uploaded=new Map(),mutations=[];
   const release={id:42,tag_name:`native-v${f.version}`,target_commitish:d.metadata.sourceSha,prerelease:true,draft:true,immutable:false,assets:[]};
   const api=async(path,options={})=>{
+    if(options.method==='POST' && path==='/git/refs'){assert.deepEqual(options.body,{ref:`refs/tags/native-v${f.version}`,sha:d.metadata.sourceSha});mutations.push(path);return {};}
     if(options.method==='POST'){assert.equal(options.body.make_latest,'false');assert.equal(options.body.draft,true);mutations.push(path);return {...release};}
     if(options.method==='PATCH'){assert.equal(options.body.make_latest,'false');release.draft=false;release.immutable=true;mutations.push(path);return {...release};}
     if(options.allowMissing)return null;
+    if(path===`/git/ref/tags/native-v${f.version}`)return {ref:`refs/tags/native-v${f.version}`,object:{type:'commit',sha:d.metadata.sourceSha}};
     if(path==='/releases/42')return {...release};
     if(path===`/releases/tags/native-v${f.version}`)return {...release};
     throw Error(`Unexpected path ${path}`);
@@ -65,7 +67,7 @@ test('native publication uploads verified draft bytes and preserves WebView late
   const upload=async(id,name,bytes)=>{assert.equal(id,42);uploaded.set(name,bytes);release.assets.push({id:release.assets.length+1,name,size:bytes.length,browser_download_url:`https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v${f.version}/${name}`});};
   const download=async(url,size,privateAsset)=>{const name=privateAsset?release.assets.find(a=>url.endsWith('/'+a.id)).name:url.split('/').at(-1);const bytes=uploaded.get(name);assert.equal(bytes.length,size);return bytes;};
   await publishNativeRelease({...d,api,upload,download});
-  assert.deepEqual(mutations,['/releases','/releases/42']);
+  assert.deepEqual(mutations,['/git/refs','/releases','/releases/42']);
   assert.equal(uploaded.size,6);
   assert.throws(()=>releaseIdentity({...release,prerelease:false},f.version,d.metadata.sourceSha,true));
   assert.throws(()=>releaseIdentity({...release,immutable:false},f.version,d.metadata.sourceSha,true));
@@ -73,7 +75,11 @@ test('native publication uploads verified draft bytes and preserves WebView late
   release.draft=true;release.immutable=false;release.assets=[];uploaded.clear();
   const before=mutations.length;
   await assert.rejects(publishNativeRelease({...d,api,upload,download:wrongDownload}));
-  assert.equal(mutations.length,before+1,'hash failure must leave a draft, never publish');
+  assert.equal(mutations.length,before+2,'hash failure must leave a draft, never publish');
+  const wrongTagApi=async(path,options={})=>path===`/git/ref/tags/native-v${f.version}` && !options.allowMissing?{ref:`refs/tags/native-v${f.version}`,object:{type:'commit',sha:'f'.repeat(40)}}:api(path,options);
+  const beforeWrongTag=mutations.length;
+  await assert.rejects(publishNativeRelease({...d,api:wrongTagApi,upload,download}));
+  assert.equal(mutations.length,beforeWrongTag+1,'tag mismatch must stop before draft creation');
 });
 test('native authority verifies public artifacts then advances only isolated ref, with stale-parent refusal',async()=>{
   const f=fixture(),d=await directory(f),parent='b'.repeat(40),commit='c'.repeat(40),tree='d'.repeat(40),blob=blobSha(f.envelope);
@@ -82,6 +88,7 @@ test('native authority verifies public artifacts then advances only isolated ref
   for(const name of [...d.metadata.artifacts.map(a=>a.name),'native-release-assets.json']){const bytes=await readFile(join(d.directory,name));publicBytes.set(name,bytes);assets.push({name,size:bytes.length,browser_download_url:`https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v${f.version}/${name}`});}
   const api=async(path,options={})=>{
     if(path.startsWith('/releases/tags/'))return {tag_name:`native-v${f.version}`,target_commitish:d.metadata.sourceSha,prerelease:true,draft:false,immutable:true,assets};
+    if(path===`/git/ref/tags/native-v${f.version}`)return {ref:`refs/tags/native-v${f.version}`,object:{type:'commit',sha:d.metadata.sourceSha}};
     if(path==='/git/ref/heads/launcher-native-update-authority')return {ref:nativeRef,object:{type:'commit',sha:current}};
     if(options.method){writes.push(path);if(path==='/git/blobs')return {sha:blob};if(path==='/git/trees')return {sha:tree};if(path==='/git/commits')return {sha:commit};if(path==='/git/refs/heads/launcher-native-update-authority'){assert.equal(options.body.force,false);current=commit;return {};}}
     if(path===`/git/commits/${parent}`)return {sha:parent,tree:{sha:emptyTreeSha},parents:[],message:nativeInitialization};

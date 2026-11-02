@@ -22,7 +22,10 @@ try {
     try {
         foreach($version in @('1.4.2','1.4.3')) {
             $env:AURORA_NATIVE_ACCEPTANCE_VERSION=$version
-            cargo build --manifest-path native/Cargo.toml --locked --release --features native-update-acceptance *> (Join-Path $Root "build-$version.txt")
+            # Optimized acceptance only: parallel ThinLTO avoids repeating the
+            # distribution's expensive whole-program LTO for two test versions.
+            # The ordinary distribution profile and artifact remain unchanged.
+            cargo rustc --manifest-path native/Cargo.toml --locked --release --features native-update-acceptance --bin aurora-native -- -C lto=thin -C codegen-units=16 *> (Join-Path $Root "build-$version.txt")
             if($LASTEXITCODE){throw "Acceptance build $version failed; inspect $Root"}
             $binary=Join-Path $Root "aurora-native-$version.exe"
             Copy-Item -LiteralPath (Join-Path $repo 'native/target/release/aurora-native.exe') -Destination $binary
@@ -44,6 +47,7 @@ try {
         $before=(Get-FileHash -LiteralPath $sentinel).Hash
         $installed=Join-Path $Root 'installation/aurora-native.exe'
         $sourceHash=(Get-FileHash -LiteralPath $installed).Hash
+        if($server.HasExited){throw 'The isolated signing helper exited before acceptance'}
         $source=Start-Process -FilePath $installed -WindowStyle Hidden -PassThru -RedirectStandardError (Join-Path $Root 'source-stderr.txt') -RedirectStandardOutput (Join-Path $Root 'source-stdout.txt')
         $deadline=[DateTime]::UtcNow.AddSeconds(120)
         $ready=Join-Path $Root 'restarted-ready.json'
@@ -62,7 +66,11 @@ try {
         for($i=1;$i -lt $progress.Count;$i++){if($progress[$i].downloadedBytes -lt $progress[$i-1].downloadedBytes){throw 'Progress moved backward'}}
         [ordered]@{passed=$true;sourceVersion='1.4.2';updatedVersion=$receipt.version;sourceHash=$sourceHash;updatedHash=$newHash;installerHash=(Get-FileHash -LiteralPath (Join-Path $Root 'signed-installer.exe')).Hash;sentinelHash=$before;downloadedBytes=$last.downloadedBytes;progressEvents=$progress.Count;sourcePid=$source.Id;restartPid=$receipt.pid;packageId="com.aurora.launcher.native-preview.acceptance.$id";distributionRejected=$rejected} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Root 'results.json')
         Get-Content -LiteralPath (Join-Path $Root 'results.json')
+        & (Join-Path $PSScriptRoot 'test-update-recovery.ps1') -Root $Root
     } finally {Pop-Location}
+} catch {
+    Write-Error -ErrorRecord $_ -ErrorAction Continue
+    exit 1
 } finally {
     [IO.File]::WriteAllText((Join-Path $Root 'stop-server'),'stop')
     foreach($name in @('ROOT','ID','ORIGIN','KEY','VERSION')) { [Environment]::SetEnvironmentVariable("AURORA_NATIVE_ACCEPTANCE_$name",$null,'Process') }

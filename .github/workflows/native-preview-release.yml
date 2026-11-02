@@ -59,7 +59,12 @@ jobs:
           test "$SOURCE_SHA" = "$(git rev-parse HEAD)"
           node tools/release/verify-version.mjs --release "$VERSION"
           node --input-type=module -e 'import {versionParts} from "./tools/release/updater-release.mjs"; const a=versionParts(process.env.MINIMUM), b=versionParts(process.env.VERSION); if ((a.map((n,i)=>n-b[i]).find(n=>n!==0)??0)>0) throw Error("Invalid minimum");'
-          if git ls-remote --exit-code --tags origin "refs/tags/native-v$VERSION"; then exit 1; fi
+          if git ls-remote --exit-code --tags origin "refs/tags/native-v$VERSION"; then
+            exit 1
+          else
+            status=$?
+            test "$status" = 2 # only 'no matching ref' is absence
+          fi
   build:
     needs: resolve
     runs-on: windows-latest

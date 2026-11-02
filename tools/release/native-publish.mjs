@@ -16,9 +16,14 @@ export function releaseIdentity(release,version,sourceSha,requirePublic=false) {
   if (!release || release.tag_name!==`native-v${version}` || release.target_commitish!==requireSha(sourceSha) ||
       release.prerelease!==true || (requirePublic && (release.draft || release.immutable!==true))) throw Error('Native release identity/immutability mismatch');
 }
+async function verifyNativeTag(api,version,sourceSha) {
+  const tag=await api(`/git/ref/tags/native-v${version}`);
+  if(tag?.ref!==`refs/tags/native-v${version}` || tag.object?.type!=='commit' || tag.object.sha!==requireSha(sourceSha)) throw Error('Exact native tag commit differs');
+}
 export async function verifyPublicNative({api,download,metadata,directory}) {
   const release=await api(`/releases/tags/native-v${metadata.version}`);
   releaseIdentity(release,metadata.version,metadata.sourceSha,true);
+  await verifyNativeTag(api,metadata.version,metadata.sourceSha);
   const bytes=await readFile(join(directory,'native-release-assets.json'));
   const expected=[...metadata.artifacts,{name:'native-release-assets.json',sizeBytes:bytes.length,sha256:sha256(bytes)}];
   if (!Array.isArray(release.assets) || release.assets.length!==expected.length) throw Error('Native public inventory differs');
@@ -34,6 +39,10 @@ export async function verifyPublicNative({api,download,metadata,directory}) {
 export async function publishNativeRelease({api,upload,download,metadata,directory}) {
   if(await api(`/releases/tags/native-v${metadata.version}`,{allowMissing:true})) throw Error('Native tag/release already exists; inspect and recover manually, never overwrite');
   if(await api(`/git/ref/tags/native-v${metadata.version}`,{allowMissing:true})) throw Error('Native tag already exists');
+  // Atomic tag creation refuses a concurrent existing tag instead of attaching
+  // the release to someone else's ref. Never move or force an existing tag.
+  await api('/git/refs',{method:'POST',body:{ref:`refs/tags/native-v${metadata.version}`,sha:metadata.sourceSha}});
+  await verifyNativeTag(api,metadata.version,metadata.sourceSha);
   const release=await api('/releases',{method:'POST',body:{tag_name:`native-v${metadata.version}`,target_commitish:metadata.sourceSha,name:`Aurora Native Preview ${metadata.version}`,body:`Native Slint preview. Source: ${metadata.sourceSha}. Data and update authority are isolated from the WebView launcher.`,draft:true,prerelease:true,make_latest:'false'}});
   releaseIdentity(release,metadata.version,metadata.sourceSha);
   for(const name of [...metadata.artifacts.map(a=>a.name),'native-release-assets.json']) await upload(release.id,name,await readFile(join(directory,name)));
@@ -49,6 +58,7 @@ export async function publishNativeRelease({api,upload,download,metadata,directo
     const bytes=await download(`/releases/assets/${assets[0].id}`,entry.sizeBytes,true);
     if(sha256(bytes)!==entry.sha256) throw Error('Native draft hash mismatch');
   }
+  await verifyNativeTag(api,metadata.version,metadata.sourceSha);
   await api(`/releases/${release.id}`,{method:'PATCH',body:{draft:false,make_latest:'false'}});
   return verifyPublicNative({api,download,metadata,directory});
 }

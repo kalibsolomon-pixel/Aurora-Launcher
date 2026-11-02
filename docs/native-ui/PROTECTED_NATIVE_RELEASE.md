@@ -76,7 +76,8 @@ Initialization is deliberately not automated by the publisher.
    and must be accepted again. This document does not authorize replacing the
    owner's installed preview.
 5. Approve publication only for the accepted current artifact. The adapter
-   creates a draft, uploads without replacement, rehashes every draft asset,
+   atomically creates the exact native tag at the reviewed source SHA, checks
+   that ref again, creates a draft, uploads without replacement, rehashes every draft asset,
    publishes immutable native prerelease bytes, and verifies unauthenticated
    public downloads. An existing tag/release is a hard stop. It never changes
    WebView latest or its authority.
@@ -91,6 +92,20 @@ Initialization is deliberately not automated by the publisher.
    through the fixed public native discovery endpoint. Local test-key acceptance
    does not establish production signing, GitHub execution or CDN acceptance.
 
+For that installed update, a previous preview built without authority opt-in
+cannot discover an update merely because the endpoint is later created. In the
+disposable Windows profile, first manually bootstrap an authority-enabled baseline
+(for example 1.4.2) from a protected private build. Then accept a strictly newer
+owner-chosen version through the fixed public native endpoint. The baseline need
+not itself be publicly released. Synchronize `package.json`, `package-lock.json`,
+both Rust `Cargo.toml` files and both `Cargo.lock` files before the owner-chosen
+version build; the executable/package metadata guard refuses divergence. No
+version bump or production installation is performed by this preparation.
+
+The draft-before-publication sequence follows GitHub's
+[immutable-release guidance](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
+Updater file signatures use the existing [Tauri signing CLI](https://v2.tauri.app/reference/cli/).
+
 Updater minisign signing verifies update bytes. **Authenticode remains
 unconfigured.** Current executable/installer publisher status is `NotSigned`.
 The owner must either explicitly accept unsigned Windows publisher distribution,
@@ -103,7 +118,8 @@ either binary. No certificate enrollment or Windows security setting is changed 
 
 `native/tools/test-signed-update.ps1` creates a new marked `aurora-native9-*`
 temporary root and random package/uninstall identity. It builds optimized
-acceptance versions 1.4.2 and 1.4.3, installs only its temporary source package,
+acceptance versions 1.4.2 and 1.4.3 (parallel ThinLTO; the ordinary distribution
+profile is unchanged), installs only its temporary source package,
 then runs the actual native discovery/download/staging/signature/digest/revalidation/
 exact-PID handoff/NSIS replacement/restart/state-load path. Progress and world
 sentinel hashes are checked. The private Ed25519 test key stays in the bounded

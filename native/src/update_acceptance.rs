@@ -34,6 +34,11 @@ pub fn start(window: &AppWindow, host: Host) {
                 return Ok(state);
             }
             let discovered = aurora_launcher_lib::updates::native::check(&host).await;
+            std::fs::write(
+                root().join("discovered.json"),
+                serde_json::to_vec(&discovered).unwrap(),
+            )
+            .unwrap();
             if !matches!(discovered, aurora_launcher_lib::updates::UpdateAvailability::UpdateAvailable { ref candidate,.. } if candidate=="1.4.3")
             {
                 return Err(api::ApiError::new(
@@ -41,11 +46,6 @@ pub fn start(window: &AppWindow, host: Host) {
                     "Local signed candidate not discovered",
                 ));
             }
-            std::fs::write(
-                root().join("discovered.json"),
-                serde_json::to_vec(&discovered).unwrap(),
-            )
-            .unwrap();
             api::download_launcher_update(host.clone(), "1.4.3".into()).await?;
             api::install_launcher_update(host, "1.4.3".into()).await?;
             std::fs::write(
