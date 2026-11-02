@@ -3,7 +3,7 @@
 Bounded prototypes, measured on 2026-10-31. Raw per-run JSON is in
 [`evidence/native0/`](evidence/native0). The probe is
 [`native/tools/measure-process.ps1`](../../native/tools/measure-process.ps1);
-the run matrix is [`native/tools/run-native0-matrix.ps1`](../../native/tools/run-native0-matrix.ps1).
+the run matrix is [`native/tools/run-native0-matrix.ps1`](../development/archive/webview-tools/run-native0-matrix.ps1).
 
 ## Conditions
 

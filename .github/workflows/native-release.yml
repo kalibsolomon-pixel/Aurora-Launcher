@@ -1,0 +1,235 @@
+name: Native stable protected release
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact reviewed current main SHA
+        type: string
+        required: true
+      version:
+        description: Native numeric version
+        type: string
+        required: true
+        default: '2.0.0'
+      minimum_version:
+        description: Oldest accepted installed native version
+        type: string
+        required: true
+        default: '1.4.2'
+      publish:
+        description: Owner authorizes immutable native publication (separate environment review still required)
+        type: boolean
+        default: false
+      advance_authority:
+        description: Owner authorizes native discovery advancement LAST
+        type: boolean
+        default: false
+      authority_parent:
+        description: Exact current native authority commit (required to advance)
+        type: string
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: aurora-native-preview-release
+  cancel-in-progress: false
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Require reviewed current main and isolated native tag
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          VERSION: ${{ inputs.version }}
+          MINIMUM: ${{ inputs.minimum_version }}
+          GH_TOKEN: ${{ github.token }}
+          ADVANCE_AUTHORITY: ${{ inputs.advance_authority }}
+          EXPECTED_PARENT: ${{ inputs.authority_parent }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          git fetch --no-tags origin main
+          test "$SOURCE_SHA" = "$(git rev-parse origin/main)"
+          test "$SOURCE_SHA" = "$(git rev-parse HEAD)"
+          if [ "$ADVANCE_AUTHORITY" = true ]; then
+            [[ "$EXPECTED_PARENT" =~ ^[a-f0-9]{40}$ ]]
+          fi
+          node tools/release/verify-version.mjs --native-release "$VERSION"
+          node --input-type=module -e 'import {versionParts} from "./tools/release/native-signing.mjs"; const a=versionParts(process.env.MINIMUM), b=versionParts(process.env.VERSION); if ((a.map((n,i)=>n-b[i]).find(n=>n!==0)??0)>0) throw Error("Invalid minimum");'
+          if git ls-remote --exit-code --tags origin "refs/tags/native-v$VERSION"; then
+            exit 1
+          else
+            status=$?
+            test "$status" = 2 # only 'no matching ref' is absence
+          fi
+  build:
+    needs: resolve
+    runs-on: windows-latest
+    environment: launcher-production
+    env:
+      AURORA_DISCORD_APPLICATION_ID: '1553653987545317396'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Validate and build native only
+        shell: pwsh
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          VERSION: ${{ inputs.version }}
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+          AURORA_NATIVE_UPDATE_AUTHORITY: https://raw.githubusercontent.com/kalibsolomon-pixel/Aurora-Launcher/launcher-native-update-authority/native-update.json
+        run: |
+          if ((git rev-parse HEAD) -ne $env:SOURCE_SHA) { throw 'Source differs' }
+          npm ci
+          if ($LASTEXITCODE) { throw 'Dependency install failed' }
+          node tools/release/verify-version.mjs --native-release $env:VERSION
+          if ($LASTEXITCODE) { throw 'Version mismatch' }
+          node --input-type=module -e 'import {publicKeyPacket,sha256} from "./tools/release/native-signing.mjs"; const k=process.env.AURORA_UPDATER_PUBKEY?.trim(); publicKeyPacket(k); if(sha256(Buffer.from(k))!=="bb2998279b09a39daeb44cd405a2f0f6d664fa751ce3d02e002463f89f8c50bc") throw Error("Owner trust identity differs");'
+          if ($LASTEXITCODE) { throw 'Trust identity mismatch' }
+          $env:AURORA_UPDATER_PUBKEY=$env:AURORA_UPDATER_PUBKEY.Trim()
+          node --test tools/release/*.test.mjs
+          if ($LASTEXITCODE) { throw 'Release tests failed' }
+          cargo fmt --manifest-path core/Cargo.toml --all -- --check
+          if ($LASTEXITCODE) { throw 'Core format failed' }
+          cargo fmt --manifest-path native/Cargo.toml --all -- --check
+          if ($LASTEXITCODE) { throw 'Native format failed' }
+          cargo test --manifest-path core/Cargo.toml --locked --no-default-features --features native-preview
+          if ($LASTEXITCODE) { throw 'Core tests failed' }
+          cargo test --manifest-path native/Cargo.toml --locked
+          if ($LASTEXITCODE) { throw 'Native tests failed' }
+          cargo build --manifest-path native/Cargo.toml --locked --release
+          if ($LASTEXITCODE) { throw 'Native build failed' }
+      - name: Install packaging compiler
+        shell: pwsh
+        run: |
+          choco install nsis --version=3.11 --yes --no-progress
+          if ($LASTEXITCODE) { throw 'NSIS provisioning failed' }
+      - name: Package native installer
+        shell: pwsh
+        run: |
+          ./native/tools/package-windows.ps1 -OutputDirectory "$env:RUNNER_TEMP/native-release" -Makensis "${env:ProgramFiles(x86)}/NSIS/makensis.exe"
+          if (!$?) { throw 'Native packaging failed' }
+      # Authenticode remains an explicit owner decision. If configured, sign
+      # and verify executable BEFORE packaging, and installer BEFORE this step.
+      - name: Sign installer and envelope using existing protected identity
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          VERSION: ${{ inputs.version }}
+          MINIMUM: ${{ inputs.minimum_version }}
+        run: |
+          if (!$env:TAURI_SIGNING_PRIVATE_KEY -or !$env:AURORA_UPDATER_PUBKEY) { throw 'Protected signing configuration missing' }
+          $dir=Join-Path $env:RUNNER_TEMP 'native-release'
+          $key=Join-Path $env:RUNNER_TEMP 'native-public-key.txt'
+          [IO.File]::WriteAllText($key,$env:AURORA_UPDATER_PUBKEY.Trim())
+          $installer=Join-Path $dir "Aurora.Native.Preview_$($env:VERSION)_x64-setup.exe"
+          node node_modules/@tauri-apps/cli/tauri.js signer sign $installer *> $null
+          if ($LASTEXITCODE) { throw 'Installer signing failed' }
+          $payload=Join-Path $dir 'native-update-payload.json'
+          node tools/release/native-update.mjs payload $installer "$installer.sig" $key $env:VERSION $env:MINIMUM $env:SOURCE_SHA $payload
+          if ($LASTEXITCODE) { throw 'Payload validation failed' }
+          node node_modules/@tauri-apps/cli/tauri.js signer sign $payload *> $null
+          if ($LASTEXITCODE) { throw 'Payload signing failed' }
+          node tools/release/native-update.mjs envelope $payload "$payload.sig" $key (Join-Path $dir 'native-update.json')
+          if ($LASTEXITCODE) { throw 'Envelope validation failed' }
+          node tools/release/native-update.mjs inventory $dir $key $env:VERSION $env:SOURCE_SHA
+          if ($LASTEXITCODE) { throw 'Native inventory failed' }
+          node tools/release/native-update.mjs verify $dir $key $env:VERSION $env:SOURCE_SHA
+          if ($LASTEXITCODE) { throw 'Signed candidate validation failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-signed-${{ inputs.version }}-${{ inputs.source_sha }}
+          path: ${{ runner.temp }}/native-release/*
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 0
+  publish:
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    environment: launcher-native-preview-publication
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-signed-${{ inputs.version }}-${{ inputs.source_sha }}
+          path: native-release
+      - name: Publish accepted exact bytes, publish the native stable release as latest
+        env:
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$AURORA_UPDATER_PUBKEY" > "$RUNNER_TEMP/native-public-key.txt"
+          node tools/release/native-publish.mjs publish native-release "$RUNNER_TEMP/native-public-key.txt" "$VERSION" "$SOURCE_SHA"
+  advance:
+    if: inputs.publish && inputs.advance_authority
+    needs: publish
+    runs-on: ubuntu-latest
+    environment: launcher-update-authority-production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-signed-${{ inputs.version }}-${{ inputs.source_sha }}
+          path: native-release
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0, same protected authority process
+        id: authority
+        with:
+          client-id: ${{ vars.AURORA_AUTHORITY_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AURORA_AUTHORITY_APP_PRIVATE_KEY }}
+          owner: kalibsolomon-pixel
+          repositories: Aurora-Launcher
+          permission-contents: write
+          skip-token-revoke: false
+      - name: Verify public native release and advance isolated discovery LAST
+        env:
+          AURORA_AUTHORITY_TOKEN: ${{ steps.authority.outputs.token }}
+          AURORA_UPDATER_PUBKEY: ${{ vars.AURORA_UPDATER_PUBKEY }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          EXPECTED_PARENT: ${{ inputs.authority_parent }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$AURORA_UPDATER_PUBKEY" > "$RUNNER_TEMP/native-public-key.txt"
+          node tools/release/native-publish.mjs advance native-release "$RUNNER_TEMP/native-public-key.txt" "$VERSION" "$SOURCE_SHA" "$EXPECTED_PARENT"

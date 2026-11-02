@@ -6,8 +6,8 @@ import {tmpdir} from 'node:os';
 import {createHash,generateKeyPairSync,sign} from 'node:crypto';
 import {createNativePayload,createNativeEnvelope,verifyNativeEnvelope,verifyNativeDirectory,nativeAdvancement,validateNativePayload,nativeName,nativeAuthority} from './native-update.mjs';
 import {publishNativeRelease,advanceNativeAuthority,nativeRef,nativeInitialization,releaseIdentity} from './native-publish.mjs';
-import {blobSha,emptyTreeSha,authorityToken} from './publish-manifest.mjs';
-import {sha256} from './updater-release.mjs';
+import {blobSha,emptyTreeSha,authorityToken} from './native-git.mjs';
+import {sha256} from './native-signing.mjs';
 
 function fixture(version='1.4.3', shared) {
   const pair=shared??generateKeyPairSync('ed25519'),id=Buffer.from('release!');
@@ -51,13 +51,13 @@ test('native authority never downgrades or accepts same-version drift',()=>{
   assert.throws(()=>nativeAdvancement(a.envelope,drift,a.key));
   assert.throws(()=>authorityToken({GH_TOKEN:'ordinary',AURORA_AUTHORITY_TOKEN:'ordinary'}));
 });
-test('native publication uploads verified draft bytes and preserves WebView latest policy',async()=>{
+test('native publication uploads verified draft bytes and selects native as latest stable',async()=>{
   const f=fixture('2.0.0'),d=await directory(f),uploaded=new Map(),mutations=[];
-  const release={id:42,tag_name:`native-v${f.version}`,target_commitish:d.metadata.sourceSha,prerelease:true,draft:true,immutable:false,assets:[]};
+  const release={id:42,tag_name:`native-v${f.version}`,target_commitish:d.metadata.sourceSha,prerelease:false,draft:true,immutable:false,assets:[]};
   const api=async(path,options={})=>{
     if(options.method==='POST' && path==='/git/refs'){assert.deepEqual(options.body,{ref:`refs/tags/native-v${f.version}`,sha:d.metadata.sourceSha});mutations.push(path);return {};}
-    if(options.method==='POST'){assert.equal(options.body.name,'Aurora Launcher Native 2.0.0');assert.equal(options.body.make_latest,'false');assert.equal(options.body.draft,true);mutations.push(path);return {...release};}
-    if(options.method==='PATCH'){assert.equal(options.body.make_latest,'false');release.draft=false;release.immutable=true;mutations.push(path);return {...release};}
+    if(options.method==='POST'){assert.equal(options.body.name,'Aurora Launcher Native 2.0.0');assert.equal(options.body.make_latest,'true');assert.equal(options.body.draft,true);mutations.push(path);return {...release};}
+    if(options.method==='PATCH'){assert.equal(options.body.make_latest,'true');release.draft=false;release.immutable=true;mutations.push(path);return {...release};}
     if(options.allowMissing)return null;
     if(path===`/git/ref/tags/native-v${f.version}`)return {ref:`refs/tags/native-v${f.version}`,object:{type:'commit',sha:d.metadata.sourceSha}};
     if(path==='/releases/42')return {...release};
@@ -69,7 +69,7 @@ test('native publication uploads verified draft bytes and preserves WebView late
   await publishNativeRelease({...d,api,upload,download});
   assert.deepEqual(mutations,['/git/refs','/releases','/releases/42']);
   assert.equal(uploaded.size,6);
-  assert.throws(()=>releaseIdentity({...release,prerelease:false},f.version,d.metadata.sourceSha,true));
+  assert.throws(()=>releaseIdentity({...release,prerelease:true},f.version,d.metadata.sourceSha,true));
   assert.throws(()=>releaseIdentity({...release,immutable:false},f.version,d.metadata.sourceSha,true));
   const wrongDownload=async()=>Buffer.from('wrong');
   release.draft=true;release.immutable=false;release.assets=[];uploaded.clear();
@@ -87,7 +87,7 @@ test('native authority verifies public artifacts then advances only isolated ref
   const assets=[];const publicBytes=new Map();
   for(const name of [...d.metadata.artifacts.map(a=>a.name),'native-release-assets.json']){const bytes=await readFile(join(d.directory,name));publicBytes.set(name,bytes);assets.push({name,size:bytes.length,browser_download_url:`https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v${f.version}/${name}`});}
   const api=async(path,options={})=>{
-    if(path.startsWith('/releases/tags/'))return {tag_name:`native-v${f.version}`,target_commitish:d.metadata.sourceSha,prerelease:true,draft:false,immutable:true,assets};
+    if(path.startsWith('/releases/tags/'))return {tag_name:`native-v${f.version}`,target_commitish:d.metadata.sourceSha,prerelease:false,draft:false,immutable:true,assets};
     if(path===`/git/ref/tags/native-v${f.version}`)return {ref:`refs/tags/native-v${f.version}`,object:{type:'commit',sha:d.metadata.sourceSha}};
     if(path==='/git/ref/heads/launcher-native-update-authority')return {ref:nativeRef,object:{type:'commit',sha:current}};
     if(options.method){writes.push(path);if(path==='/git/blobs')return {sha:blob};if(path==='/git/trees')return {sha:tree};if(path==='/git/commits')return {sha:commit};if(path==='/git/refs/heads/launcher-native-update-authority'){assert.equal(options.body.force,false);current=commit;return {};}}
@@ -105,7 +105,7 @@ test('native authority verifies public artifacts then advances only isolated ref
   assert.ok(writes.every(p=>!p.includes('/heads/launcher-update-authority')));
 });
 test('native protected workflow is manual, scoped and signing fails closed',async()=>{
-  const text=await readFile(new URL('../../.github/workflows/native-preview-release.yml',import.meta.url),'utf8');
+  const text=await readFile(new URL('../../.github/workflows/native-release.yml',import.meta.url),'utf8');
   assert.match(text,/workflow_dispatch:/);assert.doesNotMatch(text,/pull_request:|push:|schedule:|workflow_run:/);
   for(const name of ['launcher-production','launcher-native-preview-publication','launcher-update-authority-production'])assert.ok(text.includes(name));
   assert.match(text,/if: inputs.publish && inputs.advance_authority/);

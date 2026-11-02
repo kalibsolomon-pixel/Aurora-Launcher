@@ -1,34 +1,18 @@
 {
   "name": "aurora-launcher",
-  "version": "1.5.1",
+  "version": "2.0.0",
   "description": "Launcher for the Aurora client mod for Minecraft: Java Edition",
   "type": "module",
   "scripts": {
-    "verify:version": "node tools/release/verify-version.mjs",
-    "prebuild": "npm run verify:version",
-    "precheck": "npm run verify:version",
-    "dev": "vite dev",
-    "build": "vite build",
-    "preview": "vite preview",
-    "prepare": "svelte-kit sync || echo ''",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "test": "node --test --test-concurrency=1 \"src/lib/**/*.test.ts\"",
-    "tauri": "tauri"
+    "dev": "cargo run --manifest-path native/Cargo.toml",
+    "check": "cargo check --manifest-path core/Cargo.toml --all-targets && cargo check --manifest-path native/Cargo.toml --all-targets",
+    "build": "cargo build --manifest-path native/Cargo.toml --locked --release",
+    "test": "node --test tools/release/*.test.mjs",
+    "verify:version": "node tools/release/verify-version.mjs"
   },
   "license": "MIT",
-  "dependencies": {
-    "@tauri-apps/api": "^2.12.1",
-    "material-symbols": "0.47.6"
-  },
   "devDependencies": {
-    "@sveltejs/adapter-static": "^3.0.10",
-    "@sveltejs/kit": "^2.65.1",
-    "@sveltejs/vite-plugin-svelte": "^7.1.2",
-    "@tauri-apps/cli": "^2",
-    "svelte": "^5.56.3",
-    "svelte-check": "^4.6.0",
-    "typescript": "~6.0.3",
-    "vite": "^8.0.16"
-  }
+    "@tauri-apps/cli": "^2"
+  },
+  "private": true
 }

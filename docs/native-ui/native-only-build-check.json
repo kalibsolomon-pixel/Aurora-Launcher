@@ -1,0 +1,10 @@
+{
+  "productVersion": "2.0.0",
+  "productName": "Aurora Launcher (native preview)",
+  "x64": true,
+  "nativeIdentity": true,
+  "acceptanceFeaturePresent": false,
+  "executableSha256": "bb220bc94bf8e3350e035e893c1354ca58689efa18e78e1a8c48e992fa27efbd",
+  "installerSha256": "4af2597e0383818282b4083d375d5466241d622f412548ae5624dff43631463e",
+  "publishedReplacement": false
+}

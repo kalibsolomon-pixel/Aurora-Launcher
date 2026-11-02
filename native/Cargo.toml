@@ -9,7 +9,7 @@ publish = false
 build = "build.rs"
 
 # Standalone so the Tauri crate keeps its own lockfile/target layout. The
-# lockfile was seeded from src-tauri/Cargo.lock so shared dependencies resolve
+# lockfile was seeded from core/Cargo.lock so shared dependencies resolve
 # to the exact versions the production launcher is tested with.
 [workspace]
 
@@ -29,7 +29,7 @@ renderer-femtovg = ["slint/renderer-femtovg"]
 
 [dependencies]
 # The launcher core without Tauri or WebView2.
-aurora-launcher = { path = "../src-tauri", default-features = false, features = ["native-preview"] }
+aurora-launcher = { path = "../core", default-features = false, features = ["native-preview"] }
 slint = { version = "1.18", default-features = false, features = [
     "std",
     "backend-winit",

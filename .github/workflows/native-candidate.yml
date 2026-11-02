@@ -1,0 +1,57 @@
+name: Native candidate (private artifact only)
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact reviewed source SHA
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    environment: launcher-native-preview-build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: Require exact source identity
+        shell: pwsh
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          if ($env:SOURCE_SHA -notmatch '^[0-9a-f]{40}$' -or (git rev-parse HEAD) -ne $env:SOURCE_SHA) { throw 'Exact reviewed SHA required' }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check core and native host
+        shell: pwsh
+        run: |
+          cargo fmt --manifest-path native/Cargo.toml --all -- --check
+          if ($LASTEXITCODE) { throw 'Native format failed' }
+          cargo test --manifest-path core/Cargo.toml --locked --no-default-features --features native-preview
+          if ($LASTEXITCODE) { throw 'Core tests failed' }
+          cargo test --manifest-path native/Cargo.toml --locked
+          if ($LASTEXITCODE) { throw 'Native tests failed' }
+          cargo build --manifest-path native/Cargo.toml --locked --release
+          if ($LASTEXITCODE) { throw 'Native release failed' }
+      - name: Install packaging compiler
+        shell: pwsh
+        run: |
+          choco install nsis --version=3.11 --yes --no-progress
+          if ($LASTEXITCODE) { throw 'NSIS installation failed' }
+      - name: Package standalone native candidate
+        shell: pwsh
+        run: |
+          ./native/tools/package-windows.ps1 -OutputDirectory "$env:RUNNER_TEMP/native-candidate" -Makensis "${env:ProgramFiles(x86)}/NSIS/makensis.exe"
+          if (!$?) { throw 'Native package failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-preview-candidate
+          path: ${{ runner.temp }}/native-candidate/*
+          retention-days: 7
+          if-no-files-found: error
+# Deliberately no signing secrets, authority enablement, Git mutation, release,
+# tag, publication, authority advancement or production environment access.

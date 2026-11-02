@@ -113,7 +113,7 @@ improvement over its P0.1 measurements.
 
 ## Instrumentation and privacy
 
-The [native probe module](../../../src-tauri/src/performance.rs) uses closed event enums,
+The [native probe module](../../../core/src/performance.rs) uses closed event enums,
 numeric request correlation and instance/account generations, monotonic clocks,
 and eleven unsigned numeric fields per record. Native storage is capped at 16,384
 records with an explicit dropped counter. Frontend markers are capped at 2,048

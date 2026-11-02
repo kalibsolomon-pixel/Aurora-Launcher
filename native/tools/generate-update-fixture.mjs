@@ -33,6 +33,6 @@ const invalid = [
   {url:offer.url+'?redirect=1'},{sourceSha:'z'.repeat(40)}, {unknown:'unsupported'}
 ].map(change=>envelope({...offer,...change}));
 const fixture={testOnly:true,key,installer:installer.toString('base64'),valid:envelope(offer),invalid};
-const directory=fileURLToPath(new URL('../../src-tauri/src/updates/fixtures/',import.meta.url));
+const directory=fileURLToPath(new URL('../../core/src/updates/fixtures/',import.meta.url));
 mkdirSync(directory,{recursive:true});
 writeFileSync(directory+'native-test.json',JSON.stringify(fixture,null,2)+'\n',{flag:'wx'});

@@ -3,8 +3,8 @@
 import {readFile} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {repository,sha256} from './updater-release.mjs';
-import {authorityToken,blobSha,emptyTreeSha} from './publish-manifest.mjs';
+import {repository,sha256} from './native-signing.mjs';
+import {authorityToken,blobSha,emptyTreeSha} from './native-git.mjs';
 import {verifyNativeDirectory,nativeAdvancement,nativeAuthority} from './native-update.mjs';
 
 export const nativeRef='refs/heads/launcher-native-update-authority';
@@ -14,7 +14,7 @@ export const nativeInitialization='Initialize Aurora native preview update autho
 const requireSha=sha=>{if(!/^[a-f0-9]{40}$/.test(sha??'')) throw Error('Invalid exact Git identity'); return sha;};
 export function releaseIdentity(release,version,sourceSha,requirePublic=false) {
   if (!release || release.tag_name!==`native-v${version}` || release.target_commitish!==requireSha(sourceSha) ||
-      release.prerelease!==true || (requirePublic && (release.draft || release.immutable!==true))) throw Error('Native release identity/immutability mismatch');
+      release.prerelease!==false || (requirePublic && (release.draft || release.immutable!==true))) throw Error('Native release identity/immutability mismatch');
 }
 async function verifyNativeTag(api,version,sourceSha) {
   const tag=await api(`/git/ref/tags/native-v${version}`);
@@ -43,7 +43,7 @@ export async function publishNativeRelease({api,upload,download,metadata,directo
   // the release to someone else's ref. Never move or force an existing tag.
   await api('/git/refs',{method:'POST',body:{ref:`refs/tags/native-v${metadata.version}`,sha:metadata.sourceSha}});
   await verifyNativeTag(api,metadata.version,metadata.sourceSha);
-  const release=await api('/releases',{method:'POST',body:{tag_name:`native-v${metadata.version}`,target_commitish:metadata.sourceSha,name:`Aurora Launcher Native ${metadata.version}`,body:`${releaseNotes??'Native Rust/Slint release. Data and update authority are isolated from the WebView launcher.'}\n\nSource: ${metadata.sourceSha}.`,draft:true,prerelease:true,make_latest:'false'}});
+  const release=await api('/releases',{method:'POST',body:{tag_name:`native-v${metadata.version}`,target_commitish:metadata.sourceSha,name:`Aurora Launcher Native ${metadata.version}`,body:`${releaseNotes??'Native Rust/Slint release. Data and update authority are isolated from the WebView launcher.'}\n\nSource: ${metadata.sourceSha}.`,draft:true,prerelease:false,make_latest:'true'}});
   releaseIdentity(release,metadata.version,metadata.sourceSha);
   for(const name of [...metadata.artifacts.map(a=>a.name),'native-release-assets.json']) await upload(release.id,name,await readFile(join(directory,name)));
   // Verify uploaded draft bytes before the irreversible publication step.
@@ -59,7 +59,7 @@ export async function publishNativeRelease({api,upload,download,metadata,directo
     if(sha256(bytes)!==entry.sha256) throw Error('Native draft hash mismatch');
   }
   await verifyNativeTag(api,metadata.version,metadata.sourceSha);
-  await api(`/releases/${release.id}`,{method:'PATCH',body:{draft:false,make_latest:'false'}});
+  await api(`/releases/${release.id}`,{method:'PATCH',body:{draft:false,make_latest:'true'}});
   return verifyPublicNative({api,download,metadata,directory});
 }
 async function inspectAuthority(api,sha,key) {

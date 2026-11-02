@@ -1,0 +1,8311 @@
+use crate::host::Host;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+
+use crate::aurora::AuroraInstallError;
+use crate::cache::{AcquisitionError, ArtifactCache, ArtifactOrigin};
+use crate::config::{ConfigError, ConfigLoad};
+use crate::distribution::ReleaseChannel;
+use crate::downloads::{ArtifactSource, DownloadError, InvalidArtifactSource};
+use crate::fabric::metadata::{FabricMetadataError, InvalidLoaderVersion, LoaderVersionId};
+use crate::fabric::{FabricResolutionError, GameResolutionError, resolve_game_plan};
+use crate::install::{
+    InstallContext, InstallError, InstallFaults, InstalledGameValidation, ValidationOutcome,
+    ValidationStatus, install_game as execute_install_game,
+    validate_installed_game as run_installed_game_validation,
+};
+use crate::instances::lifecycle::{
+    CreateInstanceRequest as LifecycleCreateRequest, InstanceError, InstanceFaults,
+};
+use crate::instances::{
+    InstanceRecord, InstanceRegistry, InstanceRegistryError, InvalidInstanceId,
+};
+use crate::minecraft::metadata::{
+    InvalidMinecraftVersion, MetadataEndpoints, MetadataError, MinecraftVersionId,
+};
+use crate::minecraft::plan::PlanError;
+use crate::minecraft::rules::UnsupportedPlatform;
+use crate::minecraft::{MinecraftResolutionError, resolve_install_plan};
+use crate::paths::ManagedPaths;
+use crate::runtime::install::{RuntimeInstallError, RuntimeValidation};
+use crate::runtime::metadata::RuntimeMetadataError;
+
+impl From<crate::instance_sync::SyncError> for CommandError {
+    fn from(error: crate::instance_sync::SyncError) -> Self {
+        Self::new(error.code, error.message)
+    }
+}
+
+pub fn get_instance_sync_policy(app: Host) -> Result<crate::instance_sync::Policy, CommandError> {
+    Ok(crate::instance_sync::policy(&managed_paths(&app)?)?)
+}
+
+pub fn save_instance_sync_policy(
+    app: Host,
+    request: crate::instance_sync::Policy,
+) -> Result<crate::instance_sync::Policy, CommandError> {
+    let managed = managed_paths(&app)?;
+    let policy = crate::instance_sync::save_policy(&managed, request)?;
+    crate::instance_sync::automatic::reconcile(app, managed)?;
+    Ok(policy)
+}
+pub fn get_instance_sync_status() -> crate::instance_sync::automatic::Status {
+    crate::instance_sync::automatic::status()
+}
+pub fn get_instance_sync_conflicts(
+    app: Host,
+) -> Result<Vec<crate::instance_sync::Conflict>, CommandError> {
+    Ok(crate::instance_sync::conflicts(&managed_paths(&app)?)?)
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SyncResolveRequest {
+    pub id: String,
+    pub use_source: bool,
+}
+pub fn resolve_instance_sync_conflict(
+    app: Host,
+    request: SyncResolveRequest,
+) -> Result<crate::instance_sync::Receipt, CommandError> {
+    Ok(crate::instance_sync::resolve_conflict(
+        &managed_paths(&app)?,
+        &request.id,
+        request.use_source,
+    )?)
+}
+pub fn initialize_instance_sync(app: Host) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::instance_sync::automatic::reconcile(app, managed)?;
+    Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SyncEnabledRequest {
+    pub enabled: bool,
+}
+
+pub fn set_instance_sync_enabled(
+    app: Host,
+    request: SyncEnabledRequest,
+) -> Result<crate::instance_sync::Policy, CommandError> {
+    let managed = managed_paths(&app)?;
+    let policy = crate::instance_sync::set_enabled(&managed, request.enabled)?;
+    crate::instance_sync::automatic::reconcile(app, managed)?;
+    Ok(policy)
+}
+
+pub async fn preview_instance_sync(
+    app: Host,
+    request: crate::instance_sync::Request,
+) -> Result<crate::instance_sync::Preview, CommandError> {
+    let managed = managed_paths(&app)?;
+    tokio::task::spawn_blocking(move || crate::instance_sync::preview(&managed, &request))
+        .await
+        .map_err(|_| CommandError::new("sync_worker_failed", "The sync worker did not complete."))?
+        .map_err(Into::into)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SyncApplyRequest {
+    pub sync: crate::instance_sync::Request,
+    pub fingerprint: String,
+}
+
+pub async fn apply_instance_sync(
+    app: Host,
+    request: SyncApplyRequest,
+) -> Result<crate::instance_sync::Receipt, CommandError> {
+    let managed = managed_paths(&app)?;
+    tokio::task::spawn_blocking(move || {
+        crate::instance_sync::apply(&managed, &request.sync, &request.fingerprint)
+    })
+    .await
+    .map_err(|_| CommandError::new("sync_worker_failed", "The sync worker did not complete."))?
+    .map_err(Into::into)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplicationStatus {
+    launcher_version: String,
+    platform: PlatformInfo,
+    managed_data_root: String,
+    backend_status: BackendStatus,
+}
+
+impl ApplicationStatus {
+    fn ready(
+        launcher_version: impl Into<String>,
+        os: impl Into<String>,
+        architecture: impl Into<String>,
+        managed_data_root: PathBuf,
+    ) -> Self {
+        Self {
+            launcher_version: launcher_version.into(),
+            platform: PlatformInfo {
+                os: os.into(),
+                architecture: architecture.into(),
+            },
+            managed_data_root: managed_data_root.to_string_lossy().into_owned(),
+            backend_status: BackendStatus::Ready,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformInfo {
+    os: String,
+    architecture: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BackendStatus {
+    Ready,
+}
+
+/// The persisted launcher state shown by the UI: configuration summary and
+/// the known instance records.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherState {
+    config: LauncherConfigSummary,
+    instances: Vec<InstanceSummary>,
+    platform_capabilities: Vec<crate::instances::platform::PlatformCapability>,
+}
+
+impl LauncherState {
+    fn from_parts(
+        config: crate::config::LauncherConfig,
+        registry: InstanceRegistry,
+    ) -> Result<Self, CommandError> {
+        // Referential integrity: a stored selection must name a registered
+        // instance. A dangling one is a deliberate, documented error â€” the
+        // launcher never silently selects a random instance.
+        if let Some(selected) = config.selected_instance_id() {
+            if registry.find(selected).is_none() {
+                return Err(CommandError::new(
+                    "config_selected_instance_dangling",
+                    format!(
+                        "the configured selected instance '{}' does not exist in the instance registry; select an existing instance to repair the selection",
+                        selected
+                    ),
+                ));
+            }
+        }
+
+        Ok(Self {
+            config: LauncherConfigSummary {
+                schema_version: config.schema_version(),
+                selected_instance_id: config.selected_instance_id().map(|id| id.to_string()),
+            },
+            platform_capabilities: crate::instances::platform::capabilities(),
+            instances: registry
+                .instances()
+                .iter()
+                .map(InstanceSummary::from_record)
+                .collect(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherConfigSummary {
+    schema_version: u32,
+    selected_instance_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceSummary {
+    id: String,
+    display_name: String,
+    /// The stored lifecycle state (`installing`/`ready`). Whether a ready
+    /// instance is still internally consistent is answered by the
+    /// `validate_instance` command, which performs the deep (hashing)
+    /// validation on demand rather than on every state load.
+    state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    recovery: Option<RecoverySummary>,
+    aurora: Option<crate::instances::platform::AuroraPin>,
+    aurora_content_state: Option<String>,
+    minecraft_version: String,
+    platform: crate::instances::platform::PlatformPin,
+    pack: Option<crate::instances::PackRegistryIdentity>,
+    /// The desired configuration, verbatim. The UI edits a draft and sends
+    /// the whole proposed configuration to `update_instance_configuration`.
+    configuration: InstanceConfigurationDto,
+}
+
+impl InstanceSummary {
+    fn from_record(record: &InstanceRecord) -> Self {
+        Self {
+            id: record.id().to_string(),
+            display_name: record.display_name().to_owned(),
+            state: record.state().as_str().to_owned(),
+            recovery: None,
+            aurora: record.installed().aurora.clone(),
+            aurora_content_state: None,
+            minecraft_version: record.installed().minecraft_version.clone(),
+            platform: record.installed().platform.clone(),
+            pack: record.pack().cloned(),
+            configuration: InstanceConfigurationDto::from_configuration(record.configuration()),
+        }
+    }
+}
+
+/// Non-secret recovery presentation; it grants no installation or launch authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RecoverySummary {
+    status: &'static str,
+    message: &'static str,
+}
+
+fn recovery_summary(status: &'static str) -> RecoverySummary {
+    RecoverySummary {
+        status,
+        message: match status {
+            "busy" => {
+                "Installation or recovery is busy. Wait for the current operation to finish, then retry."
+            }
+            "previousRestored" => {
+                "The previous installation was restored. Retry to finish the saved configuration."
+            }
+            "completed" => "Recovery completed. The committed game content was retained.",
+            "interrupted" => {
+                "An interrupted installation was recovered. Retry to finish the saved configuration."
+            }
+            _ => {
+                "Recovery requires manual inspection. All recovery trees and evidence were preserved."
+            }
+        },
+    }
+}
+
+/// The desired instance configuration as it crosses the command boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceConfigurationDto {
+    #[serde(default)]
+    pub performance_mode: Option<crate::instances::performance::PerformanceMode>,
+    pub minecraft_version: String,
+    pub aurora_enabled: bool,
+    pub loader: crate::instances::settings::LoaderConfiguration,
+    pub memory_mib: u32,
+    pub additional_jvm_arguments: String,
+    pub window: Option<InstanceWindowDto>,
+    /// Absent: Aurora's managed Java. `{ "kind": "custom", "path": … }`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub java: Option<crate::instances::settings::JavaSelection>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceWindowDto {
+    pub width: u16,
+    pub height: u16,
+}
+
+impl InstanceConfigurationDto {
+    fn from_configuration(
+        configuration: &crate::instances::settings::InstanceConfiguration,
+    ) -> Self {
+        Self {
+            minecraft_version: configuration.minecraft_version().to_owned(),
+            performance_mode: configuration.performance_mode(),
+            aurora_enabled: configuration.aurora_enabled(),
+            loader: configuration.loader().clone(),
+            memory_mib: configuration.memory_mib(),
+            additional_jvm_arguments: configuration.additional_jvm_arguments().to_owned(),
+            window: configuration.window().map(|window| InstanceWindowDto {
+                width: window.width(),
+                height: window.height(),
+            }),
+            java: configuration.java().cloned(),
+        }
+    }
+
+    fn into_configuration(
+        self,
+    ) -> Result<crate::instances::settings::InstanceConfiguration, CommandError> {
+        let mut configuration = crate::instances::settings::InstanceConfiguration::from_parts(
+            self.minecraft_version.trim(),
+            self.loader,
+            self.memory_mib,
+            self.additional_jvm_arguments,
+            self.window.map(|window| {
+                crate::instances::settings::WindowConfiguration::new(window.width, window.height)
+            }),
+        );
+        configuration.set_aurora_enabled(self.aurora_enabled);
+        configuration.set_performance_mode(self.performance_mode);
+        configuration.set_java(self.java);
+        Ok(configuration)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandError {
+    code: String,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    conflict: Option<crate::instance_content::ProviderConflict>,
+}
+
+impl From<crate::instances::InvalidInstanceRecord> for CommandError {
+    fn from(error: crate::instances::InvalidInstanceRecord) -> Self {
+        Self::new("instance_configuration_invalid", error.to_string())
+    }
+}
+
+impl CommandError {
+    /// The stable error code for this failure. Crate-visible for acceptance
+    /// evidence; the frontend receives it through serialization.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn error_code(&self) -> &str {
+        &self.code
+    }
+
+    fn managed_path(message: impl Into<String>) -> Self {
+        Self::new("managed_path_unavailable", message)
+    }
+
+    fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+            conflict: None,
+        }
+    }
+}
+
+impl From<InvalidInstanceId> for CommandError {
+    fn from(error: InvalidInstanceId) -> Self {
+        Self::new("instance_id_invalid", error.to_string())
+    }
+}
+
+impl From<ConfigError> for CommandError {
+    fn from(error: ConfigError) -> Self {
+        let code = match &error {
+            ConfigError::Malformed(_) => "config_malformed",
+            ConfigError::UnsupportedSchema { .. } => "config_unsupported_schema",
+            ConfigError::Read(_) | ConfigError::Write(_) => "storage_io_failure",
+        };
+        Self::new(code, error.to_string())
+    }
+}
+
+impl From<InstanceRegistryError> for CommandError {
+    fn from(error: InstanceRegistryError) -> Self {
+        let code = match &error {
+            InstanceRegistryError::Malformed(_) => "instances_invalid",
+            InstanceRegistryError::UnsupportedSchema { .. } => "instances_unsupported_schema",
+            InstanceRegistryError::Read(_) => "storage_io_failure",
+            InstanceRegistryError::Write(_) => "instance_registry_write_failure",
+        };
+        Self::new(code, error.to_string())
+    }
+}
+
+impl From<crate::auth::AuthError> for CommandError {
+    fn from(error: crate::auth::AuthError) -> Self {
+        Self::new(error.code(), error.to_string())
+    }
+}
+
+impl From<crate::auth::AccountsError> for CommandError {
+    fn from(error: crate::auth::AccountsError) -> Self {
+        Self::from(crate::auth::AuthError::Accounts(error))
+    }
+}
+
+impl From<crate::auth::accounts::InvalidAccount> for CommandError {
+    fn from(error: crate::auth::accounts::InvalidAccount) -> Self {
+        Self::from(crate::auth::AuthError::InvalidAccountId(error))
+    }
+}
+
+impl From<crate::shortcuts::ShortcutError> for CommandError {
+    fn from(error: crate::shortcuts::ShortcutError) -> Self {
+        Self::new(error.code(), error.to_string())
+    }
+}
+
+impl From<crate::instance_mods::ModError> for CommandError {
+    fn from(error: crate::instance_mods::ModError) -> Self {
+        let code = error.code();
+        eprintln!("[aurora-launcher] local mod operation failed ({code}): {error}");
+        let message = match &error {
+            crate::instance_mods::ModError::DependencyBlocked(reason) => format!("This mod is needed by active content: {reason}. Disable the dependent mods first."),
+            crate::instance_mods::ModError::DirectoryMissing
+            | crate::instance_mods::ModError::DirectoryRead { .. } => {
+                "This instance's mods folder is unavailable. Check the folder and try Refresh."
+                    .to_owned()
+            }
+            crate::instance_mods::ModError::Boundary { .. }
+            | crate::instance_mods::ModError::BoundaryEscape
+            | crate::instance_mods::ModError::UnsafeEntry => {
+                "Aurora refused the operation because the local entry could not be proven safe."
+                    .to_owned()
+            }
+            crate::instance_mods::ModError::InstalledState(_) => {
+                "Aurora Client ownership could not be verified from this instance's installed state."
+                    .to_owned()
+            }
+            crate::instance_mods::ModError::ContentState(_) => {
+                "Provider content state is malformed or unsupported. No content was changed.".to_owned()
+            }
+            crate::instance_mods::ModError::StaleEntry => {
+                "This mod changed since the list was loaded. Refresh and try again.".to_owned()
+            }
+            crate::instance_mods::ModError::RequiredArtifact => {
+                "Aurora Client is required and cannot be disabled or removed here.".to_owned()
+            }
+            crate::instance_mods::ModError::TargetConflict(name) => format!(
+                "A local file named '{name}' already exists. Aurora did not overwrite it."
+            ),
+            crate::instance_mods::ModError::MutationInProgress => {
+                "Another mod change is already in progress for this instance.".to_owned()
+            }
+            crate::instance_mods::ModError::MutationIo { .. }
+            | crate::instance_mods::ModError::State(_) => {
+                "The local mod change could not be completed. Refresh and try again.".to_owned()
+            }
+        };
+        Self::new(code, message)
+    }
+}
+
+impl From<crate::instance_content::ContentError> for CommandError {
+    fn from(error: crate::instance_content::ContentError) -> Self {
+        if let crate::instance_content::ContentError::ModCollision(conflict) = error {
+            let mut response = Self::new("provider_content_collision", conflict.reason.clone());
+            response.conflict = Some(conflict);
+            return response;
+        }
+        if let crate::instance_content::ContentError::DependencyBlocked(ref reason) = error {
+            return Self::new("mod_dependency_blocked", reason.clone());
+        }
+        // Reasons are fixed, app-authored sentences (local import validation,
+        // inventory block reasons), never paths or remote bodies. Keep the code.
+        if let crate::instance_content::ContentError::UnsupportedActionWith(reason) = error {
+            return Self::new("unsupported_content_action", reason);
+        }
+        let code = error.code();
+        eprintln!("[aurora-launcher] content operation failed ({code}): {error}");
+        Self::new(
+            code,
+            match code {
+                "content_state_malformed" => {
+                    "Provider content state is malformed or unsupported. No content was changed."
+                }
+                "content_changed_since_scan" => {
+                    "This content changed since Refresh. Refresh and try again."
+                }
+                "content_collision" => {
+                    "A file already exists at that name. Nothing was overwritten."
+                }
+                "content_unsafe_path" => "Aurora refused an unsafe content path.",
+                "content_hash_mismatch" => "Content did not match its expected SHA-256.",
+                "content_operation_in_progress" => {
+                    "Another content change is in progress for this instance."
+                }
+                "unsupported_content_action" => "This content entry cannot be changed here.",
+                "content_unavailable" => {
+                    "A content folder could not be read. Refresh and try again."
+                }
+                "content_acquisition_failed" => {
+                    "The download could not be completed. Check the connection and try again."
+                }
+                "content_invalid_artifact" => {
+                    "The downloaded content is not a valid mod file. Nothing was installed."
+                }
+                "content_required_by_installed" => {
+                    "This content is still required by other installed content."
+                }
+                _ => "The content operation could not be completed. Refresh and try again.",
+            },
+        )
+    }
+}
+
+impl From<InvalidArtifactSource> for CommandError {
+    fn from(error: InvalidArtifactSource) -> Self {
+        Self::new("artifact_source_invalid", error.to_string())
+    }
+}
+
+impl From<InvalidMinecraftVersion> for CommandError {
+    fn from(error: InvalidMinecraftVersion) -> Self {
+        Self::new("minecraft_version_invalid", error.to_string())
+    }
+}
+
+impl From<InvalidLoaderVersion> for CommandError {
+    fn from(error: InvalidLoaderVersion) -> Self {
+        Self::new("fabric_loader_version_invalid", error.to_string())
+    }
+}
+
+impl From<UnsupportedPlatform> for CommandError {
+    fn from(error: UnsupportedPlatform) -> Self {
+        Self::new("minecraft_platform_unsupported", error.to_string())
+    }
+}
+
+impl From<FabricResolutionError> for CommandError {
+    fn from(error: FabricResolutionError) -> Self {
+        let code = match &error {
+            FabricResolutionError::Metadata(metadata) => match metadata {
+                FabricMetadataError::Network(_) | FabricMetadataError::ResponseTooLarge { .. } => {
+                    "fabric_metadata_network_failure"
+                }
+                FabricMetadataError::HttpStatus { .. } => "fabric_metadata_network_failure",
+                FabricMetadataError::Malformed { .. } => "fabric_metadata_invalid",
+                FabricMetadataError::Unsupported { .. } => "fabric_metadata_unsupported",
+            },
+            FabricResolutionError::LoaderNotFound { .. } => "fabric_loader_not_found",
+            FabricResolutionError::CombinationUnsupported { .. } => {
+                "fabric_combination_unsupported"
+            }
+            FabricResolutionError::Planning(planning) => match planning {
+                crate::fabric::plan::FabricPlanError::LibraryInvalid { .. } => {
+                    "fabric_library_invalid"
+                }
+                crate::fabric::plan::FabricPlanError::RepositoryInvalid { .. } => {
+                    "fabric_repository_invalid"
+                }
+                crate::fabric::plan::FabricPlanError::ArtifactInvalid { .. } => {
+                    "fabric_library_invalid"
+                }
+            },
+        };
+        Self::new(code, error.to_string())
+    }
+}
+
+impl From<GameResolutionError> for CommandError {
+    fn from(error: GameResolutionError) -> Self {
+        match error {
+            GameResolutionError::Minecraft(error) => error.into(),
+            GameResolutionError::Fabric(error) => error.into(),
+            GameResolutionError::Composition(error) => {
+                Self::new("fabric_plan_conflict", error.to_string())
+            }
+        }
+    }
+}
+
+impl From<MinecraftResolutionError> for CommandError {
+    fn from(error: MinecraftResolutionError) -> Self {
+        let code = match &error {
+            MinecraftResolutionError::Metadata(metadata) => match metadata {
+                MetadataError::VersionNotFound { .. } => "minecraft_version_not_found",
+                MetadataError::Network(_) | MetadataError::ResponseTooLarge { .. } => {
+                    "minecraft_metadata_network_failure"
+                }
+                MetadataError::ManifestInvalid { .. } => "minecraft_manifest_invalid",
+                MetadataError::DocumentInvalid { .. } => "minecraft_version_metadata_invalid",
+                MetadataError::Integrity { .. } => "minecraft_metadata_integrity_failure",
+                MetadataError::Unsupported(_) => "minecraft_version_unsupported",
+            },
+            MinecraftResolutionError::Planning(planning) => match planning {
+                PlanError::LibraryInvalid { .. } => "minecraft_library_invalid",
+                PlanError::ArtifactInvalid { .. } => "minecraft_artifact_invalid",
+                PlanError::Unsupported { .. } => "minecraft_version_unsupported",
+            },
+        };
+        Self::new(code, error.to_string())
+    }
+}
+
+impl From<AcquisitionError> for CommandError {
+    fn from(error: AcquisitionError) -> Self {
+        let code = match &error {
+            AcquisitionError::Download(download) => match download {
+                DownloadError::Cancelled => "installation_cancelled",
+                DownloadError::Network(_) => "network_unavailable",
+                DownloadError::Timeout(_) => "download_timeout",
+                DownloadError::Redirect(_) => "download_redirect_failure",
+                DownloadError::HttpStatus { .. } => "download_http_failure",
+                DownloadError::SizeMismatch { .. } => "artifact_size_mismatch",
+                DownloadError::Sha256Mismatch { .. } => "artifact_hash_mismatch",
+                DownloadError::Sha1Mismatch { .. } => "artifact_hash_mismatch",
+                DownloadError::Sha512Mismatch { .. } => "artifact_hash_mismatch",
+                DownloadError::ObservedDigestDrift { .. } => "fabric_artifact_unverified",
+                DownloadError::StagingIo(_) => "cache_io_failure",
+            },
+            AcquisitionError::StoreIo(_) => "cache_io_failure",
+            AcquisitionError::Promotion(_) | AcquisitionError::PromotionBlocked { .. } => {
+                "artifact_promotion_failure"
+            }
+        };
+        Self::new(code, error.to_string())
+    }
+}
+
+fn managed_paths(app: &Host) -> Result<ManagedPaths, CommandError> {
+    let resolved_root = app.local_data_dir().map_err(|error| {
+        CommandError::managed_path(format!(
+            "Aurora's managed data location could not be resolved: {error}"
+        ))
+    })?;
+
+    ManagedPaths::from_app_local_data_dir(resolved_root).map_err(|error| {
+        CommandError::managed_path(format!(
+            "Aurora's managed data location is not safe to use: {error}"
+        ))
+    })
+}
+
+pub fn get_application_status(app: Host) -> Result<ApplicationStatus, CommandError> {
+    let _performance = crate::performance::scope(crate::performance::Event::UnrelatedIpc);
+    let managed_paths = managed_paths(&app)?;
+
+    eprintln!(
+        "[aurora-launcher] backend ready; managed data root: {}",
+        managed_paths.data_root().display()
+    );
+
+    Ok(ApplicationStatus::ready(
+        app.version().to_owned(),
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        managed_paths.data_root().to_path_buf(),
+    ))
+}
+
+/// Loads the persisted launcher state.
+///
+/// On first run this materializes the default configuration under the managed
+/// data root; malformed persisted files are reported as structured errors and
+/// left untouched.
+pub async fn get_launcher_state(app: Host) -> Result<LauncherState, CommandError> {
+    let paths = managed_paths(&app)?;
+    tokio::task::spawn_blocking(move || load_launcher_state(&paths))
+        .await
+        .map_err(|_| {
+            CommandError::new(
+                "launcher_state_unavailable",
+                "The installation recovery worker did not complete.",
+            )
+        })?
+}
+
+fn load_launcher_state(managed_paths: &ManagedPaths) -> Result<LauncherState, CommandError> {
+    // Startup and focus may overlap state requests. Serialize these readers
+    // so their temporary lifecycle observations never report each other busy.
+    static STATE_LOAD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _state_load = STATE_LOAD.lock().unwrap_or_else(|error| error.into_inner());
+    let _performance = crate::performance::scope(crate::performance::Event::UnrelatedIpc);
+
+    let loaded = crate::config::load_or_initialize(&managed_paths.config_file())?;
+    if let ConfigLoad::Initialized(_) = &loaded {
+        eprintln!(
+            "[aurora-launcher] initialized default launcher configuration at {}",
+            managed_paths.config_file().display()
+        );
+    }
+
+    let registry = InstanceRegistry::load_and_migrate(&managed_paths.instance_registry_file())?;
+
+    let mut state = LauncherState::from_parts(loaded.into_config(), registry)?;
+    for summary in &mut state.instances {
+        let id = crate::instances::InstanceId::new(summary.id.clone())?;
+        let recovery = (|| -> Result<Option<&'static str>, crate::install::InstallError> {
+            let paths = managed_paths.instance_paths(&id);
+            // Observe lifecycle ownership even before a journal exists. Hold
+            // it through replay, using the installer's lifecycle -> game order.
+            let _operation = crate::install::coordination::TargetLock::existing(
+                managed_paths.data_root(),
+                paths.root(),
+                ".instance-operation.lock",
+            )
+            .map_err(|error| match error {
+                crate::install::coordination::LockError::Busy => InstallError::AlreadyInProgress {
+                    instance_id: id.to_string(),
+                },
+                crate::install::coordination::LockError::Io(error) => InstallError::Storage(error),
+            })?;
+            // An installer may have completed while the initial registry was
+            // loaded; publish the record observed under its ownership lock.
+            let latest =
+                InstanceRegistry::load(&managed_paths.instance_registry_file()).map_err(|_| {
+                    InstallError::RecoveryRequired {
+                        reason: "instance registry could not be reloaded safely".into(),
+                    }
+                })?;
+            let record = latest
+                .find(&id)
+                .ok_or_else(|| InstallError::RecoveryRequired {
+                    reason: "instance registry changed during state loading; refresh".into(),
+                })?;
+            *summary = InstanceSummary::from_record(record);
+            if std::fs::symlink_metadata(paths.root()).is_ok() {
+                crate::install::coordination::checked_directory(
+                    managed_paths.data_root(),
+                    paths.root(),
+                )
+                .map_err(crate::install::InstallError::Storage)?;
+            }
+            if crate::install::journal::needs_recovery(paths.root(), &id)? {
+                crate::install::recover_installation(managed_paths, &id)?;
+            }
+            crate::install::journal::readiness_gate(paths.root(), &id)?;
+            crate::install::journal::recovery_status(
+                paths.root(),
+                &id,
+                summary.state == "installing",
+            )
+        })();
+        if let Err(error) = &recovery {
+            // Stored Ready is only a presentation hint. Keep this target
+            // unavailable without suppressing unrelated instances at startup.
+            summary.state = "installing".into();
+            summary.recovery = Some(recovery_summary(
+                if matches!(error, InstallError::AlreadyInProgress { .. }) {
+                    "busy"
+                } else {
+                    "manualRepair"
+                },
+            ));
+            eprintln!("[aurora-install] target={id} recovery-unavailable: {error}");
+        } else if let Ok(Some(status)) = recovery {
+            summary.recovery = Some(recovery_summary(status));
+        }
+        summary.aurora_content_state = crate::instance_mods::bootstrap_status(&managed_paths, &id)?
+            .or_else(|| summary.aurora.as_ref().map(|_| "missing".into()));
+    }
+    Ok(state)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeleteInstanceRequest {
+    instance_id: String,
+    confirmed_name: String,
+}
+pub async fn delete_instance(
+    app: Host,
+    request: DeleteInstanceRequest,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = crate::instances::InstanceId::new(request.instance_id)?;
+    tokio::task::spawn_blocking(move || {
+        crate::instances::deletion::delete(&managed, &id, &request.confirmed_name)
+            .map_err(|error| CommandError::new(error.0, error.1))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "instance_delete_failed",
+            "Deletion worker did not complete.",
+        )
+    })?
+}
+
+/// Home layout and Discord preferences use the same registry/config write lock
+/// as selection, so unrelated preferences cannot be lost to concurrent writes.
+pub fn get_home_widgets(app: Host) -> Result<crate::home_widgets::HomeLayout, CommandError> {
+    let paths = managed_paths(&app)?;
+    let config = crate::config::load(&paths.config_file())?.unwrap_or_default();
+    Ok(config.home_widgets().clone())
+}
+fn history_query(
+    app: &Host,
+    instance_id: Option<String>,
+) -> Result<
+    (
+        crate::gameplay_history::Store,
+        Option<crate::instances::InstanceId>,
+    ),
+    CommandError,
+> {
+    let paths = managed_paths(app)?;
+    let instance = instance_id
+        .map(crate::instances::InstanceId::new)
+        .transpose()?;
+    let store =
+        crate::gameplay_history::Store::open(paths.gameplay_history_file()).map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Local gameplay history is unavailable or damaged.",
+            )
+        })?;
+    Ok((store, instance))
+}
+pub fn get_playtime_summary(
+    app: Host,
+    instance_id: Option<String>,
+) -> Result<crate::gameplay_history::Playtime, CommandError> {
+    let (store, instance) = history_query(&app, instance_id)?;
+    store
+        .playtime(
+            instance.as_ref(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        )
+        .map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Local gameplay history is unavailable or damaged.",
+            )
+        })
+}
+pub fn get_daily_playtime(
+    app: Host,
+    instance_id: Option<String>,
+    days: usize,
+) -> Result<Vec<crate::gameplay_history::DailyPlaytime>, CommandError> {
+    let (store, instance) = history_query(&app, instance_id)?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    store
+        .daily_playtime(instance.as_ref(), now, days)
+        .map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Daily playtime is unavailable.",
+            )
+        })
+}
+pub fn get_recent_worlds(
+    app: Host,
+    instance_id: Option<String>,
+    limit: usize,
+) -> Result<Vec<crate::gameplay_history::RecentTarget>, CommandError> {
+    let (store, instance) = history_query(&app, instance_id)?;
+    let mut entries = store
+        .recent(
+            crate::gameplay_history::Mode::Singleplayer,
+            instance.as_ref(),
+            limit,
+        )
+        .map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Local gameplay history is unavailable or damaged.",
+            )
+        })?;
+    let managed = managed_paths(&app)?;
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+    for entry in &mut entries {
+        entry.available =
+            match store.quick_target(crate::gameplay_history::Mode::Singleplayer, &entry.id) {
+                Ok(Some(crate::gameplay_history::QuickLaunchTarget::Singleplayer {
+                    instance,
+                    world,
+                })) => {
+                    registry.find(&instance).is_some()
+                        && validate_quick_world(&managed, &instance, &world).is_ok()
+                }
+                _ => false,
+            };
+    }
+    Ok(entries)
+}
+pub fn get_recent_servers(
+    app: Host,
+    instance_id: Option<String>,
+    limit: usize,
+) -> Result<Vec<crate::gameplay_history::RecentTarget>, CommandError> {
+    let (store, instance) = history_query(&app, instance_id)?;
+    let mut entries = store
+        .recent(
+            crate::gameplay_history::Mode::Multiplayer,
+            instance.as_ref(),
+            limit,
+        )
+        .map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Local gameplay history is unavailable or damaged.",
+            )
+        })?;
+    let managed = managed_paths(&app)?;
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+    for entry in &mut entries {
+        entry.available = match store
+            .quick_target(crate::gameplay_history::Mode::Multiplayer, &entry.id)
+        {
+            Ok(Some(crate::gameplay_history::QuickLaunchTarget::Multiplayer {
+                instance,
+                server,
+            })) => {
+                registry.find(&instance).is_some()
+                    && crate::gameplay_history::ServerTarget::try_from(server.as_str().to_owned())
+                        .is_ok()
+            }
+            _ => false,
+        };
+    }
+    Ok(entries)
+}
+
+/// Saves a local favorite for an opaque Recent Servers target id.
+pub fn set_recent_server_favorite(
+    app: Host,
+    target_id: String,
+    favorite: bool,
+) -> Result<(), CommandError> {
+    let (store, _) = history_query(&app, None)?;
+    store.set_server_favorite(&target_id, favorite).map_err(|_| CommandError::new("gameplay_history_unavailable", "The server favorite could not be saved. History may have changed, or the 100-favorite limit was reached."))
+}
+
+/// One requested Recent Servers enrichment entry: an opaque recent-target id
+/// exactly as `get_recent_servers` returned it. The frontend never supplies
+/// an address; endpoints are resolved natively from history.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServerEnrichmentRequest {
+    pub target_ids: Vec<String>,
+}
+
+/// Cache-first, on-demand presentation enrichment for Recent Servers.
+///
+/// History remains the sole source of truth for visits and rejoin authority:
+/// this command performs bounded status queries for endpoints already in
+/// persisted history, caches sanitized presentation under the managed cache,
+/// and returns display-only DTOs. One server's failure degrades only its own
+/// entry; no history document is written.
+pub async fn refresh_recent_server_status(
+    app: Host,
+    request: ServerEnrichmentRequest,
+) -> Result<Vec<crate::server_enrichment::RecentServerPresentation>, CommandError> {
+    if request.target_ids.len() > 20 {
+        return Err(CommandError::new(
+            "server_enrichment_invalid",
+            "Too many enrichment targets were requested.",
+        ));
+    }
+    let managed = managed_paths(&app)?;
+    let store =
+        crate::gameplay_history::Store::open(managed.gameplay_history_file()).map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Local gameplay history is unavailable or damaged.",
+            )
+        })?;
+    Ok(crate::server_enrichment::refresh(
+        &managed,
+        &store,
+        &request.target_ids,
+        crate::server_enrichment::RefreshOptions::default(),
+    )
+    .await)
+}
+pub fn set_home_widgets(
+    app: Host,
+    request: crate::home_widgets::HomeLayout,
+) -> Result<crate::home_widgets::HomeLayout, CommandError> {
+    request
+        .validate()
+        .map_err(|message| CommandError::new("home_widgets_invalid", message))?;
+    let paths = managed_paths(&app)?;
+    let _guard = crate::instances::lifecycle::registry_lock();
+    let mut config = crate::config::load(&paths.config_file())?.unwrap_or_default();
+    config.set_home_widgets(request.clone());
+    crate::config::save(&paths.config_file(), &config)?;
+    Ok(request)
+}
+pub fn reset_home_widgets(app: Host) -> Result<crate::home_widgets::HomeLayout, CommandError> {
+    set_home_widgets(app, Default::default())
+}
+pub fn get_discord_state() -> crate::discord::DiscordState {
+    crate::discord::state()
+}
+pub async fn connect_discord() -> crate::discord::DiscordState {
+    crate::discord::connect().await
+}
+pub fn set_discord_preferences(
+    app: Host,
+    request: crate::discord::DiscordPreferences,
+) -> Result<crate::discord::DiscordState, CommandError> {
+    let paths = managed_paths(&app)?;
+    let _guard = crate::instances::lifecycle::registry_lock();
+    let mut config = crate::config::load(&paths.config_file())?.unwrap_or_default();
+    config.set_discord(request.clone());
+    crate::config::save(&paths.config_file(), &config)?;
+    crate::discord::preferences_changed(request);
+    Ok(crate::discord::state())
+}
+
+/// Typed request for updating the launcher-wide appearance preferences.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetAppearanceRequest {
+    aurora_motion_speed: i32,
+    background: crate::appearance::BackgroundId,
+    theme: String,
+    accent: crate::appearance::AccentSelection,
+}
+
+/// The accent-family CSS token values for the current accent, as applied by
+/// the frontend to the `--color-accent*` custom properties.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccentPaletteDto {
+    accent: String,
+    accent_strong: String,
+    accent_hover: String,
+    accent_pressed: String,
+    accent_contrast: String,
+    accent_soft: String,
+    accent_outline: String,
+}
+
+impl From<&crate::appearance::AccentPalette> for AccentPaletteDto {
+    fn from(palette: &crate::appearance::AccentPalette) -> Self {
+        Self {
+            accent: palette.base.as_hex(),
+            accent_strong: palette.strong.as_hex(),
+            accent_hover: palette.hover.as_hex(),
+            accent_pressed: palette.pressed.as_hex(),
+            accent_contrast: palette.on_accent.as_hex(),
+            accent_soft: palette.soft_css(),
+            accent_outline: palette.outline_css(),
+        }
+    }
+}
+
+/// One selectable built-in theme.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeOptionDto {
+    id: &'static str,
+    label: &'static str,
+    description: &'static str,
+}
+
+/// One curated accent preset.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccentOptionDto {
+    id: &'static str,
+    label: &'static str,
+    /// The preset's base color, for the swatch preview.
+    hex: String,
+}
+
+/// The launcher-wide appearance state plus the catalogs the Settings page
+/// renders. Every value is validated Rust-owned state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppearanceDto {
+    aurora_motion_speed: u8,
+    background: crate::appearance::BackgroundId,
+    theme: &'static str,
+    accent: crate::appearance::AccentSelection,
+    palette: AccentPaletteDto,
+    themes: Vec<ThemeOptionDto>,
+    accents: Vec<AccentOptionDto>,
+}
+
+impl AppearanceDto {
+    fn of(preferences: &crate::appearance::AppearancePreferences) -> Result<Self, CommandError> {
+        let palette = preferences
+            .accent
+            .palette()
+            .map_err(|error| CommandError::new("appearance_invalid", error.to_string()))?;
+
+        Ok(Self {
+            background: preferences.background,
+            aurora_motion_speed: preferences.aurora_motion_speed,
+            theme: preferences.theme_id().as_str(),
+            accent: preferences.accent.clone(),
+            palette: AccentPaletteDto::from(&palette),
+            themes: crate::appearance::ThemeId::all()
+                .into_iter()
+                .map(|theme| ThemeOptionDto {
+                    id: theme.as_str(),
+                    label: theme.label(),
+                    description: theme.description(),
+                })
+                .collect(),
+            accents: crate::appearance::accent_presets()
+                .iter()
+                .map(|preset| AccentOptionDto {
+                    id: preset.id,
+                    label: preset.label,
+                    hex: preset.palette.base.as_hex(),
+                })
+                .collect(),
+        })
+    }
+}
+
+/// Loads the persisted launcher-wide appearance preferences.
+///
+/// These are cosmetic launcher preferences: unknown stored values were
+/// already normalized to safe defaults at load, and this command never
+/// blocks the rest of the launcher.
+pub fn get_appearance(app: Host) -> Result<AppearanceDto, CommandError> {
+    let managed_paths = managed_paths(&app)?;
+
+    let config = match crate::config::load(&managed_paths.config_file())? {
+        Some(config) => config,
+        None => crate::config::LauncherConfig::default(),
+    };
+
+    Ok(AppearanceDto::of(config.appearance())?)
+}
+
+/// Validates and persists new launcher-wide appearance preferences.
+///
+/// The whole proposed appearance is validated first — an unknown theme or an
+/// unusable accent color is rejected with an explanation and nothing is
+/// written — then saved atomically with the rest of the launcher
+/// configuration.
+pub fn set_appearance(
+    app: Host,
+    request: SetAppearanceRequest,
+) -> Result<AppearanceDto, CommandError> {
+    let managed_paths = managed_paths(&app)?;
+
+    let theme = crate::appearance::ThemeId::parse(&request.theme).ok_or_else(|| {
+        CommandError::new(
+            "appearance_invalid",
+            format!(
+                "'{}' is not a known theme; choose one of the built-in themes",
+                request.theme.trim()
+            ),
+        )
+    })?;
+    request
+        .accent
+        .palette()
+        .map_err(|error| CommandError::new("appearance_invalid", error.to_string()))?;
+
+    let preferences = crate::appearance::AppearancePreferences {
+        background: request.background,
+        aurora_motion_speed: crate::appearance::clamp_motion_speed(request.aurora_motion_speed),
+        theme: theme.as_str().to_owned(),
+        accent: request.accent,
+    };
+
+    let _guard = crate::instances::lifecycle::registry_lock();
+    let mut config = match crate::config::load(&managed_paths.config_file())? {
+        Some(config) => config,
+        None => crate::config::LauncherConfig::default(),
+    };
+    config.set_appearance(preferences);
+    crate::config::save(&managed_paths.config_file(), &config)?;
+
+    Ok(AppearanceDto::of(config.appearance())?)
+}
+
+/// The status of one Windows shortcut slot, as Settings renders it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShortcutStatusDto {
+    /// `present`, `absent`, `conflict`, or `unknown` (the OS state could not
+    /// be queried right now).
+    state: &'static str,
+    /// Who owns the slot: `aurora` (launcher-managed) or `installer`
+    /// (created and removed by the Aurora installers, reported read-only).
+    managed_by: &'static str,
+}
+
+impl ShortcutStatusDto {
+    fn for_presence(
+        presence: crate::shortcuts::ShortcutPresence,
+        managed_by: &'static str,
+    ) -> Self {
+        let state = match presence {
+            crate::shortcuts::ShortcutPresence::Present => "present",
+            crate::shortcuts::ShortcutPresence::Absent => "absent",
+            crate::shortcuts::ShortcutPresence::Conflict => "conflict",
+        };
+        Self { state, managed_by }
+    }
+
+    fn unknown(managed_by: &'static str) -> Self {
+        Self {
+            state: "unknown",
+            managed_by,
+        }
+    }
+}
+
+/// The Windows desktop-integration state for the Settings page: live,
+/// filesystem-derived shortcut status (never persisted), whether this
+/// platform supports shortcut integration at all, and whether this build
+/// may manage shortcuts (installed production builds only).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopIntegrationDto {
+    supported: bool,
+    manageable: bool,
+    desktop_shortcut: ShortcutStatusDto,
+    start_menu_shortcut: ShortcutStatusDto,
+}
+
+impl DesktopIntegrationDto {
+    /// Queries the real OS state: known folders, current executable, and the
+    /// shortcut slots inside them. Failure to resolve any input degrades to
+    /// an honest `unknown` status rather than a guess.
+    fn assess() -> Self {
+        let (desktop_dir, programs_dir) = (
+            crate::shortcuts::desktop_known_folder(),
+            crate::shortcuts::programs_known_folder(),
+        );
+        let current_exe = std::env::current_exe().ok();
+        let manageable = current_exe
+            .as_ref()
+            .is_some_and(|exe| crate::shortcuts::shortcut_manageable(exe, !cfg!(debug_assertions)));
+
+        match (desktop_dir, programs_dir, current_exe) {
+            (Ok(desktop), Ok(programs), Some(exe)) => {
+                let context = crate::shortcuts::ShortcutContext {
+                    desktop_dir: desktop,
+                    programs_dir: programs,
+                    // Best-effort: the machine-wide Programs folder widens
+                    // Start-menu reporting to per-machine MSI installs; a
+                    // resolution failure only narrows reporting.
+                    common_programs_dir: crate::shortcuts::common_programs_known_folder().ok(),
+                    target_exe: exe,
+                };
+                Self {
+                    supported: true,
+                    manageable,
+                    desktop_shortcut: ShortcutStatusDto::for_presence(
+                        context.desktop_presence(),
+                        "aurora",
+                    ),
+                    start_menu_shortcut: ShortcutStatusDto::for_presence(
+                        context.start_menu_presence(),
+                        "installer",
+                    ),
+                }
+            }
+            _ => Self {
+                supported: true,
+                manageable,
+                desktop_shortcut: ShortcutStatusDto::unknown("aurora"),
+                start_menu_shortcut: ShortcutStatusDto::unknown("installer"),
+            },
+        }
+    }
+
+    /// The non-Windows shape: shortcut integration does not exist on this
+    /// platform and nothing is claimed about any slot.
+    #[cfg(not(windows))]
+    fn unsupported() -> Self {
+        Self {
+            supported: false,
+            manageable: false,
+            desktop_shortcut: ShortcutStatusDto::unknown("aurora"),
+            start_menu_shortcut: ShortcutStatusDto::unknown("installer"),
+        }
+    }
+}
+
+/// Reports the live Windows shortcut state for the Settings page.
+///
+/// Status is queried from the filesystem on every call — a user may delete
+/// a shortcut outside Aurora, and nothing is persisted in its place.
+pub fn get_desktop_integration() -> Result<DesktopIntegrationDto, CommandError> {
+    #[cfg(windows)]
+    {
+        Ok(DesktopIntegrationDto::assess())
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(DesktopIntegrationDto::unsupported())
+    }
+}
+
+/// Creates (or refreshes) the Aurora-owned desktop shortcut.
+///
+/// Refuses development builds and shortcuts slots Aurora cannot prove it
+/// owns; conflicts surface as `shortcut_conflict` and the existing file is
+/// never touched.
+pub fn create_desktop_shortcut() -> Result<DesktopIntegrationDto, CommandError> {
+    #[cfg(windows)]
+    {
+        let context = shortcut_context_for_management()?;
+        context
+            .create_desktop_shortcut()
+            .map_err(CommandError::from)?;
+        Ok(DesktopIntegrationDto::assess())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = ShortcutStatusDto::unknown("aurora");
+        Err(CommandError::from(
+            crate::shortcuts::ShortcutError::UnsupportedPlatform,
+        ))
+    }
+}
+
+/// Adds the running installed launcher to the Start menu's app list.
+/// Windows grid pinning remains a user action; this is a real Programs link.
+pub fn create_start_menu_shortcut() -> Result<DesktopIntegrationDto, CommandError> {
+    #[cfg(windows)]
+    {
+        shortcut_context_for_management()?
+            .create_start_menu_shortcut()
+            .map_err(CommandError::from)?;
+        Ok(DesktopIntegrationDto::assess())
+    }
+    #[cfg(not(windows))]
+    {
+        Err(CommandError::from(
+            crate::shortcuts::ShortcutError::UnsupportedPlatform,
+        ))
+    }
+}
+
+/// Opens the platform-resolved launcher data folder. No frontend path is accepted.
+pub fn open_launcher_folder(app: Host) -> Result<(), CommandError> {
+    #[cfg(windows)]
+    {
+        let managed = managed_paths(&app)?;
+        let folder = managed.data_root();
+        if !folder.is_dir() {
+            return Err(CommandError::new(
+                "launcher_folder_missing",
+                "The launcher data folder does not exist yet.",
+            ));
+        }
+        crate::host::open_path(folder).map_err(|_| {
+            CommandError::new(
+                "launcher_folder_open_failure",
+                "The launcher data folder could not be opened in Explorer.",
+            )
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        Err(CommandError::new(
+            "launcher_folder_unsupported_platform",
+            "Opening the launcher data folder is currently supported only on Windows.",
+        ))
+    }
+}
+
+/// Removes the Aurora-owned desktop shortcut.
+///
+/// Only a shortcut proven to target this executable is removed; anything
+/// else at the slot is a reported conflict and survives untouched.
+pub fn remove_desktop_shortcut() -> Result<DesktopIntegrationDto, CommandError> {
+    #[cfg(windows)]
+    {
+        let context = shortcut_context_for_management()?;
+        context
+            .remove_desktop_shortcut()
+            .map_err(CommandError::from)?;
+        Ok(DesktopIntegrationDto::assess())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = ShortcutStatusDto::unknown("aurora");
+        Err(CommandError::from(
+            crate::shortcuts::ShortcutError::UnsupportedPlatform,
+        ))
+    }
+}
+
+/// Resolves the live shortcut context for a management action, applying the
+/// installed-production-build gate first.
+#[cfg(windows)]
+fn shortcut_context_for_management() -> Result<crate::shortcuts::ShortcutContext, CommandError> {
+    let current_exe = std::env::current_exe().map_err(|error| {
+        CommandError::from(crate::shortcuts::ShortcutError::Io(error.to_string()))
+    })?;
+    if !crate::shortcuts::shortcut_manageable(&current_exe, !cfg!(debug_assertions)) {
+        return Err(CommandError::from(
+            crate::shortcuts::ShortcutError::ManagementUnavailable,
+        ));
+    }
+    let desktop_dir = crate::shortcuts::desktop_known_folder().map_err(CommandError::from)?;
+    let programs_dir = crate::shortcuts::programs_known_folder().map_err(CommandError::from)?;
+    Ok(crate::shortcuts::ShortcutContext {
+        desktop_dir,
+        programs_dir,
+        common_programs_dir: crate::shortcuts::common_programs_known_folder().ok(),
+        target_exe: current_exe,
+    })
+}
+
+/// Typed artifact metadata accepted by the acquisition command.
+///
+/// The native layer re-validates everything: the URL must be HTTPS, the
+/// digest must be a canonical hexadecimal SHA-256 value, and the optional
+/// size must be positive.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcquireArtifactRequest {
+    url: String,
+    sha256: String,
+    size_bytes: Option<u64>,
+}
+
+/// The typed result of one acquisition: the verified cache object and how it
+/// came to be there.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcquiredArtifact {
+    path: String,
+    sha256: String,
+    bytes: u64,
+    origin: AcquisitionOrigin,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AcquisitionOrigin {
+    Downloaded,
+    CacheHit,
+}
+
+/// Acquires one artifact into the launcher's verified cache.
+///
+/// This is the development-facing proof of the acquisition pipeline: it takes
+/// typed artifact metadata (never a shell string or arbitrary path), runs the
+/// full untrusted-staging â†’ verify â†’ promote flow natively, and returns the
+/// verified object. It accepts no fixture shortcuts, so it can only be driven
+/// with a real reachable source â€” deterministic pipeline verification lives
+/// in the Rust test suite, which uses local loopback test servers.
+pub async fn acquire_artifact(
+    app: Host,
+    request: AcquireArtifactRequest,
+) -> Result<AcquiredArtifact, CommandError> {
+    let managed_paths = managed_paths(&app)?;
+
+    let source = ArtifactSource::https(&request.url, &request.sha256, request.size_bytes)?;
+
+    let cache = ArtifactCache::new(managed_paths);
+    let artifact = cache.acquire(&source).await?;
+
+    eprintln!(
+        "[aurora-launcher] artifact {} verified ({}) at {}",
+        artifact.sha256,
+        match artifact.origin {
+            ArtifactOrigin::Downloaded => "downloaded",
+            ArtifactOrigin::CacheHit => "cache hit",
+        },
+        artifact.path.display()
+    );
+
+    Ok(AcquiredArtifact {
+        path: artifact.path.to_string_lossy().into_owned(),
+        sha256: artifact.sha256.as_hex(),
+        bytes: artifact.bytes,
+        origin: match artifact.origin {
+            ArtifactOrigin::Downloaded => AcquisitionOrigin::Downloaded,
+            ArtifactOrigin::CacheHit => AcquisitionOrigin::CacheHit,
+        },
+    })
+}
+
+/// Typed request accepted by the Minecraft planning command.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanMinecraftInstallRequest {
+    version: String,
+}
+
+/// A concise summary of one resolved Minecraft installation plan.
+///
+/// The full normalized plan stays native; the proof UI only needs counts and
+/// key requirements, never hundreds of library rows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MinecraftPlanSummary {
+    minecraft_version: String,
+    version_type: String,
+    java_component: String,
+    java_major_version: u32,
+    client_sha1: String,
+    client_size_bytes: u64,
+    asset_index_id: String,
+    library_count: usize,
+    native_library_count: usize,
+    main_class: String,
+    game_argument_count: usize,
+    jvm_argument_count: usize,
+}
+
+/// Resolves one exact Minecraft version into a normalized install plan for
+/// the current platform and returns a concise summary.
+///
+/// This is the development-facing proof of the Phase 3 metadata-resolution
+/// layer: it performs real discovery, SHA-1-verified version-document
+/// fetching, parsing, and platform-aware planning in Rust, and installs
+/// nothing â€” no client jar, library, native, asset, or runtime is downloaded.
+pub async fn plan_minecraft_install(
+    request: PlanMinecraftInstallRequest,
+) -> Result<MinecraftPlanSummary, CommandError> {
+    let version = MinecraftVersionId::new(request.version.trim())?;
+    let platform = crate::minecraft::rules::PlatformProfile::current()?;
+
+    let plan = resolve_install_plan(
+        &MetadataEndpoints::official(),
+        &version,
+        platform,
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await?;
+
+    eprintln!(
+        "[aurora-launcher] planned Minecraft {} for {}-{}: {} libraries ({} native), Java {} ({}), asset index {}",
+        plan.minecraft_version(),
+        platform.os(),
+        platform.arch(),
+        plan.libraries().len(),
+        plan.native_library_count(),
+        plan.java().component(),
+        plan.java().major_version(),
+        plan.asset_index().id(),
+    );
+
+    Ok(MinecraftPlanSummary {
+        minecraft_version: plan.minecraft_version().to_owned(),
+        version_type: plan.version_type().to_string(),
+        java_component: plan.java().component().to_owned(),
+        java_major_version: plan.java().major_version(),
+        client_sha1: plan.client().sha1().as_hex(),
+        client_size_bytes: plan.client().size_bytes(),
+        asset_index_id: plan.asset_index().id().to_owned(),
+        library_count: plan.libraries().len(),
+        native_library_count: plan.native_library_count(),
+        main_class: plan.launch().main_class().to_owned(),
+        game_argument_count: plan.launch().game_arguments().len(),
+        jvm_argument_count: plan.launch().jvm_arguments().len(),
+    })
+}
+
+/// Typed request accepted by the Fabric planning command.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanFabricInstallRequest {
+    minecraft_version: String,
+    loader_version: String,
+}
+
+/// A concise summary of one composed game installation plan.
+///
+/// As with the Minecraft summary, the full composed plan stays native; the
+/// proof UI only needs the composed counts and key requirements.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FabricPlanSummary {
+    minecraft_version: String,
+    loader_version: String,
+    vanilla_library_count: usize,
+    fabric_library_count: usize,
+    final_library_count: usize,
+    fabric_digested_library_count: usize,
+    java_component: String,
+    java_major_version: u32,
+    java_raised_by_loader: bool,
+    final_main_class: String,
+}
+
+/// Resolves one exact Minecraft + Fabric Loader combination into the composed
+/// game install plan for the current platform and returns a concise summary.
+///
+/// This is the development-facing proof of the Phase 4 Fabric resolution and
+/// composition layer: it performs real loader discovery, exact profile
+/// resolution, Mojang planning, and composition in Rust, and installs
+/// nothing â€” no Minecraft or Fabric artifact is downloaded.
+pub async fn plan_fabric_install(
+    request: PlanFabricInstallRequest,
+) -> Result<FabricPlanSummary, CommandError> {
+    let version = MinecraftVersionId::new(request.minecraft_version.trim())?;
+    let loader = LoaderVersionId::new(request.loader_version.trim())?;
+    let platform = crate::minecraft::rules::PlatformProfile::current()?;
+
+    let plan = resolve_game_plan(
+        &MetadataEndpoints::official(),
+        &crate::fabric::metadata::FabricMetaEndpoints::official(),
+        &version,
+        &loader,
+        platform,
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await?;
+
+    Ok(FabricPlanSummary {
+        minecraft_version: plan.minecraft().minecraft_version().to_owned(),
+        loader_version: plan
+            .loader()
+            .expect("Fabric resolution")
+            .loader_version()
+            .to_owned(),
+        vanilla_library_count: plan.vanilla_library_count(),
+        fabric_library_count: plan.fabric_library_count(),
+        final_library_count: plan.libraries().len(),
+        fabric_digested_library_count: plan
+            .fabric_loader()
+            .expect("Fabric resolution")
+            .digested_library_count(),
+        java_component: plan.java().component().to_owned(),
+        java_major_version: plan.java().major_version(),
+        java_raised_by_loader: plan.java().raised_by_loader(),
+        final_main_class: plan.main_class().to_owned(),
+    })
+}
+
+/// Plans a Minecraft + NeoForge installation without installing anything
+/// (the development proof surface for the composed NeoForge pipeline).
+pub async fn plan_neoforge_install(
+    app: Host,
+    request: PlanNeoForgeInstallRequest,
+) -> Result<NeoForgePlanSummary, CommandError> {
+    let managed = managed_paths(&app)?;
+    let version = MinecraftVersionId::new(request.minecraft_version.trim())?;
+    let loader = crate::neoforge::metadata::NeoForgeVersionId::new(request.neoforge_version.trim())
+        .map_err(|error| CommandError::new("fabric_loader_not_found", error.to_string()))?;
+    let platform = crate::minecraft::rules::PlatformProfile::current()?;
+
+    let plan = crate::neoforge::resolve_neoforge_game_plan(
+        &managed,
+        &MetadataEndpoints::official(),
+        &crate::neoforge::metadata::NeoForgeMavenEndpoints::official(),
+        &version,
+        &loader,
+        platform,
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await?;
+
+    Ok(NeoForgePlanSummary {
+        minecraft_version: plan.minecraft().minecraft_version().to_owned(),
+        neoforge_version: plan
+            .neoforge_loader()
+            .expect("NeoForge resolution")
+            .neoforge_version()
+            .to_owned(),
+        vanilla_library_count: plan.vanilla_library_count(),
+        neoforge_library_count: plan.neoforge_library_count(),
+        final_library_count: plan.libraries().len(),
+        java_component: plan.java().component().to_owned(),
+        java_major_version: plan.java().major_version(),
+        final_main_class: plan.main_class().to_owned(),
+        processor_steps: plan
+            .neoforge_loader()
+            .expect("NeoForge resolution")
+            .processors()
+            .len(),
+    })
+}
+
+/// Typed request for the NeoForge planning command.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanNeoForgeInstallRequest {
+    pub minecraft_version: String,
+    pub neoforge_version: String,
+}
+
+/// Concise summary of a composed Minecraft + NeoForge game plan.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NeoForgePlanSummary {
+    pub minecraft_version: String,
+    pub neoforge_version: String,
+    pub vanilla_library_count: usize,
+    pub neoforge_library_count: usize,
+    pub final_library_count: usize,
+    pub java_component: String,
+    pub java_major_version: u32,
+    pub final_main_class: String,
+    pub processor_steps: usize,
+}
+
+impl From<crate::neoforge::NeoForgeGameResolutionError> for CommandError {
+    fn from(error: crate::neoforge::NeoForgeGameResolutionError) -> Self {
+        crate::instances::lifecycle::InstanceError::NeoForgeResolution(error).into()
+    }
+}
+
+impl From<InstallError> for CommandError {
+    fn from(error: InstallError) -> Self {
+        match error {
+            // Acquisition failures keep their established transport,
+            // integrity, and cache codes.
+            InstallError::Acquisition(acquisition) => Self::from(acquisition),
+            other => {
+                let code = match &other {
+                    InstallError::AlreadyInProgress { .. } => "installation_already_in_progress",
+                    InstallError::RecoveryRequired { .. } => "installation_recovery_required",
+                    InstallError::Cancelled => "installation_cancelled",
+                    InstallError::TargetConflict { .. } => "installation_target_conflict",
+                    InstallError::State(_) => "installation_state_invalid",
+                    InstallError::AssetIndexInvalid { .. } => "minecraft_asset_index_invalid",
+                    InstallError::AssetInvalid { .. } => "minecraft_asset_invalid",
+                    InstallError::InvalidSource(_) => "artifact_source_invalid",
+                    InstallError::Processing { .. } => "installation_processing_failed",
+                    InstallError::Materialization { .. } => "artifact_materialization_failure",
+                    InstallError::Native(native) => match native {
+                        crate::install::natives::NativeExtractionError::ArchiveInvalid {
+                            ..
+                        } => "native_archive_invalid",
+                        crate::install::natives::NativeExtractionError::EntryConflict {
+                            ..
+                        }
+                        | crate::install::natives::NativeExtractionError::Io { .. } => {
+                            "native_extraction_failure"
+                        }
+                    },
+                    InstallError::Validation { .. } => "installation_validation_failure",
+                    InstallError::Commit { .. } => "installation_commit_failure",
+                    InstallError::Storage(_) => "storage_io_failure",
+                    InstallError::Acquisition(_) => unreachable!("handled by value above"),
+                };
+                Self::new(code, other.to_string())
+            }
+        }
+    }
+}
+
+/// Typed request accepted by the installation command.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallGameRequest {
+    instance_id: String,
+    minecraft_version: String,
+    loader_version: String,
+}
+
+/// One native progress event payload; Rust owns the state, the frontend only
+/// displays it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallProgressEvent {
+    phase: &'static str,
+    completed_items: u32,
+    total_items: u32,
+    current_item: Option<String>,
+}
+
+/// A concise summary of one committed installation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstalledGameSummary {
+    minecraft_version: String,
+    loader_version: Option<String>,
+    installation_id: String,
+    file_count: usize,
+    total_bytes: u64,
+    verified_sha1_files: usize,
+    verified_sha256_files: usize,
+    transport_observed_files: usize,
+    natives_directory: String,
+    game_directory: String,
+}
+
+/// Resolves one exact Minecraft + Fabric Loader combination and installs the
+/// complete, isolated game into launcher-managed instance storage.
+///
+/// This is the development-facing proof of the Phase 5 installation
+/// executor: it performs the full resolve â†’ acquire â†’ stage â†’ validate â†’
+/// commit flow natively and reports progress through `install-progress`
+/// events. It installs a game, never launches one, installs no Java runtime,
+/// and never touches the user's `.minecraft`.
+pub async fn install_game(
+    app: Host,
+    request: InstallGameRequest,
+) -> Result<InstalledGameSummary, CommandError> {
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    let version = MinecraftVersionId::new(request.minecraft_version.trim())?;
+    let loader = LoaderVersionId::new(request.loader_version.trim())?;
+    let platform = crate::minecraft::rules::PlatformProfile::current()?;
+
+    let managed_paths = managed_paths(&app)?;
+    let options = crate::downloads::DownloadOptions::default();
+
+    let plan = resolve_game_plan(
+        &MetadataEndpoints::official(),
+        &crate::fabric::metadata::FabricMetaEndpoints::official(),
+        &version,
+        &loader,
+        platform,
+        &options,
+    )
+    .await?;
+
+    let installed = execute_install_game(
+        &managed_paths,
+        &instance,
+        &plan,
+        &InstallContext::official(),
+        &mut |progress| {
+            let _ = app.emit(
+                "install-progress",
+                InstallProgressEvent {
+                    phase: progress.phase.as_str(),
+                    completed_items: progress.completed_items,
+                    total_items: progress.total_items,
+                    current_item: progress.current_item.clone(),
+                },
+            );
+        },
+        InstallFaults::default(),
+    )
+    .await?;
+
+    eprintln!(
+        "[aurora-launcher] installed Minecraft {} + Fabric Loader {} into {} ({} files, {} bytes)",
+        installed.manifest().minecraft_version(),
+        installed
+            .manifest()
+            .fabric_loader_version()
+            .unwrap_or("Vanilla"),
+        installed.game_directory().display(),
+        installed.manifest().files().len(),
+        installed.total_byte_count(),
+    );
+
+    let manifest = installed.manifest();
+    let mut verified_sha1_files = 0usize;
+    let mut verified_sha256_files = 0usize;
+    let mut transport_observed_files = 0usize;
+    for file in manifest.files() {
+        match file.trust() {
+            crate::integrity::ArtifactTrust::ExpectedDigestVerified { algorithm, .. } => {
+                match algorithm {
+                    crate::integrity::DigestAlgorithm::Sha1 => verified_sha1_files += 1,
+                    crate::integrity::DigestAlgorithm::Sha256 => verified_sha256_files += 1,
+                }
+            }
+            crate::integrity::ArtifactTrust::SecureTransportObserved { .. }
+            | crate::integrity::ArtifactTrust::LocallyGenerated { .. } => {
+                transport_observed_files += 1;
+            }
+        }
+    }
+
+    Ok(InstalledGameSummary {
+        minecraft_version: manifest.minecraft_version().to_owned(),
+        loader_version: manifest.fabric_loader_version().map(str::to_owned),
+        installation_id: manifest.installation_id().to_owned(),
+        file_count: manifest.files().len(),
+        total_bytes: installed.total_byte_count(),
+        verified_sha1_files,
+        verified_sha256_files,
+        transport_observed_files,
+        natives_directory: manifest.natives().directory().to_owned(),
+        game_directory: installed.game_directory().to_string_lossy().into_owned(),
+    })
+}
+
+/// Typed request accepted by the installed-game validation command.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidateInstalledGameRequest {
+    instance_id: String,
+}
+
+/// The validation outcome of one installed game.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstalledGameValidationDto {
+    status: String,
+    minecraft_version: Option<String>,
+    loader_version: Option<String>,
+    installation_id: Option<String>,
+    checked_files: usize,
+    verified_bytes: u64,
+    problems: Vec<ValidationProblemDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidationProblemDto {
+    path: String,
+    reason: String,
+}
+
+/// Validates one instance's installed game against its installed-state
+/// record â€” a read-only, download-free check that reports damage precisely.
+pub fn validate_installed_game(
+    app: Host,
+    request: ValidateInstalledGameRequest,
+) -> Result<InstalledGameValidationDto, CommandError> {
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    let managed_paths = managed_paths(&app)?;
+
+    match run_installed_game_validation(&managed_paths, &instance)? {
+        ValidationOutcome::NotInstalled => Ok(InstalledGameValidationDto {
+            status: "notInstalled".to_owned(),
+            minecraft_version: None,
+            loader_version: None,
+            installation_id: None,
+            checked_files: 0,
+            verified_bytes: 0,
+            problems: Vec::new(),
+        }),
+        ValidationOutcome::Installed(validation) => Ok(validation_dto(validation)),
+    }
+}
+
+fn validation_dto(validation: InstalledGameValidation) -> InstalledGameValidationDto {
+    let status = match validation.status {
+        ValidationStatus::Valid => "valid",
+        ValidationStatus::Damaged => "damaged",
+    };
+    InstalledGameValidationDto {
+        status: status.to_owned(),
+        minecraft_version: Some(validation.minecraft_version),
+        loader_version: validation.fabric_loader_version,
+        installation_id: Some(validation.installation_id),
+        checked_files: validation.checked_files,
+        verified_bytes: validation.verified_bytes,
+        problems: validation
+            .problems
+            .into_iter()
+            .map(|problem| ValidationProblemDto {
+                path: problem.path,
+                reason: problem.reason,
+            })
+            .collect(),
+    }
+}
+
+impl From<InstanceError> for CommandError {
+    fn from(error: InstanceError) -> Self {
+        match error {
+            InstanceError::Registry(registry) => Self::from(registry),
+            InstanceError::Config(config) => Self::from(config),
+            InstanceError::GameInstall(install) => Self::from(install),
+            InstanceError::Aurora(aurora) => Self::from(aurora),
+            InstanceError::GameResolution(resolution) => Self::from(resolution),
+            InstanceError::RuntimeMetadata(runtime) => Self::from(runtime),
+            InstanceError::RuntimeInstall(runtime) => Self::from(runtime),
+            other => {
+                let code = match &other {
+                    InstanceError::NotFound { .. } => "instance_not_found",
+                    InstanceError::NotReady { .. } => "instance_not_ready",
+                    InstanceError::NameInvalid(_) => "instance_name_invalid",
+                    InstanceError::ReleaseInvalid(_) => "instance_release_invalid",
+                    InstanceError::AuroraReleaseNotFound { .. } => "aurora_release_not_found",
+                    InstanceError::ConfigurationInvalid(_) => "instance_configuration_invalid",
+                    InstanceError::ConfigurationStale { .. } => "instance_not_ready",
+                    InstanceError::ReleaseUnavailable { .. } => "instance_release_invalid",
+                    InstanceError::LoaderResolution { .. } => "fabric_loader_not_found",
+                    InstanceError::NeoForgeMetadata(_) => "neoforge_metadata_unavailable",
+                    InstanceError::NeoForgeResolution(_) => "neoforge_resolution_failed",
+                    InstanceError::ForgeMetadata(_) => "forge_metadata_unavailable",
+                    InstanceError::ForgeResolution(_) => "forge_resolution_failed",
+                    InstanceError::Platform(_) => "minecraft_platform_unsupported",
+                    InstanceError::GameInstallState(_) => "installation_state_invalid",
+                    InstanceError::ValidationFailed { .. } => "instance_consistency_failure",
+                    InstanceError::Registry(_)
+                    | InstanceError::Config(_)
+                    | InstanceError::GameInstall(_)
+                    | InstanceError::Aurora(_)
+                    | InstanceError::GameResolution(_)
+                    | InstanceError::FabricMetadata(_)
+                    | InstanceError::RuntimeMetadata(_)
+                    | InstanceError::RuntimeInstall(_) => {
+                        unreachable!("handled by value above")
+                    }
+                };
+                Self::new(code, other.to_string())
+            }
+        }
+    }
+}
+
+impl From<RuntimeMetadataError> for CommandError {
+    fn from(error: RuntimeMetadataError) -> Self {
+        let code = match &error {
+            RuntimeMetadataError::IndexNetwork(_) | RuntimeMetadataError::IndexTooLarge { .. } => {
+                "runtime_metadata_network_failure"
+            }
+            RuntimeMetadataError::PlatformUnavailable { .. } => "runtime_platform_unsupported",
+            RuntimeMetadataError::ComponentUnavailable { .. }
+            | RuntimeMetadataError::AmbiguousComponent { .. } => "runtime_component_unavailable",
+            RuntimeMetadataError::ManifestAcquisition(_) => "runtime_manifest_acquisition_failure",
+            RuntimeMetadataError::ManifestRead(_) => "storage_io_failure",
+            RuntimeMetadataError::IndexInvalid(_)
+            | RuntimeMetadataError::ManifestInvalid(_)
+            | RuntimeMetadataError::Plan(_) => "runtime_metadata_invalid",
+        };
+        let message = match &error {
+            RuntimeMetadataError::IndexNetwork(_) => {
+                "Official Mojang Java runtime metadata could not be reached.".to_owned()
+            }
+            RuntimeMetadataError::ManifestAcquisition(_) => {
+                "The official Java runtime manifest could not be acquired and verified.".to_owned()
+            }
+            _ => error.to_string(),
+        };
+        eprintln!("[aurora-launcher] runtime metadata error ({code}): {error}");
+        Self::new(code, message)
+    }
+}
+
+impl From<RuntimeInstallError> for CommandError {
+    fn from(error: RuntimeInstallError) -> Self {
+        let code = match &error {
+            RuntimeInstallError::AlreadyInProgress { .. } => {
+                "runtime_installation_already_in_progress"
+            }
+            RuntimeInstallError::Plan(_) => "runtime_plan_invalid",
+            RuntimeInstallError::Acquisition(_) => "runtime_artifact_acquisition_failure",
+            RuntimeInstallError::State(_) => "runtime_state_invalid",
+            RuntimeInstallError::TargetConflict { .. } => "runtime_target_conflict",
+            RuntimeInstallError::Materialization { .. } => "runtime_materialization_failure",
+            RuntimeInstallError::Validation(_) => "runtime_validation_failure",
+            RuntimeInstallError::Commit(_) => "runtime_commit_failure",
+            RuntimeInstallError::Storage(_) => "storage_io_failure",
+        };
+        let message = match &error {
+            RuntimeInstallError::Acquisition(_) => {
+                "A managed Java runtime file could not be acquired and verified.".to_owned()
+            }
+            _ => error.to_string(),
+        };
+        eprintln!("[aurora-launcher] runtime install error ({code}): {error}");
+        Self::new(code, message)
+    }
+}
+
+impl From<AuroraInstallError> for CommandError {
+    fn from(error: AuroraInstallError) -> Self {
+        let code = match &error {
+            AuroraInstallError::ReleaseInvalid(_) => "aurora_artifact_invalid",
+            AuroraInstallError::ArtifactInvalid(_) => "aurora_artifact_invalid",
+            AuroraInstallError::Acquisition(_) => "aurora_artifact_invalid",
+            AuroraInstallError::Materialization { .. } => "aurora_materialization_failure",
+            AuroraInstallError::StateRead(_) | AuroraInstallError::State(_) => {
+                "aurora_installation_invalid"
+            }
+            AuroraInstallError::StateWrite(_) => "aurora_installation_invalid",
+        };
+        Self::new(code, error.to_string())
+    }
+}
+
+/// One Aurora release offered for instance creation.
+///
+/// `source` identifies the official GitHub release discovery source.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuroraReleaseSummary {
+    source: &'static str,
+    aurora_version: String,
+    channel: ReleaseChannel,
+    minecraft_version: String,
+    fabric_loader_version: String,
+    java_major_version: u32,
+}
+
+/// Lists the Aurora releases available for instance creation.
+///
+/// Discovers the published Client independently of the launcher version.
+pub async fn list_aurora_releases(app: Host) -> Result<Vec<AuroraReleaseSummary>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let manifest = crate::updates::client::fetch_current_manifest(
+        &managed,
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code(), error.message()))?;
+
+    Ok(manifest
+        .releases()
+        .iter()
+        .map(|release| AuroraReleaseSummary {
+            source: "production-github",
+            aurora_version: release.aurora_version().to_owned(),
+            channel: release.channel(),
+            minecraft_version: release.minecraft_version().to_owned(),
+            fabric_loader_version: release.fabric_loader_version().to_owned(),
+            java_major_version: release.java().major_version(),
+        })
+        .collect())
+}
+
+/// Typed request for instance creation.
+///
+/// Creation asks for the essentials: a display name and the desired
+/// configuration's Minecraft version and loader policy; memory, JVM
+/// arguments, and window default safely.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateInstanceRequest {
+    display_name: String,
+    minecraft_version: String,
+    loader: crate::instances::settings::LoaderConfiguration,
+    aurora_enabled: Option<bool>,
+}
+
+fn creation_aurora_choice(
+    manifest: &crate::distribution::ReleaseManifest,
+    minecraft: &str,
+    loader: &crate::instances::settings::LoaderConfiguration,
+    requested: Option<bool>,
+) -> bool {
+    requested.unwrap_or_else(|| match loader {
+        crate::instances::settings::LoaderConfiguration::Fabric { policy } => {
+            manifest.releases().iter().any(|release| {
+                release.minecraft_version() == minecraft
+                    && match policy {
+                        crate::instances::settings::LoaderPolicy::Automatic {} => true,
+                        crate::instances::settings::LoaderPolicy::Pinned { version } => {
+                            release.fabric_loader_version() == version
+                        }
+                    }
+            })
+        }
+        _ => false,
+    })
+}
+
+/// The loader policy as it crosses the command boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum InstanceLoaderPolicyDto {
+    Automatic,
+    Pinned { version: String },
+}
+
+impl TryFrom<&InstanceLoaderPolicyDto> for crate::instances::settings::LoaderPolicy {
+    type Error = CommandError;
+
+    fn try_from(value: &InstanceLoaderPolicyDto) -> Result<Self, CommandError> {
+        match value {
+            InstanceLoaderPolicyDto::Automatic => Ok(Self::Automatic {}),
+            InstanceLoaderPolicyDto::Pinned { version } => Ok(Self::Pinned {
+                version: version.trim().to_owned(),
+            }),
+        }
+    }
+}
+
+/// Creates a complete persistent Aurora instance from a desired
+/// configuration: resolve the release and loader version, install the game
+/// through the Phase 5 executor, install Aurora, validate everything, and
+/// mark the instance ready. Progress is reported through
+/// `instance-progress` events.
+pub async fn create_instance(
+    app: Host,
+    request: CreateInstanceRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let managed_paths = managed_paths(&app)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::creation()
+        .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+
+    let mut configuration = crate::instances::settings::InstanceConfiguration::from_parts(
+        request.minecraft_version.trim(),
+        request.loader,
+        crate::instances::settings::DEFAULT_MEMORY_MIB,
+        String::new(),
+        None,
+    );
+    configuration.set_aurora_enabled(creation_aurora_choice(
+        endpoints.release_manifest(),
+        configuration.minecraft_version(),
+        configuration.loader(),
+        request.aurora_enabled,
+    ));
+    let endpoints = if configuration.aurora_enabled() {
+        let manifest = crate::updates::client::fetch_current_manifest(
+            &managed_paths,
+            endpoints.download_options(),
+        )
+        .await
+        .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        endpoints.with_release_manifest(manifest)
+    } else {
+        endpoints
+    };
+
+    let record = crate::instances::lifecycle::create_instance(
+        &managed_paths,
+        &managed_paths.instance_registry_file(),
+        &managed_paths.config_file(),
+        &endpoints,
+        LifecycleCreateRequest::new(request.display_name.trim(), configuration),
+        &mut |progress| {
+            let _ = app.emit(
+                "instance-progress",
+                InstanceProgressEvent {
+                    phase: progress.phase.as_str(),
+                    game: progress.game.map(|game| InstallProgressEvent {
+                        phase: game.phase.as_str(),
+                        completed_items: game.completed_items,
+                        total_items: game.total_items,
+                        current_item: game.current_item,
+                    }),
+                },
+            );
+        },
+        InstanceFaults::default(),
+    )
+    .await?;
+
+    eprintln!(
+        "[aurora-launcher] created instance '{}' (Minecraft {}, platform {}, Aurora configured: {})",
+        record.id(),
+        record.installed().minecraft_version,
+        record.installed().platform.kind(),
+        record.installed().aurora.is_some(),
+    );
+
+    Ok(InstanceSummary::from_record(&record))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AuroraCompatibilityRequest {
+    minecraft_version: String,
+    loader: crate::instances::settings::LoaderConfiguration,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuroraCompatibility {
+    available: bool,
+    reason: String,
+    version: Option<String>,
+    loader_version: Option<String>,
+}
+
+pub async fn get_aurora_compatibility(
+    app: Host,
+    request: AuroraCompatibilityRequest,
+) -> Result<AuroraCompatibility, CommandError> {
+    use crate::instances::settings::{LoaderConfiguration, LoaderPolicy};
+    let managed = managed_paths(&app)?;
+    let manifest = crate::updates::client::fetch_current_manifest(
+        &managed,
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code(), error.message()))?;
+    let release = match &request.loader {
+        LoaderConfiguration::Fabric { policy } => manifest.latest_compatible(
+            &request.minecraft_version,
+            match policy {
+                LoaderPolicy::Automatic {} => None,
+                LoaderPolicy::Pinned { version } => Some(version.as_str()),
+            },
+        ),
+        _ => None,
+    };
+    Ok(AuroraCompatibility {
+        available: release.is_some(),
+        reason: if release.is_some() {
+            "Compatible reviewed Aurora release available"
+        } else {
+            "No Aurora release supports this Minecraft/platform selection"
+        }
+        .into(),
+        version: release.map(|r| r.aurora_version().into()),
+        loader_version: release.map(|r| r.fabric_loader_version().into()),
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AuroraTransitionRequest {
+    instance_id: String,
+    enabled: bool,
+    fingerprint: Option<String>,
+}
+
+impl From<crate::instances::transition::TransitionError> for CommandError {
+    fn from(error: crate::instances::transition::TransitionError) -> Self {
+        Self::new(error.0, error.1)
+    }
+}
+
+pub async fn preview_aurora_transition(
+    app: Host,
+    request: AuroraTransitionRequest,
+) -> Result<crate::instances::transition::TransitionPreview, CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = crate::instances::InstanceId::new(request.instance_id)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|e| CommandError::new("aurora_manifest_invalid", e.to_string()))?;
+    let endpoints = if request.enabled {
+        let remote =
+            crate::updates::client::fetch_current_manifest(&managed, endpoints.download_options())
+                .await
+                .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        endpoints.with_release_manifest(remote)
+    } else {
+        endpoints
+    };
+    Ok(crate::instances::transition::preview(
+        &managed,
+        &endpoints,
+        &id,
+        request.enabled,
+    )?)
+}
+
+pub async fn apply_aurora_transition(
+    app: Host,
+    request: AuroraTransitionRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = crate::instances::InstanceId::new(request.instance_id)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|e| CommandError::new("aurora_manifest_invalid", e.to_string()))?;
+    let endpoints = if request.enabled {
+        let remote =
+            crate::updates::client::fetch_current_manifest(&managed, endpoints.download_options())
+                .await
+                .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        endpoints.with_release_manifest(remote)
+    } else {
+        endpoints
+    };
+    let fingerprint = request.fingerprint.ok_or_else(|| {
+        CommandError::new(
+            "aurora_transition_stale",
+            "Request and approve a transition preview first.",
+        )
+    })?;
+    let record = crate::instances::transition::apply(
+        &managed,
+        &endpoints,
+        &id,
+        request.enabled,
+        &fingerprint,
+        Default::default(),
+    )
+    .await?;
+    Ok(InstanceSummary::from_record(&record))
+}
+
+/// One lifecycle progress event payload; the game installer's item progress
+/// is embedded verbatim during the game-installation phase.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceProgressEvent {
+    phase: &'static str,
+    game: Option<InstallProgressEvent>,
+}
+
+/// Typed request for retrying an unfinished instance installation.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetryInstanceRequest {
+    instance_id: String,
+}
+
+/// Retries the installation of an instance whose creation did not finish.
+pub async fn retry_instance_install(
+    app: Host,
+    request: RetryInstanceRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let managed_paths = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+
+    let record = crate::instances::lifecycle::retry_instance_install(
+        &managed_paths,
+        &managed_paths.instance_registry_file(),
+        &managed_paths.config_file(),
+        &endpoints,
+        &instance,
+        &mut |progress| {
+            let _ = app.emit(
+                "instance-progress",
+                InstanceProgressEvent {
+                    phase: progress.phase.as_str(),
+                    game: progress.game.map(|game| InstallProgressEvent {
+                        phase: game.phase.as_str(),
+                        completed_items: game.completed_items,
+                        total_items: game.total_items,
+                        current_item: game.current_item,
+                    }),
+                },
+            );
+        },
+        InstanceFaults::default(),
+    )
+    .await?;
+
+    Ok(InstanceSummary::from_record(&record))
+}
+
+/// Typed request for renaming an instance.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameInstanceRequest {
+    instance_id: String,
+    new_display_name: String,
+    expected_display_name: String,
+}
+
+/// Renames an instance's display name. Metadata only â€” identifiers and
+/// filesystem paths are untouched.
+pub fn rename_instance(
+    app: Host,
+    request: RenameInstanceRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let managed_paths = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+
+    let record = crate::instances::lifecycle::rename_instance_checked(
+        &managed_paths.instance_registry_file(),
+        &instance,
+        request.new_display_name.trim(),
+        Some(&request.expected_display_name),
+    )?;
+
+    Ok(InstanceSummary::from_record(&record))
+}
+
+fn icon_error(error: crate::instance_icons::IconError) -> CommandError {
+    CommandError::new(error.code(), error.to_string())
+}
+
+/// Display icons (Material Symbols names) for registered instances.
+pub fn get_instance_icons(
+    app: Host,
+) -> Result<std::collections::BTreeMap<String, String>, CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::instance_icons::load(&managed).map_err(icon_error)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetInstanceIconRequest {
+    instance_id: String,
+    icon: Option<String>,
+}
+
+/// Sets or clears one instance's icon. Presentation metadata only.
+pub fn set_instance_icon(
+    app: Host,
+    request: SetInstanceIconRequest,
+) -> Result<std::collections::BTreeMap<String, String>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    crate::instance_icons::set(&managed, &instance, request.icon.as_deref()).map_err(icon_error)
+}
+
+/// Typed request for atomically persisting a new desired configuration.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInstanceConfigurationRequest {
+    instance_id: String,
+    configuration: InstanceConfigurationDto,
+    expected_configuration: InstanceConfigurationDto,
+}
+
+/// Read-only advice for one registered instance; no runtime discovery or mutation.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PerformanceAdviceRequest {
+    instance_id: String,
+    mode: Option<crate::instances::performance::PerformanceMode>,
+}
+
+pub fn get_instance_performance_advice(
+    app: Host,
+    request: PerformanceAdviceRequest,
+) -> Result<crate::instances::performance::MemoryAdvice, CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())?;
+    let record = registry.find(&id).ok_or_else(|| {
+        CommandError::new(
+            "instance_not_found",
+            "Open a registered instance to request memory advice.",
+        )
+    })?;
+    let mut advice = crate::instances::performance::recommend(
+        crate::instances::performance::host_facts(),
+        request.mode,
+    );
+    advice.argument_notices = crate::instances::performance::argument_notices(
+        record.configuration().additional_jvm_arguments(),
+    );
+    Ok(advice)
+}
+
+/// Atomically persists a new desired configuration for one ready instance.
+///
+/// The persisted change is metadata only; installed content, identifiers,
+/// and paths are untouched. Readiness reflects the change immediately — deep
+/// validation reports a stale instance until its new configuration is
+/// installed through `install_instance_configuration`.
+pub fn update_instance_configuration(
+    app: Host,
+    request: UpdateInstanceConfigurationRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let managed_paths = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+    let configuration = request.configuration.into_configuration()?;
+    let expected = request.expected_configuration.into_configuration()?;
+
+    let record = crate::instances::lifecycle::update_instance_configuration_checked(
+        &managed_paths.instance_registry_file(),
+        &endpoints,
+        &instance,
+        configuration,
+        Some(&expected),
+    )
+    .map_err(|error| match error {
+        crate::instances::lifecycle::InstanceError::ConfigurationInvalid(reason) => {
+            CommandError::new("instance_configuration_invalid", reason.to_string())
+        }
+        crate::instances::lifecycle::InstanceError::ReleaseUnavailable { .. } => {
+            CommandError::new("instance_release_invalid", error.to_string())
+        }
+        other => CommandError::from(other),
+    })?;
+
+    Ok(InstanceSummary::from_record(&record))
+}
+
+/// Resolves an instance's desired configuration into a new release pin and
+/// (re)installs the content to match it — the deliberate path for
+/// install-affecting configuration changes. Progress is reported through
+/// `instance-progress` events.
+pub async fn install_instance_configuration(
+    app: Host,
+    request: RetryInstanceRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let managed_paths = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+
+    let record = crate::instances::lifecycle::install_instance_configuration(
+        &managed_paths,
+        &managed_paths.instance_registry_file(),
+        &managed_paths.config_file(),
+        &endpoints,
+        &instance,
+        &mut |progress| {
+            let _ = app.emit(
+                "instance-progress",
+                InstanceProgressEvent {
+                    phase: progress.phase.as_str(),
+                    game: progress.game.map(|game| InstallProgressEvent {
+                        phase: game.phase.as_str(),
+                        completed_items: game.completed_items,
+                        total_items: game.total_items,
+                        current_item: game.current_item,
+                    }),
+                },
+            );
+        },
+        InstanceFaults::default(),
+    )
+    .await
+    .map_err(|error| match error {
+        crate::instances::lifecycle::InstanceError::ConfigurationInvalid(reason) => {
+            CommandError::new("instance_configuration_invalid", reason.to_string())
+        }
+        crate::instances::lifecycle::InstanceError::ReleaseUnavailable { .. } => {
+            CommandError::new("instance_release_invalid", error.to_string())
+        }
+        crate::instances::lifecycle::InstanceError::LoaderResolution { .. } => {
+            CommandError::new("fabric_loader_not_found", error.to_string())
+        }
+        other => CommandError::from(other),
+    })?;
+
+    Ok(InstanceSummary::from_record(&record))
+}
+
+/// Typed request for opening one instance's managed folder in the operating
+/// system's file browser.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenInstanceFolderRequest {
+    instance_id: String,
+}
+
+/// Resolves the managed root folder of one registered instance for opening
+/// in the operating system's file browser.
+///
+/// Registry/path logic for one existing managed instance: the identifier must
+/// be a valid [`crate::instances::InstanceId`] that exists in the registry,
+/// and the folder is derived through [`ManagedPaths`] — never supplied by the
+/// frontend. Canonical-path checks reject a junction or symbolic link that
+/// would redirect either the instances directory or the instance root outside
+/// Aurora's managed filesystem boundary (or to another instance).
+fn resolve_instance_folder(
+    managed: &ManagedPaths,
+    registry: &InstanceRegistry,
+    instance_id: &str,
+) -> Result<PathBuf, CommandError> {
+    let instance = crate::instances::InstanceId::new(instance_id.trim())?;
+    if registry.find(&instance).is_none() {
+        return Err(CommandError::new(
+            "instance_not_found",
+            format!("no instance '{instance}' exists in the launcher's registry"),
+        ));
+    }
+
+    let folder = managed.instance_paths(&instance).root().to_path_buf();
+    if !folder.is_dir() {
+        return Err(CommandError::new(
+            "instance_folder_missing",
+            format!(
+                "the managed folder for this instance does not exist yet: {}",
+                folder.display()
+            ),
+        ));
+    }
+
+    let canonical_root = std::fs::canonicalize(managed.data_root()).map_err(|error| {
+        CommandError::new(
+            "instance_folder_open_failure",
+            format!("the managed data boundary could not be resolved: {error}"),
+        )
+    })?;
+    let canonical_instances = std::fs::canonicalize(managed.instances_dir()).map_err(|error| {
+        CommandError::new(
+            "instance_folder_open_failure",
+            format!("the managed instances boundary could not be resolved: {error}"),
+        )
+    })?;
+    let canonical_folder = std::fs::canonicalize(&folder).map_err(|error| {
+        CommandError::new(
+            "instance_folder_open_failure",
+            format!("the managed instance folder could not be resolved: {error}"),
+        )
+    })?;
+
+    validate_canonical_instance_folder(
+        &canonical_root,
+        &canonical_instances,
+        &canonical_folder,
+        &instance,
+    )?;
+
+    // Keep the derived platform path for the opener. On Windows,
+    // `canonicalize` may add a verbatim `\\?\` prefix that shell APIs do not
+    // consistently accept; the canonical path above is validation evidence,
+    // not the UI-facing value.
+    Ok(folder)
+}
+
+fn validate_canonical_instance_folder(
+    managed_root: &Path,
+    instances_root: &Path,
+    instance_folder: &Path,
+    instance: &crate::instances::InstanceId,
+) -> Result<(), CommandError> {
+    let expected = instances_root.join(instance.as_str());
+    if !instances_root.starts_with(managed_root) || instance_folder != expected {
+        return Err(CommandError::new(
+            "instance_folder_open_failure",
+            "the resolved instance folder is outside Aurora's managed filesystem boundary",
+        ));
+    }
+    Ok(())
+}
+
+/// Opens one instance's managed root folder in the operating system's file
+/// browser.
+///
+/// The folder is always derived, never supplied: only an instance id that
+/// exists in the registry is accepted, the root is derived from validated
+/// managed paths, and the folder must exist before the OS opener receives it
+/// as structured data. There is no arbitrary-path surface and no shell
+/// command string anywhere in this path.
+pub fn open_instance_folder(
+    app: Host,
+    request: OpenInstanceFolderRequest,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+
+    let folder = resolve_instance_folder(&managed, &registry, &request.instance_id)?;
+
+    crate::host::open_path(&folder).map_err(|error| {
+        CommandError::new(
+            "instance_folder_open_failure",
+            format!("the instance folder could not be opened: {error}"),
+        )
+    })
+}
+
+/// A registered instance whose authoritative local mods inventory is requested.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceModsRequest {
+    instance_id: String,
+}
+
+/// A safe mutation request. `entry_id` is an opaque scan-derived token, never
+/// a path or filename supplied by the frontend.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetInstanceModEnabledRequest {
+    instance_id: String,
+    entry_id: String,
+    enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveInstanceModRequest {
+    instance_id: String,
+    entry_id: String,
+}
+
+fn registered_instance(
+    managed: &ManagedPaths,
+    instance_id: &str,
+) -> Result<crate::instances::InstanceId, CommandError> {
+    let instance = crate::instances::InstanceId::new(instance_id.trim())?;
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+    if registry.find(&instance).is_none() {
+        return Err(CommandError::new(
+            "instance_not_found",
+            format!("no instance '{instance}' exists in the launcher's registry"),
+        ));
+    }
+    Ok(instance)
+}
+
+/// Scans one registered instance's actual mods directory on a blocking worker.
+/// Search/filter/sort in the presentation layer operates on this snapshot and
+/// never triggers another filesystem scan per keystroke.
+pub async fn get_instance_mods(
+    app: Host,
+    request: InstanceModsRequest,
+) -> Result<crate::instance_mods::ModInventory, CommandError> {
+    crate::performance::measure(crate::performance::Event::ModInventoryCommand, async {
+        let managed = managed_paths(&app)?;
+        let instance = registered_instance(&managed, &request.instance_id)?;
+        let result = tokio::task::spawn_blocking(crate::performance::queued(move || {
+            crate::instance_mods::scan(&managed, &instance)
+        }))
+        .await
+        .map_err(|error| {
+            CommandError::new(
+                "mod_inventory_unavailable",
+                format!("the local mod inventory worker stopped unexpectedly: {error}"),
+            )
+        })?;
+        result.map_err(CommandError::from)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InstanceRecoveryRequest {
+    instance_id: String,
+    fingerprint: Option<String>,
+    #[serde(default)]
+    keep_removed_mods: bool,
+}
+impl From<crate::instances::recovery::RecoveryError> for CommandError {
+    fn from(error: crate::instances::recovery::RecoveryError) -> Self {
+        Self::new(error.0, error.1)
+    }
+}
+pub async fn inspect_instance_recovery(
+    app: Host,
+    request: InstanceRecoveryRequest,
+) -> Result<crate::instances::recovery::RecoveryPreview, CommandError> {
+    let paths = managed_paths(&app)?;
+    let id = registered_instance(&paths, &request.instance_id)?;
+    tokio::task::spawn_blocking(move || {
+        crate::instances::recovery::inspect(&paths, &id).map_err(CommandError::from)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "instance_recovery_unavailable",
+            "Recovery inspection did not complete; no files were changed.",
+        )
+    })?
+}
+pub async fn apply_instance_recovery(
+    app: Host,
+    request: InstanceRecoveryRequest,
+) -> Result<crate::instances::recovery::RecoveryPreview, CommandError> {
+    let paths = managed_paths(&app)?;
+    let id = registered_instance(&paths, &request.instance_id)?;
+    let fingerprint = request.fingerprint.ok_or_else(|| {
+        CommandError::new(
+            "instance_recovery_stale",
+            "Inspect and approve recovery first.",
+        )
+    })?;
+    tokio::task::spawn_blocking(move || {
+        crate::instances::recovery::apply(&paths, &id, &fingerprint, request.keep_removed_mods)
+            .map_err(CommandError::from)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "instance_recovery_unavailable",
+            "Recovery did not complete. Inspect this instance again before retrying.",
+        )
+    })?
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InstalledModIconsRequest {
+    instance_id: String,
+    files: Vec<crate::mod_icons::IconRequest>,
+}
+pub async fn get_installed_mod_icons(
+    app: Host,
+    request: InstalledModIconsRequest,
+) -> Result<Vec<crate::mod_icons::IconResult>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = registered_instance(&managed, &request.instance_id)?;
+    if request.files.len() > 128 {
+        return Err(CommandError::new(
+            "mod_icons_invalid_request",
+            "Too many icons requested.",
+        ));
+    }
+    tokio::task::spawn_blocking(move || crate::mod_icons::load(&managed, &id, &request.files))
+        .await
+        .map_err(|_| CommandError::new("mod_icons_unavailable", "Icon loading did not complete."))
+}
+
+/// Enables or disables one current user-managed JAR through a same-directory
+/// rename and returns the resulting authoritative inventory.
+pub async fn set_instance_mod_enabled(
+    app: Host,
+    request: SetInstanceModEnabledRequest,
+) -> Result<crate::instance_mods::ModInventory, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    let result = tokio::task::spawn_blocking(move || {
+        crate::instance_mods::set_enabled(&managed, &instance, &request.entry_id, request.enabled)
+    })
+    .await
+    .map_err(|error| {
+        CommandError::new(
+            "mod_mutation_failure",
+            format!("the local mod mutation worker stopped unexpectedly: {error}"),
+        )
+    })?;
+    result.map_err(CommandError::from)
+}
+
+/// Permanently removes one current user-managed local JAR after the frontend's
+/// explicit confirmation, then returns the authoritative inventory.
+pub async fn remove_instance_mod(
+    app: Host,
+    request: RemoveInstanceModRequest,
+) -> Result<crate::instance_mods::ModInventory, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    let result = tokio::task::spawn_blocking(move || {
+        crate::instance_mods::remove(&managed, &instance, &request.entry_id)
+    })
+    .await
+    .map_err(|error| {
+        CommandError::new(
+            "mod_mutation_failure",
+            format!("the local mod removal worker stopped unexpectedly: {error}"),
+        )
+    })?;
+    result.map_err(CommandError::from)
+}
+
+/// Opens only the exact derived mods directory of a registered instance.
+pub fn open_instance_mods_folder(
+    app: Host,
+    request: InstanceModsRequest,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    let folder = crate::instance_mods::validate_mods_directory(&managed, &instance)?;
+    crate::host::open_path(&folder).map_err(|error| {
+        CommandError::new(
+            "instance_folder_open_failure",
+            format!("the instance mods folder could not be opened: {error}"),
+        )
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceContentRequest {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveInstanceContentRequest {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+    entry_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetInstancePackEnabledRequest {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+    entry_id: String,
+    enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceContentContext {
+    instance_id: String,
+    minecraft_version: String,
+    loader: String,
+    loader_version: Option<String>,
+    aurora_version: Option<String>,
+    environment: String,
+    modrinth_available: bool,
+    mods_loadable: bool,
+}
+
+pub fn get_instance_content_context(
+    app: Host,
+    request: InstanceModsRequest,
+) -> Result<InstanceContentContext, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+    let record = registry.find(&instance).ok_or_else(|| {
+        CommandError::new(
+            "instance_not_found",
+            "Instance was removed during the request.",
+        )
+    })?;
+    Ok(InstanceContentContext {
+        instance_id: instance.to_string(),
+        minecraft_version: record.installed().minecraft_version.clone(),
+        loader: record.installed().platform.kind().to_owned(),
+        loader_version: record.installed().platform.version().map(str::to_owned),
+        aurora_version: record
+            .installed()
+            .aurora
+            .as_ref()
+            .map(|pin| pin.version.clone()),
+        environment: "client".to_owned(),
+        modrinth_available: record.installed().platform.provider_loader().is_ok(),
+        mods_loadable: matches!(
+            record.installed().platform,
+            crate::instances::platform::PlatformPin::Fabric { .. }
+                | crate::instances::platform::PlatformPin::NeoForge { .. }
+        ),
+    })
+}
+
+pub async fn get_instance_content(
+    app: Host,
+    request: InstanceContentRequest,
+) -> Result<crate::instance_content::ContentInventory, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    if request.content_type == crate::instance_content::ContentType::Mod {
+        return Err(CommandError::new(
+            "unsupported_content_action",
+            "Use the Mods inventory for Fabric mods.",
+        ));
+    }
+    tokio::task::spawn_blocking(move || {
+        crate::instance_content::scan(&managed, &instance, request.content_type)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "content_unavailable",
+            "The content inventory worker stopped.",
+        )
+    })?
+    .map_err(CommandError::from)
+}
+
+pub async fn remove_instance_content(
+    app: Host,
+    request: RemoveInstanceContentRequest,
+) -> Result<crate::instance_content::ContentInventory, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    if request.content_type == crate::instance_content::ContentType::Mod {
+        return Err(CommandError::new(
+            "unsupported_content_action",
+            "Use the Mods action for Fabric mods.",
+        ));
+    }
+    tokio::task::spawn_blocking(move || {
+        crate::instance_content::remove(
+            &managed,
+            &instance,
+            request.content_type,
+            &request.entry_id,
+        )
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "content_unavailable",
+            "The content mutation worker stopped.",
+        )
+    })?
+    .map_err(CommandError::from)
+}
+
+pub async fn set_instance_pack_enabled(
+    app: Host,
+    request: SetInstancePackEnabledRequest,
+) -> Result<crate::instance_content::ContentInventory, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    tokio::task::spawn_blocking(move || {
+        crate::instance_content::set_pack_enabled(
+            &managed,
+            &instance,
+            request.content_type,
+            &request.entry_id,
+            request.enabled,
+        )
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "content_unavailable",
+            "The content mutation worker stopped.",
+        )
+    })?
+    .map_err(CommandError::from)
+}
+
+pub fn open_instance_content_folder(
+    app: Host,
+    request: InstanceContentRequest,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    let folder =
+        crate::instance_content::ensure_directory(&managed, &instance, request.content_type)?;
+    crate::host::open_path(&folder).map_err(|error| {
+        CommandError::new(
+            "instance_folder_open_failure",
+            format!("content folder could not be opened: {error}"),
+        )
+    })
+}
+
+pub async fn scan_instance_content(
+    app: Host,
+    request: InstanceContentRequest,
+) -> Result<crate::content_recognition::RecognitionScan, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, _context) = provider_context(&managed, &request.instance_id)?;
+    // The read-only local half (classification, bounded hashing, inventory
+    // revision) runs on a blocking worker; hashing never touches the UI.
+    let local = tokio::task::spawn_blocking({
+        let managed = managed.clone();
+        let instance = instance.clone();
+        move || crate::content_recognition::scan_local(&managed, &instance, request.content_type)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "content_unavailable",
+            "The recognition scan worker stopped.",
+        )
+    })?
+    .map_err(CommandError::from)?;
+    crate::content_recognition::recognize(
+        &instance,
+        request.content_type,
+        local,
+        &crate::modrinth::Client::official(),
+    )
+    .await
+    .map_err(CommandError::from)
+}
+
+pub async fn register_recovered_content(
+    app: Host,
+    request: crate::content_recognition::RecoveredContentApproval,
+) -> Result<Vec<crate::instance_content::ProviderRecord>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, _context) = provider_context(&managed, &request.instance_id)?;
+    crate::content_recognition::register_recovered_content(
+        &managed,
+        &instance,
+        request.content_type,
+        &request,
+        &crate::modrinth::Client::official(),
+    )
+    .await
+    .map_err(CommandError::from)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthSearchRequest {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+    query: String,
+    offset: u32,
+}
+
+/// Provider-neutral browse query. The provider is validated; the frontend
+/// never supplies URLs or raw provider API shapes. Modpacks browse with
+/// strong identity but never install.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderBrowseRequest {
+    instance_id: String,
+    provider: String,
+    content_type: crate::modrinth::BrowseKind,
+    search: String,
+    #[serde(default)]
+    categories: Vec<String>,
+    sort: crate::modrinth::BrowseSort,
+    offset: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderBrowseTagsRequest {
+    provider: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthProjectRequest {
+    instance_id: String,
+    content_type: crate::modrinth::BrowseKind,
+    project_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthPreviewRequest {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+    project_id: String,
+    version_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthInstallRequest {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+    project_id: String,
+    version_id: String,
+    preview_fingerprint: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthQuickInstallRequest {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+    project_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthPreviewResponse {
+    preview: crate::modrinth::InstallPreview,
+    preview_fingerprint: String,
+    conflicts: Vec<crate::instance_content::ProviderConflict>,
+}
+
+fn provider_context(
+    managed: &ManagedPaths,
+    id: &str,
+) -> Result<(crate::instances::InstanceId, crate::modrinth::Context), CommandError> {
+    let instance = registered_instance(managed, id)?;
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+    let record = registry.find(&instance).ok_or_else(|| {
+        CommandError::new(
+            "instance_not_found",
+            "Instance was removed during the request.",
+        )
+    })?;
+    if record.state() != crate::instances::InstanceState::Ready {
+        return Err(CommandError::new(
+            "instance_not_ready",
+            "Install the instance before browsing provider content.",
+        ));
+    }
+    Ok((
+        instance.clone(),
+        crate::modrinth::Context {
+            minecraft_version: record.installed().minecraft_version.clone(),
+            // Resource/shader packs are Minecraft-version scoped. Vanilla has
+            // no mod-loader identity, but must still reach those pipelines.
+            // Mod compatibility itself remains fail-closed in the provider.
+            loader: match &record.installed().platform {
+                crate::instances::platform::PlatformPin::Vanilla {} => "vanilla",
+                platform => platform
+                    .provider_loader()
+                    .map_err(|reason| CommandError::new("provider_platform_unsupported", reason))?,
+            }
+            .into(),
+            fabric_api_protected: crate::instance_mods::verified_required_mods(managed, &instance)?
+                .iter()
+                .any(|metadata| metadata.id == "fabric-api"),
+        },
+    ))
+}
+
+fn provider_state(
+    managed: &ManagedPaths,
+    instance: &crate::instances::InstanceId,
+) -> Result<crate::instance_content::ContentState, CommandError> {
+    let state = crate::instance_content::ContentState::load_and_migrate(managed, instance)?;
+    for record in &state.entries {
+        crate::instance_content::validate_provider_file(managed, instance, record).map_err(|_| {
+            CommandError::new("provider_content_collision", "An installed provider file is missing, changed, or unsafe. Inspect local content before installing.")
+        })?;
+    }
+    Ok(state)
+}
+
+fn provider_fingerprint(
+    instance: &crate::instances::InstanceId,
+    resolved: &crate::modrinth::Resolved,
+) -> String {
+    use sha2::Digest as _;
+    let plans: Vec<_> = resolved
+        .plans
+        .iter()
+        .map(|plan| {
+            let source = match &plan.source {
+                crate::instance_content::ProviderArtifactSource::Sha256(source) => {
+                    serde_json::json!({
+                        "algorithm": "sha256",
+                        "digest": source.sha256().as_hex(),
+                        "url": source.url().as_str(),
+                        "size": source.size_bytes(),
+                    })
+                }
+                crate::instance_content::ProviderArtifactSource::Sha512(source) => {
+                    serde_json::json!({
+                        "algorithm": "sha512",
+                        "digest": source.sha512().as_hex(),
+                        "url": source.url().as_str(),
+                        "size": source.size_bytes(),
+                    })
+                }
+            };
+            serde_json::json!({
+                "contentType": plan.content_type,
+                "provider": plan.provider,
+                "projectId": plan.project_id,
+                "versionId": plan.version_id,
+                "fileId": plan.file_id,
+                "fileName": plan.file_name,
+                "displayVersion": plan.display_version,
+                "compatibility": plan.compatibility,
+                "dependencies": plan.dependencies,
+                "source": source,
+            })
+        })
+        .collect();
+    let bytes = serde_json::to_vec(&(instance.to_string(), &resolved.preview, plans))
+        .expect("provider preview and plans serialize");
+    format!("{:x}", sha2::Sha256::digest(bytes))
+}
+
+fn provider_error(error: crate::modrinth::Error) -> CommandError {
+    CommandError::new(error.code(), error.to_string())
+}
+
+async fn check_provider_requirements(
+    managed: &ManagedPaths,
+    instance: &crate::instances::InstanceId,
+    context: &crate::modrinth::Context,
+    resolved: &crate::modrinth::Resolved,
+) -> Result<(), CommandError> {
+    if resolved.plans.is_empty()
+        || resolved
+            .plans
+            .iter()
+            .all(|plan| plan.content_type != crate::instance_content::ContentType::Mod)
+    {
+        return Ok(());
+    }
+    let plan = crate::minecraft::resolve_install_plan(
+        &crate::minecraft::metadata::MetadataEndpoints::official(),
+        &crate::minecraft::metadata::MinecraftVersionId::new(&context.minecraft_version)
+            .map_err(|e| CommandError::new("provider_invalid_response", e.to_string()))?,
+        crate::minecraft::rules::PlatformProfile::current()?,
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|e| CommandError::new("provider_dependency_unresolved", e.to_string()))?;
+    crate::instance_content::preview_provider_requirements(
+        managed,
+        instance,
+        &resolved.plans,
+        plan.java().major_version(),
+    )
+    .await?;
+    Ok(())
+}
+
+/// At most 16 candidates, stable releases first and newest publication first
+/// within each channel. Explicit choices are never substituted. This is a
+/// bounded environment check, not a dependency transition solver.
+async fn resolve_environment_candidate(
+    managed: &ManagedPaths,
+    instance: &crate::instances::InstanceId,
+    context: &crate::modrinth::Context,
+    kind: crate::instance_content::ContentType,
+    project: &str,
+    state: &crate::instance_content::ContentState,
+) -> Result<crate::modrinth::Resolved, CommandError> {
+    let client = crate::modrinth::Client::official();
+    let details = client
+        .details(context, kind, project)
+        .await
+        .map_err(provider_error)?;
+    let mut choices = details.versions;
+    choices.sort_by_key(|v| v.version_type != "release");
+    let mut first_error = None;
+    for choice in choices.into_iter().take(16) {
+        let candidate = async {
+            let mut resolved = client
+                .resolve(context, kind, project, &choice.id, state)
+                .await
+                .map_err(provider_error)?;
+            crate::instance_content::reconcile_provider_resolution(
+                managed,
+                instance,
+                &mut resolved,
+            )
+            .await?;
+            check_provider_requirements(managed, instance, context, &resolved).await?;
+            let conflicts = crate::instance_content::preview_provider_conflicts(
+                managed,
+                instance,
+                &resolved.plans,
+            )
+            .await?;
+            if let Some(conflict) = conflicts.into_iter().next() {
+                return Err(CommandError::from(
+                    crate::instance_content::ContentError::ModCollision(conflict),
+                ));
+            }
+            Ok(resolved)
+        }
+        .await;
+        match candidate {
+            Ok(resolved) => return Ok(resolved),
+            Err(error)
+                if matches!(
+                    error.code.as_str(),
+                    "provider_content_collision"
+                        | "mod_dependency_blocked"
+                        | "provider_dependency_unresolved"
+                        | "provider_no_compatible_version"
+                ) =>
+            {
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(first_error.unwrap_or_else(|| {
+        CommandError::new(
+            "provider_no_compatible_version",
+            "No installable candidate was found within the 16-version review bound.",
+        )
+    }))
+}
+
+pub async fn search_modrinth(
+    app: Host,
+    request: ModrinthSearchRequest,
+) -> Result<crate::modrinth::SearchPage, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (_, context) = provider_context(&managed, &request.instance_id)?;
+    crate::modrinth::Client::official()
+        .search(
+            &context,
+            request.content_type,
+            &request.query,
+            request.offset,
+        )
+        .await
+        .map_err(provider_error)
+}
+
+pub async fn browse_modrinth(
+    app: Host,
+    request: ProviderBrowseRequest,
+) -> Result<crate::modrinth::SearchPage, CommandError> {
+    if request.provider != "modrinth" {
+        return Err(CommandError::new(
+            "provider_unsupported",
+            "This provider is not available in Aurora yet.",
+        ));
+    }
+    let context = if request.content_type == crate::modrinth::BrowseKind::Modpack
+        && request.instance_id.is_empty()
+    {
+        crate::modrinth::Context {
+            minecraft_version: String::new(),
+            loader: "fabric".into(),
+            fabric_api_protected: false,
+        }
+    } else {
+        let managed = managed_paths(&app)?;
+        provider_context(&managed, &request.instance_id)?.1
+    };
+    crate::modrinth::Client::official()
+        .search_browse(
+            &context,
+            request.content_type,
+            &request.search,
+            &request.categories,
+            request.sort,
+            request.offset,
+        )
+        .await
+        .map_err(provider_error)
+}
+
+/// Live provider category tags for the browse filter. One bounded request
+/// per process; no polling.
+pub async fn browse_modrinth_tags(
+    request: ProviderBrowseTagsRequest,
+) -> Result<Vec<crate::modrinth::ProviderCategory>, CommandError> {
+    if request.provider != "modrinth" {
+        return Err(CommandError::new(
+            "provider_unsupported",
+            "This provider is not available in Aurora yet.",
+        ));
+    }
+    crate::modrinth::Client::official()
+        .categories()
+        .await
+        .map_err(provider_error)
+}
+
+pub async fn get_modrinth_project(
+    app: Host,
+    request: ModrinthProjectRequest,
+) -> Result<crate::modrinth::ProjectDetails, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, context) = if request.content_type == crate::modrinth::BrowseKind::Modpack
+        && request.instance_id.is_empty()
+    {
+        (
+            None,
+            crate::modrinth::Context {
+                minecraft_version: String::new(),
+                loader: "fabric".into(),
+                fabric_api_protected: false,
+            },
+        )
+    } else {
+        let (instance, context) = provider_context(&managed, &request.instance_id)?;
+        (Some(instance), context)
+    };
+    let mut details = crate::modrinth::Client::official()
+        .details_browse(&context, request.content_type, &request.project_id)
+        .await
+        .map_err(provider_error)?;
+    // Modpacks browse with provider identity only: no environment resolution,
+    // no install planning. Phase I attaches the .mrpack pipeline.
+    if let Some(kind) = request.content_type.content_type() {
+        let instance = instance.ok_or_else(|| {
+            CommandError::new(
+                "instance_not_found",
+                "An instance is required for content browsing.",
+            )
+        })?;
+        let state = provider_state(&managed, &instance)?;
+        // Keep Details available even if all candidates are blocked: its
+        // explicit preview supplies the concrete first candidate error.
+        if let Ok(resolved) = resolve_environment_candidate(
+            &managed,
+            &instance,
+            &context,
+            kind,
+            &request.project_id,
+            &state,
+        )
+        .await
+        {
+            details.default_version_id = Some(resolved.preview.version_id);
+        }
+    }
+    Ok(details)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthArtworkRequest {
+    project_id: String,
+}
+
+pub async fn get_modrinth_project_artwork(
+    app: Host,
+    request: ModrinthArtworkRequest,
+) -> Option<String> {
+    // Failure is cosmetic. No frontend URL or filesystem locator is accepted.
+    // Cache-first: installed rows render Aurora-cached bytes, and the network
+    // is touched only for a project whose artwork is not yet stored.
+    let managed = managed_paths(&app).ok()?;
+    crate::artwork::cached_artwork(&managed, &request.project_id).await
+}
+
+pub async fn resolve_project_artwork(
+    app: Host,
+    request: ModrinthArtworkRequest,
+) -> Result<crate::artwork::ArtworkResult, CommandError> {
+    let managed = managed_paths(&app)?;
+    Ok(crate::artwork::resolve_artwork(&managed, &request.project_id).await)
+}
+
+pub async fn get_installed_artwork_identities(
+    app: Host,
+    request: InstanceContentRequest,
+) -> Result<crate::installed_artwork::Identities, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    Ok(crate::installed_artwork::resolve(
+        &managed,
+        &instance,
+        request.content_type,
+        &crate::modrinth::Client::official(),
+    )
+    .await)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthPackRequest {
+    project_id: String,
+    version_id: String,
+    #[serde(default)]
+    selected_optional: Vec<String>,
+    fingerprint: Option<String>,
+}
+
+pub async fn preview_modrinth_pack(
+    app: Host,
+    request: ModrinthPackRequest,
+) -> Result<crate::modpacks::PackPreview, CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::modpacks::preview(
+        &managed,
+        &crate::modrinth::Client::official(),
+        &request.project_id,
+        &request.version_id,
+        &request.selected_optional,
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
+}
+
+pub async fn install_modrinth_pack(
+    app: Host,
+    request: ModrinthPackRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let fingerprint = request.fingerprint.ok_or_else(|| {
+        CommandError::new(
+            "pack_preview_required",
+            "Review the exact pack version before installing it.",
+        )
+    })?;
+    let managed = managed_paths(&app)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("pack_configuration_invalid", error.to_string()))?;
+    let record = Box::pin(crate::modpacks::install(
+        &managed,
+        &endpoints,
+        &crate::modrinth::Client::official(),
+        &request.project_id,
+        &request.version_id,
+        &request.selected_optional,
+        &fingerprint,
+        &mut |phase| {
+            let _ = app.emit("modpack-progress", serde_json::json!({ "phase": phase }));
+        },
+    ))
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))?;
+    Ok(InstanceSummary::from_record(&record))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModrinthPackMergeRequest {
+    instance_id: String,
+    project_id: String,
+    version_id: String,
+    #[serde(default)]
+    selected_optional: Vec<String>,
+    fingerprint: Option<String>,
+}
+
+/// Read-only review of merging an exact pack version into an existing instance.
+pub async fn preview_modrinth_pack_merge(
+    app: Host,
+    request: ModrinthPackMergeRequest,
+) -> Result<crate::pack_merge::PackMergePreview, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    crate::pack_merge::preview(
+        &managed,
+        &crate::modrinth::Client::official(),
+        &instance,
+        &request.project_id,
+        &request.version_id,
+        &request.selected_optional,
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
+}
+
+/// Adds the reviewed pack's content to the instance; never creates an instance.
+pub async fn install_modrinth_pack_merge(
+    app: Host,
+    request: ModrinthPackMergeRequest,
+) -> Result<crate::pack_merge::PackMergeResult, CommandError> {
+    let fingerprint = request.fingerprint.ok_or_else(|| {
+        CommandError::new(
+            "pack_preview_required",
+            "Review the exact pack version before adding it.",
+        )
+    })?;
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    crate::pack_merge::install(
+        &managed,
+        &crate::modrinth::Client::official(),
+        &instance,
+        &request.project_id,
+        &request.version_id,
+        &request.selected_optional,
+        &fingerprint,
+        &mut |phase| {
+            let _ = app.emit("modpack-progress", serde_json::json!({ "phase": phase }));
+        },
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackInstanceRequest {
+    instance_id: String,
+}
+
+/// Pack-level update discovery for one managed modpack instance. The
+/// frontend supplies only the instance identifier: the installed pack state
+/// is the sole authority for which project's timeline is consulted.
+pub async fn check_modpack_update(
+    app: Host,
+    request: ModpackInstanceRequest,
+) -> Result<crate::pack_update::PackUpdateCheck, CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::pack_update::check_pack_update(
+        &managed,
+        &crate::modrinth::Client::official(),
+        &request.instance_id,
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
+}
+
+/// The full three-way reconciliation plan for the discovered candidate.
+/// Read-only: no instance bytes change while previewing.
+pub async fn preview_modpack_update(
+    app: Host,
+    request: ModpackInstanceRequest,
+) -> Result<crate::pack_update::PackUpdatePlan, CommandError> {
+    let managed = managed_paths(&app)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("pack_configuration_invalid", error.to_string()))?;
+    crate::pack_update::build_plan(
+        &managed,
+        &endpoints,
+        &crate::modrinth::Client::official(),
+        &request.instance_id,
+        &[],
+        false,
+    )
+    .await
+    .map(|reconciliation| reconciliation.plan)
+    .map_err(|error| CommandError::new(error.code, error.message))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackUpdateApproval {
+    instance_id: String,
+    fingerprint: String,
+    #[serde(default)]
+    resolutions: Vec<crate::pack_update::ConflictResolution>,
+}
+
+/// Apply one reviewed pack reconciliation. The plan is re-derived natively
+/// and must still match the reviewed fingerprint; conflict resolutions are
+/// validated against the fresh classification.
+pub async fn apply_modpack_update(
+    app: Host,
+    request: ModpackUpdateApproval,
+) -> Result<InstanceSummary, CommandError> {
+    let managed = managed_paths(&app)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("pack_configuration_invalid", error.to_string()))?;
+    let record = crate::pack_update::apply_pack_update(
+        &managed,
+        &endpoints,
+        &crate::modrinth::Client::official(),
+        &request.instance_id,
+        &request.fingerprint,
+        &request.resolutions,
+        &mut |phase| {
+            let _ = app.emit(
+                "modpack-update-progress",
+                serde_json::json!({ "phase": phase }),
+            );
+        },
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))?;
+    Ok(InstanceSummary::from_record(&record))
+}
+
+/// The installed modpack's own presentation state: exact identity plus the
+/// recorded divergences that make an instance "pack version — modified".
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackDetails {
+    instance_id: String,
+    provider: String,
+    project_id: String,
+    version_id: String,
+    name: String,
+    pack_version: String,
+    minecraft_version: String,
+    fabric_loader_version: String,
+    component_count: usize,
+    override_count: usize,
+    divergences: Vec<crate::pack_state::PackDivergence>,
+}
+
+pub fn get_modpack_details(
+    app: Host,
+    request: ModpackInstanceRequest,
+) -> Result<ModpackDetails, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = registered_instance(&managed, &request.instance_id)?;
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+    let record = registry.find(&instance).ok_or_else(|| {
+        CommandError::new(
+            "instance_not_found",
+            "Instance was removed during the request.",
+        )
+    })?;
+    if record.pack().is_none() {
+        return Err(CommandError::new(
+            "pack_not_installed",
+            "This instance was not created from a Modrinth modpack.",
+        ));
+    }
+    let pack = crate::pack_state::InstalledPack::load(&managed, &instance)
+        .map_err(|error| CommandError::new(error.code(), error.to_string()))?
+        .ok_or_else(|| {
+            CommandError::new(
+                "pack_state_malformed",
+                "The installed modpack state is missing.",
+            )
+        })?;
+    Ok(ModpackDetails {
+        instance_id: instance.to_string(),
+        provider: pack.identity.provider.clone(),
+        project_id: pack.identity.project_id.clone(),
+        version_id: pack.identity.version_id.clone(),
+        name: pack.identity.name.clone(),
+        pack_version: pack.identity.pack_version.clone(),
+        minecraft_version: pack.identity.minecraft_version.clone(),
+        fabric_loader_version: pack.identity.fabric_loader_version.clone(),
+        component_count: pack.components.len(),
+        override_count: pack.overrides.len(),
+        divergences: pack.divergences.clone(),
+    })
+}
+
+pub async fn preview_modrinth_install(
+    app: Host,
+    request: ModrinthPreviewRequest,
+) -> Result<ModrinthPreviewResponse, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, context) = provider_context(&managed, &request.instance_id)?;
+    let state = provider_state(&managed, &instance)?;
+    let mut resolved = crate::modrinth::Client::official()
+        .resolve(
+            &context,
+            request.content_type,
+            &request.project_id,
+            &request.version_id,
+            &state,
+        )
+        .await
+        .map_err(provider_error)?;
+    crate::instance_content::reconcile_provider_resolution(&managed, &instance, &mut resolved)
+        .await?;
+    check_provider_requirements(&managed, &instance, &context, &resolved).await?;
+    let preview_fingerprint = provider_fingerprint(&instance, &resolved);
+    let conflicts =
+        crate::instance_content::preview_provider_conflicts(&managed, &instance, &resolved.plans)
+            .await?;
+    Ok(ModrinthPreviewResponse {
+        preview: resolved.preview,
+        preview_fingerprint,
+        conflicts,
+    })
+}
+
+pub async fn install_modrinth(
+    app: Host,
+    request: ModrinthInstallRequest,
+) -> Result<Vec<crate::instance_content::ProviderRecord>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, context) = provider_context(&managed, &request.instance_id)?;
+    let state = provider_state(&managed, &instance)?;
+    let mut resolved = crate::modrinth::Client::official()
+        .resolve(
+            &context,
+            request.content_type,
+            &request.project_id,
+            &request.version_id,
+            &state,
+        )
+        .await
+        .map_err(provider_error)?;
+    crate::instance_content::reconcile_provider_resolution(&managed, &instance, &mut resolved)
+        .await?;
+    check_provider_requirements(&managed, &instance, &context, &resolved).await?;
+    if provider_fingerprint(&instance, &resolved) != request.preview_fingerprint {
+        return Err(CommandError::new(
+            "provider_install_failed",
+            "The dependency preview changed. Review it again before installing.",
+        ));
+    }
+    install_resolved_provider_plans(&managed, &instance, resolved).await
+}
+
+async fn install_resolved_provider_plans(
+    managed: &ManagedPaths,
+    instance: &crate::instances::InstanceId,
+    resolved: crate::modrinth::Resolved,
+) -> Result<Vec<crate::instance_content::ProviderRecord>, CommandError> {
+    if resolved.plans.is_empty() {
+        let _commit = crate::content_jobs::commit().map_err(|_| {
+            CommandError::new(
+                "installation_cancelled",
+                "Installation cancelled before activation.",
+            )
+        })?;
+        let identity = crate::instance_content::ProviderIdentity {
+            content_type: resolved.preview.content_type,
+            provider: "modrinth".into(),
+            project_id: resolved.preview.project_id,
+        };
+        let state = provider_state(managed, instance)?;
+        if state
+            .find(&identity)
+            .is_some_and(|record| !record.explicitly_retained)
+        {
+            return Ok(vec![crate::instance_content::retain_provider(
+                managed, instance, &identity,
+            )?]);
+        }
+        return Ok(Vec::new());
+    }
+    crate::instance_content::install_provider_plans_reviewed(
+        managed,
+        instance,
+        resolved.plans,
+        resolved.preview.inventory_revision.as_deref(),
+    )
+    .await
+    .map_err(|error| {
+        let code = match error {
+            crate::instance_content::ContentError::Collision
+            | crate::instance_content::ContentError::ModCollision(_) => {
+                "provider_content_collision"
+            }
+            crate::instance_content::ContentError::HashMismatch => "provider_integrity_failure",
+            _ => "provider_install_failed",
+        };
+        let mut command_error = CommandError::new(code, error.to_string());
+        if let crate::instance_content::ContentError::ModCollision(conflict) = error {
+            command_error.conflict = Some(conflict);
+        }
+        command_error
+    })
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CustomJavaRequest {
+    instance_id: String,
+    path: String,
+}
+
+/// Executes and checks a candidate custom Java for one instance's game
+/// without saving anything. The required major comes from the instance's
+/// resolved runtime requirement, never from the frontend.
+pub async fn check_custom_java(
+    app: Host,
+    request: CustomJavaRequest,
+) -> Result<crate::runtime::external::ExternalJavaReport, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id)?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+    let plan = crate::instances::lifecycle::resolve_instance_game_plan(
+        &managed,
+        &managed.instance_registry_file(),
+        &endpoints,
+        &instance,
+    )
+    .await?;
+    let required = plan.java().major_version();
+    let result = crate::runtime::external::validate(&request.path, required).await;
+    Ok(crate::runtime::external::ExternalJavaReport::from_result(
+        &request.path,
+        required,
+        &result,
+    ))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalModpackRequest {
+    source_path: String,
+}
+
+/// Identify one explicitly selected local `.mrpack`. Success means Modrinth
+/// publishes these exact bytes as a pack version; the caller then reviews and
+/// installs that identity through the unchanged hosted pack engine, which
+/// reuses the verified local bytes. Nothing is installed here.
+pub async fn identify_local_modpack(
+    app: Host,
+    request: LocalModpackRequest,
+) -> Result<crate::local_pack::LocalPackMatch, CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::local_pack::recognize(
+        &managed,
+        &crate::modrinth::Client::official(),
+        std::path::Path::new(&request.source_path),
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
+}
+
+/// One-click UX over the same resolution, fingerprint, and transaction path as
+/// the reviewed install. No search-result metadata becomes install authority.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalContentPreviewRequest {
+    instance_id: String,
+    source_path: String,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalContentInstallRequest {
+    instance_id: String,
+    ticket: String,
+    fingerprint: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalContentDiscardRequest {
+    instance_id: String,
+    ticket: String,
+}
+pub fn discard_local_content_review(
+    app: Host,
+    request: LocalContentDiscardRequest,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id)
+        .map_err(|_| CommandError::new("instance_id_invalid", "The target instance is invalid."))?;
+    crate::local_content::discard(&managed, &instance, &request.ticket).map_err(CommandError::from)
+}
+
+pub async fn preview_local_content(
+    app: Host,
+    request: LocalContentPreviewRequest,
+) -> Result<crate::local_content::Preview, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id)
+        .map_err(|_| CommandError::new("instance_id_invalid", "The target instance is invalid."))?;
+    tokio::task::spawn_blocking(move || {
+        crate::local_content::preview(&managed, instance, request.source_path.into())
+            .map_err(CommandError::from)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "local_import_failed",
+            "The local file review did not complete.",
+        )
+    })?
+}
+
+pub async fn install_local_content(
+    app: Host,
+    request: LocalContentInstallRequest,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id)
+        .map_err(|_| CommandError::new("instance_id_invalid", "The target instance is invalid."))?;
+    crate::local_content::install(&managed, &instance, &request.ticket, &request.fingerprint)
+        .await
+        .map_err(CommandError::from)
+}
+
+pub async fn quick_install_modrinth(
+    app: Host,
+    request: ModrinthQuickInstallRequest,
+) -> Result<Vec<crate::instance_content::ProviderRecord>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, context) = provider_context(&managed, &request.instance_id)?;
+    let state = provider_state(&managed, &instance)?;
+    if let Some(record) = state.entries.iter().find(|record| {
+        record.provider == "modrinth"
+            && record.content_type == request.content_type
+            && record.project_id == request.project_id
+    }) {
+        let _commit = crate::content_jobs::commit().map_err(|_| {
+            CommandError::new(
+                "installation_cancelled",
+                "Installation cancelled before activation.",
+            )
+        })?;
+        if !record.explicitly_retained {
+            return Ok(vec![crate::instance_content::retain_provider(
+                &managed,
+                &instance,
+                &record.identity(),
+            )?]);
+        }
+        return Ok(Vec::new());
+    }
+    let client = crate::modrinth::Client::official();
+    let first = resolve_environment_candidate(
+        &managed,
+        &instance,
+        &context,
+        request.content_type,
+        &request.project_id,
+        &state,
+    )
+    .await?;
+    let fingerprint = provider_fingerprint(&instance, &first);
+    let version_id = first.preview.version_id;
+    let (current_instance, current_context) = provider_context(&managed, &request.instance_id)?;
+    if current_instance != instance
+        || current_context.minecraft_version != context.minecraft_version
+        || current_context.loader != context.loader
+    {
+        return Err(CommandError::new(
+            "provider_install_failed",
+            "Instance compatibility changed. Try again.",
+        ));
+    }
+    let current_state = provider_state(&managed, &instance)?;
+    let mut revalidated = client
+        .resolve(
+            &current_context,
+            request.content_type,
+            &request.project_id,
+            &version_id,
+            &current_state,
+        )
+        .await
+        .map_err(provider_error)?;
+    crate::instance_content::reconcile_provider_resolution(&managed, &instance, &mut revalidated)
+        .await?;
+    check_provider_requirements(&managed, &instance, &current_context, &revalidated).await?;
+    if provider_fingerprint(&instance, &revalidated) != fingerprint {
+        return Err(CommandError::new(
+            "provider_install_failed",
+            "The installation plan changed. Try again.",
+        ));
+    }
+    install_resolved_provider_plans(&managed, &instance, revalidated).await
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderLifecycleRequest {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+    project_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderLifecycleApproval {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+    project_id: String,
+    preview_fingerprint: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderLifecycleEntry {
+    record: crate::instance_content::ProviderRecord,
+    required_by: Vec<crate::instance_content::ProviderRecord>,
+    requires: Vec<crate::instance_content::ProviderRecord>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LifecycleItem {
+    content_type: crate::instance_content::ContentType,
+    provider: String,
+    project_id: String,
+    file_name: String,
+    display_version: Option<String>,
+}
+
+impl From<&crate::instance_content::ProviderRecord> for LifecycleItem {
+    fn from(record: &crate::instance_content::ProviderRecord) -> Self {
+        Self {
+            content_type: record.content_type,
+            provider: record.provider.clone(),
+            project_id: record.project_id.clone(),
+            file_name: record.file_name.clone(),
+            display_version: record.display_version.clone(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LifecycleDelta {
+    will_install: Vec<LifecycleItem>,
+    will_remove: Vec<LifecycleItem>,
+    will_retain: Vec<LifecycleItem>,
+    new_requirements: Vec<LifecycleItem>,
+    removed_requirements: Vec<LifecycleItem>,
+}
+
+fn lifecycle_delta(
+    current: &crate::instance_content::ContentState,
+    next: &crate::instance_content::ContentState,
+    root: &crate::instance_content::ProviderIdentity,
+) -> LifecycleDelta {
+    let old_root = current.find(root);
+    let new_root = next.find(root);
+    let old_requires = old_root
+        .map(|record| record.requires.as_slice())
+        .unwrap_or(&[]);
+    let new_requires = new_root
+        .map(|record| record.requires.as_slice())
+        .unwrap_or(&[]);
+    let will_install = next
+        .entries
+        .iter()
+        .filter(|record| {
+            current
+                .find(&record.identity())
+                .is_none_or(|old| old.sha256 != record.sha256 || old.file_name != record.file_name)
+        })
+        .map(LifecycleItem::from)
+        .collect();
+    let will_remove = current
+        .entries
+        .iter()
+        .filter(|record| {
+            next.find(&record.identity())
+                .is_none_or(|new| new.sha256 != record.sha256 || new.file_name != record.file_name)
+        })
+        .map(LifecycleItem::from)
+        .collect();
+    let will_retain = old_requires
+        .iter()
+        .filter(|identity| !new_requires.contains(identity))
+        .filter_map(|identity| next.find(identity))
+        .map(LifecycleItem::from)
+        .collect();
+    let new_requirements = new_requires
+        .iter()
+        .filter(|identity| !old_requires.contains(identity))
+        .filter_map(|identity| next.find(identity))
+        .map(LifecycleItem::from)
+        .collect();
+    let removed_requirements = old_requires
+        .iter()
+        .filter(|identity| !new_requires.contains(identity))
+        .filter_map(|identity| current.find(identity))
+        .map(LifecycleItem::from)
+        .collect();
+    LifecycleDelta {
+        will_install,
+        will_remove,
+        will_retain,
+        new_requirements,
+        removed_requirements,
+    }
+}
+
+fn lifecycle_fingerprint(
+    instance: &crate::instances::InstanceId,
+    context: &crate::modrinth::Context,
+    current: &crate::instance_content::ContentState,
+    next: &crate::instance_content::ContentState,
+    provider_plan: Option<&str>,
+) -> String {
+    use sha2::Digest as _;
+    // Receipt timestamps are lifecycle bookkeeping finalized at commit; both
+    // the preview and the re-resolved approval plan stamp "now" while
+    // planning, so masking them keeps the fingerprint about identity, policy
+    // and file facts rather than the wall clock.
+    fn mask_receipts(state: &crate::instance_content::ContentState) -> impl serde::Serialize + '_ {
+        let mut masked = state.clone();
+        for record in &mut masked.entries {
+            record.installed_at_unix_seconds = None;
+        }
+        masked
+    }
+    let bytes = serde_json::to_vec(&(
+        instance.to_string(),
+        &context.minecraft_version,
+        &context.loader,
+        context.fabric_api_protected,
+        mask_receipts(current),
+        mask_receipts(next),
+        provider_plan,
+    ))
+    .expect("lifecycle state serializes");
+    format!("{:x}", sha2::Sha256::digest(bytes))
+}
+
+fn lifecycle_record<'a>(
+    state: &'a crate::instance_content::ContentState,
+    request: &ProviderLifecycleRequest,
+) -> Result<&'a crate::instance_content::ProviderRecord, CommandError> {
+    let identity = crate::instance_content::ProviderIdentity {
+        content_type: request.content_type,
+        provider: "modrinth".into(),
+        project_id: request.project_id.clone(),
+    };
+    state.find(&identity).ok_or_else(|| {
+        CommandError::new(
+            "content_changed_since_scan",
+            "This managed project is no longer installed. Refresh and try again.",
+        )
+    })
+}
+
+pub fn get_provider_lifecycle(
+    app: Host,
+    request: InstanceModsRequest,
+) -> Result<Vec<ProviderLifecycleEntry>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, _) = provider_context(&managed, &request.instance_id)?;
+    let state = provider_state(&managed, &instance)?;
+    Ok(state
+        .entries
+        .iter()
+        .map(|record| ProviderLifecycleEntry {
+            record: record.clone(),
+            required_by: state
+                .required_by(&record.identity())
+                .iter()
+                .filter_map(|identity| state.find(identity).cloned())
+                .collect(),
+            requires: record
+                .requires
+                .iter()
+                .filter_map(|identity| state.find(identity).cloned())
+                .collect(),
+        })
+        .collect())
+}
+
+pub async fn check_modrinth_update(
+    app: Host,
+    request: ProviderLifecycleRequest,
+) -> Result<Option<crate::modrinth::VersionChoice>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, context) = provider_context(&managed, &request.instance_id)?;
+    let state = provider_state(&managed, &instance)?;
+    let record = lifecycle_record(&state, &request)?;
+    if !record.explicitly_retained {
+        return Err(CommandError::new(
+            "content_required_by_installed",
+            "This item is installed as a dependency. Check its parent for updates.",
+        ));
+    }
+    crate::modrinth::Client::official()
+        .update_candidate(&context, record)
+        .await
+        .map_err(provider_error)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderLifecycleTarget {
+    pub(crate) content_type: crate::instance_content::ContentType,
+    pub(crate) project_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderBulkUpdateRequest {
+    instance_id: String,
+    targets: Vec<ProviderLifecycleTarget>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderBulkUpdateApproval {
+    instance_id: String,
+    targets: Vec<ProviderLifecycleTarget>,
+    preview_fingerprint: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckInstanceUpdatesRequest {
+    instance_id: String,
+    content_type: Option<crate::instance_content::ContentType>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderPolicyRequest {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+    project_id: String,
+    pinned: Option<bool>,
+    channel: Option<crate::instance_content::UpdateChannel>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderUpdatePreview {
+    current: LifecycleItem,
+    candidate: crate::modrinth::VersionChoice,
+    changelog: Option<String>,
+    channel: crate::instance_content::UpdateChannel,
+    delta: LifecycleDelta,
+    warnings: Vec<String>,
+    preview_fingerprint: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkUpdateTargetPreview {
+    pub(crate) current: LifecycleItem,
+    pub(crate) candidate: crate::modrinth::VersionChoice,
+    changelog: Option<String>,
+    channel: crate::instance_content::UpdateChannel,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkUpdatePreview {
+    pub(crate) targets: Vec<BulkUpdateTargetPreview>,
+    delta: LifecycleDelta,
+    warnings: Vec<String>,
+    pub(crate) preview_fingerprint: String,
+}
+
+/// Explicit, user-triggered availability check across the managed Modrinth
+/// records of one instance. Read-only; no background polling exists.
+pub async fn check_instance_updates(
+    app: Host,
+    request: CheckInstanceUpdatesRequest,
+) -> Result<crate::content_updates::UpdatesReport, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, context) = provider_context(&managed, &request.instance_id)?;
+    crate::content_updates::check_updates(
+        &managed,
+        &instance,
+        &context,
+        &crate::modrinth::Client::official(),
+        request.content_type,
+    )
+    .await
+    .map_err(CommandError::from)
+}
+
+/// Change only the persisted pin/release-channel policy of one managed
+/// Modrinth record. Files, bytes, versions and provenance are untouched.
+pub fn set_provider_update_policy(
+    app: Host,
+    request: ProviderPolicyRequest,
+) -> Result<crate::instance_content::ProviderRecord, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (instance, _) = provider_context(&managed, &request.instance_id)?;
+    let identity = crate::instance_content::ProviderIdentity {
+        content_type: request.content_type,
+        provider: "modrinth".into(),
+        project_id: request.project_id,
+    };
+    crate::instance_content::set_update_policy(
+        &managed,
+        &instance,
+        &identity,
+        request.pinned,
+        request.channel,
+    )
+    .map_err(CommandError::from)
+}
+
+fn bulk_targets(request: &ProviderLifecycleRequest) -> Vec<ProviderLifecycleTarget> {
+    vec![ProviderLifecycleTarget {
+        content_type: request.content_type,
+        project_id: request.project_id.clone(),
+    }]
+}
+
+/// Resolve one coherent update preview for one or more managed roots.
+/// Discovery, dependency resolution against the target versions, local
+/// reconciliation and compatibility validation all happen before any
+/// mutation; nothing is downloaded into the instance here.
+pub(crate) async fn resolve_updates_preview(
+    managed: &ManagedPaths,
+    instance_id: &str,
+    targets: &[ProviderLifecycleTarget],
+) -> Result<
+    (
+        crate::instances::InstanceId,
+        crate::instance_content::ContentState,
+        Vec<crate::instance_content::ProviderIdentity>,
+        crate::modrinth::Resolved,
+        BulkUpdatePreview,
+    ),
+    CommandError,
+> {
+    if targets.is_empty() || targets.len() > 64 {
+        return Err(CommandError::new(
+            "provider_invalid_request",
+            "Select at least one and at most 64 managed items to update.",
+        ));
+    }
+    let (instance, context) = provider_context(managed, instance_id)?;
+    let state = provider_state(managed, &instance)?;
+    let pack = crate::pack_state::InstalledPack::load(managed, &instance)
+        .map_err(|error| CommandError::new(error.code(), error.to_string()))?;
+    let client = crate::modrinth::Client::official();
+    let mut resolved_targets = Vec::<(crate::instance_content::ContentType, String, String)>::new();
+    let mut target_previews = Vec::new();
+    let mut roots = Vec::new();
+    for target in targets {
+        let lookup = ProviderLifecycleRequest {
+            instance_id: instance_id.to_owned(),
+            content_type: target.content_type,
+            project_id: target.project_id.clone(),
+        };
+        let record = lifecycle_record(&state, &lookup)?;
+        if pack
+            .as_ref()
+            .is_some_and(|pack| pack.owns_provider(&record.identity()))
+        {
+            return Err(CommandError::new(
+                "pack_component_owned",
+                "This component belongs to the installed modpack; update the modpack itself from the instance's Overview page.",
+            ));
+        }
+        if !record.explicitly_retained {
+            return Err(CommandError::new(
+                "content_required_by_installed",
+                "This item is installed as a dependency. Check its parent for updates.",
+            ));
+        }
+        if record.pinned {
+            return Err(CommandError::new(
+                "provider_update_pinned",
+                "This content is pinned to its current version. Unpin it before updating.",
+            ));
+        }
+        match crate::instance_content::validate_provider_file(managed, &instance, record) {
+            Ok(path) => {
+                let disabled = record.content_type == crate::instance_content::ContentType::Mod
+                    && path
+                        .extension()
+                        .is_some_and(|extension| extension.eq_ignore_ascii_case("disabled"));
+                if disabled {
+                    return Err(CommandError::new(
+                        "mod_dependency_blocked",
+                        "This mod is disabled. Re-enable it before updating it.",
+                    ));
+                }
+            }
+            Err(_) => {
+                return Err(CommandError::new(
+                    "provider_content_collision",
+                    "An installed provider file is missing, changed, or unsafe. Inspect local content before updating.",
+                ));
+            }
+        }
+        let discovery = client
+            .update_discovery(&context, record)
+            .await
+            .map_err(provider_error)?;
+        let candidate = discovery.candidate.ok_or_else(|| {
+            CommandError::new(
+                "provider_no_update",
+                "No newer compatible version under the current release-channel policy.",
+            )
+        })?;
+        target_previews.push(BulkUpdateTargetPreview {
+            current: LifecycleItem::from(record),
+            changelog: None,
+            channel: record.update_channel,
+            candidate: candidate.clone(),
+        });
+        roots.push(crate::instance_content::ProviderIdentity {
+            content_type: target.content_type,
+            provider: "modrinth".into(),
+            project_id: target.project_id.clone(),
+        });
+        resolved_targets.push((target.content_type, target.project_id.clone(), candidate.id));
+    }
+    let mut resolved = client
+        .resolve_updates(&context, &resolved_targets, &state)
+        .await
+        .map_err(provider_error)?;
+    crate::instance_content::reconcile_provider_resolution(managed, &instance, &mut resolved)
+        .await?;
+    check_provider_requirements(managed, &instance, &context, &resolved).await?;
+    let next =
+        crate::instance_content::update_preview_state_multi(&state, &roots, &resolved.plans)?;
+    let fingerprint = lifecycle_fingerprint(
+        &instance,
+        &context,
+        &state,
+        &next,
+        Some(&provider_fingerprint(&instance, &resolved)),
+    );
+    for preview in &mut target_previews {
+        preview.changelog = resolved
+            .preview
+            .items
+            .iter()
+            .find(|item| {
+                item.project_id == preview.current.project_id
+                    && item.version_id == preview.candidate.id
+            })
+            .and_then(|item| item.changelog.clone());
+    }
+    let bulk = BulkUpdatePreview {
+        targets: target_previews,
+        delta: lifecycle_delta_multi(&state, &next, &roots),
+        warnings: resolved.preview.warnings.clone(),
+        preview_fingerprint: fingerprint,
+    };
+    Ok((instance, state, roots, resolved, bulk))
+}
+
+fn lifecycle_delta_multi(
+    current: &crate::instance_content::ContentState,
+    next: &crate::instance_content::ContentState,
+    roots: &[crate::instance_content::ProviderIdentity],
+) -> LifecycleDelta {
+    let mut delta = lifecycle_delta(current, next, &roots[0]);
+    for root in &roots[1..] {
+        let more = lifecycle_delta(current, next, root);
+        delta.will_retain.extend(more.will_retain);
+        delta.new_requirements.extend(more.new_requirements);
+        delta.removed_requirements.extend(more.removed_requirements);
+    }
+    delta
+}
+
+pub async fn preview_modrinth_update(
+    app: Host,
+    request: ProviderLifecycleRequest,
+) -> Result<ProviderUpdatePreview, CommandError> {
+    let managed = managed_paths(&app)?;
+    let (_, _, _, _, bulk) =
+        resolve_updates_preview(&managed, &request.instance_id, &bulk_targets(&request)).await?;
+    let target = bulk.targets.into_iter().next().ok_or_else(|| {
+        CommandError::new("provider_invalid_response", "The update preview is empty.")
+    })?;
+    Ok(ProviderUpdatePreview {
+        current: target.current,
+        changelog: target.changelog,
+        channel: target.channel,
+        candidate: target.candidate,
+        delta: bulk.delta,
+        warnings: bulk.warnings,
+        preview_fingerprint: bulk.preview_fingerprint,
+    })
+}
+
+pub async fn preview_modrinth_bulk_update(
+    app: Host,
+    request: ProviderBulkUpdateRequest,
+) -> Result<BulkUpdatePreview, CommandError> {
+    let managed = managed_paths(&app)?;
+    Ok(
+        resolve_updates_preview(&managed, &request.instance_id, &request.targets)
+            .await?
+            .4,
+    )
+}
+
+pub(crate) async fn apply_resolved_updates(
+    managed: &ManagedPaths,
+    instance_id: &str,
+    targets: Vec<ProviderLifecycleTarget>,
+    preview_fingerprint: &str,
+) -> Result<(), CommandError> {
+    let (instance, state, roots, resolved, preview) =
+        resolve_updates_preview(managed, instance_id, &targets).await?;
+    if preview.preview_fingerprint != preview_fingerprint {
+        return Err(CommandError::new(
+            "provider_preview_changed",
+            "The update preview changed. Review it again before updating.",
+        ));
+    }
+    crate::instance_content::update_provider_graph_multi_reviewed(
+        managed,
+        &instance,
+        &state,
+        &roots,
+        resolved.plans,
+        resolved.preview.inventory_revision.as_deref(),
+    )
+    .await
+    .map_err(CommandError::from)?;
+    Ok(())
+}
+
+pub async fn apply_modrinth_update(
+    app: Host,
+    request: ProviderLifecycleApproval,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let targets = vec![ProviderLifecycleTarget {
+        content_type: request.content_type,
+        project_id: request.project_id.clone(),
+    }];
+    apply_resolved_updates(
+        &managed,
+        &request.instance_id,
+        targets,
+        &request.preview_fingerprint,
+    )
+    .await
+}
+
+pub async fn apply_modrinth_bulk_update(
+    app: Host,
+    request: ProviderBulkUpdateApproval,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    apply_resolved_updates(
+        &managed,
+        &request.instance_id,
+        request.targets,
+        &request.preview_fingerprint,
+    )
+    .await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderRemovalPreview {
+    root: LifecycleItem,
+    delta: LifecycleDelta,
+    preview_fingerprint: String,
+}
+
+fn resolve_removal_preview(
+    managed: &ManagedPaths,
+    request: &ProviderLifecycleRequest,
+) -> Result<
+    (
+        crate::instances::InstanceId,
+        crate::instance_content::ContentState,
+        ProviderRemovalPreview,
+    ),
+    CommandError,
+> {
+    let (instance, context) = provider_context(managed, &request.instance_id)?;
+    let state = provider_state(managed, &instance)?;
+    let record = lifecycle_record(&state, request)?;
+    let root = record.identity();
+    let next = crate::instance_content::removal_state(&state, &root)?;
+    let removed: Vec<_> = state
+        .entries
+        .iter()
+        .filter(|record| next.find(&record.identity()).is_none())
+        .cloned()
+        .collect();
+    crate::instance_mods::validate_provider_removals(managed, &instance, &removed)?;
+    let preview = ProviderRemovalPreview {
+        root: LifecycleItem::from(record),
+        delta: lifecycle_delta(&state, &next, &root),
+        preview_fingerprint: lifecycle_fingerprint(
+            &instance,
+            &context,
+            &state,
+            &next,
+            Some(&crate::instance_content::local_inventory_revision(
+                managed, &instance,
+            )?),
+        ),
+    };
+    Ok((instance, state, preview))
+}
+
+pub fn preview_provider_removal(
+    app: Host,
+    request: ProviderLifecycleRequest,
+) -> Result<ProviderRemovalPreview, CommandError> {
+    let managed = managed_paths(&app)?;
+    Ok(resolve_removal_preview(&managed, &request)?.2)
+}
+
+pub fn apply_provider_removal(
+    app: Host,
+    request: ProviderLifecycleApproval,
+) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let lookup = ProviderLifecycleRequest {
+        instance_id: request.instance_id.clone(),
+        content_type: request.content_type,
+        project_id: request.project_id.clone(),
+    };
+    let (instance, state, preview) = resolve_removal_preview(&managed, &lookup)?;
+    if preview.preview_fingerprint != request.preview_fingerprint {
+        return Err(CommandError::new(
+            "provider_preview_changed",
+            "The removal preview changed. Review it again.",
+        ));
+    }
+    let root = crate::instance_content::ProviderIdentity {
+        content_type: request.content_type,
+        provider: "modrinth".into(),
+        project_id: request.project_id,
+    };
+    crate::instance_content::remove_provider_graph(&managed, &instance, &state, &root)?;
+    Ok(())
+}
+
+/// One Minecraft version offered for instance configuration, from the
+/// official Mojang manifest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MinecraftVersionDto {
+    id: String,
+    version_type: String,
+}
+
+/// One Fabric Loader version available for a Minecraft version, from the
+/// official Fabric Meta per-game listing (newest first).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FabricLoaderVersionDto {
+    version: String,
+    stable: bool,
+}
+
+/// Lists the Minecraft versions available for instance configuration.
+///
+/// Modern releases and snapshots are served from the pinned official Mojang
+/// manifest, newest first. Historical types are absent because the launcher
+/// deliberately does not support them. `include_snapshots` is an explicit
+/// filter: snapshots never mix into the ordinary release list.
+pub async fn list_minecraft_versions(
+    include_snapshots: bool,
+) -> Result<Vec<MinecraftVersionDto>, CommandError> {
+    let manifest = crate::minecraft::metadata::fetch_manifest(
+        &MetadataEndpoints::official(),
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|error| CommandError::from(MinecraftResolutionError::Metadata(error)))?;
+
+    Ok(manifest
+        .versions
+        .iter()
+        .filter(|entry| {
+            matches!(
+                (&entry.kind, include_snapshots),
+                (crate::minecraft::metadata::VersionType::Release, _)
+                    | (crate::minecraft::metadata::VersionType::Snapshot, true)
+            )
+        })
+        .map(|entry| MinecraftVersionDto {
+            id: entry.id.clone(),
+            version_type: entry.kind.as_mojang_str().to_owned(),
+        })
+        .collect())
+}
+
+/// Lists the Fabric Loader versions available for one exact Minecraft
+/// version, newest first, with the official `stable` markers. An
+/// unsupported Minecraft version is Fabric Meta's own answer and surfaces as
+/// `fabric_combination_unsupported`.
+pub async fn list_fabric_loader_versions(
+    minecraft_version: String,
+) -> Result<Vec<FabricLoaderVersionDto>, CommandError> {
+    let version = MinecraftVersionId::new(minecraft_version.trim())?;
+    let entries = crate::fabric::metadata::fetch_game_loader_versions(
+        &crate::fabric::metadata::FabricMetaEndpoints::official(),
+        &version,
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(FabricMetadataError::from)?;
+
+    Ok(entries
+        .into_iter()
+        .map(|entry| FabricLoaderVersionDto {
+            version: entry.version,
+            stable: entry.stable,
+        })
+        .collect())
+}
+
+/// Lists the NeoForge versions available for one exact Minecraft version,
+/// newest first, with the official stability markers. A Minecraft version
+/// no current NeoForge generation addresses surfaces as an empty list —
+/// a truthful no-compatible answer, never a fabricated one.
+pub async fn list_neoforge_versions(
+    minecraft_version: String,
+) -> Result<Vec<NeoForgeVersionDto>, CommandError> {
+    let version = MinecraftVersionId::new(minecraft_version.trim())?;
+    let listing = crate::neoforge::metadata::fetch_neoforge_versions(
+        &crate::neoforge::metadata::NeoForgeMavenEndpoints::official(),
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|error| -> CommandError {
+        crate::instances::lifecycle::InstanceError::NeoForgeMetadata(error).into()
+    })?;
+
+    Ok(listing
+        .for_minecraft(&version)
+        .into_iter()
+        .map(|entry| NeoForgeVersionDto {
+            version: entry.version().to_owned(),
+            stable: entry.stable(),
+        })
+        .collect())
+}
+
+/// One NeoForge version available for a Minecraft version.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NeoForgeVersionDto {
+    pub version: String,
+    pub stable: bool,
+}
+
+/// One Forge version available for a Minecraft version: the full combined
+/// upstream identity (`<minecraft>-<build>`), stable exactly when the
+/// official promotions document names that build as the recommended one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForgeVersionDto {
+    pub version: String,
+    pub stable: bool,
+}
+
+/// Lists every Forge version this launcher can install for one exact
+/// Minecraft version, newest build first.
+pub async fn list_forge_versions(
+    minecraft_version: String,
+) -> Result<Vec<ForgeVersionDto>, CommandError> {
+    let version = MinecraftVersionId::new(minecraft_version.trim())?;
+    let listing = crate::forge::metadata::fetch_forge_versions(
+        &crate::forge::metadata::ForgeMavenEndpoints::official(),
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|error| -> CommandError {
+        crate::instances::lifecycle::InstanceError::ForgeMetadata(error).into()
+    })?;
+
+    Ok(listing
+        .installable_for_minecraft(&version)
+        .into_iter()
+        .map(|entry| ForgeVersionDto {
+            version: entry.version().as_str().to_owned(),
+            stable: entry.stable(),
+        })
+        .collect())
+}
+
+impl From<crate::neoforge::metadata::NeoForgeMetadataError> for CommandError {
+    fn from(error: crate::neoforge::metadata::NeoForgeMetadataError) -> Self {
+        crate::instances::lifecycle::InstanceError::NeoForgeMetadata(error).into()
+    }
+}
+
+impl From<FabricMetadataError> for CommandError {
+    fn from(error: FabricMetadataError) -> Self {
+        // Mirrors the FabricResolutionError mapping for the same conditions.
+        match &error {
+            FabricMetadataError::HttpStatus { status: 400 } => {
+                Self::new("fabric_combination_unsupported", error.to_string())
+            }
+            _ => crate::instances::lifecycle::InstanceError::FabricMetadata(error).into(),
+        }
+    }
+}
+
+/// Typed request for selecting an instance.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectInstanceRequest {
+    instance_id: String,
+}
+
+/// Selects an instance. The selection always refers to a registered
+/// instance; a dangling selection is never written.
+pub fn select_instance(app: Host, request: SelectInstanceRequest) -> Result<(), CommandError> {
+    let _performance = crate::performance::scope(crate::performance::Event::InstanceSelection);
+    let managed_paths = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+
+    crate::instances::lifecycle::select_instance(
+        &managed_paths.instance_registry_file(),
+        &managed_paths.config_file(),
+        &instance,
+    )?;
+
+    Ok(())
+}
+
+/// The complete validation outcome of one instance, as reported by the
+/// read-only deep validation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceValidationDto {
+    instance_id: String,
+    display_name: String,
+    status: String,
+    problems: Vec<InstanceProblemDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceProblemDto {
+    component: String,
+    reason: String,
+}
+
+/// Explicit storage maintenance, on a worker and under the existing target locks.
+pub async fn maintain_installation_backups(
+    app: Host,
+    request: ValidateInstalledGameRequest,
+) -> Result<crate::install::retention::RetentionReport, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id)?;
+    tokio::task::spawn_blocking(move || crate::install::retention::maintain(&managed, &instance))
+        .await
+        .map_err(|_| {
+            CommandError::new(
+                "storage_io_failure",
+                "Backup maintenance could not finish. Existing recovery data remains protected.",
+            )
+        })?
+        .map_err(CommandError::from)
+}
+
+/// Validates one instance completely â€” a read-only, download-free check
+/// covering the game installation, the Aurora installation and artifact
+/// bytes, and cross-component version consistency.
+pub fn validate_instance(
+    app: Host,
+    request: ValidateInstalledGameRequest,
+) -> Result<InstanceValidationDto, CommandError> {
+    let managed_paths = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    let registry = InstanceRegistry::load(&managed_paths.instance_registry_file())?;
+
+    let validation =
+        crate::instances::lifecycle::validate_instance(&managed_paths, &registry, &instance)?;
+
+    Ok(InstanceValidationDto {
+        instance_id: validation.instance_id,
+        display_name: validation.display_name,
+        status: validation.status.as_str().to_owned(),
+        problems: validation
+            .problems
+            .into_iter()
+            .map(|problem| InstanceProblemDto {
+                component: problem.component.to_owned(),
+                reason: problem.reason,
+            })
+            .collect(),
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeStatusDto {
+    instance_id: String,
+    content_status: &'static str,
+    status: String,
+    component: String,
+    required_major_version: u32,
+    runtime_version: Option<String>,
+    runtime_root: String,
+    launch_executable: Option<String>,
+    checked_files: u32,
+    verified_bytes: u64,
+    reported_major_version: Option<u32>,
+    diagnostic_summary: Option<String>,
+    problems: Vec<String>,
+    reused: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeProgressEvent {
+    phase: &'static str,
+    completed_items: u32,
+    total_items: u32,
+    current_item: Option<String>,
+}
+
+fn runtime_status_dto(instance_id: &str, validation: RuntimeValidation) -> RuntimeStatusDto {
+    RuntimeStatusDto {
+        instance_id: instance_id.to_owned(),
+        content_status: "ready",
+        status: validation.status.as_str().to_owned(),
+        component: validation.component,
+        required_major_version: validation.required_major_version,
+        runtime_version: validation.runtime_version,
+        runtime_root: validation.root.to_string_lossy().into_owned(),
+        launch_executable: validation
+            .launch_executable
+            .map(|path| path.to_string_lossy().into_owned()),
+        checked_files: validation.checked_files,
+        verified_bytes: validation.verified_bytes,
+        reported_major_version: validation
+            .diagnostic
+            .as_ref()
+            .map(|diagnostic| diagnostic.reported_major_version),
+        diagnostic_summary: validation.diagnostic.map(|diagnostic| diagnostic.summary),
+        problems: validation.problems,
+        reused: None,
+    }
+}
+
+/// Resolves and deeply validates the exact managed runtime for one
+/// content-ready instance. Validation is read-only; runtime absence is
+/// reported independently and never damages the instance's content status.
+pub async fn get_instance_runtime_status(
+    app: Host,
+    request: ValidateInstalledGameRequest,
+) -> Result<RuntimeStatusDto, CommandError> {
+    crate::performance::measure(crate::performance::Event::RuntimeStatus, async {
+        let managed = managed_paths(&app)?;
+        let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+        let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+            .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+        let runtime_endpoints = crate::runtime::metadata::RuntimeMetadataEndpoints::official();
+        let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+        if let Some(java) = registry
+            .find(&instance)
+            .and_then(|record| record.configuration().java())
+        {
+            let game = crate::instances::lifecycle::resolve_instance_game_plan(
+                &managed,
+                &managed.instance_registry_file(),
+                &endpoints,
+                &instance,
+            )
+            .await?;
+            let required = game.java().major_version();
+            let result =
+                crate::runtime::external::validate_for_readiness(java.custom_path(), required)
+                    .await;
+            let facts = result.as_ref().ok().map(|java| java.facts());
+            return Ok(RuntimeStatusDto {
+                instance_id: instance.to_string(),
+                content_status: "ready",
+                status: if result.is_ok() { "ready" } else { "damaged" }.into(),
+                component: "Custom Java".into(),
+                required_major_version: required,
+                runtime_version: facts.map(|f| f.version.clone()),
+                runtime_root: std::path::Path::new(java.custom_path())
+                    .parent()
+                    .unwrap_or(std::path::Path::new(""))
+                    .to_string_lossy()
+                    .into_owned(),
+                launch_executable: result
+                    .as_ref()
+                    .ok()
+                    .map(|v| v.path().to_string_lossy().into_owned()),
+                checked_files: 1,
+                verified_bytes: 0,
+                reported_major_version: facts.map(|f| f.major_version),
+                diagnostic_summary: facts
+                    .map(|f| format!("Java {} · {} · {}", f.version, f.vendor, f.architecture)),
+                problems: result.err().map(|e| vec![e.message]).unwrap_or_default(),
+                reused: None,
+            });
+        }
+        let validation = crate::instances::lifecycle::validate_instance_runtime(
+            &managed,
+            &managed.instance_registry_file(),
+            &endpoints,
+            &runtime_endpoints,
+            &instance,
+            true,
+        )
+        .await?;
+        Ok(runtime_status_dto(instance.as_str(), validation))
+    })
+    .await
+}
+
+/// Acquires, installs, validates, and executes the exact official runtime for
+/// one content-ready instance. Shared exact runtimes are reused.
+pub async fn ensure_instance_runtime(
+    app: Host,
+    request: ValidateInstalledGameRequest,
+) -> Result<RuntimeStatusDto, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+    let runtime_endpoints = crate::runtime::metadata::RuntimeMetadataEndpoints::official();
+    let installed = crate::instances::lifecycle::ensure_instance_runtime(
+        &managed,
+        &managed.instance_registry_file(),
+        &endpoints,
+        &runtime_endpoints,
+        &instance,
+        &mut |progress| {
+            let _ = app.emit(
+                "runtime-progress",
+                RuntimeProgressEvent {
+                    phase: progress.phase.as_str(),
+                    completed_items: progress.completed_items,
+                    total_items: progress.total_items,
+                    current_item: progress.current_item,
+                },
+            );
+        },
+    )
+    .await?;
+    let state = installed.state();
+    let checked_files = state
+        .entries()
+        .iter()
+        .filter(|entry| entry.kind() == crate::runtime::state::RuntimeStateEntryKind::File)
+        .count() as u32;
+    let verified_bytes = state
+        .entries()
+        .iter()
+        .filter_map(|entry| entry.size_bytes())
+        .sum();
+    Ok(RuntimeStatusDto {
+        instance_id: instance.to_string(),
+        content_status: "ready",
+        status: "ready".to_owned(),
+        component: state.component().to_owned(),
+        required_major_version: state.required_major_version(),
+        runtime_version: Some(state.runtime_version().to_owned()),
+        runtime_root: installed.root().to_string_lossy().into_owned(),
+        launch_executable: Some(installed.launch_executable().to_string_lossy().into_owned()),
+        checked_files,
+        verified_bytes,
+        reported_major_version: Some(state.required_major_version()),
+        diagnostic_summary: Some(format!(
+            "managed Java {} executed successfully",
+            state.runtime_version()
+        )),
+        problems: Vec::new(),
+        reused: Some(installed.reused()),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Accounts (Phase 8)
+// ---------------------------------------------------------------------------
+
+/// One non-secret account summary for the UI. Status is derived honestly:
+/// `signedIn` means a stored credential exists; whether it still refreshes
+/// is answered by `refresh_account_session`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountSummaryDto {
+    account_id: String,
+    minecraft_name: String,
+    status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountsStateDto {
+    accounts: Vec<AccountSummaryDto>,
+    selected_account_id: Option<String>,
+}
+
+/// Coarse sign-in progress; never carries data.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthProgressEvent {
+    phase: &'static str,
+}
+
+/// The outcome of an on-demand session restoration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountSessionDto {
+    account_id: String,
+    minecraft_name: String,
+    status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectAccountRequest {
+    account_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountIdRequest {
+    account_id: String,
+}
+
+/// Lists the launcher's accounts with derived status and the selection.
+pub fn get_accounts(app: Host) -> Result<AccountsStateDto, CommandError> {
+    let managed = managed_paths(&app)?;
+    let store = crate::auth::OsCredentialStore;
+    let document = crate::auth::accounts::load(&managed.accounts_file())?;
+
+    let accounts = document
+        .accounts()
+        .iter()
+        .map(|record| AccountSummaryDto {
+            account_id: record.account_id().to_owned(),
+            minecraft_name: record.minecraft_name().to_owned(),
+            status: crate::auth::flow::AccountStatus::of(&store, record.account_id())
+                .as_str()
+                .to_owned(),
+        })
+        .collect();
+
+    Ok(AccountsStateDto {
+        accounts,
+        selected_account_id: document.selected_account_id().map(str::to_owned),
+    })
+}
+
+/// Starts Microsoft sign-in in the system browser and completes the whole
+/// authentication chain. The command stays in flight (bounded by the login
+/// timeout) while the user signs in; `cancel_microsoft_login` aborts it.
+///
+/// Requires Aurora's real Microsoft application registration (the committed
+/// public client ID, optionally overridden through the
+/// `AURORA_MICROSOFT_CLIENT_ID` build-environment variable); without it the
+/// command fails deliberately instead of pretending.
+pub async fn begin_microsoft_login(app: Host) -> Result<AccountSummaryDto, CommandError> {
+    let managed = managed_paths(&app)?;
+    let registration = crate::auth::flow::production_registration()
+        .ok_or_else(|| CommandError::from(crate::auth::AuthError::ConfigurationMissing))?;
+
+    let endpoints = crate::auth::AuthEndpoints::official();
+    let store = crate::auth::OsCredentialStore;
+    let context = crate::auth::flow::AuthContext {
+        endpoints: &endpoints,
+        oauth: registration,
+        credentials: &store,
+        accounts_path: &managed.accounts_file(),
+        options: crate::auth::flow::AuthFlowOptions::default(),
+        browser: &|url: &str| {
+            // The user's default system browser (the official Tauri opener
+            // in the WebView host, ShellExecute/xdg-open in the native host),
+            // exactly the public-client model — no embedded webview.
+            crate::host::open_url(url).map_err(crate::auth::flow::BrowserOpenError::new)
+        },
+    };
+
+    let record = crate::auth::flow::sign_in(&context, &mut |phase| {
+        let _ = app.emit(
+            "auth-progress",
+            AuthProgressEvent {
+                phase: phase.as_str(),
+            },
+        );
+    })
+    .await?;
+
+    Ok(AccountSummaryDto {
+        account_id: record.account_id().to_owned(),
+        minecraft_name: record.minecraft_name().to_owned(),
+        status: "signedIn".to_owned(),
+    })
+}
+
+/// Cancels the active sign-in, if one exists. Idempotent.
+pub fn cancel_microsoft_login() -> Result<(), CommandError> {
+    crate::auth::flow::cancel_active_login();
+    Ok(())
+}
+
+/// Selects an account. The selection always refers to a known account; a
+/// dangling selection is never written.
+pub fn select_account(app: Host, request: SelectAccountRequest) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let account_id = request.account_id.trim().to_owned();
+    crate::auth::accounts::AccountId::validate(&account_id)?;
+
+    let mut document = crate::auth::accounts::load(&managed.accounts_file())?;
+    if document.find(&account_id).is_none() {
+        return Err(CommandError::from(
+            crate::auth::AuthError::AccountNotFound { account_id },
+        ));
+    }
+    document
+        .set_selected_account_id(Some(&account_id))
+        .map_err(CommandError::from)?;
+    crate::auth::accounts::save(&managed.accounts_file(), &document)?;
+
+    Ok(())
+}
+
+/// Removes one account from Aurora: deletes the persisted credential,
+/// the non-secret record, and the cached session. Local removal only — the
+/// Microsoft account session itself is not revoked.
+pub async fn remove_account(app: Host, request: AccountIdRequest) -> Result<(), CommandError> {
+    let managed = managed_paths(&app)?;
+    let account_id = request.account_id.trim().to_owned();
+    crate::auth::accounts::AccountId::validate(&account_id)?;
+
+    let endpoints = crate::auth::AuthEndpoints::official();
+    let store = crate::auth::OsCredentialStore;
+    let context = crate::auth::flow::AuthContext {
+        endpoints: &endpoints,
+        oauth: crate::auth::OAuthClientConfig::new("unused-by-sign-out"),
+        credentials: &store,
+        accounts_path: &managed.accounts_file(),
+        options: crate::auth::flow::AuthFlowOptions::default(),
+        browser: &|_url: &str| Ok(()),
+    };
+
+    let _restoration = crate::auth::flow::session_restoration_guard().await;
+    crate::auth::flow::sign_out(&context, &account_id)?;
+    // The account is proven removed: retire exactly its own avatar cache
+    // object. Shared and unrelated cache material is never touched.
+    crate::auth::avatar::remove_cached(&managed, &account_id);
+
+    Ok(())
+}
+
+/// Restores or refreshes one account's session on demand and reports the
+/// non-secret outcome. The Minecraft token itself stays in Rust.
+pub async fn refresh_account_session(
+    app: Host,
+    request: AccountIdRequest,
+) -> Result<AccountSessionDto, CommandError> {
+    let managed = managed_paths(&app)?;
+    let account_id = request.account_id.trim().to_owned();
+    crate::auth::accounts::AccountId::validate(&account_id)?;
+
+    let registration = crate::auth::flow::production_registration()
+        .ok_or_else(|| CommandError::from(crate::auth::AuthError::ConfigurationMissing))?;
+
+    let endpoints = crate::auth::AuthEndpoints::official();
+    let store = crate::auth::OsCredentialStore;
+    let context = crate::auth::flow::AuthContext {
+        endpoints: &endpoints,
+        oauth: registration,
+        credentials: &store,
+        accounts_path: &managed.accounts_file(),
+        options: crate::auth::flow::AuthFlowOptions::default(),
+        browser: &|_url: &str| Ok(()),
+    };
+
+    let session = crate::auth::flow::ensure_session(&context, &account_id, &mut |phase| {
+        let _ = app.emit(
+            "auth-progress",
+            AuthProgressEvent {
+                phase: phase.as_str(),
+            },
+        );
+    })
+    .await?;
+
+    Ok(AccountSessionDto {
+        account_id: session.account_id().to_owned(),
+        minecraft_name: session.profile().name().to_owned(),
+        status: "ready".to_owned(),
+    })
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AccountAvatarRequest {
+    account_id: String,
+    refresh: bool,
+}
+
+/// Separate cosmetic command: session secrets and remote locators stay native.
+/// A failed image never participates in Play readiness or launch assembly.
+pub async fn get_account_avatar(
+    app: Host,
+    request: AccountAvatarRequest,
+) -> Result<Option<crate::auth::avatar::HeadAvatar>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let account_id = request.account_id.trim().to_owned();
+    crate::auth::accounts::AccountId::validate(&account_id)?;
+    // Cache-first: a previously verified avatar serves without touching the
+    // session or the network, including saved secondary accounts.
+    if !request.refresh
+        && let Some(avatar) = crate::auth::avatar::load_cached(&managed, &account_id)
+    {
+        return Ok(Some(avatar));
+    }
+    let fetched = fetch_account_avatar(&app, &account_id, request.refresh).await;
+    match fetched {
+        Some(avatar) => {
+            crate::auth::avatar::store_cached(&managed, &account_id, &avatar);
+            Ok(Some(avatar))
+        }
+        // A failed refresh retains the known-good cached real avatar instead
+        // of degrading to a placeholder.
+        None => Ok(crate::auth::avatar::load_cached(&managed, &account_id)),
+    }
+}
+
+async fn fetch_account_avatar(
+    app: &Host,
+    account_id: &str,
+    refresh: bool,
+) -> Option<crate::auth::avatar::HeadAvatar> {
+    refresh_account_session(
+        app.clone(),
+        AccountIdRequest {
+            account_id: account_id.to_owned(),
+        },
+    )
+    .await
+    .ok()?;
+    let Some(session) = crate::auth::session::SessionCache::usable(account_id) else {
+        return None;
+    };
+    let refreshed_profile = if refresh {
+        // Refresh cosmetic metadata with the existing token, independently of
+        // credential/session lifetime. A mismatching identity is never adopted.
+        crate::auth::metadata::fetch_profile(
+            &crate::auth::AuthEndpoints::official(),
+            session.minecraft_access_token(),
+        )
+        .await
+        .ok()
+        .flatten()
+        .filter(|profile| profile.id == session.account_id())
+    } else {
+        None
+    };
+    let skin = if refresh {
+        refreshed_profile
+            .as_ref()
+            .and_then(|profile| profile.skin.as_ref())
+    } else {
+        session.profile().skin()
+    };
+    let skin = skin?;
+    crate::auth::avatar::head(skin, refresh).await
+}
+
+/// Cached avatars for every saved account, so the account list renders real
+/// avatars after restart without any network work or session restoration.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedAccountAvatarDto {
+    pub account_id: String,
+    pub avatar: crate::auth::avatar::HeadAvatar,
+}
+
+pub fn get_cached_account_avatars(app: Host) -> Result<Vec<CachedAccountAvatarDto>, CommandError> {
+    Ok(crate::auth::avatar::list_cached(&managed_paths(&app)?)
+        .into_iter()
+        .map(|(account_id, avatar)| CachedAccountAvatarDto { account_id, avatar })
+        .collect())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportSkinPresetRequest {
+    name: String,
+    model: crate::cosmetics::SkinModel,
+    bytes: Vec<u8>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PresetIdRequest {
+    preset_id: String,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplySkinPresetRequest {
+    account_id: String,
+    preset_id: String,
+    model: crate::cosmetics::SkinModel,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SelectCapeRequest {
+    account_id: String,
+    cape_id: String,
+}
+fn cosmetic_error(error: crate::cosmetics::CosmeticsError) -> CommandError {
+    CommandError::new(error.code, error.message)
+}
+
+async fn cosmetic_session(
+    app: &Host,
+    account_id: &str,
+) -> Result<std::sync::Arc<crate::auth::session::MinecraftSession>, CommandError> {
+    refresh_account_session(
+        app.clone(),
+        AccountIdRequest {
+            account_id: account_id.to_owned(),
+        },
+    )
+    .await?;
+    crate::auth::session::SessionCache::usable(account_id).ok_or_else(|| {
+        CommandError::new(
+            "cosmetics_authentication_required",
+            "Sign in to this Minecraft account to manage cosmetics.",
+        )
+    })
+}
+
+pub async fn get_cosmetics(
+    app: Host,
+    request: AccountIdRequest,
+) -> Result<crate::cosmetics::CosmeticsState, CommandError> {
+    let session = cosmetic_session(&app, &request.account_id).await?;
+    crate::cosmetics::fetch(&request.account_id, session.minecraft_access_token())
+        .await
+        .map_err(cosmetic_error)
+}
+pub fn list_skin_presets(app: Host) -> Result<Vec<crate::cosmetics::SkinPreset>, CommandError> {
+    crate::cosmetics::list_presets(&managed_paths(&app)?).map_err(cosmetic_error)
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SkinFavoriteRequest {
+    preset_id: String,
+    favorite: bool,
+}
+pub fn set_skin_favorite(
+    app: Host,
+    request: SkinFavoriteRequest,
+) -> Result<Vec<crate::cosmetics::SkinPreset>, CommandError> {
+    crate::cosmetics::set_favorite(&managed_paths(&app)?, &request.preset_id, request.favorite)
+        .map_err(cosmetic_error)
+}
+pub fn skin_preset_preview(
+    app: Host,
+    request: PresetIdRequest,
+) -> Result<crate::auth::avatar::HeadAvatar, CommandError> {
+    crate::cosmetics::preset_preview(&managed_paths(&app)?, &request.preset_id)
+        .map_err(cosmetic_error)
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkinPresetImportDto {
+    preset: crate::cosmetics::SkinPreset,
+    duplicate: bool,
+}
+
+pub fn import_skin_preset(
+    app: Host,
+    request: ImportSkinPresetRequest,
+) -> Result<SkinPresetImportDto, CommandError> {
+    let outcome = crate::cosmetics::import_preset(
+        &managed_paths(&app)?,
+        &request.name,
+        request.model,
+        &request.bytes,
+    )
+    .map_err(cosmetic_error)?;
+    Ok(SkinPresetImportDto {
+        preset: outcome.preset,
+        duplicate: outcome.duplicate,
+    })
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateSkinPresetRequest {
+    preset_id: String,
+    changes: SkinPresetChanges,
+}
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields, default)]
+pub struct SkinPresetChanges {
+    name: Option<String>,
+    model: Option<crate::cosmetics::SkinModel>,
+}
+pub fn update_skin_preset(
+    app: Host,
+    request: UpdateSkinPresetRequest,
+) -> Result<Vec<crate::cosmetics::SkinPreset>, CommandError> {
+    crate::cosmetics::update_preset(
+        &managed_paths(&app)?,
+        &request.preset_id,
+        request.changes.name.as_deref(),
+        request.changes.model,
+    )
+    .map_err(cosmetic_error)
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetThumbnailDto {
+    rgba: Vec<u8>,
+}
+pub fn skin_preset_thumbnail(
+    app: Host,
+    request: PresetIdRequest,
+) -> Result<Option<PresetThumbnailDto>, CommandError> {
+    Ok(
+        crate::cosmetics::preset_thumbnail(&managed_paths(&app)?, &request.preset_id)
+            .map_err(cosmetic_error)?
+            .map(|rgba| PresetThumbnailDto {
+                rgba: rgba.to_vec(),
+            }),
+    )
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveCurrentSkinRequest {
+    account_id: String,
+}
+/// Saves the active account's current skin into the Skin Library through the
+/// existing validated import path. Uses the same authenticated profile the
+/// avatar pipeline trusts; nothing is invented locally.
+pub async fn save_current_skin(
+    app: Host,
+    request: SaveCurrentSkinRequest,
+) -> Result<SkinPresetImportDto, CommandError> {
+    let managed = managed_paths(&app)?;
+    let session = cosmetic_session(&app, &request.account_id).await?;
+    let profile = crate::auth::metadata::fetch_profile(
+        &crate::auth::AuthEndpoints::official(),
+        session.minecraft_access_token(),
+    )
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "cosmetics_service_unavailable",
+            "Minecraft Services could not be reached.",
+        )
+    })?
+    .ok_or_else(|| {
+        CommandError::new(
+            "cosmetics_profile_unavailable",
+            "The Minecraft profile is unavailable.",
+        )
+    })?;
+    if profile.id != session.account_id() {
+        return Err(CommandError::new(
+            "cosmetics_wrong_account",
+            "Minecraft returned a different account profile.",
+        ));
+    }
+    let skin = profile.skin.ok_or_else(|| {
+        CommandError::new(
+            "current_skin_unavailable",
+            "This account has no current skin to save.",
+        )
+    })?;
+    let model = match skin.model.as_str() {
+        "slim" => crate::cosmetics::SkinModel::Slim,
+        _ => crate::cosmetics::SkinModel::Classic,
+    };
+    let name = format!("{}'s skin", session.profile().name());
+    let bytes = crate::cosmetics::download_current_skin(skin.url())
+        .await
+        .map_err(cosmetic_error)?;
+    let outcome =
+        crate::cosmetics::import_preset(&managed, &name, model, &bytes).map_err(cosmetic_error)?;
+    Ok(SkinPresetImportDto {
+        preset: outcome.preset,
+        duplicate: outcome.duplicate,
+    })
+}
+pub fn remove_skin_preset(app: Host, request: PresetIdRequest) -> Result<(), CommandError> {
+    crate::cosmetics::remove_preset(&managed_paths(&app)?, &request.preset_id)
+        .map_err(cosmetic_error)
+}
+pub async fn apply_skin_preset(
+    app: Host,
+    request: ApplySkinPresetRequest,
+) -> Result<crate::cosmetics::CosmeticsState, CommandError> {
+    let session = cosmetic_session(&app, &request.account_id).await?;
+    let (_preset, bytes) =
+        crate::cosmetics::preset_for_upload(&managed_paths(&app)?, &request.preset_id)
+            .map_err(cosmetic_error)?;
+    crate::cosmetics::apply_skin(
+        &request.account_id,
+        session.minecraft_access_token(),
+        &bytes,
+        request.model,
+    )
+    .await
+    .map_err(cosmetic_error)
+}
+pub async fn select_cape(
+    app: Host,
+    request: SelectCapeRequest,
+) -> Result<crate::cosmetics::CosmeticsState, CommandError> {
+    let session = cosmetic_session(&app, &request.account_id).await?;
+    crate::cosmetics::select_cape(
+        &request.account_id,
+        session.minecraft_access_token(),
+        &request.cape_id,
+    )
+    .await
+    .map_err(cosmetic_error)
+}
+pub async fn disable_cape(
+    app: Host,
+    request: AccountIdRequest,
+) -> Result<crate::cosmetics::CosmeticsState, CommandError> {
+    let session = cosmetic_session(&app, &request.account_id).await?;
+    crate::cosmetics::disable_cape(&request.account_id, session.minecraft_access_token())
+        .await
+        .map_err(cosmetic_error)
+}
+
+// ---------------------------------------------------------------------------
+// Launch (Phase 9)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchReadinessRequest {
+    instance_id: String,
+    account_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayRequest {
+    instance_id: String,
+    account_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct QuickPlayRequest {
+    target_id: String,
+    mode: String,
+    account_id: String,
+}
+
+fn validate_quick_world(
+    managed: &ManagedPaths,
+    instance: &crate::instances::InstanceId,
+    world: &crate::gameplay_history::WorldSaveId,
+) -> Result<(), CommandError> {
+    let world =
+        crate::gameplay_history::WorldSaveId::parse(world.as_str().to_owned()).map_err(|_| {
+            CommandError::new(
+                "quick_world_invalid",
+                "The saved world identity is invalid.",
+            )
+        })?;
+    let root = managed.instance_paths(instance).root().join("saves");
+    let target = root.join(world.as_str());
+    let metadata = std::fs::symlink_metadata(&target).map_err(|_| {
+        CommandError::new("quick_world_missing", "This world is no longer available.")
+    })?;
+    let level = std::fs::symlink_metadata(target.join("level.dat"));
+    if !metadata.file_type().is_dir() || !level.is_ok_and(|item| item.file_type().is_file()) {
+        return Err(CommandError::new(
+            "quick_world_missing",
+            "This world is no longer available.",
+        ));
+    }
+    let root_real = std::fs::canonicalize(&root).map_err(|_| {
+        CommandError::new("quick_world_missing", "This world is no longer available.")
+    })?;
+    let instance_real =
+        std::fs::canonicalize(managed.instance_paths(instance).root()).map_err(|_| {
+            CommandError::new(
+                "quick_instance_missing",
+                "The instance for this recent target no longer exists.",
+            )
+        })?;
+    if !std::fs::symlink_metadata(&root).is_ok_and(|item| item.file_type().is_dir())
+        || !root_real.starts_with(instance_real)
+    {
+        return Err(CommandError::new(
+            "quick_world_invalid",
+            "The saved world is outside this instance.",
+        ));
+    }
+    let target_real = std::fs::canonicalize(&target).map_err(|_| {
+        CommandError::new(
+            "quick_world_invalid",
+            "The saved world is outside this instance.",
+        )
+    })?;
+    if !target_real.starts_with(root_real) {
+        return Err(CommandError::new(
+            "quick_world_invalid",
+            "The saved world is outside this instance.",
+        ));
+    }
+    Ok(())
+}
+
+pub async fn quick_play_history(
+    app: Host,
+    request: QuickPlayRequest,
+) -> Result<LaunchProcessDto, CommandError> {
+    use crate::gameplay_history::{Mode, QuickLaunchTarget, ServerTarget};
+    let mode = match request.mode.as_str() {
+        "world" => Mode::Singleplayer,
+        "server" => Mode::Multiplayer,
+        _ => {
+            return Err(CommandError::new(
+                "quick_target_invalid",
+                "Choose a recent world or server.",
+            ));
+        }
+    };
+    let managed = managed_paths(&app)?;
+    let store =
+        crate::gameplay_history::Store::open(managed.gameplay_history_file()).map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Local gameplay history is unavailable or damaged.",
+            )
+        })?;
+    let target = store
+        .quick_target(mode, &request.target_id)
+        .map_err(|_| CommandError::new("quick_target_invalid", "The recent target is invalid."))?
+        .ok_or_else(|| {
+            CommandError::new(
+                "quick_target_stale",
+                "This recent target is no longer in local history.",
+            )
+        })?;
+    let instance = match &target {
+        QuickLaunchTarget::Singleplayer { instance, world } => {
+            validate_quick_world(&managed, instance, world)?;
+            instance
+        }
+        QuickLaunchTarget::Multiplayer { instance, server } => {
+            ServerTarget::try_from(server.as_str().to_owned()).map_err(|_| {
+                CommandError::new(
+                    "quick_server_invalid",
+                    "The saved server target is invalid.",
+                )
+            })?;
+            instance
+        }
+    };
+    if InstanceRegistry::load(&managed.instance_registry_file())?
+        .find(instance)
+        .is_none()
+    {
+        return Err(CommandError::new(
+            "quick_instance_missing",
+            "The instance for this recent target no longer exists.",
+        ));
+    }
+    play_instance_with_target(
+        app,
+        PlayRequest {
+            instance_id: instance.as_str().to_owned(),
+            account_id: request.account_id,
+        },
+        Some(target),
+    )
+    .await
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayBlockerDto {
+    code: String,
+    message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayReadinessDto {
+    ready: bool,
+    can_prepare: bool,
+    instance_id: String,
+    account_id: Option<String>,
+    account_name: Option<String>,
+    instance_status: String,
+    runtime_status: String,
+    account_status: String,
+    process_status: String,
+    blockers: Vec<PlayBlockerDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchProcessDto {
+    diagnostic: Option<crate::launch::diagnostics::LaunchFailureDiagnostic>,
+    instance_id: String,
+    status: String,
+    process_id: Option<u32>,
+    started_at_unix_seconds: Option<u64>,
+    exit_code: Option<i32>,
+    message: Option<String>,
+}
+
+impl From<crate::launch::process::ProcessSnapshot> for LaunchProcessDto {
+    fn from(snapshot: crate::launch::process::ProcessSnapshot) -> Self {
+        Self {
+            instance_id: snapshot.instance_id,
+            diagnostic: snapshot.diagnostic,
+            status: snapshot.status.as_str().to_owned(),
+            process_id: snapshot.process_id,
+            started_at_unix_seconds: snapshot.started_at_unix_seconds,
+            exit_code: snapshot.exit_code,
+            message: snapshot.message,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchProgressEvent {
+    phase: &'static str,
+}
+
+impl From<crate::launch::resolve::LaunchResolveError> for CommandError {
+    fn from(error: crate::launch::resolve::LaunchResolveError) -> Self {
+        Self::new(error.code(), error.to_string())
+    }
+}
+
+impl From<crate::launch::process::LaunchProcessError> for CommandError {
+    fn from(error: crate::launch::process::LaunchProcessError) -> Self {
+        Self::new(error.code(), error.to_string())
+    }
+}
+
+impl From<crate::launch::boundary::BoundaryError> for CommandError {
+    fn from(error: crate::launch::boundary::BoundaryError) -> Self {
+        Self::new(error.code(), error.to_string())
+    }
+}
+
+fn emit_launch_phase(app: &Host, phase: &'static str) {
+    let _ = app.emit("launch-progress", LaunchProgressEvent { phase });
+}
+
+fn launch_plan_error(error: InstanceError) -> CommandError {
+    match error {
+        InstanceError::NotFound { .. } | InstanceError::NotReady { .. } => {
+            CommandError::new("launch_instance_not_ready", error.to_string())
+        }
+        InstanceError::GameInstallState(_)
+        | InstanceError::ValidationFailed { .. }
+        | InstanceError::GameInstall(_)
+        | InstanceError::Aurora(_) => {
+            CommandError::new("launch_instance_damaged", error.to_string())
+        }
+        InstanceError::RuntimeMetadata(_) | InstanceError::RuntimeInstall(_) => {
+            CommandError::new("launch_runtime_not_ready", error.to_string())
+        }
+        InstanceError::ReleaseInvalid(_)
+        | InstanceError::AuroraReleaseNotFound { .. }
+        | InstanceError::GameResolution(_)
+        | InstanceError::Platform(_) => CommandError::new(
+            "launch_metadata_invalid",
+            "The exact pinned launch metadata could not be resolved.",
+        ),
+        other => CommandError::from(other),
+    }
+}
+
+fn launch_account_status(
+    managed: &ManagedPaths,
+    account_id: Option<&str>,
+) -> Result<(crate::launch::state::LaunchAccountStatus, Option<String>), CommandError> {
+    use crate::auth::credentials::CredentialStore as _;
+    use crate::launch::state::LaunchAccountStatus;
+
+    let Some(account_id) = account_id.filter(|value| !value.trim().is_empty()) else {
+        return Ok((LaunchAccountStatus::Missing, None));
+    };
+    crate::auth::accounts::AccountId::validate(account_id)?;
+    let accounts = crate::auth::accounts::load(&managed.accounts_file())?;
+    let Some(record) = accounts.find(account_id) else {
+        return Ok((LaunchAccountStatus::Missing, None));
+    };
+    let name = Some(record.minecraft_name().to_owned());
+    if crate::auth::session::SessionCache::usable(account_id).is_some() {
+        return Ok((LaunchAccountStatus::Ready, name));
+    }
+    let store = crate::auth::OsCredentialStore;
+    if store
+        .load(account_id)
+        .map_err(|error| CommandError::from(crate::auth::AuthError::CredentialStore(error)))?
+        .is_none()
+    {
+        return Ok((LaunchAccountStatus::ReauthenticationRequired, name));
+    }
+    if crate::auth::flow::production_registration().is_none() {
+        return Ok((LaunchAccountStatus::ConfigurationMissing, name));
+    }
+    Ok((LaunchAccountStatus::Ready, name))
+}
+
+async fn calculate_play_readiness(
+    managed: &ManagedPaths,
+    instance_id: &crate::instances::InstanceId,
+    account_id: Option<&str>,
+) -> Result<PlayReadinessDto, CommandError> {
+    use crate::instances::InstanceState;
+    use crate::launch::state::{LaunchInstanceStatus, LaunchRuntimeStatus, PlayReadiness};
+    use crate::runtime::install::RuntimeValidationStatus;
+
+    let process = crate::launch::process::snapshot(instance_id.as_str());
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+    let (instance, runtime_plan) = match registry.find(instance_id) {
+        None => (LaunchInstanceStatus::Missing, None),
+        Some(record) if record.state() == InstanceState::Installing => {
+            (LaunchInstanceStatus::Installing, None)
+        }
+        Some(record) if !record.configuration().matches_installed(record.installed()) => {
+            // The desired configuration no longer matches the installed
+            // content. Stale is distinct from damaged: nothing is wrong with
+            // the installed bytes, they are simply no longer what the user
+            // wants. Installing the new configuration restores launchability.
+            (LaunchInstanceStatus::Stale, None)
+        }
+        Some(_) => {
+            // This one lifecycle call performs deep content validation and,
+            // only after it passes, one exact metadata resolution pass.
+            // Readiness does not hash the instance twice.
+            let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+                .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+            let runtime_endpoints = crate::runtime::metadata::RuntimeMetadataEndpoints::official();
+            match crate::instances::lifecycle::resolve_instance_launch_plans(
+                managed,
+                &managed.instance_registry_file(),
+                &endpoints,
+                &runtime_endpoints,
+                instance_id,
+            )
+            .await
+            {
+                Ok((_, runtime_plan)) => (LaunchInstanceStatus::Ready, Some(runtime_plan)),
+                Err(InstanceError::GameInstall(InstallError::AlreadyInProgress { .. })) => {
+                    let _contention =
+                        crate::performance::scope(crate::performance::Event::ReadinessContention);
+                    (LaunchInstanceStatus::Damaged, None)
+                }
+                Err(
+                    InstanceError::NotReady { .. }
+                    | InstanceError::GameInstallState(_)
+                    | InstanceError::ValidationFailed { .. }
+                    | InstanceError::GameInstall(_)
+                    | InstanceError::Aurora(_),
+                ) => (LaunchInstanceStatus::Damaged, None),
+                Err(_) => (LaunchInstanceStatus::Ready, None),
+            }
+        }
+    };
+
+    let mut mod_issues = Vec::new();
+    if let (Some(plan), Some(record)) = (&runtime_plan, registry.find(instance_id)) {
+        let loader_family = record.installed().platform.kind();
+        if matches!(loader_family, "fabric" | "neoForge")
+            && managed.instance_paths(instance_id).mods().is_dir()
+        {
+            let mut inventory = crate::instance_mods::scan(managed, instance_id)?;
+            crate::instance_mods::add_loader_builtins(managed, instance_id, &mut inventory);
+            mod_issues = crate::mod_compatibility::validate(
+                &inventory,
+                &record.installed().minecraft_version,
+                record.installed().platform.version().unwrap_or(""),
+                Some(plan.required_major_version()),
+                loader_family,
+            );
+        }
+    }
+    // A custom Java selection replaces the managed runtime for launch only;
+    // it is never silently swapped back while selected.
+    let custom_java = registry
+        .find(instance_id)
+        .and_then(|record| record.configuration().java().cloned());
+    let mut custom_problem = None;
+    let runtime = if let Some(plan) = runtime_plan {
+        if let Some(java) = &custom_java {
+            match crate::runtime::external::validate_for_readiness(
+                java.custom_path(),
+                plan.required_major_version(),
+            )
+            .await
+            {
+                Ok(_) => LaunchRuntimeStatus::Ready,
+                Err(error) => {
+                    custom_problem = Some(error.message);
+                    LaunchRuntimeStatus::CustomInvalid
+                }
+            }
+        } else {
+            match crate::runtime::install::validate_runtime_eligibility(managed, &plan)
+                .await?
+                .status
+            {
+                RuntimeValidationStatus::Ready => LaunchRuntimeStatus::Ready,
+                RuntimeValidationStatus::Missing => LaunchRuntimeStatus::Missing,
+                RuntimeValidationStatus::Damaged => LaunchRuntimeStatus::Damaged,
+            }
+        }
+    } else {
+        LaunchRuntimeStatus::Unresolved
+    };
+
+    let (account, account_name) = launch_account_status(managed, account_id)?;
+    let mut readiness = PlayReadiness::evaluate(instance, runtime, account, process.status);
+    if let Some(problem) = custom_problem {
+        for blocker in readiness
+            .blockers
+            .iter_mut()
+            .filter(|b| b.code == "launch_custom_java_invalid")
+        {
+            blocker.message = format!("{} {problem}", blocker.message);
+        }
+    }
+    for problem in mod_issues {
+        readiness
+            .blockers
+            .push(crate::launch::state::LaunchBlocker {
+                code: "launch_mod_incompatible",
+                message: problem.message,
+            });
+    }
+    Ok(PlayReadinessDto {
+        ready: readiness.ready(),
+        can_prepare: readiness.can_prepare(),
+        instance_id: instance_id.to_string(),
+        account_id: account_id.map(str::to_owned),
+        account_name,
+        instance_status: readiness.instance.as_str().to_owned(),
+        runtime_status: readiness.runtime.as_str().to_owned(),
+        account_status: readiness.account.as_str().to_owned(),
+        process_status: readiness.process.as_str().to_owned(),
+        blockers: readiness
+            .blockers
+            .into_iter()
+            .map(|blocker| PlayBlockerDto {
+                code: blocker.code.to_owned(),
+                message: blocker.message,
+            })
+            .collect(),
+    })
+}
+
+/// Returns the complete Rust-owned, non-secret Play decision for the
+/// selected instance/account pair.
+pub async fn get_play_readiness(
+    app: Host,
+    request: LaunchReadinessRequest,
+) -> Result<PlayReadinessDto, CommandError> {
+    crate::performance::measure(crate::performance::Event::Readiness, async {
+        let managed = managed_paths(&app)?;
+        let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+        calculate_play_readiness(&managed, &instance, request.account_id.as_deref()).await
+    })
+    .await
+}
+
+/// Returns process-local state only. It never reconstructs process truth by
+/// name and never claims a process survived a launcher restart.
+pub fn get_launch_state(
+    request: ValidateInstalledGameRequest,
+) -> Result<LaunchProcessDto, CommandError> {
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    Ok(crate::launch::process::snapshot(instance.as_str()).into())
+}
+
+/// Checks all preconditions, obtains a Rust-only session, assembles the exact
+/// argument vector, and starts supervised Minecraft without a shell.
+pub async fn play_instance(
+    app: Host,
+    request: PlayRequest,
+) -> Result<LaunchProcessDto, CommandError> {
+    play_instance_with_target(app, request, None).await
+}
+
+async fn play_instance_with_target(
+    app: Host,
+    request: PlayRequest,
+    quick_target: Option<crate::gameplay_history::QuickLaunchTarget>,
+) -> Result<LaunchProcessDto, CommandError> {
+    crate::performance::measure(crate::performance::Event::PlayPreparation, async {
+        use crate::runtime::install::RuntimeValidationStatus;
+        use std::sync::Arc;
+
+        let managed = managed_paths(&app)?;
+        let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+        if let Some(target) = &quick_target {
+            let owner = match target {
+                crate::gameplay_history::QuickLaunchTarget::Singleplayer { instance, .. }
+                | crate::gameplay_history::QuickLaunchTarget::Multiplayer { instance, .. } => {
+                    instance
+                }
+            };
+            if owner != &instance {
+                return Err(CommandError::new(
+                    "quick_instance_mismatch",
+                    "The recent target belongs to a different instance.",
+                ));
+            }
+        }
+        let account_id = request.account_id.trim().to_owned();
+        crate::auth::accounts::AccountId::validate(&account_id)?;
+
+        let _preparation = crate::launch::process::PreparationGuard::acquire(instance.as_str())?;
+        let prepared = crate::launch::boundary::LaunchSnapshot::capture(&managed, &instance)?;
+        emit_launch_phase(&app, "checkingPreconditions");
+        if crate::launch::process::snapshot(instance.as_str())
+            .status
+            .blocks_launch()
+        {
+            return Err(CommandError::new(
+                "launch_already_running",
+                "This instance is already starting or running.",
+            ));
+        }
+
+        emit_launch_phase(&app, "resolvingLaunch");
+        let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+            .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+        let runtime_endpoints = crate::runtime::metadata::RuntimeMetadataEndpoints::official();
+        let (game_plan, runtime_plan) = crate::instances::lifecycle::resolve_instance_launch_plans(
+            &managed,
+            &managed.instance_registry_file(),
+            &endpoints,
+            &runtime_endpoints,
+            &instance,
+        )
+        .await
+        .map_err(launch_plan_error)?;
+
+        // The desired configuration shapes the process: memory, additional JVM
+        // arguments, and the windowed resolution. Stale configuration never
+        // reaches this point — resolve_instance_launch_plans performs the deep
+        // validation that reports staleness as NotReady.
+        let record = prepared.record();
+        if quick_target.is_some() && record.installed().minecraft_version != "1.21.11" {
+            return Err(CommandError::new(
+                "quick_version_unsupported",
+                "Quick Launch is currently supported for Minecraft 1.21.11 only.",
+            ));
+        }
+        let launch_loader_family = record.installed().platform.kind();
+        if matches!(launch_loader_family, "fabric" | "neoForge")
+            && managed.instance_paths(&instance).mods().is_dir()
+        {
+            let mut inventory = crate::instance_mods::scan(&managed, &instance)?;
+            crate::instance_mods::add_loader_builtins(&managed, &instance, &mut inventory);
+            if let Some(problem) = crate::mod_compatibility::validate(
+                &inventory,
+                &record.installed().minecraft_version,
+                record.installed().platform.version().unwrap_or(""),
+                Some(game_plan.java().major_version()),
+                launch_loader_family,
+            )
+            .first()
+            {
+                return Err(CommandError::new(
+                    "launch_mod_incompatible",
+                    problem.message.clone(),
+                ));
+            }
+        }
+        let configuration = record.configuration();
+        configuration
+            .validate()
+            .map_err(|error| CommandError::new("launch_metadata_invalid", error.to_string()))?;
+        let additional_jvm_arguments =
+            configuration.validated_jvm_arguments().map_err(|error| {
+                CommandError::new("launch_jvm_arguments_invalid", error.to_string())
+            })?;
+        let launch_options = crate::launch::resolve::LaunchOptions::new(
+            configuration.memory_mib(),
+            additional_jvm_arguments,
+            configuration
+                .window()
+                .map(|window| (window.width(), window.height())),
+        );
+        let features = launch_options.feature_profile();
+
+        // Custom Java is executed and validated afresh for every launch;
+        // otherwise the exact managed runtime must validate as before.
+        let custom_java = match configuration.java() {
+            Some(java) => Some(
+                crate::runtime::external::validate(
+                    java.custom_path(),
+                    runtime_plan.required_major_version(),
+                )
+                .await
+                .map_err(|error| {
+                    CommandError::new(
+                        "launch_custom_java_invalid",
+                        format!(
+                            "The custom Java for this instance is not usable: {}",
+                            error.message
+                        ),
+                    )
+                })?,
+            ),
+            None => None,
+        };
+        let managed_java = if custom_java.is_some() {
+            None
+        } else {
+            let runtime =
+                crate::runtime::install::validate_runtime_eligibility(&managed, &runtime_plan)
+                    .await?;
+            if runtime.status == RuntimeValidationStatus::Missing {
+                // The Play intent authorizes acquisition of this exact resolved
+                // managed requirement, never custom-Java fallback or repair of
+                // a damaged/foreign runtime. Account checks still precede it.
+                let (account, _) = launch_account_status(&managed, Some(&account_id))?;
+                if account != crate::launch::state::LaunchAccountStatus::Ready {
+                    return Err(CommandError::new(
+                        "launch_authentication_required",
+                        "Sign in before preparing Java for Play.",
+                    ));
+                }
+                emit_launch_phase(&app, "preparingJava");
+                let installed = crate::runtime::install::ensure_missing_runtime(
+                    &managed,
+                    &runtime_plan,
+                    &crate::downloads::DownloadOptions::default(),
+                    true,
+                    &mut |progress| {
+                        let _ = app.emit(
+                            "runtime-progress",
+                            RuntimeProgressEvent {
+                                phase: progress.phase.as_str(),
+                                completed_items: progress.completed_items,
+                                total_items: progress.total_items,
+                                current_item: progress.current_item,
+                            },
+                        );
+                    },
+                )
+                .await?;
+                Some(installed.launch_executable().to_path_buf())
+            } else if runtime.status != RuntimeValidationStatus::Ready {
+                return Err(CommandError::new(
+                    "launch_runtime_not_ready",
+                    format!(
+                        "The exact managed Java runtime is {}.",
+                        runtime.status.as_str()
+                    ),
+                ));
+            } else {
+                Some(runtime.launch_executable.ok_or_else(|| {
+                    CommandError::new(
+                        "launch_runtime_not_ready",
+                        "The validated runtime has no launch executable.",
+                    )
+                })?)
+            }
+        };
+
+        emit_launch_phase(&app, "restoringSession");
+        let session = crate::performance::measure(crate::performance::Event::Session, async {
+            Ok::<_, CommandError>(
+                if let Some(session) = crate::auth::session::SessionCache::usable(&account_id) {
+                    session
+                } else {
+                    let registration =
+                        crate::auth::flow::production_registration().ok_or_else(|| {
+                            CommandError::new(
+                                "launch_authentication_required",
+                                "Aurora's Microsoft application registration is not configured.",
+                            )
+                        })?;
+                    let auth_endpoints = crate::auth::AuthEndpoints::official();
+                    let store = crate::auth::OsCredentialStore;
+                    let context = crate::auth::flow::AuthContext {
+                        endpoints: &auth_endpoints,
+                        oauth: registration,
+                        credentials: &store,
+                        accounts_path: &managed.accounts_file(),
+                        options: crate::auth::flow::AuthFlowOptions::default(),
+                        browser: &|_url: &str| Ok(()),
+                    };
+                    crate::auth::flow::ensure_session(&context, &account_id, &mut |phase| {
+                        let _ = app.emit(
+                            "auth-progress",
+                            AuthProgressEvent {
+                                phase: phase.as_str(),
+                            },
+                        );
+                    })
+                    .await
+                    .map_err(|error| match error {
+                        crate::auth::AuthError::ConfigurationMissing
+                        | crate::auth::AuthError::ReauthenticationRequired { .. }
+                        | crate::auth::AuthError::AccountNotFound { .. } => {
+                            CommandError::new("launch_authentication_required", error.to_string())
+                        }
+                        other => CommandError::new("launch_session_unavailable", other.to_string()),
+                    })?
+                },
+            )
+        })
+        .await?;
+
+        emit_launch_phase(&app, "assemblingArguments");
+        let launch_plan = crate::launch::resolve::LaunchPlan::from_game_plan(
+            &game_plan,
+            crate::minecraft::rules::PlatformProfile::current()?,
+        );
+        prepared.with_validated(&managed, |installed| {
+            // Retain Windows write/delete exclusion through the normal spawn.
+            let _custom_java_guard = custom_java
+                .as_ref()
+                .map(|java| java.lock_for_launch())
+                .transpose()
+                .map_err(|error| CommandError::new("launch_custom_java_invalid", error.message))?;
+            let validated_loader_family = record.installed().platform.kind();
+            if matches!(validated_loader_family, "fabric" | "neoForge")
+                && managed.instance_paths(&instance).mods().is_dir()
+            {
+                let mut inventory = crate::instance_mods::scan(&managed, &instance)?;
+                crate::instance_mods::add_loader_builtins(&managed, &instance, &mut inventory);
+                if let Some(problem) = crate::mod_compatibility::validate(
+                    &inventory,
+                    &record.installed().minecraft_version,
+                    record.installed().platform.version().unwrap_or(""),
+                    Some(game_plan.java().major_version()),
+                    validated_loader_family,
+                )
+                .first()
+                {
+                    return Err(CommandError::new(
+                        "launch_mod_incompatible",
+                        problem.message.clone(),
+                    ));
+                }
+            }
+            let java = match (&custom_java, &managed_java) {
+                (Some(external), _) => crate::launch::resolve::LaunchJava::External(external),
+                (None, Some(path)) => crate::launch::resolve::LaunchJava::Managed(path),
+                (None, None) => {
+                    return Err(CommandError::new(
+                        "launch_runtime_not_ready",
+                        "No validated Java is available for this launch.",
+                    ));
+                }
+            };
+            let spec = crate::launch::resolve::resolve_launch_spec_with_java(
+                &managed,
+                &instance,
+                &launch_plan,
+                installed,
+                java,
+                &session,
+                &features,
+                &launch_options,
+            )?;
+            let spec = if let Some(target) = &quick_target {
+                if let crate::gameplay_history::QuickLaunchTarget::Singleplayer { world, .. } =
+                    target
+                {
+                    validate_quick_world(&managed, &instance, world)?;
+                }
+                spec.with_quick_target(target)
+            } else {
+                spec
+            };
+
+            emit_launch_phase(&app, "startingProcess");
+            let listener_app = app.clone();
+            let presence_name = record.display_name().to_owned();
+            let presence_version = record.installed().minecraft_version.clone();
+            let presence_platform = match &record.installed().platform {
+                crate::instances::platform::PlatformPin::Vanilla {} => "Vanilla",
+                crate::instances::platform::PlatformPin::NeoForge { .. } => "NeoForge",
+                _ => "Fabric",
+            }
+            .to_owned();
+            let presence_aurora = crate::instance_mods::bootstrap_status(&managed, &instance)
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some("active");
+            let bridge_digest = crate::aurora::load_installed_state(&managed, &instance)
+                .ok()
+                .flatten()
+                .map(|state| state.artifact().sha256().to_owned());
+            let bridge = crate::launch::activity_bridge::supported(
+                presence_aurora,
+                &presence_version,
+                bridge_digest.as_deref(),
+            )
+            .then(|| crate::launch::activity_bridge::Session::prepare_for_protocol(2).ok())
+            .flatten();
+            let gameplay = bridge.as_ref().map(|session| session.handle());
+            let recorder = Arc::new(std::sync::Mutex::new(
+                None::<Arc<crate::gameplay_history::Recorder>>,
+            ));
+            if let Some(handle) = &gameplay {
+                let recorder = recorder.clone();
+                handle.set_observer(Arc::new(move |snapshot| {
+                    let active = recorder.lock().ok().and_then(|guard| guard.clone());
+                    if let Some(active) = active {
+                        use crate::gameplay_history::Mode;
+                        let (mode, world, server, display) = match snapshot {
+                            Some(snapshot) => match snapshot.state {
+                                crate::launch::activity_bridge::GameplayState::MainMenu => {
+                                    (Mode::MainMenu, None, None, None)
+                                }
+                                crate::launch::activity_bridge::GameplayState::Singleplayer => (
+                                    Mode::Singleplayer,
+                                    snapshot.world_save_id,
+                                    None,
+                                    snapshot.world,
+                                ),
+                                crate::launch::activity_bridge::GameplayState::Multiplayer => (
+                                    Mode::Multiplayer,
+                                    None,
+                                    snapshot.server_target,
+                                    snapshot.server_name,
+                                ),
+                            },
+                            None => (Mode::Unknown, None, None, None),
+                        };
+                        let _ = active.observe(mode, world, server, display);
+                    }
+                }));
+            }
+            let history_path = managed.gameplay_history_file();
+            let history_instance = instance.clone();
+            let snapshot = crate::launch::process::spawn_supervised_with_bridge(
+                spec,
+                managed.instance_paths(&instance).logs(),
+                Arc::new(move |snapshot| {
+                    match snapshot.status {
+                        crate::launch::state::LaunchProcessStatus::Running => {
+                            if let Ok(store) =
+                                crate::gameplay_history::Store::open(history_path.clone())
+                            {
+                                if let Ok(active) = store.start(history_instance.clone()) {
+                                    if let Ok(mut guard) = recorder.lock() {
+                                        *guard = Some(Arc::new(active));
+                                    }
+                                }
+                            }
+                        }
+                        crate::launch::state::LaunchProcessStatus::Exited
+                        | crate::launch::state::LaunchProcessStatus::Failed => {
+                            if let Some(active) =
+                                recorder.lock().ok().and_then(|mut guard| guard.take())
+                            {
+                                let outcome = if snapshot.status
+                                    == crate::launch::state::LaunchProcessStatus::Exited
+                                {
+                                    crate::gameplay_history::Outcome::Normal
+                                } else {
+                                    crate::gameplay_history::Outcome::Abnormal
+                                };
+                                let _ = active.finish(outcome);
+                            }
+                        }
+                        _ => {}
+                    }
+                    crate::discord::process_changed(crate::discord::GameActivity {
+                        instance_id: snapshot.instance_id.clone(),
+                        instance_name: presence_name.clone(),
+                        minecraft_version: presence_version.clone(),
+                        platform: presence_platform.clone(),
+                        aurora_active: presence_aurora,
+                        status: snapshot.status,
+                        started_at: snapshot.started_at_unix_seconds,
+                        gameplay: gameplay.clone(),
+                    });
+                    let _ = listener_app.emit("launch-state", LaunchProcessDto::from(snapshot));
+                }),
+                Some(game_plan.java().major_version()),
+                bridge,
+            )?;
+            Ok(snapshot.into())
+        })
+    })
+    .await
+}
+
+// ---------------------------------------------------------------------------
+// Phase L: production updates
+// ---------------------------------------------------------------------------
+
+use crate::updates::CheckDomain;
+use crate::updates::launcher as launcher_updates;
+
+/// The combined update overview shown by Settings and Home.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateOverviewDto {
+    launcher: launcher_updates::LauncherUpdateStatus,
+    client: crate::updates::UpdateAvailability,
+    client_instance_id: Option<String>,
+    client_instance_name: Option<String>,
+    client_installed_version: Option<String>,
+    startup_check_done: bool,
+}
+
+fn update_overview(app: &Host) -> Result<UpdateOverviewDto, CommandError> {
+    let managed = managed_paths(app)?;
+    let config = crate::config::load(&managed.config_file())?.unwrap_or_default();
+    let selected = config.selected_instance_id().map(|id| id.to_string());
+    let registry = InstanceRegistry::load(&managed.instance_registry_file()).ok();
+    let state = crate::updates::center()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let client = match (&selected, &state.client_instance_id) {
+        (Some(selected), Some(recorded)) if selected == recorded => state
+            .client
+            .clone()
+            .unwrap_or(crate::updates::UpdateAvailability::NotChecked),
+        (Some(_), _) => crate::updates::UpdateAvailability::NotChecked,
+        (None, _) => crate::updates::UpdateAvailability::NotApplicable {
+            reason: "no instance is selected".to_owned(),
+        },
+    };
+    let client_instance_name = selected.as_ref().and_then(|id| {
+        registry.as_ref().and_then(|registry| {
+            crate::instances::InstanceId::new(id.clone())
+                .ok()
+                .and_then(|id| registry.find(&id))
+                .map(|record| record.display_name().to_owned())
+        })
+    });
+    Ok(UpdateOverviewDto {
+        launcher: launcher_updates::LauncherUpdateStatus {
+            installed_version: app.version().to_owned(),
+            availability: state
+                .launcher
+                .clone()
+                .unwrap_or(crate::updates::UpdateAvailability::NotChecked),
+            phase: state.launcher_phase,
+        },
+        client,
+        client_instance_id: selected,
+        client_instance_name,
+        client_installed_version: config.selected_instance_id().and_then(|id| {
+            registry
+                .as_ref()
+                .and_then(|registry| registry.find(id))
+                .and_then(|record| record.installed().aurora.as_ref())
+                .map(|pin| pin.version.clone())
+        }),
+        startup_check_done: state.startup_check_done(),
+    })
+}
+
+/// One bounded update check across both domains. Startup checks run at most
+/// once per process; manual checks re-run on demand. Checking never
+/// installs anything and never blocks the launcher on update services.
+async fn run_update_check(app: &Host, startup: bool) -> Result<UpdateOverviewDto, CommandError> {
+    static CHECK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+    let _check = CHECK
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .try_lock()
+        .map_err(|_| {
+            CommandError::new(
+                "update_check_in_progress",
+                "An update check is already in progress.",
+            )
+        })?;
+    {
+        let mut state = crate::updates::center()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if startup {
+            if state.startup_check_done() {
+                drop(state);
+                return update_overview(app);
+            }
+            state.mark_startup_check_done();
+        }
+    }
+    crate::performance::measure(
+        crate::performance::Event::LauncherUpdateDiscovery,
+        launcher_updates::run_check(app),
+    )
+    .await;
+
+    let managed = managed_paths(app)?;
+    let config = crate::config::load(&managed.config_file())?.unwrap_or_default();
+    if let Some(instance) = config.selected_instance_id() {
+        let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+            .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+        if crate::updates::begin_check(CheckDomain::Client) == crate::updates::CheckStart::Started {
+            let availability =
+                crate::updates::client::check_client_update(&managed, &endpoints, instance).await;
+            crate::updates::finish_check(CheckDomain::Client, availability);
+            let mut state = crate::updates::center()
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state.client_instance_id = Some(instance.to_string());
+        }
+    }
+    let _performance = crate::performance::scope(crate::performance::Event::UpdatePublication);
+    let overview = update_overview(app)?;
+    let _ = app.emit("update-status", &overview);
+    Ok(overview)
+}
+
+/// The single post-startup update check. Bounded, once per process,
+/// non-fatal: the launcher stays fully usable when update services are
+/// unreachable.
+pub async fn startup_update_check(app: Host) -> Result<UpdateOverviewDto, CommandError> {
+    crate::performance::measure(
+        crate::performance::Event::StartupUpdateCheck,
+        run_update_check(&app, true),
+    )
+    .await
+}
+
+/// The explicit user-triggered check across both domains.
+pub async fn check_for_updates(app: Host) -> Result<UpdateOverviewDto, CommandError> {
+    crate::performance::measure(
+        crate::performance::Event::ManualUpdateCheck,
+        run_update_check(&app, false),
+    )
+    .await
+}
+
+/// The current overview without performing any network work.
+pub fn get_update_overview(app: Host) -> Result<UpdateOverviewDto, CommandError> {
+    update_overview(&app)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreviewClientUpdateRequest {
+    instance_id: String,
+}
+
+/// The read-only, fingerprinted Aurora Client update preview. Fresh
+/// published metadata is fetched; nothing on the instance changes.
+pub async fn preview_client_update(
+    app: Host,
+    request: PreviewClientUpdateRequest,
+) -> Result<crate::updates::client::ClientUpdatePreview, CommandError> {
+    crate::performance::measure(crate::performance::Event::ClientPreviewCommand, async {
+        let managed = managed_paths(&app)?;
+        let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+        let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+            .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+        let remote = crate::updates::client::fetch_update_manifest(&managed, &endpoints, &instance)
+            .await
+            .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        crate::updates::client::preview_update(&managed, &endpoints, &instance, &remote)
+            .map_err(|error| CommandError::new(error.code(), error.message()))
+    })
+    .await
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplyClientUpdateRequest {
+    instance_id: String,
+    fingerprint: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClientUpdateProgressEvent {
+    phase: crate::updates::ClientPhase,
+}
+
+/// Executes one approved Aurora Client update transaction. The published
+/// manifest is re-fetched and the fingerprint re-derived: a changed world
+/// refuses the stale plan before any mutation. Progress is emitted as real
+/// transaction phases.
+pub async fn apply_client_update(
+    app: Host,
+    request: ApplyClientUpdateRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+    if crate::updates::begin_transaction(CheckDomain::Client)
+        == crate::updates::CheckStart::Duplicate
+    {
+        return Err(CommandError::new(
+            "update_already_in_progress",
+            "An update is already in progress.",
+        ));
+    }
+    let result = async {
+        let remote = crate::updates::client::fetch_update_manifest(&managed, &endpoints, &instance)
+            .await
+            .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        let progress_app = app.clone();
+        let mut progress = move |phase: crate::updates::ClientPhase| {
+            let _ = progress_app.emit(
+                "client-update-progress",
+                ClientUpdateProgressEvent { phase },
+            );
+        };
+        let record = crate::updates::client::apply_update(
+            &managed,
+            &endpoints,
+            &instance,
+            &request.fingerprint,
+            &remote,
+            endpoints.download_options(),
+            &mut progress,
+            crate::updates::client::UpdateFaults::default(),
+        )
+        .await
+        .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        Ok::<InstanceRecord, CommandError>(record)
+    }
+    .await;
+    crate::updates::finish_transaction(CheckDomain::Client);
+    let record = result?;
+    let mut state = crate::updates::center()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    state.client = Some(crate::updates::UpdateAvailability::UpToDate);
+    state.client_instance_id = Some(instance.to_string());
+    drop(state);
+    Ok(InstanceSummary::from_record(&record))
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LauncherUpdateProgressEvent {
+    phase: Option<crate::updates::LauncherPhase>,
+    downloaded_bytes: Option<u64>,
+    total_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LauncherUpdateDownloadRequest {
+    version: String,
+}
+
+/// Downloads the offered launcher update after re-validating the offer.
+/// Real progress only: byte counts come from the updater's own callbacks.
+pub async fn launcher_update_download(
+    app: Host,
+    request: LauncherUpdateDownloadRequest,
+) -> Result<launcher_updates::LauncherUpdateStatus, CommandError> {
+    if crate::updates::begin_transaction(CheckDomain::Launcher)
+        == crate::updates::CheckStart::Duplicate
+    {
+        return Err(CommandError::new(
+            "update_already_in_progress",
+            "A launcher update is already in progress.",
+        ));
+    }
+    launcher_updates::set_phase(Some(crate::updates::LauncherPhase::Downloading));
+    let progress_app = app.clone();
+    let result = launcher_updates::download(&app, &request.version, move |done, total| {
+        let _ = progress_app.emit(
+            "launcher-update-progress",
+            LauncherUpdateProgressEvent {
+                phase: Some(crate::updates::LauncherPhase::Downloading),
+                downloaded_bytes: Some(done),
+                total_bytes: total,
+            },
+        );
+    })
+    .await;
+    crate::updates::finish_transaction(CheckDomain::Launcher);
+    match result {
+        Ok(status) => {
+            launcher_updates::set_phase(status.phase);
+            Ok(status)
+        }
+        Err(error) => {
+            launcher_updates::set_phase(None);
+            Err(CommandError::new(error.code, error.message))
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LauncherUpdateInstallRequest {
+    version: String,
+}
+
+/// Installs the downloaded, signature-verified launcher update. On Windows
+/// the verified installer launches and the application exits as part of
+/// the install — the UI presents that honestly before invoking this.
+pub async fn launcher_update_install(
+    app: Host,
+    request: LauncherUpdateInstallRequest,
+) -> Result<launcher_updates::LauncherUpdateStatus, CommandError> {
+    if crate::updates::begin_transaction(CheckDomain::Launcher)
+        == crate::updates::CheckStart::Duplicate
+    {
+        return Err(CommandError::new(
+            "update_already_in_progress",
+            "A launcher update is already in progress.",
+        ));
+    }
+    launcher_updates::set_phase(Some(crate::updates::LauncherPhase::Installing));
+    let result = launcher_updates::install(&app, &request.version).await;
+    crate::updates::finish_transaction(CheckDomain::Launcher);
+    match result {
+        Ok(status) => Ok(status),
+        Err(error) => {
+            launcher_updates::set_phase(None);
+            Err(CommandError::new(error.code, error.message))
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "release_acceptance.rs"]
+mod release_acceptance;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native9_specific_content_refusals_keep_their_code_and_explain_the_reason() {
+        use crate::instance_content::ContentError;
+        let specific = CommandError::from(ContentError::UnsupportedActionWith(
+            "The selected file is not a valid ZIP/JAR archive.".into(),
+        ));
+        assert_eq!(specific.code, "unsupported_content_action");
+        assert_eq!(
+            specific.message,
+            "The selected file is not a valid ZIP/JAR archive."
+        );
+        let generic = CommandError::from(ContentError::UnsupportedAction);
+        assert_eq!(generic.code, "unsupported_content_action");
+        assert_eq!(
+            generic.message,
+            "This content entry cannot be changed here."
+        );
+    }
+
+    #[tokio::test]
+    async fn native9_disposable_webview_data_copy_preserves_documents_and_user_sentinels() {
+        use crate::instances::lifecycle::tests::SyntheticWorld;
+        fn snapshot(
+            root: &std::path::Path,
+        ) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+            fn walk(
+                root: &std::path::Path,
+                path: &std::path::Path,
+                out: &mut std::collections::BTreeMap<std::path::PathBuf, Vec<u8>>,
+            ) {
+                for entry in std::fs::read_dir(path).unwrap() {
+                    let entry = entry.unwrap();
+                    let path = entry.path();
+                    let meta = entry.file_type().unwrap();
+                    assert!(!meta.is_symlink());
+                    if meta.is_dir() {
+                        walk(root, &path, out);
+                    } else {
+                        out.insert(
+                            path.strip_prefix(root).unwrap().to_path_buf(),
+                            std::fs::read(&path).unwrap(),
+                        );
+                    }
+                }
+            }
+            let mut out = std::collections::BTreeMap::new();
+            walk(root, root, &mut out);
+            out
+        }
+        let world = SyntheticWorld::new("native9-data-upgrade");
+        let record = world.create("Preserved instance").await.unwrap();
+        let managed = world.managed();
+        crate::instance_icons::set(managed, record.id(), Some("swords")).unwrap();
+        for path in [
+            "saves/Synthetic World/level.dat",
+            "mods/user-sentinel.jar",
+            "config/user-sentinel.json",
+            "resourcepacks/user-sentinel.zip",
+        ] {
+            let path = managed.instance_paths(record.id()).root().join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"NATIVE9 owner data sentinel").unwrap();
+        }
+        let accounts=crate::auth::accounts::AccountsDocument::from_json(&serde_json::json!({"schemaVersion":1,"selectedAccountId":"11111111111141118111111111111111","accounts":[{"accountId":"11111111111141118111111111111111","minecraftName":"SyntheticUser"}]}).to_string()).unwrap();
+        crate::auth::accounts::save(&managed.accounts_file(), &accounts).unwrap();
+        let mut config = crate::config::load(&managed.config_file())
+            .unwrap()
+            .unwrap();
+        let mut layout = config.home_widgets().clone();
+        layout.widgets.push(crate::home_widgets::WidgetPlacement {
+            id: "native-media".into(),
+            enabled: false,
+            size: crate::home_widgets::WidgetSize::Wide,
+            grid: None,
+        });
+        config.set_home_widgets(layout);
+        crate::config::save(&managed.config_file(), &config).unwrap();
+        let before = snapshot(managed.data_root());
+        let copy =
+            std::env::temp_dir().join(format!("aurora-native9-data-copy-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&copy).unwrap();
+        for (relative, bytes) in &before {
+            let path = copy.join(relative);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        let copied = ManagedPaths::from_app_local_data_dir(copy).unwrap();
+        let state = load_launcher_state(&copied).unwrap();
+        assert_eq!(state.instances.len(), 1);
+        assert_eq!(state.instances[0].display_name, "Preserved instance");
+        let after = snapshot(copied.data_root());
+        for (path, bytes) in &before {
+            assert_eq!(
+                after.get(path),
+                Some(bytes),
+                "existing data changed: {}",
+                path.display()
+            );
+        }
+        assert_eq!(
+            crate::auth::accounts::load(&copied.accounts_file()).unwrap(),
+            accounts
+        );
+        let registry = InstanceRegistry::load(&copied.instance_registry_file()).unwrap();
+        assert_eq!(
+            crate::instances::lifecycle::validate_instance(&copied, &registry, record.id())
+                .unwrap()
+                .status,
+            crate::instances::lifecycle::InstanceStatus::Ready
+        );
+        let mut config = crate::config::load(&copied.config_file()).unwrap().unwrap();
+        let value = serde_json::json!({"schemaVersion":7,"selectedInstanceId":record.id(),"appearance":{"theme":"oled","accent":{"type":"custom","hex":"#58b8dc"},"background":"simple","auroraMotionSpeed":0},"homeWidgets":config.home_widgets(),"discord":config.discord()});
+        let changed = crate::config::LauncherConfig::from_json(&value.to_string()).unwrap();
+        config.set_appearance(changed.appearance().clone());
+        crate::config::save(&copied.config_file(), &config).unwrap();
+        let round_trip = crate::config::load(&copied.config_file()).unwrap().unwrap();
+        assert_eq!(
+            round_trip.home_widgets().widgets.last().unwrap().id,
+            "native-media"
+        );
+        assert_eq!(
+            snapshot(managed.data_root()),
+            before,
+            "source WebView fixture must stay byte-identical"
+        );
+    }
+
+    #[test]
+    fn state_loading_exposes_recovery_errors_without_trusting_stored_ready() {
+        let root = std::env::temp_dir().join(format!("aurora-f3ra-state-{}", uuid::Uuid::new_v4()));
+        let managed = ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let mut registry = InstanceRegistry::empty();
+        for name in ["recover-target", "unrelated-target"] {
+            registry.instances_mut().push(
+                InstanceRecord::new(
+                    crate::instances::InstanceId::new(name).unwrap(),
+                    name,
+                    crate::instances::InstanceState::Ready,
+                    crate::instances::PinnedRelease::new(
+                        ReleaseChannel::Stable,
+                        "0.3.0",
+                        "26.2",
+                        "0.19.5",
+                    )
+                    .unwrap(),
+                    crate::instances::settings::InstanceConfiguration::for_minecraft_version(
+                        "26.2",
+                    ),
+                )
+                .unwrap(),
+            );
+        }
+        registry.save(&managed.instance_registry_file()).unwrap();
+        let target = managed.instance_paths(registry.instances()[0].id());
+        std::fs::create_dir_all(target.root()).unwrap();
+        let path = target.root().join(crate::install::journal::JOURNAL_FILE);
+        let owner = crate::instances::lifecycle::lock_instance_operation(
+            &managed,
+            registry.instances()[0].id(),
+        )
+        .unwrap();
+        let busy = load_launcher_state(&managed).unwrap();
+        assert_eq!(busy.instances[0].state, "installing");
+        assert_eq!(busy.instances[0].recovery.as_ref().unwrap().status, "busy");
+        drop(owner);
+        std::fs::write(&path, b"malformed evidence").unwrap();
+        let state = load_launcher_state(&managed).unwrap();
+        assert_eq!(state.instances[0].state, "installing");
+        assert_eq!(
+            state.instances[0].recovery.as_ref().unwrap().status,
+            "manualRepair"
+        );
+        assert_eq!(state.instances[1].state, "ready");
+        assert!(state.instances[1].recovery.is_none());
+        assert_eq!(std::fs::read(path).unwrap(), b"malformed evidence");
+        // Unique disposable root created by this test.
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn quick_world_requires_a_real_save_inside_the_owning_instance() {
+        let root = std::env::temp_dir().join(format!("aurora-e2-world-{}", uuid::Uuid::new_v4()));
+        let managed = ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let instance =
+            crate::instances::InstanceId::new("1234567890abcdef1234567890abcdef").unwrap();
+        let saves = managed.instance_paths(&instance).root().join("saves");
+        std::fs::create_dir_all(saves.join("safe-save")).unwrap();
+        std::fs::write(saves.join("safe-save").join("level.dat"), b"fixture").unwrap();
+        let world = crate::gameplay_history::WorldSaveId::parse("safe-save".into()).unwrap();
+        assert!(validate_quick_world(&managed, &instance, &world).is_ok());
+        std::fs::remove_file(saves.join("safe-save").join("level.dat")).unwrap();
+        assert_eq!(
+            validate_quick_world(&managed, &instance, &world)
+                .unwrap_err()
+                .code,
+            "quick_world_missing"
+        );
+        assert!(crate::gameplay_history::WorldSaveId::parse("../escape".into()).is_err());
+        assert!(crate::gameplay_history::WorldSaveId::parse("C:/escape".into()).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn new_instance_aurora_defaults_are_compatible_and_respect_explicit_off() {
+        use crate::instances::settings::{LoaderConfiguration, LoaderPolicy};
+        let manifest = crate::distribution::production_manifest().unwrap();
+        let release = &manifest.releases()[0];
+        let fabric = LoaderConfiguration::Fabric {
+            policy: LoaderPolicy::Automatic {},
+        };
+        assert!(creation_aurora_choice(
+            &manifest,
+            release.minecraft_version(),
+            &fabric,
+            None
+        ));
+        assert!(!creation_aurora_choice(
+            &manifest,
+            release.minecraft_version(),
+            &fabric,
+            Some(false)
+        ));
+        assert!(!creation_aurora_choice(
+            &manifest,
+            release.minecraft_version(),
+            &LoaderConfiguration::Vanilla {},
+            None
+        ));
+        assert!(!creation_aurora_choice(
+            &manifest,
+            "unsupported",
+            &fabric,
+            None
+        ));
+        assert!(!creation_aurora_choice(
+            &manifest,
+            release.minecraft_version(),
+            &LoaderConfiguration::Fabric {
+                policy: LoaderPolicy::Pinned {
+                    version: "incompatible".into()
+                }
+            },
+            None
+        ));
+    }
+
+    #[test]
+    fn provider_preview_fingerprint_changes_with_integrity_and_dependency_metadata() {
+        use crate::instance_content::{
+            ContentCompatibility, ContentType, DependencyKind, ProviderArtifactSource,
+            ProviderDependency, ProviderInstallPlan,
+        };
+
+        let instance = crate::instances::InstanceId::new("fingerprint-test").unwrap();
+        let source = |digest: char| {
+            ProviderArtifactSource::Sha512(
+                crate::downloads::Sha512ArtifactSource::https(
+                    "https://cdn.modrinth.com/data/example.jar",
+                    &digest.to_string().repeat(128),
+                    Some(5),
+                )
+                .unwrap(),
+            )
+        };
+        let mut resolved = crate::modrinth::Resolved {
+            preview: crate::modrinth::InstallPreview {
+                inventory_revision: None,
+                project_id: "AAAABBBB".into(),
+                version_id: "11112222".into(),
+                content_type: ContentType::Mod,
+                items: vec![crate::modrinth::PreviewItem {
+                    satisfied_by: None,
+                    project_id: "AAAABBBB".into(),
+                    title: "Example".into(),
+                    version_id: "11112222".into(),
+                    version_number: "1.0".into(),
+                    file_name: "example.jar".into(),
+                    already_installed: false,
+                    changelog: None,
+                }],
+                warnings: Vec::new(),
+            },
+            plans: vec![ProviderInstallPlan {
+                content_type: ContentType::Mod,
+                provider: "modrinth".into(),
+                project_id: "AAAABBBB".into(),
+                version_id: "11112222".into(),
+                file_id: "a".repeat(128),
+                file_name: "example.jar".into(),
+                display_version: Some("1.0".into()),
+                compatibility: ContentCompatibility {
+                    minecraft_versions: vec!["1.21.11".into()],
+                    loader: Some("fabric".into()),
+                    environment: Some("client_and_server".into()),
+                },
+                dependencies: Vec::new(),
+                source: source('a'),
+            }],
+        };
+        let first = provider_fingerprint(&instance, &resolved);
+        resolved.plans[0].source = source('b');
+        assert_ne!(provider_fingerprint(&instance, &resolved), first);
+        resolved.plans[0].source = source('a');
+        resolved.plans[0].dependencies.push(ProviderDependency {
+            kind: DependencyKind::Required,
+            provider: "modrinth".into(),
+            project_id: "CCCCDDDD".into(),
+            version_id: None,
+        });
+        assert_ne!(provider_fingerprint(&instance, &resolved), first);
+    }
+
+    #[test]
+    fn instance_folder_resolution_follows_the_registry_and_managed_paths() {
+        let root =
+            std::env::temp_dir().join(format!("aurora-folder-resolution-{}", uuid::Uuid::new_v4()));
+        let managed = ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+
+        let mut registry = InstanceRegistry::empty();
+        registry.instances_mut().push(
+            InstanceRecord::new(
+                crate::instances::InstanceId::new("aurora-folder-test").unwrap(),
+                "Folder Fixture",
+                crate::instances::InstanceState::Ready,
+                crate::instances::PinnedRelease::new(
+                    ReleaseChannel::Stable,
+                    "0.3.0",
+                    "26.2",
+                    "0.19.5",
+                )
+                .unwrap(),
+                crate::instances::settings::InstanceConfiguration::for_minecraft_version("26.2"),
+            )
+            .unwrap(),
+        );
+
+        let expected = root.join("instances").join("aurora-folder-test");
+        std::fs::create_dir_all(&expected).unwrap();
+
+        let folder = resolve_instance_folder(&managed, &registry, " aurora-folder-test ").unwrap();
+        assert_eq!(folder, expected);
+        assert!(folder.starts_with(managed.data_root()));
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn instance_folder_resolution_refuses_unknown_and_invalid_ids() {
+        let managed = ManagedPaths::from_app_local_data_dir(
+            std::env::temp_dir().join("AuroraLauncherFolderResolutionTestUnknown"),
+        )
+        .unwrap();
+        let registry = InstanceRegistry::empty();
+
+        let unknown = resolve_instance_folder(&managed, &registry, "aurora-missing").unwrap_err();
+        assert_eq!(unknown.code, "instance_not_found");
+
+        let invalid = resolve_instance_folder(&managed, &registry, "../escape").unwrap_err();
+        assert_eq!(invalid.code, "instance_id_invalid");
+    }
+
+    #[test]
+    fn instance_folder_resolution_rejects_canonical_boundary_escapes() {
+        let managed_root = Path::new("C:/managed/aurora");
+        let instances_root = managed_root.join("instances");
+        let instance = crate::instances::InstanceId::new("aurora-folder-test").unwrap();
+
+        validate_canonical_instance_folder(
+            managed_root,
+            &instances_root,
+            &instances_root.join(instance.as_str()),
+            &instance,
+        )
+        .unwrap();
+
+        let redirected_instances = Path::new("C:/elsewhere/instances");
+        let escaped_parent = validate_canonical_instance_folder(
+            managed_root,
+            redirected_instances,
+            &redirected_instances.join(instance.as_str()),
+            &instance,
+        )
+        .unwrap_err();
+        assert_eq!(escaped_parent.code, "instance_folder_open_failure");
+
+        let redirected_instance = validate_canonical_instance_folder(
+            managed_root,
+            &instances_root,
+            &instances_root.join("another-instance"),
+            &instance,
+        )
+        .unwrap_err();
+        assert_eq!(redirected_instance.code, "instance_folder_open_failure");
+    }
+
+    #[test]
+    fn launch_failures_map_to_stable_machine_codes() {
+        let resolve_cases = [
+            (
+                crate::launch::resolve::LaunchResolveError::Metadata("fixture".to_owned()),
+                "launch_metadata_invalid",
+            ),
+            (
+                crate::launch::resolve::LaunchResolveError::Placeholder("fixture".to_owned()),
+                "launch_placeholder_unresolved",
+            ),
+            (
+                crate::launch::resolve::LaunchResolveError::Classpath("fixture".to_owned()),
+                "launch_classpath_invalid",
+            ),
+            (
+                crate::launch::resolve::LaunchResolveError::Natives("fixture".to_owned()),
+                "launch_native_path_invalid",
+            ),
+            (
+                crate::launch::resolve::LaunchResolveError::Logging("fixture".to_owned()),
+                "launch_logging_invalid",
+            ),
+        ];
+        for (error, code) in resolve_cases {
+            assert_eq!(CommandError::from(error).code, code);
+        }
+        assert_eq!(
+            CommandError::from(crate::launch::process::LaunchProcessError::AlreadyRunning {
+                instance_id: "fixture".to_owned(),
+            })
+            .code,
+            "launch_already_running"
+        );
+        assert_eq!(
+            launch_plan_error(InstanceError::NotFound {
+                instance_id: "fixture".to_owned(),
+            })
+            .code,
+            "launch_instance_not_ready"
+        );
+    }
+
+    #[test]
+    fn production_launch_dtos_have_no_secret_or_argument_fields() {
+        let readiness = PlayReadinessDto {
+            ready: false,
+            can_prepare: false,
+            instance_id: "fixture".to_owned(),
+            account_id: None,
+            account_name: None,
+            instance_status: "ready".to_owned(),
+            runtime_status: "ready".to_owned(),
+            account_status: "missing".to_owned(),
+            process_status: "stopped".to_owned(),
+            blockers: vec![PlayBlockerDto {
+                code: "launch_authentication_required".to_owned(),
+                message: "Select an account.".to_owned(),
+            }],
+        };
+        let json = serde_json::to_string(&readiness).unwrap();
+        assert!(!json.contains("accessToken"));
+        assert!(!json.contains("arguments"));
+        assert!(!json.contains("javaExecutable"));
+        assert!(!json.contains("classpath"));
+    }
+
+    #[test]
+    fn auth_errors_map_to_stable_machine_codes() {
+        use crate::auth::metadata::{
+            AuthTransportError, EntitlementError, MinecraftExchangeError, TokenExchangeError,
+            XboxExchangeError, XstsExchangeError,
+        };
+
+        let cases: Vec<(crate::auth::AuthError, &str)> = vec![
+            (
+                crate::auth::AuthError::ConfigurationMissing,
+                "auth_configuration_missing",
+            ),
+            (
+                crate::auth::AuthError::LoginInProgress,
+                "auth_login_in_progress",
+            ),
+            (
+                crate::auth::AuthError::LoginCancelled,
+                "auth_login_cancelled",
+            ),
+            (crate::auth::AuthError::LoginTimeout, "auth_login_timeout"),
+            (
+                crate::auth::AuthError::CallbackInvalid,
+                "auth_callback_invalid",
+            ),
+            (
+                crate::auth::AuthError::OAuthFailure {
+                    reason: "access_denied".to_owned(),
+                },
+                "auth_oauth_failure",
+            ),
+            (
+                crate::auth::AuthError::TokenExchange(TokenExchangeError::Malformed),
+                "auth_token_exchange_failure",
+            ),
+            (
+                crate::auth::AuthError::Xbox(XboxExchangeError::Malformed),
+                "auth_xbox_failure",
+            ),
+            (
+                crate::auth::AuthError::Xsts(XstsExchangeError::Malformed),
+                "auth_xsts_failure",
+            ),
+            (
+                crate::auth::AuthError::XstsDenied {
+                    xerr: 2148916238,
+                    reason: "family group".to_owned(),
+                },
+                "auth_xsts_failure",
+            ),
+            (
+                crate::auth::AuthError::MinecraftServices(MinecraftExchangeError::Malformed),
+                "auth_minecraft_services_failure",
+            ),
+            (
+                crate::auth::AuthError::EntitlementCheck(EntitlementError::Malformed),
+                "auth_minecraft_services_failure",
+            ),
+            (
+                crate::auth::AuthError::MinecraftServicesTransport(
+                    AuthTransportError::HttpStatus { status: 503 },
+                ),
+                "auth_minecraft_services_failure",
+            ),
+            (
+                crate::auth::AuthError::EntitlementMissing,
+                "auth_entitlement_missing",
+            ),
+            (
+                crate::auth::AuthError::ProfileMissing,
+                "auth_profile_missing",
+            ),
+            (
+                crate::auth::AuthError::ProfileInvalid,
+                "auth_profile_invalid",
+            ),
+            (
+                crate::auth::AuthError::ReauthenticationRequired {
+                    reason: "revoked".to_owned(),
+                },
+                "auth_reauthentication_required",
+            ),
+            (
+                crate::auth::AuthError::CredentialStore(
+                    crate::auth::CredentialStoreError::UnsupportedPlatform,
+                ),
+                "auth_credential_store_failure",
+            ),
+            (
+                crate::auth::AuthError::Accounts(crate::auth::AccountsError::Malformed(
+                    "broken".to_owned(),
+                )),
+                "accounts_invalid",
+            ),
+            (
+                crate::auth::AuthError::Accounts(crate::auth::AccountsError::UnsupportedSchema {
+                    found: 9,
+                    supported: 1,
+                }),
+                "accounts_unsupported_schema",
+            ),
+            (
+                crate::auth::AuthError::Accounts(crate::auth::AccountsError::SelectedDangling {
+                    account_id: "x".repeat(32),
+                }),
+                "accounts_selected_dangling",
+            ),
+            (
+                crate::auth::AuthError::AccountNotFound {
+                    account_id: "y".repeat(32),
+                },
+                "auth_account_not_found",
+            ),
+            (
+                crate::auth::AuthError::BrowserOpen(crate::auth::flow::BrowserOpenError::new(
+                    "no browser",
+                )),
+                "auth_browser_open_failure",
+            ),
+            (
+                crate::auth::AuthError::CallbackListener("bind failed".to_owned()),
+                "auth_callback_listener_failure",
+            ),
+            (
+                crate::auth::AuthError::EntropyFailure(crate::auth::oauth::OAuthEntropyError),
+                "auth_entropy_failure",
+            ),
+        ];
+
+        for (error, expected_code) in cases {
+            let command_error = CommandError::from(error);
+            assert_eq!(command_error.code, expected_code);
+            assert!(
+                !command_error.message.is_empty(),
+                "every structured error carries a readable message"
+            );
+        }
+    }
+
+    #[test]
+    fn ready_status_preserves_structured_platform_metadata() {
+        let root = std::env::temp_dir().join("com.aurora.launcher");
+
+        let status = ApplicationStatus::ready("1.0.0", "windows", "x86_64", root.clone());
+
+        assert_eq!(status.launcher_version, "1.0.0");
+        assert_eq!(status.platform.os, "windows");
+        assert_eq!(status.platform.architecture, "x86_64");
+        assert_eq!(status.managed_data_root, root.to_string_lossy());
+        assert_eq!(status.backend_status, BackendStatus::Ready);
+    }
+
+    #[test]
+    fn managed_path_errors_have_a_stable_machine_code() {
+        let error = CommandError::managed_path("example failure");
+
+        assert_eq!(error.code, "managed_path_unavailable");
+        assert_eq!(error.message, "example failure");
+    }
+
+    #[test]
+    fn config_errors_map_to_stable_machine_codes() {
+        let malformed = CommandError::from(ConfigError::Malformed("broken".to_owned()));
+        assert_eq!(malformed.code, "config_malformed");
+
+        let unsupported = CommandError::from(ConfigError::UnsupportedSchema {
+            found: 9,
+            supported: 1,
+        });
+        assert_eq!(unsupported.code, "config_unsupported_schema");
+        assert!(unsupported.message.contains("9"));
+
+        let io = CommandError::from(ConfigError::Read(std::io::Error::other("disk")));
+        assert_eq!(io.code, "storage_io_failure");
+    }
+
+    #[test]
+    fn instance_registry_errors_map_to_stable_machine_codes() {
+        let malformed = CommandError::from(InstanceRegistryError::Malformed("broken".to_owned()));
+        assert_eq!(malformed.code, "instances_invalid");
+
+        let unsupported = CommandError::from(InstanceRegistryError::UnsupportedSchema {
+            found: 9,
+            supported: 1,
+        });
+        assert_eq!(unsupported.code, "instances_unsupported_schema");
+
+        let io = CommandError::from(InstanceRegistryError::Read(std::io::Error::other("disk")));
+        assert_eq!(io.code, "storage_io_failure");
+    }
+
+    #[test]
+    fn invalid_artifact_sources_map_to_a_stable_machine_code() {
+        let insecure = CommandError::from(
+            crate::downloads::ArtifactSource::https(
+                "http://example.invalid/x",
+                "0".repeat(64).as_str(),
+                None,
+            )
+            .unwrap_err(),
+        );
+        assert_eq!(insecure.code, "artifact_source_invalid");
+        assert!(insecure.message.contains("HTTPS"));
+    }
+
+    #[test]
+    fn invalid_minecraft_versions_map_to_a_stable_machine_code() {
+        let error = CommandError::from(
+            MinecraftVersionId::new("../evil").expect_err("traversal ids are invalid"),
+        );
+        assert_eq!(error.code, "minecraft_version_invalid");
+    }
+
+    #[test]
+    fn invalid_loader_versions_map_to_a_stable_machine_code() {
+        let error = CommandError::from(
+            LoaderVersionId::new("../evil").expect_err("traversal ids are invalid"),
+        );
+        assert_eq!(error.code, "fabric_loader_version_invalid");
+    }
+
+    #[test]
+    fn fabric_resolution_errors_map_to_stable_machine_codes() {
+        use crate::fabric::plan::FabricPlanError;
+
+        let cases: Vec<(FabricResolutionError, &str)> = vec![
+            (
+                FabricResolutionError::Metadata(FabricMetadataError::Network(
+                    DownloadError::HttpStatus { status: 503 },
+                )),
+                "fabric_metadata_network_failure",
+            ),
+            (
+                FabricResolutionError::Metadata(FabricMetadataError::HttpStatus { status: 500 }),
+                "fabric_metadata_network_failure",
+            ),
+            (
+                FabricResolutionError::Metadata(FabricMetadataError::ResponseTooLarge {
+                    limit_bytes: 8 * 1024 * 1024,
+                }),
+                "fabric_metadata_network_failure",
+            ),
+            (
+                FabricResolutionError::Metadata(FabricMetadataError::Malformed {
+                    reason: "broken".to_owned(),
+                }),
+                "fabric_metadata_invalid",
+            ),
+            (
+                FabricResolutionError::Metadata(FabricMetadataError::Unsupported {
+                    reason: "launcherMeta generation 3".to_owned(),
+                }),
+                "fabric_metadata_unsupported",
+            ),
+            (
+                FabricResolutionError::LoaderNotFound {
+                    requested: "0.99.0".to_owned(),
+                },
+                "fabric_loader_not_found",
+            ),
+            (
+                FabricResolutionError::CombinationUnsupported {
+                    game: "9.9.9".to_owned(),
+                    loader: "0.19.5".to_owned(),
+                },
+                "fabric_combination_unsupported",
+            ),
+            (
+                FabricResolutionError::Planning(FabricPlanError::LibraryInvalid {
+                    name: "broken".to_owned(),
+                    reason: "not a coordinate".to_owned(),
+                }),
+                "fabric_library_invalid",
+            ),
+            (
+                FabricResolutionError::Planning(FabricPlanError::RepositoryInvalid {
+                    url: "http://maven.example.invalid/".to_owned(),
+                    reason: "must use HTTPS".to_owned(),
+                }),
+                "fabric_repository_invalid",
+            ),
+            (
+                FabricResolutionError::Planning(FabricPlanError::ArtifactInvalid {
+                    source: "org.ow2.asm:asm:9.10.1".to_owned(),
+                    reason: "bad digest".to_owned(),
+                }),
+                "fabric_library_invalid",
+            ),
+        ];
+
+        for (error, expected_code) in cases {
+            let command_error = CommandError::from(error);
+            assert_eq!(command_error.code, expected_code);
+            assert!(
+                !command_error.message.is_empty(),
+                "every structured error carries a readable message"
+            );
+        }
+    }
+
+    #[test]
+    fn game_resolution_errors_map_to_stable_machine_codes() {
+        use crate::fabric::plan::CompositionError;
+
+        let conflict = GameResolutionError::Composition(CompositionError::LibraryConflict {
+            existing: "org.ow2.asm:asm:9.9.9".to_owned(),
+            conflicting: "org.ow2.asm:asm:9.10.1".to_owned(),
+        });
+        assert_eq!(CommandError::from(conflict).code, "fabric_plan_conflict");
+
+        let minecraft = GameResolutionError::Minecraft(MinecraftResolutionError::Metadata(
+            MetadataError::VersionNotFound {
+                requested: "9.9.9".to_owned(),
+            },
+        ));
+        assert_eq!(
+            CommandError::from(minecraft).code,
+            "minecraft_version_not_found"
+        );
+
+        let fabric = GameResolutionError::Fabric(FabricResolutionError::LoaderNotFound {
+            requested: "0.99.0".to_owned(),
+        });
+        assert_eq!(CommandError::from(fabric).code, "fabric_loader_not_found");
+    }
+
+    #[test]
+    fn minecraft_resolution_errors_map_to_stable_machine_codes() {
+        let cases: Vec<(MinecraftResolutionError, &str)> = vec![
+            (
+                MinecraftResolutionError::Metadata(MetadataError::VersionNotFound {
+                    requested: "9.9.9".to_owned(),
+                }),
+                "minecraft_version_not_found",
+            ),
+            (
+                MinecraftResolutionError::Metadata(MetadataError::ManifestInvalid {
+                    reason: "broken".to_owned(),
+                }),
+                "minecraft_manifest_invalid",
+            ),
+            (
+                MinecraftResolutionError::Metadata(MetadataError::DocumentInvalid {
+                    reason: "broken".to_owned(),
+                }),
+                "minecraft_version_metadata_invalid",
+            ),
+            (
+                MinecraftResolutionError::Metadata(MetadataError::Integrity {
+                    context: "Minecraft version document '26.2'".to_owned(),
+                    expected: "a".repeat(40),
+                    actual: "b".repeat(40),
+                }),
+                "minecraft_metadata_integrity_failure",
+            ),
+            (
+                MinecraftResolutionError::Metadata(MetadataError::Network(
+                    DownloadError::HttpStatus { status: 503 },
+                )),
+                "minecraft_metadata_network_failure",
+            ),
+            (
+                MinecraftResolutionError::Metadata(MetadataError::ResponseTooLarge {
+                    limit_bytes: 8 * 1024 * 1024,
+                }),
+                "minecraft_metadata_network_failure",
+            ),
+            (
+                MinecraftResolutionError::Metadata(MetadataError::Unsupported(
+                    "historical".to_owned(),
+                )),
+                "minecraft_version_unsupported",
+            ),
+            (
+                MinecraftResolutionError::Planning(PlanError::LibraryInvalid {
+                    name: "broken".to_owned(),
+                    reason: "no artifact".to_owned(),
+                }),
+                "minecraft_library_invalid",
+            ),
+            (
+                MinecraftResolutionError::Planning(PlanError::ArtifactInvalid {
+                    source: "client".to_owned(),
+                    reason: "not HTTPS".to_owned(),
+                }),
+                "minecraft_artifact_invalid",
+            ),
+            (
+                MinecraftResolutionError::Planning(PlanError::Unsupported {
+                    reason: "feature-conditioned library".to_owned(),
+                }),
+                "minecraft_version_unsupported",
+            ),
+        ];
+
+        for (error, expected_code) in cases {
+            let command_error = CommandError::from(error);
+            assert_eq!(command_error.code, expected_code);
+            assert!(
+                !command_error.message.is_empty(),
+                "every structured error carries a readable message"
+            );
+        }
+    }
+
+    #[test]
+    fn acquisition_errors_map_to_stable_machine_codes() {
+        let cases: Vec<(AcquisitionError, &str)> = vec![
+            (
+                AcquisitionError::Download(DownloadError::Redirect(
+                    crate::downloads::RedirectRefusal::LimitExceeded { limit: 8 },
+                )),
+                "download_redirect_failure",
+            ),
+            (
+                AcquisitionError::Download(DownloadError::Redirect(
+                    crate::downloads::RedirectRefusal::InsecureDowngrade {
+                        to: "http://example.invalid/x".to_owned(),
+                    },
+                )),
+                "download_redirect_failure",
+            ),
+            (
+                AcquisitionError::Download(DownloadError::HttpStatus { status: 404 }),
+                "download_http_failure",
+            ),
+            (
+                AcquisitionError::Download(DownloadError::SizeMismatch {
+                    expected: 1,
+                    actual: 2,
+                }),
+                "artifact_size_mismatch",
+            ),
+            (
+                AcquisitionError::Download(DownloadError::Sha256Mismatch {
+                    expected: "e".repeat(64),
+                    actual: "f".repeat(64),
+                }),
+                "artifact_hash_mismatch",
+            ),
+            (
+                AcquisitionError::Download(DownloadError::StagingIo(std::io::Error::other("disk"))),
+                "cache_io_failure",
+            ),
+            (
+                AcquisitionError::StoreIo(std::io::Error::other("disk")),
+                "cache_io_failure",
+            ),
+            (
+                AcquisitionError::Promotion(crate::cache::PromotionError {
+                    context: "replacing a corrupt cache object",
+                    source: std::io::Error::other("locked"),
+                }),
+                "artifact_promotion_failure",
+            ),
+            (
+                AcquisitionError::PromotionBlocked {
+                    rename: std::io::Error::other("rename"),
+                    validation: std::io::Error::other("validation"),
+                },
+                "artifact_promotion_failure",
+            ),
+        ];
+
+        for (error, expected_code) in cases {
+            let command_error = CommandError::from(error);
+            assert_eq!(command_error.code, expected_code);
+            assert!(
+                !command_error.message.is_empty(),
+                "every structured error carries a readable message"
+            );
+        }
+    }
+
+    /// Transport-level classifications are exercised on genuine reqwest
+    /// errors from a reserved loopback listener that never responds, without
+    /// releasing an ephemeral port for another parallel test to reuse.
+    #[tokio::test]
+    async fn real_transport_errors_map_to_their_machine_codes() {
+        // Keep the listener reserved until the real request times out.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        // Build through the launcher's own client so the rustls crypto
+        // provider is installed exactly like in production.
+        let source = crate::downloads::ArtifactSource::loopback_http_for_testing(
+            &format!("http://127.0.0.1:{port}/aurora.jar"),
+            &"a".repeat(64),
+            None,
+        )
+        .unwrap();
+        let destination = std::env::temp_dir()
+            .join("aurora-application-test")
+            .join(std::process::id().to_string())
+            .join("unreachable.part");
+
+        let error = crate::downloads::download(
+            &source,
+            &destination,
+            &crate::downloads::DownloadOptions {
+                connect_timeout: std::time::Duration::from_secs(1),
+                idle_read_timeout: std::time::Duration::from_millis(500),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect_err("a non-responding endpoint must time out");
+        drop(listener);
+
+        let command_error = CommandError::from(AcquisitionError::Download(error));
+        assert!(
+            matches!(
+                command_error.code.as_str(),
+                "network_unavailable" | "download_timeout"
+            ),
+            "a transport failure must map to a transport category, got: {}",
+            command_error.code
+        );
+    }
+
+    #[test]
+    fn invalid_instance_ids_map_to_a_stable_machine_code() {
+        let error = CommandError::from(crate::instances::InstanceId::new("../evil").unwrap_err());
+        assert_eq!(error.code, "instance_id_invalid");
+    }
+
+    #[test]
+    fn installation_errors_map_to_stable_machine_codes() {
+        use crate::install::natives::NativeExtractionError;
+
+        let cases: Vec<(InstallError, &str)> = vec![
+            (
+                InstallError::AlreadyInProgress {
+                    instance_id: "aurora-default".to_owned(),
+                },
+                "installation_already_in_progress",
+            ),
+            (
+                InstallError::TargetConflict {
+                    path: "C:/managed/instances/x/game".to_owned(),
+                    reason: "partial prior tree".to_owned(),
+                },
+                "installation_target_conflict",
+            ),
+            (
+                InstallError::State(crate::install::state::InstalledStateError::Malformed {
+                    reason: "broken".to_owned(),
+                }),
+                "installation_state_invalid",
+            ),
+            (
+                InstallError::AssetIndexInvalid {
+                    reason: "not JSON".to_owned(),
+                },
+                "minecraft_asset_index_invalid",
+            ),
+            (
+                InstallError::AssetInvalid {
+                    name: "icons/icon.png".to_owned(),
+                    reason: "bad hash".to_owned(),
+                },
+                "minecraft_asset_invalid",
+            ),
+            (
+                InstallError::InvalidSource("bad metadata".to_owned()),
+                "artifact_source_invalid",
+            ),
+            (
+                InstallError::Materialization {
+                    path: "libraries/x.jar".to_owned(),
+                    source: std::io::Error::other("disk"),
+                },
+                "artifact_materialization_failure",
+            ),
+            (
+                InstallError::Native(NativeExtractionError::ArchiveInvalid {
+                    archive: "org.lwjgl:lwjgl:3.4.1:natives-windows".to_owned(),
+                    reason: "traversal entry".to_owned(),
+                }),
+                "native_archive_invalid",
+            ),
+            (
+                InstallError::Native(NativeExtractionError::EntryConflict {
+                    archive: "a".to_owned(),
+                    entry: "lwjgl.dll".to_owned(),
+                    reason: "differing duplicates".to_owned(),
+                }),
+                "native_extraction_failure",
+            ),
+            (
+                InstallError::Validation {
+                    path: "versions/26.2/client.jar".to_owned(),
+                    reason: "digest drift".to_owned(),
+                },
+                "installation_validation_failure",
+            ),
+            (
+                InstallError::Commit {
+                    context: "promoting the staged installation".to_owned(),
+                    source: std::io::Error::other("locked"),
+                },
+                "installation_commit_failure",
+            ),
+            (
+                InstallError::Storage(std::io::Error::other("disk")),
+                "storage_io_failure",
+            ),
+            (
+                InstallError::Acquisition(AcquisitionError::StoreIo(std::io::Error::other("disk"))),
+                "cache_io_failure",
+            ),
+            (
+                InstallError::Acquisition(AcquisitionError::Download(
+                    DownloadError::Sha1Mismatch {
+                        expected: "a".repeat(40),
+                        actual: "b".repeat(40),
+                    },
+                )),
+                "artifact_hash_mismatch",
+            ),
+            (
+                InstallError::Acquisition(AcquisitionError::Download(
+                    DownloadError::ObservedDigestDrift {
+                        url: "https://maven.fabricmc.net/x.jar".to_owned(),
+                        recorded: "a".repeat(64),
+                        received: "b".repeat(64),
+                    },
+                )),
+                "fabric_artifact_unverified",
+            ),
+        ];
+
+        for (error, expected_code) in cases {
+            let command_error = CommandError::from(error);
+            assert_eq!(command_error.code, expected_code);
+            assert!(
+                !command_error.message.is_empty(),
+                "every structured error carries a readable message"
+            );
+        }
+    }
+
+    #[test]
+    fn launcher_state_flattens_persisted_records_into_summary_dtos() {
+        let config = crate::config::LauncherConfig::from_json(
+            r#"{ "schemaVersion": 1, "selectedInstanceId": "aurora-default" }"#,
+        )
+        .unwrap();
+        let registry = InstanceRegistry::from_json(
+            r#"{
+                "schemaVersion": 2,
+                "instances": [
+                    {
+                        "id": "aurora-default",
+                        "displayName": "Aurora Default",
+                        "state": "ready",
+                        "release": {
+                            "channel": "stable",
+                            "auroraVersion": "0.3.0",
+                            "minecraftVersion": "26.2",
+                            "fabricLoaderVersion": "0.19.5"
+                        }
+                    }
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        let state = LauncherState::from_parts(config, registry).unwrap();
+
+        // The schema-1 input migrated deterministically to schema 2 with the
+        // selection preserved and default appearance.
+        assert_eq!(
+            state.config.schema_version,
+            crate::config::CONFIG_SCHEMA_VERSION
+        );
+        assert_eq!(
+            state.config.selected_instance_id.as_deref(),
+            Some("aurora-default")
+        );
+        assert_eq!(state.instances.len(), 1);
+        assert_eq!(state.instances[0].id, "aurora-default");
+        assert_eq!(state.instances[0].display_name, "Aurora Default");
+        assert_eq!(state.instances[0].state, "ready");
+        assert_eq!(
+            state.instances[0].aurora.as_ref().unwrap().channel,
+            ReleaseChannel::Stable
+        );
+        assert_eq!(state.instances[0].aurora.as_ref().unwrap().version, "0.3.0");
+        assert_eq!(state.instances[0].minecraft_version, "26.2");
+        assert_eq!(state.instances[0].platform.version(), Some("0.19.5"));
+    }
+
+    #[test]
+    fn a_dangling_selected_instance_is_a_deliberate_state_error() {
+        let config = crate::config::LauncherConfig::from_json(
+            r#"{ "schemaVersion": 1, "selectedInstanceId": "ghost" }"#,
+        )
+        .unwrap();
+        let registry = InstanceRegistry::empty();
+
+        let error = LauncherState::from_parts(config, registry).unwrap_err();
+
+        assert_eq!(error.code, "config_selected_instance_dangling");
+    }
+
+    #[test]
+    fn no_selection_or_a_valid_selection_loads_normally() {
+        let unselected = crate::config::LauncherConfig::default();
+        assert!(LauncherState::from_parts(unselected, InstanceRegistry::empty()).is_ok());
+    }
+
+    #[test]
+    fn appearance_dtos_expose_the_catalog_and_the_derived_palette() {
+        let preferences = crate::appearance::AppearancePreferences::new();
+        let dto = AppearanceDto::of(&preferences).unwrap();
+
+        assert_eq!(dto.theme, "aurora-dark");
+        assert_eq!(
+            dto.accent,
+            crate::appearance::AccentSelection::Preset {
+                id: "violet".to_owned()
+            }
+        );
+        assert_eq!(dto.themes.len(), 3);
+        assert_eq!(dto.themes[0].id, "aurora-dark");
+        assert_eq!(dto.accents.len(), 7);
+        assert_eq!(dto.accents[0].id, "violet");
+        assert_eq!(dto.palette.accent, "#8b80ff");
+        assert_eq!(dto.palette.accent_strong, "#6f5df2");
+        assert_eq!(dto.palette.accent_contrast, "#ffffff");
+        assert_eq!(dto.palette.accent_soft, "rgba(139, 128, 255, 0.14)");
+
+        // The DTO never carries secrets or machine paths.
+        let json = serde_json::to_string(&dto).unwrap();
+        assert!(!json.contains("accessToken"));
+        assert!(!json.contains("C:\\"));
+    }
+
+    #[test]
+    fn invalid_appearance_requests_map_to_a_stable_machine_code() {
+        // An unknown theme id is already normalized by the time the DTO is
+        // built (config load normalizes); only an unusable accent fails here.
+        let bad_theme = crate::appearance::AppearancePreferences {
+            aurora_motion_speed: 50,
+            background: crate::appearance::BackgroundId::Simple,
+            theme: "neon".to_owned(),
+            accent: crate::appearance::AccentSelection::default(),
+        };
+        let dto = AppearanceDto::of(&bad_theme).unwrap();
+        assert_eq!(dto.theme, "aurora-dark");
+
+        let bad_accent = crate::appearance::AppearancePreferences {
+            aurora_motion_speed: 50,
+            background: crate::appearance::BackgroundId::Simple,
+            theme: "oled".to_owned(),
+            accent: crate::appearance::AccentSelection::Custom {
+                hex: "#000000".to_owned(),
+            },
+        };
+        let error = AppearanceDto::of(&bad_accent).unwrap_err();
+        assert_eq!(error.code, "appearance_invalid");
+        assert!(error.message.contains("too dark"));
+    }
+
+    #[test]
+    fn shortcut_errors_map_to_stable_machine_codes() {
+        let cases = [
+            (
+                crate::shortcuts::ShortcutError::UnsupportedPlatform,
+                "shortcut_unsupported_platform",
+            ),
+            (
+                crate::shortcuts::ShortcutError::ManagementUnavailable,
+                "shortcut_management_unavailable",
+            ),
+            (
+                crate::shortcuts::ShortcutError::Conflict,
+                "shortcut_conflict",
+            ),
+            (
+                crate::shortcuts::ShortcutError::Io("io".into()),
+                "shortcut_io_failure",
+            ),
+            (
+                crate::shortcuts::ShortcutError::Shell("shell".into()),
+                "shortcut_shell_failure",
+            ),
+        ];
+        for (error, expected_code) in cases {
+            let command_error = CommandError::from(error);
+            assert_eq!(command_error.code, expected_code);
+            assert!(
+                !command_error.message.is_empty(),
+                "every structured error carries a readable message"
+            );
+        }
+    }
+
+    #[test]
+    fn desktop_integration_dtos_serialize_the_live_status_vocabulary() {
+        let present =
+            ShortcutStatusDto::for_presence(crate::shortcuts::ShortcutPresence::Present, "aurora");
+        let json = serde_json::to_string(&present).unwrap();
+        assert_eq!(json, r#"{"state":"present","managedBy":"aurora"}"#);
+
+        let conflict = ShortcutStatusDto::for_presence(
+            crate::shortcuts::ShortcutPresence::Conflict,
+            "installer",
+        );
+        assert_eq!(
+            serde_json::to_string(&conflict).unwrap(),
+            r#"{"state":"conflict","managedBy":"installer"}"#
+        );
+
+        let unknown = ShortcutStatusDto::unknown("aurora");
+        assert_eq!(
+            serde_json::to_string(&unknown).unwrap(),
+            r#"{"state":"unknown","managedBy":"aurora"}"#
+        );
+
+        // The non-Windows shape stays honest: nothing is claimed present.
+        #[cfg(not(windows))]
+        {
+            let dto = DesktopIntegrationDto::unsupported();
+            assert!(!dto.supported);
+            assert!(!dto.manageable);
+            assert_eq!(dto.desktop_shortcut.state, "unknown");
+            assert_eq!(dto.start_menu_shortcut.managed_by, "installer");
+            let json = serde_json::to_string(&dto).unwrap();
+            assert!(!json.contains("present"));
+        }
+    }
+}

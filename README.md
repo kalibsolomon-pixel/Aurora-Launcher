@@ -6,15 +6,15 @@ moves the interface away from WebView while retaining the verified Rust backend.
 
 ## Download and install
 
-Native 2.0.0 is published through the separate **native-preview** channel as
+Native 2.0.0 is published through the native stable channel as
 `native-v2.0.0`. Get the [Windows x64 installer](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v2.0.0/Aurora.Native.Preview_2.0.0_x64-setup.exe)
 or review its signatures and hashes on the [native release page](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/native-v2.0.0).
 Run `Aurora.Native.Preview_2.0.0_x64-setup.exe`, open Aurora Launcher Native
 Preview, sign in with Microsoft, and create or select an instance. Minecraft:
 Java Edition ownership is required.
 
-[WebView 1.5.1](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/v1.5.1)
-remains the stable fallback. Native has separate installation, data, credentials,
+[Historical WebView 1.5.1](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/v1.5.1)
+is retained as an archived release; the WebView UI is no longer developed. Native has separate installation, data, credentials,
 and update authority; it does not automatically replace or migrate WebView
 installations. Keep a backup before manually moving data between versions.
 Updater signatures authenticate updates; Windows Authenticode publisher signing
@@ -47,15 +47,17 @@ Historical development and acceptance reports remain in the organized docs tree.
 ## Development
 
 Native Windows builds require stable Rust and the Microsoft C++ build tools.
-The native interface does not require WebView2. Node/npm are used for release
-tooling and for the retained WebView host.
+The native interface does not require WebView2. Node/npm are used only for release tooling and the existing encrypted-key signer.
+The retired UI has been removed; the reusable Rust backend is in `core/`.
 
 ```sh
 cargo run --manifest-path native/Cargo.toml
 cargo test --manifest-path native/Cargo.toml --locked
-cargo test --manifest-path src-tauri/Cargo.toml --locked --no-default-features --features native-preview
+cargo test --manifest-path core/Cargo.toml --locked
 cargo build --manifest-path native/Cargo.toml --locked --release
 ```
 
-Use `npm ci`, `npm run check`, and `npm run build` for the separate WebView host.
+Use `npm ci` and `npm test` for release-tool validation. Native is the only
+application build. Existing package/data identifiers retain their compatibility
+names, including `native-preview`; GitHub 2.0.0 is a stable release.
 See [AGENTS.md](AGENTS.md) for repository and security boundaries.

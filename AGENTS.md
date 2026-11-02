@@ -29,25 +29,26 @@ a requirement to release Launcher for every compatible Client version. See
 
 ## Purpose and stack
 
-Aurora Launcher is the standalone, cross-platform launcher for the separate Aurora Fabric client mod. The stack is Tauri 2, Rust, Svelte 5, TypeScript, SvelteKit in static SPA mode, and Vite. The launcher consumes Aurora as a future versioned artifact; never copy or couple to the mod's source tree.
+Aurora Launcher is the standalone, cross-platform launcher for the separate Aurora Fabric client mod. The application is native Rust with a Slint interface over the Rust launcher core. Tauri, WebView, Svelte and the web frontend are retired; do not reintroduce them. The launcher consumes Aurora as a future versioned artifact; never copy or couple to the mod's source tree.
 
 ## Commands
 
 ```sh
-npm install
-npm run tauri dev
-npm run check
-npm run build
-cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-cargo check --manifest-path src-tauri/Cargo.toml --all-targets
-cargo test --manifest-path src-tauri/Cargo.toml
-npm run tauri build
+cargo run --manifest-path native/Cargo.toml
+cargo fmt --manifest-path core/Cargo.toml --all -- --check
+cargo fmt --manifest-path native/Cargo.toml --all -- --check
+cargo check --manifest-path core/Cargo.toml --all-targets --locked
+cargo test --manifest-path core/Cargo.toml --locked
+cargo test --manifest-path native/Cargo.toml --locked
+cargo build --manifest-path native/Cargo.toml --release --locked
+npm ci
+npm test
 ```
 
 ## Boundaries
 
-- Svelte is presentation only. Installation, downloads, authentication, secure credentials, integrity checks, Java/runtime handling, filesystem mutation, and process launch belong in Rust.
-- Cross the frontend/native boundary through narrow, typed commands/events. Keep DTO field naming and error shapes synchronized with `src/lib/backend.ts`.
+- Slint is presentation only. Installation, downloads, authentication, secure credentials, integrity checks, Java/runtime handling, filesystem mutation, and process launch belong in Rust.
+- Cross the frontend/native boundary through narrow, typed commands/events. Keep Rust DTO field naming and error shapes synchronized with `native/src/api.rs`.
 - Use platform application-data APIs. Never default an instance to the user's normal `.minecraft`, and never write mutable data beside the executable.
 - Grow Rust by launcher domain, not in a giant `main.rs` or catch-all service. Add modules only with implemented behavior.
 
@@ -68,7 +69,7 @@ npm run tauri build
 - Production artifact sources are HTTPS-only. Cleartext HTTP is acceptable exclusively for explicit loopback hosts (`127.0.0.1`, `::1`, `localhost`) as the documented test transport path; deterministic tests use local loopback servers, never public internet.
 - Spawn processes with structured executable/argument APIs, never shell strings. Sanitize diagnostics and never log secrets or reusable tokens.
 - Validate path containment before destructive operations. Distinguish managed paths from user-selected external paths.
-- Do not casually change the Tauri identifier (`com.aurora.launcher`), managed-data semantics, command DTOs, error codes, or isolation model; they become compatibility contracts.
+- Do not casually change the native identifier (`com.aurora.launcher.native-preview`) or the historical WebView identifier (`com.aurora.launcher`), managed-data semantics, command DTOs, error codes, or isolation model; they become compatibility contracts.
 
 ## Minecraft metadata and install planning
 
@@ -215,42 +216,24 @@ modules come only from the manifest-recorded, digest-verified installed loader
 jar and are validation-only. Do not reintroduce the stricter bundled-version
 rule. See `docs/instance-tiles-icons/README.md`.
 
-## Native host (NATIVE initiative, 2026-10-31)
+## Native application boundary
 
-A native Slint host (`native/`, crate `aurora-native`) runs alongside the
-Tauri/WebView host over the same core. See `docs/native-ui/NATIVE_UI_MIGRATION_ACCEPTANCE.md`
-and `docs/native-ui/`.
+The Slint application in `native/` is the only supported UI. The Rust backend
+lives in `core/`; it has no Tauri, WebView or frontend runtime dependency.
 
-- Launcher operations live in `src-tauri/src/application.rs` and take a
-  `host::Host`, never `tauri::AppHandle`. `application_tauri.rs` holds only thin
-  generated `#[tauri::command]` wrappers; keep behavior out of it. New commands
-  need both a wrapper there and, when the native UI uses them, a typed call in
-  `native/src/api.rs`.
-- `tauri`, `tauri-build` and the opener/updater plugins stay optional behind the
-  default `tauri-host` feature; the core must keep building and testing with
-  `--no-default-features`. Keep `Host` dispatch dynamic so shared code paths
-  never link the WebView runtime into tests or the native host.
-- The native host consumes the serialized DTO contract (the same JSON as
-  `src/lib/backend.ts`) through mirror types; it never reads private core
-  fields and never re-decides readiness, verification or installation.
-- Native presentation is Slint: tokens in `native/ui/theme.slint`, shared
-  controls in `native/ui/components.slint`, one global per domain in
-  `native/ui/state.slint`. Screens do not restyle controls locally.
-- Play readiness deep-verifies installed files: trigger it only when its inputs
-  change or on explicit refresh, never on navigation, and keep at most one
-  check in flight.
-- NATIVE-9's `native-preview` core feature uses separate application-data,
-  credential and shortcut identities (`com.aurora.launcher.native-preview`).
-  Never combine it with `tauri-host` or `private-candidate`. Native updates use
-  a separately signed native-only offer and remain unconfigured unless the
-  owner enables the proposed native authority at build time. Do not change the
-  existing WebView authority. See `docs/native-ui/NATIVE_DISTRIBUTION.md`.
-- Native acceptance uses `AURORA_DIAGNOSTIC_DATA_ROOT` (debug builds, or release
-  with the `disposable-data-root` feature only). Windows credential targets are
-  global per account within each compiled identity: never sign out in a
-  disposable root of an account also used by another installation of that
-  identity. NATIVE-6/7/8 executables used the production namespace; retain their
-  credential warning even though NATIVE-9 preview builds are isolated.
+- Implement launcher operations in `core/src/application.rs` against `host::Host`.
+  Native presentation uses typed calls and serialized DTOs in `native/src/api.rs`.
+- UI tokens, shared controls and domain state remain in `native/ui/`. Do not move
+  downloads, authentication, installation, filesystem changes or launch into UI.
+- Readiness remains deep verification, triggered by changed inputs or explicit
+  refresh, with at most one in-flight check.
+- Native 2.0.0 is stable/latest. Preserve existing native-preview identifiers,
+  credentials, data paths, artifact names and signed update schema as compatibility
+  contracts. They do not imply a GitHub prerelease. Never auto-migrate old WebView
+  data or change the historical WebView authority.
+- The native-preview core feature is only a compatibility marker for existing
+  build commands; it cannot enable a WebView host. Acceptance builds retain their
+  compile-time isolated identities and packaging rejection.
 
 ## Native controls and published Client discovery (2026-11-01)
 

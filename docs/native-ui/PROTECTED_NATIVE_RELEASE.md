@@ -36,10 +36,11 @@ and `Aurora.Native.Preview_<version>_x64-setup.exe`. Discovery is the existing
 proposed `launcher-native-update-authority/native-update.json` endpoint. Native
 offers bind product/channel/Slint/platform/architecture/package/source/version,
 expected size/hash and both updater signatures. Neither stream can consume the
-other's package. Native releases are prereleases with `make_latest=false`, so
-the WebView release selected by GitHub's latest endpoint stays unchanged.
+other's package. The owner has promoted Native 2.0.0 to stable/latest and retired
+the WebView UI. Future native publication uses `prerelease=false` and
+`make_latest=true`; historical WebView artifacts and authority remain intact.
 
-The protected workflow is `.github/workflows/native-preview-release.yml`.
+The protected workflow is `.github/workflows/native-release.yml`.
 It is manual, bound to the exact reviewed current `main` SHA, and defaults to
 private build artifacts without publication or discovery advancement. It never
 rebuilds between signing, the publication gate and authority advancement.

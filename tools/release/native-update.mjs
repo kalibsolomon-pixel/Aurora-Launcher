@@ -3,7 +3,7 @@
 import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verifyUpdaterSignature, versionParts, sha256, strictUtf8, publicKeyPacket } from './updater-release.mjs';
+import { verifyUpdaterSignature, versionParts, sha256, strictUtf8, publicKeyPacket } from './native-signing.mjs';
 
 export const nativeAuthority = 'https://raw.githubusercontent.com/kalibsolomon-pixel/Aurora-Launcher/launcher-native-update-authority/native-update.json';
 export const nativeName = version => `Aurora.Native.Preview_${version}_x64-setup.exe`;

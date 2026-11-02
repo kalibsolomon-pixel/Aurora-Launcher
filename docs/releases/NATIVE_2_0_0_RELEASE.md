@@ -2,6 +2,13 @@
 
 **RELEASED — AURORA LAUNCHER NATIVE 2.0.0**
 
+**Subsequent owner decision:** Native 2.0.0 is now GitHub's stable **Latest**
+release (`prerelease: false`). The active Tauri/WebView UI was retired and the
+retained Rust core moved to `core/`. The immutable 2.0.0 tag and signed installer
+are unchanged. See [native-only transition](../native-ui/NATIVE_ONLY_TRANSITION.md)
+for the source changes and validation; preview-policy statements below record
+the original publication sequence.
+
 Source integration, requested widget/icon inclusion, documentation organization,
 versioning and independent validation are complete. Protected CI has built and
 signed the exact 2.0.0 installer and update envelope. Their downloaded bytes pass

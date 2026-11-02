@@ -293,7 +293,7 @@ component SettingsPage inherits ScrollView {
 
 export component AppWindow inherits Window {
     title: "Aurora Launcher — Slint prototype";
-    icon: @image-url("../../../../static/aurora-icon.png");
+    icon: @image-url("../../../../native/assets/aurora-mark-216.png");
     preferred-width: 1120px;
     preferred-height: 760px;
     min-width: 720px;
@@ -320,7 +320,7 @@ export component AppWindow inherits Window {
             width: 96px; background: Theme.sidebar;
             VerticalLayout {
                 padding: 12px; spacing: 6px;
-                Image { source: @image-url("../../../../static/aurora-icon.png"); width: 40px; height: 40px; image-rendering: smooth; accessible-role: image; accessible-label: "Aurora"; }
+                Image { source: @image-url("../../../../native/assets/aurora-mark-216.png"); width: 40px; height: 40px; image-rendering: smooth; accessible-role: image; accessible-label: "Aurora"; }
                 Rectangle { height: 12px; }
                 NavItem { label: "Home"; glyph: "⌂"; active: root.page == 0; activated => { root.page = 0; } }
                 NavItem { label: "Mods"; glyph: "▤"; active: root.page == 1; activated => { root.page = 1; } }

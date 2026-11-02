@@ -1,3 +1,27 @@
+# Current architecture — native Rust/Slint
+
+Aurora Launcher has one UI: `native/`, rendered by Slint. The launcher domains
+live in the Rust `core/` library. The former `src-tauri/` directory was renamed
+to `core/`; its Tauri entry point, IPC wrappers, plugins, frontend and WebView
+build configuration have been removed. `Host` supplies the native Tokio runtime,
+platform data directory, version and serialized progress/state events.
+
+`native/src/api.rs` is the presentation adapter over `core/src/application.rs`.
+Authentication, verified acquisition, instance/runtime installation, synchronization
+and exact-child process supervision remain Rust-owned. Native update discovery,
+minisign verification, staging and NSIS handoff use the established native updater.
+Existing package/data/credential names and native signed schema are unchanged.
+
+Native 2.0.0 is now the stable/latest GitHub release. The immutable 2.0.0 installer
+was already native-only; repository cleanup does not rebuild or replace it.
+Historical WebView releases/data and update authority remain untouched.
+
+The dated engineering sections below are retained historical records. References
+to a WebView host or old build commands describe earlier development, not a second
+supported application. Current commands and release policy are in `RELEASING.md`.
+
+---
+
 > Current authority lifecycle: see `docs/releases/UPDATE_AUTHORITY.md`. Immutable versioned releases, mutable discovery ref and compiled signing key are separate identities. Public 1.4.0 retains its retired endpoint and requires manual bootstrap to 1.4.1. Historical acceptance below is preserved.
 
 # Aurora Launcher architecture

@@ -14,16 +14,16 @@ Source links are relative to this document; line numbers refer to the audit HEAD
 
 | Stage | Actual authority and behavior | Source |
 | --- | --- | --- |
-| Global Minecraft & Java | Shows saved selected-instance MiB; links to instance Settings/Overview. No global JVM, memory, or Java override | [MinecraftSettings.svelte](../../src/lib/launcher/MinecraftSettings.svelte), [UI-5 audit](../ui-5/SETTINGS_AUDIT.md) |
-| Instance editor | Per-instance draft, whole-MiB input, additional JVM text, optional window; explicit Save. Changing Java is not a picker | [InstanceSettingsPanel.svelte](../../src/lib/instances/InstanceSettingsPanel.svelte), lines 203–247 |
-| Frontend save | `detailDrafts` preserve edits across navigation. `runSaveConfiguration` submits whole proposed configuration and original expected configuration, then publishes native result and refreshes readiness | [store.svelte.ts](../../src/lib/launcher/store.svelte.ts), lines 565–625 |
-| Typed boundary | `InstanceConfiguration` uses `memoryMib`, `additionalJvmArguments`, tagged loader, Minecraft version, `auroraEnabled`, `window`. `updateInstanceConfiguration` sends original and proposed values | [backend.ts](../../src/lib/backend.ts), lines 568, 689; [application.rs](../../src-tauri/src/application.rs), line 2334 |
-| Save validation | Validates configuration and implemented platform; requires Ready registry record; refuses stale original and unreviewed Aurora association changes; atomically saves registry | [instances/lifecycle.rs](../../src-tauri/src/instances/lifecycle.rs), line 914 |
-| Play preparation | Rust preparation reservation; capture snapshot; deep content check; exact game/runtime plan resolution; validate saved configuration and parse JVM text | [application.rs](../../src-tauri/src/application.rs), lines 5786–5895 |
-| Runtime/session | Deep managed runtime validation with actual bounded `-version`; use its exact launch executable. Usable Rust session or native restoration required | same file, lines 5896–5960; [runtime/install.rs](../../src-tauri/src/runtime/install.rs), `validate_runtime` |
-| Final authority | `prepared.with_validated` rechecks snapshot and content under final locks; local mod compatibility repeated; resolves LaunchSpec and spawns inside the boundary | same file, lines 5960 onward; [launch/boundary.rs](../../src-tauri/src/launch/boundary.rs) |
-| Assembly | `LaunchPlan::from_game_plan` consumes normalized effective arguments; role/containment-checked installed paths and Rust-owned session replace placeholders | [launch/resolve.rs](../../src-tauri/src/launch/resolve.rs), lines 282, 325, 512 |
-| Spawn | Structured executable and individual strings, instance-root cwd, null stdin, piped output; exact returned child supervised | [launch/process.rs](../../src-tauri/src/launch/process.rs), lines 172, 240 |
+| Global Minecraft & Java | Shows saved selected-instance MiB; links to instance Settings/Overview. No global JVM, memory, or Java override | [MinecraftSettings.svelte](https://github.com/kalibsolomon-pixel/Aurora-Launcher/blob/native-v2.0.0/src/lib/launcher/MinecraftSettings.svelte), [UI-5 audit](../ui-5/SETTINGS_AUDIT.md) |
+| Instance editor | Per-instance draft, whole-MiB input, additional JVM text, optional window; explicit Save. Changing Java is not a picker | [InstanceSettingsPanel.svelte](https://github.com/kalibsolomon-pixel/Aurora-Launcher/blob/native-v2.0.0/src/lib/instances/InstanceSettingsPanel.svelte), lines 203–247 |
+| Frontend save | `detailDrafts` preserve edits across navigation. `runSaveConfiguration` submits whole proposed configuration and original expected configuration, then publishes native result and refreshes readiness | [store.svelte.ts](https://github.com/kalibsolomon-pixel/Aurora-Launcher/blob/native-v2.0.0/src/lib/launcher/store.svelte.ts), lines 565–625 |
+| Typed boundary | `InstanceConfiguration` uses `memoryMib`, `additionalJvmArguments`, tagged loader, Minecraft version, `auroraEnabled`, `window`. `updateInstanceConfiguration` sends original and proposed values | [backend.ts](https://github.com/kalibsolomon-pixel/Aurora-Launcher/blob/native-v2.0.0/src/lib/backend.ts), lines 568, 689; [application.rs](../../core/src/application.rs), line 2334 |
+| Save validation | Validates configuration and implemented platform; requires Ready registry record; refuses stale original and unreviewed Aurora association changes; atomically saves registry | [instances/lifecycle.rs](../../core/src/instances/lifecycle.rs), line 914 |
+| Play preparation | Rust preparation reservation; capture snapshot; deep content check; exact game/runtime plan resolution; validate saved configuration and parse JVM text | [application.rs](../../core/src/application.rs), lines 5786–5895 |
+| Runtime/session | Deep managed runtime validation with actual bounded `-version`; use its exact launch executable. Usable Rust session or native restoration required | same file, lines 5896–5960; [runtime/install.rs](../../core/src/runtime/install.rs), `validate_runtime` |
+| Final authority | `prepared.with_validated` rechecks snapshot and content under final locks; local mod compatibility repeated; resolves LaunchSpec and spawns inside the boundary | same file, lines 5960 onward; [launch/boundary.rs](../../core/src/launch/boundary.rs) |
+| Assembly | `LaunchPlan::from_game_plan` consumes normalized effective arguments; role/containment-checked installed paths and Rust-owned session replace placeholders | [launch/resolve.rs](../../core/src/launch/resolve.rs), lines 282, 325, 512 |
+| Spawn | Structured executable and individual strings, instance-root cwd, null stdin, piped output; exact returned child supervised | [launch/process.rs](../../core/src/launch/process.rs), lines 172, 240 |
 
 Launcher configuration is **schema 7**, with selection, appearance, widgets and
 Discord preferences; it has no heap or JVM preference. Instance registry is
@@ -43,14 +43,14 @@ Fabric's declared major floor is recorded by composition; it cannot cause a
 silent switch to an unrelated runtime component. Vanilla/Forge/NeoForge retain
 their implemented composition semantics; P1's gameplay matrix focuses on Fabric.
 
-[runtime/metadata.rs](../../src-tauri/src/runtime/metadata.rs), lines 126–225,
+[runtime/metadata.rs](../../core/src/runtime/metadata.rs), lines 126–225,
 uses the pinned Mojang runtime index, exact platform/component and exactly one
 entry. Missing/empty/ambiguous selections fail. Index version must match the
 required major. Its file manifest is acquired through the SHA-1 verified cache,
 then normalized into JavaRuntimePlan. No system Java, PATH, JAVA_HOME, vendor
 picker, custom executable, or architecture fallback participates.
 
-[runtime/plan.rs](../../src-tauri/src/runtime/plan.rs), lines 60, 93, 255, 332,
+[runtime/plan.rs](../../core/src/runtime/plan.rs), lines 60, 93, 255, 332,
 maps OS/architecture explicitly and derives
 `runtimes/<component>/<platform>-<manifest-sha1>/`. Windows uses `bin/javaw.exe`
 for Minecraft and `bin/java.exe` for diagnostics; Linux uses `bin/java` for both.
@@ -58,7 +58,7 @@ Linux x64/x86 map to `linux`/`linux-i386`; Linux ARM64 is unsupported by the
 current mapping. Windows x64/ARM64/x86 have separate keys. No Java is copied into
 an instance or installed into the system.
 
-[runtime/install.rs](../../src-tauri/src/runtime/install.rs), `ensure_runtime`,
+[runtime/install.rs](../../core/src/runtime/install.rs), `ensure_runtime`,
 `validate_runtime`, `run_java_diagnostic`, and `run_process`, installs only
 verified SHA-1 store objects into derived staging, writes schema-1
 `runtime-installed.json` last, and promotes the whole tree. Existing valid exact
@@ -93,8 +93,8 @@ other native callers/tests; it is not the normal Play default.
 7. Applicable Mojang then loader game arguments, with real native session/path
    substitutions; optional quick target augments this same spec.
 
-Evidence: [game/plan.rs](../../src-tauri/src/game/plan.rs), lines 336, 354;
-[launch/resolve.rs](../../src-tauri/src/launch/resolve.rs), lines 169, 512–558.
+Evidence: [game/plan.rs](../../core/src/game/plan.rs), lines 336, 354;
+[launch/resolve.rs](../../core/src/launch/resolve.rs), lines 169, 512–558.
 There is no shell command string. Full process arguments are sensitive and must
 never be recorded for this audit or benchmark reporting.
 
@@ -117,7 +117,7 @@ not a captured live command or a claim about the owner's saved settings:
 -Dlog4j.configurationFile=<validated installed client-1.21.2.xml>
 ```
 
-Source: [1.21.11 Mojang fixture](../../src-tauri/src/forge/fixtures/1.21.11-mojang.json),
+Source: [1.21.11 Mojang fixture](../../core/src/forge/fixtures/1.21.11-mojang.json),
 plus the resolver tests. Linux x64 omits the Windows HeapDumpPath entry, uses `:`
 as classpath separator, Unix paths, and `bin/java`. x86 metadata additionally
 selects `-Xss1M`. Other Minecraft versions contribute their own official arguments;
@@ -130,7 +130,7 @@ change them. Actual VM flags/collector still need measurement.
 
 ## Custom parsing, precedence and limits
 
-[instances/settings.rs](../../src-tauri/src/instances/settings.rs), lines 483–605,
+[instances/settings.rs](../../core/src/instances/settings.rs), lines 483–605,
 splits spaces outside double quotes, preserves grouped text, and applies even/odd
 backslash-before-quote rules. Single quotes do not group. Shell expansions and
 shell escaping do not apply. Empty `""` becomes a real empty argument. Control
