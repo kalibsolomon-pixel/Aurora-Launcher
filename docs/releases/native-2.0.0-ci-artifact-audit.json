@@ -1,0 +1,28 @@
+{
+  "workflowRun": 41374244252,
+  "sourceSha": "33af6a6b619c375ed84b7ff495ff125c282386cd",
+  "installerSha256": "b72888bb1a57921e94b0fdbdec895c834c2f1522b4437f346827e1de3e28e09f",
+  "executableSha256": "55ed5d536777aa09a30b535b001924f7aa206b746f6eff940cbad5dbf8521462",
+  "productName": "Aurora Launcher (native preview)",
+  "productVersion": "2.0.0",
+  "fileVersion": "2.0.0",
+  "x64": true,
+  "nativeIdentity": true,
+  "productionPublicKey": true,
+  "nativeAuthority": true,
+  "disposableRootPresent": false,
+  "acceptanceProbePresent": false,
+  "acceptanceProductPresent": false,
+  "webviewDlls": [],
+  "executableAuthenticode": "NotSigned",
+  "installerAuthenticode": "NotSigned",
+  "payloadFiles": [
+    "LICENSE.txt",
+    "MaterialSymbols-LICENSE.txt",
+    "native-new.exe",
+    "THIRD_PARTY_NOTICES.txt",
+    "$PLUGINSDIR\\modern-wizard.bmp",
+    "$PLUGINSDIR\\nsDialogs.dll",
+    "$PLUGINSDIR\\System.dll"
+  ]
+}

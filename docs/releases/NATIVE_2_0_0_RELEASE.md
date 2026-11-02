@@ -3,8 +3,10 @@
 **BLOCKED — PROTECTED APPROVAL REQUIRED**
 
 Source integration, requested widget/icon inclusion, documentation organization,
-versioning and independent validation are complete. The protected release is
-waiting for its required owner review; publication has not occurred.
+versioning and independent validation are complete. Protected CI has built and
+signed the exact 2.0.0 installer and update envelope. Their downloaded bytes pass
+independent signature, inventory and executable-identity verification. Publication
+is waiting for its required owner review; no public release or native tag exists.
 
 The owner authorized Native 2.0.0, tag `native-v2.0.0`, and explicitly included
 the existing responsive-widget and icon improvements. The original in-progress
@@ -49,12 +51,16 @@ stays 1.5.1. No legacy tag is repurposed.
 | Public release title | Prepared as `Aurora Launcher Native 2.0.0` |
 | GitHub release URL | Not published; the expected tag URL must not be treated as an available release |
 | Installer filename | `Aurora.Native.Preview_2.0.0_x64-setup.exe` |
-| Final public installer SHA-256 | Pending protected CI signing and publication; no public hash is claimed |
+| Signed CI installer SHA-256 | `b72888bb1a57921e94b0fdbdec895c834c2f1522b4437f346827e1de3e28e09f`; public download verification remains pending |
+| Signed CI installer size | 10,222,028 bytes |
+| Native executable SHA-256, extracted from that installer | `55ed5d536777aa09a30b535b001924f7aa206b746f6eff940cbad5dbf8521462` |
 | Protected workflow | [Run 41374244252](https://github.com/kalibsolomon-pixel/Aurora-Launcher/actions/runs/41374244252), exact source above |
 | Workflow inputs | Version `2.0.0`, minimum native version `1.4.2`, publication and authority advancement explicitly enabled |
 | Resolve job | Passed exact-main/source/version/minimum/tag-absence guards |
-| Build/sign job | Waiting for required reviewer `kalibsolomon-pixel` in `launcher-production` |
-| Public signing/authority verification | Pending; local unsigned packaging is not production signing acceptance |
+| Build/sign job | Passed after owner approval: core/native tests, optimized build, NSIS packaging, production installer/envelope signing and signed inventory verification |
+| Publication job | Waiting for reviewer `kalibsolomon-pixel` in `launcher-native-preview-publication` |
+| CI signing verification | Passed independently on the exact downloaded CI installer and envelope using the established production public key |
+| Public signing/authority verification | Pending publication and native authority initialization |
 | Native authority | Still absent, protected from creation; no authority mutation performed |
 | Authenticode | Executable and local installer `NotSigned`, under the accepted unsigned-publisher policy |
 
@@ -65,6 +71,23 @@ There was no uncertain duplicate release or tag creation.
 
 ## Independent validation
 
+- Exact protected CI artifact `13110968951`,
+  `native-signed-2.0.0-33af6a6b619c375ed84b7ff495ff125c282386cd`, was downloaded
+  and verified with `native-update.mjs verify`. Both real minisign signatures,
+  payload identities, sizes, hashes and all six inventory entries pass. The
+  artifact ZIP digest recorded by GitHub is
+  `6ddce3fe8a006fb0954a93da6388a983f2c29a1ef0268801ed1925a43ed48a1c`.
+- The exact CI installer was extracted without executing it. Its payload EXE
+  reports product/file version 2.0.0 and PE x64. The native package identity,
+  production public key and fixed native authority endpoint are present;
+  diagnostic-root/probe/acceptance-product markers and WebView/debug payload
+  files are absent. Installer and EXE Authenticode remain `NotSigned` under the
+  accepted publisher policy. See [CI artifact audit](native-2.0.0-ci-artifact-audit.json).
+- Actual installation, normal boot and production-trust installed-update smoke
+  remain unperformed for these exact CI bytes. This host has existing native
+  preview data and no available isolated Windows profile/VM or administrator
+  access for creating one. Extracting a payload is not installed acceptance.
+  No owner installation, preview data, account, instance or world was touched.
 - Core: 1,117 tests and six integration tests passed; 31 existing opt-in tests
   remained ignored. A merge-introduced duplicate WebView test block was removed,
   retaining the original feature-gated tests; default-host all-target checking
@@ -113,9 +136,12 @@ was dispatched.
 
 ## Exact protected actions and remaining limitations
 
-1. The owner must approve the pending `launcher-production` environment review
-   in run 41374244252. Its required reviewer and administrator-bypass prohibition
-   were not changed. The agent did not approve its own protected operation.
+1. The initial `launcher-production` review was approved and its build/sign job
+   passed. The owner must accept the exact CI artifact in an isolated Windows
+   profile/VM, then approve `launcher-native-preview-publication` in
+   [run 41374244252](https://github.com/kalibsolomon-pixel/Aurora-Launcher/actions/runs/41374244252).
+   Its required reviewer and administrator-bypass prohibition remain intact.
+   The agent did not approve its own protected operation.
 2. Before approving native authority advancement, the owner/administrator must
    complete the separately controlled initial-ref procedure. Native ruleset
    `26335822` has **no creation bypass actors**; routine App credentials cannot
@@ -130,12 +156,12 @@ was dispatched.
    record are retained outside Git under
    `C:\Dev\aurora-pandora-evidence-20261101\native-200-release-correction`.
    This proposal does not create a remote authority or authorize a different root.
-4. Accept the exact protected CI artifact before approving the separate native
-   publication gate, then approve the authority gate only after the intended root
-   exists. Actual installer/envelope signatures, immutable public downloads/hashes,
-   installed signed-byte acceptance, native authority bytes and final website
-   downloads remain dependent on those protected actions. Prior test-key lifecycle
-   and owner gameplay acceptance are reused, not relabelled as CI artifact results.
+4. After publication, approve the authority gate only when the intended root
+   exists. Immutable public downloads/hashes, installed signed-byte acceptance,
+   native authority bytes and final website downloads remain dependent on those
+   protected actions. Exact CI installer/envelope signature verification has
+   already passed. Prior test-key lifecycle and owner gameplay acceptance are
+   reused, not relabelled as production installed-update acceptance.
 
 WebView release `v1.5.1`, its immutable artifact identity, and authority ref
 `df7e824b2e49f8a5b9d2447ca2314bcafa21d119` remain unchanged. Neither
