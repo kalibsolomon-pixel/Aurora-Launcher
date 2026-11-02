@@ -6,6 +6,12 @@ Follow `UPDATE_AUTHORITY.md`. Immutable installers and the separately gated Git 
 
 ## Native preview candidate (NATIVE-9)
 
+Current native signing/publication preparation, protected environment setup,
+test-key lifecycle, data compatibility and rollback instructions are in
+[PROTECTED_NATIVE_RELEASE.md](docs/native-ui/PROTECTED_NATIVE_RELEASE.md).
+The new manual protected workflow is prepared locally and has not been
+dispatched. The NATIVE-9 text below remains its historical baseline.
+
 The standalone Slint package is built with `native/tools/package-windows.ps1`,
 using NSIS directly. It has a separate per-user installation/data/credential/
 shortcut identity and never enters the existing stable Tauri update authority.

@@ -1,5 +1,11 @@
 # Native preview distribution contract — NATIVE-9
 
+Final readiness continuation: [PROTECTED_NATIVE_RELEASE.md](PROTECTED_NATIVE_RELEASE.md)
+documents the implemented protected native pipeline and compile-time isolated
+signed local lifecycle. It supersedes the historical statements below that
+native publication automation is unimplemented and that newer preferences have
+no compatibility changes. No workflow was dispatched or authority activated.
+
 This is a local implementation, not permission to publish or activate an
 authority. The stable WebView installation and update authority are preserved.
 The current evidence and remaining production gates are in

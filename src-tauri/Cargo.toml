@@ -27,6 +27,8 @@ private-candidate = []
 # Side-by-side Slint preview: separate data, credentials, shortcut identity and
 # a signed native-only updater. Never changes the WebView production channel.
 native-preview = ["dep:minisign-verify"]
+# Compile-time-only loopback updater acceptance; packaging rejects this feature.
+native-update-acceptance = ["native-preview", "disposable-data-root"]
 # Explicit research build only; absent from ordinary development/release builds.
 performance-p0-2 = []
 # Native-host acceptance builds only: honor AURORA_DIAGNOSTIC_DATA_ROOT in

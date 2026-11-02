@@ -22,6 +22,7 @@ default = []
 # Acceptance builds only: honor AURORA_DIAGNOSTIC_DATA_ROOT in release builds
 # so measurements never open the owner's data. Never enabled for distribution.
 disposable-data-root = ["aurora-launcher/disposable-data-root"]
+native-update-acceptance = ["disposable-data-root", "aurora-launcher/native-update-acceptance"]
 # Opt-in OpenGL renderer for comparison; the software renderer is the default
 # because it measured materially lower memory (docs/native-ui/BENCHMARKS.md).
 renderer-femtovg = ["slint/renderer-femtovg"]

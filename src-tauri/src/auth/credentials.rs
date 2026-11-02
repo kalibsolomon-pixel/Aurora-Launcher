@@ -180,7 +180,7 @@ fn entry_target(account_id: &str) -> String {
     #[cfg(all(not(feature = "private-candidate"), not(feature = "native-preview")))]
     const NAMESPACE: &str = "com.aurora.launcher";
     #[cfg(all(not(feature = "private-candidate"), feature = "native-preview"))]
-    const NAMESPACE: &str = "com.aurora.launcher.native-preview";
+    const NAMESPACE: &str = crate::host::APPLICATION_IDENTIFIER;
     format!("{NAMESPACE}/account/{account_id}")
 }
 

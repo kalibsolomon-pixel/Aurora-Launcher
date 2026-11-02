@@ -9,6 +9,20 @@ fn main() {
         resource.set_icon("assets/icon.ico");
         resource.set("ProductName", "Aurora Launcher (native preview)");
         resource.set("FileDescription", "Aurora Launcher");
+        #[cfg(feature = "native-update-acceptance")]
+        {
+            println!("cargo:rerun-if-env-changed=AURORA_NATIVE_ACCEPTANCE_VERSION");
+            let version =
+                std::env::var("AURORA_NATIVE_ACCEPTANCE_VERSION").expect("acceptance version");
+            let parts: Vec<u64> = version.split('.').map(|v| v.parse().unwrap()).collect();
+            assert!(parts.len() == 3 && parts.iter().all(|v| *v <= 65535));
+            let numeric = (parts[0] << 48) | (parts[1] << 32) | (parts[2] << 16);
+            resource.set_version_info(winresource::VersionInfo::PRODUCTVERSION, numeric);
+            resource.set_version_info(winresource::VersionInfo::FILEVERSION, numeric);
+            resource.set("ProductVersion", &version);
+            resource.set("FileVersion", &version);
+            resource.set("ProductName", "Aurora LOCAL UPDATE ACCEPTANCE ONLY");
+        }
         resource
             .compile()
             .expect("the Windows resource must compile");

@@ -593,7 +593,7 @@ export component AppWindow inherits Window {
         dismissible: !Instances.delete-busy;
         dismissed => { Instances.delete-open = false; }
         Text { text: "This permanently deletes the instance folder, including worlds and screenshots. It cannot be undone. Type the instance name to confirm."; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
-        delete-field := TextField { label: "Type the instance name to confirm"; placeholder: Instances.name; text <=> Instances.delete-text; enabled: !Instances.delete-busy; }
+        TextField { label: "Type the instance name to confirm"; placeholder: Instances.name; text <=> Instances.delete-text; enabled: !Instances.delete-busy; initial-focus: true; }
         if Instances.delete-error != "": Text { text: Instances.delete-error; color: Theme.error; wrap: word-wrap; }
         HorizontalLayout {
             alignment: end;
@@ -601,7 +601,6 @@ export component AppWindow inherits Window {
             Button { text: "Cancel"; kind: ButtonKind.ghost; enabled: !Instances.delete-busy; clicked => { Instances.delete-open = false; } }
             Button { text: "Delete permanently"; kind: ButtonKind.danger; loading: Instances.delete-busy; enabled: Instances.delete-text == Instances.name; clicked => { Instances.delete-confirm(); } }
         }
-        init => { delete-field.focus-field(); }
     }
 
     if IconPicker.open: IconPickerDialog { }

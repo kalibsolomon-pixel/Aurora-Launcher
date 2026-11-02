@@ -6977,6 +6977,10 @@ pub async fn launcher_update_install(
 }
 
 #[cfg(test)]
+#[path = "release_acceptance.rs"]
+mod release_acceptance;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

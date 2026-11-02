@@ -16,6 +16,8 @@ mod borealis;
 mod chrome;
 mod content_import;
 mod content_updates;
+#[cfg(test)]
+mod desktop_acceptance_tests;
 mod discover;
 mod events;
 mod home;
@@ -40,10 +42,14 @@ mod symbols;
 mod syncing;
 mod theme;
 mod ui;
+#[cfg(feature = "native-update-acceptance")]
+mod update_acceptance;
 mod widgets;
 
+use aurora_launcher_lib::host::Host;
+#[cfg(not(feature = "native-update-acceptance"))]
 use aurora_launcher_lib::host::{
-    APPLICATION_IDENTIFIER, Host, LAUNCHER_VERSION, platform_local_data_dir,
+    APPLICATION_IDENTIFIER, LAUNCHER_VERSION, platform_local_data_dir,
 };
 
 fn main() -> Result<(), slint::PlatformError> {
@@ -68,11 +74,23 @@ fn main() -> Result<(), slint::PlatformError> {
     let window = AppWindow::new()?;
     #[cfg(feature = "disposable-data-root")]
     preview_probe::configure_window(&window);
-    let host = Host::native(
+    #[cfg(not(feature = "native-update-acceptance"))]
+    let (data_root, version) = (
         platform_local_data_dir(APPLICATION_IDENTIFIER),
         LAUNCHER_VERSION,
+    );
+    #[cfg(feature = "native-update-acceptance")]
+    let (data_root, version) = (
+        Ok(std::path::PathBuf::from(env!("AURORA_NATIVE_ACCEPTANCE_ROOT")).join("managed")),
+        env!("AURORA_NATIVE_ACCEPTANCE_VERSION"),
+    );
+    let host = Host::native(
+        data_root,
+        version,
         runtime.handle().clone(),
         |name, payload| {
+            #[cfg(feature = "native-update-acceptance")]
+            update_acceptance::record_progress(name, &payload);
             let name = name.to_owned();
             let _ = slint::invoke_from_event_loop(move || events::dispatch(&name, payload));
         },
@@ -101,6 +119,16 @@ fn main() -> Result<(), slint::PlatformError> {
         ui::with(|window, _| window.global::<Shell>().set_toast_visible(false));
     });
     window.global::<Shell>().on_retry_load(load);
+
+    // Compile-time isolated acceptance never loads accounts, credentials, sync or Discord.
+    #[cfg(feature = "native-update-acceptance")]
+    if !std::env::args().any(|arg| arg == "--desktop-acceptance") {
+        update_acceptance::start(&window, host.clone());
+        window.run()?;
+        ui::release();
+        runtime.shutdown_timeout(std::time::Duration::from_secs(2));
+        return Ok(());
+    }
 
     // Opt-in local diagnostics: synthetic pixels, no launcher loading,
     // credentials, provider requests, persistence or account mutations.

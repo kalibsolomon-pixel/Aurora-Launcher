@@ -182,14 +182,22 @@ impl Host {
 
 /// The launcher version compiled into this core (kept equal to package.json
 /// by `npm run verify:version`).
+#[cfg(not(feature = "native-update-acceptance"))]
 pub const LAUNCHER_VERSION: &str = env!("CARGO_PKG_VERSION");
+#[cfg(feature = "native-update-acceptance")]
+pub const LAUNCHER_VERSION: &str = env!("AURORA_NATIVE_ACCEPTANCE_VERSION");
 
 /// The application identifier that names the platform data directory. It is
 /// a compatibility contract shared by both hosts (see AGENTS.md).
 #[cfg(not(feature = "native-preview"))]
 pub const APPLICATION_IDENTIFIER: &str = "com.aurora.launcher";
-#[cfg(feature = "native-preview")]
+#[cfg(all(feature = "native-preview", not(feature = "native-update-acceptance")))]
 pub const APPLICATION_IDENTIFIER: &str = "com.aurora.launcher.native-preview";
+#[cfg(feature = "native-update-acceptance")]
+pub const APPLICATION_IDENTIFIER: &str = concat!(
+    "com.aurora.launcher.native-preview.acceptance.",
+    env!("AURORA_NATIVE_ACCEPTANCE_ID")
+);
 
 /// Resolves `<platform local data>/<identifier>` the same way Tauri's
 /// `app_local_data_dir` does: the OS known folder (Windows

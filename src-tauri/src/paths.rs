@@ -19,10 +19,20 @@ impl ManagedPaths {
         // Development acceptance can run the real app against a disposable
         // managed root without ever opening the owner's normal instance data.
         // Release builds have no override.
-        #[cfg(any(debug_assertions, feature = "disposable-data-root"))]
+        #[cfg(all(
+            any(debug_assertions, feature = "disposable-data-root"),
+            not(feature = "native-update-acceptance")
+        ))]
         let data_root = std::env::var_os("AURORA_DIAGNOSTIC_DATA_ROOT")
             .map(PathBuf::from)
             .unwrap_or(data_root);
+        // The signed-update acceptance executable cannot be redirected at
+        // runtime, even by an inherited diagnostic environment variable.
+        #[cfg(feature = "native-update-acceptance")]
+        let data_root = {
+            let _ = data_root;
+            PathBuf::from(env!("AURORA_NATIVE_ACCEPTANCE_ROOT")).join("managed")
+        };
         // The opt-in private package can test path limitations with disposable
         // roots. Ordinary release builds retain the platform-only contract.
         #[cfg(feature = "private-candidate")]

@@ -8,7 +8,9 @@ use base64ct::{Base64, Encoding};
 use minisign_verify::{PublicKey, Signature};
 use serde::{Deserialize, Serialize};
 
-use super::launcher::{LauncherUpdateError as Error, LauncherUpdateStatus, UPDATER_PUBKEY};
+#[cfg(not(feature = "native-update-acceptance"))]
+use super::launcher::UPDATER_PUBKEY;
+use super::launcher::{LauncherUpdateError as Error, LauncherUpdateStatus};
 use super::{LauncherPhase, UpdateAvailability};
 use crate::host::Host;
 use crate::integrity::{ArtifactDigest, verify_file};
@@ -17,7 +19,31 @@ use crate::integrity::{ArtifactDigest, verify_file};
 // build. Both owner-supplied compile-time opt-in and the existing trust key are
 // required; environment/runtime/frontend overrides are deliberately absent.
 pub const AUTHORITY: &str = "https://raw.githubusercontent.com/kalibsolomon-pixel/Aurora-Launcher/launcher-native-update-authority/native-update.json";
+#[cfg(not(feature = "native-update-acceptance"))]
 const PRODUCT: &str = "com.aurora.launcher.native-preview";
+#[cfg(feature = "native-update-acceptance")]
+const PRODUCT: &str = concat!(
+    "com.aurora.launcher.native-preview.acceptance.",
+    env!("AURORA_NATIVE_ACCEPTANCE_ID")
+);
+#[cfg(not(feature = "native-update-acceptance"))]
+const CHANNEL: &str = "native-preview";
+#[cfg(feature = "native-update-acceptance")]
+const CHANNEL: &str = "native-acceptance";
+
+fn discovery_url() -> &'static str {
+    #[cfg(feature = "native-update-acceptance")]
+    {
+        concat!(
+            env!("AURORA_NATIVE_ACCEPTANCE_ORIGIN"),
+            "/native-update.json"
+        )
+    }
+    #[cfg(not(feature = "native-update-acceptance"))]
+    {
+        AUTHORITY
+    }
+}
 const MAX_INSTALLER: u64 = 256 * 1024 * 1024;
 const MAX_ENVELOPE: usize = 64 * 1024;
 
@@ -92,14 +118,22 @@ impl Offer {
         let candidate = version(&self.version)?;
         let minimum = version(&self.minimum_installed_version)?;
         let current = version(installed)?;
+        #[cfg(not(feature = "native-update-acceptance"))]
         let url = format!(
             "https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v{}/{}",
             self.version,
             installer_name(&self.version)
         );
+        #[cfg(feature = "native-update-acceptance")]
+        let url = format!(
+            "{}/native-v{}/{}",
+            env!("AURORA_NATIVE_ACCEPTANCE_ORIGIN"),
+            self.version,
+            installer_name(&self.version)
+        );
         if self.schema_version != 1
             || self.product != PRODUCT
-            || self.channel != "native-preview"
+            || self.channel != CHANNEL
             || self.runtime != "slint"
             || self.platform != "windows"
             || self.architecture != "x86_64"
@@ -187,22 +221,31 @@ pub fn verify_installer(path: &Path, offer: &Offer, public_key: &str) -> Result<
 }
 
 fn configured_key() -> Result<&'static str, Error> {
-    if !cfg!(all(target_os = "windows", target_arch = "x86_64"))
-        || option_env!("AURORA_NATIVE_UPDATE_AUTHORITY") != Some(AUTHORITY)
+    #[cfg(feature = "native-update-acceptance")]
     {
-        return Err(Error::new(
-            "updater_unconfigured",
-            "Native preview updates are not enabled. Use the separately accepted native installer.",
-        ));
+        let value = env!("AURORA_NATIVE_ACCEPTANCE_KEY");
+        key(value)?;
+        return Ok(value);
     }
-    let value = UPDATER_PUBKEY.ok_or_else(|| {
-        Error::new(
-            "updater_unconfigured",
-            "Native update verification is not configured.",
-        )
-    })?;
-    key(value)?;
-    Ok(value)
+    #[cfg(not(feature = "native-update-acceptance"))]
+    {
+        if !cfg!(all(target_os = "windows", target_arch = "x86_64"))
+            || option_env!("AURORA_NATIVE_UPDATE_AUTHORITY") != Some(AUTHORITY)
+        {
+            return Err(Error::new(
+                "updater_unconfigured",
+                "Native preview updates are not enabled. Use the separately accepted native installer.",
+            ));
+        }
+        let value = UPDATER_PUBKEY.ok_or_else(|| {
+            Error::new(
+                "updater_unconfigured",
+                "Native update verification is not configured.",
+            )
+        })?;
+        key(value)?;
+        Ok(value)
+    }
 }
 
 fn client(artifacts: bool) -> Result<reqwest::Client, Error> {
@@ -239,7 +282,7 @@ fn client(artifacts: bool) -> Result<reqwest::Client, Error> {
 async fn discover(app: &Host) -> Result<Offer, Error> {
     let public_key = configured_key()?;
     let mut response = client(false)?
-        .get(AUTHORITY)
+        .get(discovery_url())
         .header("Cache-Control", "no-cache")
         .send()
         .await
@@ -350,7 +393,7 @@ impl Drop for Staging {
 pub async fn download(
     app: &Host,
     presented: &str,
-    mut progress: impl FnMut(u64, Option<u64>) + Send,
+    progress: impl FnMut(u64, Option<u64>) + Send,
 ) -> Result<LauncherUpdateStatus, Error> {
     let offer = discover(app).await?;
     if offer.version != presented || !is_upgrade(presented, &app.version()) {
@@ -360,6 +403,22 @@ pub async fn download(
         app.local_data_dir().map_err(|_| failure())?,
     )
     .map_err(|_| failure())?;
+    let path = stage_installer(&managed, &offer, configured_key()?, &offer.url, progress).await?;
+    let status = status(app, &offer, LauncherPhase::ReadyToInstall);
+    *pending().lock().expect("native update slot") = Some(Pending { offer, path });
+    Ok(status)
+}
+
+// One transfer/verification implementation. The only production caller supplies
+// the authenticated, pinned offer URL. Tests can exercise it over loopback;
+// there is no runtime endpoint/key override or production signature bypass.
+async fn stage_installer(
+    managed: &crate::paths::ManagedPaths,
+    offer: &Offer,
+    public_key: &str,
+    url: &str,
+    mut progress: impl FnMut(u64, Option<u64>) + Send,
+) -> Result<PathBuf, Error> {
     safe_directory(managed.data_root())?;
     let mut directory = managed.data_root().to_path_buf();
     for name in ["cache", "native-updates"] {
@@ -382,7 +441,7 @@ pub async fn download(
         .open(&staging.path)
         .map_err(|_| failure())?;
     let mut response = client(true)?
-        .get(&offer.url)
+        .get(url)
         .send()
         .await
         .map_err(|_| failure())?
@@ -408,17 +467,12 @@ pub async fn download(
     if done != offer.size_bytes {
         return Err(failure());
     }
-    verify_installer(&staging.path, &offer, configured_key()?)?;
+    verify_installer(&staging.path, offer, public_key)?;
     let executable = staging.root.join("verified-setup.exe");
     std::fs::rename(&staging.path, &executable).map_err(|_| failure())?;
     staging.path = executable;
-    let status = status(app, &offer, LauncherPhase::ReadyToInstall);
-    *pending().lock().expect("native update slot") = Some(Pending {
-        offer,
-        path: staging.path.clone(),
-    });
     staging.retained = true;
-    Ok(status)
+    Ok(staging.path.clone())
 }
 
 pub async fn install(app: &Host, presented: &str) -> Result<LauncherUpdateStatus, Error> {
@@ -452,9 +506,13 @@ pub async fn install(app: &Host, presented: &str) -> Result<LauncherUpdateStatus
         return Err(Error::gone("The native update changed. Download it again."));
     }
     let executable = std::env::current_exe().map_err(|_| failure())?;
+    #[cfg(not(feature = "native-update-acceptance"))]
     let expected = crate::host::platform_local_data_dir("Aurora Launcher Native Preview")
         .map_err(|_| failure())?
         .join("aurora-native.exe");
+    #[cfg(feature = "native-update-acceptance")]
+    let expected =
+        PathBuf::from(env!("AURORA_NATIVE_ACCEPTANCE_ROOT")).join("installation/aurora-native.exe");
     safe_directory(executable.parent().ok_or_else(failure)?)?;
     if executable.canonicalize().ok() != expected.canonicalize().ok() || !expected.is_file() {
         return Err(Error::new(
@@ -574,5 +632,93 @@ mod tests {
             .unwrap_err();
         assert!(error.is_redirect());
         assert_eq!(server.request_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn release_signed_transfer_progress_and_failure_preserve_existing_data() {
+        use crate::test_support::{TestResponse, TestServer};
+        let fixture = fixture();
+        let key = fixture["key"].as_str().unwrap();
+        let offer = verify_offer(
+            &serde_json::to_vec(&fixture["valid"]).unwrap(),
+            key,
+            "1.4.2",
+        )
+        .unwrap();
+        let bytes = decode(fixture["installer"].as_str().unwrap()).unwrap();
+        let served = bytes.clone();
+        let server = TestServer::spawn(std::sync::Arc::new(move |request| {
+            match request.path.as_str() {
+                "/ok" => TestResponse::ok(&served),
+                "/corrupt" => TestResponse::ok(&vec![b'x'; served.len()]),
+                "/interrupted" => TestResponse::ok(&served).with_truncated_body(3),
+                _ => TestResponse::status(404),
+            }
+        }));
+        let root = std::env::temp_dir().join(format!(
+            "aurora-native-release-transfer-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let managed = crate::paths::ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let sentinel = root.join("owner-world-sentinel");
+        std::fs::write(&sentinel, b"preserve").unwrap();
+        let mut progress = Vec::new();
+        let path = stage_installer(
+            &managed,
+            &offer,
+            key,
+            &format!("{}/ok", server.base_url()),
+            |done, total| progress.push((done, total)),
+        )
+        .await
+        .unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        assert_eq!(
+            progress.last(),
+            Some(&(offer.size_bytes, Some(offer.size_bytes)))
+        );
+        assert!(progress.windows(2).all(|p| p[0].0 <= p[1].0));
+        for route in ["corrupt", "interrupted", "missing"] {
+            assert!(
+                stage_installer(
+                    &managed,
+                    &offer,
+                    key,
+                    &format!("{}/{route}", server.base_url()),
+                    |_, _| {}
+                )
+                .await
+                .is_err()
+            );
+            assert_eq!(std::fs::read(&sentinel).unwrap(), b"preserve");
+            assert_eq!(std::fs::read(&path).unwrap(), bytes);
+            assert_eq!(
+                std::fs::read_dir(root.join("cache/native-updates"))
+                    .unwrap()
+                    .count(),
+                1,
+                "failed operation staging must be removed without touching verified data"
+            );
+        }
+        std::fs::write(
+            path.parent().unwrap().join("installer.part"),
+            b"interrupted staging evidence",
+        )
+        .unwrap();
+        assert!(
+            pending_version().is_none(),
+            "on-disk staging cannot create process-local installation authority"
+        );
+        assert!(
+            verify_offer(
+                &serde_json::to_vec(&fixture["valid"]).unwrap(),
+                "unknown identity",
+                "1.4.2"
+            )
+            .is_err()
+        );
+        // Exact disposable root positively created by this test.
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
