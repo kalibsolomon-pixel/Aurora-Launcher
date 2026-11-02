@@ -3986,7 +3986,7 @@ pub async fn check_custom_java(
     let instance = crate::instances::InstanceId::new(request.instance_id)?;
     let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
         .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
-    let plan = crate::instances::lifecycle::resolve_instance_game_plan(
+    let plan = crate::instances::lifecycle::resolve_instance_game_plan_for_runtime(
         &managed,
         &managed.instance_registry_file(),
         &endpoints,
@@ -5140,7 +5140,7 @@ pub async fn get_instance_runtime_status(
             .find(&instance)
             .and_then(|record| record.configuration().java())
         {
-            let game = crate::instances::lifecycle::resolve_instance_game_plan(
+            let game = crate::instances::lifecycle::resolve_instance_game_plan_for_runtime(
                 &managed,
                 &managed.instance_registry_file(),
                 &endpoints,

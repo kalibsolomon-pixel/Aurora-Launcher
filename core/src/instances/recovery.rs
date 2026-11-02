@@ -158,6 +158,13 @@ fn plan(paths: &ManagedPaths, id: &InstanceId) -> Result<Plan, RecoveryError> {
                     .map(|c| (c.path.as_str(), c.local_sha256.as_str(), c.component)),
             )
         {
+            // Runtime-mutable settings are user/game-owned after
+            // installation; validation never byte-pins them, so they are not
+            // recovery concerns either. Their authored digests remain in the
+            // pack document for update planning.
+            if crate::pack_state::is_runtime_mutable(relative) {
+                continue;
+            }
             let path = match crate::pack_state::safe_file(&root, relative) {
                 Ok(path) => Some(path),
                 Err(crate::pack_state::PackStateError::Io(e))
@@ -423,6 +430,12 @@ fn apply_locked(
             )));
         }
         for item in &next.divergences {
+            // Runtime-mutable settings may legitimately be rewritten by the
+            // game during the apply window; only deterministic keep-local
+            // choices must still carry their reviewed bytes.
+            if crate::pack_state::is_runtime_mutable(&item.path) {
+                continue;
+            }
             let file = crate::pack_state::safe_file(&root, &item.path).map_err(fail)?;
             if file_hash(&file)? != item.local_sha256 {
                 return Err(fail("Settings changed during recovery; inspect again."));
@@ -559,7 +572,9 @@ mod tests {
         let pack_before = std::fs::read(root.join("pack-installed.json")).unwrap();
         let preview = inspect(&world.managed(), &id).unwrap();
         assert!(preview.can_apply, "{:?}", preview.blockers);
-        assert_eq!(preview.kept_settings, ["config/settings.properties"]);
+        // Runtime-mutable settings are user/game-owned: drift is neither
+        // damage nor recovery business, so nothing is offered to keep.
+        assert!(preview.kept_settings.is_empty());
         assert_eq!(preview.removed_mods, ["mods/clientsort.jar"]);
         assert!(apply(&world.managed(), &id, &preview.fingerprint, false).is_err());
         assert_eq!(
@@ -578,12 +593,10 @@ mod tests {
         assert!(!root.join("mods/clientsort.jar").exists());
         let pack = InstalledPack::load(&world.managed(), &id).unwrap().unwrap();
         assert_eq!(pack.excluded_paths, ["mods/clientsort.jar"]);
-        assert_eq!(
-            pack.divergences[0].expected_sha256,
-            Some(hash(b"pack defaults"))
-        );
-        assert_eq!(pack.divergences[0].local_sha256, hash(b"owner settings"));
-        assert!(pack.divergences[0].recorded_at_unix_seconds > 0);
+        // The mutable override stays authored pack state; no divergence is
+        // recorded for it and validation no longer pins its bytes.
+        assert!(pack.divergences.is_empty());
+        assert_eq!(pack.overrides[0].sha256, hash(b"pack defaults"));
         assert!(
             ContentState::load(&world.managed(), &id)
                 .unwrap()
@@ -618,7 +631,29 @@ mod tests {
         let (world, id) = fixture("smart-recovery-stale").await;
         let preview = inspect(&world.managed(), &id).unwrap();
         let root = world.managed().instance_paths(&id).root().to_owned();
+        // Mutable settings drift during review is expected game behavior,
+        // not review state: it neither stales the review nor blocks it.
         std::fs::write(root.join("config/settings.properties"), b"new edit").unwrap();
+        apply(&world.managed(), &id, &preview.fingerprint, true).unwrap();
+        assert_eq!(
+            std::fs::read(root.join("config/settings.properties")).unwrap(),
+            b"new edit"
+        );
+        // Metadata the review captured — the registry record — still must
+        // match exactly, or the review is stale and nothing is written.
+        let (world, id) = fixture("smart-recovery-stale-record").await;
+        let preview = inspect(&world.managed(), &id).unwrap();
+        let root = world.managed().instance_paths(&id).root().to_owned();
+        let mut registry =
+            InstanceRegistry::load(&world.managed().instance_registry_file()).unwrap();
+        registry
+            .find_mut(&id)
+            .unwrap()
+            .set_display_name("Renamed during review")
+            .unwrap();
+        registry
+            .save(&world.managed().instance_registry_file())
+            .unwrap();
         assert_eq!(
             apply(&world.managed(), &id, &preview.fingerprint, true)
                 .unwrap_err()
@@ -732,14 +767,31 @@ mod tests {
         });
         changed.replace(world.managed(), &old).unwrap();
         std::fs::write(root.join("config/bad.json"), b"{bad JSON").unwrap();
+        // Runtime-mutable settings — parseable or not — are the game's own
+        // state after installation: recovery neither inspects, blocks on,
+        // nor records them. The authored digest stays in the pack document.
         let preview = inspect(world.managed(), &id).unwrap();
-        assert!(!preview.can_apply);
         assert!(
-            preview
+            !preview
                 .blockers
                 .iter()
-                .any(|b| b.contains("config/bad.json"))
+                .any(|b| b.contains("config/bad.json")),
+            "{:?}",
+            preview.blockers
         );
+        assert!(!preview.kept_settings.iter().any(|p| p == "config/bad.json"));
         assert!(!root.join(".smart-recovery").exists());
+        let registry = InstanceRegistry::load(&world.managed().instance_registry_file()).unwrap();
+        let validation = lifecycle::validate_instance(world.managed(), &registry, &id).unwrap();
+        // The deliberately removed fixture mod stays a precise problem; the
+        // malformed settings file never becomes one.
+        assert!(
+            !validation
+                .problems
+                .iter()
+                .any(|p| p.reason.contains("config/bad.json")),
+            "{:?}",
+            validation.problems
+        );
     }
 }
