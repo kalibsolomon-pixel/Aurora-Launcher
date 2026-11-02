@@ -14,7 +14,9 @@ use std::rc::Rc;
 use slint::Rgb8Pixel;
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
 use slint::platform::{Key, Platform, PointerEventButton, WindowAdapter, WindowEvent};
-use slint::{ComponentHandle, LogicalPosition, LogicalSize, ModelRc, SharedString, VecModel};
+use slint::{
+    ComponentHandle, LogicalPosition, LogicalSize, Model, ModelRc, SharedString, VecModel,
+};
 
 use crate::{AppWindow, ContentImport, ContentRow, Discover, Instances, Nav, Page, Shell, Tone};
 
@@ -534,8 +536,72 @@ fn instance_cards(app: &AppWindow) {
         ])));
 }
 
+fn responsive_widget(app: &AppWindow, id: &str, columns: i32, rows: i32) {
+    dashboard(app, false, false);
+    let widgets = app.global::<crate::Widgets>();
+    let available = (((app.window().size().width as f32 / app.window().scale_factor() - 106.0)
+        / 164.0)
+        .floor() as i32)
+        .clamp(1, 6);
+    let mut item = widgets
+        .get_items()
+        .iter()
+        .find(|w| w.id == id)
+        .unwrap_or(crate::WidgetView {
+            id: id.into(),
+            title: "Servers".into(),
+            empty: "No servers yet.".into(),
+            ..Default::default()
+        });
+    if id == "recent-worlds" {
+        item.title = "Worlds".into();
+        item.lines = ui_model(
+            (0..8)
+                .map(|i| crate::WidgetLine {
+                    label: format!("Saved world {i}").into(),
+                    detail: "Minecraft 1.21.11".into(),
+                    value: "Today".into(),
+                })
+                .collect(),
+        );
+    }
+    item.column = 0;
+    item.row = 0;
+    item.width = columns.min(available);
+    item.height = rows;
+    item.requested_width = columns;
+    item.requested_height = rows;
+    widgets.set_items(ui_model(vec![item]));
+    widgets.set_grid_rows(rows);
+    scroll_down(app, 280.);
+}
+
 fn scenes() -> Vec<(&'static str, Scene)> {
     vec![
+        ("responsive-media-small", |app| {
+            responsive_widget(app, "media", 1, 1)
+        }),
+        ("responsive-media-wide", |app| {
+            responsive_widget(app, "media", 4, 1)
+        }),
+        ("responsive-media-large", |app| {
+            responsive_widget(app, "media", 4, 2)
+        }),
+        ("responsive-media-tall", |app| {
+            responsive_widget(app, "media", 2, 3)
+        }),
+        ("responsive-empty-tall", |app| {
+            responsive_widget(app, "recent-servers", 2, 3)
+        }),
+        ("responsive-list-small", |app| {
+            responsive_widget(app, "recent-worlds", 1, 1)
+        }),
+        ("responsive-list-tall", |app| {
+            responsive_widget(app, "recent-worlds", 2, 3)
+        }),
+        ("responsive-chart-narrow", |app| {
+            responsive_widget(app, "playtime", 1, 3)
+        }),
         ("dashboard-compact", |app| dashboard(app, false, false)),
         ("dashboard-large", |app| dashboard(app, false, true)),
         ("dashboard-editor", |app| dashboard(app, true, true)),
@@ -817,6 +883,33 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
         &("playtime".into(), 0, 0, 3, 2)
     );
     assert_eq!(changes.borrow().len(), 3);
+
+    // Playback remains usable after changing the card footprint and orientation.
+    for (columns, rows, x) in [(4, 2, 430.), (1, 3, 180.)] {
+        let (app, adapter) = window((1120., 1000.), 1.);
+        responsive_widget(&app, "media", columns, rows);
+        let toggles = Rc::new(RefCell::new(0));
+        let observed = toggles.clone();
+        app.global::<crate::Widgets>().set_media_can_toggle(true);
+        app.global::<crate::Widgets>()
+            .on_media_toggle(move || *observed.borrow_mut() += 1);
+        render(
+            &app,
+            &adapter,
+            &format!("responsive-media-input-{columns}-{rows}"),
+        );
+        for y in (100..980).step_by(8) {
+            click(&app, x, y as f32);
+            if *toggles.borrow() > 0 {
+                break;
+            }
+        }
+        assert_eq!(
+            *toggles.borrow(),
+            1,
+            "playback control remains reachable after resize"
+        );
+    }
 
     // Rename a saved skin through the real editor and Enter action.
     let (app, adapter) = window((1120., 760.), 1.);
