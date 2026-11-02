@@ -1,12 +1,16 @@
 # Aurora Launcher Native 2.0.0 release record
 
-**BLOCKED — PROTECTED APPROVAL REQUIRED**
+**PUBLISHED — ACCEPTANCE INCOMPLETE**
 
 Source integration, requested widget/icon inclusion, documentation organization,
 versioning and independent validation are complete. Protected CI has built and
 signed the exact 2.0.0 installer and update envelope. Their downloaded bytes pass
 independent signature, inventory and executable-identity verification. Publication
-is waiting for its required owner review; no public release or native tag exists.
+passed its owner gate. The immutable public release and every public asset have
+been independently verified. The owner reports manually running the installer
+and that it looks fine. Native update authority remains blocked by its protected
+one-time initialization and authority-only retry; website deployment also
+lacks its configured Cloudflare credential/account/project.
 
 The owner authorized Native 2.0.0, tag `native-v2.0.0`, and explicitly included
 the existing responsive-widget and icon improvements. The original in-progress
@@ -47,20 +51,23 @@ stays 1.5.1. No legacy tag is repurposed.
 | --- | --- |
 | Reviewed release source commit | `33af6a6b619c375ed84b7ff495ff125c282386cd` |
 | Integrated source branch | `codex/native-2.0.0-release`; normally fast-forwarded to GitHub `main` |
-| Expected native tag | `native-v2.0.0`, not created yet |
-| Public release title | Prepared as `Aurora Launcher Native 2.0.0` |
-| GitHub release URL | Not published; the expected tag URL must not be treated as an available release |
+| Public native tag | `native-v2.0.0`, verified at `33af6a6b619c375ed84b7ff495ff125c282386cd` |
+| Public release title | Aurora Launcher Native 2.0.0 |
+| GitHub release URL | [Immutable release 431029795](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/native-v2.0.0) |
+| Publication time | November 1, 2026, 10:05 p.m. America/New_York (`2026-11-02T03:05:05Z`) |
 | Installer filename | `Aurora.Native.Preview_2.0.0_x64-setup.exe` |
-| Signed CI installer SHA-256 | `b72888bb1a57921e94b0fdbdec895c834c2f1522b4437f346827e1de3e28e09f`; public download verification remains pending |
+| Public installer SHA-256 | `b72888bb1a57921e94b0fdbdec895c834c2f1522b4437f346827e1de3e28e09f`; independently downloaded without credentials and verified |
 | Signed CI installer size | 10,222,028 bytes |
 | Native executable SHA-256, extracted from that installer | `55ed5d536777aa09a30b535b001924f7aa206b746f6eff940cbad5dbf8521462` |
 | Protected workflow | [Run 41374244252](https://github.com/kalibsolomon-pixel/Aurora-Launcher/actions/runs/41374244252), exact source above |
 | Workflow inputs | Version `2.0.0`, minimum native version `1.4.2`, publication and authority advancement explicitly enabled |
 | Resolve job | Passed exact-main/source/version/minimum/tag-absence guards |
 | Build/sign job | Passed after owner approval: core/native tests, optimized build, NSIS packaging, production installer/envelope signing and signed inventory verification |
-| Publication job | Waiting for reviewer `kalibsolomon-pixel` in `launcher-native-preview-publication` |
+| Publication job | Passed after required owner review; immutable native prerelease, WebView latest preserved |
 | CI signing verification | Passed independently on the exact downloaded CI installer and envelope using the established production public key |
-| Public signing/authority verification | Pending publication and native authority initialization |
+| Public signing verification | Passed for all six immutable public assets, exact source/tag, installer signature and signed update envelope |
+| Installed-release smoke | Owner reports manually running the installer and that it looks fine; environment and detailed startup/update results were not supplied |
+| Authority job | Owner-approved attempt failed safely with `Native API HTTP 404` because the native authority ref remains absent; retry only this job after initialization |
 | Native authority | Still absent, protected from creation; no authority mutation performed |
 | Authenticode | Executable and local installer `NotSigned`, under the accepted unsigned-publisher policy |
 
@@ -83,11 +90,16 @@ There was no uncertain duplicate release or tag creation.
   diagnostic-root/probe/acceptance-product markers and WebView/debug payload
   files are absent. Installer and EXE Authenticode remain `NotSigned` under the
   accepted publisher policy. See [CI artifact audit](native-2.0.0-ci-artifact-audit.json).
-- Actual installation, normal boot and production-trust installed-update smoke
-  remain unperformed for these exact CI bytes. This host has existing native
-  preview data and no available isolated Windows profile/VM or administrator
-  access for creating one. Extracting a payload is not installed acceptance.
-  No owner installation, preview data, account, instance or world was touched.
+- The owner confirmed manually running the installer and reported that it looks
+  fine. That report supplies manual installer acceptance; no isolated-profile,
+  configuration-preservation, exact installed-byte or production-trust update/
+  restart result is inferred. The agent did not install over owner data.
+- All six immutable assets were independently downloaded without authentication
+  and matched the protected CI byte inventory. `verifyPublicNative` and
+  `verifyNativeDirectory` passed on those public bytes. The public native tag
+  points to the reviewed source, and GitHub confirms an immutable prerelease.
+  [Public verification record](native-2.0.0-public-verification.json) preserves
+  release identity, installer/envelope signatures and all signed-content hashes.
 - Core: 1,117 tests and six integration tests passed; 31 existing opt-in tests
   remained ignored. A merge-introduced duplicate WebView test block was removed,
   retaining the original feature-gated tests; default-host all-target checking
@@ -124,24 +136,27 @@ There was no uncertain duplicate release or tag creation.
 
 ## Website and public presentation
 
-The repository README and documentation index are current. The separate
-[website draft PR](https://github.com/kalibsolomon-pixel/Aurora-Website/pull/1)
-at `e5f68b9a443b3a057e61f397fcab1346d0e99cce` prepares the Native 2.0.0 section
-using existing static styles, accurately marks publication as pending, and
-preserves the WebView fallback. Local `npm run validate` passed, including ten
-static tests; both GitHub validation runs passed. It adds no fabricated native
-download URL or hash. Fill in actual verified release metadata before merging
-and performing the separately protected website deployment. No website deployment
-was dispatched.
+The repository README links the verified public native installer. The separate
+[website PR](https://github.com/kalibsolomon-pixel/Aurora-Website/pull/1), source
+`10713d5bb44c0132100fef76fab37364e7357d47`, was merged as
+`19fb07f74acaa71eb58a135de99eab8bd62c3e0b`. It links the real immutable installer,
+checksum, detached signature and release notes within existing styles, retaining
+the WebView fallback and accurately noting pending automatic update discovery.
+Local `npm run validate` and both GitHub validation checks passed, including ten static tests. The native download
+section was visually inspected in the local browser. No dependency/style/runtime
+change or new performance claim was introduced. Production deployment is not
+configured: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and
+`CLOUDFLARE_PAGES_PROJECT_NAME` are absent from `aurora-website-production`, and
+`AURORA_PRODUCTION_ENABLED` is false; local Wrangler also reports no authenticated
+Cloudflare session. No deployment or invented hosting URL is
+claimed. GitHub's public release page already provides working distribution.
 
 ## Exact protected actions and remaining limitations
 
-1. The initial `launcher-production` review was approved and its build/sign job
-   passed. The owner must accept the exact CI artifact in an isolated Windows
-   profile/VM, then approve `launcher-native-preview-publication` in
+1. Build/sign and publication reviews were approved and both jobs passed in
    [run 41374244252](https://github.com/kalibsolomon-pixel/Aurora-Launcher/actions/runs/41374244252).
-   Its required reviewer and administrator-bypass prohibition remain intact.
-   The agent did not approve its own protected operation.
+   The owner supplied manual installer acceptance. Review protections remain
+   intact; the agent did not approve its own protected operation.
 2. Before approving native authority advancement, the owner/administrator must
    complete the separately controlled initial-ref procedure. Native ruleset
    `26335822` has **no creation bypass actors**; routine App credentials cannot
@@ -156,16 +171,19 @@ was dispatched.
    record are retained outside Git under
    `C:\Dev\aurora-pandora-evidence-20261101\native-200-release-correction`.
    This proposal does not create a remote authority or authorize a different root.
-4. After publication, approve the authority gate only when the intended root
-   exists. Immutable public downloads/hashes, installed signed-byte acceptance,
-   native authority bytes and final website downloads remain dependent on those
-   protected actions. Exact CI installer/envelope signature verification has
-   already passed. Prior test-key lifecycle and owner gameplay acceptance are
-   reused, not relabelled as production installed-update acceptance.
+4. Approve the authority gate only when the intended root and restored
+   protections have been verified. The first approved attempt encountered the
+   absent ref and failed with HTTP 404 before any authority write. After the
+   root exists, retry only the failed authority job; do not rebuild, republish
+   or replace any immutable release asset. Native discovery bytes and production-trust
+   installed-update/restart acceptance remain outstanding. Configure the actual
+   Cloudflare production credential/account/project before website deployment.
+   Prior test-key lifecycle and owner gameplay acceptance are reused, not
+   relabelled as production installed-update acceptance.
 
 WebView release `v1.5.1`, its immutable artifact identity, and authority ref
 `df7e824b2e49f8a5b9d2447ca2314bcafa21d119` remain unchanged. Neither
-`native-v1.5.0` nor `v2.0.0` was created or repurposed. No release was falsely
-labelled as published, and no private credential or generated package was committed.
+`native-v1.5.0` nor `v2.0.0` was created or repurposed. Only `native-v2.0.0`
+was published. No private credential or generated package was committed.
 
 **AURORA CLIENT HANDOFF: NOT YET REQUIRED**

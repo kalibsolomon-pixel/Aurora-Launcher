@@ -6,9 +6,9 @@ moves the interface away from WebView while retaining the verified Rust backend.
 
 ## Download and install
 
-Native 2.0.0 is being prepared through the protected **native-preview** channel.
-Its release tag is `native-v2.0.0`. Download only after the signed installer is
-published on the [native release page](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/native-v2.0.0).
+Native 2.0.0 is published through the separate **native-preview** channel as
+`native-v2.0.0`. Get the [Windows x64 installer](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v2.0.0/Aurora.Native.Preview_2.0.0_x64-setup.exe)
+or review its signatures and hashes on the [native release page](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/native-v2.0.0).
 Run `Aurora.Native.Preview_2.0.0_x64-setup.exe`, open Aurora Launcher Native
 Preview, sign in with Microsoft, and create or select an instance. Minecraft:
 Java Edition ownership is required.
@@ -19,6 +19,8 @@ and update authority; it does not automatically replace or migrate WebView
 installations. Keep a backup before manually moving data between versions.
 Updater signatures authenticate updates; Windows Authenticode publisher signing
 is currently unavailable, so Windows can show an unknown-publisher warning.
+Native automatic update discovery is awaiting its protected authority setup;
+the signed manual installer is available now.
 
 ## Features
 

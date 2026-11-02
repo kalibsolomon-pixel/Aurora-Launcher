@@ -1,0 +1,39 @@
+{
+  "id": 431029795,
+  "title": "Aurora Launcher Native 2.0.0",
+  "url": "https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/native-v2.0.0",
+  "tag": "native-v2.0.0",
+  "sourceSha": "33af6a6b619c375ed84b7ff495ff125c282386cd",
+  "immutable": true,
+  "prerelease": true,
+  "publishedAt": "2026-11-02T03:05:05Z",
+  "publicDownloadsVerified": true,
+  "signaturesVerified": true,
+  "artifacts": [
+    {
+      "name": "Aurora.Native.Preview_2.0.0_x64-setup.exe",
+      "sizeBytes": 10222028,
+      "sha256": "b72888bb1a57921e94b0fdbdec895c834c2f1522b4437f346827e1de3e28e09f"
+    },
+    {
+      "name": "Aurora.Native.Preview_2.0.0_x64-setup.exe.sig",
+      "sizeBytes": 436,
+      "sha256": "3a3527583ddec5ae1711d92dc6b1fae8ca9e952b53b8063021ec53c8aa70fb78"
+    },
+    {
+      "name": "native-update-payload.json",
+      "sizeBytes": 1044,
+      "sha256": "317bc229148652a71313d6abe6d0b6d3840b9be91d6b641eea4e2dc1f9e1d0d2"
+    },
+    {
+      "name": "native-update-payload.json.sig",
+      "sizeBytes": 416,
+      "sha256": "360ba27e96669eafab487bae00070398cd6b70d4fedd28055e3c9f5adf583db8"
+    },
+    {
+      "name": "native-update.json",
+      "sizeBytes": 1838,
+      "sha256": "63e1187c2528aaff4344e6f034815d675324799c7e193d2d46690658b1b0ba10"
+    }
+  ]
+}
