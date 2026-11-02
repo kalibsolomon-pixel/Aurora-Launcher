@@ -563,14 +563,31 @@ pub async fn retry_instance_install(
                 ),
             });
         }
-        if record.pack().is_some() {
-            return Err(InstanceError::NotReady {
-                instance_id: instance_id.to_string(),
-                reason: "An interrupted modpack snapshot cannot be retried by the ordinary instance installer. It remains unavailable; review its files before recovery.".into(),
-            });
-        }
         record
     };
+    if record.pack().is_some() {
+        // A pack instance never re-runs the ordinary installer: the pack
+        // snapshot on disk is the authority, and re-installing the game
+        // cannot repair or replace pack-owned bytes. Retry means
+        // completion — replay any committed game journal, then promote
+        // through the pack completion gate, which validates the whole
+        // instance (pack state included) before the record becomes
+        // Ready. Real damage is reported precisely and the record stays
+        // retryable; nothing is downloaded, wiped, or overwritten. This
+        // runs after the registry-read scope above closes: the completion
+        // gate takes the registry lock itself.
+        return complete_pack_instance(
+            managed,
+            registry_path,
+            config_path,
+            instance_id,
+            &_operation,
+        )
+        .map_err(|error| InstanceError::NotReady {
+            instance_id: instance_id.to_string(),
+            reason: format!("the interrupted modpack installation could not complete: {error}"),
+        });
+    }
 
     install_instance_components(
         managed,
@@ -1350,7 +1367,11 @@ fn validate_release_java_major(
 
 /// Resolves the exact runtime plan for a content-ready instance. Runtime
 /// readiness remains independent: no runtime absence or damage changes the
-/// instance's persisted or content-validation state.
+/// instance's persisted or content-validation state, and content-byte damage
+/// (a changed modpack file, a damaged game artifact) never blocks inspecting
+/// or installing the Java runtime — the plan resolves from the installed
+/// identity, which that damage cannot change. Launch keeps its own strict
+/// gate.
 pub async fn resolve_instance_runtime_plan(
     managed: &ManagedPaths,
     registry_path: &Path,
@@ -1358,14 +1379,20 @@ pub async fn resolve_instance_runtime_plan(
     runtime_endpoints: &RuntimeMetadataEndpoints,
     instance_id: &InstanceId,
 ) -> Result<JavaRuntimePlan, InstanceError> {
-    let (_, runtime_plan) = resolve_instance_launch_plans(
+    let game_plan =
+        resolve_instance_game_plan_for_runtime(managed, registry_path, endpoints, instance_id)
+            .await?;
+    let runtime_platform = RuntimePlatform::current().map_err(RuntimeMetadataError::Plan)?;
+    let runtime_plan = crate::runtime::metadata::resolve_runtime_plan(
         managed,
-        registry_path,
-        endpoints,
         runtime_endpoints,
-        instance_id,
+        game_plan.java().component(),
+        game_plan.java().major_version(),
+        runtime_platform,
+        endpoints.install.download_options(),
     )
-    .await?;
+    .await
+    .map_err(InstanceError::RuntimeMetadata)?;
     Ok(runtime_plan)
 }
 
@@ -1397,11 +1424,74 @@ pub async fn resolve_instance_launch_plans(
 /// instance. The bundled release manifest supplies the exact pin, while
 /// Mojang and Fabric remain the metadata authorities. No installation state
 /// is changed by this operation.
+///
+/// This is the launch-blocking gate: every validation problem refuses the
+/// resolution. Java maintenance operations that only need the installed
+/// game's Java requirement use [`resolve_instance_game_plan_for_runtime`],
+/// which ignores content-byte damage that cannot change the plan.
 pub async fn resolve_instance_game_plan(
     managed: &ManagedPaths,
     registry_path: &Path,
     endpoints: &InstanceEndpoints,
     instance_id: &InstanceId,
+) -> Result<crate::fabric::plan::GameInstallPlan, InstanceError> {
+    resolve_instance_game_plan_under_gate(
+        managed,
+        registry_path,
+        endpoints,
+        instance_id,
+        PlanResolutionGate::LaunchBlocking,
+    )
+    .await
+}
+
+/// The game plan for Java maintenance (runtime status, custom-Java checks,
+/// runtime installation). The plan resolves from `record.installed()`, so
+/// file-level damage — a changed modpack byte, a damaged game artifact, a
+/// missing mod — cannot change the resolved Java requirement and does not
+/// block it. Only problems that make the installed identity unresolvable
+/// (an unsupported platform family, or installed/recorded identity
+/// disagreement) refuse the resolution. Damage still blocks launch through
+/// [`resolve_instance_game_plan`] and readiness.
+pub async fn resolve_instance_game_plan_for_runtime(
+    managed: &ManagedPaths,
+    registry_path: &Path,
+    endpoints: &InstanceEndpoints,
+    instance_id: &InstanceId,
+) -> Result<crate::fabric::plan::GameInstallPlan, InstanceError> {
+    resolve_instance_game_plan_under_gate(
+        managed,
+        registry_path,
+        endpoints,
+        instance_id,
+        PlanResolutionGate::RuntimeMaintenance,
+    )
+    .await
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PlanResolutionGate {
+    LaunchBlocking,
+    RuntimeMaintenance,
+}
+
+impl PlanResolutionGate {
+    fn blocks(self, problem: &InstanceProblem) -> bool {
+        match self {
+            Self::LaunchBlocking => true,
+            Self::RuntimeMaintenance => {
+                matches!(problem.component, "platform" | "consistency")
+            }
+        }
+    }
+}
+
+async fn resolve_instance_game_plan_under_gate(
+    managed: &ManagedPaths,
+    registry_path: &Path,
+    endpoints: &InstanceEndpoints,
+    instance_id: &InstanceId,
+    gate: PlanResolutionGate,
 ) -> Result<crate::fabric::plan::GameInstallPlan, InstanceError> {
     let registry = InstanceRegistry::load(registry_path)?;
     let record = registry
@@ -1417,18 +1507,23 @@ pub async fn resolve_instance_game_plan(
         });
     }
     let content = validate_instance(managed, &registry, instance_id)?;
-    if content.status != InstanceStatus::Ready {
+    let blocking: Vec<String> = content
+        .problems
+        .iter()
+        .filter(|problem| gate.blocks(problem))
+        .map(|problem| format!("{}: {}", problem.component, problem.reason))
+        .collect();
+    let blocked = match gate {
+        PlanResolutionGate::LaunchBlocking => content.status != InstanceStatus::Ready,
+        PlanResolutionGate::RuntimeMaintenance => !blocking.is_empty(),
+    };
+    if blocked {
         return Err(InstanceError::NotReady {
             instance_id: instance_id.to_string(),
             reason: format!(
                 "instance content validation reported {}: {}",
                 content.status.as_str(),
-                content
-                    .problems
-                    .iter()
-                    .map(|problem| format!("{}: {}", problem.component, problem.reason))
-                    .collect::<Vec<_>>()
-                    .join("; ")
+                blocking.join("; ")
             ),
         });
     }
@@ -3356,6 +3451,168 @@ pub(crate) mod tests {
         };
         assert_eq!(game_objects(&after_retry), game_objects(&after_rollback));
         assert_eq!(std::fs::read(&unrelated).unwrap(), b"owner state");
+    }
+
+    async fn installed_pack_world(
+        name: &str,
+    ) -> (
+        SyntheticWorld,
+        crate::instances::InstanceRecord,
+        std::path::PathBuf,
+    ) {
+        let world = SyntheticWorld::new(name);
+        let fixture = PackAuthorityFixture::new(false, false);
+        let client = fixture.client();
+        let shown = crate::modpacks::preview(&world.managed, &client, "PACKROLL", "VERSROLL", &[])
+            .await
+            .unwrap();
+        let record = crate::modpacks::install(
+            &world.managed,
+            &world.endpoints(),
+            &client,
+            "PACKROLL",
+            "VERSROLL",
+            &[],
+            &shown.fingerprint,
+            &mut |_| {},
+        )
+        .await
+        .unwrap();
+        assert_eq!(record.state(), InstanceState::Ready);
+        let root = world
+            .managed
+            .instance_paths(record.id())
+            .root()
+            .to_path_buf();
+        (world, record, root)
+    }
+
+    /// The owner's recurring failure: settings files the game rewrites
+    /// (`options.txt`, `config/*` — Java's Properties.store stamps every
+    /// save with the current date) must never report pack damage, while
+    /// deterministic pack artifacts stay byte-verified and a missing mod is
+    /// reported precisely.
+    #[tokio::test]
+    async fn runtime_mutable_drift_is_not_damage_but_mod_artifacts_stay_verified() {
+        let (world, record, root) = installed_pack_world("pack-runtime-mutable").await;
+        std::fs::write(
+            root.join("config/rollback-fixture.toml"),
+            b"rewritten by the game\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("options.txt"), b"volume:0.42\n").unwrap();
+        let registry = world.load_registry();
+        assert_eq!(
+            validate_instance(&world.managed, &registry, record.id())
+                .unwrap()
+                .status,
+            InstanceStatus::Ready
+        );
+
+        // The launcher's own disable control renames the jar; the twin keeps
+        // the component satisfied without a pack operation.
+        let disabled = root.join("mods/second.jar.disabled");
+        std::fs::rename(root.join("mods/second.jar"), &disabled).unwrap();
+        let registry = world.load_registry();
+        assert_eq!(
+            validate_instance(&world.managed, &registry, record.id())
+                .unwrap()
+                .status,
+            InstanceStatus::Ready
+        );
+
+        // A genuinely missing deterministic artifact is precise damage.
+        std::fs::remove_file(&disabled).unwrap();
+        let registry = world.load_registry();
+        let validation = validate_instance(&world.managed, &registry, record.id()).unwrap();
+        assert_eq!(validation.status, InstanceStatus::Damaged);
+        assert!(
+            validation
+                .problems
+                .iter()
+                .any(|problem| problem.component == "modpack"
+                    && problem.reason.contains("pack_state_missing_file")
+                    && problem.reason.contains("mods/second.jar")),
+            "{:?}",
+            validation.problems
+        );
+    }
+
+    /// An interrupted promotion (registry left `installing` with a complete,
+    /// valid pack on disk — exactly the owner's stuck record) is completed by
+    /// retry through the pack completion gate, without downloads or writes.
+    #[tokio::test]
+    async fn retry_completes_an_interrupted_pack_promotion() {
+        let (world, record, root) = installed_pack_world("pack-retry-completion").await;
+        let unrelated = root.join("options.txt");
+        std::fs::write(&unrelated, b"owner state\n").unwrap();
+        let mut registry = world.load_registry();
+        registry
+            .find_mut(record.id())
+            .unwrap()
+            .set_state(InstanceState::Installing);
+        registry.save(&world.registry_path()).unwrap();
+        assert_eq!(
+            world.validate(record.id()).status,
+            InstanceStatus::Installing
+        );
+
+        let completed = retry_instance_install(
+            &world.managed,
+            &world.registry_path(),
+            &world.config_path(),
+            &world.endpoints(),
+            record.id(),
+            &mut |_| {},
+            InstanceFaults::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(completed.state(), InstanceState::Ready);
+        assert_eq!(world.validate(record.id()).status, InstanceStatus::Ready);
+        assert_eq!(
+            std::fs::read(&unrelated).unwrap(),
+            b"owner state\n",
+            "completion writes nothing to the instance"
+        );
+    }
+
+    /// Java maintenance resolves the installed game's requirement even while
+    /// pack bytes are damaged; the launch-blocking gate still refuses.
+    #[tokio::test]
+    async fn runtime_resolution_ignores_pack_damage_while_launch_gate_refuses_it() {
+        let (world, record, root) = installed_pack_world("pack-runtime-gate").await;
+        std::fs::write(root.join("mods/first.jar"), b"damaged bytes").unwrap();
+        let registry = world.load_registry();
+        assert_eq!(
+            validate_instance(&world.managed, &registry, record.id())
+                .unwrap()
+                .status,
+            InstanceStatus::Damaged
+        );
+
+        let strict = resolve_instance_game_plan(
+            &world.managed,
+            &world.registry_path(),
+            &world.endpoints(),
+            record.id(),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(strict, InstanceError::NotReady { .. }), "{strict}");
+
+        let maintenance = resolve_instance_game_plan_for_runtime(
+            &world.managed,
+            &world.registry_path(),
+            &world.endpoints(),
+            record.id(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            maintenance.minecraft().minecraft_version(),
+            record.installed().minecraft_version
+        );
     }
 
     #[tokio::test]

@@ -163,6 +163,82 @@ fn stale_source_destination_exclusions_or_disable_prevent_mutation() {
 }
 
 #[test]
+fn pack_owned_destination_content_is_never_a_sync_target() {
+    let (managed, mut request) = fixture();
+    request.category = Category::ResourcePacks;
+    let pack = crate::pack_state::InstalledPack::new(
+        request.destination_id.clone(),
+        crate::pack_state::PackIdentity {
+            provider: "modrinth".into(),
+            project_id: "PACKSYNC".into(),
+            version_id: "VERSYNC".into(),
+            name: "Sync pack".into(),
+            pack_version: "1".into(),
+            artifact_sha512: "a".repeat(128),
+            artifact_sha256: "b".repeat(64),
+            minecraft_version: "1.21.11".into(),
+            fabric_loader_version: "0.19.5".into(),
+            installed_at_unix_seconds: 1,
+        },
+        vec![crate::pack_state::OwnedComponent {
+            path: "resourcepacks/pack-owned.zip".into(),
+            sha256: "c".repeat(64),
+            sha512: "d".repeat(128),
+            provider: None,
+            provider_version_id: None,
+        }],
+        vec![],
+        vec![],
+    )
+    .unwrap();
+    pack.save(&managed).unwrap();
+    // Deterministic pack content differs between the instances: it must not
+    // become a copy, replace, or conflict candidate. Unowned files in the
+    // same category still sync normally.
+    put(
+        &managed,
+        &request.source_id,
+        "resourcepacks/pack-owned.zip",
+        b"other instance copy",
+    );
+    put(
+        &managed,
+        &request.destination_id,
+        "resourcepacks/pack-owned.zip",
+        b"pack bytes",
+    );
+    put(
+        &managed,
+        &request.source_id,
+        "resourcepacks/free.zip",
+        b"free",
+    );
+    let p = preview(&managed, &request).unwrap();
+    assert!(
+        !p.entries
+            .iter()
+            .any(|entry| entry.path == "resourcepacks/pack-owned.zip"),
+        "{:?}",
+        p.entries
+    );
+    let receipt = apply(&managed, &request, &p.fingerprint).unwrap();
+    assert_eq!(receipt.copied, 1);
+    assert_eq!(receipt.conflicts_kept, 0);
+    assert_eq!(
+        get(
+            &managed,
+            &request.destination_id,
+            "resourcepacks/pack-owned.zip"
+        ),
+        b"pack bytes"
+    );
+    assert_eq!(
+        get(&managed, &request.destination_id, "resourcepacks/free.zip"),
+        b"free"
+    );
+}
+
+#[test]
 fn additive_sync_keeps_conflicts_excludes_paths_and_never_links_instances() {
     let (managed, mut request) = fixture();
     request.category = Category::ResourcePacks;

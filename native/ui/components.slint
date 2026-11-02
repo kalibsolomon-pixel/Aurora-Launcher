@@ -654,19 +654,21 @@ export component Dialog inherits Rectangle {
     init => { popup.show(); }
 }
 
-/// A transient notification line shown at the bottom of the window.
+/// A transient notification line. Only its visible bounds consume pointer input.
 export component Toast inherits Rectangle {
     in property <string> text;
+    in property <length> available-width: 560px;
     in property <Tone> tone: neutral;
     callback dismissed();
     height: row.preferred-height;
-    width: min(row.preferred-width, 560px);
+    width: min(row.preferred-width, root.available-width);
     background: Theme.raised;
     border-radius: Theme.radius-md;
     border-width: 1px;
     border-color: tone == Tone.error ? Theme.error : tone == Tone.success ? Theme.success : Theme.border-strong;
     accessible-role: AccessibleRole.text;
     accessible-label: text;
+    TouchArea { }
     row := HorizontalLayout {
         padding: 10px;
         padding-left: 14px;

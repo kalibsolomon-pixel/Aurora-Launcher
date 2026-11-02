@@ -37,13 +37,15 @@ export async function verifyPublicNative({api,download,metadata,directory}) {
   return release;
 }
 export async function publishNativeRelease({api,upload,download,metadata,directory,releaseNotes}) {
+  const title=releaseNotes?.match(/^# (Aurora Launcher Native [^\r\n]+)\r?$/m)?.[1]??`Aurora Launcher Native ${metadata.version}`;
+  if(!title.startsWith(`Aurora Launcher Native ${metadata.version} — `) && title!==`Aurora Launcher Native ${metadata.version}`) throw Error('Release notes title version differs');
   if(await api(`/releases/tags/native-v${metadata.version}`,{allowMissing:true})) throw Error('Native tag/release already exists; inspect and recover manually, never overwrite');
   if(await api(`/git/ref/tags/native-v${metadata.version}`,{allowMissing:true})) throw Error('Native tag already exists');
   // Atomic tag creation refuses a concurrent existing tag instead of attaching
   // the release to someone else's ref. Never move or force an existing tag.
   await api('/git/refs',{method:'POST',body:{ref:`refs/tags/native-v${metadata.version}`,sha:metadata.sourceSha}});
   await verifyNativeTag(api,metadata.version,metadata.sourceSha);
-  const release=await api('/releases',{method:'POST',body:{tag_name:`native-v${metadata.version}`,target_commitish:metadata.sourceSha,name:`Aurora Launcher Native ${metadata.version}`,body:`${releaseNotes??'Native Rust/Slint release. Data and update authority are isolated from the WebView launcher.'}\n\nSource: ${metadata.sourceSha}.`,draft:true,prerelease:false,make_latest:'true'}});
+  const release=await api('/releases',{method:'POST',body:{tag_name:`native-v${metadata.version}`,target_commitish:metadata.sourceSha,name:title,body:`${releaseNotes??'Native Rust/Slint release. Data and update authority are isolated from the WebView launcher.'}\n\nSource: ${metadata.sourceSha}.`,draft:true,prerelease:false,make_latest:'true'}});
   releaseIdentity(release,metadata.version,metadata.sourceSha);
   for(const name of [...metadata.artifacts.map(a=>a.name),'native-release-assets.json']) await upload(release.id,name,await readFile(join(directory,name)));
   // Verify uploaded draft bytes before the irreversible publication step.

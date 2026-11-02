@@ -87,7 +87,12 @@ pub enum PackStateError {
     Malformed,
     UnsupportedSchema(u64),
     UnsafePath,
-    Integrity,
+    /// Byte verification failed. The owned path is carried so reports name
+    /// the exact file instead of a generic corruption message.
+    Integrity(Option<String>),
+    /// A pack-owned deterministic file is absent, and no accepted disabled
+    /// twin exists for a mod.
+    Missing(String),
     ProviderMismatch,
     InstanceMismatch,
 }
@@ -99,7 +104,8 @@ impl PackStateError {
             Self::Malformed => "pack_state_malformed",
             Self::UnsupportedSchema(_) => "pack_state_unsupported_schema",
             Self::UnsafePath => "pack_state_unsafe_path",
-            Self::Integrity => "pack_state_integrity_failure",
+            Self::Integrity(_) => "pack_state_integrity_failure",
+            Self::Missing(_) => "pack_state_missing_file",
             Self::ProviderMismatch => "pack_state_provider_mismatch",
             Self::InstanceMismatch => "pack_state_instance_mismatch",
         }
@@ -108,7 +114,12 @@ impl PackStateError {
 
 impl fmt::Display for PackStateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.code())
+        match self {
+            Self::Integrity(Some(path)) | Self::Missing(path) => {
+                write!(f, "{}: {path}", self.code())
+            }
+            _ => f.write_str(self.code()),
+        }
     }
 }
 impl std::error::Error for PackStateError {}
@@ -285,7 +296,7 @@ impl InstalledPack {
         }
         let stored = Self::load(managed, &self.instance_id)?;
         if stored.as_ref() != Some(expected) {
-            return Err(PackStateError::Integrity);
+            return Err(PackStateError::Integrity(None));
         }
         write_atomic(self, &state_path(managed, &self.instance_id)?)
     }
@@ -320,6 +331,16 @@ impl InstalledPack {
     /// Read-only, network-free validation against the exact installed pack
     /// snapshot. A modified user config remains visible but is reported as
     /// divergence instead of being silently repaired or overwritten.
+    ///
+    /// Runtime-mutable settings paths (see [`is_runtime_mutable`]) are not
+    /// byte-pinned: the running game and its mods legitimately rewrite them
+    /// (`options.txt` and `servers.dat` per session, `config/*` through
+    /// ordinary mod saves whose Java `Properties.store` output embeds a fresh
+    /// timestamp every time), so after installation they are user/game-owned
+    /// state. Their recorded digests stay authored expectations for update
+    /// planning and recovery, never post-install integrity verdicts.
+    /// Deterministic pack artifacts — mods, resource packs, shader packs, and
+    /// every other shipped path — remain hash-verified exactly as before.
     pub fn validate_installed(&self, managed: &ManagedPaths) -> Result<(), PackStateError> {
         self.validate_document()?;
         let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
@@ -346,19 +367,6 @@ impl InstalledPack {
         let provider = ContentState::load(managed, &self.instance_id)
             .map_err(|_| PackStateError::ProviderMismatch)?;
         for component in &self.components {
-            let path = match safe_file(&root, &component.path) {
-                Ok(path) => path,
-                Err(PackStateError::Io(error))
-                    if error.kind() == std::io::ErrorKind::NotFound
-                        && component.path.starts_with("mods/") =>
-                {
-                    safe_file(&root, &format!("{}.disabled", component.path))?
-                }
-                Err(error) => return Err(error),
-            };
-            let digest =
-                ArtifactDigest::parse(&component.sha256).map_err(|_| PackStateError::Malformed)?;
-            verify_file(&path, &digest, None).map_err(|_| PackStateError::Integrity)?;
             if let Some(identity) = &component.provider {
                 let version_id = component
                     .provider_version_id
@@ -379,33 +387,109 @@ impl InstalledPack {
                     return Err(PackStateError::ProviderMismatch);
                 }
             }
+            if is_runtime_mutable(&component.path) {
+                // Present files must still be safe regular files; their bytes
+                // are the game's to rewrite, and absence is not damage.
+                safe_file_optional(&root, &component.path)?;
+                continue;
+            }
+            let path = match safe_file_optional(&root, &component.path)? {
+                Some(path) => path,
+                None => match disabled_mod_twin(&root, &component.path) {
+                    Some(path) => path,
+                    None => return Err(PackStateError::Missing(component.path.clone())),
+                },
+            };
+            let digest =
+                ArtifactDigest::parse(&component.sha256).map_err(|_| PackStateError::Malformed)?;
+            verify_file(&path, &digest, None)
+                .map_err(|_| PackStateError::Integrity(Some(component.path.clone())))?;
         }
         for item in &self.overrides {
-            let path = match safe_file(&root, &item.path) {
-                Ok(path) => path,
-                Err(PackStateError::Io(error))
-                    if error.kind() == std::io::ErrorKind::NotFound
-                        && item.path.starts_with("mods/") =>
-                {
-                    safe_file(&root, &format!("{}.disabled", item.path))?
-                }
-                Err(error) => return Err(error),
+            if is_runtime_mutable(&item.path) {
+                safe_file_optional(&root, &item.path)?;
+                continue;
+            }
+            let path = match safe_file_optional(&root, &item.path)? {
+                Some(path) => path,
+                None => match disabled_mod_twin(&root, &item.path) {
+                    Some(path) => path,
+                    None => return Err(PackStateError::Missing(item.path.clone())),
+                },
             };
             let digest =
                 ArtifactDigest::parse(&item.sha256).map_err(|_| PackStateError::Malformed)?;
-            verify_file(&path, &digest, None).map_err(|_| PackStateError::Integrity)?;
+            verify_file(&path, &digest, None)
+                .map_err(|_| PackStateError::Integrity(Some(item.path.clone())))?;
         }
         // A recorded divergence is the chosen local state, not damage: the
         // bytes must still match what the user kept, or drift from the chosen
-        // state is reported exactly like any other integrity failure.
+        // state is reported exactly like any other integrity failure. A
+        // runtime-mutable divergence keeps its recorded digest only as
+        // provenance; the game rewrites those files by design.
         for item in &self.divergences {
-            let path = safe_file(&root, &item.path)?;
+            if is_runtime_mutable(&item.path) {
+                continue;
+            }
+            let path = safe_file_optional(&root, &item.path)?
+                .ok_or_else(|| PackStateError::Missing(item.path.clone()))?;
             let digest =
                 ArtifactDigest::parse(&item.local_sha256).map_err(|_| PackStateError::Malformed)?;
-            verify_file(&path, &digest, None).map_err(|_| PackStateError::Integrity)?;
+            verify_file(&path, &digest, None)
+                .map_err(|_| PackStateError::Integrity(Some(item.path.clone())))?;
         }
         Ok(())
     }
+}
+
+/// Pack-owned paths the running game legitimately rewrites. Minecraft saves
+/// `options.txt`, `servers.dat`, and the user caches during normal sessions,
+/// and mods rewrite their `config/*` files through ordinary config saves
+/// (Java's `Properties.store` stamps every save with the current date, so
+/// byte-identical output is impossible). The pack snapshot keeps authoring
+/// digests for these paths — update planning and recovery still compare
+/// against them — but post-install validation never treats them as damaged.
+pub fn is_runtime_mutable(relative: &str) -> bool {
+    matches!(
+        relative,
+        "options.txt" | "servers.dat" | "usercache.json" | "usernamecache.json"
+    ) || relative.starts_with("config/")
+}
+
+/// Like [`safe_file`], but a path absent anywhere along the way is
+/// `Ok(None)` instead of an error; a present-but-unsafe path still fails.
+fn safe_file_optional(root: &Path, relative: &str) -> Result<Option<PathBuf>, PackStateError> {
+    crate::mrpack::destination_path(relative).map_err(|_| PackStateError::UnsafePath)?;
+    let mut path = root.to_path_buf();
+    for part in relative.split('/') {
+        path.push(part);
+        let meta = match std::fs::symlink_metadata(&path) {
+            Ok(meta) => meta,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(PackStateError::Io(error)),
+        };
+        if meta.file_type().is_symlink() || reparse(&meta) {
+            return Err(PackStateError::UnsafePath);
+        }
+    }
+    match std::fs::symlink_metadata(&path) {
+        Ok(meta) if meta.is_file() => Ok(Some(path)),
+        Ok(_) => Err(PackStateError::UnsafePath),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(PackStateError::Io(error)),
+    }
+}
+
+/// The launcher's own mod controls rename pack mods between `x.jar` and
+/// `x.jar.disabled`; the disabled twin carries identical bytes and satisfies
+/// the component's digest exactly like the active file.
+fn disabled_mod_twin(root: &Path, relative: &str) -> Option<PathBuf> {
+    if !relative.starts_with("mods/") || !relative.ends_with(".jar") {
+        return None;
+    }
+    safe_file_optional(root, &format!("{relative}.disabled"))
+        .ok()
+        .flatten()
 }
 
 fn write_atomic(value: &InstalledPack, path: &Path) -> Result<(), PackStateError> {
@@ -540,5 +624,45 @@ mod tests {
             conflict.validate_document(),
             Err(PackStateError::Malformed)
         ));
+    }
+
+    #[test]
+    fn runtime_mutable_vocabulary_covers_the_game_write_surface_and_errors_name_paths() {
+        for path in [
+            "options.txt",
+            "servers.dat",
+            "usercache.json",
+            "usernamecache.json",
+            "config/vmp.properties",
+            "config/nested/deep/anything.toml",
+        ] {
+            assert!(is_runtime_mutable(path), "{path}");
+        }
+        for path in [
+            "mods/kept.jar",
+            "resourcepacks/pack.zip",
+            "shaderpacks/shaders.zip",
+            "bin/library.jar",
+            "config.exe",
+            "options.txt.bak",
+        ] {
+            assert!(!is_runtime_mutable(path), "{path}");
+        }
+        assert_eq!(
+            PackStateError::Integrity(Some("mods/x.jar".into())).to_string(),
+            "pack_state_integrity_failure: mods/x.jar"
+        );
+        assert_eq!(
+            PackStateError::Integrity(None).to_string(),
+            "pack_state_integrity_failure"
+        );
+        assert_eq!(
+            PackStateError::Missing("mods/x.jar".into()).to_string(),
+            "pack_state_missing_file: mods/x.jar"
+        );
+        assert_eq!(
+            PackStateError::Missing("mods/x.jar".into()).code(),
+            "pack_state_missing_file"
+        );
     }
 }

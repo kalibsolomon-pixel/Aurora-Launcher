@@ -1,6 +1,6 @@
 [package]
 name = "aurora-native"
-version = "2.0.0"
+version = "2.0.1"
 description = "Native (Slint) host for Aurora Launcher"
 authors = ["Aurora Launcher contributors"]
 edition = "2024"

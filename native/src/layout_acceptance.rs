@@ -777,6 +777,164 @@ fn scenes() -> Vec<(&'static str, Scene)> {
 }
 
 #[test]
+fn discover_download_notification_clears_pagination_at_every_size_and_scale() {
+    let _ = slint::platform::set_platform(Box::new(RenderPlatform));
+    for (width, height) in [(720., 520.), (1120., 760.), (1600., 1000.)] {
+        for scale in [1., 1.25, 1.5, 2.] {
+            let (app, adapter) = window((width, height), scale);
+            app.global::<Nav>().set_page(Page::Discover);
+            let discover = app.global::<Discover>();
+            discover.set_kind(1);
+            discover.set_has_instances(true);
+            discover.set_instance_names(strings(&["Disposable fixture"]));
+            discover.set_has_more(true);
+            discover.set_results(ModelRc::new(VecModel::from(
+                (0..30)
+                    .map(|i| crate::ProjectRow {
+                        id: format!("fixture-{i}").into(),
+                        title: format!("Resource pack {i}").into(),
+                        description: "Synthetic download layout fixture".into(),
+                        letter: "R".into(),
+                        ..Default::default()
+                    })
+                    .collect::<Vec<_>>(),
+            )));
+            let more = Rc::new(RefCell::new(0));
+            let observed = more.clone();
+            discover.on_more(move || *observed.borrow_mut() += 1);
+            let shell = app.global::<Shell>();
+            let started = Rc::new(RefCell::new(Vec::new()));
+            let observed = started.clone();
+            let weak = app.as_weak();
+            // Synthetic operation: real Install pointer route, no network or owner data.
+            discover.on_install(move |id| {
+                observed.borrow_mut().push(id.to_string());
+                let app = weak.unwrap();
+                app.global::<Shell>()
+                    .set_toast_text("Resource pack added to Downloads.".into());
+                app.global::<Shell>().set_toast_visible(true);
+            });
+            render(&app, &adapter, &format!("download-before-{width}-{scale}"));
+            click(&app, width - 94., 280.);
+            assert_eq!(*started.borrow(), ["fixture-0"]);
+            let weak = app.as_weak();
+            shell
+                .on_dismiss_toast(move || weak.unwrap().global::<Shell>().set_toast_visible(false));
+            let pixels = render(&app, &adapter, &format!("download-right-{width}-{scale}"));
+            let physical_width = app.window().size().width as usize;
+            // Flood just the toast surface: pagination/buttons share its color.
+            let raised = |i: usize| (pixels[i].r, pixels[i].g, pixels[i].b) == (29, 31, 39);
+            let seed = (0..pixels.len())
+                .rev()
+                .find(|&i| {
+                    i % physical_width > physical_width - (40. * scale) as usize && raised(i)
+                })
+                .expect("notification must render at bottom-right");
+            let mut pending = vec![seed];
+            let mut visited = vec![false; pixels.len()];
+            let mut bounds = (usize::MAX, usize::MAX, 0, 0);
+            while let Some(i) = pending.pop() {
+                if visited[i] || !raised(i) {
+                    continue;
+                }
+                visited[i] = true;
+                let (x, y) = (i % physical_width, i / physical_width);
+                bounds = (
+                    bounds.0.min(x),
+                    bounds.1.min(y),
+                    bounds.2.max(x),
+                    bounds.3.max(y),
+                );
+                if x > 0 {
+                    pending.push(i - 1);
+                }
+                if x + 1 < physical_width {
+                    pending.push(i + 1);
+                }
+                if i >= physical_width {
+                    pending.push(i - physical_width);
+                }
+                if i + physical_width < pixels.len() {
+                    pending.push(i + physical_width);
+                }
+            }
+            assert_ne!(bounds.0, usize::MAX, "notification must render");
+            let (left, top, right, bottom) = (
+                bounds.0 as f32 / scale,
+                bounds.1 as f32 / scale,
+                (bounds.2 + 1) as f32 / scale,
+                (bounds.3 + 1) as f32 / scale,
+            );
+            assert!((width - right - 16.).abs() < 3., "right: {bounds:?}");
+            assert!((height - bottom - 16.).abs() < 3., "bottom: {bounds:?}");
+            assert!(
+                left > (width + 72.) / 2. + 60.,
+                "pagination must stay clear"
+            );
+            assert!(top > 44. && left >= 88.);
+            // Scroll the real results viewport with the notification visible.
+            scroll_down(&app, 4000.);
+            render(&app, &adapter, "download-scrolled");
+            // Actual pointer dispatch through the transparent space beside the toast.
+            click(&app, (width + 72.) / 2., height - 50.);
+            assert_eq!(*more.borrow(), 1, "Show more blocked at {width} / {scale}");
+            // Replacing a notification uses the existing single slot, not a growing stack.
+            shell.set_toast_text("Installation completed and verified.".into());
+            shell.set_toast_tone(Tone::Success);
+            render(&app, &adapter, "download-completed");
+            click(&app, width - 39., height - 39.);
+            assert!(!shell.get_toast_visible(), "Dismiss must remain clickable");
+            // Resize/restore and change DPI on the same window, without a desktop origin.
+            app.window()
+                .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 1.5 });
+            app.window().set_size(LogicalSize::new(1120., 760.));
+            shell.set_toast_visible(true);
+            render(&app, &adapter, "download-restored");
+            click(&app, 1081., 721.);
+            assert!(!shell.get_toast_visible());
+        }
+    }
+    let (app, adapter) = window((1120., 760.), 1.);
+    let activity = app.global::<crate::Activity>();
+    activity.set_active(1);
+    activity.set_summary("1 active · 50% downloaded".into());
+    activity.set_rows(ModelRc::new(VecModel::from(vec![
+        crate::ActivityRow {
+            id: 1,
+            title: "Resource pack".into(),
+            phase: "Downloading".into(),
+            message: "50% downloaded".into(),
+            running: true,
+            can_cancel: true,
+            ..Default::default()
+        },
+        crate::ActivityRow {
+            id: 2,
+            title: "Second download".into(),
+            phase: "Failed".into(),
+            message: "Retry available".into(),
+            can_retry: true,
+            ..Default::default()
+        },
+    ])));
+    let cancelled = Rc::new(RefCell::new(Vec::new()));
+    let observed = cancelled.clone();
+    activity.on_cancel(move |id| observed.borrow_mut().push(id));
+    let retried = Rc::new(RefCell::new(Vec::new()));
+    let observed = retried.clone();
+    activity.on_retry(move |id| observed.borrow_mut().push(id));
+    activity.set_open(true);
+    render(&app, &adapter, "download-progress-controls");
+    key(&app, Key::Tab); // Close
+    key(&app, Key::Tab); // Cancel first download
+    key(&app, Key::Return);
+    assert_eq!(*cancelled.borrow(), [1]);
+    key(&app, Key::Tab); // Retry second download
+    key(&app, Key::Return);
+    assert_eq!(*retried.borrow(), [2]);
+}
+
+#[test]
 fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     let _ = slint::platform::set_platform(Box::new(RenderPlatform));
     // Every scene at every size (100%) and every scale (minimum size).

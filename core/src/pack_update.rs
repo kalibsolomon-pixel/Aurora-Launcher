@@ -4605,13 +4605,24 @@ mod tests {
         .unwrap();
         // Damage after a successful update is plain drift, detected by
         // validation, not rollback (this pins the boundary: the transaction
-        // owns the window between its own begin and commit).
+        // owns the window between its own begin and commit). A deterministic
+        // pack artifact carries the verdict; runtime-mutable settings files
+        // are the game's to rewrite and never fail validation on drift.
         let root = world.instance_root(&record);
-        std::fs::write(root.join("config").join("same.toml"), b"tampered\n").unwrap();
         let pack = crate::pack_state::InstalledPack::load(&world.managed, record.id())
             .unwrap()
             .unwrap();
-        assert!(pack.validate_installed(&world.managed).is_err());
+        std::fs::write(
+            root.join("config").join("same.toml"),
+            b"rewritten by the game\n",
+        )
+        .unwrap();
+        pack.validate_installed(&world.managed).unwrap();
+
+        std::fs::write(root.join("mods").join("kept.jar"), b"tampered\n").unwrap();
+        let damage = pack.validate_installed(&world.managed).unwrap_err();
+        assert_eq!(damage.code(), "pack_state_integrity_failure");
+        assert!(damage.to_string().contains("mods/kept.jar"));
     }
 
     // BM — same Minecraft/loader means no transition and a cheap update.

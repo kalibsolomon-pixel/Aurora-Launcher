@@ -729,12 +729,28 @@ fn plan_files(
         Some(files) => files.keys().cloned().collect(),
         None => collect(managed, &source_root, request)?,
     };
+    // Pack-owned deterministic content in the destination (a mod, resource
+    // pack, or shader pack the installed modpack authors) is never a sync
+    // target: overwriting it would invalidate installation integrity.
+    // Runtime-mutable settings stay syncable — the game owns their bytes.
+    let destination_pack = crate::pack_state::InstalledPack::load(managed, &request.destination_id)
+        .map_err(|_| {
+            fail(
+                "sync_destination_unreadable",
+                "Sync could not read the destination instance's installed modpack state; review that instance before syncing into it.",
+            )
+        })?;
     for path in paths {
         validate_relative(&path)?;
         if path != request.category.root()
             && !path.starts_with(&format!("{}/", request.category.root()))
         {
             return Err(unsafe_path());
+        }
+        if let Some(pack) = &destination_pack {
+            if pack.owns_path(&path) && !crate::pack_state::is_runtime_mutable(&path) {
+                continue;
+            }
         }
         if request.category == Category::Configuration
             && !request
