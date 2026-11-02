@@ -27,8 +27,8 @@ PNG boundary with Browse. Artwork supplies a local type-specific fallback and
 contain-sized image, with reserved geometry. Inventory identity resolution is
 independent of ownership. No provider URLs or new artwork sources are needed.
 
-Read AGENTS.md and ARCHITECTURE.md in full, LAUNCHER_DESIGN_LANGUAGE.md,
-PHASE_F_DESIGN.md, UI-1, UI-2B and UI-2B.1 acceptance, review-harness documentation,
+Read AGENTS.md and ARCHITECTURE.md in full, docs/development/ui/LAUNCHER_DESIGN_LANGUAGE.md,
+docs/development/phases/PHASE_F_DESIGN.md, UI-1, UI-2B and UI-2B.1 acceptance, review-harness documentation,
 and current source. Historical architecture descriptions are superseded by source
 and the current sections (notably pack activation, modpack installation and loaders).
 

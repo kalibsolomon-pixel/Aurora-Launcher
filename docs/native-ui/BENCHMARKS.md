@@ -1,7 +1,7 @@
 # NATIVE-0 framework benchmarks
 
 Bounded prototypes, measured on 2026-10-31. Raw per-run JSON is in
-[`evidence/native0/`](evidence/native0/). The probe is
+[`evidence/native0/`](evidence/native0). The probe is
 [`native/tools/measure-process.ps1`](../../native/tools/measure-process.ps1);
 the run matrix is [`native/tools/run-native0-matrix.ps1`](../../native/tools/run-native0-matrix.ps1).
 
@@ -82,7 +82,7 @@ rejected alternatives are in [`FRAMEWORK_DECISION.md`](FRAMEWORK_DECISION.md).
 
 ## NATIVE-6: full native launcher vs Tauri (release builds)
 
-Raw JSON: [`evidence/native6/`](evidence/native6/). Same host and probe as
+Raw JSON: [`evidence/native6/`](evidence/native6). Same host and probe as
 above; both on empty data roots; 3 interleaved runs (medians).
 
 | Build | Processes | First window | Quiescent | Idle working set | Idle private | GPU dedicated | Idle CPU | Minimized CPU |

@@ -66,7 +66,7 @@ test("production Client ordering is semantic and independent of catalog order", 
 });
 
 test("1.5.0 publication notes omit only its exact preparation notices and preserve release facts", () => {
-  const source = readFileSync(new URL('../../RELEASE_1_5_0_NOTES.md', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../../docs/releases/archive/RELEASE_1_5_0_NOTES.md', import.meta.url), 'utf8');
   const notices = [
     "Draft for the selected release candidate. Publication requires the remaining\nacceptance and owner gates in LAUNCHER_1_5_0_RELEASE_ACCEPTANCE.md.",
     "Final signed-installer, authenticated gameplay, supported-mod-stack and upgrade\nacceptance are still pending. This draft is not a publication announcement.",
@@ -82,7 +82,7 @@ test("1.5.0 publication notes omit only its exact preparation notices and preser
   assert(final.includes('## Known limitations'));
   assert.equal(publicationNotes(final, '1.5.0'), final);
   assert.equal(publicationNotes(source.replaceAll(/\r?\n/g, '\r\n'), '1.5.0'), final);
-  assert.equal(readFileSync(new URL('../../RELEASE_1_5_0_NOTES.md', import.meta.url), 'utf8'), source);
+  assert.equal(readFileSync(new URL('../../docs/releases/archive/RELEASE_1_5_0_NOTES.md', import.meta.url), 'utf8'), source);
 });
 
 test("publication notes preserve historical versions and still reject a wrong source identity", () => {

@@ -8,7 +8,7 @@ catalog authority for latest-version selection. Keep exact old pins resolvable,
 verify GitHub's expected JAR SHA-256 through the trusted cache before inspecting
 compatibility, and preserve explicit transactional updates. Do not reintroduce
 a requirement to release Launcher for every compatible Client version. See
-`CLIENT_RELEASE_DISCOVERY.md`.
+`docs/compatibility/CLIENT_RELEASE_DISCOVERY.md`.
 
 ## Purpose and stack
 
@@ -171,7 +171,7 @@ initial snapshot; never assume that snapshot was applied. Existing revision,
 account, instance and readiness checks remain authoritative. Research-only
 performance-p0-2 probes distinguish first Home paint, restored usable Home, Ready
 and Ready RAF checkpoints, with Windows QPC clock brackets. RAF is not physical
-visibility. See `PERFORMANCE_INITIATIVE_II_RESULTS.md` for acceptance and limits.
+visibility. See `docs/development/performance/PERFORMANCE_INITIATIVE_II_RESULTS.md` for acceptance and limits.
 
 ## Native resolution and validation readers (2026-10-19)
 
@@ -184,7 +184,7 @@ include the actual conditional group, not a fixture that omits it.
 Install/recovery/final launch writers remain exclusive. `TargetLock::existing`
 also remains exclusive because lifecycle state loading may replay recovery; do
 not replace it with shared ownership. Readiness still verifies bytes and rejects
-damage. See `NATIVE_RESOLUTION_READINESS_REPORT.md` for native acceptance, the
+damage. See `docs/native-ui/NATIVE_RESOLUTION_READINESS_REPORT.md` for native acceptance, the
 reproduced false-damage race and the limits of historical n3 attribution.
 
 ## Fabric mod resolution (owner decision, 2026-10-19)
@@ -201,7 +201,7 @@ rule. See `docs/instance-tiles-icons/README.md`.
 ## Native host (NATIVE initiative, 2026-10-31)
 
 A native Slint host (`native/`, crate `aurora-native`) runs alongside the
-Tauri/WebView host over the same core. See `NATIVE_UI_MIGRATION_ACCEPTANCE.md`
+Tauri/WebView host over the same core. See `docs/native-ui/NATIVE_UI_MIGRATION_ACCEPTANCE.md`
 and `docs/native-ui/`.
 
 - Launcher operations live in `src-tauri/src/application.rs` and take a
@@ -256,7 +256,7 @@ and `docs/native-ui/`.
   customized geometry; do not strip it or rewrite malformed state for downgrade.
 - Playtime graphs consume the existing daily-history API and its UTC day buckets.
   Never invent activity, poll for chart animation, or confuse a zero-day baseline
-  with recorded time. See `NATIVE_CONTROLS_WIDGETS_ACCEPTANCE.md`.
+  with recorded time. See `docs/native-ui/NATIVE_CONTROLS_WIDGETS_ACCEPTANCE.md`.
 
 
 ## Native drag widget layout (2026-11-01)
@@ -270,3 +270,11 @@ saved geometry. Keep stable widget models so keyboard focus and pointer capture
 survive data refreshes. Gestures pass the live viewport column count; record width
 changes synchronously and defer only rendering, so queued events cannot reinstate
 an obsolete narrow layout. See NATIVE_WIDGET_DRAG_ACCEPTANCE.md.
+
+## Responsive native widget content (2026-11-01)
+
+Widget interiors derive their layout from actual rendered card dimensions, not
+saved size labels. Media scales its cached artwork and switches between compact,
+wide and tall layouts; playback stays reachable. Lists adapt row count/spacing,
+and narrow charts use seven bars even when tall. Presentation resizing must not
+rewrite saved grid geometry. See NATIVE_WIDGET_RESPONSIVE_ACCEPTANCE.md.

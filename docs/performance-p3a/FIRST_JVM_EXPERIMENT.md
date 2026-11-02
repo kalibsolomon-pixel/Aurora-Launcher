@@ -1,6 +1,6 @@
 # First JVM experiment — design only, separate P3-B authorization required
 
-P3-A.4a.4 assessment: see [fresh-process acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md).
+P3-A.4a.4 assessment: see [fresh-process acceptance](../development/performance/PERFORMANCE_P3A4A4_ACCEPTANCE.md).
 The normal-terrain stationary baseline is now frozen and restored independently;
 it is a practical subset, not canonical B or a memory-pressure workload. Its
 committed/live heap remains well below both proposed maxima. Do not expect changing

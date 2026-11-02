@@ -22,7 +22,7 @@ pair, C2 is unpaired, B2 is excluded and B3/C3 were not run.
 | HUD/widgets/events/background features | **Aurora Client** | Per-frame work is a plausible profiling target. No feature is proven excessive; compare supported feature states and preserve behavior before proposing caching or cadence changes. |
 | GC and scheduling/render interaction | Shared investigation; assign change to actual subsystem | Launcher can hold JVM/observers/workload constant. Client owns pacing and its allocations; upstream work stays upstream. No two-repository implementation in one unreviewed task. |
 
-Sources: [P3-B.1 results](../../PERFORMANCE_P3B1_ACCEPTANCE.md),
+Sources: [P3-B.1 results](../development/performance/PERFORMANCE_P3B1_ACCEPTANCE.md),
 [installed-artifact limiter audit](../performance-p3a/AURORA_LIMITER_AUDIT.md),
 [practical protocol](../performance-p3a/PRACTICAL_PROTOCOL.md), and current source
 `src-tauri/src/launch/process.rs` (await/drain supervision),

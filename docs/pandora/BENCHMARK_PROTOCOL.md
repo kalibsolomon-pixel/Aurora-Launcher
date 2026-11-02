@@ -128,5 +128,5 @@ Minecraft launch, authenticated play, physical visibility, or a clean-close test
 
 Run sequentially after build/test activity finishes, retaining executable hashes,
 raw JSON and stderr. Results and precise coverage belong in
-`PANDORA_4_ACCEPTANCE.md` and `pandora4-results.json`. Unsupported measurements stay
+`docs/pandora/PANDORA_4_ACCEPTANCE.md` and `pandora4-results.json`. Unsupported measurements stay
 NOT MEASURED. No public downloads, GPU/frame-time tests or real worlds are used.

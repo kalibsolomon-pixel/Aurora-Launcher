@@ -8,10 +8,10 @@ game, Cargo or Vite development process was present before this run. Historical
 acceptance paths are inventoried separately from newly generated UI-1 evidence.
 
 Read: root AGENTS.md; ARCHITECTURE.md frontend/native, navigation, appearance,
-Home and local content sections; LAUNCHER_DESIGN_LANGUAGE.md including its Phase F
-supersession; PHASE_F_DESIGN.md and PHASE_F_ACCEPTANCE.md; current L3 architecture
-and acceptance; LAUNCHER_PRERELEASE_UI_CORRECTIONS.md (including the per-result
-blur correction); RR1_A_NATIVE_STARTUP_ACCEPTANCE.md; and the Client 3 production
+Home and local content sections; docs/development/ui/LAUNCHER_DESIGN_LANGUAGE.md including its Phase F
+supersession; docs/development/phases/PHASE_F_DESIGN.md and docs/development/phases/PHASE_F_ACCEPTANCE.md; current L3 architecture
+and acceptance; docs/development/ui/LAUNCHER_PRERELEASE_UI_CORRECTIONS.md (including the per-result
+blur correction); docs/troubleshooting/RR1_A_NATIVE_STARTUP_ACCEPTANCE.md; and the Client 3 production
 correction. Source is authoritative where historical descriptions differ (for
 example the current Home cap is 1280px and the rail has no instance shortcuts).
 

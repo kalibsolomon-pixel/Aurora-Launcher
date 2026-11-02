@@ -1,7 +1,7 @@
 # F3R-A evidence index — 2026-10-12
 
 Overall verdict: **PARTIAL; Linux engine and desktop unexecuted**.
-Full report: [FORGE_F3R_ACCEPTANCE.md](../../FORGE_F3R_ACCEPTANCE.md).
+Full report: [docs/compatibility/FORGE_F3R_ACCEPTANCE.md](../../docs/compatibility/FORGE_F3R_ACCEPTANCE.md).
 Implementation starts at `c461eff2baddb099db52f5d56aa728e9f2f4afab` on
 `codex/client-3-production-authority`. Exact delivery revision is recorded in
 `final-head.txt` after the closing documentation commit. No push/publication.

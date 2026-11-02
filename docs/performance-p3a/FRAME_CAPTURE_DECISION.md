@@ -2,7 +2,7 @@
 
 Performance Overlay1.0.2 remains usable for coarse internal pacing screening:
 four coherent locked normal-terrain exports from fresh warmed processes, with
-new workload-specific B/C ranges in [acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md).
+new workload-specific B/C ranges in [acceptance](../development/performance/PERFORMANCE_P3A4A4_ACCEPTANCE.md).
 This measures eligible HUD callbacks, not active rendering, submission, physical
 display or every Minecraft frame. No independent inactive timing reference exists.
 
@@ -27,7 +27,7 @@ Locked-JDK JFR start/stop/export/readability and aggregate GC/heap coverage now 
 Combined pacing falls within the baseline ranges, but resource observer attribution
 is inconclusive because inactive CPU/RSS drift and GC differences remain. No
 negligible-overhead claim or ready heap-comparison workflow. [Practical protocol](PRACTICAL_PROTOCOL.md),
-[results](../../PERFORMANCE_P3A4A3_ACCEPTANCE.md). Strict primary-source decisions
+[results](../development/performance/PERFORMANCE_P3A4A3_ACCEPTANCE.md). Strict primary-source decisions
 and failed historical captures below are unchanged. P3-B is not authorized.
 
 # P3-A.4a.2 current frame-source decision (historical)

@@ -22,7 +22,7 @@ Audit before application edits, 2026-10-14. Branch `codex/client-3-production-au
 
 ## Account-operation decision gate
 
-No new authenticated capability is required for the existing skin upload, owned cape selection or No Cape operation. Existing evidence includes `PHASE_E3_DESIGN.md`, `PHASE_E3_ACCEPTANCE.md`, L3 acceptance, native service/profile-confirmation tests and command implementations. These are ecosystem-corroborated service contracts, not a published official service specification or live-production mutation proof. UI-4 will reuse them with explicit named-account confirmation and existing progress/failure/refresh handling. No real mutation or sign-in is authorized for acceptance. New permissions, cape upload, third-party cape integration, or new auth operations remain out of scope and would require an owner-reviewed contract first.
+No new authenticated capability is required for the existing skin upload, owned cape selection or No Cape operation. Existing evidence includes `docs/development/phases/PHASE_E3_DESIGN.md`, `docs/development/phases/PHASE_E3_ACCEPTANCE.md`, L3 acceptance, native service/profile-confirmation tests and command implementations. These are ecosystem-corroborated service contracts, not a published official service specification or live-production mutation proof. UI-4 will reuse them with explicit named-account confirmation and existing progress/failure/refresh handling. No real mutation or sign-in is authorized for acceptance. New permissions, cape upload, third-party cape integration, or new auth operations remain out of scope and would require an owner-reviewed contract first.
 
 ## UI composition and state policy
 

@@ -3,7 +3,7 @@
 Branch `codex/instance-tiles-icons` (from `codex/java-validation-private-rc` at `39c8a03`).
 Local commits only; nothing pushed, merged or published.
 
-**2026-11-01 follow-up:** [Installed mod controls, icons and optional Aurora](../../MOD_CONTROLS_AURORA_ACCEPTANCE.md) supersedes the historical prohibition on adding Aurora to a pack-owned instance. Verified existing provider Fabric API ownership can be retained. The older merge flow below still intentionally produces ordinary content; it does not follow pack updates.
+**2026-11-01 follow-up:** [Installed mod controls, icons and optional Aurora](../development/acceptance/MOD_CONTROLS_AURORA_ACCEPTANCE.md) supersedes the historical prohibition on adding Aurora to a pack-owned instance. Verified existing provider Fabric API ownership can be retained. The older merge flow below still intentionally produces ordinary content; it does not follow pack updates.
 
 ## What changed
 

@@ -1,6 +1,6 @@
 # P0.1 evidence and reproduction index
 
-The [report](../../PERFORMANCE_RESEARCH_P0_1.md) now records the owner's
+The [report](../development/performance/PERFORMANCE_RESEARCH_P0_1.md) now records the owner's
 2026-10-09 authorization to benchmark the current installation **as-is**.
 No separate account or storage isolation is claimed. The original 2026-10-08
 BLOCKED preflight and the first resume preflight remain historical observations.

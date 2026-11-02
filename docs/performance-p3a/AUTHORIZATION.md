@@ -9,7 +9,7 @@ corrections/tests, preservation audits, readiness documentation and scoped revie
 local commits are authorized. The [trial plan](P3A4A4_TRIAL_PLAN.md) records order
 and the procedural amendments/exclusions. A and C each used their single retry;
 the C retry's resource timing failure remains excluded rather than authorizing
-another attempt. See the [final acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md).
+another attempt. See the [final acceptance](../development/performance/PERFORMANCE_P3A4A4_ACCEPTANCE.md).
 
 The established same-user isolated root/profile/native Play workflow and accepted
 shared credential refresh risk continue. Interactive login is owner-operated.

@@ -9,7 +9,7 @@ no compatibility changes. No workflow was dispatched or authority activated.
 This is a local implementation, not permission to publish or activate an
 authority. The stable WebView installation and update authority are preserved.
 The current evidence and remaining production gates are in
-[NATIVE_9_ACCEPTANCE.md](../../NATIVE_9_ACCEPTANCE.md).
+[docs/native-ui/NATIVE_9_ACCEPTANCE.md](NATIVE_9_ACCEPTANCE.md).
 
 ## Preview isolation
 
@@ -147,7 +147,7 @@ bytes; they do not supply Windows publisher reputation or replace Authenticode.
 6. Separately approve native authority initialization/protection, signing build
    configuration, immutable native release publication and discovery advancement
    last. Reuse the existing authority protection principles from
-   `UPDATE_AUTHORITY.md`; do not reuse or modify the stable ref. Native publication
+   `docs/releases/UPDATE_AUTHORITY.md`; do not reuse or modify the stable ref. Native publication
    automation/authority advancement has not been implemented or dispatched here.
 
 The manual `native-preview-candidate.yml` only builds a private CI artifact. It

@@ -1,7 +1,7 @@
 # P3: local Minecraft startup investigation
 
 The verdict, measured distributions, attribution, and proposed next changes are in
-[PERFORMANCE_RESEARCH_P3.md](../../PERFORMANCE_RESEARCH_P3.md). These tools implement
+[docs/development/performance/PERFORMANCE_RESEARCH_P3.md](../development/performance/PERFORMANCE_RESEARCH_P3.md). These tools implement
 a Windows research workflow for the exact Java 21 / Minecraft 1.21.11 / Fabric
 0.19.5 environment studied. They are not a production launch mode or a general
 benchmark service. No application source or installed executable was changed.
@@ -187,5 +187,5 @@ Instrumentation is a separate local commit from the report and sanitized evidenc
 There are no production changes to roll back. To remove the research additions,
 revert the report commit and then the instrumentation commit after preserving any
 desired local evidence. Identify them with `git log --oneline -- docs/performance-p3
-PERFORMANCE_RESEARCH_P3.md`. Do not delete the private root or owner files as an
+docs/development/performance/PERFORMANCE_RESEARCH_P3.md`. Do not delete the private root or owner files as an
 automatic rollback step. Nothing was pushed, published, installed or uploaded.

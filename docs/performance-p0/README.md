@@ -1,6 +1,6 @@
 # Performance P0 evidence and isolated tools
 
-The [research report](../../PERFORMANCE_RESEARCH_P0.md) describes the results,
+The [research report](../development/performance/PERFORMANCE_RESEARCH_P0.md) describes the results,
 limitations, architecture and owner-review gate. These tools are research-only;
 they do not instrument the normal application. No optimization is implemented.
 

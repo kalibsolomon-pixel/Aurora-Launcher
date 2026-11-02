@@ -1,6 +1,6 @@
 # P3-A.4a.4 fresh-process observer review — LIMITED / INCONCLUSIVE
 
-[Acceptance and numeric ranges](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md) report
+[Acceptance and numeric ranges](../development/performance/PERFORMANCE_P3A4A4_ACCEPTANCE.md) report
 two fresh inactive controls, two Overlay resource windows and one eligible combined
 window on locked normal terrain. C2 failed procedure; its single retry C2r has a
 sampler delay extending beyond Overlay auto-stop, so that resource slot is excluded.
@@ -42,7 +42,7 @@ counterbalanced inactive/recording/JFR control set on a frozen representative
 workload, with equal fresh-process warm-up and no new tooling, is the smallest
 next validation. If drift still obscures the proposed resource benefit, stop or
 defer that resource claim. Do not pursue optical/per-frame research prerequisites
-to resolve this practical question. [Full results](../../PERFORMANCE_P3A4A3_ACCEPTANCE.md).
+to resolve this practical question. [Full results](../development/performance/PERFORMANCE_P3A4A3_ACCEPTANCE.md).
 
 # P3-A.4a.2 existing collector/JFR overhead — UNKNOWN (historical)
 

@@ -55,4 +55,4 @@ configuration bytes in `finally`. Keep the measurement free of build/test work.
 
 Historical and rejected harness attempts remain privately preserved under the
 continuation temp directory; only the final validated matrix is acceptance data.
-See `NATIVE_8_ACCEPTANCE.md` at the repository root for interpretation and limits.
+See `docs/native-ui/NATIVE_8_ACCEPTANCE.md` at the repository root for interpretation and limits.

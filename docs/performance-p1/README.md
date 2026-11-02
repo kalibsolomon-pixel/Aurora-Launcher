@@ -3,7 +3,7 @@
 The optimization is the independent commit
 `0d68340f0e280978f675c6f83330a10fb97bf678`. The baseline is the unchanged P0.2
 instrumentation commit `6cbabd38bc1c5268b9f6c80034f18da3a26f1e21`.
-The report is [PERFORMANCE_OPTIMIZATION_P1.md](../../PERFORMANCE_OPTIMIZATION_P1.md).
+The report is [docs/development/performance/PERFORMANCE_OPTIMIZATION_P1.md](../development/performance/PERFORMANCE_OPTIMIZATION_P1.md).
 
 ## Reproduction and boundaries
 

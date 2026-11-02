@@ -65,6 +65,6 @@ integration are deliberately unsupported. No installer was run.
 
 All 2,788 baseline tracked files remain present. The task retains and wires the
 pre-existing, directly relevant Start-menu shortcut implementation. Unrelated
-working changes in `PRIVATE_CANDIDATE_TESTING.md`, `tools/visual/ui2.test.mjs` and
+working changes in `docs/development/PRIVATE_CANDIDATE_TESTING.md`, `tools/visual/ui2.test.mjs` and
 pre-existing untracked files are kept outside the task commit. No Client source,
 installed game data, runtime data or normal Minecraft directory was changed.

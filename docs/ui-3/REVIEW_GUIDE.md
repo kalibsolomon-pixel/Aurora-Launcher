@@ -1,6 +1,6 @@
 # UI-3 visual review
 
-Start with the [acceptance report](../../UI_3_DISCOVER_LIBRARY_ACCEPTANCE.md).
+Start with the [acceptance report](../development/ui/UI_3_DISCOVER_LIBRARY_ACCEPTANCE.md).
 All comparison sheets use the same baseline (`7c76626`), deterministic fixture,
 viewport and background on both sides. They are browser evidence, clearly labeled.
 Original full-resolution captures are in `before/` and `after/`.

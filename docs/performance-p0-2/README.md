@@ -1,7 +1,7 @@
 # P0.2 instrumentation and evidence
 
 This is a development-only research harness. No validation is removed, cached,
-coalesced, or authorized by a timing result. The [report](../../PERFORMANCE_RESEARCH_P0_2.md)
+coalesced, or authorized by a timing result. The [report](../development/performance/PERFORMANCE_RESEARCH_P0_2.md)
 is PARTIAL: Launcher startup/readiness and IPC were measured; Play and startup
 JFR are BLOCKED for owner review. No game was launched and no optimization made.
 

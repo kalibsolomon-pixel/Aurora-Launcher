@@ -7,7 +7,7 @@ promotion. Actual Overlay startup/world/HUD coexistence succeeded. Fresh title
 CPU 2.979357% failed the unchanged 2% screen, so frame/JFR/observer recordings were
 deferred. No actual CSV or JFR recording metrics exist. PresentMon is optional
 diagnostics; full measured schema/gates unchanged. See
-[acceptance](../../PERFORMANCE_P3A4A2_ACCEPTANCE.md),
+[acceptance](../development/performance/PERFORMANCE_P3A4A2_ACCEPTANCE.md),
 [timebase/overhead](P3A4A2_TIMEBASE_OVERHEAD.md), [JFR coverage](P3A4A2_JFR.md).
 Historical audit below is preserved.
 

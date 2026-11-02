@@ -143,7 +143,7 @@ async function main() {
       signatures.push({ name, sizeBytes: bytes.length, sha256: sha256(bytes) });
     }
     manifest.updater = { platform: "windows-x86_64", publicKeySha256: sha256(Buffer.from(publicKey)), signatures };
-    const notes = publicationNotes(await readFile(join(root, `RELEASE_${version.replaceAll(".", "_")}_NOTES.md`), "utf8"), version);
+    const notes = publicationNotes(await readFile(join(root, `docs/releases/archive/RELEASE_${version.replaceAll(".", "_")}_NOTES.md`), "utf8"), version);
     const signature = (await readFile(join(directory, installerName(version, "nsis") + ".sig"), "utf8")).trim();
     await writeFile(join(directory, manifestName), JSON.stringify(createManifest(version, notes, signature), null, 2) + "\n", { flag: "wx" });
     await writeFile(path, JSON.stringify(manifest, null, 2) + "\n");

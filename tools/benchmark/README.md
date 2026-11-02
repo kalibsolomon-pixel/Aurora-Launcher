@@ -8,7 +8,7 @@ quality relaxation or metric promotion. The [predeclared fresh-process plan](../
 is separate from both the historical within-session sequence and strict schema1.
 An equal saved snapshot does not prove the camera survived UI loading: reset and
 observe the live camera before warm-up and verify it again after normal exit.
-[P3-A.4a.4 acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md) records the actual
+[P3-A.4a.4 acceptance](../../docs/development/performance/PERFORMANCE_P3A4A4_ACCEPTANCE.md) records the actual
 resource timing exclusions, independent metric readiness and unchanged P3-B
 authorization boundary.
 
@@ -16,7 +16,7 @@ authorization boundary.
 
 P3-A.4a.3 adds the separate [Practical Performance Protocol](../../docs/performance-p3a/PRACTICAL_PROTOCOL.md).
 Actual recording, baseline and observer results are in
-[P3-A.4a.3 acceptance](../../PERFORMANCE_P3A4A3_ACCEPTANCE.md). Historical statements
+[P3-A.4a.3 acceptance](../../docs/development/performance/PERFORMANCE_P3A4A3_ACCEPTANCE.md). Historical statements
 below describe their original phase. Strict Research Protocol/schema-1 gates and
 all prior tests remain unchanged; practical diagnostics do not promote old captures.
 
@@ -195,4 +195,4 @@ focused tests are synthetic. A tenth regression covers consumer overflow in both
 short readers: explicit overflow diagnostics reject a capture even when ETW
 counters are zero. Existing full measured importer/schema remain unchanged.
 Actual evidence and historical quality corrections are documented in
-[P3-A.4a.1 acceptance](../../PERFORMANCE_P3A4A1_ACCEPTANCE.md).
+[P3-A.4a.1 acceptance](../../docs/development/performance/PERFORMANCE_P3A4A1_ACCEPTANCE.md).

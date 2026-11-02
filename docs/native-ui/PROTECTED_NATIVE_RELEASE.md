@@ -1,10 +1,33 @@
 # Protected native preview release
 
+## Native 2.0.0 release continuation
+
+The owner has authorized publication of Native 2.0.0, including the reviewed
+responsive-widget and icon improvements. See the [release record](../releases/NATIVE_2_0_0_RELEASE.md).
+The preparation-only authorization statements below describe the earlier
+readiness phase; current owner release instructions supersede them.
+
+The workflow now reuses the existing `launcher-production` signing environment
+and `launcher-update-authority-production` authority App environment, with the
+separate `launcher-native-preview-publication` gate. The existing and newly
+prepared native environments have the same owner reviewer, exact `main` branch
+policy, and prohibition on administrator bypass. Existing secrets stay in
+their protected environments; no new signing identity or secret copy is needed.
+
+For the first native authority publication only, the explicit manual workflow
+input `initialize_authority=true` with an empty `authority_parent` requests
+initialization through the dedicated App. After public signed artifact
+verification, it requires an absent native ref, validates the canonical empty
+tree and exact zero-parent initialization commit, then creates the ref
+atomically. It refuses an existing ref. Subsequent releases supply the observed
+40-character authority parent and leave initialization disabled. No WebView ref
+is initialized, replaced or advanced by this native procedure.
+
 This prepares the existing native updater, standalone NSIS package and GitHub
 release/authority protocol. It does not authorize a workflow dispatch, push,
 publication, authority initialization or installation over an owner's preview.
 The WebView workflow, `v<version>` releases and `launcher-update-authority` ref
-remain unchanged. Current acceptance: [NATIVE_RELEASE_READINESS.md](../../NATIVE_RELEASE_READINESS.md).
+remain unchanged. Current acceptance: [docs/releases/archive/NATIVE_RELEASE_READINESS.md](../releases/archive/NATIVE_RELEASE_READINESS.md).
 
 ## Identities and protected configuration
 
@@ -38,7 +61,7 @@ or copy secrets into repository variables, files, diagnostics or chat. Reuse the
 existing protected signing and authority App process; a new App is not required.
 Prevent self-review where a distinct owner-authorized reviewer is practical.
 
-Apply the three layered ruleset principles in [UPDATE_AUTHORITY.md](../../UPDATE_AUTHORITY.md)
+Apply the three layered ruleset principles in [docs/releases/UPDATE_AUTHORITY.md](../releases/UPDATE_AUTHORITY.md)
 to the **native ref**, retaining WebView protection. History integrity forbids
 rewind/deletion without an App bypass; writer restriction permits only the
 dedicated authority App; creation restriction blocks unauthorized initialization
@@ -51,7 +74,8 @@ Only after separate authorization, initialize the native ref with one root
 commit, canonical empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904`, and exact
 message `Initialize Aurora native preview update authority`. The first
 advancement creates a tree containing only regular `native-update.json`.
-Initialization is deliberately not automated by the publisher.
+Current first-publication initialization is performed only through the explicit
+protected workflow input described above.
 
 ## Controlled acceptance and publication
 
@@ -99,7 +123,8 @@ disposable Windows profile, first manually bootstrap an authority-enabled baseli
 owner-chosen version through the fixed public native endpoint. The baseline need
 not itself be publicly released. Synchronize `package.json`, `package-lock.json`,
 both Rust `Cargo.toml` files and both `Cargo.lock` files before the owner-chosen
-version build; the executable/package metadata guard refuses divergence. No
+version build; the executable/package metadata guard refuses divergence. Native
+2.0.0 retains independent native version metadata while WebView stays 1.5.1. No
 version bump or production installation is performed by this preparation.
 
 The draft-before-publication sequence follows GitHub's

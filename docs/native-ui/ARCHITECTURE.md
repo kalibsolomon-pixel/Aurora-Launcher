@@ -17,7 +17,7 @@ motion work. This supersedes the earlier statement that Spinner is the only
 continuous animation. Forced foreground bypass and numeric telemetry are
 acceptance-feature-only and require an absolute diagnostic data root.
 
-See [NATIVE_8_ACCEPTANCE](../../NATIVE_8_ACCEPTANCE.md) for evidence, deliberate
+See [NATIVE_8_ACCEPTANCE](NATIVE_8_ACCEPTANCE.md) for evidence, deliberate
 limitations and the distinction between visible-window and loaded-Home timing.
 
 ## Preview worker refinement (2026-10-31 follow-up)
@@ -46,7 +46,7 @@ separate standard-library-only raster benchmark over decoded synthetic fixtures.
 
 ## NATIVE-7 continuation
 
-See [NATIVE_7_UI_COMPLETION_ACCEPTANCE](../../NATIVE_7_UI_COMPLETION_ACCEPTANCE.md)
+See [NATIVE_7_UI_COMPLETION_ACCEPTANCE](NATIVE_7_UI_COMPLETION_ACCEPTANCE.md)
 for the current implementation and verification limits. `player.rs` provides
 bounded CPU rasterization into one 320×440 RGBA image, scheduled by `skins.rs`
 only on changes/interaction; no idle preview timer or GPU surface exists.

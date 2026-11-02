@@ -14,7 +14,7 @@ The compact icon rail retains accessible names and hover/focus tooltips. Instanc
 identity uses the existing persisted Material Symbols names, with search and a
 full native path catalog. Home widgets and the custom accent picker expose
 implemented services; they introduce no framework or runtime blur. See
-[NATIVE_8_ACCEPTANCE](../../NATIVE_8_ACCEPTANCE.md) for native screenshots,
+[NATIVE_8_ACCEPTANCE](NATIVE_8_ACCEPTANCE.md) for native screenshots,
 measured resources and verification limits. The refinement's retained raster
 measurements are not end-to-end preview latency.
 
@@ -32,7 +32,7 @@ Home/End and a focus ring on the current tab. Selection remains accent text and
 icons only. The existing palettes, type roles, radii and spacing remain in use;
 there are no new effects, fonts, dependencies or background animations.
 
-See `NATIVE_7_UI_REFINEMENT_ACCEPTANCE.md` at the repository root for the new
+See `docs/native-ui/NATIVE_7_UI_REFINEMENT_ACCEPTANCE.md` at the repository root for the new
 Windows screenshots, measured preview latency and remaining acceptance limits.
 
 ## NATIVE-7 amendments

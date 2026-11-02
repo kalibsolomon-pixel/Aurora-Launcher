@@ -1,116 +1,60 @@
-# Aurora Launcher
+# Aurora Launcher 2.0.0 — Native Rust Minecraft Launcher
 
-The current public Launcher release is **1.4.1**. The corrected production source
-selects Aurora Client 3.0.0 for new compatible Minecraft 1.21.11 instances, with
-Fabric Loader 0.19.5, Java 21 and Fabric API 0.141.6+1.21.11. Older immutable
-entries remain resolvable for existing pins; nothing updates automatically.
+Aurora Launcher is a Windows x64 launcher for Minecraft: Java Edition, with a
+native Rust/Slint interface and isolated Minecraft instances. This major release
+moves the interface away from WebView while retaining the verified Rust backend.
 
-This source correction does not replace the already published 1.4.1 installer.
-With that installer, create a compatible instance, then use **Check for Updates**
-and explicitly apply the Aurora Client 3.0.0 update before playing. The published
-Client update manifest already offers that release. Review
-[Client 3.0.0 production correction](CLIENT_3_0_0_PRODUCTION_CORRECTION.md) for
-artifact/bridge verification and publication limits. The dated earlier activation
-record remains [historical evidence](AURORA_CLIENT_2_1_5_ACTIVATION.md).
+## Download and install
 
-The launcher supports executable Vanilla instances, Fabric instances without Aurora, and compatible optional Aurora. Creation uses the Rust capability catalog; compatible Fabric instances include Aurora Client by default, and an explicit off choice is respected. Existing instances change configured Aurora through an explicit preview and fingerprinted content transaction, while Mods supports ordinary bootstrap enable, disable and removal. Provider-managed Fabric API remains provider-managed. See [ARCHITECTURE.md](ARCHITECTURE.md) for the supported lifecycle and transition boundaries.
+Native 2.0.0 is being prepared through the protected **native-preview** channel.
+Its release tag is `native-v2.0.0`. Download only after the signed installer is
+published on the [native release page](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/native-v2.0.0).
+Run `Aurora.Native.Preview_2.0.0_x64-setup.exe`, open Aurora Launcher Native
+Preview, sign in with Microsoft, and create or select an instance. Minecraft:
+Java Edition ownership is required.
 
-Aurora Launcher is a standalone launcher for the Aurora client mod for Minecraft: Java Edition. It is designed around isolated installations, transparent behavior, low background overhead, and user control.
+[WebView 1.5.1](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/v1.5.1)
+remains the stable fallback. Native has separate installation, data, credentials,
+and update authority; it does not automatically replace or migrate WebView
+installations. Keep a backup before manually moving data between versions.
+Updater signatures authenticate updates; Windows Authenticode publisher signing
+is currently unavailable, so Windows can show an unknown-publisher warning.
 
-This repository is the canonical public repository for Aurora Launcher. It contains the launcher implementation (Tauri, Rust, and Svelte) and serves as the public release location. The Aurora client mod itself is developed as a separate project.
+## Features
 
-Aurora Launcher does **not** provide Minecraft accounts, bypass Minecraft ownership requirements, or distribute authentication credentials. Playing requires the user's own Microsoft account and a legitimate Minecraft: Java Edition entitlement.
+- Isolated Minecraft instances, exact loader selection, and optional compatible Aurora Client integration.
+- Modrinth discovery and content management, local modpack import, installation, and reviewed updates.
+- Managed Java runtimes and explicitly selected, validated custom Java executables.
+- Resource-pack, shader, mod, skin, and cape management.
+- Shared runtime/assets and coordinated verified downloads to avoid unnecessary repeated work.
+- Optional cross-instance synchronization with backups, conflict review, and per-instance overrides.
+- Responsive Home widgets, playback controls, and refreshed native Aurora icons.
 
-## Development status
+Synchronization supports selected settings and files, plus safe server-list
+additions. World synchronization and automatic merging of edited server entries
+are unsupported. Performance depends on the system and workload; prior native
+measurements and their limits are in the [benchmark record](docs/native-ui/BENCHMARKS.md).
 
-This repository contains the launcher foundation through Phase 9 plus local instance content management: Tauri/Svelte desktop boundaries and versioned state; verified SHA-256, official SHA-1, and transport-observed artifact stores; official Minecraft and Fabric planning; safe staged game installation; persistent isolated Aurora instances; launcher-managed Java runtime provisioning; Microsoft → Xbox → Minecraft authentication; native launch assembly/process supervision; and filesystem-authoritative local mod inventory with safe enable, disable, and removal. Signing in uses the system browser with public-client OAuth (authorization code + PKCE), verifies Minecraft ownership and profile, stores only the Microsoft refresh credential in the operating system's credential store (the real Windows Credential Manager; Linux/macOS persistence is not implemented yet and fails deliberately), and restores Rust-only sessions with refresh-token rotation.
+## Documentation
 
-**Authentication is live-verified.** The Aurora Client Microsoft application registration exists and has completed Microsoft's Minecraft Services AppID review/allowlisting, and the production OAuth flow has been verified end-to-end against the real services: system-browser authorization with a loopback callback (registered redirect `http://localhost`, ephemeral port, root path), PKCE/state validation, the Microsoft → Xbox Live → XSTS → Minecraft Services exchange chain, entitlement and profile retrieval, and secure persistence across an application restart — with no secret logged or persisted in plaintext. The application (client) ID is public application configuration — a desktop public client has no client secret — and is committed in the repository (`src-tauri/src/auth/flow.rs`), so normal development and official builds sign in without manual environment setup; the optional `AURORA_MICROSOFT_CLIENT_ID` build-environment variable overrides it for fork builds, which otherwise report `auth_configuration_missing` honestly. The launch pipeline is implemented and tested against current official metadata with synthetic sessions and harmless child processes; live production-game acceptance is recorded separately from those deterministic tests.
+Start with the [documentation index](docs/README.md),
+[architecture](ARCHITECTURE.md), and [release instructions](RELEASING.md).
+The [Native 2.0.0 release record](docs/releases/NATIVE_2_0_0_RELEASE.md) records
+publication, signing, artifact hashes, validation, and remaining gates.
+Historical development and acceptance reports remain in the organized docs tree.
 
-Aurora Client 2.1.2 was the first production release integrated with this launcher.
-For new instances, the reviewed production catalog is embedded from
-`src-tauri/production/aurora-releases.json`; debug builds separately offer loopback
-fixtures. Existing exact pins remain resolvable. A corrected build is required to
-ship a changed creation catalog. For existing instances, the separate owner-published
-Client manifest drives bounded update discovery and explicit verified updates; a
-GitHub Client release alone does not change the catalog or an existing pin.
+## Development
 
-The 2.1.2 entry pins Minecraft 1.21.11, Fabric Loader 0.19.5, and Java 21. Aurora's embedded Fabric Loader requirement is a floor (`>=0.16.0`); the launcher verifies the exact 0.19.5 combination through official Fabric Meta. Aurora also requires Fabric API, so this release pins Fabric API 0.141.6+1.21.11 from the official Fabric Maven repository with its published SHA-256 and exact size. Both mods are acquired through the verified cache and bootstrapped under deterministic names. After installation they are user controllable in Mods, including disable, re-enable and removal; the original release record is provenance, not permanent protection. Normal Play and validation never restore removed content. Dependency problems are shown as warnings for explicit local mod toggles/deletion; installation and final launch keep their own compatibility checks. The embedded manifest is a manual distribution decision; SHA-256 checks bytes against that entry and does not independently authenticate the publisher.
-
-Instances are fully configurable: each one carries the desired Minecraft version (chosen from official Mojang metadata, snapshots behind an explicit filter), a Fabric Loader policy (the release's exact version or an explicitly matching pin), a memory allocation that produces the real JVM heap argument, additional JVM arguments with strict quoting and conflict rules, an optional custom window size, and a display name — saved atomically, with launch-only changes applying immediately and install-affecting changes applied through a deliberate, verified installation step. Older persisted instances migrate to the new registry schema automatically, preserving their identity and installed content. Instances can be selected, renamed, retried, and completely validated. The selected content-ready instance can install, validate, and reuse its official managed Java runtime. Rust owns Play readiness, exact classpath/native/logging/asset argument assembly, token redaction, structured process spawning, and exit supervision. Instance Settings supports deliberate native deletion of one stopped, registered instance after name confirmation; its user data is removed while shared cache, Java and accounts remain. Custom/system Java selection remains outside this lifecycle. Current Aurora Client update discovery and explicit verified transactions follow the Phase L contract.
-
-The instance architecture separates Minecraft, a typed platform pin, and optional Aurora in registry schema 4. Existing schema-2/3 Aurora instances migrate conservatively. Vanilla and Fabric are executable choices; Fabric without Aurora adds neither Aurora nor its bootstrap Fabric API. Forge, NeoForge, and Quilt are representable in the schema but have no executable backend support or UI choice. Backend capabilities determine available platform choices.
-
-The launcher's appearance is customizable from the Settings page: three built-in dark themes (the default Aurora Dark, the cooler Midnight, and true-black OLED) and an accent color chosen from a curated palette or a custom color, validated natively so text, focus, and status colors stay readable. The choice applies live and is remembered across restarts.
-
-Navigation separates global launcher destinations (Home, Instances, Settings, About) from a contextual instance workspace: opening an instance shows Overview, Mods, Resource Packs, Shaders, and Settings tabs. Mods inspects the isolated `mods` directory without executing JARs, distinguishes launcher bootstrap provenance from real provider ownership, reads bounded Fabric metadata, and safely manages local, bootstrap and provider JAR toggles. Disabled files use `.jar.disabled`; their bytes are checked before reuse. Provider update/removal retains its existing verified graph transactions, while updates of a disabled target require re-enabling it first. Resource Packs and Shaders show local ZIP and folder packs with search, warnings, and explicit Refresh; regular ZIP files can be removed after confirmation, while folder packs and unsafe entries are left untouched. Each content tab also offers Modrinth Browse, which loads compatible projects and their icons immediately. Results offer Details for version and dependency review, plus Quick Install for the latest compatible version. Rust resolves required dependencies, verifies Modrinth's published SHA-512 and size, activates files safely, and records durable provider ownership. Resource packs are installed without activating them in Minecraft; shaders may require a separate shader loader. Installed provider content shows explicit dependency ownership and supports user-approved compatible update and removal previews. Installed regular mod JARs have cached local icons (with a letter fallback), delete and on/off controls regardless of source. In the native host, Instance Settings → Aurora Client can add the latest catalog release matching the installed Minecraft and Fabric versions to an existing instance or modpack; it reviews the change and reuses a verified provider Fabric API without duplicating it. See [acceptance and compatibility limits](MOD_CONTROLS_AURORA_ACCEPTANCE.md). Native Play also diagnoses failed/incomplete instances and offers reviewed Smart Recovery that preserves local settings and removed-mod choices; see [failure recovery acceptance](LAUNCH_FAILURE_RECOVERY_ACCEPTANCE.md). Existing content works offline. Automatic updates and CurseForge are not implemented; Logs remains a future workspace tab.
-
-Aurora's external application identity — the Windows executable, taskbar, title-bar, installer, and shortcut icon — is a rounded-square dark neutral gradient with the exact white Aurora mark, kept separate from the transparent internal mark used inside the UI, and generated deterministically from it by repository-owned tooling. On Windows, Settings also shows live desktop-integration state: an Aurora-owned desktop shortcut can be created and removed from there (only Aurora's own shortcut is ever touched), while the Start-menu shortcut that the installer creates is reported read-only. Shortcut status always reflects the operating system as it is right now. Linux/macOS desktop integration, taskbar pinning, file associations, and URI registration are **not implemented**.
-
-## Authentication and privacy
-
-Aurora Launcher signs players in through the Microsoft OAuth 2.0 authorization-code flow with PKCE in the user's system browser and never collects or stores Microsoft account passwords. After Microsoft sign-in it follows the standard Xbox Live, XSTS, and Minecraft Services flow required of third-party Minecraft: Java Edition launchers: it verifies Minecraft: Java Edition ownership, retrieves the authenticated player's Minecraft profile, and obtains the Minecraft access token required to launch the game. Authorization requests Xbox Live sign-in and offline access so a returning user can restore their session without repeating sign-in. The only persisted credential is the Microsoft refresh credential, held in operating-system secure credential storage, never in plaintext launcher configuration.
-
-The launcher is designed around local operation and minimal data collection. It does not require an Aurora account and does not include unnecessary analytics or telemetry. Microsoft/Xbox/Minecraft credentials are used only for authentication and game-launch functionality. Downloaded game and client artifacts are integrity-checked before activation, and Minecraft instances are kept isolated from the user's default `.minecraft` installation.
-
-## Prerequisites
-
-- Git
-- Node.js 20.19+ or 22.12+ with npm (Node.js 24 LTS is recommended)
-- The stable Rust toolchain for the host platform
-- Tauri 2 platform prerequisites:
-  - Windows: Microsoft C++ Build Tools with the Desktop development with C++ workload and Microsoft Edge WebView2
-  - macOS: Xcode Command Line Tools
-  - Linux: the WebKitGTK and system packages listed in the [Tauri prerequisites guide](https://v2.tauri.app/start/prerequisites/)
-
-## Install
+Native Windows builds require stable Rust and the Microsoft C++ build tools.
+The native interface does not require WebView2. Node/npm are used for release
+tooling and for the retained WebView host.
 
 ```sh
-npm install
+cargo run --manifest-path native/Cargo.toml
+cargo test --manifest-path native/Cargo.toml --locked
+cargo test --manifest-path src-tauri/Cargo.toml --locked --no-default-features --features native-preview
+cargo build --manifest-path native/Cargo.toml --locked --release
 ```
 
-## Run in development
-
-```sh
-npm run tauri dev
-```
-
-## Build
-
-Build the frontend only:
-
-```sh
-npm run build
-```
-
-Build the desktop application and platform bundle:
-
-```sh
-npm run tauri build
-```
-
-## Test and check
-
-```sh
-npm run check
-npm run test
-cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-cargo check --manifest-path src-tauri/Cargo.toml --all-targets
-cargo test --manifest-path src-tauri/Cargo.toml
-```
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for implemented boundaries and future direction. Contributions are licensed under the [MIT License](LICENSE).
-
-Launcher versioning, Windows installer differences, manual release checks, and the future launcher-update policy are documented in [RELEASING.md](RELEASING.md). Aurora Launcher 1.0.0 is the selected first public version; its selected Windows distribution format is NSIS x64.
-
-## Disclaimer
-
-Aurora Launcher and Aurora are independent projects and are not affiliated with, endorsed by, or sponsored by Microsoft, Mojang Studios, or Fabric.
-
-Minecraft is a trademark of Microsoft Corporation.
-
-## Home and Minecraft identity
-
-Home integrates a compact instance picker into the selected-instance card, shows its installed Minecraft/platform/optional Aurora configuration and native launch state, and opens **Manage Instance** for detailed work. Mods, resource packs, shaders, Modrinth and maintenance belong to that instance's Workspace; launcher appearance remains in Settings. Vanilla and Fabric without Aurora are complete configurations, with Aurora shown as Off.
-
-The bottom-left account control opens a shell-level modal over Home, Workspace or Settings without navigating. It shows the active Minecraft name/head, browser sign-in, switching, checks and confirmed local removal; there is no Accounts navigation page. Interactive sign-in explicitly requests Microsoft account selection (`prompt=select_account`); session refresh stays noninteractive. Home shows a static 3D player in the right canvas outside the instance card, never account management. Skin pixels are validated/decoded in Rust and reused only in bounded memory. Missing or offline imagery falls back locally and cannot disable Play. Credentials and launch authority stay in Rust; the image DTO contains pixels rather than remote URLs or tokens. The original synchronized native Play path is unchanged.
+Use `npm ci`, `npm run check`, and `npm run build` for the separate WebView host.
+See [AGENTS.md](AGENTS.md) for repository and security boundaries.

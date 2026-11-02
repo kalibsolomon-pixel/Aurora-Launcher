@@ -1,6 +1,6 @@
 # P2 background audit attribution evidence
 
-Report: [PERFORMANCE_RESEARCH_P2.md](../../PERFORMANCE_RESEARCH_P2.md).
+Report: [docs/development/performance/PERFORMANCE_RESEARCH_P2.md](../development/performance/PERFORMANCE_RESEARCH_P2.md).
 Instrumentation is independently revertible commit
 `b8591ae78f9ba319dfd07f2d56dbe12085c272b4`; reporting/tools/evidence are separate.
 P1 optimized source is `0d68340f0e280978f675c6f83330a10fb97bf678`.

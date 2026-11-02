@@ -44,7 +44,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $remote -cne $env:GITHUB_SHA) { throw 'Reviewed main moved' }
           git merge-base --is-ancestor $env:SOURCE_SHA $env:GITHUB_SHA
           if ($LASTEXITCODE -ne 0) { throw 'Accepted source is not an ancestor' }
-          $allowed = @('.github/workflows/launcher-release-1-4-2-recovery.yml', 'tools/release/complete-1-4-2-draft.mjs', 'tools/release/complete-1-4-2-draft.test.mjs', 'RELEASE_1_4_2_RECOVERY.md')
+          $allowed = @('.github/workflows/launcher-release-1-4-2-recovery.yml', 'tools/release/complete-1-4-2-draft.mjs', 'tools/release/complete-1-4-2-draft.test.mjs', 'docs/releases/archive/RELEASE_1_4_2_RECOVERY.md')
           $changed = @(git diff --name-only $env:SOURCE_SHA $env:GITHUB_SHA)
           if ($LASTEXITCODE -ne 0 -or @($changed | Where-Object { $_ -cnotin $allowed }).Count -ne 0) { throw 'Recovery contains unexpected source changes' }
           node --test tools/release/*.test.mjs

@@ -1,4 +1,4 @@
-> Current authority lifecycle: see `UPDATE_AUTHORITY.md`. Immutable versioned releases, mutable discovery ref and compiled signing key are separate identities. Public 1.4.0 retains its retired endpoint and requires manual bootstrap to 1.4.1. Historical acceptance below is preserved.
+> Current authority lifecycle: see `docs/releases/UPDATE_AUTHORITY.md`. Immutable versioned releases, mutable discovery ref and compiled signing key are separate identities. Public 1.4.0 retains its retired endpoint and requires manual bootstrap to 1.4.1. Historical acceptance below is preserved.
 
 # Aurora Launcher architecture
 
@@ -48,7 +48,7 @@ closed. World snapshot/restore and deletion propagation remain unsupported.
 Every output uses private staging and revalidation, followed by no-clobber creation
 or atomic replacement after a durable original backup. Per-file completion is
 recoverable by inspection; this is not one atomic multi-file transaction.
-See `PANDORA_4_ACCEPTANCE.md` for current evidence and limits.
+See `docs/pandora/PANDORA_4_ACCEPTANCE.md` for current evidence and limits.
 
 Rust readiness now reports `canPrepare` separately from `ready` when the sole
 blocker is missing exact managed Java. Native Play uses the existing verified
@@ -64,7 +64,7 @@ retains its existing bounds and transactions. No production dependency or releas
 authority changes; existing Tokio test utilities verify the minute clock.
 Full scope, evidence and limitations:
 `docs/pandora/PANDORA_ARCHITECTURE_AUDIT.md` and
-`PANDORA_BACKEND_INTEGRATION_ACCEPTANCE.md`.
+`docs/pandora/PANDORA_BACKEND_INTEGRATION_ACCEPTANCE.md`.
 
 ## NATIVE-10 — explicit per-instance custom Java (current)
 
@@ -128,7 +128,7 @@ Thus an older client cannot silently erase this preference; use a supporting
 launcher to reset it before downgrading. The updated WebView DTO also round-trips
 the field on unrelated edits, but this phase adds its selection controls only
 to the native host. Historical managed-only statements below are superseded
-by this section. Acceptance: `NATIVE_10_ACCEPTANCE.md`.
+by this section. Acceptance: `docs/native-ui/NATIVE_10_ACCEPTANCE.md`.
 
 ## NATIVE-9 preview distribution and content jobs
 
@@ -139,7 +139,7 @@ Native offers authenticate their complete payload and installer with the existin
 minisign public-key format, then enforce native product/channel/runtime/platform/
 architecture/package/version/source/hash constraints. Native authority activation
 and publication remain separate owner decisions. Current operational contract:
-`docs/native-ui/NATIVE_DISTRIBUTION.md`; bounded evidence: `NATIVE_9_ACCEPTANCE.md`.
+`docs/native-ui/NATIVE_DISTRIBUTION.md`; bounded evidence: `docs/native-ui/NATIVE_9_ACCEPTANCE.md`.
 
 `content_jobs` provides one cooperative context per native content operation.
 Acquisition settles active writes into verified shared cache objects and stops
@@ -162,7 +162,7 @@ host (`native/`) builds the same core with `--no-default-features` (no Tauri,
 no WebView2). NATIVE-9 isolates its preview identity while retaining the same
 persisted schemas. Updates remain unavailable without owner build configuration.
 Details: `docs/native-ui/ARCHITECTURE.md`; results:
-`NATIVE_UI_MIGRATION_ACCEPTANCE.md`.
+`docs/native-ui/NATIVE_UI_MIGRATION_ACCEPTANCE.md`.
 
 NATIVE-7 adds shared pointer-transparent keyboard focus, accent-only navigation
 selection, a compact Home instance dropdown, and a sidebar account panel. Native
@@ -173,7 +173,7 @@ compatibility remains strict for mods. A small on-demand CPU cuboid renderer
 consumes the existing validated skin/cape pixels; PNG import uses a native Windows
 chooser and the existing cosmetics store. No GPU surface, browser, persistence
 schema, updater authority or second installer is introduced. Acceptance and its
-remaining limits are in `NATIVE_7_UI_COMPLETION_ACCEPTANCE.md`.
+remaining limits are in `docs/native-ui/NATIVE_7_UI_COMPLETION_ACCEPTANCE.md`.
 
 ## Java execution eligibility and private candidates (2026-10-19)
 
@@ -197,7 +197,7 @@ host with a production verification key; signature verification is unchanged in
 ordinary builds. Client authority is unchanged. Only the private package supports
 the explicit `AURORA_PRIVATE_DATA_ROOT` environment override for isolated path
 acceptance. It defaults to its separate platform application-data directory.
-See `tools/release/private-candidate.ps1` and `PRIVATE_CANDIDATE_TESTING.md`.
+See `tools/release/private-candidate.ps1` and `docs/development/PRIVATE_CANDIDATE_TESTING.md`.
 
 ## Performance P2 — explicit JVM configuration modes (current)
 
@@ -269,7 +269,7 @@ defaults, migrations, native commands, error codes, release authority and native
 minimum are unchanged. There are no new dependencies, preview subscriptions,
 background polls, telemetry, cleanup operations or release changes. Audit:
 `docs/ui-5/SETTINGS_AUDIT.md`; results and browser/native evidence:
-`UI_5_SETTINGS_PERSONALIZATION_ACCEPTANCE.md`. UI-4 remains separately PARTIAL
+`docs/development/ui/UI_5_SETTINGS_PERSONALIZATION_ACCEPTANCE.md`. UI-4 remains separately PARTIAL
 until its full-body/native library-sizing requirements are independently verified.
 
 ## UI-4 Player Appearance (current)
@@ -307,7 +307,7 @@ cape ownership recheck, profile refresh and sanitized failures stay authoritativ
 No new account capability requires approval in this phase. Custom/third-party cape
 upload and new authentication operations remain unsupported. Production mutations
 are not part of acceptance. Audit and verification: `docs/ui-4/APPEARANCE_AUDIT.md`
-and `UI_4_APPEARANCE_ACCEPTANCE.md`.
+and `docs/development/ui/UI_4_APPEARANCE_ACCEPTANCE.md`.
 
 ## Phase F3R-B backup retention (current)
 
@@ -343,7 +343,7 @@ cache/runtime GC, credentials or release behavior is introduced.
 Windows local-NTFS process termination is the acceptance model; power loss,
 malicious same-user namespace replacement and other filesystems retain F3R's
 existing limits. Policy, invariants, diagnostics, test and desktop evidence,
-measurements and deferred work: [FORGE_F3R_B_BACKUP_RETENTION.md](FORGE_F3R_B_BACKUP_RETENTION.md).
+measurements and deferred work: [docs/compatibility/FORGE_F3R_B_BACKUP_RETENTION.md](docs/compatibility/FORGE_F3R_B_BACKUP_RETENTION.md).
 
 F3R-B2a corrects the disposable acceptance helper, independently of production
 retention: exclusive fresh direct-temp roots, fixture-bound marker contents,
@@ -359,7 +359,7 @@ code and initializes synthetic game transactions, so privileged prepare needs
 separate authorization covering that scope. Installer-tool composition compares
 exact normalized repository paths (including extension) and agreeing published
 SHA-1, without changing launch-library merge policy. Details and historical
-claim corrections: [FORGE_F3R_B2A_REVIEW_CORRECTIONS.md](FORGE_F3R_B2A_REVIEW_CORRECTIONS.md).
+claim corrections: [docs/compatibility/FORGE_F3R_B2A_REVIEW_CORRECTIONS.md](docs/compatibility/FORGE_F3R_B2A_REVIEW_CORRECTIONS.md).
 
 ## Phase F3R durable game operations (current)
 
@@ -418,7 +418,7 @@ Journal/candidate files are synchronized before authority advances; Unix directo
 sync follows renames. Windows directory synchronization is not claimed, and neither
 platform has a universal power-loss guarantee. The supported acceptance target is
 process termination. Full evidence, limitations and the phase verdict are in
-[FORGE_F3R_DURABLE_OPERATIONS.md](FORGE_F3R_DURABLE_OPERATIONS.md). A restored game
+[docs/compatibility/FORGE_F3R_DURABLE_OPERATIONS.md](docs/compatibility/FORGE_F3R_DURABLE_OPERATIONS.md). A restored game
 does not silently roll back desired configuration, optional Aurora content or the
 registry's attempted pin: an Installing/mismatched instance remains unavailable
 for explicit retry/review. Failed fresh pack component installation retains its
@@ -442,7 +442,7 @@ They do not change verification/order. Debug-only desktop checkpoint observation
 requires an exact marked temporary root and validated target; no production IPC
 crash control exists. Actual Windows Tauri process-death results, measured costs
 and the still-unexecuted Linux gate are in
-[FORGE_F3R_ACCEPTANCE.md](FORGE_F3R_ACCEPTANCE.md). Backup retirement remains a
+[docs/compatibility/FORGE_F3R_ACCEPTANCE.md](docs/compatibility/FORGE_F3R_ACCEPTANCE.md). Backup retirement remains a
 proposal; no diagnostic evidence or protected previous tree is pruned.
 
 ## Owner correction source (unreleased)
@@ -512,8 +512,8 @@ during ordinary navigation; mounted consumers retry only transient outcomes and
 update reactively after completion, canceling timers and stale results on unmount or
 identity change. No content interface redesign, file adoption, update authority or
 launcher version change accompanies this correction. Acceptance and limits are recorded
-in `INSTALLED_ARTWORK_RELIABILITY.md`; subsequent browsing and GIF acceptance is in
-`LAUNCHER_REFINEMENT_L1.md`.
+in `docs/development/acceptance/INSTALLED_ARTWORK_RELIABILITY.md`; subsequent browsing and GIF acceptance is in
+`docs/development/ui/LAUNCHER_REFINEMENT_L1.md`.
 
 Provider artwork (including Browse) and Minecraft server favicons use one Rust-owned normalized-PNG output boundary, with the bounded provider WebP extension described above. Artwork permits at most 512 KiB encoded bytes, 1024×1024 and 1,048,576 pixels with a 16 MiB decoder budget; favicons permit 128 KiB, 512×512 and 262,144 pixels with a 4 MiB decoder budget. Dimensions and worst-case pixel bytes use checked arithmetic before surface allocation. Full decoding and completion are required, then pixels are re-encoded without source metadata into a bounded static PNG; only that normalized image can be persisted or emitted. Cache reuse applies the same policy. Production CSP retains `data:` only for images. The frontend accepts native PNG data URLs only, keeps a local type-specific SVG fallback visible until decoding succeeds, and removes failed images. Browse resolves its native search project identity through the shared cached artwork command, never renders a remote search icon URL. Acquisition stays coalesced and bounded. Recognition may show an identified project's artwork without adopting ownership. Invalid server cache icons become absent while other status facts remain usable; there is no banner scraping or persistence migration.
 
@@ -527,9 +527,9 @@ The corrected bundled catalog selects Client 3.0.0 for new compatible Minecraft
 1.21.11 instances. Immutable older pins remain resolvable, and verified 3.0.0 and
 2.1.5 artifacts both retain bridge v2 capability. The published 1.4.1 installer
 has not been replaced; its users explicitly apply the Client update after creation.
-See `CLIENT_3_0_0_PRODUCTION_CORRECTION.md` for current evidence and limits.
+See `docs/compatibility/CLIENT_3_0_0_PRODUCTION_CORRECTION.md` for current evidence and limits.
 
-Aurora has **one public production release stream**, with two independent Rust engines: Client artifact transactions and official Tauri Launcher self-updates. Full contract: `PHASE_L_PRODUCTION_UPDATES.md`; corrected acceptance: `PHASE_L_SIMPLIFIED_UPDATES_CORRECTION.md`. Earlier phase sections below are historical where superseded by this current contract.
+Aurora has **one public production release stream**, with two independent Rust engines: Client artifact transactions and official Tauri Launcher self-updates. Full contract: `docs/development/phases/PHASE_L_PRODUCTION_UPDATES.md`; corrected acceptance: `docs/development/phases/PHASE_L_SIMPLIFIED_UPDATES_CORRECTION.md`. Earlier phase sections below are historical where superseded by this current contract.
 
 **Release authority.** Only the owner-published Client `aurora-releases.json` and single Launcher `launcher-update.json` become offers. Commits, local tags/builds and CI success do not publish updates. Client selection chooses the newest semver-compatible intentionally published release, without public channel filtering; equal/build-metadata-only versions are current and installed newer never downgrades. Exact Minecraft/Loader and Java assertions remain checked. Legacy release classifications remain only to resolve persisted exact identities; no public preference or eligibility ladder exists. Modrinth per-item release policies remain independent.
 
@@ -537,7 +537,7 @@ Aurora has **one public production release stream**, with two independent Rust e
 
 **Launcher security.** The official updater (existing >=2.12 floor) uses a compile-time `AURORA_UPDATER_PUBKEY`; absent trust fails honestly unconfigured. `updates::launcher::PRODUCTION_MANIFEST_URL` points to `https://raw.githubusercontent.com/kalibsolomon-pixel/Aurora-Launcher/launcher-update-authority/launcher-update.json`. The endpoint is a fixed Rust constant, with no environment/frontend/runtime URL override. Signatures remain mandatory. Before download the version is rechecked; before installation version/URL/signature must still match the verified retained bytes. Windows official passive NSIS installation exits and relaunches; it never fabricates the running version.
 
-**Authority publication boundary.** The separate `launcher-update-authority-production` owner gate controls a dedicated GitHub App credential, minted late for this repository with Contents write; the job's ordinary token has Contents read and is never a mutation fallback. Original manifest bytes require fatal UTF-8 decoding before object preparation. Active layered rulesets restrict writers to that App, prohibit deletion/force pushes with no bypass, and prohibit creation after separately authorized initialization. Protection precedes creation. Fast-forward is ancestry-based, not expected-SHA CAS; the publisher's version ordering depends on protected history and protocol-following writers. Local tests verify source wiring, deterministic races and native boundaries, not installed GitHub policy or full Windows updater acceptance. Full setup and limitations: `UPDATE_AUTHORITY.md`. Signed-version verification is conditional on its authenticated field being present; legacy filename-only signatures remain supported.
+**Authority publication boundary.** The separate `launcher-update-authority-production` owner gate controls a dedicated GitHub App credential, minted late for this repository with Contents write; the job's ordinary token has Contents read and is never a mutation fallback. Original manifest bytes require fatal UTF-8 decoding before object preparation. Active layered rulesets restrict writers to that App, prohibit deletion/force pushes with no bypass, and prohibit creation after separately authorized initialization. Protection precedes creation. Fast-forward is ancestry-based, not expected-SHA CAS; the publisher's version ordering depends on protected history and protocol-following writers. Local tests verify source wiring, deterministic races and native boundaries, not installed GitHub policy or full Windows updater acceptance. Full setup and limitations: `docs/releases/UPDATE_AUTHORITY.md`. Signed-version verification is conditional on its authenticated field being present; legacy filename-only signatures remain supported.
 
 **Configuration.** Schema 7 has no meaningful update preference. Original schema-7 stable/beta/nightly settings validate then discard in memory; the next ordinary atomic save removes the obsolete field while preserving unrelated settings. Schemas 1–6 retain existing explicit migrations. Unknown/malformed state remains read-only and fails deliberately. No instance pin migration or filesystem move occurs.
 
@@ -553,7 +553,7 @@ unreviewed build. There are no silent substitutions or automatic upgrades.
 F1C is PARTIAL pending owner authenticated gameplay for both new pins;
 both passed isolated Windows x64 installation, deep Ready validation,
 managed Java17 validation and native-file launch assembly. See
-`FORGE_F1C_COMPATIBILITY_EXPANSION.md` for exact evidence and limitations.
+`docs/compatibility/FORGE_F1C_COMPATIBILITY_EXPANSION.md` for exact evidence and limitations.
 
 Forge remains `LoaderPlan::Forge` through F3 composition and F1A supervision.
 Spec-1 normalization now models whole processor argument literals, data
@@ -583,7 +583,7 @@ remain deliberately unavailable; F3R durability work remains separate.
 ## Phase F1B modern Forge support (completed checkpoint)
 
 Forge is a first-class loader family through the same normalized
-architecture (details: FORGE_F1B_MODERN_FORGE.md). `forge::metadata`
+architecture (details: docs/compatibility/FORGE_F1B_MODERN_FORGE.md). `forge::metadata`
 owns discovery over the official MavenForge listing plus the promotions
 document — a build is stable exactly when it is that Minecraft
 version's recommended promotion; list order is never a policy. The
@@ -610,7 +610,7 @@ by the agent. Original machine-generated installation evidence remains separate.
 
 NeoForge is a first-class loader of ordinary instances inside the existing
 normalized architecture; there is no parallel NeoForge launcher. Full
-details: `PHASE_K_NEOFORGE.md`.
+details: `docs/development/phases/PHASE_K_NEOFORGE.md`.
 
 ### Loader-generic composed plan
 
@@ -706,11 +706,11 @@ empty list.
 
 ## Phase J modpack update & reconciliation
 
-An installed Modrinth modpack can move from one exact pack version to a newer exact version through a reviewed three-way reconciliation between the old snapshot, the candidate snapshot, and the current local filesystem; see [PHASE_J_MODPACK_UPDATES.md](PHASE_J_MODPACK_UPDATES.md). Discovery is same-project only, anchored on the installed exact version's still-published archive SHA-512, ordered by publication chronology (never version strings), with unsupported-loader candidates reported as blocked. Classification uses provider/file identity (project + version + SHA-512), never filenames; every outcome — preserve, acquire, adopt, replace, retire, preserve-shared, conflict — is planned before mutation, with keep-local divergence recorded in `pack-installed.json` schema 2 so a "Pack v2 — modified" instance validates against its chosen bytes instead of lying. Apply re-derives the whole plan natively and compares a resolution-independent fingerprint over the observed world; the transaction (receipt-marked `installing`, verified acquisition, staged activation with backups, game/loader transitions through the ordinary pipeline, registry commit last) rolls back fully on failure and recovers receipt-marked interruptions by proving old or new state. Pack-owned components remain blocked from ordinary Phase H updates; Update Modpack is a separate reconciliation path, not a call into Update All.
+An installed Modrinth modpack can move from one exact pack version to a newer exact version through a reviewed three-way reconciliation between the old snapshot, the candidate snapshot, and the current local filesystem; see [docs/development/phases/PHASE_J_MODPACK_UPDATES.md](docs/development/phases/PHASE_J_MODPACK_UPDATES.md). Discovery is same-project only, anchored on the installed exact version's still-published archive SHA-512, ordered by publication chronology (never version strings), with unsupported-loader candidates reported as blocked. Classification uses provider/file identity (project + version + SHA-512), never filenames; every outcome — preserve, acquire, adopt, replace, retire, preserve-shared, conflict — is planned before mutation, with keep-local divergence recorded in `pack-installed.json` schema 2 so a "Pack v2 — modified" instance validates against its chosen bytes instead of lying. Apply re-derives the whole plan natively and compares a resolution-independent fingerprint over the observed world; the transaction (receipt-marked `installing`, verified acquisition, staged activation with backups, game/loader transitions through the ordinary pipeline, registry commit last) rolls back fully on failure and recovers receipt-marked interruptions by proving old or new state. Pack-owned components remain blocked from ordinary Phase H updates; Update Modpack is a separate reconciliation path, not a call into Update All.
 
 ## Phase H.1 recent server enrichment (current)
 
-The Home Recent Servers widget now shows real Minecraft server presentation — favicon, name, MOTD, player counts, online/offline state — for servers already recorded in local gameplay history. See [PHASE_H1_SERVER_ENRICHMENT.md](PHASE_H1_SERVER_ENRICHMENT.md) for the acceptance record and native evidence.
+The Home Recent Servers widget now shows real Minecraft server presentation — favicon, name, MOTD, player counts, online/offline state — for servers already recorded in local gameplay history. See [docs/development/phases/PHASE_H1_SERVER_ENRICHMENT.md](docs/development/phases/PHASE_H1_SERVER_ENRICHMENT.md) for the acceptance record and native evidence.
 
 **History stays authoritative.** Enrichment is a presentation-only layer beside the existing activity/history pipeline. Multiplayer visits already persist a validated canonical `ServerTarget` (`host:port`, default 25565); the new `server_enrichment` domain resolves opaque recent-target IDs through the same native history lookup the Quick Launch path uses — the frontend never supplies an address — and never writes a history document. Rejoin authority is unchanged: the Play button still sends only the opaque target ID, and the presentation DTO carries display facts (no endpoint field, no instance, no connection authority). The widget's history rows render first and enrich progressively; enrichment failure is silent and never degrades a row.
 
@@ -724,7 +724,7 @@ The Home Recent Servers widget now shows real Minecraft server presentation — 
 
 ## Phase H content controls correction (current)
 
-Resource Packs and Shader Packs now expose real management through a backend-owned capability statement, and the Home player arrows rotate the displayed player in the direction they communicate. See [PHASE_H_CONTENT_CONTROLS.md](PHASE_H_CONTENT_CONTROLS.md) for the acceptance record and native evidence.
+Resource Packs and Shader Packs now expose real management through a backend-owned capability statement, and the Home player arrows rotate the displayed player in the direction they communicate. See [docs/development/phases/PHASE_H_CONTENT_CONTROLS.md](docs/development/phases/PHASE_H_CONTENT_CONTROLS.md) for the acceptance record and native evidence.
 
 **Capability model.** Each pack inventory entry carries `management` (`ContentManagement`): `canRemove` with a `removalPath` (`localFile` for unmanaged ZIPs, `providerGraph` for verified managed ZIPs, `blocked` with a real reason for folders/links/hash-mismatched records), plus `canToggle`, `active`, `activationManagedInGame` and `toggleBlockedReason`. Svelte renders this object; it never infers legality from content types or provider strings. Previously `canRemove` was `zip && UserManaged`, which made every managed or adopted pack render a bare "Unavailable".
 
@@ -798,17 +798,17 @@ Provider-managed content now records where it came from, and existing local file
 
 ## Phase F visual pilot (current)
 
-Shell, Home and launcher Settings use the bounded Phase F system described in [PHASE_F_DESIGN.md](PHASE_F_DESIGN.md). Other page interiors retain their existing design pending owner approval. Windows uses a custom title bar backed by Tauri window operations; other platforms retain native decorations. The default window is 1120×760; the minimum remains 720×520.
+Shell, Home and launcher Settings use the bounded Phase F system described in [docs/development/phases/PHASE_F_DESIGN.md](docs/development/phases/PHASE_F_DESIGN.md). Other page interiors retain their existing design pending owner approval. Windows uses a custom title bar backed by Tauri window operations; other platforms retain native decorations. The default window is 1120×760; the minimum remains 720×520.
 
 Launcher configuration is now **schema 5**. `appearance.background` is a native enum (`simple` or `borealis`), independent of theme and accent. Explicit migrations from schemas 1–4 preserve prior supported state and select Simple. Schema 5 requires a valid background; malformed/unknown-schema documents remain untouched. Existing atomic persistence and configuration locking are unchanged. No new trusted launch, authentication, filesystem or provider authority enters Svelte.
 
-The pencil on Home enters direct widget editing, with pointer-handle reorder, keyboard earlier/later controls, sizing, add/hide, a persistent Done bar, and the existing native save/reset path. An all-hidden layout retains its edit entry point. Settings holds the edit shortcut and reset, rather than a duplicate checklist. The player redraws on skin/rotation/visibility changes and has no idle loop. The locally bundled Borealis still image drifts at ten small steps per second, pauses when hidden/unfocused, and becomes static under reduced motion. It is a pilot treatment, not recorded aurora footage. See [PHASE_F_ACCEPTANCE.md](PHASE_F_ACCEPTANCE.md) for evidence, measurements and rollout limits.
+The pencil on Home enters direct widget editing, with pointer-handle reorder, keyboard earlier/later controls, sizing, add/hide, a persistent Done bar, and the existing native save/reset path. An all-hidden layout retains its edit entry point. Settings holds the edit shortcut and reset, rather than a duplicate checklist. The player redraws on skin/rotation/visibility changes and has no idle loop. The locally bundled Borealis still image drifts at ten small steps per second, pauses when hidden/unfocused, and becomes static under reduced motion. It is a pilot treatment, not recorded aurora footage. See [docs/development/phases/PHASE_F_ACCEPTANCE.md](docs/development/phases/PHASE_F_ACCEPTANCE.md) for evidence, measurements and rollout limits.
 
 The earlier phase sections below remain historical records; the Phase F section supersedes their schema-4 and Home/Settings presentation descriptions.
 
-Phase E3 adds Rust-owned Minecraft cosmetic requests and launcher-global local skin presets. The native boundary accepts selected PNG bytes, validates full PNG structure and supported Java dimensions, stores generated-ID preset files and atomic schema-1 metadata, and never accepts a frontend filesystem path. Account skin and owned capes come from the selected authenticated Minecraft profile; native refresh uses the existing credential/session flow. Cape selection rechecks ownership immediately before mutation. Profile responses are refreshed after skin/cape changes, and the existing 3D skin preview bypasses its texture cache after a successful skin apply. Cape textures are fetched from validated official texture hosts, decoded under strict bounds in Rust, and returned as pixels for a small selector thumbnail; the 3D renderer remains skin-only. See [PHASE_E3_DESIGN.md](PHASE_E3_DESIGN.md) and [PHASE_E3_ACCEPTANCE.md](PHASE_E3_ACCEPTANCE.md).
+Phase E3 adds Rust-owned Minecraft cosmetic requests and launcher-global local skin presets. The native boundary accepts selected PNG bytes, validates full PNG structure and supported Java dimensions, stores generated-ID preset files and atomic schema-1 metadata, and never accepts a frontend filesystem path. Account skin and owned capes come from the selected authenticated Minecraft profile; native refresh uses the existing credential/session flow. Cape selection rechecks ownership immediately before mutation. Profile responses are refreshed after skin/cape changes, and the existing 3D skin preview bypasses its texture cache after a successful skin apply. Cape textures are fetched from validated official texture hosts, decoded under strict bounds in Rust, and returned as pixels for a small selector thumbnail; the 3D renderer remains skin-only. See [docs/development/phases/PHASE_E3_DESIGN.md](docs/development/phases/PHASE_E3_DESIGN.md) and [docs/development/phases/PHASE_E3_ACCEPTANCE.md](docs/development/phases/PHASE_E3_ACCEPTANCE.md).
 
-Phase E1 gameplay-history ownership, retention and v2 identity protocol are recorded in [PHASE_E1_DESIGN.md](PHASE_E1_DESIGN.md). Phase E2 registers the three Home history widgets and resolves opaque recent-target IDs in Rust before adding reviewed direct-start arguments to the ordinary Play pipeline; see [PHASE_E2_ACCEPTANCE.md](PHASE_E2_ACCEPTANCE.md). Persisted selection stays unchanged when a recent target belongs to another instance.
+Phase E1 gameplay-history ownership, retention and v2 identity protocol are recorded in [docs/development/phases/PHASE_E1_DESIGN.md](docs/development/phases/PHASE_E1_DESIGN.md). Phase E2 registers the three Home history widgets and resolves opaque recent-target IDs in Rust before adding reviewed direct-start arguments to the ordinary Play pipeline; see [docs/development/phases/PHASE_E2_ACCEPTANCE.md](docs/development/phases/PHASE_E2_ACCEPTANCE.md). Persisted selection stays unchanged when a recent target belongs to another instance.
 
 The phase sections below record the architecture as it evolved. **The final pre-publication pass below** defines current bootstrap ownership, mod toggles, deletion and spatial behavior. **Phases C1/C2** and **Phase D** retain the history of the instance/lifecycle and Home/account boundaries. They supersede earlier mandatory-Aurora, Fabric-only and diagnostic Home descriptions.
 
@@ -832,7 +832,7 @@ Research used [official RPC/IPC documentation](https://discord.com/developers/to
 
 A small auditable implementation uses existing Tokio/Serde (Tokio net enabled; lockfile/transitives already resolved), avoiding an archived wrapper, broad SDK/FFI binary or downloaded helper. Fixed local Discord pipe/socket endpoints 0–9, little-endian framing, 64 KiB cap before allocation, two-second operation timeout, bounded unrelated responses, ping/pong, strict READY/nonce/command checks and sanitized enum errors constrain the protocol. Windows named pipes and Unix sockets are implemented; only Windows receives host acceptance. Frontend supplies no IPC path.
 
-The public build-time `AURORA_DISCORD_APPLICATION_ID` must identify a legitimate Aurora-owned application (17–20 decimal digits, positive u64), read through Rust `option_env!`. The confirmed Aurora Client application ID is supplied in the production build environment rather than hard-coded; the registered large image key is `aurora-logo`. Registered application name supplies Aurora Client; no filesystem path or external image URL is sent. [DISCORD_SETUP.md](DISCORD_SETUP.md) records build/live steps. Missing configuration reports Application setup required and disables Connect, while preference saving is explained. Application registration and IPC acknowledgement alone do not prove live profile/logo rendering.
+The public build-time `AURORA_DISCORD_APPLICATION_ID` must identify a legitimate Aurora-owned application (17–20 decimal digits, positive u64), read through Rust `option_env!`. The confirmed Aurora Client application ID is supplied in the production build environment rather than hard-coded; the registered large image key is `aurora-logo`. Registered application name supplies Aurora Client; no filesystem path or external image URL is sent. [docs/development/DISCORD_SETUP.md](docs/development/DISCORD_SETUP.md) records build/live steps. Missing configuration reports Application setup required and disables Connect, while preference saving is explained. Application registration and IPC acknowledgement alone do not prove live profile/logo rendering.
 
 ### Connection, activity and privacy
 
@@ -854,7 +854,7 @@ UTF-8 LF frames reject CRLF, BOM, duplicate/unknown fields and null optional str
 
 Private snapshots stay in native memory independently of Discord connection. A capacity-one coalesced wake reconciles the existing actor; no unbounded activity queue or frontend gameplay event is added. Generic process-known presence remains the fallback. Show World permits only the authenticated human-readable singleplayer name. Show Server permits only the separate multiplayer display name. Show Server Address additionally requires Show Server and explicit address consent; addresses never substitute for missing names. Names containing the supplied address or its host are suppressed while address consent is off, including sanitized/case-insensitive and bracketed IPv6 forms. Filtering precedes Discord serialization. Master off still projects null. No world paths, logs, account identifiers or arbitrary client operations enter the bridge.
 
-Client source remains a separate read-only repository. No client code is imported into the launcher. [ACTIVITY_BRIDGE_ACCEPTANCE.md](ACTIVITY_BRIDGE_ACCEPTANCE.md) distinguishes deterministic/actual-Java interoperability, isolated live game checks, production fallback launch and the external Discord registration blocker.
+Client source remains a separate read-only repository. No client code is imported into the launcher. [docs/development/acceptance/ACTIVITY_BRIDGE_ACCEPTANCE.md](docs/development/acceptance/ACTIVITY_BRIDGE_ACCEPTANCE.md) distinguishes deterministic/actual-Java interoperability, isolated live game checks, production fallback launch and the external Discord registration blocker.
 
 ## Final pre-publication ownership and lifecycle pass
 
@@ -1714,7 +1714,7 @@ SvelteKit is configured as a static, client-side SPA because Tauri has no Node s
 
 ### Screen organization
 
-The shell is one persistent sidebar (Home, Instances, Settings, About — plus Developer in development builds only, stripped from the production bundle together with its page — and a short Instances shortcut section beneath the destinations), one scrolling content region, and, when an instance is open, the instance workspace shell in place of a global page (see "Instance workspace and navigation"); the visual contract is `LAUNCHER_DESIGN_LANGUAGE.md`. Each screen presents only real backend state:
+The shell is one persistent sidebar (Home, Instances, Settings, About — plus Developer in development builds only, stripped from the production bundle together with its page — and a short Instances shortcut section beneath the destinations), one scrolling content region, and, when an instance is open, the instance workspace shell in place of a global page (see "Instance workspace and navigation"); the visual contract is `docs/development/ui/LAUNCHER_DESIGN_LANGUAGE.md`. Each screen presents only real backend state:
 
 - **Home** — selects the Play target, summarizes its installed configuration and native launch state, shows a cosmetic player preview, and offers Play and Manage Instance. Detailed readiness and maintenance remain in the Workspace.
 - **Instances** — creation from the essentials (name, Minecraft version from official metadata, loader policy) and a compact list of instances with concise readiness and Open/Select/Validate/Retry actions. Opening an instance enters its workspace; the page deliberately does not duplicate the Settings editor, and opaque instance ids and raw readiness dumps stay absent.
@@ -2166,9 +2166,9 @@ Only the exact `textures.minecraft.net/texture/<64 hexadecimal digits>` locator 
 
 Cosmetic reuse is **memory-only**, at most 16 validated textures (each at most 16,384 skin bytes plus a 256-byte head) with a 15-minute TTL; malformed/expired entries are discarded and explicit refresh bypasses reuse. No image files, new persisted preferences or cosmetic authentication records exist. A restart requests the official authenticated data again. The frontend receives pixels/model, never a remote locator or token, and draws a pixelated canvas with an accessible label. Missing/invalid/offline imagery uses an initial-based account head or local default player. On narrow Home layouts the cosmetic player collapses before instance controls. Cosmetic requests have separate busy/failure state, ignore obsolete account responses, and never change Play readiness or launch errors. CSP is unchanged.
 
-Deterministic coverage renders the actual Svelte Home/account components through the existing compiler with mocked native DTOs and commands, including three installed configurations, selection invariance, native Play targeting, asynchronous races, account switching, missing imagery and large/long identities. Native fixtures test profile metadata, strict locators, bounded loopback image transport, PNG validation/composition, cache corruption/expiry and concurrent session restoration. Real acceptance evidence and exact final checks are recorded in `PHASE_D_ACCEPTANCE.md`.
+Deterministic coverage renders the actual Svelte Home/account components through the existing compiler with mocked native DTOs and commands, including three installed configurations, selection invariance, native Play targeting, asynchronous races, account switching, missing imagery and large/long identities. Native fixtures test profile metadata, strict locators, bounded loopback image transport, PNG validation/composition, cache corruption/expiry and concurrent session restoration. Real acceptance evidence and exact final checks are recorded in `docs/development/phases/PHASE_D_ACCEPTANCE.md`.
 
-Interactive Add account sends `prompt=select_account` to interrupt Microsoft browser-session reuse and offer remembered/different accounts. PKCE S256, per-login state, loopback redirect, scopes, callback checks and the Xbox/Minecraft exchange remain intact. Refresh-token grants never send prompt and never open the browser. See Microsoft's authorization-code flow documentation and `PHASE_D_ACCEPTANCE.md` for verified behavior.
+Interactive Add account sends `prompt=select_account` to interrupt Microsoft browser-session reuse and offer remembered/different accounts. PKCE S256, per-login state, loopback redirect, scopes, callback checks and the Xbox/Minecraft exchange remain intact. Refresh-token grants never send prompt and never open the browser. See Microsoft's authorization-code flow documentation and `docs/development/phases/PHASE_D_ACCEPTANCE.md` for verified behavior.
 
 ### Installed project artwork and provider identity preflight
 
@@ -2205,11 +2205,11 @@ The Instances page leads with the user's existing instances whenever any exist: 
 
 Modrinth category filtering renders one coherent interactive row per provider category: a native checkbox with a fixed footprint beside its label inside the same clickable label row, in a single-column popover with vertical-only scrolling, bounded width and readable formatting of provider slugs (`game-mechanics` → `Game Mechanics`, `vanilla-like` → `Vanilla-like`). Provider values, live tag discovery, project-type attribution, multi-select facets, search/sort preservation, stale-response serialization and incompatible-facet clearing on content-type switches are unchanged; the earlier defect was presentation CSS (`input[type="checkbox"]` inheriting text-field styling), not provider logic. Escape closes the popover and returns focus to the trigger.
 
-The Home player view controls are permanently visible whenever a real player is rendered, hold fixed 40 px targets that never scale down with the model, and sit in reserved normal-flow space below the model inside the preview component. A single bound height governs both the model container and canvas width, so the approved large presentation is kept while space allows, yields before control usability can be compromised, and the raster cannot overflow into the control row. Rotation remains arrow-and-reset only (drag rotation stays removed), redraws remain change-driven with no polling, and below the 900 px presentation breakpoint the whole preview hides — the player is never visible with unusable controls. See `PHASE_H_INTERFACE_CORRECTIONS.md` for verified acceptance.
+The Home player view controls are permanently visible whenever a real player is rendered, hold fixed 40 px targets that never scale down with the model, and sit in reserved normal-flow space below the model inside the preview component. A single bound height governs both the model container and canvas width, so the approved large presentation is kept while space allows, yields before control usability can be compromised, and the raster cannot overflow into the control row. Rotation remains arrow-and-reset only (drag rotation stays removed), redraws remain change-driven with no polling, and below the 900 px presentation breakpoint the whole preview hides — the player is never visible with unusable controls. See `docs/development/phases/PHASE_H_INTERFACE_CORRECTIONS.md` for verified acceptance.
 
 ## Exact Modrinth modpacks
 
-The Modpacks browse path now reviews an exact Modrinth version and creates an independent Fabric instance from its verified `.mrpack`. `mrpack` parses bounded format-1 archives; `modpacks` composes the native snapshot, hash recognition and installation; `pack_state` persists ownership separately from `ProviderRecord` provenance. A pack remains Installing until its installed game, provider state, external files, overrides, and pack marker validate. Normal removal and managed updates cannot mutate pack-owned provider records. The supported format subset, path and URL policies, schema migration, and threat model are documented in `PHASE_I_MODPACKS.md`.
+The Modpacks browse path now reviews an exact Modrinth version and creates an independent Fabric instance from its verified `.mrpack`. `mrpack` parses bounded format-1 archives; `modpacks` composes the native snapshot, hash recognition and installation; `pack_state` persists ownership separately from `ProviderRecord` provenance. A pack remains Installing until its installed game, provider state, external files, overrides, and pack marker validate. Normal removal and managed updates cannot mutate pack-owned provider records. The supported format subset, path and URL policies, schema migration, and threat model are documented in `docs/development/phases/PHASE_I_MODPACKS.md`.
 
 ## L2 instance editing and durable Recent Servers
 
@@ -2217,7 +2217,7 @@ The Modpacks browse path now reviews an exact Modrinth version and creates an in
 
 Rename and desired-configuration commands require the original name or configuration alongside the proposed value. Lifecycle compares that original value with the registry under its existing process-local lock, refusing stale drafts before atomic persistence. Returned records immediately update presentation state, and saves refresh readiness. Rename changes display metadata only; a rename during launch preparation invalidates the existing final snapshot, and an already Starting/Running child keeps its supervised state. Version/platform edits remain desired configuration until explicit verified installation. Rust retains release, platform, artifact, runtime and final spawn authority.
 
-Both workspace Rename controls open the same modal. Settings exposes supported platform selection, correct Fabric/NeoForge version policies, snapshot discovery, every valid whole-MiB allocation, JVM text and optional window dimensions. Original Aurora association changes remain reviewed native transitions, accessible under Installed Mods; Settings no longer repeats the Aurora Configuration or content-navigation cards. Ordinary mod enable/disable/removal still follows existing bootstrap and provider policies. Update discovery, Maintenance and confirmed deletion remain available. See `LAUNCHER_REFINEMENT_L2.md` for the complete setting audit, migration/rollback limits and acceptance evidence.
+Both workspace Rename controls open the same modal. Settings exposes supported platform selection, correct Fabric/NeoForge version policies, snapshot discovery, every valid whole-MiB allocation, JVM text and optional window dimensions. Original Aurora association changes remain reviewed native transitions, accessible under Installed Mods; Settings no longer repeats the Aurora Configuration or content-navigation cards. Ordinary mod enable/disable/removal still follows existing bootstrap and provider policies. Update discovery, Maintenance and confirmed deletion remain available. See `docs/development/ui/LAUNCHER_REFINEMENT_L2.md` for the complete setting audit, migration/rollback limits and acceptance evidence.
 
 ## L3 persistent Skins & Capes library
 
@@ -2229,7 +2229,7 @@ The software cuboid player renderer is reused for full local previews, classic/s
 
 The shared cosmetic store separates local work from account requests, coalesces reads and rejects stale/wrong-account responses using request generations, including A→B→A switches during a pending mutation. Local records stay usable without a session or during service failure. Last fetched/cached state is labeled separately from a profile refreshed this session. Only explicit Apply/Equip/No Cape actions invoke native account mutations. Native authentication and selected-account checks remain authoritative; tokens and provider URLs never enter cosmetic DTOs. Skin upload confirmation matches the active skin identity and model from the upload response against a separate fresh matching-account profile GET. Cape changes recheck ownership and confirm the resulting profile. Incomplete confirmations remain errors, retaining the local collection.
 
-See `LAUNCHER_REFINEMENT_L3.md` for validation, schema rollback constraints, desktop evidence and the distinction between actual local native acceptance and synthetic account-service acceptance.
+See `docs/development/ui/LAUNCHER_REFINEMENT_L3.md` for validation, schema rollback constraints, desktop evidence and the distinction between actual local native acceptance and synthetic account-service acceptance.
 
 ## Performance Initiative II (2026-10-19)
 
@@ -2245,7 +2245,7 @@ Home paint, restored usable Home and Ready RAF markers. Windows QPC brackets
 correlate native processes without treating frontend performance.now as the
 native clock. Ordinary builds compile the probes away. Raw credentials, identity,
 arguments and log contents are excluded from numeric traces. See
-`PERFORMANCE_INITIATIVE_II_RESULTS.md` for the local native evidence.
+`docs/development/performance/PERFORMANCE_INITIATIVE_II_RESULTS.md` for the local native evidence.
 
 ## Native resolution and readiness reliability (2026-10-19)
 
@@ -2263,5 +2263,5 @@ check could become a false Damaged decision. All mutation/recovery/final-spawn
 locks stay exclusive, including lifecycle `TargetLock::existing`; its caller can
 replay recovery. Path and ownership checks remain common to both lock modes.
 The existing research-only numeric vocabulary adds contention event 50. Normal
-builds emit no probe data. See `NATIVE_RESOLUTION_READINESS_REPORT.md` for the
+builds emit no probe data. See `docs/native-ui/NATIVE_RESOLUTION_READINESS_REPORT.md` for the
 original-failing regressions, native positive/negative controls and platform limits.

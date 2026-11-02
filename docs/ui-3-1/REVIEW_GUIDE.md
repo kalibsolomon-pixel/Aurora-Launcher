@@ -1,6 +1,6 @@
 # UI-3.1 screenshot review
 
-Start with the [acceptance report](../../UI_3_1_MODPACK_LAYOUT_ACCEPTANCE.md).
+Start with the [acceptance report](../development/ui/UI_3_1_MODPACK_LAYOUT_ACCEPTANCE.md).
 
 - [Matched Modpacks before/after](modpacks-before-after.png): all five required
   sizes, identical fixtures, backgrounds and viewport dimensions.

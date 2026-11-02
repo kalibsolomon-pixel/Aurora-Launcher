@@ -3,17 +3,17 @@
 **NATIVE-10:** content updates, exact loader versions, managed-modpack updates
 and local `.mrpack` import are implemented; the current classification of every
 workflow, with synthetic versus live evidence, is in
-[NATIVE_10_ACCEPTANCE](../../NATIVE_10_ACCEPTANCE.md). Custom Java executables
+[NATIVE_10_ACCEPTANCE](NATIVE_10_ACCEPTANCE.md). Custom Java executables
 remain unimplemented pending an owner decision (they are out of scope in
 `AGENTS.md` and were never offered by the WebView host).
 
 **NATIVE-9:** current additions, the complete surface audit and explicit remaining
-release blockers are in [NATIVE_9_ACCEPTANCE](../../NATIVE_9_ACCEPTANCE.md).
+release blockers are in [NATIVE_9_ACCEPTANCE](NATIVE_9_ACCEPTANCE.md).
 Historical "Done" rows never imply owner-attended account or installer acceptance.
 
 **NATIVE-8 continuation:** the current status of shared installation/downloads,
 native cards/navigation/icons, widgets/media, custom accent, Discord, chrome and
-Borealis is recorded in [NATIVE_8_ACCEPTANCE](../../NATIVE_8_ACCEPTANCE.md).
+Borealis is recorded in [NATIVE_8_ACCEPTANCE](NATIVE_8_ACCEPTANCE.md).
 Its evidence and explicit limitations supersede the corresponding historical
 rows below. Native packaging/updater authority remains separately gated.
 
@@ -21,7 +21,7 @@ rows below. Native packaging/updater authority remains separately gated.
 input, Home selection, selection styling, Discover/project artwork/details,
 modpack install/merge, 3D skins/capes, PNG import, accounts and native branding.
 The current functional/verification table is in
-[NATIVE_7_UI_COMPLETION_ACCEPTANCE](../../NATIVE_7_UI_COMPLETION_ACCEPTANCE.md).
+[NATIVE_7_UI_COMPLETION_ACCEPTANCE](NATIVE_7_UI_COMPLETION_ACCEPTANCE.md).
 The original measurements and acceptance evidence below are preserved.
 
 Status values: **Done** (implemented against the authoritative backend and
@@ -31,7 +31,7 @@ UI yet), **Blocked** (needs an owner decision or external dependency).
 
 Acceptance runs used a disposable data root (`AURORA_DIAGNOSTIC_DATA_ROOT`)
 and were driven through Windows UI Automation (`native/tools/uia.ps1`);
-screenshots are in [`screens/`](screens/).
+screenshots are in [`screens/`](screens).
 
 ## Home and launch
 

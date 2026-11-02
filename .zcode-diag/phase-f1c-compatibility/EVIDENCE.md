@@ -1,6 +1,6 @@
 # F1C local evidence index — 2026-10-12
 
-Scope and verdict: see `FORGE_F1C_COMPATIBILITY_EXPANSION.md` at repository root.
+Scope and verdict: see `docs/compatibility/FORGE_F1C_COMPATIBILITY_EXPANSION.md` at repository root.
 This index is the only curated diagnostic file committed for F1C. Executables,
 raw installers, logs, screenshots, managed caches and game/runtime data remain
 local evidence, not source/release artifacts. No secret-bearing launch arguments

@@ -7,7 +7,7 @@ The archive SHA-256 is
 Fresh world/config/options inventories must equal the lock before every process;
 reset and verify the live camera after loading, then warm stationary for >=300s.
 See [trial plan](P3A4A4_TRIAL_PLAN.md) and
-[acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md).
+[acceptance](../development/performance/PERFORMANCE_P3A4A4_ACCEPTANCE.md).
 
 This is a reproducible forest/plains/water stationary view, more representative
 than the prior superflat collector scene. It excludes traversal, generation bursts,

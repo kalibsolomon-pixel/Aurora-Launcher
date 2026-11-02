@@ -74,7 +74,7 @@ async function complete(directory) {
   const manifest = await verifyDirectory(directory, recovery.version, recovery.sourceSha, key);
   for (const [name, hash] of Object.entries(acceptedHashes)) assert.equal(sha256(await readFile(join(directory, name))), hash);
   const files = await Promise.all(Object.keys(acceptedHashes).filter((n) => n !== "launcher-update.json").map(async (name) => ({ name, bytes: await readFile(join(directory, name)) })));
-  const notes = (await readFile(new URL("../../RELEASE_1_4_2_NOTES.md", import.meta.url), "utf8")).trim();
+  const notes = (await readFile(new URL("../../docs/releases/archive/RELEASE_1_4_2_NOTES.md", import.meta.url), "utf8")).trim();
   const body = `${notes}\n\n## Installer artifacts\n\n| File | Architecture | Bytes | SHA-256 |\n| --- | --- | ---: | --- |\n${manifest.artifacts.map((a) => `| ${a.name} | ${a.architecture} | ${a.sizeBytes} | \`${a.sha256}\` |`).join("\n")}\n`;
   const draftPath = `/releases/${recovery.releaseId}`;
   const missing = inspectDraft(await api(draftPath), await api("/git/ref/tags/v1.4.2", true), body, files);

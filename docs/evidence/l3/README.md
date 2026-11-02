@@ -1,6 +1,6 @@
 # L3 acceptance evidence
 
-See [the L3 report](../../../LAUNCHER_REFINEMENT_L3.md) for the full implementation, test matrix, rollback limits and screenshot index.
+See [the L3 report](../../development/ui/LAUNCHER_REFINEMENT_L3.md) for the full implementation, test matrix, rollback limits and screenshot index.
 
 These are actual isolated Tauri/WebView2 desktop captures. The original and refined Home widget images use matching 2000×1288 pixel viewports. Images 13/13b/17 use the physically resized native window. All artwork, player names and cape inventories are synthetic; none belongs to an owner account or private collection.
 

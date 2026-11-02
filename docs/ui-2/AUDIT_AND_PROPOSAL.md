@@ -7,10 +7,10 @@ and report. `baseline.json` records paths, local-file hashes, processes and evid
 The only observed relevant processes are existing Codex Node/WebView helpers;
 no game, Cargo, review server or launcher process was present before this task.
 
-Read AGENTS.md; UI_1_NAVIGATION_DESIGN_PILOT.md and its audit/proposal;
+Read AGENTS.md; docs/development/ui/UI_1_NAVIGATION_DESIGN_PILOT.md and its audit/proposal;
 ARCHITECTURE.md current Home/widgets, frontend/native, navigation, appearance,
-launch and Phase D sections; PHASE_F_DESIGN.md; LAUNCHER_DESIGN_LANGUAGE.md current
-composition and token/accessibility sections; RR1_A_NATIVE_STARTUP_ACCEPTANCE.md;
+launch and Phase D sections; docs/development/phases/PHASE_F_DESIGN.md; docs/development/ui/LAUNCHER_DESIGN_LANGUAGE.md current
+composition and token/accessibility sections; docs/troubleshooting/RR1_A_NATIVE_STARTUP_ACCEPTANCE.md;
 and tools/visual/README.md. Historical statements defer to implemented source.
 Inspected UI-1's Home comparison and actual new UI-2 baseline render.
 The referenced Note screenshots were not attached; use the supplied hierarchy

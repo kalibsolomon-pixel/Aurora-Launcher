@@ -1,6 +1,6 @@
 # Practical first experiment — design only
 
-The latest [P3-A.4a.4 acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md)
+The latest [P3-A.4a.4 acceptance](../development/performance/PERFORMANCE_P3A4A4_ACCEPTANCE.md)
 characterizes fresh-process variation by metric. Its partial readiness supersedes
 the older blanket practical blocker below. P3-B is still NOT AUTHORIZED. Do not
 execute the prepared 2048→1536 MiB candidate until an owner-approved scope names
@@ -11,7 +11,7 @@ workload, using existing tools, rather than another instrumentation program.
 
 P3-A.4a.3 introduces a distinct [practical protocol](PRACTICAL_PROTOCOL.md) and
 [single maximum-heap experiment design](FIRST_JVM_EXPERIMENT.md). Its readiness
-decision is in [the current acceptance report](../../PERFORMANCE_P3A4A3_ACCEPTANCE.md).
+decision is in [the current acceptance report](../development/performance/PERFORMANCE_P3A4A3_ACCEPTANCE.md).
 P3-B requires separate owner authorization. The strict research proposal below
 remains intact, including its longer runs and historical prerequisites; its
 separate-user requirement has the later approved same-user exception documented

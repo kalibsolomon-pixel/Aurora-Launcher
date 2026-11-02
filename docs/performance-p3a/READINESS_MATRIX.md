@@ -1,6 +1,6 @@
 # P3-A.4a.4 practical readiness — PARTIAL
 
-[Fresh-process acceptance](../../PERFORMANCE_P3A4A4_ACCEPTANCE.md) and
+[Fresh-process acceptance](../development/performance/PERFORMANCE_P3A4A4_ACCEPTANCE.md) and
 [actual evidence](evidence/p3a4a4/resources.json) supersede the prior practical
 next-action request. The bounded A–B–C–C–B–A sequence is finished with five eligible
 resource windows; C2r's delayed sampler makes that resource slot mixed-state and
@@ -25,7 +25,7 @@ on every practical metric family.
 # P3-A.4a.3 practical readiness — PARTIAL (historical)
 
 Use the separate [Practical Performance Protocol](PRACTICAL_PROTOCOL.md).
-[Actual recordings and acceptance](../../PERFORMANCE_P3A4A3_ACCEPTANCE.md).
+[Actual recordings and acceptance](../development/performance/PERFORMANCE_P3A4A3_ACCEPTANCE.md).
 
 | Practical gate | Result | Evidence / limit |
 | --- | --- | --- |
@@ -45,7 +45,7 @@ would evaluate. No failed historical capture is upgraded. Strict reports follow.
 # P3-A.4a.2 current readiness (historical)
 
 **PARTIAL. No accepted primary. P3-B NOT READY / NOT AUTHORIZED.**
-[Acceptance](../../PERFORMANCE_P3A4A2_ACCEPTANCE.md),
+[Acceptance](../development/performance/PERFORMANCE_P3A4A2_ACCEPTANCE.md),
 [candidate comparison](P3A4A2_CANDIDATES.md), [next gates](P3A4A2_DECISION.md).
 
 | Gate | Current result | Evidence / remaining condition |
@@ -84,7 +84,7 @@ offline quality labels are superseded. Canonical A and production remain protect
 
 
 **Overall PARTIAL. P3-B NOT READY / NOT AUTHORIZED.** No accepted primary metric
-for uncapped JVM comparisons. [Acceptance](../../PERFORMANCE_P3A4A_ACCEPTANCE.md).
+for uncapped JVM comparisons. [Acceptance](../development/performance/PERFORMANCE_P3A4A_ACCEPTANCE.md).
 
 | Gate | Current result | Evidence / remaining condition |
 | --- | --- | --- |
@@ -109,7 +109,7 @@ Historical matrices follow unchanged.
 
 **Overall PARTIAL. P3-B NOT READY / NOT AUTHORIZED.** Corrective A-only work is
 complete; high-throughput timing/observer confidence remains an essential gate.
-[Acceptance](../../PERFORMANCE_P3A3_ACCEPTANCE.md), [authorization](AUTHORIZATION.md).
+[Acceptance](../development/performance/PERFORMANCE_P3A3_ACCEPTANCE.md), [authorization](AUTHORIZATION.md).
 
 | Gate | Current result | Evidence / remaining condition |
 | --- | --- | --- |
@@ -166,6 +166,6 @@ P3-A.1's mandatory separate-Windows-user gate; earlier reports are historical.
 | Linux / other hardware | NOT TESTED | No portability/performance equivalence claim |
 
 No presets, collector/Xms policy, product dependencies, native command DTOs, releases
-or production installation changed. See [P3-A.2 acceptance](../../PERFORMANCE_P3A2_ACCEPTANCE.md)
+or production installation changed. See [P3-A.2 acceptance](../development/performance/PERFORMANCE_P3A2_ACCEPTANCE.md)
 for final capture/snapshot status and preservation limits. Successful short capture
 is not permission to start repeated comparisons.
