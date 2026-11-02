@@ -150,8 +150,10 @@ The repository README links the verified public native installer. The separate
 `10713d5bb44c0132100fef76fab37364e7357d47`, was merged as
 `19fb07f74acaa71eb58a135de99eab8bd62c3e0b`. It links the real immutable installer,
 checksum, detached signature and release notes within existing styles, retaining
-the WebView fallback. A follow-up removes the now-obsolete pending-authority
-notice and adds the owner's attribution policy to the website's agent guide.
+the WebView fallback. [Follow-up PR 2](https://github.com/kalibsolomon-pixel/Aurora-Website/pull/2)
+removes the obsolete pending-authority notice and adds the owner's attribution
+policy to the website's agent guide. Both GitHub checks passed; it was merged
+as `f55fa4d5c11d7a20226fce78bc9c4f350917ae21`.
 Local `npm run validate` and both GitHub validation checks passed, including ten static tests. The native download
 section was visually inspected in the local browser. No dependency/style/runtime
 change or new performance claim was introduced. Production deployment is not
