@@ -2095,8 +2095,7 @@ impl From<AuroraInstallError> for CommandError {
 
 /// One Aurora release offered for instance creation.
 ///
-/// `source` distinguishes the reviewed bundled production entry from the
-/// checked-in development fixture; there is no automatic release discovery.
+/// `source` identifies the official GitHub release discovery source.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuroraReleaseSummary {
@@ -2110,26 +2109,21 @@ pub struct AuroraReleaseSummary {
 
 /// Lists the Aurora releases available for instance creation.
 ///
-/// Resolves from the manifest offered for creation in this build. Production
-/// entries are bundled, with no remote release discovery endpoint.
-pub fn list_aurora_releases() -> Result<Vec<AuroraReleaseSummary>, CommandError> {
-    let manifest = crate::distribution::creation_manifest()
-        .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
-    let production = crate::distribution::production_manifest()
-        .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
+/// Discovers the published Client independently of the launcher version.
+pub async fn list_aurora_releases(app: Host) -> Result<Vec<AuroraReleaseSummary>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let manifest = crate::updates::client::fetch_current_manifest(
+        &managed,
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code(), error.message()))?;
 
     Ok(manifest
         .releases()
         .iter()
         .map(|release| AuroraReleaseSummary {
-            source: if production
-                .resolve_exact(release.aurora_version(), None)
-                .is_some()
-            {
-                "production-bundled"
-            } else {
-                "development-fixture"
-            },
+            source: "production-github",
             aurora_version: release.aurora_version().to_owned(),
             channel: release.channel(),
             minecraft_version: release.minecraft_version().to_owned(),
@@ -2222,6 +2216,17 @@ pub async fn create_instance(
         configuration.loader(),
         request.aurora_enabled,
     ));
+    let endpoints = if configuration.aurora_enabled() {
+        let manifest = crate::updates::client::fetch_current_manifest(
+            &managed_paths,
+            endpoints.download_options(),
+        )
+        .await
+        .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        endpoints.with_release_manifest(manifest)
+    } else {
+        endpoints
+    };
 
     let record = crate::instances::lifecycle::create_instance(
         &managed_paths,
@@ -2274,12 +2279,18 @@ pub struct AuroraCompatibility {
     loader_version: Option<String>,
 }
 
-pub fn get_aurora_compatibility(
+pub async fn get_aurora_compatibility(
+    app: Host,
     request: AuroraCompatibilityRequest,
 ) -> Result<AuroraCompatibility, CommandError> {
     use crate::instances::settings::{LoaderConfiguration, LoaderPolicy};
-    let manifest = crate::distribution::creation_manifest()
-        .map_err(|e| CommandError::new("aurora_manifest_invalid", e.to_string()))?;
+    let managed = managed_paths(&app)?;
+    let manifest = crate::updates::client::fetch_current_manifest(
+        &managed,
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code(), error.message()))?;
     let release = match &request.loader {
         LoaderConfiguration::Fabric { policy } => manifest.latest_compatible(
             &request.minecraft_version,
@@ -2317,7 +2328,7 @@ impl From<crate::instances::transition::TransitionError> for CommandError {
     }
 }
 
-pub fn preview_aurora_transition(
+pub async fn preview_aurora_transition(
     app: Host,
     request: AuroraTransitionRequest,
 ) -> Result<crate::instances::transition::TransitionPreview, CommandError> {
@@ -2325,6 +2336,15 @@ pub fn preview_aurora_transition(
     let id = crate::instances::InstanceId::new(request.instance_id)?;
     let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
         .map_err(|e| CommandError::new("aurora_manifest_invalid", e.to_string()))?;
+    let endpoints = if request.enabled {
+        let remote =
+            crate::updates::client::fetch_current_manifest(&managed, endpoints.download_options())
+                .await
+                .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        endpoints.with_release_manifest(remote)
+    } else {
+        endpoints
+    };
     Ok(crate::instances::transition::preview(
         &managed,
         &endpoints,
@@ -2341,6 +2361,15 @@ pub async fn apply_aurora_transition(
     let id = crate::instances::InstanceId::new(request.instance_id)?;
     let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
         .map_err(|e| CommandError::new("aurora_manifest_invalid", e.to_string()))?;
+    let endpoints = if request.enabled {
+        let remote =
+            crate::updates::client::fetch_current_manifest(&managed, endpoints.download_options())
+                .await
+                .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        endpoints.with_release_manifest(remote)
+    } else {
+        endpoints
+    };
     let fingerprint = request.fingerprint.ok_or_else(|| {
         CommandError::new(
             "aurora_transition_stale",

@@ -45,12 +45,40 @@ export function expectedAssetName(name) {
   return name.replaceAll(" ", ".");
 }
 
+// GitHub can briefly omit a newly created draft from its release listing.
+// Retry reads only; never recreate a draft or retry a publication mutation.
+export async function awaitCreatedDraft(readState, createdId, wait = (ms) => new Promise((done) => setTimeout(done, ms))) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const selected = await readState(attempt);
+    if (selected.kind === "resume" && selected.release.id === createdId) return selected;
+    if (selected.kind !== "create") throw new Error("Created draft identity changed; inspect before recovery");
+    if (attempt < 5) await wait(2000);
+  }
+  throw new Error("Created draft is not visible; retain it and inspect before recovery");
+}
+
 export function verifyNotesIdentity(sourceNotes, version, clientVersion = productionClientVersion) {
   const heading = sourceNotes.split(/\r?\n/, 1)[0];
   const clientIdentities = [...sourceNotes.matchAll(/\bAurora Client ([0-9]+\.[0-9]+\.[0-9]+)(?![\w+-]|\.[\w])/g)].map((match) => match[1]);
   if (!(heading === `# Aurora Launcher ${version}` || heading.startsWith(`# Aurora Launcher ${version} `)) || !clientIdentities.includes(clientVersion)) {
     throw new Error(`Release notes identity mismatch: expected Aurora Launcher ${version} naming the current production Aurora Client ${clientVersion}`);
   }
+}
+
+// Source preparation status stays in Git until publication succeeds. Private
+// production outputs carry the reviewed feature/compatibility copy that will
+// become public only after the existing publication approval; no gate is waived.
+export function publicationNotes(sourceNotes, version) {
+  verifyNotesIdentity(sourceNotes, version);
+  if (version !== "1.5.0") return sourceNotes.trim();
+  const preparationNotices = [
+    "Draft for the selected release candidate. Publication requires the remaining\nacceptance and owner gates in LAUNCHER_1_5_0_RELEASE_ACCEPTANCE.md.",
+    "Final signed-installer, authenticated gameplay, supported-mod-stack and upgrade\nacceptance are still pending. This draft is not a publication announcement.",
+  ];
+  const paragraphs = sourceNotes.replaceAll("\r\n", "\n").trim().split(/\n\s*\n/);
+  const notes = paragraphs.filter((paragraph) => !preparationNotices.includes(paragraph)).join("\n\n");
+  verifyNotesIdentity(notes, version);
+  return notes;
 }
 
 export function selectAsset(assets, expected) {

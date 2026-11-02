@@ -267,8 +267,10 @@ pub fn validate_installed_game(
 }
 
 #[tauri::command]
-pub fn list_aurora_releases() -> Result<Vec<AuroraReleaseSummary>, CommandError> {
-    super::list_aurora_releases()
+pub async fn list_aurora_releases(
+    app: tauri::AppHandle,
+) -> Result<Vec<AuroraReleaseSummary>, CommandError> {
+    super::list_aurora_releases(Host::from_tauri(&app)).await
 }
 
 #[tauri::command]
@@ -280,18 +282,19 @@ pub async fn create_instance(
 }
 
 #[tauri::command]
-pub fn get_aurora_compatibility(
+pub async fn get_aurora_compatibility(
+    app: tauri::AppHandle,
     request: AuroraCompatibilityRequest,
 ) -> Result<AuroraCompatibility, CommandError> {
-    super::get_aurora_compatibility(request)
+    super::get_aurora_compatibility(Host::from_tauri(&app), request).await
 }
 
 #[tauri::command]
-pub fn preview_aurora_transition(
+pub async fn preview_aurora_transition(
     app: tauri::AppHandle,
     request: AuroraTransitionRequest,
 ) -> Result<crate::instances::transition::TransitionPreview, CommandError> {
-    super::preview_aurora_transition(Host::from_tauri(&app), request)
+    super::preview_aurora_transition(Host::from_tauri(&app), request).await
 }
 
 #[tauri::command]

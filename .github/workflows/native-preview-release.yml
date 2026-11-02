@@ -57,7 +57,7 @@ jobs:
           git fetch --no-tags origin main
           test "$SOURCE_SHA" = "$(git rev-parse origin/main)"
           test "$SOURCE_SHA" = "$(git rev-parse HEAD)"
-          node tools/release/verify-version.mjs --release "$VERSION"
+          node tools/release/verify-version.mjs --native-release "$VERSION"
           node --input-type=module -e 'import {versionParts} from "./tools/release/updater-release.mjs"; const a=versionParts(process.env.MINIMUM), b=versionParts(process.env.VERSION); if ((a.map((n,i)=>n-b[i]).find(n=>n!==0)??0)>0) throw Error("Invalid minimum");'
           if git ls-remote --exit-code --tags origin "refs/tags/native-v$VERSION"; then
             exit 1
@@ -94,7 +94,7 @@ jobs:
           if ((git rev-parse HEAD) -ne $env:SOURCE_SHA) { throw 'Source differs' }
           npm ci
           if ($LASTEXITCODE) { throw 'Dependency install failed' }
-          node tools/release/verify-version.mjs --release $env:VERSION
+          node tools/release/verify-version.mjs --native-release $env:VERSION
           if ($LASTEXITCODE) { throw 'Version mismatch' }
           node --input-type=module -e 'import {publicKeyPacket,sha256} from "./tools/release/updater-release.mjs"; const k=process.env.AURORA_UPDATER_PUBKEY?.trim(); publicKeyPacket(k); if(sha256(Buffer.from(k))!=="bb2998279b09a39daeb44cd405a2f0f6d664fa751ce3d02e002463f89f8c50bc") throw Error("Owner trust identity differs");'
           if ($LASTEXITCODE) { throw 'Trust identity mismatch' }

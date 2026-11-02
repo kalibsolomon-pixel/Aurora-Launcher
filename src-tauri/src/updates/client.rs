@@ -2,8 +2,8 @@
 //! verified transactional activation of one newer intentionally published
 //! release on one existing instance.
 //!
-//! Authority is the manually published public release manifest — never a
-//! commit, branch head, or CI build. The remote manifest is bootstrap
+//! Authority is the official published GitHub Client release — never a
+//! commit, branch head, or CI build. GitHub release metadata is bootstrap
 //! discovery metadata (HTTPS plus strict parsing, exactly like the official
 //! Mojang version manifest); the artifact it describes is acquired through
 //! the SHA-256 verified store and only then activated. Discovery and
@@ -32,9 +32,8 @@ use crate::integrity::{ArtifactDigest, verify_file};
 use crate::paths::ManagedPaths;
 use crate::updates::{UpdateAvailability, parse_release_version};
 
-/// The location the owner's manual publication gate exposes the Aurora
-/// Client release manifest at. It exists only when the owner has published
-/// it; before that, checks fail non-fatally as unavailable.
+/// Official independent Client discovery endpoint. Production uses
+/// `fetch_current_manifest`, which verifies the release JAR and compatibility.
 ///
 /// Diagnostic builds may compile a different endpoint (loopback) through
 /// `AURORA_CLIENT_MANIFEST_URL`; production builds never set it. The
@@ -42,9 +41,7 @@ use crate::updates::{UpdateAvailability, parse_release_version};
 /// the manifest and verify the acquired bytes.
 pub const PRODUCTION_MANIFEST_URL: &str = match option_env!("AURORA_CLIENT_MANIFEST_URL") {
     Some(diagnostic) => diagnostic,
-    None => {
-        "https://github.com/kalibsolomon-pixel/Aurora-Client/releases/download/release-manifest/aurora-releases.json"
-    }
+    None => crate::distribution::github::LATEST_RELEASE_URL,
 };
 
 /// Hard cap for the fetched manifest document. Manifests are small; a
@@ -991,6 +988,19 @@ fn atomic_write(path: &Path, bytes: Option<&[u8]>) -> Result<(), std::io::Error>
             std::fs::remove_file(path)?;
         }
         Ok(())
+    }
+}
+
+/// Published Client metadata comes from the Client repository independently of
+/// the Launcher version. An explicit diagnostic override retains loopback tests.
+pub async fn fetch_current_manifest(
+    managed: &ManagedPaths,
+    options: &DownloadOptions,
+) -> Result<ReleaseManifest, ClientUpdateError> {
+    if let Some(endpoint) = option_env!("AURORA_CLIENT_MANIFEST_URL") {
+        fetch_published_manifest(endpoint, options).await
+    } else {
+        crate::distribution::github::discover(managed, options).await
     }
 }
 

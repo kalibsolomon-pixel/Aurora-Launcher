@@ -8,7 +8,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$version = (Get-Content (Join-Path $repo 'package.json') -Raw | ConvertFrom-Json).version
+$version = [regex]::Match([IO.File]::ReadAllText((Join-Path $repo 'native/Cargo.toml')), '(?ms)^\[package\]\s*\n.*?^version\s*=\s*"([^"]+)"').Groups[1].Value
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'A numeric release version is required' }
 if (!$Binary) { $Binary = Join-Path $repo 'native\target\release\aurora-native.exe' }
 $Binary = (Resolve-Path -LiteralPath $Binary).Path

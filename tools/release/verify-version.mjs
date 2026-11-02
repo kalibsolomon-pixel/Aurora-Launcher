@@ -20,6 +20,19 @@ function packageVersion(toml, name) {
   return /^\[package\]\s*\n[\s\S]*?^version\s*=\s*"([^"]+)"\s*$/m.exec(toml)?.[1];
 }
 
+const nativeCargo = readFileSync(join(root, "native/Cargo.toml"), "utf8");
+const nativeLock = readFileSync(join(root, "native/Cargo.lock"), "utf8");
+const nativeVersion = packageVersion(nativeCargo, "Cargo.toml");
+const nativeEntries = [...nativeLock.matchAll(/(?:^|\n)\[\[package\]\]\s*\n([\s\S]*?)(?=\n\[\[package\]\]|$)/g)];
+for (const [name, expectedVersion] of [["aurora-native", nativeVersion], ["aurora-launcher", pkg.version]]) {
+  const entry = nativeEntries.find(([, body]) => new RegExp(`^name\\s*=\\s*"${name}"\\s*$`, "m").test(body));
+  if (!entry || /^version\s*=\s*"([^"]+)"\s*$/m.exec(entry[1])?.[1] !== expectedVersion) {
+    throw new Error(`native/Cargo.lock ${name} differs from its package metadata`);
+  }
+}
+if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(nativeVersion ?? "") || nativeVersion.split('.').some(n => Number(n) > 65535)) {
+  throw new Error("Native version must be numeric major.minor.patch within Windows resource bounds");
+}
 const version = pkg.version;
 if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version ?? "")) {
   throw new Error("Launcher version in package.json must be numeric major.minor.patch for Windows installers");
@@ -42,14 +55,15 @@ if (tauri.version !== "../package.json") {
 }
 
 if (process.argv.length > 2) {
-  if (process.argv.length !== 4 || process.argv[2] !== "--release") {
-    throw new Error("Usage: node tools/release/verify-version.mjs [--release <version>]");
+  if (process.argv.length !== 4 || !["--release", "--native-release"].includes(process.argv[2])) {
+    throw new Error("Usage: node tools/release/verify-version.mjs [--release <version> | --native-release <version>]");
   }
   const requested = process.argv[3];
-  if (requested !== version) throw new Error(`Requested launcher version ${requested} differs from source ${version}`);
+  const sourceVersion = process.argv[2] === "--native-release" ? nativeVersion : version;
+  if (requested !== sourceVersion) throw new Error(`Requested launcher version ${requested} differs from source ${sourceVersion}`);
   if (version === "0.1.0") {
     throw new Error("0.1.0 is the inherited development version; choose and synchronize an intentional first production version before publication");
   }
 }
 
-console.log(`Aurora Launcher version contract: ${version}`);
+console.log(`Aurora Launcher version contract: WebView ${version}; Native ${nativeVersion}`);

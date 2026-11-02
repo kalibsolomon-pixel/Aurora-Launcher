@@ -2,7 +2,7 @@ import { createHash, createPublicKey, verify } from "node:crypto";
 import { readFile, writeFile, copyFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expectedAssetName, verifyBytes, verifyNotesIdentity, productionClientVersion, productionClientVersions } from "./release-state.mjs";
+import { expectedAssetName, verifyBytes, verifyNotesIdentity, productionClientVersion, productionClientVersions, publicationNotes } from "./release-state.mjs";
 
 export const repository = "kalibsolomon-pixel/Aurora-Launcher";
 export const manifestName = "launcher-update.json";
@@ -143,7 +143,7 @@ async function main() {
       signatures.push({ name, sizeBytes: bytes.length, sha256: sha256(bytes) });
     }
     manifest.updater = { platform: "windows-x86_64", publicKeySha256: sha256(Buffer.from(publicKey)), signatures };
-    const notes = await readFile(join(root, `RELEASE_${version.replaceAll(".", "_")}_NOTES.md`), "utf8");
+    const notes = publicationNotes(await readFile(join(root, `RELEASE_${version.replaceAll(".", "_")}_NOTES.md`), "utf8"), version);
     const signature = (await readFile(join(directory, installerName(version, "nsis") + ".sig"), "utf8")).trim();
     await writeFile(join(directory, manifestName), JSON.stringify(createManifest(version, notes, signature), null, 2) + "\n", { flag: "wx" });
     await writeFile(path, JSON.stringify(manifest, null, 2) + "\n");

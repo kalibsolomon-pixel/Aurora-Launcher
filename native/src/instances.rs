@@ -353,7 +353,7 @@ fn refresh_client_option() {
         return;
     };
     ui::spawn(
-        api::aurora_compatibility(minecraft, loader),
+        api::aurora_compatibility(ui::host(), minecraft, loader),
         move |result| {
             ui::with(|window, state| {
                 if state.workspace.as_ref().map(|w| w.id.as_str()) != Some(&id) {
@@ -1521,6 +1521,7 @@ fn platform_label(kind: &str) -> &'static str {
 }
 
 fn load_versions() {
+    let host = ui::host();
     let include = ui::with(|window, _| {
         let instances = window.global::<Instances>();
         instances.set_versions_loading(true);
@@ -1531,7 +1532,7 @@ fn load_versions() {
         async move {
             (
                 api::minecraft_versions(include).await,
-                api::aurora_releases().await,
+                api::aurora_releases(host).await,
             )
         },
         |(result, releases)| {
@@ -1600,29 +1601,32 @@ fn refresh_aurora_compatibility() {
     let Some((version, loader)) = creation_choice() else {
         return;
     };
-    ui::spawn(api::aurora_compatibility(version, loader), |result| {
-        ui::with(|window, _| {
-            let instances = window.global::<Instances>();
-            match result {
-                Ok(compatibility) => {
-                    instances.set_aurora_available(compatibility.available);
-                    instances.set_create_aurora(compatibility.available);
-                    let note = match (&compatibility.version, compatibility.available) {
-                        (Some(version), true) => format!(
-                            "Aurora {version} will be installed and kept with this instance."
-                        ),
-                        _ => compatibility.reason,
-                    };
-                    instances.set_aurora_note(note.into());
+    ui::spawn(
+        api::aurora_compatibility(ui::host(), version, loader),
+        |result| {
+            ui::with(|window, _| {
+                let instances = window.global::<Instances>();
+                match result {
+                    Ok(compatibility) => {
+                        instances.set_aurora_available(compatibility.available);
+                        instances.set_create_aurora(compatibility.available);
+                        let note = match (&compatibility.version, compatibility.available) {
+                            (Some(version), true) => format!(
+                                "Aurora {version} will be installed and kept with this instance."
+                            ),
+                            _ => compatibility.reason,
+                        };
+                        instances.set_aurora_note(note.into());
+                    }
+                    Err(error) => {
+                        instances.set_aurora_available(false);
+                        instances.set_create_aurora(false);
+                        instances.set_aurora_note(error.message.into());
+                    }
                 }
-                Err(error) => {
-                    instances.set_aurora_available(false);
-                    instances.set_create_aurora(false);
-                    instances.set_aurora_note(error.message.into());
-                }
-            }
-        });
-    });
+            });
+        },
+    );
 }
 
 fn create() {

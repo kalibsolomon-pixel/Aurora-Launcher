@@ -1,5 +1,15 @@
 # Agent operating guide
 
+## Independent Client releases (owner decision, 2026-10-20)
+
+Launcher 1.5.1 discovers the latest published stable Aurora Client directly from
+the official Client GitHub repository. This supersedes historical fixture/bundled
+catalog authority for latest-version selection. Keep exact old pins resolvable,
+verify GitHub's expected JAR SHA-256 through the trusted cache before inspecting
+compatibility, and preserve explicit transactional updates. Do not reintroduce
+a requirement to release Launcher for every compatible Client version. See
+`CLIENT_RELEASE_DISCOVERY.md`.
+
 ## Purpose and stack
 
 Aurora Launcher is the standalone, cross-platform launcher for the separate Aurora Fabric client mod. The stack is Tauri 2, Rust, Svelte 5, TypeScript, SvelteKit in static SPA mode, and Vite. The launcher consumes Aurora as a future versioned artifact; never copy or couple to the mod's source tree.
@@ -253,7 +263,7 @@ and `docs/native-ui/`.
 
 Home customization uses header dragging and corner resizing with snapped outlines.
 The optional grid.position is a bounded [column,row] anchor (column plus span at
-most six; row 0–63). Absent anchors retain automatic placement. Rust resolves
+most six; row 0ï¿½63). Absent anchors retain automatic placement. Rust resolves
 collisions and persists one completed gesture through the atomic Home API; pointer
 previews and canceled gestures never write. Responsive display does not rewrite
 saved geometry. Keep stable widget models so keyboard focus and pointer capture

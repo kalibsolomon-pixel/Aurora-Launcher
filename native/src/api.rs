@@ -921,11 +921,12 @@ pub async fn create_instance(
 }
 
 pub async fn aurora_compatibility(
+    host: Host,
     minecraft: String,
     loader: Value,
 ) -> ApiResult<AuroraCompatibility> {
     let request = request(json!({ "minecraftVersion": minecraft, "loader": loader }))?;
-    blocking(move || convert(app::get_aurora_compatibility(request))).await?
+    convert(app::get_aurora_compatibility(host, request).await)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -955,7 +956,7 @@ pub async fn preview_aurora(
     enabled: bool,
 ) -> ApiResult<AuroraTransition> {
     let request = request(json!({"instanceId": instance, "enabled": enabled}))?;
-    blocking(move || convert(app::preview_aurora_transition(host, request))).await?
+    convert(app::preview_aurora_transition(host, request).await)
 }
 pub async fn apply_aurora(
     host: Host,
@@ -968,8 +969,8 @@ pub async fn apply_aurora(
     convert(app::apply_aurora_transition(host, request).await)
 }
 
-pub async fn aurora_releases() -> ApiResult<Vec<AuroraRelease>> {
-    blocking(|| convert(app::list_aurora_releases())).await?
+pub async fn aurora_releases(host: Host) -> ApiResult<Vec<AuroraRelease>> {
+    convert(app::list_aurora_releases(host).await)
 }
 
 pub async fn minecraft_versions(include_snapshots: bool) -> ApiResult<Vec<MinecraftVersion>> {

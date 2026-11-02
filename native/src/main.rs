@@ -48,9 +48,7 @@ mod widgets;
 
 use aurora_launcher_lib::host::Host;
 #[cfg(not(feature = "native-update-acceptance"))]
-use aurora_launcher_lib::host::{
-    APPLICATION_IDENTIFIER, LAUNCHER_VERSION, platform_local_data_dir,
-};
+use aurora_launcher_lib::host::{APPLICATION_IDENTIFIER, platform_local_data_dir};
 
 fn main() -> Result<(), slint::PlatformError> {
     // The isolated cosmetic image worker re-executes this binary.
@@ -77,7 +75,7 @@ fn main() -> Result<(), slint::PlatformError> {
     #[cfg(not(feature = "native-update-acceptance"))]
     let (data_root, version) = (
         platform_local_data_dir(APPLICATION_IDENTIFIER),
-        LAUNCHER_VERSION,
+        env!("CARGO_PKG_VERSION"),
     );
     #[cfg(feature = "native-update-acceptance")]
     let (data_root, version) = (

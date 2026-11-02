@@ -91,7 +91,7 @@ class LauncherStore {
   launcherState = $state<LauncherState | null>(null);
   stateError = $state<LauncherBackendError | null>(null);
 
-  // Aurora releases from this build's production manifest and debug-only fixture.
+  // Aurora Client releases discovered independently from the official GitHub repository.
   releases = $state<AuroraReleaseSummary[]>([]);
   releasesError = $state<LauncherBackendError | null>(null);
 
@@ -316,6 +316,17 @@ class LauncherStore {
             this.runtimeStatus?.status === "ready") return;
       }
       void this.refreshPlayReadiness();
+    }
+  }
+
+  private async loadAvailableReleases(): Promise<void> {
+    mark("releasesRequest");
+    try {
+      this.releases = await listAuroraReleases();
+    } catch (cause: unknown) {
+      this.releasesError = backendError(cause, "The Aurora release list failed.");
+    } finally {
+      mark("releasesComplete");
     }
   }
 
