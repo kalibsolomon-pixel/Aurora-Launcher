@@ -52,11 +52,13 @@ test('native authority never downgrades or accepts same-version drift',()=>{
   assert.throws(()=>authorityToken({GH_TOKEN:'ordinary',AURORA_AUTHORITY_TOKEN:'ordinary'}));
 });
 test('native publication uploads verified draft bytes and selects native as latest stable',async()=>{
-  const f=fixture('2.0.0'),d=await directory(f),uploaded=new Map(),mutations=[];
+  const f=fixture('2.0.1'),d=await directory(f),uploaded=new Map(),mutations=[];
+  const patchTitle='Aurora Launcher Native 2.0.1 — Modpack Reliability and Download UI Fixes';
+  let expectedTitle=patchTitle;
   const release={id:42,tag_name:`native-v${f.version}`,target_commitish:d.metadata.sourceSha,prerelease:false,draft:true,immutable:false,assets:[]};
   const api=async(path,options={})=>{
     if(options.method==='POST' && path==='/git/refs'){assert.deepEqual(options.body,{ref:`refs/tags/native-v${f.version}`,sha:d.metadata.sourceSha});mutations.push(path);return {};}
-    if(options.method==='POST'){assert.equal(options.body.name,'Aurora Launcher Native 2.0.0');assert.equal(options.body.make_latest,'true');assert.equal(options.body.draft,true);mutations.push(path);return {...release};}
+    if(options.method==='POST'){assert.equal(options.body.name,expectedTitle);assert.equal(options.body.make_latest,'true');assert.equal(options.body.draft,true);mutations.push(path);return {...release};}
     if(options.method==='PATCH'){assert.equal(options.body.make_latest,'true');release.draft=false;release.immutable=true;mutations.push(path);return {...release};}
     if(options.allowMissing)return null;
     if(path===`/git/ref/tags/native-v${f.version}`)return {ref:`refs/tags/native-v${f.version}`,object:{type:'commit',sha:d.metadata.sourceSha}};
@@ -66,7 +68,10 @@ test('native publication uploads verified draft bytes and selects native as late
   };
   const upload=async(id,name,bytes)=>{assert.equal(id,42);uploaded.set(name,bytes);release.assets.push({id:release.assets.length+1,name,size:bytes.length,browser_download_url:`https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v${f.version}/${name}`});};
   const download=async(url,size,privateAsset)=>{const name=privateAsset?release.assets.find(a=>url.endsWith('/'+a.id)).name:url.split('/').at(-1);const bytes=uploaded.get(name);assert.equal(bytes.length,size);return bytes;};
-  await publishNativeRelease({...d,api,upload,download});
+  await assert.rejects(publishNativeRelease({...d,api,upload,download,releaseNotes:'# Aurora Launcher Native 2.0.0 — Wrong version'}));
+  assert.equal(mutations.length,0,'invalid notes must not create a tag');
+  await publishNativeRelease({...d,api,upload,download,releaseNotes:`# ${patchTitle}\n\nPatch fixes.`});
+  expectedTitle='Aurora Launcher Native 2.0.1';
   assert.deepEqual(mutations,['/git/refs','/releases','/releases/42']);
   assert.equal(uploaded.size,6);
   assert.throws(()=>releaseIdentity({...release,prerelease:true},f.version,d.metadata.sourceSha,true));
