@@ -153,8 +153,9 @@ The same-schema additions are not universally backward compatible:
   reader. A supporting launcher can reset custom selections to managed first;
   never strip JSON fields with an older client.
 - Current optional widget `grid`/`position` fields are rejected by pre-widget-grid
-  configuration readers. Reset geometry using a supporting launcher or restore
-  the complete compatible configuration backup.
+  configuration readers. Restore the complete compatible configuration backup.
+  Do not assume a visible size change removes those persisted fields; no seamless
+  geometry downgrade/reset UI is certified here.
 - PANDORA-4 schema-2 sync policy writes `overrides`, including an empty object,
   and adds `servers`. The actual pre-PANDORA-4 core at
   `1d7c30738569b29fd6a32f85352aadce4ea69813` rejects the new policy and refuses

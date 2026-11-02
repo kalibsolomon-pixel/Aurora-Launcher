@@ -1,0 +1,123 @@
+{
+  "date": "2026-11-01",
+  "verdict": "READY FOR PROTECTED RELEASE ACCEPTANCE",
+  "branch": "codex/pandora-backend",
+  "startingSha": "75c2c3baa056d7ce6038cb3ed4156aad196ecb52",
+  "finalImplementationSha": "8339d371d189df9f4716f085dcea32e754d41030",
+  "ordinaryArtifact": {
+    "sourceSha": "66303fac86a1087bcb012561eddb0ff5b238a268",
+    "exeSha256": "0C998B5A3759DE334EBADBBCA0135D2C1778F21F201B7BB90519659AD4BA8BFA",
+    "installerSha256": "83CF2CAE8695AA955FA9B844F72C20932591CC503D396B55E1CF122B447DB805",
+    "exeBytes": 34137088,
+    "installerBytes": 10241805,
+    "authenticode": "NotSigned"
+  },
+  "ordinaryFeatureAudit": {
+    "testKeyPresent": false,
+    "diagnosticOverridePresent": false,
+    "desktopAcceptanceFlagPresent": false,
+    "productName": "Aurora Launcher (native preview)",
+    "productVersion": "1.4.2"
+  },
+  "ordinaryBuildConfiguration": {
+    "inheritedNativeAuthorityOptIn": false,
+    "inheritedUpdaterPublicKeyPresent": false
+  },
+  "signedLocalAcceptance": {
+    "passed": true,
+    "sourceVersion": "1.4.2",
+    "updatedVersion": "1.4.3",
+    "sourceHash": "7438D338C745D4FE94C6C4FC4C16AE15A1D81DDE2F5C9981A869A3F5A9937B7D",
+    "updatedHash": "D7AC751C27A1383CF102AFB47D074B0821577A63F63414A1CA4C6A5DC710B75F",
+    "installerHash": "87CBD9F2D2138633614EBDE32AFAA419E8F9191D90961252CAB239AAA44BF502",
+    "sentinelHash": "A189F21A35AB84CAA8BDBAEDA10BCA3F76DC55E6E970F3BCC07A08F5295C8579",
+    "downloadedBytes": 10615020,
+    "progressEvents": 31,
+    "sourcePid": 16700,
+    "restartPid": 33576,
+    "packageId": "com.aurora.launcher.native-preview.acceptance.d4f55cbc55d1470f85ad305604e8dbe4",
+    "distributionRejected": true
+  },
+  "testPublicKeySha256": "bdd4ffe44452a26e8eb6f8777cb5d51afebb8bb0fc4967193718e24b70a9f4f3",
+  "installedRecovery": {
+    "executableInUseExit": 2,
+    "packageLockExit": 2,
+    "interruptedStagingExit": 3,
+    "packageIdentityVerified": true,
+    "userWorldPreserved": true,
+    "executablePreserved": true
+  },
+  "restartedVersion": "1.4.3",
+  "restartedStateLoaded": true,
+  "signingHelperExited": true,
+  "failedFirstAttemptSourcePreserved": true,
+  "failedFirstAttemptWorldPreserved": true,
+  "acceptanceDistributionRefusal": "Distribution cannot contain acceptance features",
+  "historicalReaderSha": "1d7c30738569b29fd6a32f85352aadce4ea69813",
+  "historicalCompatibility": {
+    "allBytesPreserved": true,
+    "configurationReadable": false,
+    "registryReadable": true,
+    "rejectedSyncWrite": true,
+    "syncPolicyReadable": false
+  },
+  "currentCompatibility": {
+    "allBytesPreserved": true,
+    "configurationReadable": true,
+    "registryReadable": true,
+    "rejectedSyncWrite": false,
+    "syncPolicyReadable": true
+  },
+  "tests": {
+    "coreIgnored": 31,
+    "iconPassed": 6,
+    "actionlint": "1.7.12 passed",
+    "typeWarnings": 0,
+    "pickerDtoPassed": 5,
+    "releaseToolsPassed": 123,
+    "powershellSyntax": "passed",
+    "nativeIgnored": 0,
+    "releaseToolsSkipped": 0,
+    "nativePassed": 52,
+    "corePassed": 1112,
+    "typeErrors": 0,
+    "rustFormat": "passed"
+  },
+  "desktop": {
+    "narratorVerified": false,
+    "headlessScales": [
+      100,
+      125,
+      150,
+      200
+    ],
+    "physicalInputStoppedByOwner": true,
+    "finalPhysicalMatrixVerified": false
+  },
+  "protectedCiExecuted": false,
+  "productionSignedUpdateAccepted": false,
+  "authenticode": "NotSigned",
+  "productionExeSha256": "42c34fbab45ece1c88727374b52751067d5aeebb419a705f72f6e16dd6a2387c",
+  "productionPublicKeySha256": "bb2998279b09a39daeb44cd405a2f0f6d664fa751ce3d02e002463f89f8c50bc",
+  "publicationPerformed": false,
+  "manualCompatibleRollback": {
+    "sourceVersion": "1.4.3",
+    "rollbackVersion": "1.4.2",
+    "candidateUninstallExit": 0,
+    "oldInstallExit": 0,
+    "restoredExeSha256": "7438D338C745D4FE94C6C4FC4C16AE15A1D81DDE2F5C9981A869A3F5A9937B7D",
+    "preservedDataFiles": 4,
+    "allOriginalDataHashesPreserved": true,
+    "finalUninstallExit": 0,
+    "temporaryRegistrationRemoved": true,
+    "dataAndArtifactCopiesRetained": true
+  },
+  "firstFixtureCleanup": {
+    "exitCode": 0,
+    "temporaryRegistrationRemoved": true,
+    "worldPreserved": true,
+    "sourceCopyRetained": true,
+    "desktopProcessNotControlled": true
+  },
+  "ownerBaselinePreserved": true
+}
