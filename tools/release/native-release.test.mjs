@@ -52,11 +52,11 @@ test('native authority never downgrades or accepts same-version drift',()=>{
   assert.throws(()=>authorityToken({GH_TOKEN:'ordinary',AURORA_AUTHORITY_TOKEN:'ordinary'}));
 });
 test('native publication uploads verified draft bytes and preserves WebView latest policy',async()=>{
-  const f=fixture(),d=await directory(f),uploaded=new Map(),mutations=[];
+  const f=fixture('2.0.0'),d=await directory(f),uploaded=new Map(),mutations=[];
   const release={id:42,tag_name:`native-v${f.version}`,target_commitish:d.metadata.sourceSha,prerelease:true,draft:true,immutable:false,assets:[]};
   const api=async(path,options={})=>{
     if(options.method==='POST' && path==='/git/refs'){assert.deepEqual(options.body,{ref:`refs/tags/native-v${f.version}`,sha:d.metadata.sourceSha});mutations.push(path);return {};}
-    if(options.method==='POST'){assert.equal(options.body.make_latest,'false');assert.equal(options.body.draft,true);mutations.push(path);return {...release};}
+    if(options.method==='POST'){assert.equal(options.body.name,'Aurora Launcher Native 2.0.0');assert.equal(options.body.make_latest,'false');assert.equal(options.body.draft,true);mutations.push(path);return {...release};}
     if(options.method==='PATCH'){assert.equal(options.body.make_latest,'false');release.draft=false;release.immutable=true;mutations.push(path);return {...release};}
     if(options.allowMissing)return null;
     if(path===`/git/ref/tags/native-v${f.version}`)return {ref:`refs/tags/native-v${f.version}`,object:{type:'commit',sha:d.metadata.sourceSha}};
@@ -107,7 +107,7 @@ test('native authority verifies public artifacts then advances only isolated ref
 test('native protected workflow is manual, scoped and signing fails closed',async()=>{
   const text=await readFile(new URL('../../.github/workflows/native-preview-release.yml',import.meta.url),'utf8');
   assert.match(text,/workflow_dispatch:/);assert.doesNotMatch(text,/pull_request:|push:|schedule:|workflow_run:/);
-  for(const name of ['launcher-native-preview-signing','launcher-native-preview-publication','launcher-native-update-authority-production'])assert.ok(text.includes(name));
+  for(const name of ['launcher-production','launcher-native-preview-publication','launcher-update-authority-production'])assert.ok(text.includes(name));
   assert.match(text,/if: inputs.publish && inputs.advance_authority/);
   const advance=text.split('\n  advance:')[1];
   assert.doesNotMatch(advance,/GH_TOKEN:|GITHUB_TOKEN:|TAURI_SIGNING_PRIVATE_KEY:/);

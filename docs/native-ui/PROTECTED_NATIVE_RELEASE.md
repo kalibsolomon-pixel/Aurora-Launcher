@@ -14,14 +14,14 @@ prepared native environments have the same owner reviewer, exact `main` branch
 policy, and prohibition on administrator bypass. Existing secrets stay in
 their protected environments; no new signing identity or secret copy is needed.
 
-For the first native authority publication only, the explicit manual workflow
-input `initialize_authority=true` with an empty `authority_parent` requests
-initialization through the dedicated App. After public signed artifact
-verification, it requires an absent native ref, validates the canonical empty
-tree and exact zero-parent initialization commit, then creates the ref
-atomically. It refuses an existing ref. Subsequent releases supply the observed
-40-character authority parent and leave initialization disabled. No WebView ref
-is initialized, replaced or advanced by this native procedure.
+The native authority ref is still absent. Its creation restriction admits no
+writer, including the routine authority App. First initialization therefore
+requires the legitimate owner setup described by the authority contract; this
+release does not add an initializer exception or bypass that restriction.
+Supply the exact reviewed empty-root commit as `authority_parent`, and complete
+its owner-controlled initialization before approving the authority job. The
+publisher validates the canonical empty tree and exact zero-parent message.
+It never creates or recreates the authority ref itself.
 
 This prepares the existing native updater, standalone NSIS package and GitHub
 release/authority protocol. It does not authorize a workflow dispatch, push,
@@ -74,8 +74,8 @@ Only after separate authorization, initialize the native ref with one root
 commit, canonical empty tree `4b825dc642cb6eb9a060e54bf8d69288fbee4904`, and exact
 message `Initialize Aurora native preview update authority`. The first
 advancement creates a tree containing only regular `native-update.json`.
-Current first-publication initialization is performed only through the explicit
-protected workflow input described above.
+Initialization is deliberately not automated by the publisher. Owner setup is
+required before the protected authority advancement approval.
 
 ## Controlled acceptance and publication
 

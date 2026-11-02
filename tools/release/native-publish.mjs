@@ -36,14 +36,14 @@ export async function verifyPublicNative({api,download,metadata,directory}) {
   }
   return release;
 }
-export async function publishNativeRelease({api,upload,download,metadata,directory}) {
+export async function publishNativeRelease({api,upload,download,metadata,directory,releaseNotes}) {
   if(await api(`/releases/tags/native-v${metadata.version}`,{allowMissing:true})) throw Error('Native tag/release already exists; inspect and recover manually, never overwrite');
   if(await api(`/git/ref/tags/native-v${metadata.version}`,{allowMissing:true})) throw Error('Native tag already exists');
   // Atomic tag creation refuses a concurrent existing tag instead of attaching
   // the release to someone else's ref. Never move or force an existing tag.
   await api('/git/refs',{method:'POST',body:{ref:`refs/tags/native-v${metadata.version}`,sha:metadata.sourceSha}});
   await verifyNativeTag(api,metadata.version,metadata.sourceSha);
-  const release=await api('/releases',{method:'POST',body:{tag_name:`native-v${metadata.version}`,target_commitish:metadata.sourceSha,name:`Aurora Native Preview ${metadata.version}`,body:`Native Slint preview. Source: ${metadata.sourceSha}. Data and update authority are isolated from the WebView launcher.`,draft:true,prerelease:true,make_latest:'false'}});
+  const release=await api('/releases',{method:'POST',body:{tag_name:`native-v${metadata.version}`,target_commitish:metadata.sourceSha,name:`Aurora Launcher Native ${metadata.version}`,body:`${releaseNotes??'Native Rust/Slint release. Data and update authority are isolated from the WebView launcher.'}\n\nSource: ${metadata.sourceSha}.`,draft:true,prerelease:true,make_latest:'false'}});
   releaseIdentity(release,metadata.version,metadata.sourceSha);
   for(const name of [...metadata.artifacts.map(a=>a.name),'native-release-assets.json']) await upload(release.id,name,await readFile(join(directory,name)));
   // Verify uploaded draft bytes before the irreversible publication step.
@@ -141,7 +141,8 @@ async function main() {
     const r=await fetch(`https://uploads.github.com/repos/${repository}/releases/${id}/assets?name=${encodeURIComponent(name)}`,{method:'POST',redirect:'error',signal:AbortSignal.timeout(300000),headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/octet-stream'},body:bytes});
     if(!r.ok)throw Error(`Native upload HTTP ${r.status}`);
   };
-  const options={api,download,upload,metadata,directory,key,expectedParent};
+  const releaseNotes=mode==='publish'?await readFile(new URL(`../../docs/releases/NATIVE_${version.replaceAll('.','_')}_NOTES.md`,import.meta.url),'utf8'):undefined;
+  const options={api,download,upload,metadata,directory,key,expectedParent,releaseNotes};
   if(mode==='publish')await publishNativeRelease(options);else await advanceNativeAuthority(options);
 }
 if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)) main().catch(error=>{console.error(error.message);process.exitCode=1;});
