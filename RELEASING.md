@@ -1,6 +1,6 @@
 # Releasing Aurora Launcher
 
-Aurora Launcher is a native Rust/Slint application. Native 2.0.0 is the current
+Aurora Launcher is a native Rust/Slint application. Native 2.0.1 is the current
 stable/latest GitHub release. The Svelte/Tauri application and WebView release
 workflows are retired; old releases and their authority remain historical records.
 
@@ -20,7 +20,7 @@ cargo build --manifest-path native/Cargo.toml --release --locked
 
 `native/Cargo.toml`, `core/Cargo.toml`, their lockfiles and the release-tool npm
 metadata share the native version. Never rebuild or replace published immutable
-2.0.0 artifacts; a future binary release requires a new owner-selected version.
+native artifacts; a future binary release requires a new owner-selected version.
 
 ## Protected publication
 
@@ -46,5 +46,5 @@ public bytes and native discovery before reporting success. Preserve explicit
 installer acceptance and describe any update/restart verification limits.
 
 See [protected native procedure](docs/native-ui/PROTECTED_NATIVE_RELEASE.md),
-[2.0.0 release record](docs/releases/NATIVE_2_0_0_RELEASE.md), and
+[2.0.1 release record](docs/releases/NATIVE_2_0_1_RELEASE.md), and
 [historical release instructions](docs/releases/archive/RELEASING_PRE_NATIVE_ONLY.md).
