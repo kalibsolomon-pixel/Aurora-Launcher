@@ -3583,6 +3583,27 @@ pub async fn resolve_project_artwork(
     Ok(crate::artwork::resolve_artwork(&managed, &request.project_id).await)
 }
 
+/// A bounded local thumbnail. Project identity comes from the installed inventory.
+pub fn get_installed_pack_icon(
+    app: Host,
+    instance: &str,
+    resource_pack: bool,
+    file_name: &str,
+    project: Option<&str>,
+) -> Option<crate::mod_icons::Bitmap> {
+    use base64ct::{Base64, Encoding};
+    let managed = managed_paths(&app).ok()?;
+    let id = crate::instances::InstanceId::new(instance).ok()?;
+    if resource_pack {
+        if let Some(icon) = crate::instance_content::resource_pack_icon(&managed, &id, file_name) {
+            return Some(icon);
+        }
+    }
+    let data = crate::artwork::read_cached(&managed, project?)?;
+    let bytes = Base64::decode_vec(data.strip_prefix("data:image/png;base64,")?).ok()?;
+    crate::mod_icons::bitmap(&bytes)
+}
+
 pub async fn get_installed_artwork_identities(
     app: Host,
     request: InstanceContentRequest,

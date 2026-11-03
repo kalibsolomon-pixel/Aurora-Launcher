@@ -8,7 +8,7 @@ import { Icon, Icons } from "../icons.slint";
 import {
     Button, ButtonKind, IconButton, Glyph, StatusPill, Tone, Toggle, Slider, TextField, Tabs,
     Group, SettingRow, Divider, EmptyState, Spinner, PageTitle, FocusRing, KeyboardFocus,
-    InstanceIcon, Dropdown, ProgressBar,
+    InstanceIcon, Dropdown, ProgressBar, UnifiedList,
 } from "../components.slint";
 import { Home, Instances, ContentRow, InstanceRow, BlockerRow } from "../state.slint";
 
@@ -97,9 +97,11 @@ export component InstancesPage inherits Rectangle {
 
 component ContentLine inherits Rectangle {
     in property <ContentRow> item;
-    height: max(56px, layout.preferred-height);
-    border-radius: Theme.radius-md;
-    background: touch.has-hover ? Theme.hover : Theme.surface;
+    height: 68px;
+    background: touch.has-hover ? Theme.hover : transparent;
+    in property <bool> divided;
+    in property <string> fallback;
+    if divided: Divider { x: 14px; width: parent.width - 28px; y: 0px; }
     accessible-role: list-item;
     accessible-label: root.item.title;
     accessible-description: root.item.detail + (root.item.update-text != "" ? ". " + root.item.update-text : "");
@@ -107,16 +109,14 @@ component ContentLine inherits Rectangle {
     layout := HorizontalLayout {
         padding-left: 14px;
         padding-right: 10px;
-        padding-top: 8px;
-        padding-bottom: 8px;
         spacing: 12px;
-        if root.item.is-mod: Glyph { y: (parent.height - self.height) / 2; size: 32px; letter: root.item.letter; picture: root.item.picture; has-picture: root.item.has-picture; }
+        Glyph { y: (parent.height - self.height) / 2; size: 46px; letter: root.item.letter; fallback-icon: root.item.is-mod ? "" : root.fallback; picture: root.item.picture; has-picture: root.item.has-picture; }
         VerticalLayout {
             horizontal-stretch: 1;
             alignment: center;
-            spacing: 2px;
+            spacing: 4px;
             Text { text: root.item.title; font-size: Theme.text-body; color: root.item.enabled ? Theme.text : Theme.text-muted; overflow: elide; }
-            Text { text: root.item.detail; font-size: Theme.text-metadata; color: Theme.text-muted; overflow: elide; }
+            Text { text: root.item.detail; font-size: Theme.text-secondary-size; color: Theme.text-secondary; overflow: elide; }
 
         }
         if root.item.note != "": IconButton {
@@ -402,6 +402,8 @@ component ConfigurationTab inherits VerticalLayout {
 
 component ContentTab inherits VerticalLayout {
     in property <string> noun;
+    in property <length> visible-top;
+    in property <length> visible-height;
     spacing: Theme.space-3;
     HorizontalLayout {
         spacing: Theme.space-2;
@@ -444,10 +446,13 @@ component ContentTab inherits VerticalLayout {
         border-radius: Theme.radius-lg;
         EmptyState { icon: Icons.extension; title: "Nothing installed"; message: "Use Find more to browse Modrinth, or place files in the instance folder."; }
     }
-    VerticalLayout {
-        spacing: 4px;
-        accessible-role: list;
-        for row in Instances.content: ContentLine { item: row; }
+    if Instances.content.length > 0: UnifiedList {
+        property <int> first: max(0, floor((root.visible-top - self.absolute-position.y) / 68px));
+        property <int> end: max(first, ceil((root.visible-top + root.visible-height - self.absolute-position.y) / 68px));
+        init => { Instances.content-artwork-window(first, end); }
+        changed first => { Instances.content-artwork-window(first, end); }
+        changed end => { Instances.content-artwork-window(first, end); }
+        for row[index] in Instances.content: ContentLine { item: row; divided: index > 0; fallback: root.noun == "shaders" ? Icons.sparkle : Icons.image; }
     }
 }
 
@@ -490,9 +495,9 @@ export component WorkspacePage inherits ScrollView {
             current <=> Instances.tab;
             selected(index) => { Instances.tab-changed(index); }
         }
-        if Instances.tab == 0: ContentTab { noun: "mods"; }
-        if Instances.tab == 1: ContentTab { noun: "resource packs"; }
-        if Instances.tab == 2: ContentTab { noun: "shaders"; }
+        if Instances.tab == 0: ContentTab { noun: "mods"; visible-top: root.absolute-position.y; visible-height: root.height; }
+        if Instances.tab == 1: ContentTab { noun: "resource packs"; visible-top: root.absolute-position.y; visible-height: root.height; }
+        if Instances.tab == 2: ContentTab { noun: "shaders"; visible-top: root.absolute-position.y; visible-height: root.height; }
         if Instances.tab == 3: ConfigurationTab { }
     }
 }

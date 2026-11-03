@@ -152,6 +152,35 @@ fn row(
 
 const LONG_FILE: &str = "Synthetic Aurora Extremely Long Resource Pack Name Used To Check Wrapping In Narrow Windows And Large Scale Factors v12.4.0-final.zip";
 
+fn settings_toggle_scene(app: &AppWindow, theme: &str, background: &str, accent: &str) {
+    app.global::<Nav>().set_page(Page::Settings);
+    app.global::<crate::Settings>()
+        .set_section(crate::SettingsSection::Accessibility);
+    let palette = &aurora_launcher_lib::appearance::accent_preset(accent)
+        .unwrap()
+        .palette;
+    crate::theme::apply(
+        app,
+        &crate::api::Appearance {
+            aurora_motion_speed: 0,
+            background: background.into(),
+            theme: theme.into(),
+            accent: serde_json::Value::Null,
+            palette: crate::api::AccentPalette {
+                accent: palette.base.as_hex(),
+                accent_strong: palette.strong.as_hex(),
+                accent_hover: palette.hover.as_hex(),
+                accent_pressed: palette.pressed.as_hex(),
+                accent_contrast: palette.on_accent.as_hex(),
+                accent_soft: palette.soft_css(),
+                accent_outline: palette.outline_css(),
+            },
+            themes: vec![],
+            accents: vec![],
+        },
+    );
+}
+
 fn workspace(app: &AppWindow, tab: i32) {
     let nav = app.global::<Nav>();
     nav.set_page(Page::Instances);
@@ -728,6 +757,8 @@ fn scenes() -> Vec<(&'static str, Scene)> {
         }),
         ("pandora4-conflicts", |app| {
             app.global::<Nav>().set_page(Page::Settings);
+            app.global::<crate::Settings>()
+                .set_section(crate::SettingsSection::Syncing);
             let sync = app.global::<crate::InstanceSync>();
             sync.set_loaded(true);
             sync.set_enabled(true);
@@ -745,6 +776,92 @@ fn scenes() -> Vec<(&'static str, Scene)> {
                 },
             ])));
             scroll_down(app, 1000.);
+        }),
+        ("ui1-settings", |app| {
+            app.global::<Nav>().set_page(Page::Settings)
+        }),
+        ("ui1-toggle-simple", |app| {
+            settings_toggle_scene(app, "aurora-dark", "simple", "violet")
+        }),
+        ("ui1-toggle-oled", |app| {
+            settings_toggle_scene(app, "oled", "simple", "violet")
+        }),
+        ("ui1-toggle-borealis", |app| {
+            settings_toggle_scene(app, "aurora-dark", "borealis", "violet")
+        }),
+        ("ui1-accounts", |app| {
+            let accounts = app.global::<crate::Accounts>();
+            accounts.set_has_account(true);
+            accounts.set_rows(ModelRc::new(VecModel::from(vec![
+                crate::AccountRow {
+                    name: "Active fixture".into(),
+                    status: "Ready to play".into(),
+                    selected: true,
+                    initial: "A".into(),
+                    ..Default::default()
+                },
+                crate::AccountRow {
+                    name: "Second fixture".into(),
+                    status: "Sign in again".into(),
+                    initial: "S".into(),
+                    ..Default::default()
+                },
+            ])));
+            accounts.set_dialog_open(true);
+        }),
+        ("ui1-downloads", |app| {
+            let activity = app.global::<crate::Activity>();
+            activity.set_summary("1 active · 1 queued".into());
+            activity.set_active(2);
+            activity.set_rows(ModelRc::new(VecModel::from(
+                ["Downloading", "Queued", "Completed", "Failed"]
+                    .iter()
+                    .map(|phase| crate::ActivityRow {
+                        title: format!("{phase} fixture").into(),
+                        phase: (*phase).into(),
+                        message: "Synthetic download activity".into(),
+                        running: *phase == "Downloading",
+                        can_cancel: matches!(*phase, "Downloading" | "Queued"),
+                        can_retry: *phase == "Failed",
+                        ..Default::default()
+                    })
+                    .collect::<Vec<_>>(),
+            )));
+            activity.set_open(true);
+        }),
+        ("ui1-long-mods", |app| {
+            workspace(app, 0);
+            app.global::<Instances>()
+                .set_content(ModelRc::new(VecModel::from(
+                    (0..120)
+                        .map(|i| ContentRow {
+                            id: format!("fixture-{i}").into(),
+                            title: format!("Mod {i}").into(),
+                            detail: LONG_FILE.into(),
+                            letter: "M".into(),
+                            is_mod: true,
+                            enabled: true,
+                            toggleable: true,
+                            removable: true,
+                            ..Default::default()
+                        })
+                        .collect::<Vec<_>>(),
+                )));
+        }),
+        ("ui1-long-skins", |app| {
+            app.global::<Nav>().set_page(Page::Skins);
+            app.global::<crate::Skins>()
+                .set_presets(ModelRc::new(VecModel::from(
+                    (0..120)
+                        .map(|i| crate::SkinRow {
+                            id: format!("fixture-{i}").into(),
+                            name: "Duplicate name".into(),
+                            model: "Classic".into(),
+                            favorite: i % 2 == 0,
+                            ..Default::default()
+                        })
+                        .collect::<Vec<_>>(),
+                )));
         }),
         ("settings-game", |app| workspace(app, 3)),
         ("create-loader", |app| create_dialog(app)),
@@ -935,6 +1052,136 @@ fn discover_download_notification_clears_pagination_at_every_size_and_scale() {
 }
 
 #[test]
+fn skin_favorite_controls_use_stable_identity_for_pointer_and_keyboard() {
+    let _ = slint::platform::set_platform(Box::new(RenderPlatform));
+    let (app, adapter) = window((1120., 760.), 1.);
+    scenes()
+        .into_iter()
+        .find(|(name, _)| *name == "refinement-saved-skin")
+        .unwrap()
+        .1(&app);
+    render(&app, &adapter, "ui1-skin-before-favorite");
+    // Exercise the star through both input paths, retaining stable identity.
+    let presets = app.global::<crate::Skins>().get_presets();
+    let favorites: Rc<RefCell<Vec<(String, bool)>>> = Rc::default();
+    let observed = favorites.clone();
+    let weak = app.as_weak();
+    app.global::<crate::Skins>()
+        .on_set_favorite(move |id, favorite| {
+            observed.borrow_mut().push((id.to_string(), favorite));
+            let app = weak.unwrap();
+            let model = app.global::<crate::Skins>().get_presets();
+            let mut row = model.row_data(0).unwrap();
+            row.favorite = favorite;
+            model.set_row_data(0, row);
+        });
+    click(&app, 480., 334.);
+    render(&app, &adapter, "ui1-skin-favorited");
+    assert!(presets.row_data(0).unwrap().favorite);
+    key(&app, Key::Return);
+    assert_eq!(
+        *favorites.borrow(),
+        [("saved-one".into(), true), ("saved-one".into(), false)]
+    );
+    click(&app, 457., 247.);
+    assert!(app.global::<crate::Skins>().get_favorites_only());
+    app.window()
+        .dispatch_event(WindowEvent::KeyPressed { text: " ".into() });
+    app.window()
+        .dispatch_event(WindowEvent::KeyReleased { text: " ".into() });
+    assert!(!app.global::<crate::Skins>().get_favorites_only());
+}
+
+#[test]
+fn content_artwork_tracks_the_visible_window_on_long_lists() {
+    let _ = slint::platform::set_platform(Box::new(RenderPlatform));
+    let (app, adapter) = window((720., 520.), 1.);
+    let ranges: Rc<RefCell<Vec<(i32, i32)>>> = Rc::default();
+    let observed = ranges.clone();
+    app.global::<Instances>()
+        .on_content_artwork_window(move |first, end| {
+            observed.borrow_mut().push((first, end));
+        });
+    scenes()
+        .into_iter()
+        .find(|(name, _)| *name == "ui1-long-mods")
+        .unwrap()
+        .1(&app);
+    render(&app, &adapter, "ui1-artwork-top");
+    assert!(
+        ranges
+            .borrow()
+            .iter()
+            .any(|&(first, end)| first == 0 && (1..12).contains(&end))
+    );
+    scroll_down(&app, 5_000.);
+    render(&app, &adapter, "ui1-artwork-scrolled");
+    render(&app, &adapter, "ui1-artwork-scrolled-settled");
+    assert!(
+        ranges
+            .borrow()
+            .iter()
+            .any(|&(first, end)| first > 30 && end > first)
+    );
+}
+
+#[test]
+fn anchored_drawers_dismiss_by_escape_and_close_control() {
+    let _ = slint::platform::set_platform(Box::new(RenderPlatform));
+    let (app, adapter) = window((720., 520.), 1.);
+    scenes()
+        .into_iter()
+        .find(|(name, _)| *name == "ui1-accounts")
+        .unwrap()
+        .1(&app);
+    render(&app, &adapter, "ui1-account-dismissal");
+    key(&app, Key::Escape);
+    assert!(!app.global::<crate::Accounts>().get_dialog_open());
+    scenes()
+        .into_iter()
+        .find(|(name, _)| *name == "ui1-downloads")
+        .unwrap()
+        .1(&app);
+    render(&app, &adapter, "ui1-download-dismissal");
+    click(&app, 492., 55.);
+    assert!(!app.global::<crate::Activity>().get_open());
+}
+
+#[test]
+fn settings_sections_accept_keyboard_navigation_and_preserve_theme_accents() {
+    let _ = slint::platform::set_platform(Box::new(RenderPlatform));
+    let (app, adapter) = window((720., 520.), 1.);
+    app.global::<Nav>().set_page(Page::Settings);
+    render(&app, &adapter, "ui1-settings-navigation");
+    click(&app, 112., 95.);
+    assert_eq!(
+        app.global::<crate::Settings>().get_section(),
+        crate::SettingsSection::Account
+    );
+    key(&app, Key::Tab);
+    key(&app, Key::Return);
+    assert_eq!(
+        app.global::<crate::Settings>().get_section(),
+        crate::SettingsSection::Discord
+    );
+    for (theme, background) in [
+        ("aurora-dark", "simple"),
+        ("oled", "simple"),
+        ("aurora-dark", "borealis"),
+    ] {
+        for accent in aurora_launcher_lib::appearance::accent_presets() {
+            settings_toggle_scene(&app, theme, background, accent.id);
+            let palette = app.global::<crate::Theme>();
+            assert!(palette.get_control_track().red() > palette.get_border_strong().red());
+            assert_eq!(
+                palette.get_accent_strong(),
+                crate::theme::parse_color(&accent.palette.strong.as_hex()).unwrap()
+            );
+        }
+    }
+}
+
+#[test]
 fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     let _ = slint::platform::set_platform(Box::new(RenderPlatform));
     // Every scene at every size (100%) and every scale (minimum size).
@@ -1084,9 +1331,9 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
             .push((id.to_string(), name.to_string()))
     });
     render(&app, &adapter, "refinement-skin-before-rename");
-    click(&app, 951., 294.);
+    click(&app, 960., 334.);
     render(&app, &adapter, "refinement-skin-name-editor");
-    click(&app, 820., 294.);
+    click(&app, 820., 334.);
     key(&app, Key::End);
     app.window().dispatch_event(WindowEvent::KeyPressed {
         text: " New".into(),
@@ -1262,11 +1509,11 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     let log = choices.clone();
     app.global::<crate::InstanceSync>()
         .on_resolve_conflict(move |index, use_source| log.borrow_mut().push((index, use_source)));
-    click(&app, 180., 344.);
-    click(&app, 390., 344.);
+    click(&app, 304., 324.);
+    click(&app, 470., 324.);
     assert_eq!(*choices.borrow(), [(0, true), (0, false)]);
     // Tab transfers focus between native buttons and Return activates the next.
-    click(&app, 180., 344.);
+    click(&app, 304., 324.);
     key(&app, Key::Tab);
     key(&app, Key::Return);
     assert_eq!(choices.borrow().last(), Some(&(0, false)));
@@ -1280,6 +1527,6 @@ mod targets {
         (1070.0, 178.0),
         (1018.0, 224.0),
         (930.0, 280.0),
-        (948.0, 341.0),
+        (944.0, 354.0),
     ];
 }

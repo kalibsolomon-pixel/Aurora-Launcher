@@ -863,6 +863,38 @@ pub fn ensure_directory(
     validate_directory(managed, instance, kind)
 }
 
+pub(crate) fn resource_pack_icon(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    name: &str,
+) -> Option<crate::mod_icons::Bitmap> {
+    validate_file_name(name).ok()?;
+    let directory = validate_directory(managed, instance, ContentType::ResourcePack).ok()?;
+    let path = directory.join(name);
+    let metadata = std::fs::symlink_metadata(&path).ok()?;
+    if metadata.file_type().is_symlink()
+        || is_reparse_point(&metadata)
+        || path.canonicalize().ok()? != directory.canonicalize().ok()?.join(name)
+    {
+        return None;
+    }
+    if metadata.is_dir() {
+        let icon = path.join("pack.png");
+        let metadata = std::fs::symlink_metadata(&icon).ok()?;
+        if !metadata.is_file()
+            || is_reparse_point(&metadata)
+            || icon.canonicalize().ok()? != path.canonicalize().ok()?.join("pack.png")
+        {
+            return None;
+        }
+        crate::mod_icons::pack_directory_icon(&icon)
+    } else if metadata.is_file() && name.to_ascii_lowercase().ends_with(".zip") {
+        crate::mod_icons::pack_archive_icon(&path)
+    } else {
+        None
+    }
+}
+
 pub fn validate_file_name(name: &str) -> Result<(), ContentError> {
     let path = Path::new(name);
     let stem = name

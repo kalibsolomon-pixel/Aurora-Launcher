@@ -510,6 +510,8 @@ pub struct ModEntry {
 pub struct Provenance {
     pub provider: String,
     pub project_id: String,
+    #[serde(default)]
+    pub display_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1001,6 +1003,25 @@ pub struct ModIconResult {
     pub sha256: String,
     pub bitmap: Option<ModIconBitmap>,
 }
+pub async fn pack_icon(
+    host: Host,
+    instance: String,
+    resource_pack: bool,
+    file_name: String,
+    project: Option<String>,
+) -> ApiResult<Option<ModIconBitmap>> {
+    blocking(move || {
+        convert(Ok(app::get_installed_pack_icon(
+            host,
+            &instance,
+            resource_pack,
+            &file_name,
+            project.as_deref(),
+        )))
+    })
+    .await?
+}
+
 pub async fn mod_icons(
     host: Host,
     id: String,
@@ -1561,6 +1582,15 @@ pub async fn skin_thumbnail(host: Host, preset_id: String) -> ApiResult<Option<T
 pub async fn save_current_skin(host: Host, account_id: String) -> ApiResult<Value> {
     let request = request(json!({ "accountId": account_id }))?;
     convert(app::save_current_skin(host, request).await)
+}
+
+pub async fn set_skin_favorite(
+    host: Host,
+    preset_id: String,
+    favorite: bool,
+) -> ApiResult<Vec<SkinPreset>> {
+    let request = request(json!({"presetId": preset_id, "favorite": favorite}))?;
+    blocking(move || convert(app::set_skin_favorite(host, request))).await?
 }
 
 pub async fn rename_skin_preset(

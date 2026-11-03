@@ -4,7 +4,8 @@ import { ScrollView, AboutSlint } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
 import { Button, ButtonKind, Toggle, Dropdown, Group, SettingRow, PageTitle, FocusRing, KeyboardFocus, Label, TextField } from "../components.slint";
-import { Settings, Accounts, Swatch, AccentPicker } from "../state.slint";
+import { Settings, SettingsSection, Accounts, Swatch, AccentPicker, Nav, Page } from "../state.slint";
+import { Widgets } from "../widgets.slint";
 import { SyncSettings } from "../syncing.slint";
 
 /// The custom accent: one more swatch beside the presets. It shows the saved
@@ -64,143 +65,193 @@ component AccentSwatch inherits Rectangle {
     FocusRing { x: -4px; y: -4px; width: root.width + 8px; height: root.height + 8px; shown: focus.has-focus && focus.focus-visible; radius: 16px; }
 }
 
-export component SettingsPage inherits ScrollView {
-    VerticalLayout {
-        padding: Theme.space-6;
-        spacing: Theme.space-4;
-        alignment: start;
-        PageTitle { text: "Settings"; }
+struct SectionLink { id: SettingsSection, label: string }
 
-        Group {
-            title: "Appearance";
-            SettingRow {
-                label: "Theme";
-                detail: Settings.theme-index >= 0 && Settings.theme-index < Settings.theme-descriptions.length ? Settings.theme-descriptions[Settings.theme-index] : "";
-                Dropdown {
-                    width: 220px;
+export component SettingsPage inherits HorizontalLayout {
+    private property <[SectionLink]> sections: [
+        { id: appearance, label: "Appearance" },
+        { id: home-widgets, label: "Home & widgets" },
+        { id: account, label: "Account" },
+        { id: discord, label: "Discord" },
+        { id: updates, label: "Updates" },
+        { id: syncing, label: "Syncing" },
+        { id: launcher, label: "Launcher" },
+        { id: accessibility, label: "Accessibility" },
+        { id: about, label: "About" },
+    ];
+    ScrollView {
+        width: root.width < 760px ? 130px : 172px;
+        VerticalLayout {
+            padding: 12px;
+            spacing: 4px;
+            alignment: start;
+            accessible-role: list;
+            accessible-label: "Settings sections";
+            for section in root.sections: Button {
+                text: section.label;
+                align-start: true;
+                compact: root.width < 760px;
+                selected: Settings.section == section.id;
+                kind: ButtonKind.ghost;
+                clicked => { Settings.section = section.id; content.content-y = 0px; }
+            }
+        }
+    }
+    Rectangle { width: 1px; background: Theme.border; }
+    content := ScrollView {
+        horizontal-stretch: 1;
+        VerticalLayout {
+            padding: root.width < 760px ? 12px : Theme.space-6;
+            spacing: Theme.space-4;
+            alignment: start;
+            PageTitle { text: "Settings"; }
+
+            if Settings.section == SettingsSection.appearance: Group {
+                title: "Appearance";
+                SettingRow {
                     label: "Theme";
-                    model: Settings.theme-labels;
-                    current-index <=> Settings.theme-index;
-                    enabled: !Settings.appearance-busy;
-                    selected(index) => { Settings.theme-changed(index); }
-                }
-            }
-            SettingRow {
-                label: "Accent";
-                detail: "Used for selection, focus and primary actions.";
-                HorizontalLayout {
-                    spacing: 10px;
-                    accessible-role: list;
-                    accessible-label: "Accent color";
-                    for swatch in Settings.accents: AccentSwatch {
-                        swatch: swatch;
-                        chosen: swatch.id == Settings.accent-id;
-                        picked => { Settings.accent-changed(swatch.id); }
+                    detail: Settings.theme-index >= 0 && Settings.theme-index < Settings.theme-descriptions.length ? Settings.theme-descriptions[Settings.theme-index] : "";
+                    Dropdown {
+                        width: 220px;
+                        label: "Theme";
+                        model: Settings.theme-labels;
+                        current-index <=> Settings.theme-index;
+                        enabled: !Settings.appearance-busy;
+                        selected(index) => { Settings.theme-changed(index); }
                     }
-                    CustomAccentSwatch { chosen: Settings.accent-id == "custom"; }
                 }
-            }
-            SettingRow {
-                label: "Background";
-                detail: Settings.background-index >= 0 && Settings.background-index < Settings.background-descriptions.length ? Settings.background-descriptions[Settings.background-index] : "";
-                Dropdown {
-                    width: 220px;
+                SettingRow {
+                    label: "Accent";
+                    detail: "Used for selection, focus and primary actions.";
+                    HorizontalLayout {
+                        spacing: 10px;
+                        accessible-role: list;
+                        accessible-label: "Accent color";
+                        for swatch in Settings.accents: AccentSwatch {
+                            swatch: swatch;
+                            chosen: swatch.id == Settings.accent-id;
+                            picked => { Settings.accent-changed(swatch.id); }
+                        }
+                        CustomAccentSwatch { chosen: Settings.accent-id == "custom"; }
+                    }
+                }
+                SettingRow {
                     label: "Background";
-                    model: Settings.background-labels;
-                    current-index <=> Settings.background-index;
-                    enabled: !Settings.appearance-busy;
-                    selected(index) => { Settings.background-changed(index); }
+                    detail: Settings.background-index >= 0 && Settings.background-index < Settings.background-descriptions.length ? Settings.background-descriptions[Settings.background-index] : "";
+                    Dropdown {
+                        width: 220px;
+                        label: "Background";
+                        model: Settings.background-labels;
+                        current-index <=> Settings.background-index;
+                        enabled: !Settings.appearance-busy;
+                        selected(index) => { Settings.background-changed(index); }
+                    }
+                }
+
+                if Settings.appearance-error != "": Text { text: Settings.appearance-error; color: Theme.error; wrap: word-wrap; }
+            }
+
+            if Settings.section == SettingsSection.home-widgets: Group {
+                title: "Home & widgets";
+                SettingRow {
+                    label: "Widget layout";
+                    detail: "Choose, resize, and arrange the widgets on Home.";
+                    Button { text: "Customize Home"; clicked => { Nav.navigate(Page.home); Widgets.editing = true; } }
                 }
             }
-            SettingRow {
-                label: "Reduce motion";
+
+            if Settings.section == SettingsSection.account: Group {
+                title: "Account";
+                SettingRow {
+                    label: Accounts.has-account ? Accounts.name : "Not signed in";
+                    detail: Accounts.has-account ? Accounts.status : "Sign-in opens Microsoft in your browser. Aurora never sees your password.";
+                    Button { text: "Manage accounts"; icon: Icons.person; clicked => { Accounts.open-dialog(); } }
+                }
+            }
+
+            if Settings.section == SettingsSection.discord: Group {
+                title: "Discord";
+                description: Settings.discord-status;
+                SettingRow {
+                    label: "Rich Presence";
+                    detail: "Shows that you are playing through Aurora in your Discord status. Nothing is shared until this is on.";
+                    Toggle { label: "Discord Rich Presence"; checked <=> Settings.discord-enabled; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } }
+                }
+                if Settings.discord-enabled: VerticalLayout {
+                    spacing: Theme.space-1;
+                    SettingRow { label: "Instance name"; Toggle { label: "Share the instance name"; checked <=> Settings.discord-instance-name; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                    SettingRow { label: "Minecraft version"; Toggle { label: "Share the Minecraft version"; checked <=> Settings.discord-minecraft-version; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                    SettingRow { label: "Mod loader"; Toggle { label: "Share the mod loader"; checked <=> Settings.discord-platform; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                    SettingRow { label: "Aurora Client status"; Toggle { label: "Share whether Aurora Client is active"; checked <=> Settings.discord-aurora-active; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                    SettingRow { label: "Elapsed time"; Toggle { label: "Share elapsed play time"; checked <=> Settings.discord-elapsed-time; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                    SettingRow { label: "World name"; detail: "The singleplayer world you are in."; Toggle { label: "Share the singleplayer world name"; checked <=> Settings.discord-world; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                    SettingRow { label: "Server name"; detail: "The multiplayer server's name. A name that contains its address is withheld unless the address is allowed below."; Toggle { label: "Share the server name"; checked <=> Settings.discord-server; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                    if Settings.discord-server: SettingRow { label: "Server address"; Toggle { label: "Share the server address"; checked <=> Settings.discord-server-address; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
+                    if Settings.discord-configured: HorizontalLayout { alignment: end; Button { text: "Reconnect"; icon: Icons.refresh; compact: true; enabled: !Settings.discord-busy; clicked => { Settings.discord-connect(); } } }
+                }
+            }
+
+            if Settings.section == SettingsSection.updates: Group {
+                title: "Updates";
+                SettingRow {
+                    label: "Launcher";
+                    detail: Settings.launcher-update;
+                    if Settings.launcher-update-available: Button { text: "Review native update"; clicked => { Settings.review-launcher-update(); } }
+                }
+                SettingRow {
+                    label: "Aurora Client";
+                    detail: Settings.client-update;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        if Settings.client-update-available: Button { text: "Review update"; kind: ButtonKind.primary; clicked => { Settings.review-client-update(); } }
+                        Button { text: "Check now"; icon: Icons.update; loading: Settings.update-busy; clicked => { Settings.check-updates(); } }
+                    }
+                }
+            }
+
+            if Settings.section == SettingsSection.syncing: SyncSettings { }
+
+            if Settings.section == SettingsSection.launcher: Group {
+                title: "Desktop";
+                if Settings.shortcuts-supported: SettingRow {
+                    label: "Desktop shortcut";
+                    detail: Settings.desktop-state;
+                    Button {
+                        text: Settings.desktop-present ? "Remove" : "Create";
+                        enabled: !Settings.shortcuts-busy;
+                        clicked => { Settings.toggle-desktop-shortcut(); }
+                    }
+                }
+                if Settings.shortcuts-supported && !Settings.start-menu-present: SettingRow {
+                    label: "Start menu shortcut";
+                    detail: Settings.start-menu-state;
+                    Button { text: "Create"; enabled: !Settings.shortcuts-busy; clicked => { Settings.create-start-menu-shortcut(); } }
+                }
+                SettingRow {
+                    label: "Launcher folder";
+                    detail: Settings.data-root;
+                    Button { text: "Open"; icon: Icons.folder; clicked => { Settings.open-launcher-folder(); } }
+                }
+            }
+
+            if Settings.section == SettingsSection.accessibility: Group {
+                title: "Accessibility";
+                SettingRow {
+                    label: "Reduce motion";
                     detail: "Stops transitions and Borealis motion.";
-                Toggle { label: "Reduce motion"; checked <=> Settings.reduce-motion; toggled(value) => { Settings.reduce-motion-changed(value); } }
+                    Toggle { label: "Reduce motion"; checked <=> Settings.reduce-motion; toggled(value) => { Settings.reduce-motion-changed(value); } }
+                }
+                if Settings.appearance-error != "": Text { text: Settings.appearance-error; color: Theme.error; wrap: word-wrap; }
             }
-            if Settings.appearance-error != "": Text { text: Settings.appearance-error; color: Theme.error; wrap: word-wrap; }
-        }
 
-        Group {
-            title: "Account";
-            SettingRow {
-                label: Accounts.has-account ? Accounts.name : "Not signed in";
-                detail: Accounts.has-account ? Accounts.status : "Sign-in opens Microsoft in your browser. Aurora never sees your password.";
-                Button { text: "Manage accounts"; icon: Icons.person; clicked => { Accounts.open-dialog(); } }
-            }
-        }
-
-        Group {
-            title: "Discord";
-            description: Settings.discord-status;
-            SettingRow {
-                label: "Rich Presence";
-                detail: "Shows that you are playing through Aurora in your Discord status. Nothing is shared until this is on.";
-                Toggle { label: "Discord Rich Presence"; checked <=> Settings.discord-enabled; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } }
-            }
-            if Settings.discord-enabled: VerticalLayout {
-                spacing: Theme.space-1;
-                SettingRow { label: "Instance name"; Toggle { label: "Share the instance name"; checked <=> Settings.discord-instance-name; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
-                SettingRow { label: "Minecraft version"; Toggle { label: "Share the Minecraft version"; checked <=> Settings.discord-minecraft-version; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
-                SettingRow { label: "Mod loader"; Toggle { label: "Share the mod loader"; checked <=> Settings.discord-platform; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
-                SettingRow { label: "Aurora Client status"; Toggle { label: "Share whether Aurora Client is active"; checked <=> Settings.discord-aurora-active; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
-                SettingRow { label: "Elapsed time"; Toggle { label: "Share elapsed play time"; checked <=> Settings.discord-elapsed-time; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
-                SettingRow { label: "World name"; detail: "The singleplayer world you are in."; Toggle { label: "Share the singleplayer world name"; checked <=> Settings.discord-world; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
-                SettingRow { label: "Server name"; detail: "The multiplayer server's name. A name that contains its address is withheld unless the address is allowed below."; Toggle { label: "Share the server name"; checked <=> Settings.discord-server; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
-                if Settings.discord-server: SettingRow { label: "Server address"; Toggle { label: "Share the server address"; checked <=> Settings.discord-server-address; enabled: !Settings.discord-busy; toggled => { Settings.discord-changed(); } } }
-                if Settings.discord-configured: HorizontalLayout { alignment: end; Button { text: "Reconnect"; icon: Icons.refresh; compact: true; enabled: !Settings.discord-busy; clicked => { Settings.discord-connect(); } } }
-            }
-        }
-
-        Group {
-            title: "Updates";
-            SettingRow {
-                label: "Launcher";
-                detail: Settings.launcher-update;
-                if Settings.launcher-update-available: Button { text: "Review native update"; clicked => { Settings.review-launcher-update(); } }
-            }
-            SettingRow {
-                label: "Aurora Client";
-                detail: Settings.client-update;
+            if Settings.section == SettingsSection.about: Group {
+                title: "About";
+                SettingRow { label: "Aurora Launcher " + Settings.version; detail: "Native preview · " + Settings.renderer; }
+                Label { text: "Aurora Launcher is open source under the MIT license. The native interface is built with Slint under the Slint Royalty-free License 2.0."; wrap: word-wrap; }
                 HorizontalLayout {
-                    spacing: 8px;
-                    if Settings.client-update-available: Button { text: "Review update"; kind: ButtonKind.primary; clicked => { Settings.review-client-update(); } }
-                    Button { text: "Check now"; icon: Icons.update; loading: Settings.update-busy; clicked => { Settings.check-updates(); } }
+                    alignment: start;
+                    AboutSlint { max-height: 140px; }
                 }
-            }
-        }
-
-        SyncSettings { }
-
-        Group {
-            title: "Desktop";
-            if Settings.shortcuts-supported: SettingRow {
-                label: "Desktop shortcut";
-                detail: Settings.desktop-state;
-                Button {
-                    text: Settings.desktop-present ? "Remove" : "Create";
-                    enabled: !Settings.shortcuts-busy;
-                    clicked => { Settings.toggle-desktop-shortcut(); }
-                }
-            }
-            if Settings.shortcuts-supported && !Settings.start-menu-present: SettingRow {
-                label: "Start menu shortcut";
-                detail: Settings.start-menu-state;
-                Button { text: "Create"; enabled: !Settings.shortcuts-busy; clicked => { Settings.create-start-menu-shortcut(); } }
-            }
-            SettingRow {
-                label: "Launcher folder";
-                detail: Settings.data-root;
-                Button { text: "Open"; icon: Icons.folder; clicked => { Settings.open-launcher-folder(); } }
-            }
-        }
-
-        Group {
-            title: "About";
-            SettingRow { label: "Aurora Launcher " + Settings.version; detail: "Native preview · " + Settings.renderer; }
-            Label { text: "Aurora Launcher is open source under the MIT license. The native interface is built with Slint under the Slint Royalty-free License 2.0."; wrap: word-wrap; }
-            HorizontalLayout {
-                alignment: start;
-                AboutSlint { max-height: 140px; }
             }
         }
     }
