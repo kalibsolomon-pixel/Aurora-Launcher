@@ -432,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "aurora-launcher"
-version = "2.0.1"
+version = "2.1.0"
 dependencies = [
  "base64ct",
  "flate2",
@@ -464,7 +464,7 @@ dependencies = [
 
 [[package]]
 name = "aurora-native"
-version = "2.0.1"
+version = "2.1.0"
 dependencies = [
  "aurora-launcher",
  "base64 0.22.1",

@@ -10,7 +10,7 @@ on:
         description: Native numeric version
         type: string
         required: true
-        default: '2.0.1'
+        default: '2.1.0'
       minimum_version:
         description: Oldest accepted installed native version
         type: string
