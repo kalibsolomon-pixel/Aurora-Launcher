@@ -620,6 +620,43 @@ fn responsive_widget(app: &AppWindow, id: &str, columns: i32, rows: i32) {
     scroll_down(app, 280.);
 }
 
+fn saved_destination_scene(app: &AppWindow, worlds: bool) {
+    let id = if worlds {
+        "recent-worlds"
+    } else {
+        "recent-servers"
+    };
+    responsive_widget(app, id, 3, 2);
+    let widgets = app.global::<crate::Widgets>();
+    let mut item = widgets.get_items().row_data(0).unwrap();
+    item.icon =
+        crate::symbols::path_or_fallback(Some(if worlds { "landscape" } else { "dns" })).into();
+    item.lines = ui_model(
+        item.lines
+            .iter()
+            .enumerate()
+            .map(|(index, mut row)| {
+                row.value = if worlds {
+                    format!("Workshop {index} · {} days ago", index + 1)
+                } else {
+                    format!("server{index}.invalid:25565")
+                }
+                .into();
+                row.detail = if worlds {
+                    "Vulkan 11 · Survival · 1.21.11"
+                } else {
+                    "Vulkan 11"
+                }
+                .into();
+                row
+            })
+            .collect(),
+    );
+    widgets.set_items(ui_model(vec![item]));
+    widgets.set_saved_servers(!worlds);
+    widgets.set_saved_worlds(worlds);
+}
+
 fn scenes() -> Vec<(&'static str, Scene)> {
     vec![
         ("responsive-media-small", |app| {
@@ -653,12 +690,10 @@ fn scenes() -> Vec<(&'static str, Scene)> {
             responsive_widget(app, "recent-worlds", 3, 2)
         }),
         ("ui2-saved-servers", |app| {
-            responsive_widget(app, "recent-servers", 3, 2);
-            app.global::<crate::Widgets>().set_saved_servers(true);
+            saved_destination_scene(app, false);
         }),
         ("ui2-saved-worlds", |app| {
-            responsive_widget(app, "recent-worlds", 3, 2);
-            app.global::<crate::Widgets>().set_saved_worlds(true);
+            saved_destination_scene(app, true);
         }),
         ("ui2-playtime-30d", |app| {
             responsive_widget(app, "playtime", 3, 1);
@@ -667,8 +702,27 @@ fn scenes() -> Vec<(&'static str, Scene)> {
         ("ui2-playtime-all", |app| {
             responsive_widget(app, "playtime", 3, 1);
             let widgets = app.global::<crate::Widgets>();
-            widgets.set_historical(widgets.get_week());
-            widgets.set_historical_peak(widgets.get_week_peak());
+            widgets.set_historical(ui_model(
+                [4, 0, 2, 1, 6, 3, 8]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, hours)| {
+                        let ago = (6 - index) * 14;
+                        let label = if ago == 0 {
+                            "Last 14 days".into()
+                        } else {
+                            format!("{}–{} days ago", ago + 13, ago)
+                        };
+                        crate::PlaytimePoint {
+                            label: label.clone().into(),
+                            detail: format!("{label} (UTC), {hours} h").into(),
+                            value: format!("{hours} h").into(),
+                            fraction: hours as f32 / 8.,
+                        }
+                    })
+                    .collect(),
+            ));
+            widgets.set_historical_peak("8 h".into());
             widgets.set_playtime_period(2);
         }),
         ("dashboard-compact", |app| dashboard(app, false, false)),
@@ -1219,6 +1273,33 @@ fn settings_sections_accept_keyboard_navigation_and_preserve_theme_accents() {
             );
         }
     }
+}
+
+#[test]
+fn ui2_saved_tab_and_quick_play_route_the_saved_row_identity() {
+    let _ = slint::platform::set_platform(Box::new(RenderPlatform));
+    let (app, adapter) = window((1120., 760.), 1.);
+    saved_destination_scene(&app, false);
+    let widgets = app.global::<crate::Widgets>();
+    widgets.set_saved_servers(false);
+    let views = Rc::new(RefCell::new(Vec::new()));
+    let view_events = views.clone();
+    widgets.on_saved_view(move |worlds, saved| view_events.borrow_mut().push((worlds, saved)));
+    let plays = Rc::new(RefCell::new(Vec::new()));
+    let play_events = plays.clone();
+    widgets.on_quick_play(move |mode, id| {
+        play_events
+            .borrow_mut()
+            .push((mode.to_string(), id.to_string()));
+    });
+    let _ = render(&app, &adapter, "ui2-saved-bindings");
+    click(&app, 422., 372.);
+    assert_eq!(*views.borrow(), [(false, true)]);
+    click(&app, 560., 416.);
+    assert_eq!(
+        *plays.borrow(),
+        [("saved-server".into(), "fixture-0".into())]
+    );
 }
 
 /// One scenario per process so working set and CPU can be sampled externally.
