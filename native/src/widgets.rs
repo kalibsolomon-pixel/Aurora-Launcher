@@ -47,6 +47,7 @@ pub fn bind(window: &crate::AppWindow) {
     let widgets = window.global::<Widgets>();
     widgets.on_add(|id| edit(|layout| set_enabled(layout, id.as_str(), true)));
     widgets.on_remove(|id| edit(|layout| set_enabled(layout, id.as_str(), false)));
+    widgets.on_reset_layout(|| edit(reset_layout));
     widgets.on_move(|id, delta| edit(|layout| move_widget(layout, id.as_str(), delta)));
     widgets.on_place(|id, index| edit(|layout| place_widget(layout, id.as_str(), index)));
     widgets.on_resize(|id, columns, rows| {
@@ -148,16 +149,32 @@ fn refresh_servers() {
     });
 }
 
+fn default_layout() -> HomeLayout {
+    serde_json::to_value(aurora_launcher_lib::home_widgets::HomeLayout::default())
+        .ok()
+        .and_then(|value| serde_json::from_value(value).ok())
+        .unwrap_or(HomeLayout {
+            widgets: Vec::new(),
+        })
+}
+
+fn reset_layout(layout: &mut HomeLayout) {
+    let mut reset = effective(default_layout());
+    reset.widgets.retain(|widget| is_native(&widget.id));
+    reset.widgets.extend(
+        layout
+            .widgets
+            .iter()
+            .filter(|widget| !is_native(&widget.id))
+            .cloned(),
+    );
+    *layout = reset;
+}
+
 /// The core's untouched default means "never customized": this host shows
 /// its own default (Playtime and Servers) instead.
 fn effective(saved: HomeLayout) -> HomeLayout {
-    let core_default: HomeLayout =
-        serde_json::to_value(aurora_launcher_lib::home_widgets::HomeLayout::default())
-            .ok()
-            .and_then(|value| serde_json::from_value(value).ok())
-            .unwrap_or(HomeLayout {
-                widgets: Vec::new(),
-            });
+    let core_default = default_layout();
     let mut layout = saved.clone();
     if saved == core_default {
         for widget in &mut layout.widgets {
@@ -897,6 +914,23 @@ mod tests {
                 .id,
             "playtime"
         );
+    }
+
+    #[test]
+    fn reset_restores_native_defaults_and_keeps_unknown_widget_settings() {
+        let unknown = placement("future-widget", true);
+        let mut layout = HomeLayout {
+            widgets: vec![placement("media", true), unknown.clone()],
+        };
+        reset_layout(&mut layout);
+        assert_eq!(layout.widgets.last(), Some(&unknown));
+        let active: Vec<_> = layout
+            .widgets
+            .iter()
+            .filter(|widget| widget.enabled && is_native(&widget.id))
+            .map(|widget| widget.id.as_str())
+            .collect();
+        assert_eq!(active, ["playtime", "recent-servers"]);
     }
 
     #[test]

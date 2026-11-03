@@ -46,6 +46,7 @@ export global Widgets {
     callback refresh-servers();
     in property <bool> refreshing-servers;
     in-out property <bool> favorites: false;
+    callback reset-layout();
     callback add(string);
     callback remove(string);
     callback move(string, int);
@@ -118,7 +119,8 @@ export component WidgetLayoutEditor inherits Rectangle {
     layout := HorizontalLayout {
         padding: 14px; spacing: 12px;
         Text { horizontal-stretch: 1; text: "Drag headers to move / Drag corners to resize"; wrap: word-wrap; font-size: Theme.text-metadata; color: Theme.text-secondary; vertical-alignment: center; }
-        if Widgets.available.length > 0: Dropdown { min-width: 160px; model: Widgets.available-names; label: "Add a widget"; current-index: -1; controlled: true; placeholder: "Add widget"; selected(index) => { Widgets.add(Widgets.available[index].id); } }
+        Button { text: "Reset layout"; compact: true; kind: ButtonKind.ghost; clicked => { Widgets.reset-layout(); } }
+        if Widgets.available.length > 0: Dropdown { min-width: 122px; model: Widgets.available-names; label: "Add a widget"; current-index: -1; controlled: true; placeholder: "Add widget"; selected(index) => { Widgets.add(Widgets.available[index].id); } }
     }
 }
 
@@ -264,7 +266,7 @@ component ListCard inherits Rectangle {
             spacing: 4px;
             Button { text: "Recent"; compact: true; kind: ButtonKind.ghost; selected: !Widgets.favorites; clicked => { Widgets.favorites = false; Widgets.server-view(false); } }
             Button { text: "Favorites"; compact: true; kind: ButtonKind.ghost; selected: Widgets.favorites; clicked => { Widgets.favorites = true; Widgets.server-view(true); } }
-            if root.item.lines.length > 0: IconButton { icon: Icons.refresh; label: "Refresh server status"; size: 30px; enabled: !Widgets.refreshing-servers; clicked => { Widgets.refresh-servers(); } }
+            if root.item.lines.length > 0: Button { icon: Icons.refresh; compact: true; kind: ButtonKind.ghost; accessible-description-text: "Refresh server status"; enabled: !Widgets.refreshing-servers; clicked => { Widgets.refresh-servers(); } }
         }
         if root.item.lines.length == 0 && !root.item.loading: Text {
             vertical-stretch: 1; text: root.item.empty; color: Theme.text-muted; font-size: Theme.text-metadata;
@@ -277,7 +279,7 @@ component ListCard inherits Rectangle {
                 alignment: start;
                 for line[index] in root.item.lines: Rectangle {
                     height: root.destinations ? 48px : 36px;
-                    if index > 0: Rectangle { width: parent.width; height: 1px; background: Theme.border; }
+                    if index > 0: Rectangle { x: 0px; y: 0px; width: parent.width; height: 1px; background: Theme.border; }
                     HorizontalLayout {
                         spacing: 4px;
                         if line.artwork.width > 0 && root.width >= 240px: Image {
