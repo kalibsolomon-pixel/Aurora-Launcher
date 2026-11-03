@@ -254,7 +254,7 @@ struct ServerHistory {
     duration_ms: u64,
     favorite: bool,
 }
-fn target_id(mode: Mode, instance: &InstanceId, target: &str) -> String {
+pub(crate) fn target_id(mode: Mode, instance: &InstanceId, target: &str) -> String {
     use sha2::{Digest, Sha256};
     let mut digest = Sha256::new();
     digest.update(if mode == Mode::Singleplayer {
@@ -591,6 +591,14 @@ impl Store {
         Ok(None)
     }
     pub fn open(path: PathBuf) -> Result<Self, ()> {
+        Self::open_inner(path, None)
+    }
+
+    pub fn open_managed(paths: &crate::paths::ManagedPaths) -> Result<Self, ()> {
+        Self::open_inner(paths.gameplay_history_file(), Some(paths))
+    }
+
+    fn open_inner(path: PathBuf, paths: Option<&crate::paths::ManagedPaths>) -> Result<Self, ()> {
         let mut map = memory().lock().map_err(|_| ())?;
         if !map.contains_key(&path) {
             let mut doc = read(&path)?;
@@ -605,9 +613,27 @@ impl Store {
                     session.outcome = Some(Outcome::Interrupted);
                     changed = true;
                 }
+                // The UUID was assigned to the child and persisted only after
+                // spawn. Reconcile evidence without reattaching or claiming time.
+                if session.outcome == Some(Outcome::Interrupted)
+                    && let Some(paths) = paths
+                    && let Ok(id) = uuid::Uuid::parse_str(&session.id)
+                    && let Some(log) = crate::launch::activity_log::SessionLog::with_id(
+                        paths.data_root(),
+                        paths.instance_paths(&session.instance).logs(),
+                        id,
+                    )
+                    && let Some(visit) = log.snapshot()
+                    && (session.started_at..=now()).contains(&visit.written_at)
+                {
+                    changed |= add_observed_visit(session, visit);
+                }
             }
             if changed {
+                doc.retain()?;
                 write(&path, &doc)?;
+                // Leave the artifact available for a later restart if the
+                // orphaned child overwrites it again.
             }
             map.insert(path.clone(), doc);
         }
@@ -624,7 +650,15 @@ impl Store {
         Ok(())
     }
     pub fn start(&self, instance: InstanceId) -> Result<Recorder, ()> {
-        let id = uuid::Uuid::new_v4().to_string();
+        self.start_with_id(instance, uuid::Uuid::new_v4())
+    }
+
+    pub(crate) fn start_with_id(
+        &self,
+        instance: InstanceId,
+        id: uuid::Uuid,
+    ) -> Result<Recorder, ()> {
+        let id = id.to_string();
         let started_at = now();
         self.edit(|doc| {
             doc.sessions.push(SessionRecord {
@@ -658,17 +692,7 @@ impl Store {
     pub fn playtime(&self, instance: Option<&InstanceId>, at: u64) -> Result<Playtime, ()> {
         let map = memory().lock().map_err(|_| ())?;
         let doc = map.get(&self.path).ok_or(())?;
-        let mut buckets: BTreeMap<u64, u64> = BTreeMap::new();
-        for day in &doc.archive {
-            if instance.is_none_or(|id| *id == day.instance) {
-                *buckets.entry(day.day).or_default() += day.duration_ms;
-            }
-        }
-        for session in &doc.sessions {
-            if instance.is_none_or(|id| *id == session.instance) {
-                add_daily(&mut buckets, session.started_at, session.duration_ms);
-            }
-        }
+        let buckets = playtime_days(doc, instance);
         let day = at / 86400;
         let sum = |days: u64| {
             buckets
@@ -694,17 +718,7 @@ impl Store {
         }
         let map = memory().lock().map_err(|_| ())?;
         let doc = map.get(&self.path).ok_or(())?;
-        let mut buckets = BTreeMap::new();
-        for day in &doc.archive {
-            if instance.is_none_or(|id| *id == day.instance) {
-                *buckets.entry(day.day).or_insert(0u64) += day.duration_ms;
-            }
-        }
-        for session in &doc.sessions {
-            if instance.is_none_or(|id| *id == session.instance) {
-                add_daily(&mut buckets, session.started_at, session.duration_ms);
-            }
-        }
+        let buckets = playtime_days(doc, instance);
         let today = at / 86400;
         Ok((0..days)
             .rev()
@@ -717,6 +731,69 @@ impl Store {
             })
             .collect())
     }
+    /// Aggregate retained UTC days into at most twelve equal-width intervals.
+    pub fn historical_playtime(
+        &self,
+        instance: Option<&InstanceId>,
+        at: u64,
+    ) -> Result<Vec<PlaytimeInterval>, ()> {
+        let map = memory().lock().map_err(|_| ())?;
+        let doc = map.get(&self.path).ok_or(())?;
+        let mut days = playtime_days(doc, instance);
+        let today = at / 86_400;
+        days.retain(|day, _| *day <= today);
+        let Some((&first, _)) = days.first_key_value() else {
+            return Ok(Vec::new());
+        };
+        let span = today - first + 1;
+        let width = if span <= 12 { 1 } else { span.div_ceil(84) * 7 };
+        let count = span.div_ceil(width);
+        let mut intervals = (0..count)
+            .rev()
+            .map(|back| {
+                let end_day = today - back * width;
+                PlaytimeInterval {
+                    start_day: end_day.saturating_sub(width - 1),
+                    end_day,
+                    duration_ms: 0,
+                }
+            })
+            .collect::<Vec<_>>();
+        for (day, duration) in days {
+            let index = count - 1 - (today - day) / width;
+            intervals[index as usize].duration_ms += duration;
+        }
+        Ok(intervals)
+    }
+
+    pub(crate) fn server_rows(
+        &self,
+        instance: Option<&InstanceId>,
+        limit: usize,
+        include_unvisited_favorites: bool,
+    ) -> Result<Vec<RecentTarget>, ()> {
+        let map = memory().lock().map_err(|_| ())?;
+        let doc = map.get(&self.path).ok_or(())?;
+        Ok(doc
+            .servers
+            .iter()
+            .filter(|entry| instance.is_none_or(|id| *id == entry.instance))
+            .filter(|entry| {
+                entry.last_played_at != 0 || (include_unvisited_favorites && entry.favorite)
+            })
+            .take(limit.min(MAX_RECENT_SERVERS + MAX_FAVORITE_SERVERS))
+            .map(|entry| RecentTarget {
+                id: target_id(Mode::Multiplayer, &entry.instance, entry.server.as_str()),
+                instance_id: entry.instance.to_string(),
+                display_name: entry.display.clone(),
+                last_played_at: entry.last_played_at,
+                duration_ms: entry.duration_ms,
+                available: true,
+                favorite: entry.favorite,
+            })
+            .collect())
+    }
+
     pub fn recent(
         &self,
         mode: Mode,
@@ -727,25 +804,11 @@ impl Store {
         if !matches!(mode, Mode::Singleplayer | Mode::Multiplayer) {
             return Err(());
         }
+        if mode == Mode::Multiplayer {
+            return self.server_rows(instance, limit, false);
+        }
         let map = memory().lock().map_err(|_| ())?;
         let doc = map.get(&self.path).ok_or(())?;
-        if mode == Mode::Multiplayer {
-            return Ok(doc
-                .servers
-                .iter()
-                .filter(|s| instance.is_none_or(|id| *id == s.instance))
-                .take(limit.min(MAX_RECENT_SERVERS + MAX_FAVORITE_SERVERS))
-                .map(|s| RecentTarget {
-                    id: target_id(mode, &s.instance, s.server.as_str()),
-                    instance_id: s.instance.to_string(),
-                    display_name: s.display.clone(),
-                    last_played_at: s.last_played_at,
-                    duration_ms: s.duration_ms,
-                    available: true,
-                    favorite: s.favorite,
-                })
-                .collect());
-        }
         let mut entries = HashMap::<String, RecentTarget>::new();
         for session in &doc.sessions {
             if !instance.is_none_or(|id| *id == session.instance) {
@@ -806,6 +869,47 @@ impl Store {
         result.truncate(limit.min(20));
         Ok(result)
     }
+    pub(crate) fn set_saved_server_favorite(
+        &self,
+        instance: InstanceId,
+        server: ServerTarget,
+        display: String,
+        favorite: bool,
+    ) -> Result<(), ()> {
+        let mut map = memory().lock().map_err(|_| ())?;
+        let mut next = map.get(&self.path).ok_or(())?.clone();
+        let index = next
+            .servers
+            .iter()
+            .position(|item| item.instance == instance && item.server == server);
+        if favorite
+            && !index.is_some_and(|i| next.servers[i].favorite)
+            && next.servers.iter().filter(|item| item.favorite).count() >= MAX_FAVORITE_SERVERS
+        {
+            return Err(());
+        }
+        if let Some(index) = index {
+            if !favorite && next.servers[index].last_played_at == 0 {
+                next.servers.remove(index);
+            } else {
+                next.servers[index].favorite = favorite;
+            }
+        } else if favorite {
+            next.servers.push(ServerHistory {
+                instance,
+                server,
+                display,
+                last_played_at: 0,
+                duration_ms: 0,
+                favorite,
+            });
+        }
+        next.retain()?;
+        write(&self.path, &next)?;
+        map.insert(self.path.clone(), next);
+        Ok(())
+    }
+
     pub fn set_server_favorite(&self, id: &str, favorite: bool) -> Result<(), ()> {
         // The existing process-wide history mutex serializes with bridge writes.
         let mut map = memory().lock().map_err(|_| ())?;
@@ -821,13 +925,40 @@ impl Store {
         {
             return Err(());
         }
-        next.servers[entry].favorite = favorite;
+        if !favorite && next.servers[entry].last_played_at == 0 {
+            next.servers.remove(entry);
+        } else {
+            next.servers[entry].favorite = favorite;
+        }
         next.retain()?;
         write(&self.path, &next)?;
         map.insert(self.path.clone(), next);
         Ok(())
     }
 }
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaytimeInterval {
+    pub start_day: u64,
+    pub end_day: u64,
+    pub duration_ms: u64,
+}
+
+fn playtime_days(doc: &Document, instance: Option<&InstanceId>) -> BTreeMap<u64, u64> {
+    let mut buckets = BTreeMap::new();
+    for day in &doc.archive {
+        if day.duration_ms > 0 && instance.is_none_or(|id| *id == day.instance) {
+            *buckets.entry(day.day).or_default() += day.duration_ms;
+        }
+    }
+    for session in &doc.sessions {
+        if instance.is_none_or(|id| *id == session.instance) {
+            add_daily(&mut buckets, session.started_at, session.duration_ms);
+        }
+    }
+    buckets
+}
+
 fn add_daily(buckets: &mut BTreeMap<u64, u64>, start: u64, duration_ms: u64) {
     let mut time_ms = start.saturating_mul(1000);
     let mut left = duration_ms;
@@ -883,7 +1014,55 @@ pub struct Recorder {
         )>,
     >,
 }
+fn add_observed_visit(
+    session: &mut SessionRecord,
+    visit: crate::launch::activity_log::GameVisit,
+) -> bool {
+    let stamp = visit.written_at;
+    // The optional bridge can already have recorded this same visit,
+    // including the transition to Unknown when its receiver stops.
+    if session.visits.iter().any(|item| {
+        item.mode == visit.mode
+            && item.world == visit.world
+            && item.server == visit.server
+            && item.started_at <= stamp
+            && item.ended_at >= stamp
+    }) {
+        return false;
+    }
+    if session.visits.len() == MAX_VISITS {
+        session.visits.remove(0);
+    }
+    session.visits.push(Visit {
+        mode: visit.mode,
+        started_at: stamp,
+        ended_at: stamp,
+        duration_ms: 0,
+        world: visit.world,
+        server: visit.server,
+        display: visit.display,
+    });
+    session.visits.sort_by_key(|item| item.started_at);
+    true
+}
+
 impl Recorder {
+    pub(crate) fn record_game_visit(
+        &self,
+        visit: crate::launch::activity_log::GameVisit,
+    ) -> Result<(), ()> {
+        let stamp = visit.written_at;
+        if stamp < self.started_at || stamp > now() {
+            return Ok(());
+        }
+        self.store.edit(|doc| {
+            let Some(session) = doc.sessions.iter_mut().find(|s| s.id == self.id) else {
+                return;
+            };
+            add_observed_visit(session, visit);
+        })
+    }
+
     pub fn observe(
         &self,
         mode: Mode,
@@ -961,6 +1140,71 @@ impl Recorder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn historical_chart_preserves_utc_midnight_splits_and_archive_totals() {
+        let path =
+            std::env::temp_dir().join(format!("aurora-history-{}.json", uuid::Uuid::new_v4()));
+        let store = Store::open(path.clone()).unwrap();
+        let today = now() / 86_400;
+        let mut session = server_session(0, "fixture.invalid:25565", id());
+        session.started_at = today * 86_400 - 30;
+        session.ended_at = Some(session.started_at + 90);
+        session.duration_ms = 90_000;
+        session.visits.clear();
+        store
+            .edit(|doc| {
+                doc.sessions.push(session);
+                doc.archive.push(DayTotal {
+                    day: today - 120,
+                    instance: id(),
+                    duration_ms: 120_000,
+                });
+            })
+            .unwrap();
+        let at = today * 86_400;
+        let day = store.daily_playtime(Some(&id()), at, 2).unwrap();
+        assert_eq!((day[0].duration_ms, day[1].duration_ms), (30_000, 60_000));
+        let chart = store.historical_playtime(Some(&id()), at).unwrap();
+        assert!(chart.len() <= 12);
+        assert_eq!(
+            chart.iter().map(|bar| bar.duration_ms).sum::<u64>(),
+            210_000
+        );
+        assert_eq!(chart.last().unwrap().end_day, today);
+        assert!(chart.iter().any(|bar| bar.duration_ms == 0));
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn saved_favorite_has_no_played_timestamp_or_duration() {
+        let path =
+            std::env::temp_dir().join(format!("aurora-favorite-{}.json", uuid::Uuid::new_v4()));
+        let store = Store::open(path.clone()).unwrap();
+        let target = ServerTarget::parse("saved.invalid".into()).unwrap();
+        store
+            .set_saved_server_favorite(id(), target, "Saved server".into(), true)
+            .unwrap();
+        assert!(
+            store
+                .recent(Mode::Multiplayer, Some(&id()), 10)
+                .unwrap()
+                .is_empty()
+        );
+        let rows = store.server_rows(Some(&id()), 10, true).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].favorite);
+        assert_eq!((rows[0].last_played_at, rows[0].duration_ms), (0, 0));
+        assert!(store.sessions().unwrap().is_empty());
+        store.set_server_favorite(&rows[0].id, false).unwrap();
+        assert!(
+            store
+                .recent(Mode::Multiplayer, Some(&id()), 10)
+                .unwrap()
+                .is_empty()
+        );
+        fs::remove_file(path).unwrap();
+    }
+
     fn server_session(index: u64, address: &str, instance: InstanceId) -> SessionRecord {
         SessionRecord {
             id: uuid::Uuid::new_v4().to_string(),

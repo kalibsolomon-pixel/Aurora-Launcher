@@ -13,6 +13,12 @@ mod cosmetic_image;
 mod desktop_acceptance;
 pub mod local_content;
 pub mod local_pack;
+// Bounded read-only NBT walking for saved-game discovery (servers.dat and
+// level.dat). Deliberately separate from instance_sync's span-preserving
+// merge reader, which keeps its own write-back semantics.
+pub(crate) mod nbt;
+pub mod saved_servers;
+pub mod saved_worlds;
 
 pub use cosmetic_image::run_artwork_decoder_if_requested;
 pub mod cosmetics;

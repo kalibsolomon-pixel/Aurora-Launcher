@@ -34,6 +34,13 @@ struct State {
     columns: i32,
     saving: bool,
     daily: Vec<api::DailyPlaytime>,
+    historical: Vec<api::PlaytimeInterval>,
+    server_favorites: bool,
+    saved_servers: bool,
+    saved_worlds: bool,
+    saved_errors: std::collections::HashMap<&'static str, String>,
+    refreshing_servers: bool,
+    server_status: std::collections::HashMap<String, (String, slint::Image)>,
 }
 
 thread_local! {
@@ -44,6 +51,7 @@ pub fn bind(window: &crate::AppWindow) {
     let widgets = window.global::<Widgets>();
     widgets.on_add(|id| edit(|layout| set_enabled(layout, id.as_str(), true)));
     widgets.on_remove(|id| edit(|layout| set_enabled(layout, id.as_str(), false)));
+    widgets.on_reset_layout(|| edit(reset_layout));
     widgets.on_move(|id, delta| edit(|layout| move_widget(layout, id.as_str(), delta)));
     widgets.on_place(|id, index| edit(|layout| place_widget(layout, id.as_str(), index)));
     widgets.on_resize(|id, columns, rows| {
@@ -69,19 +77,154 @@ pub fn bind(window: &crate::AppWindow) {
         STATE.with(|s| s.borrow_mut().columns = columns);
         edit(|layout| arrange(layout, id.as_str(), column, row, width, height, columns));
     });
+    widgets.on_quick_play(|mode, id| crate::home::quick_play(mode.into(), id.into()));
+    widgets.on_server_view(|favorites| {
+        STATE.with(|s| {
+            let mut s = s.borrow_mut();
+            s.server_favorites = favorites;
+            s.saved_servers = false;
+            s.saved_errors.remove("saved-servers");
+        });
+        render();
+    });
+    widgets.on_saved_view(|worlds, saved| {
+        STATE.with(|s| {
+            let mut s = s.borrow_mut();
+            if worlds {
+                s.saved_worlds = saved;
+            } else {
+                s.saved_servers = saved;
+                s.server_favorites = false;
+            }
+        });
+        refresh();
+    });
+    widgets.on_refresh_servers(refresh_servers);
+    widgets.on_favorite_server(|id, favorite| {
+        ui::spawn_api(
+            api::favorite_server(ui::host(), id.into(), favorite),
+            |result| match result {
+                Ok(()) => refresh(),
+                Err(error) => ui::error_toast(&error),
+            },
+        );
+    });
     crate::media::bind(window);
+}
+
+fn refresh_servers() {
+    use base64::Engine;
+    let (ids, saved_instance) = STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        if state.refreshing_servers {
+            return (Vec::new(), None);
+        }
+        let ids: Vec<_> = state
+            .data
+            .get(if state.saved_servers {
+                "saved-servers"
+            } else {
+                "recent-servers"
+            })
+            .into_iter()
+            .flatten()
+            .filter(|row| {
+                state.saved_servers
+                    || (if state.server_favorites {
+                        row.favorite
+                    } else {
+                        !row.unvisited_favorite
+                    })
+            })
+            .take(20)
+            .map(|row| row.target_id.to_string())
+            .collect();
+        state.refreshing_servers = !ids.is_empty();
+        (
+            ids,
+            if state.saved_servers {
+                state.instance.clone()
+            } else {
+                None
+            },
+        )
+    });
+    if ids.is_empty() {
+        return;
+    }
+    render();
+    let host = ui::host();
+    ui::spawn_api(
+        async move {
+            match saved_instance {
+                Some(instance) => api::refresh_saved_server_status(host, instance, ids).await,
+                None => api::refresh_server_status(host, ids).await,
+            }
+        },
+        |result| {
+            STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.refreshing_servers = false;
+                if let Ok(statuses) = &result {
+                    state.server_status = statuses
+                        .iter()
+                        .map(|row| {
+                            let image = row
+                                .favicon
+                                .as_deref()
+                                .and_then(|s| s.strip_prefix("data:image/png;base64,"))
+                                .filter(|s| s.len() <= 128 * 1024)
+                                .and_then(|s| {
+                                    base64::engine::general_purpose::STANDARD.decode(s).ok()
+                                })
+                                .and_then(|bytes| {
+                                    slint::Image::load_from_data(&bytes, Some("png")).ok()
+                                })
+                                .unwrap_or_default();
+                            let label = if row.status == "online" {
+                                "Online"
+                            } else {
+                                "No response"
+                            };
+                            (row.target_id.clone(), (label.to_owned(), image))
+                        })
+                        .collect();
+                }
+            });
+            if let Err(error) = result {
+                ui::error_toast(&error);
+            }
+            render();
+        },
+    );
+}
+
+fn default_layout() -> HomeLayout {
+    serde_json::to_value(aurora_launcher_lib::home_widgets::HomeLayout::default())
+        .ok()
+        .and_then(|value| serde_json::from_value(value).ok())
+        .unwrap_or(HomeLayout {
+            widgets: Vec::new(),
+        })
+}
+
+fn reset_layout(layout: &mut HomeLayout) {
+    let mut reset = effective(default_layout());
+    reset.widgets.retain(|widget| is_native(&widget.id));
+    reset.widgets.extend(
+        layout
+            .widgets
+            .iter()
+            .filter(|widget| !is_native(&widget.id))
+            .cloned(),
+    );
+    *layout = reset;
 }
 
 /// The core's untouched default means "never customized": this host shows
 /// its own default (Playtime and Servers) instead.
 fn effective(saved: HomeLayout) -> HomeLayout {
-    let core_default: HomeLayout =
-        serde_json::to_value(aurora_launcher_lib::home_widgets::HomeLayout::default())
-            .ok()
-            .and_then(|value| serde_json::from_value(value).ok())
-            .unwrap_or(HomeLayout {
-                widgets: Vec::new(),
-            });
+    let core_default = default_layout();
     let mut layout = saved.clone();
     if saved == core_default {
         for widget in &mut layout.widgets {
@@ -278,12 +421,15 @@ pub fn refresh() {
     let wants_history = shown
         .iter()
         .any(|id| matches!(*id, "playtime" | "recent-servers" | "recent-worlds"));
-    let serial = STATE.with(|s| {
+    let (serial, saved_servers, saved_worlds) = STATE.with(|s| {
         let mut s = s.borrow_mut();
         s.serial += 1;
         s.instance = instance.clone();
+        s.data.remove("saved-worlds");
+        s.data.remove("saved-servers");
+        s.saved_errors.clear();
         s.loading = wants_history;
-        s.serial
+        (s.serial, s.saved_servers, s.saved_worlds)
     });
     render();
     if !wants_history {
@@ -292,16 +438,49 @@ pub fn refresh() {
     let host = ui::host();
     ui::spawn(
         async move {
-            let playtime = api::playtime(host.clone(), instance.clone()).await;
-            let daily = api::daily_playtime(host.clone(), instance.clone()).await;
-            let servers = api::recent_servers(host.clone(), None, 5).await;
-            let worlds = match &instance {
-                Some(id) => api::recent_worlds(host, Some(id.clone()), 5).await,
-                None => Ok(Vec::new()),
+            let (playtime, daily, historical) = if shown.contains(&"playtime") {
+                (
+                    api::playtime(host.clone(), instance.clone()).await.ok(),
+                    api::daily_playtime(host.clone(), instance.clone())
+                        .await
+                        .unwrap_or_default(),
+                    api::historical_playtime(host.clone(), instance.clone())
+                        .await
+                        .unwrap_or_default(),
+                )
+            } else {
+                (None, Vec::new(), Vec::new())
             };
-            (playtime, daily, servers, worlds)
+            let servers = if shown.contains(&"recent-servers") {
+                api::recent_servers(host.clone(), None, 200)
+                    .await
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            let worlds = if shown.contains(&"recent-worlds") {
+                api::recent_worlds(host.clone(), instance.clone(), 32)
+                    .await
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            let mut saved = Vec::new();
+            if let Some(instance) = instance {
+                for (recent, key, enabled, world) in [
+                    ("recent-servers", "saved-servers", saved_servers, false),
+                    ("recent-worlds", "saved-worlds", saved_worlds, true),
+                ] {
+                    if enabled && shown.contains(&recent) {
+                        let result =
+                            api::saved_destinations(host.clone(), instance.clone(), world).await;
+                        saved.push((key, instance.clone(), world, result));
+                    }
+                }
+            }
+            (playtime, daily, historical, servers, worlds, saved)
         },
-        move |(playtime, daily, servers, worlds)| {
+        move |(playtime, daily, historical, servers, worlds, saved)| {
             let current = STATE.with(|s| s.borrow().serial == serial);
             if !current {
                 return;
@@ -309,18 +488,24 @@ pub fn refresh() {
             let names = ui::state(|s| {
                 s.instances()
                     .iter()
-                    .map(|i| (i.id.clone(), i.display_name.clone()))
+                    .map(|i| {
+                        (
+                            i.id.clone(),
+                            (i.display_name.clone(), i.minecraft_version == "1.21.11"),
+                        )
+                    })
                     .collect::<std::collections::HashMap<_, _>>()
             });
             let now = now_secs();
             STATE.with(|s| {
                 let mut s = s.borrow_mut();
                 s.loading = false;
-                s.daily = daily.unwrap_or_default();
+                s.daily = daily;
+                s.historical = historical;
                 s.data.insert(
                     "playtime",
                     match playtime {
-                        Ok(p) if p.all_time_ms > 0 => vec![
+                        Some(p) if p.all_time_ms > 0 => vec![
                             line("Today", &duration(p.today_ms), ""),
                             line("Last 7 days", &duration(p.last_7_days_ms), ""),
                             line("Last 30 days", &duration(p.last_30_days_ms), ""),
@@ -329,43 +514,89 @@ pub fn refresh() {
                         _ => Vec::new(),
                     },
                 );
-                s.data.insert(
-                    "recent-servers",
-                    servers
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|t| {
-                            let instance = names.get(&t.instance_id).cloned().unwrap_or_default();
-                            line(
-                                &t.display_name,
-                                &relative(t.last_played_at, now),
-                                &if t.favorite {
-                                    format!("Favorite · {instance}")
-                                } else {
-                                    instance
-                                },
-                            )
-                        })
-                        .collect(),
-                );
-                s.data.insert(
-                    "recent-worlds",
-                    worlds
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|t| {
-                            line(
-                                &t.display_name,
-                                &relative(t.last_played_at, now),
-                                &if t.available {
-                                    format!("Played {}", duration(t.duration_ms))
-                                } else {
-                                    "No longer in this instance".into()
-                                },
-                            )
-                        })
-                        .collect(),
-                );
+                for (id, targets) in [("recent-servers", servers), ("recent-worlds", worlds)] {
+                    s.data.insert(
+                        id,
+                        targets
+                            .into_iter()
+                            .map(|target| {
+                                let (instance, compatible) =
+                                    names.get(&target.instance_id).cloned().unwrap_or_default();
+                                WidgetLine {
+                                    label: target.display_name.into(),
+                                    value: if target.last_played_at == 0 {
+                                        "Favorite".into()
+                                    } else {
+                                        relative(target.last_played_at, now).into()
+                                    },
+                                    detail: if !target.available {
+                                        "Destination unavailable".into()
+                                    } else if !compatible {
+                                        format!("{instance} · Quick Play requires 1.21.11").into()
+                                    } else {
+                                        instance.into()
+                                    },
+                                    target_id: target.id.into(),
+                                    playable: target.available && compatible,
+                                    favorite: target.favorite,
+                                    unvisited_favorite: target.last_played_at == 0,
+                                    ..Default::default()
+                                }
+                            })
+                            .collect(),
+                    );
+                }
+                for (key, id, worlds, result) in saved {
+                    let (instance, compatible) = names.get(&id).cloned().unwrap_or_default();
+                    match result {
+                        Ok(entries) => {
+                            s.data.insert(
+                                key,
+                                entries
+                                    .into_iter()
+                                    .map(|entry| {
+                                        let value = if worlds && entry.last_played_ms != 0 {
+                                            format!(
+                                                "{} · {}",
+                                                entry.identity,
+                                                relative(entry.last_played_ms / 1000, now)
+                                            )
+                                        } else {
+                                            entry.identity
+                                        };
+                                        let detail = if entry.detail.is_empty() {
+                                            instance.clone()
+                                        } else {
+                                            format!("{instance} · {}", entry.detail)
+                                        };
+                                        WidgetLine {
+                                            label: entry.display_name.into(),
+                                            value: value.into(),
+                                            detail: detail.into(),
+                                            target_id: entry.id.into(),
+                                            playable: compatible,
+                                            favorite: entry.favorite,
+                                            unvisited_favorite: false,
+                                            artwork: entry
+                                                .icon
+                                                .and_then(|bytes| {
+                                                    slint::Image::load_from_data(
+                                                        &bytes,
+                                                        Some("png"),
+                                                    )
+                                                    .ok()
+                                                })
+                                                .unwrap_or_default(),
+                                        }
+                                    })
+                                    .collect(),
+                            );
+                        }
+                        Err(error) => {
+                            s.saved_errors.insert(key, error.message);
+                        }
+                    }
+                }
             });
             render();
         },
@@ -377,6 +608,7 @@ fn line(label: &str, value: &str, detail: &str) -> WidgetLine {
         label: label.into(),
         value: value.into(),
         detail: detail.into(),
+        ..Default::default()
     }
 }
 
@@ -401,7 +633,7 @@ pub fn duration(ms: u64) -> String {
 /// Seconds-since-epoch → "Today", "Yesterday", "3 days ago", "5 weeks ago".
 pub fn relative(at: u64, now: u64) -> String {
     let at = if at > 100_000_000_000 { at / 1000 } else { at };
-    let days = now.saturating_sub(at) / 86_400;
+    let days = (now / 86_400).saturating_sub(at / 86_400);
     match days {
         0 => "Today".into(),
         1 => "Yesterday".into(),
@@ -437,7 +669,20 @@ fn details() -> Vec<WidgetLine> {
 }
 
 pub fn render() {
-    let (layout, data, loading, columns, daily) = STATE.with(|s| {
+    let (
+        layout,
+        data,
+        loading,
+        columns,
+        daily,
+        historical,
+        favorites,
+        status,
+        refreshing,
+        saved_servers,
+        saved_worlds,
+        saved_errors,
+    ) = STATE.with(|s| {
         let s = s.borrow();
         (
             s.layout.clone(),
@@ -445,6 +690,13 @@ pub fn render() {
             s.loading,
             if s.columns == 0 { 6 } else { s.columns },
             s.daily.clone(),
+            s.historical.clone(),
+            s.server_favorites,
+            s.server_status.clone(),
+            s.refreshing_servers,
+            s.saved_servers,
+            s.saved_worlds,
+            s.saved_errors.clone(),
         )
     });
     let Some(layout) = layout else { return };
@@ -471,13 +723,60 @@ pub fn render() {
                 loading,
             ),
             "recent-servers" => (
-                data.get(id).cloned().unwrap_or_default(),
-                "No servers yet. Servers you join from an Aurora instance appear here.",
+                data.get(if saved_servers { "saved-servers" } else { id })
+                    .into_iter()
+                    .flatten()
+                    .filter(|row| {
+                        saved_servers
+                            || (if favorites {
+                                row.favorite
+                            } else {
+                                !row.unvisited_favorite
+                            })
+                    })
+                    .cloned()
+                    .map(|mut row| {
+                        if let Some((label, icon)) = status.get(row.target_id.as_str()) {
+                            row.value = format!("{} · {label}", row.value).into();
+                            if icon.size().width > 0 {
+                                row.artwork = icon.clone();
+                            }
+                        }
+                        row
+                    })
+                    .collect(),
+                if saved_servers {
+                    saved_errors
+                        .get("saved-servers")
+                        .map(String::as_str)
+                        .unwrap_or(if has_instance {
+                            "No saved servers in this instance."
+                        } else {
+                            "Choose an instance to browse its saved servers."
+                        })
+                } else if favorites {
+                    "No favorite servers yet."
+                } else {
+                    "Observed server visits appear here as Aurora records them."
+                },
                 loading,
             ),
             "recent-worlds" => (
-                data.get(id).cloned().unwrap_or_default(),
-                "No worlds yet. Singleplayer worlds you play in this instance appear here.",
+                data.get(if saved_worlds { "saved-worlds" } else { id })
+                    .cloned()
+                    .unwrap_or_default(),
+                if saved_worlds {
+                    saved_errors
+                        .get("saved-worlds")
+                        .map(String::as_str)
+                        .unwrap_or(if has_instance {
+                            "No saved worlds in this instance."
+                        } else {
+                            "Choose an instance to browse its saved worlds."
+                        })
+                } else {
+                    "No worlds yet. Singleplayer worlds you play in this instance appear here."
+                },
                 loading,
             ),
             "instance-details" => (details(), "Choose an instance to see its details.", false),
@@ -536,6 +835,7 @@ pub fn render() {
         } else {
             widgets.set_items(ui::model(items));
         }
+        widgets.set_refreshing_servers(refreshing);
         widgets.set_available_names(ui::model(
             available
                 .iter()
@@ -570,6 +870,22 @@ pub fn render() {
         ));
         widgets.set_week(ui::model(chart_points(&daily, 7)));
         widgets.set_month(ui::model(chart_points(&daily, 30)));
+        let month_compact: Vec<_> = daily
+            .chunks(5)
+            .filter_map(|chunk| {
+                Some(api::PlaytimeInterval {
+                    start_day: chunk.first()?.day,
+                    end_day: chunk.last()?.day,
+                    duration_ms: chunk.iter().map(|day| day.duration_ms).sum(),
+                })
+            })
+            .collect();
+        let (points, peak) = interval_points(&month_compact);
+        widgets.set_month_compact(ui::model(points));
+        widgets.set_month_compact_peak(peak.into());
+        let (points, peak) = interval_points(&historical);
+        widgets.set_historical(ui::model(points));
+        widgets.set_historical_peak(peak.into());
         widgets.set_week_peak(
             duration(
                 daily
@@ -607,47 +923,59 @@ fn arrange(
     height: i32,
     columns: i32,
 ) {
-    let Some(index) = layout
+    if !layout
         .widgets
         .iter()
-        .position(|w| w.id == id && w.enabled && is_native(id))
-    else {
-        return;
-    };
-    let width = width.clamp(1, 6);
-    let max_column = (columns.clamp(1, 6) - width.min(columns.clamp(1, 6))).min(6 - width);
-    layout.widgets[index].grid = Some(api::WidgetGrid {
-        columns: width as u8,
-        rows: height.clamp(1, 3) as u8,
-        position: Some([column.clamp(0, max_column) as u8, row.clamp(0, 63) as u8]),
-    });
-    // Give the manipulated card first claim, while preserving the saved entry order.
-    let mut prioritized = layout.clone();
-    let moved = prioritized.widgets.remove(index);
-    prioritized.widgets.insert(0, moved);
-    let positions = grid_positions(&prioritized, columns);
-    for (widget, (c, r, w, h)) in prioritized
-        .widgets
-        .iter()
-        .filter(|w| w.enabled && is_native(&w.id))
-        .zip(positions)
+        .any(|w| w.id == id && w.enabled && is_native(id))
     {
-        let target = layout
-            .widgets
-            .iter_mut()
-            .find(|w| w.id == widget.id)
-            .unwrap();
-        let mut grid = target.grid.clone().unwrap_or(api::WidgetGrid {
-            columns: w as u8,
-            rows: h as u8,
-            position: None,
-        });
-        grid.position = Some([c as u8, r as u8]);
-        // A move on a narrow viewport must not erase the saved wider size.
-        if target.id == id {
-            grid.columns = width as u8;
+        return;
+    }
+    let width = width.clamp(1, 6);
+    let height = height.clamp(1, 3);
+    let shown_width = width.min(columns);
+    let column = column.clamp(0, (columns - shown_width).min(6 - width));
+    let row = row.clamp(0, 63);
+    let visible = layout
+        .widgets
+        .iter()
+        .filter(|w| w.enabled && is_native(&w.id));
+    let positions = grid_positions(layout, columns);
+    if visible.zip(&positions).any(|(widget, &(c, r, w, h))| {
+        widget.id != id
+            && column < c + w
+            && c < column + shown_width
+            && row < r + h
+            && r < row + height
+    }) {
+        return;
+    }
+    let mut positions = positions.into_iter();
+    for widget in layout
+        .widgets
+        .iter_mut()
+        .filter(|w| w.enabled && is_native(&w.id))
+    {
+        let (c, r, _, h) = positions.next().expect("one position per visible widget");
+        if widget.id == id {
+            widget.grid = Some(api::WidgetGrid {
+                columns: width as u8,
+                rows: height as u8,
+                position: Some([column as u8, row as u8]),
+            });
+        } else if widget
+            .grid
+            .as_ref()
+            .and_then(|grid| grid.position)
+            .is_none()
+        {
+            // Freeze legacy auto-placed neighbors when the layout first gains an anchor.
+            let grid = widget.grid.get_or_insert_with(|| api::WidgetGrid {
+                columns: if widget.size == "small" { 2 } else { 4 },
+                rows: h as u8,
+                position: None,
+            });
+            grid.position = Some([c.min(6 - i32::from(grid.columns)) as u8, r as u8]);
         }
-        target.grid = Some(grid);
     }
 }
 
@@ -697,6 +1025,37 @@ pub(crate) fn grid_positions(layout: &HomeLayout, columns: i32) -> Vec<(i32, i32
         }
     }
     result
+}
+
+fn interval_points(intervals: &[api::PlaytimeInterval]) -> (Vec<crate::PlaytimePoint>, String) {
+    let peak = intervals
+        .iter()
+        .map(|interval| interval.duration_ms)
+        .max()
+        .unwrap_or(0)
+        .max(60_000);
+    let today = intervals.last().map_or(0, |interval| interval.end_day);
+    let points = intervals
+        .iter()
+        .map(|interval| {
+            let from = today - interval.start_day;
+            let until = today - interval.end_day;
+            let label = match (from, until) {
+                (0, 0) => "Today".to_owned(),
+                (from, 0) => format!("Last {} days", from + 1),
+                (from, until) if from == until => format!("{from} days ago"),
+                (from, until) => format!("{from}–{until} days ago"),
+            };
+            let value = duration(interval.duration_ms);
+            crate::PlaytimePoint {
+                detail: format!("{label} (UTC), {value}").into(),
+                label: label.into(),
+                value: value.into(),
+                fraction: interval.duration_ms as f32 / peak as f32,
+            }
+        })
+        .collect();
+    (points, duration(peak))
 }
 
 pub(crate) fn chart_points(
@@ -779,7 +1138,24 @@ mod tests {
     }
 
     #[test]
-    fn dragging_displaces_collisions_and_preserves_unrecognized_widgets() {
+    fn reset_restores_native_defaults_and_keeps_unknown_widget_settings() {
+        let unknown = placement("future-widget", true);
+        let mut layout = HomeLayout {
+            widgets: vec![placement("media", true), unknown.clone()],
+        };
+        reset_layout(&mut layout);
+        assert_eq!(layout.widgets.last(), Some(&unknown));
+        let active: Vec<_> = layout
+            .widgets
+            .iter()
+            .filter(|widget| widget.enabled && is_native(&widget.id))
+            .map(|widget| widget.id.as_str())
+            .collect();
+        assert_eq!(active, ["playtime", "recent-servers"]);
+    }
+
+    #[test]
+    fn dragging_refuses_collisions_and_preserves_unrecognized_widgets() {
         let mut layout = HomeLayout {
             widgets: vec![
                 placement("playtime", true),
@@ -788,9 +1164,13 @@ mod tests {
             ],
         };
         let unknown = layout.widgets[2].clone();
+        let original = layout.clone();
         arrange(&mut layout, "media", 0, 0, 3, 2, 6);
+        assert_eq!(layout, original);
+        arrange(&mut layout, "media", 2, 0, 3, 2, 6);
         let positions = grid_positions(&layout, 6);
-        assert_eq!(positions[1], (0, 0, 3, 2));
+        assert_eq!(positions[0], (0, 0, 2, 1));
+        assert_eq!(positions[1], (2, 0, 3, 2));
         assert_eq!(layout.widgets[2], unknown);
         let mut cells = std::collections::HashSet::new();
         for (c, r, w, h) in positions {

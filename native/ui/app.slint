@@ -8,9 +8,9 @@ import { Icon, Icons } from "icons.slint";
 import {
     Button, ButtonKind, IconButton, Toggle, Checkbox, Dropdown, TextField, Dialog, Toast, Tone,
     Avatar, StatusPill, Spinner, ProgressBar, FocusRing, KeyboardFocus, EmptyState, Divider,
-    Tooltip, InstanceIcon,
+    Tooltip, InstanceIcon, UnifiedList,
 } from "components.slint";
-import { Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, InstanceSync, SyncChoice, Skins, AccountRow, IconPicker, AccentPicker, Activity, ActivityRow, ContentImport } from "state.slint";
+import { Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, SettingsSection, InstanceSync, SyncChoice, Skins, AccountRow, IconPicker, AccentPicker, Activity, ActivityRow, ContentImport } from "state.slint";
 import { IdentityDialog, IconPickerDialog } from "dialogs.slint";
 import { AccentPickerPopover } from "popovers.slint";
 import { Chrome, TitleBar, DragArea, ResizeEdges } from "chrome.slint";
@@ -21,7 +21,7 @@ import { DiscoverPage } from "pages/discover.slint";
 import { SettingsPage } from "pages/settings.slint";
 import { SkinsPage } from "pages/skins.slint";
 
-export { Recovery, Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, InstanceSync, SyncChoice, Skins, Tone, IconPicker, AccentPicker, Chrome, Widgets, WidgetChoice, WidgetLine, WidgetView, Activity, ActivityRow, ContentImport }
+export { Recovery, Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, SettingsSection, InstanceSync, SyncChoice, Skins, Tone, IconPicker, AccentPicker, Chrome, Widgets, WidgetChoice, WidgetLine, WidgetView, Activity, ActivityRow, ContentImport }
 
 component NavItem inherits Rectangle {
     in property <string> label;
@@ -76,8 +76,8 @@ component AccountButton inherits Rectangle {
 component ActivityLine inherits Rectangle {
     in property <ActivityRow> item;
     height: layout.preferred-height;
-    border-radius: Theme.radius-md;
-    background: Theme.surface;
+    in property <bool> divided;
+    if divided: Divider { x: 12px; width: parent.width - 24px; y: 0px; }
     accessible-role: list-item;
     accessible-label: root.item.title + ", " + root.item.phase;
     accessible-description: root.item.message;
@@ -109,8 +109,9 @@ component ActivityLine inherits Rectangle {
 component AccountLine inherits Rectangle {
     in property <AccountRow> item;
     height: 56px;
-    border-radius: Theme.radius-md;
-    background: touch.has-hover ? Theme.hover : Theme.surface;
+    in property <bool> divided;
+    background: touch.has-hover ? Theme.hover : transparent;
+    if divided: Divider { x: 12px; width: parent.width - 24px; y: 0px; }
     accessible-role: list-item;
     accessible-label: root.item.name;
     accessible-description: root.item.status;
@@ -314,9 +315,8 @@ export component AppWindow inherits Window {
     if Accounts.dialog-open: Dialog {
         title: "Accounts";
         sidebar-anchored: true;
-        dialog-width: 420px;
-        dismissible: !Accounts.login-busy;
-        dismissed => { Accounts.dialog-open = false; account-trigger.focus(); }
+        dialog-width: 460px;
+        dismissed => { Accounts.dialog-open = false; }
         Text {
             text: "Sign-in happens on Microsoft's website in your browser. Aurora never sees your password and keeps only a refresh credential in Windows Credential Manager.";
             color: Theme.text-secondary;
@@ -324,11 +324,20 @@ export component AppWindow inherits Window {
             wrap: word-wrap;
         }
         ScrollView {
-            height: min(Accounts.rows.length * 62px, min(240px, max(0px, root.height - 320px)));
+            vertical-stretch: 1;
             VerticalLayout {
-                spacing: 6px;
-                accessible-role: list;
-                for row in Accounts.rows: AccountLine { item: row; }
+                alignment: start;
+                spacing: 8px;
+                if Accounts.rows.length > 0: UnifiedList {
+                    for row[index] in Accounts.rows: VerticalLayout {
+                        if row.selected || index == (Accounts.has-account ? 1 : 0): Text {
+                            height: 30px; x: 12px; vertical-alignment: center;
+                            text: row.selected ? "Active account" : "Other accounts";
+                            color: Theme.text-secondary;
+                        }
+                        AccountLine { item: row; divided: index > (Accounts.has-account ? 1 : 0); }
+                    }
+                }
             }
         }
         if Accounts.login-busy: HorizontalLayout {
@@ -460,16 +469,20 @@ export component AppWindow inherits Window {
         title: "Downloads";
         sidebar-anchored: true;
         dialog-width: 460px;
-        dismissed => { Activity.open = false; }
+        dismissed => { Activity.open = false; downloads-nav.focus(); }
         Text { text: Activity.summary; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
-        if Activity.rows.length == 0: Text { text: "Installs you start from Discover appear here. Several can run at once; installs into the same instance take turns."; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
-        if Activity.rows.length > 0: ScrollView {
-            height: min(Activity.rows.length * 92px, min(380px, max(120px, root.height - 260px)));
+        ScrollView {
+            vertical-stretch: 1;
             VerticalLayout {
-                spacing: 6px;
                 alignment: start;
-                accessible-role: list;
-                for row in Activity.rows: ActivityLine { item: row; }
+                if Activity.rows.length == 0: EmptyState {
+                    icon: Icons.download;
+                    title: "No downloads";
+                    message: "Installs you start from Discover will appear here.";
+                }
+                if Activity.rows.length > 0: UnifiedList {
+                    for row[index] in Activity.rows: ActivityLine { item: row; divided: index > 0; }
+                }
             }
         }
         HorizontalLayout {

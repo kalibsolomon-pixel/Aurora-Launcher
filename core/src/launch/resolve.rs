@@ -126,10 +126,13 @@ impl LaunchSpec {
             .push(ResolvedArgument::Sensitive(SecretString::new(
                 value.to_owned(),
             )));
+        self
+    }
+
+    pub(crate) fn with_activity_log(mut self, relative: String) -> Self {
         self.game_arguments
             .push(ResolvedArgument::Plain("--quickPlayPath".into()));
-        self.game_arguments
-            .push(ResolvedArgument::Plain("logs/quickplay.txt".into()));
+        self.game_arguments.push(ResolvedArgument::Plain(relative));
         self
     }
     pub fn instance_id(&self) -> &str {
@@ -914,7 +917,9 @@ mod tests {
                 .unwrap(),
             server: crate::gameplay_history::ServerTarget::parse("private.invalid".into()).unwrap(),
         };
-        let quick = spec.with_quick_target(&target);
+        let quick = spec
+            .with_quick_target(&target)
+            .with_activity_log("logs/aurora-activity-fixture.json".into());
         assert_eq!(quick.java_executable(), java);
         assert_eq!(quick.jvm_arguments(), jvm);
         assert!(
@@ -937,6 +942,35 @@ mod tests {
                 .any(|value| value == "private.invalid:25565")
         );
     }
+    #[test]
+    fn singleplayer_quick_play_keeps_the_directory_as_one_sensitive_argument() {
+        let instance =
+            crate::instances::InstanceId::new("1234567890abcdef1234567890abcdef").unwrap();
+        let spec = super::LaunchSpec::fake_process(
+            instance.as_str(),
+            "java".into(),
+            "token",
+            "instance".into(),
+        );
+        let target = crate::gameplay_history::QuickLaunchTarget::Singleplayer {
+            instance,
+            world: crate::gameplay_history::WorldSaveId::parse("Private world".into()).unwrap(),
+        };
+        let quick = spec
+            .with_quick_target(&target)
+            .with_activity_log("logs/aurora-activity-fixture.json".into());
+        assert!(quick.game_arguments().windows(2).any(|pair| {
+            pair[0].expose() == "--quickPlaySingleplayer" && pair[1].expose() == "Private world"
+        }));
+        assert!(!format!("{quick:?}").contains("Private world"));
+        assert!(
+            quick
+                .sensitive_values()
+                .iter()
+                .any(|value| value == "Private world")
+        );
+    }
+
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use super::*;

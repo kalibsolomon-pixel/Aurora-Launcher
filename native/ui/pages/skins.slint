@@ -19,7 +19,15 @@ component PresetLine inherits Rectangle {
     forward-focus: focus;
     touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); Skins.preview-skin(root.item.id); } }
     HorizontalLayout {
-        padding: 12px; spacing: 12px;
+        padding: 12px; spacing: 8px;
+        Button {
+            y: (parent.height - self.height) / 2;
+            icon: root.item.favorite ? Icons.star-filled : Icons.star;
+            accessible-description-text: (root.item.favorite ? "Unfavorite " : "Favorite ") + root.item.name;
+            compact: true; kind: ButtonKind.ghost; selected: root.item.favorite;
+            enabled: !Skins.busy;
+            clicked => { Skins.set-favorite(root.item.id, !root.item.favorite); }
+        }
         Rectangle {
             width: 44px; height: 44px; y: (parent.height - self.height) / 2;
             border-radius: Theme.radius-sm; background: Theme.raised; clip: true;
@@ -146,12 +154,13 @@ export component SkinsPage inherits Rectangle {
                     Button { text: "Current skin"; compact: true; kind: ButtonKind.ghost; enabled: Skins.has-current; clicked => { Skins.preview-current(); } }
                     if Skins.has-current: Button { text: "Save to library"; compact: true; kind: ButtonKind.ghost; enabled: !Skins.busy; clicked => { Skins.save-current(); } }
                 }
+                if root.library-tab == 0: Checkbox { text: "Favorites only"; checked <=> Skins.favorites-only; toggled(value) => { Skins.filter-favorites(value); } }
                 Text { text: root.library-tab == 0 ? "Select a skin to preview" : "Select a cape to view its outward face"; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
                 ScrollView {
                     horizontal-stretch: 1; vertical-stretch: 1;
                     VerticalLayout {
                         padding: 4px; spacing: 6px; alignment: start;
-                        if root.library-tab == 0 && Skins.presets.length == 0: EmptyState { icon: Icons.image; title: "Your skin library"; message: "Import a PNG or save your current skin to get started."; }
+                        if root.library-tab == 0 && Skins.presets.length == 0: EmptyState { icon: Icons.image; title: Skins.favorites-only ? "No favorites yet" : "Your skin library"; message: Skins.favorites-only ? "Turn off Favorites only to see all saved skins." : "Import a PNG or save your current skin to get started."; }
                         if root.library-tab == 0: VerticalLayout { spacing: 6px; accessible-role: list; accessible-label: "Saved skins"; for row in Skins.presets: PresetLine { item: row; } }
                         if root.library-tab == 1 && !Skins.has-account: EmptyState {
                             icon: Icons.person; title: "Your cape collection"; message: "Sign in to see the capes owned by your Minecraft account.";

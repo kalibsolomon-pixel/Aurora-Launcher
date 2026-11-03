@@ -1,0 +1,219 @@
+{
+  "label": "baseline",
+  "samples": [
+    {
+      "phase": "idle-start",
+      "workingSetMiB": 33.34,
+      "privateMiB": 9.78,
+      "privateWorkingSetMiB": 8.91,
+      "cpuSeconds": 0.046875,
+      "at": "2026-11-03T09:59:37.7161588-05:00"
+    },
+    {
+      "phase": "idle-end",
+      "workingSetMiB": 33.34,
+      "privateMiB": 9.78,
+      "privateWorkingSetMiB": 8.91,
+      "cpuSeconds": 0.046875,
+      "at": "2026-11-03T09:59:50.0914058-05:00"
+    },
+    {
+      "phase": "after-mod-scroll",
+      "workingSetMiB": 55.78,
+      "privateMiB": 25.22,
+      "privateWorkingSetMiB": 23.31,
+      "cpuSeconds": 2.15625,
+      "at": "2026-11-03T09:59:54.9119846-05:00"
+    },
+    {
+      "phase": "after-content-navigation",
+      "workingSetMiB": 56.54,
+      "privateMiB": 23.61,
+      "privateWorkingSetMiB": 21.57,
+      "cpuSeconds": 4.53125,
+      "at": "2026-11-03T10:00:00.5690501-05:00"
+    },
+    {
+      "phase": "after-drawers",
+      "workingSetMiB": 57.21,
+      "privateMiB": 23.81,
+      "privateWorkingSetMiB": 21.76,
+      "cpuSeconds": 4.609375,
+      "at": "2026-11-03T10:00:03.9242433-05:00"
+    },
+    {
+      "phase": "after-settings",
+      "workingSetMiB": 63.38,
+      "privateMiB": 24.61,
+      "privateWorkingSetMiB": 22.17,
+      "cpuSeconds": 4.65625,
+      "at": "2026-11-03T10:00:04.4823329-05:00"
+    },
+    {
+      "phase": "settled-start",
+      "workingSetMiB": 63.23,
+      "privateMiB": 24.23,
+      "privateWorkingSetMiB": 21.99,
+      "cpuSeconds": 4.671875,
+      "at": "2026-11-03T10:00:10.0322540-05:00"
+    },
+    {
+      "phase": "settled-end",
+      "workingSetMiB": 63.03,
+      "privateMiB": 23.89,
+      "privateWorkingSetMiB": 21.68,
+      "cpuSeconds": 4.671875,
+      "at": "2026-11-03T10:00:22.4030930-05:00"
+    }
+  ],
+  "actions": [
+    {
+      "name": "Instances",
+      "milliseconds": 110
+    },
+    {
+      "name": "UI 1 Synthetic Instance",
+      "milliseconds": 26
+    },
+    {
+      "name": "Resource packs",
+      "milliseconds": 25
+    },
+    {
+      "name": "Shaders",
+      "milliseconds": 22
+    },
+    {
+      "name": "Mods",
+      "milliseconds": 17
+    },
+    {
+      "name": "Resource packs",
+      "milliseconds": 24
+    },
+    {
+      "name": "Shaders",
+      "milliseconds": 15
+    },
+    {
+      "name": "Mods",
+      "milliseconds": 14
+    },
+    {
+      "name": "Resource packs",
+      "milliseconds": 21
+    },
+    {
+      "name": "Shaders",
+      "milliseconds": 14
+    },
+    {
+      "name": "Mods",
+      "milliseconds": 13
+    },
+    {
+      "name": "Resource packs",
+      "milliseconds": 33
+    },
+    {
+      "name": "Shaders",
+      "milliseconds": 16
+    },
+    {
+      "name": "Mods",
+      "milliseconds": 17
+    },
+    {
+      "name": "Resource packs",
+      "milliseconds": 41
+    },
+    {
+      "name": "Shaders",
+      "milliseconds": 18
+    },
+    {
+      "name": "Mods",
+      "milliseconds": 18
+    },
+    {
+      "name": "Resource packs",
+      "milliseconds": 28
+    },
+    {
+      "name": "Shaders",
+      "milliseconds": 17
+    },
+    {
+      "name": "Sign in",
+      "milliseconds": 13
+    },
+    {
+      "name": "Close",
+      "milliseconds": 14
+    },
+    {
+      "name": "Downloads",
+      "milliseconds": 14
+    },
+    {
+      "name": "Close",
+      "milliseconds": 3
+    },
+    {
+      "name": "Sign in",
+      "milliseconds": 14
+    },
+    {
+      "name": "Close",
+      "milliseconds": 3
+    },
+    {
+      "name": "Downloads",
+      "milliseconds": 13
+    },
+    {
+      "name": "Close",
+      "milliseconds": 5
+    },
+    {
+      "name": "Sign in",
+      "milliseconds": 20
+    },
+    {
+      "name": "Close",
+      "milliseconds": 4
+    },
+    {
+      "name": "Downloads",
+      "milliseconds": 22
+    },
+    {
+      "name": "Close",
+      "milliseconds": 5
+    },
+    {
+      "name": "Sign in",
+      "milliseconds": 19
+    },
+    {
+      "name": "Close",
+      "milliseconds": 3
+    },
+    {
+      "name": "Downloads",
+      "milliseconds": 14
+    },
+    {
+      "name": "Close",
+      "milliseconds": 3
+    },
+    {
+      "name": "Settings",
+      "milliseconds": 12
+    },
+    {
+      "name": "Home",
+      "milliseconds": 11
+    }
+  ]
+}

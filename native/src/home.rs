@@ -294,6 +294,41 @@ fn play() {
     });
 }
 
+pub(crate) fn quick_play(mode: String, target_id: String) {
+    let account = ui::with(|_, state| {
+        if state.play_busy {
+            return None;
+        }
+        let Some(account) = state.accounts.selected_account_id.clone() else {
+            state.play_error = Some("Select a Minecraft account to use Quick Play.".into());
+            return None;
+        };
+        state.play_busy = true;
+        state.play_error = None;
+        state.play_progress = Some("Checking readiness...".into());
+        Some(account)
+    })
+    .flatten();
+    render();
+    let Some(account) = account else { return };
+    ui::spawn_api(
+        api::quick_play(ui::host(), mode, target_id, account),
+        |result| {
+            ui::with(|_, state| {
+                state.play_busy = false;
+                state.play_progress = None;
+                // Process state arrives through the supervisor events. The reply
+                // can arrive after a short-lived child has already exited.
+                if let Err(error) = result {
+                    state.play_error = Some(error.message);
+                }
+            });
+            render();
+            refresh_readiness();
+        },
+    );
+}
+
 /// `launch-progress` event.
 pub fn on_launch_progress(phase: &str) {
     let label = match phase {
@@ -323,6 +358,7 @@ pub fn on_launch_state(process: LaunchProcess) {
         crate::recovery::inspect(id, false);
     }
     if finished {
+        crate::widgets::refresh();
         refresh_readiness();
     }
 }

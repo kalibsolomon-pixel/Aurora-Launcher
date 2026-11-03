@@ -332,19 +332,40 @@ pub async fn refresh(
         .map(|entry| (entry.id, entry.display_name))
         .collect();
 
+    let resolved = target_ids
+        .iter()
+        .filter_map(|id| {
+            let crate::gameplay_history::QuickLaunchTarget::Multiplayer { server, .. } =
+                store.quick_target(Mode::Multiplayer, id).ok()??
+            else {
+                return None;
+            };
+            Some((id.clone(), displays.get(id).cloned(), server))
+        })
+        .collect();
+    refresh_resolved(paths, resolved, options).await
+}
+
+pub(crate) async fn refresh_resolved(
+    paths: &ManagedPaths,
+    resolved: Vec<(
+        String,
+        Option<String>,
+        crate::gameplay_history::ServerTarget,
+    )>,
+    options: RefreshOptions,
+) -> Vec<RecentServerPresentation> {
+    if resolved.len() > MAX_TARGETS {
+        return Vec::new();
+    }
     let mut targets: Vec<RequestedTarget> = Vec::new();
     let mut seen_ids = HashSet::new();
     let mut endpoints: Vec<Endpoint> = Vec::new();
     let mut by_endpoint: HashMap<String, Vec<usize>> = HashMap::new();
-    for id in target_ids {
+    for (id, display, server) in resolved {
         if !seen_ids.insert(id.clone()) {
             continue;
         }
-        let Ok(Some(crate::gameplay_history::QuickLaunchTarget::Multiplayer { server, .. })) =
-            store.quick_target(Mode::Multiplayer, id)
-        else {
-            continue;
-        };
         let Ok(endpoint) = Endpoint::from_target(&server) else {
             continue;
         };
@@ -356,8 +377,8 @@ pub async fn refresh(
             .or_default()
             .push(targets.len());
         targets.push(RequestedTarget {
-            id: id.clone(),
-            display: displays.get(id).cloned(),
+            id,
+            display,
             endpoint,
         });
     }

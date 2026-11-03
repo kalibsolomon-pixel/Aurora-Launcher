@@ -78,6 +78,7 @@ export struct Swatch {
 }
 
 export struct SkinRow {
+    favorite: bool,
     edit-name: string,
     id: string,
     name: string,
@@ -212,6 +213,7 @@ export global Instances {
     in property <string> content-error;
     in-out property <string> content-filter;
     callback content-filter-changed(string);
+    callback content-artwork-window(int, int);
     callback content-toggle(string, bool);
     callback content-remove(string, string);
     callback content-open-folder();
@@ -480,6 +482,9 @@ export global Accounts {
 
 export global Skins {
     callback rename(string, string);
+    callback set-favorite(string, bool);
+    callback filter-favorites(bool);
+    in-out property <bool> favorites-only: false;
     in property <bool> has-account: false;
     in property <string> account-name;
     in property <image> current;
@@ -546,7 +551,10 @@ export global InstanceSync {
     callback refresh-conflicts();
 }
 
+export enum SettingsSection { appearance, home-widgets, account, discord, updates, syncing, launcher, accessibility, about }
+
 export global Settings {
+    in-out property <SettingsSection> section: appearance;
     in property <[string]> theme-labels;
     in property <[string]> theme-descriptions;
     in-out property <int> theme-index: 0;

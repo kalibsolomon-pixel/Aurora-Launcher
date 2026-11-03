@@ -96,6 +96,41 @@ fn read_member<R: Read + std::io::Seek>(
     file.take(bound + 1).read_to_end(&mut bytes).ok()?;
     (bytes.len() as u64 <= bound).then_some(bytes)
 }
+const MAX_ICON_BYTES: u64 = 512 * 1024;
+
+pub(crate) fn pack_directory_icon(path: &Path) -> Option<Bitmap> {
+    let file = std::fs::File::open(path).ok()?;
+    if file.metadata().ok()?.len() > MAX_ICON_BYTES {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_ICON_BYTES + 1).read_to_end(&mut bytes).ok()?;
+    (bytes.len() as u64 <= MAX_ICON_BYTES)
+        .then(|| bitmap(&bytes))
+        .flatten()
+}
+
+pub(crate) fn pack_archive_icon(path: &Path) -> Option<Bitmap> {
+    let file = std::fs::File::open(path).ok()?;
+    if file.metadata().ok()?.len() > MAX_JAR {
+        return None;
+    }
+    let mut zip = zip::ZipArchive::new(file).ok()?;
+    if zip.len() > 16_384 {
+        return None;
+    }
+    bitmap(&read_member(&mut zip, "pack.png", MAX_ICON_BYTES)?)
+}
+
+pub(crate) fn bitmap(bytes: &[u8]) -> Option<Bitmap> {
+    let (width, height, rgba) = crate::cosmetic_image::thumbnail_rgba(bytes, ICON_SIDE)?;
+    Some(Bitmap {
+        width,
+        height,
+        rgba_base64: Base64::encode_string(&rgba),
+    })
+}
+
 fn extract(path: &Path) -> Option<Bitmap> {
     let mut zip = zip::ZipArchive::new(std::fs::File::open(path).ok()?).ok()?;
     if zip.len() > 4096 {
@@ -114,13 +149,7 @@ fn extract(path: &Path) -> Option<Bitmap> {
             }
         }
     }
-    let bytes = read_member(&mut zip, &icon?, 512 * 1024)?;
-    let (width, height, rgba) = crate::cosmetic_image::thumbnail_rgba(&bytes, ICON_SIDE)?;
-    Some(Bitmap {
-        width,
-        height,
-        rgba_base64: Base64::encode_string(&rgba),
-    })
+    bitmap(&read_member(&mut zip, &icon?, MAX_ICON_BYTES)?)
 }
 pub fn load(
     paths: &ManagedPaths,
@@ -194,6 +223,39 @@ mod tests {
         zip.write_all(bytes).unwrap();
         zip.finish().unwrap();
     }
+    #[test]
+    fn pack_artwork_uses_only_a_bounded_root_png() {
+        let fixture =
+            std::env::temp_dir().join(format!("aurora-pack-icons-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&fixture).unwrap();
+        let path = fixture.join("pack.zip");
+        let png = crate::cosmetic_image::fixtures::png(128, 64);
+        for (name, bytes, expected) in [
+            ("pack.png", png.as_slice(), true),
+            ("nested/pack.png", png.as_slice(), false),
+            ("pack.png", b"corrupt".as_slice(), false),
+            (
+                "pack.png",
+                vec![0; MAX_ICON_BYTES as usize + 1].as_slice(),
+                false,
+            ),
+        ] {
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+            zip.start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(bytes).unwrap();
+            zip.finish().unwrap();
+            assert_eq!(pack_archive_icon(&path).is_some(), expected);
+        }
+        std::fs::remove_file(path).unwrap();
+        let path = fixture.join("pack.png");
+        std::fs::write(&path, png).unwrap();
+        let image = pack_directory_icon(&path).unwrap();
+        assert_eq!((image.width, image.height), (48, 24));
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(fixture).unwrap();
+    }
+
     #[test]
     fn static_thumbnail_is_bounded_and_rejects_animation_truncation_and_bad_crc() {
         let png = crate::cosmetic_image::fixtures::png(128, 64);

@@ -70,6 +70,7 @@ export component Button inherits Rectangle {
     in property <bool> enabled: true;
     in property <bool> loading: false;
     in property <bool> compact: false;
+    in property <bool> align-start: false;
     in property <bool> selected: false;
     in property <length> control-height: compact ? 30px : Theme.control-height;
     in property <string> accessible-description-text;
@@ -98,7 +99,7 @@ export component Button inherits Rectangle {
         padding-left: compact ? 8px : (root.text == "" ? 8px : 14px);
         padding-right: compact ? 8px : (root.text == "" ? 8px : 14px);
         spacing: 8px;
-        alignment: center;
+        alignment: root.align-start ? start : center;
         if root.icon != "" && !root.loading: Icon {
             y: (parent.height - self.height) / 2;
             path: root.icon;
@@ -183,7 +184,7 @@ export component Toggle inherits Rectangle {
     accessible-enabled: enabled;
     accessible-action-default => { if (enabled) { root.flip(); } }
     forward-focus: focus;
-    background: !enabled ? (checked ? Theme.accent-strong : Theme.raised) : checked ? (touch.has-hover ? Theme.accent-hover : Theme.accent-strong) : (touch.has-hover ? Theme.border-strong : Theme.hover);
+    background: !enabled ? (checked ? Theme.accent-strong : Theme.control-track) : checked ? (touch.has-hover ? Theme.accent-hover : Theme.accent-strong) : (touch.has-hover ? Theme.control-track.brighter(0.18) : Theme.control-track);
     opacity: enabled ? 1 : 0.55;
     animate background { duration: Theme.motion-fast; }
     function flip() { root.checked = !root.checked; root.toggled(root.checked); }
@@ -544,6 +545,14 @@ export component SettingRow inherits HorizontalLayout {
     @children
 }
 
+export component UnifiedList inherits Rectangle {
+    border-radius: Theme.radius-lg;
+    background: Theme.surface;
+    clip: true;
+    accessible-role: list;
+    VerticalLayout { @children }
+}
+
 export component Divider inherits Rectangle {
     height: 1px;
     background: Theme.border;
@@ -628,9 +637,9 @@ export component Dialog inherits Rectangle {
                 }
                 panel := Rectangle {
                     x: root.sidebar-anchored ? 72px : (root.width - self.width) / 2;
-                    y: root.sidebar-anchored ? max(16px, root.height - self.height - 16px) : (root.height - self.height) / 2;
+                    y: root.sidebar-anchored ? 16px : (root.height - self.height) / 2;
                     width: min(root.dialog-width, root.width - (root.sidebar-anchored ? 88px : 48px));
-                    height: min(content.preferred-height, root.height - 48px);
+                    height: root.sidebar-anchored ? root.height - 32px : min(content.preferred-height, root.height - 48px);
                     background: Theme.raised;
                     border-radius: Theme.radius-lg;
                     border-width: 1px;
@@ -687,6 +696,7 @@ export component Toast inherits Rectangle {
 /// A square instance/content glyph: a letter on a neutral ground, or an image.
 export component Glyph inherits Rectangle {
     in property <string> letter;
+    in property <string> fallback-icon;
     in property <image> picture;
     in property <bool> has-picture: false;
     in property <length> size: 40px;
@@ -697,7 +707,8 @@ export component Glyph inherits Rectangle {
     clip: true;
     accessible-role: none;
     if root.has-picture: Image { width: root.size; height: root.size; source: root.picture; image-fit: cover; image-rendering: smooth; }
-    if !root.has-picture: Text { text: root.letter; color: Theme.text; font-size: root.size * 0.42; font-weight: 600; }
+    if !root.has-picture && root.fallback-icon != "": Icon { path: root.fallback-icon; size: root.size * 0.47; }
+    if !root.has-picture && root.fallback-icon == "": Text { text: root.letter; color: Theme.text; font-size: root.size * 0.42; font-weight: 600; }
 }
 
 /// A round account avatar with an initial fallback.

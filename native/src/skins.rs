@@ -3,7 +3,7 @@
 //! talks to Minecraft services with the Rust-owned session; the UI receives
 //! only decoded pixels, names and ids.
 
-use slint::ComponentHandle;
+use slint::{ComponentHandle, Model, VecModel};
 use std::sync::Arc;
 
 use crate::api::{self, Cape, Cosmetics, HeadAvatar, SkinPreset, Texture};
@@ -485,6 +485,16 @@ pub fn bind(window: &AppWindow) {
         render_presets();
         schedule_render();
     });
+    skins.on_filter_favorites(|_| render_presets());
+    skins.on_set_favorite(|preset, favorite| {
+        mutate(
+            api::set_skin_favorite(ui::host(), preset.to_string(), favorite),
+            |presets| {
+                ui::with(|_, state| state.skin_presets = presets);
+                render_presets();
+            },
+        );
+    });
     skins.on_rename(|preset, name| {
         mutate(
             api::rename_skin_preset(ui::host(), preset.to_string(), name.to_string()),
@@ -744,20 +754,18 @@ fn load_presets() {
 
 fn render_presets() {
     ui::with(|window, state| {
+        let skins = window.global::<Skins>();
         let rows: Vec<SkinRow> = state
             .skin_presets
             .iter()
+            .filter(|preset| !skins.get_favorites_only() || preset.favorite)
             .map(|preset: &SkinPreset| {
                 let thumb = state.skin_thumbnails.get(&preset.id).cloned();
                 SkinRow {
                     edit_name: preset.name.clone().into(),
                     id: preset.id.clone().into(),
-                    name: if preset.favorite {
-                        format!("★ {}", preset.name)
-                    } else {
-                        preset.name.clone()
-                    }
-                    .into(),
+                    name: preset.name.clone().into(),
+                    favorite: preset.favorite,
                     model: model_label(&preset.model).into(),
                     has_thumb: thumb.is_some(),
                     previewed: state.skin_preview.preview_id == preset.id,
@@ -765,6 +773,19 @@ fn render_presets() {
                 }
             })
             .collect();
-        window.global::<Skins>().set_presets(ui::model(rows));
+        let current = skins.get_presets();
+        if let Some(model) = current.as_any().downcast_ref::<VecModel<SkinRow>>()
+            && model.row_count() == rows.len()
+            && model.iter().zip(&rows).all(|(old, new)| old.id == new.id)
+        {
+            // A thumbnail or favorite update should keep the row's focus and editor.
+            for (index, row) in rows.into_iter().enumerate() {
+                if model.row_data(index).as_ref() != Some(&row) {
+                    model.set_row_data(index, row);
+                }
+            }
+        } else {
+            skins.set_presets(ui::model(rows));
+        }
     });
 }

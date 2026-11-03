@@ -8,140 +8,8 @@ fn invalid() -> SyncError {
         "The server list is malformed or unsupported; it was left unchanged.",
     )
 }
-#[derive(Clone)]
-struct Field<'a> {
-    tag: u8,
-    name: &'a [u8],
-    raw: &'a [u8],
-    payload: &'a [u8],
-}
-struct Reader<'a> {
-    bytes: &'a [u8],
-    at: usize,
-    nodes: usize,
-}
-impl<'a> Reader<'a> {
-    fn take(&mut self, len: usize) -> Result<&'a [u8], SyncError> {
-        let end = self.at.checked_add(len).ok_or_else(invalid)?;
-        let value = self.bytes.get(self.at..end).ok_or_else(invalid)?;
-        self.at = end;
-        Ok(value)
-    }
-    fn byte(&mut self) -> Result<u8, SyncError> {
-        Ok(self.take(1)?[0])
-    }
-    fn string(&mut self) -> Result<&'a [u8], SyncError> {
-        let len = u16::from_be_bytes(self.take(2)?.try_into().map_err(|_| invalid())?) as usize;
-        let bytes = self.take(len)?;
-        // Java DataInput's modified UTF-8: preserve surrogate code units and
-        // encoded NUL, reject truncated/overlong/non-NBT string encodings.
-        let mut at = 0;
-        while at < bytes.len() {
-            let a = bytes[at];
-            if (1..=0x7f).contains(&a) {
-                at += 1;
-                continue;
-            }
-            if (0xc0..=0xdf).contains(&a) {
-                let b = *bytes.get(at + 1).ok_or_else(invalid)?;
-                if b & 0xc0 != 0x80 || (a < 0xc2 && !(a == 0xc0 && b == 0x80)) {
-                    return Err(invalid());
-                }
-                at += 2;
-            } else if (0xe0..=0xef).contains(&a) {
-                let b = *bytes.get(at + 1).ok_or_else(invalid)?;
-                let c = *bytes.get(at + 2).ok_or_else(invalid)?;
-                if b & 0xc0 != 0x80 || c & 0xc0 != 0x80 || (a == 0xe0 && b < 0xa0) {
-                    return Err(invalid());
-                }
-                at += 3;
-            } else {
-                return Err(invalid());
-            }
-        }
-        Ok(bytes)
-    }
-    fn count(&mut self) -> Result<usize, SyncError> {
-        let n = i32::from_be_bytes(self.take(4)?.try_into().map_err(|_| invalid())?);
-        usize::try_from(n).map_err(|_| invalid())
-    }
-    fn payload(&mut self, tag: u8, depth: usize) -> Result<(), SyncError> {
-        self.nodes += 1;
-        if depth > 32 || self.nodes > 32768 {
-            return Err(invalid());
-        }
-        match tag {
-            1 => {
-                self.take(1)?;
-            }
-            2 => {
-                self.take(2)?;
-            }
-            3 | 5 => {
-                self.take(4)?;
-            }
-            4 | 6 => {
-                self.take(8)?;
-            }
-            7 | 11 | 12 => {
-                let width = if tag == 7 {
-                    1
-                } else if tag == 11 {
-                    4
-                } else {
-                    8
-                };
-                let n = self.count()?.checked_mul(width).ok_or_else(invalid)?;
-                self.take(n)?;
-            }
-            8 => {
-                self.string()?;
-            }
-            9 => {
-                let element = self.byte()?;
-                let count = self.count()?;
-                if count > 4096 || element > 12 || (element == 0 && count != 0) {
-                    return Err(invalid());
-                }
-                for _ in 0..count {
-                    self.payload(element, depth + 1)?;
-                }
-            }
-            10 => {
-                self.compound(depth + 1)?;
-            }
-            _ => return Err(invalid()),
-        }
-        Ok(())
-    }
-    fn compound(&mut self, depth: usize) -> Result<Vec<Field<'a>>, SyncError> {
-        if depth > 32 {
-            return Err(invalid());
-        }
-        let mut result = Vec::new();
-        let mut names = BTreeSet::new();
-        loop {
-            let start = self.at;
-            let tag = self.byte()?;
-            if tag == 0 {
-                break;
-            }
-            let name = self.string()?;
-            if !names.insert(name) {
-                return Err(invalid());
-            }
-            let payload = self.at;
-            self.payload(tag, depth)?;
-            result.push(Field {
-                tag,
-                name,
-                raw: &self.bytes[start..self.at],
-                payload: &self.bytes[payload..self.at],
-            });
-        }
-        Ok(result)
-    }
-}
+use crate::nbt::{Field, reader_at};
+
 struct Server<'a> {
     name: &'a [u8],
     ip: &'a [u8],
@@ -156,17 +24,13 @@ fn parse(bytes: &[u8]) -> Result<List<'_>, SyncError> {
     if bytes.len() as u64 > MAX_OPTIONS {
         return Err(invalid());
     }
-    let mut r = Reader {
-        bytes,
-        at: 0,
-        nodes: 0,
-    };
-    if r.byte()? != 10 {
+    let mut r = reader_at(bytes, 0);
+    if r.byte().map_err(|_| invalid())? != 10 {
         return Err(invalid());
     }
-    r.string()?;
+    r.string().map_err(|_| invalid())?;
     let prefix = &bytes[..r.at];
-    let fields = r.compound(0)?;
+    let fields = r.compound(0).map_err(|_| invalid())?;
     if r.at != bytes.len() {
         return Err(invalid());
     }
@@ -177,31 +41,23 @@ fn parse(bytes: &[u8]) -> Result<List<'_>, SyncError> {
     if field.tag != 9 {
         return Err(invalid());
     }
-    let mut r = Reader {
-        bytes: field.payload,
-        at: 0,
-        nodes: 0,
-    };
-    let tag = r.byte()?;
-    let count = r.count()?;
+    let mut r = reader_at(field.payload, 0);
+    let tag = r.byte().map_err(|_| invalid())?;
+    let count = r.count().map_err(|_| invalid())?;
     if count > 1024 || !(tag == 10 || (tag == 0 && count == 0)) {
         return Err(invalid());
     }
     let mut entries = Vec::new();
     for _ in 0..count {
         let start = r.at;
-        let fields = r.compound(0)?;
+        let fields = r.compound(0).map_err(|_| invalid())?;
         let value = |key: &[u8]| -> Result<&[u8], SyncError> {
             let f = fields
                 .iter()
                 .find(|f| f.name == key && f.tag == 8)
                 .ok_or_else(invalid)?;
-            let mut r = Reader {
-                bytes: f.payload,
-                at: 0,
-                nodes: 0,
-            };
-            let value = r.string()?;
+            let mut r = reader_at(f.payload, 0);
+            let value = r.string().map_err(|_| invalid())?;
             if value.is_empty() || value.len() > 4096 {
                 return Err(invalid());
             }

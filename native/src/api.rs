@@ -510,6 +510,8 @@ pub struct ModEntry {
 pub struct Provenance {
     pub provider: String,
     pub project_id: String,
+    #[serde(default)]
+    pub display_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -741,6 +743,21 @@ pub async fn daily_playtime(
     blocking(move || convert(app::get_daily_playtime(host, instance_id, 30))).await?
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaytimeInterval {
+    pub start_day: u64,
+    pub end_day: u64,
+    pub duration_ms: u64,
+}
+
+pub async fn historical_playtime(
+    host: Host,
+    instance_id: Option<String>,
+) -> ApiResult<Vec<PlaytimeInterval>> {
+    blocking(move || convert(app::get_historical_playtime(host, instance_id))).await?
+}
+
 pub async fn playtime(host: Host, instance_id: Option<String>) -> ApiResult<Playtime> {
     blocking(move || convert(app::get_playtime_summary(host, instance_id))).await?
 }
@@ -748,6 +765,7 @@ pub async fn playtime(host: Host, instance_id: Option<String>) -> ApiResult<Play
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecentTarget {
+    pub id: String,
     pub instance_id: String,
     pub display_name: String,
     pub last_played_at: u64,
@@ -761,7 +779,51 @@ pub async fn recent_servers(
     instance_id: Option<String>,
     limit: usize,
 ) -> ApiResult<Vec<RecentTarget>> {
-    blocking(move || convert(app::get_recent_servers(host, instance_id, limit))).await?
+    blocking(move || convert(app::get_home_servers(host, instance_id, limit))).await?
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedDestination {
+    pub id: String,
+    pub display_name: String,
+    pub identity: String,
+    pub last_played_ms: u64,
+    pub detail: String,
+    pub icon: Option<Vec<u8>>,
+    pub favorite: bool,
+}
+
+pub async fn saved_destinations(
+    host: Host,
+    instance: String,
+    worlds: bool,
+) -> ApiResult<Vec<SavedDestination>> {
+    blocking(move || convert(app::get_saved_destinations(host, instance, worlds))).await?
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerStatus {
+    pub target_id: String,
+    pub status: String,
+    pub favicon: Option<String>,
+}
+
+pub async fn refresh_server_status(
+    host: Host,
+    target_ids: Vec<String>,
+) -> ApiResult<Vec<ServerStatus>> {
+    let request = request(json!({ "targetIds": target_ids }))?;
+    convert(app::refresh_recent_server_status(host, request).await)
+}
+
+pub async fn refresh_saved_server_status(
+    host: Host,
+    instance: String,
+    ids: Vec<String>,
+) -> ApiResult<Vec<ServerStatus>> {
+    convert(app::refresh_saved_server_status(host, instance, ids).await)
 }
 
 pub async fn recent_worlds(
@@ -832,6 +894,27 @@ pub async fn launch_state(instance_id: String) -> ApiResult<LaunchProcess> {
 pub async fn play(host: Host, instance_id: String, account_id: String) -> ApiResult<LaunchProcess> {
     let request = request(json!({ "instanceId": instance_id, "accountId": account_id }))?;
     convert(app::play_instance(host, request).await)
+}
+
+pub async fn quick_play(
+    host: Host,
+    mode: String,
+    target_id: String,
+    account_id: String,
+) -> ApiResult<LaunchProcess> {
+    let request = request(json!({ "mode": mode, "targetId": target_id, "accountId": account_id }))?;
+    convert(app::quick_play_history(host, request).await)
+}
+
+pub async fn favorite_server(host: Host, target_id: String, favorite: bool) -> ApiResult<()> {
+    blocking(move || {
+        if target_id.contains(':') {
+            convert(app::set_saved_server_favorite(host, target_id, favorite))
+        } else {
+            convert(app::set_recent_server_favorite(host, target_id, favorite))
+        }
+    })
+    .await?
 }
 
 pub async fn runtime_status(host: Host, instance_id: String) -> ApiResult<RuntimeStatus> {
@@ -1001,6 +1084,25 @@ pub struct ModIconResult {
     pub sha256: String,
     pub bitmap: Option<ModIconBitmap>,
 }
+pub async fn pack_icon(
+    host: Host,
+    instance: String,
+    resource_pack: bool,
+    file_name: String,
+    project: Option<String>,
+) -> ApiResult<Option<ModIconBitmap>> {
+    blocking(move || {
+        convert(Ok(app::get_installed_pack_icon(
+            host,
+            &instance,
+            resource_pack,
+            &file_name,
+            project.as_deref(),
+        )))
+    })
+    .await?
+}
+
 pub async fn mod_icons(
     host: Host,
     id: String,
@@ -1561,6 +1663,15 @@ pub async fn skin_thumbnail(host: Host, preset_id: String) -> ApiResult<Option<T
 pub async fn save_current_skin(host: Host, account_id: String) -> ApiResult<Value> {
     let request = request(json!({ "accountId": account_id }))?;
     convert(app::save_current_skin(host, request).await)
+}
+
+pub async fn set_skin_favorite(
+    host: Host,
+    preset_id: String,
+    favorite: bool,
+) -> ApiResult<Vec<SkinPreset>> {
+    let request = request(json!({"presetId": preset_id, "favorite": favorite}))?;
+    blocking(move || convert(app::set_skin_favorite(host, request))).await?
 }
 
 pub async fn rename_skin_preset(

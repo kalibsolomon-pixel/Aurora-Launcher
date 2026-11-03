@@ -1,6 +1,6 @@
 [package]
 name = "aurora-launcher"
-version = "2.0.1"
+version = "2.1.0"
 description = "Launcher for the Aurora client mod for Minecraft: Java Edition"
 authors = ["Aurora Launcher contributors"]
 edition = "2024"
@@ -78,6 +78,15 @@ zip = { version = "8.6", default-features = false, features = ["deflate"] }
 # Bounded decoding of official Minecraft skin PNGs into a cosmetic head avatar.
 # Reuses the version already locked for the icon tests.
 png = "0.17"
+# gzip member decoding for saved-world `level.dat` discovery (read-only).
+# Pure-Rust backend (miniz_oxide, already in the tree via zip); no C toolchain.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+# Event-driven observation of the child-owned QuickPlayLog artifact while a
+# supervised game runs: platform directory-change notifications instead of
+# polling. Focused maintained watcher used only for that bounded purpose.
+notify = { version = "8", default-features = false, features = ["macos_kqueue"] }
+# Decode Java modified UTF-8 labels, including supplementary characters.
+simd_cesu8 = "1.2"
 # Semantic version ordering for release-update eligibility (Phase L): Aurora
 # release channels gate candidates, and "newer" is semver precedence, never
 # lexical string comparison. Focused, universally maintained implementation.

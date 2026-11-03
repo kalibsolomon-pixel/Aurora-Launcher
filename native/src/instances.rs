@@ -2,7 +2,7 @@
 //! (configuration, health, and installed content). Every mutation goes
 //! through the validated application services; the UI keeps only drafts.
 
-use slint::ComponentHandle;
+use slint::{ComponentHandle, Model, VecModel};
 
 use crate::api::{self, InstanceConfiguration, InstanceSummary, LauncherState, WindowSize};
 use crate::ui;
@@ -14,9 +14,11 @@ pub struct Workspace {
     pub id: String,
     pub base: Option<InstanceConfiguration>,
     pub content: Vec<ContentItem>,
-    pub mod_icons: std::collections::HashMap<String, Option<slint::Image>>,
+    pub content_artwork: std::collections::HashMap<String, Option<slint::Image>>,
     pub client_preview: Option<api::AuroraTransition>,
     pub icons_pending: std::collections::HashSet<String>,
+    pub artwork_order: std::collections::VecDeque<String>,
+    pub artwork_window: (usize, usize),
     pub content_serial: u64,
     pub filter: String,
     pub pending_remove: Option<(String, String)>,
@@ -32,6 +34,7 @@ pub struct Workspace {
 #[derive(Clone)]
 pub struct ContentItem {
     pub icon_source: Option<api::ModIconRequest>,
+    pub pack_file: Option<String>,
     pub row: ContentRow,
     /// Modrinth project id when the file is provider-managed.
     pub project: Option<String>,
@@ -115,6 +118,14 @@ pub fn bind(window: &AppWindow) {
     instances.on_client_confirm(confirm_client);
     instances.on_validate(validate);
     instances.on_repair(|| install_or_repair(false));
+    instances.on_content_artwork_window(|first, end| {
+        ui::with(|_, state| {
+            if let Some(workspace) = state.workspace.as_mut() {
+                workspace.artwork_window = (first.max(0) as usize, end.max(0) as usize);
+            }
+        });
+        load_content_artwork();
+    });
     instances.on_content_filter_changed(|text| {
         ui::with(|_, state| {
             if let Some(workspace) = state.workspace.as_mut() {
@@ -122,6 +133,7 @@ pub fn bind(window: &AppWindow) {
             }
         });
         render_content();
+        load_content_artwork();
     });
     instances.on_content_toggle(toggle_content);
     instances.on_content_remove(|id, title| {
@@ -156,7 +168,20 @@ pub fn bind(window: &AppWindow) {
         }
     });
     instances.on_content_refresh(|| {
-        let tab = ui::with(|window, _| window.global::<Instances>().get_tab()).unwrap_or(0);
+        let tab = ui::with(|window, state| {
+            let tab = window.global::<Instances>().get_tab();
+            if let Some(workspace) = state.workspace.as_mut() {
+                let prefix = format!("{tab}:");
+                workspace
+                    .content_artwork
+                    .retain(|key, _| !key.starts_with(&prefix));
+                workspace
+                    .artwork_order
+                    .retain(|key| !key.starts_with(&prefix));
+            }
+            tab
+        })
+        .unwrap_or(0);
         load_tab(tab);
         crate::content_updates::check();
     });
@@ -930,13 +955,25 @@ fn install_or_repair(install: bool) {
     });
 }
 
+thread_local! {
+    static CONTENT_SERIAL: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+fn next_content_serial() -> u64 {
+    CONTENT_SERIAL.with(|serial| {
+        let next = serial.get() + 1;
+        serial.set(next);
+        next
+    })
+}
+
 fn load_tab(tab: i32) {
     if !(TAB_MODS..TAB_SETTINGS).contains(&tab) {
         return;
     }
     let Some((id, serial)) = ui::with(|window, state| {
         let workspace = state.workspace.as_mut()?;
-        workspace.content_serial += 1;
+        workspace.content_serial = next_content_serial();
         workspace.content.clear();
         workspace.icons_pending.clear();
         if workspace.updates.tab != tab {
@@ -1015,6 +1052,7 @@ fn mod_items(inventory: api::ModInventory) -> Vec<ContentItem> {
                 })
                 .unwrap_or_default();
             ContentItem {
+                pack_file: None,
                 icon_source: entry.sha256.as_ref().map(|hash| api::ModIconRequest {
                     file_name: entry.file_name.clone(),
                     sha256: hash.clone(),
@@ -1047,15 +1085,24 @@ fn pack_items(inventory: api::ContentInventory, hide_bundled: bool) -> Vec<Conte
                 .size_bytes
                 .map(|bytes| format!("{:.1} MB", bytes as f64 / 1_048_576.0))
                 .unwrap_or_default();
-            let mut detail = vec![entry.file_name.clone()];
+            let mut detail = Vec::new();
+            if let Some(version) = entry
+                .provenance
+                .as_ref()
+                .and_then(|p| p.display_version.as_ref())
+            {
+                detail.push(version.clone());
+            }
             if !size.is_empty() {
                 detail.push(size);
             }
             if entry.management.activation_managed_in_game {
                 detail.push("Selected in game".into());
             }
+            detail.push(entry.file_name.clone());
             ContentItem {
                 icon_source: None,
+                pack_file: Some(entry.file_name),
                 project: modrinth_project(entry.provenance.as_ref()),
                 row: ContentRow {
                     id: entry.entry_id.into(),
@@ -1110,46 +1157,79 @@ fn apply_content(id: &str, serial: u64, result: api::ApiResult<Vec<ContentItem>>
         match result {
             Ok(items) => {
                 workspace.content = items;
-                let hashes: std::collections::HashSet<_> = workspace
-                    .content
-                    .iter()
-                    .filter_map(|item| item.icon_source.as_ref().map(|i| i.sha256.clone()))
-                    .collect();
-                workspace.mod_icons.retain(|key, _| hashes.contains(key));
             }
             Err(error) => instances.set_content_error(error.message.into()),
         }
     });
     render_content();
-    load_mod_icons(serial);
+    load_content_artwork();
 }
 
-fn load_mod_icons(serial: u64) {
+impl ContentItem {
+    fn artwork_key(&self, tab: i32) -> Option<String> {
+        if let Some(source) = &self.icon_source {
+            return Some(source.sha256.clone());
+        }
+        self.pack_file.as_ref()?;
+        match tab {
+            1 => Some(format!(
+                "1:{}:{}",
+                self.row.id,
+                self.project.as_deref().unwrap_or_default()
+            )),
+            2 => self.project.as_ref().map(|project| format!("2:{project}")),
+            _ => None,
+        }
+    }
+
+    fn matches(&self, filter: &str) -> bool {
+        filter.is_empty()
+            || self.row.title.to_lowercase().contains(filter)
+            || self.row.detail.to_lowercase().contains(filter)
+    }
+}
+
+const ARTWORK_CACHE_LIMIT: usize = 96;
+const ARTWORK_BATCH_LIMIT: usize = 48;
+
+fn load_content_artwork() {
     let request = ui::with(|window, state| {
-        if window.global::<Instances>().get_tab() != TAB_MODS {
+        let tab = window.global::<Instances>().get_tab();
+        if !(TAB_MODS..TAB_SETTINGS).contains(&tab) {
             return None;
         }
         let workspace = state.workspace.as_mut()?;
-        if workspace.content_serial != serial {
+        if !workspace.icons_pending.is_empty() {
             return None;
         }
+        let (first, end) = workspace.artwork_window;
+        let count = end.saturating_sub(first).min(ARTWORK_BATCH_LIMIT);
+        let filter = workspace.filter.to_lowercase();
         let mut files = Vec::new();
-        for item in &workspace.content {
-            if let Some(source) = &item.icon_source {
-                if !workspace.mod_icons.contains_key(&source.sha256)
-                    && workspace.icons_pending.insert(source.sha256.clone())
+        for item in workspace
+            .content
+            .iter()
+            .filter(|item| item.matches(&filter))
+            .skip(first)
+            .take(count)
+        {
+            if let Some(key) = item.artwork_key(tab) {
+                if !workspace.content_artwork.contains_key(&key)
+                    && workspace.icons_pending.insert(key.clone())
                 {
-                    files.push(source.clone());
+                    files.push((
+                        key,
+                        item.icon_source.clone(),
+                        item.pack_file.clone(),
+                        item.project.clone(),
+                    ));
                 }
             }
         }
-        if files.is_empty() {
-            return None;
-        }
-        Some((workspace.id.clone(), files))
+        (!files.is_empty()).then(|| (workspace.id.clone(), workspace.content_serial, tab, files))
     })
     .flatten();
-    let Some((id, files)) = request else {
+    let Some((id, serial, tab, files)) = request else {
         return;
     };
     let host = ui::host();
@@ -1157,44 +1237,72 @@ fn load_mod_icons(serial: u64) {
     ui::spawn(
         async move {
             use base64::Engine;
-            let mut icons = Vec::new();
-            for batch in files.chunks(128) {
-                for result in api::mod_icons(host.clone(), id.clone(), batch.to_vec()).await? {
-                    let pixels = result.bitmap.and_then(|b| {
-                        if b.width > 48 || b.height > 48 {
-                            return None;
-                        }
-                        let bytes = base64::engine::general_purpose::STANDARD
-                            .decode(&b.rgba_base64)
-                            .ok()?;
-                        Some((b.width, b.height, bytes))
-                    });
-                    icons.push((result.sha256, pixels));
+            let mods: Vec<_> = files
+                .iter()
+                .filter_map(|(_, source, _, _)| source.clone())
+                .collect();
+            let mut mod_results = std::collections::HashMap::new();
+            if !mods.is_empty() {
+                for result in api::mod_icons(host.clone(), id.clone(), mods)
+                    .await
+                    .unwrap_or_default()
+                {
+                    mod_results.insert(result.sha256, result.bitmap);
                 }
             }
-            Ok::<_, api::ApiError>((id, icons))
+            let mut images = Vec::new();
+            for (key, source, file, project) in files {
+                let bitmap = if source.is_some() {
+                    mod_results.remove(&key).flatten()
+                } else if let Some(file) = file {
+                    api::pack_icon(host.clone(), id.clone(), tab == 1, file, project)
+                        .await
+                        .ok()
+                        .flatten()
+                } else {
+                    None
+                };
+                let pixels = bitmap.and_then(|bitmap| {
+                    if bitmap.width > 48 || bitmap.height > 48 {
+                        return None;
+                    }
+                    let bytes = base64::engine::general_purpose::STANDARD
+                        .decode(bitmap.rgba_base64)
+                        .ok()?;
+                    Some((bitmap.width, bitmap.height, bytes))
+                });
+                images.push((key, pixels));
+            }
+            images
         },
-        move |result| {
-            ui::with(|_, state| {
+        move |images| {
+            let applied = ui::with(|_, state| {
                 let Some(workspace) = state.workspace.as_mut() else {
-                    return;
+                    return false;
                 };
                 if workspace.id != expected_id || workspace.content_serial != serial {
-                    return;
+                    return false;
                 }
                 workspace.icons_pending.clear();
-                if let Ok((id, icons)) = result {
-                    if workspace.id != id {
-                        return;
+                // Keep two maximum batches and evict the oldest entries first.
+                for (key, pixels) in images {
+                    if workspace.artwork_order.len() >= ARTWORK_CACHE_LIMIT {
+                        if let Some(old) = workspace.artwork_order.pop_front() {
+                            workspace.content_artwork.remove(&old);
+                        }
                     }
-                    for (hash, pixels) in icons {
-                        let image =
-                            pixels.and_then(|(w, h, bytes)| ui::rectangular_image(&bytes, w, h));
-                        workspace.mod_icons.insert(hash, image);
-                    }
+                    let image =
+                        pixels.and_then(|(w, h, bytes)| ui::rectangular_image(&bytes, w, h));
+                    workspace.artwork_order.push_back(key.clone());
+                    workspace.content_artwork.insert(key, image);
                 }
-            });
-            render_content();
+                true
+            })
+            .unwrap_or(false);
+            if applied {
+                render_content();
+                load_content_artwork();
+            }
         },
     );
 }
@@ -1218,17 +1326,12 @@ pub fn render_content() {
                 workspace
                     .content
                     .iter()
-                    .filter(|item| {
-                        filter.is_empty()
-                            || item.row.title.to_lowercase().contains(&filter)
-                            || item.row.detail.to_lowercase().contains(&filter)
-                    })
+                    .filter(|item| item.matches(&filter))
                     .map(|item| {
                         let mut row = item.row.clone();
                         if let Some(image) = item
-                            .icon_source
-                            .as_ref()
-                            .and_then(|source| workspace.mod_icons.get(&source.sha256))
+                            .artwork_key(tab)
+                            .and_then(|key| workspace.content_artwork.get(&key))
                             .and_then(|image| image.as_ref())
                         {
                             row.picture = image.clone();
@@ -1251,7 +1354,20 @@ pub fn render_content() {
             .count();
         instances.set_updates_summary(updates.summary.clone().into());
         instances.set_updates_count(count as i32);
-        instances.set_content(ui::model(rows));
+        let current = instances.get_content();
+        if let Some(model) = current.as_any().downcast_ref::<VecModel<ContentRow>>()
+            && model.row_count() == rows.len()
+            && model.iter().zip(&rows).all(|(old, new)| old.id == new.id)
+        {
+            // Keep the row and its keyboard focus alive as artwork arrives.
+            for (index, row) in rows.into_iter().enumerate() {
+                if model.row_data(index).as_ref() != Some(&row) {
+                    model.set_row_data(index, row);
+                }
+            }
+        } else {
+            instances.set_content(ui::model(rows));
+        }
     });
 }
 
@@ -1272,7 +1388,7 @@ pub fn after_content_change() {
 fn toggle_content(entry: slint::SharedString, enabled: bool) {
     let Some((id, tab, serial)) = ui::with(|window, state| {
         let workspace = state.workspace.as_mut()?;
-        workspace.content_serial += 1;
+        workspace.content_serial = next_content_serial();
         Some((
             workspace.id.clone(),
             window.global::<Instances>().get_tab(),
@@ -1310,7 +1426,7 @@ fn remove_content() {
         instances.set_remove_open(false);
         let workspace = state.workspace.as_mut()?;
         let (entry, _) = workspace.pending_remove.take()?;
-        workspace.content_serial += 1;
+        workspace.content_serial = next_content_serial();
         Some((
             workspace.id.clone(),
             instances.get_tab(),

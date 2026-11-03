@@ -143,7 +143,7 @@ pub fn render() {
     ui::with(|window, state| {
         let accounts = window.global::<Accounts>();
         let selected = state.accounts.selected_account_id.clone();
-        let rows: Vec<AccountRow> = state
+        let mut rows: Vec<AccountRow> = state
             .accounts
             .accounts
             .iter()
@@ -174,6 +174,7 @@ pub fn render() {
             accounts.set_has_avatar(avatar.is_some());
             accounts.set_avatar(avatar.unwrap_or_default());
         }
+        rows.sort_by_key(|row| !row.selected);
         accounts.set_rows(ui::model(rows));
     });
 }

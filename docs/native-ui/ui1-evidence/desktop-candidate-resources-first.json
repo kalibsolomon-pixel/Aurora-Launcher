@@ -1,0 +1,247 @@
+{
+  "label": "after",
+  "samples": [
+    {
+      "phase": "idle-start",
+      "workingSetMiB": 47.21,
+      "privateMiB": 9.84,
+      "cpuSeconds": 0.046875,
+      "at": "2026-11-03T09:54:06.8058557-05:00"
+    },
+    {
+      "phase": "idle-end",
+      "workingSetMiB": 47.18,
+      "privateMiB": 9.7,
+      "cpuSeconds": 0.046875,
+      "at": "2026-11-03T09:54:18.8155573-05:00"
+    },
+    {
+      "phase": "after-mod-scroll",
+      "workingSetMiB": 67.28,
+      "privateMiB": 24.71,
+      "cpuSeconds": 2.09375,
+      "at": "2026-11-03T09:54:23.1394110-05:00"
+    },
+    {
+      "phase": "after-content-navigation",
+      "workingSetMiB": 67.25,
+      "privateMiB": 22.52,
+      "cpuSeconds": 4.40625,
+      "at": "2026-11-03T09:54:28.3448113-05:00"
+    },
+    {
+      "phase": "after-drawers",
+      "workingSetMiB": 67.7,
+      "privateMiB": 23.15,
+      "cpuSeconds": 4.5625,
+      "at": "2026-11-03T09:54:31.3038003-05:00"
+    },
+    {
+      "phase": "after-settings",
+      "workingSetMiB": 73.48,
+      "privateMiB": 24.07,
+      "cpuSeconds": 4.6875,
+      "at": "2026-11-03T09:54:33.1073021-05:00"
+    },
+    {
+      "phase": "settled-start",
+      "workingSetMiB": 73.3,
+      "privateMiB": 23.81,
+      "cpuSeconds": 4.703125,
+      "at": "2026-11-03T09:54:38.3064130-05:00"
+    },
+    {
+      "phase": "settled-end",
+      "workingSetMiB": 73.15,
+      "privateMiB": 23.53,
+      "cpuSeconds": 4.703125,
+      "at": "2026-11-03T09:54:50.3123417-05:00"
+    }
+  ],
+  "actions": [
+    {
+      "name": "Instances",
+      "milliseconds": 62
+    },
+    {
+      "name": "UI 1 Synthetic Instance",
+      "milliseconds": 11
+    },
+    {
+      "name": "Resource packs",
+      "milliseconds": 18
+    },
+    {
+      "name": "Shaders",
+      "milliseconds": 15
+    },
+    {
+      "name": "Mods",
+      "milliseconds": 12
+    },
+    {
+      "name": "Resource packs",
+      "milliseconds": 22
+    },
+    {
+      "name": "Shaders",
+      "milliseconds": 15
+    },
+    {
+      "name": "Mods",
+      "milliseconds": 13
+    },
+    {
+      "name": "Resource packs",
+      "milliseconds": 20
+    },
+    {
+      "name": "Shaders",
+      "milliseconds": 17
+    },
+    {
+      "name": "Mods",
+      "milliseconds": 14
+    },
+    {
+      "name": "Resource packs",
+      "milliseconds": 19
+    },
+    {
+      "name": "Shaders",
+      "milliseconds": 15
+    },
+    {
+      "name": "Mods",
+      "milliseconds": 13
+    },
+    {
+      "name": "Resource packs",
+      "milliseconds": 19
+    },
+    {
+      "name": "Shaders",
+      "milliseconds": 14
+    },
+    {
+      "name": "Mods",
+      "milliseconds": 13
+    },
+    {
+      "name": "Resource packs",
+      "milliseconds": 19
+    },
+    {
+      "name": "Shaders",
+      "milliseconds": 29
+    },
+    {
+      "name": "Sign in",
+      "milliseconds": 13
+    },
+    {
+      "name": "Close",
+      "milliseconds": 14
+    },
+    {
+      "name": "Downloads",
+      "milliseconds": 13
+    },
+    {
+      "name": "Close",
+      "milliseconds": 4
+    },
+    {
+      "name": "Sign in",
+      "milliseconds": 12
+    },
+    {
+      "name": "Close",
+      "milliseconds": 3
+    },
+    {
+      "name": "Downloads",
+      "milliseconds": 12
+    },
+    {
+      "name": "Close",
+      "milliseconds": 3
+    },
+    {
+      "name": "Sign in",
+      "milliseconds": 13
+    },
+    {
+      "name": "Close",
+      "milliseconds": 3
+    },
+    {
+      "name": "Downloads",
+      "milliseconds": 13
+    },
+    {
+      "name": "Close",
+      "milliseconds": 3
+    },
+    {
+      "name": "Sign in",
+      "milliseconds": 12
+    },
+    {
+      "name": "Close",
+      "milliseconds": 3
+    },
+    {
+      "name": "Downloads",
+      "milliseconds": 12
+    },
+    {
+      "name": "Close",
+      "milliseconds": 3
+    },
+    {
+      "name": "Settings",
+      "milliseconds": 11
+    },
+    {
+      "name": "Home & widgets",
+      "milliseconds": 11
+    },
+    {
+      "name": "Account",
+      "milliseconds": 9
+    },
+    {
+      "name": "Discord",
+      "milliseconds": 9
+    },
+    {
+      "name": "Updates",
+      "milliseconds": 9
+    },
+    {
+      "name": "Syncing",
+      "milliseconds": 10
+    },
+    {
+      "name": "Launcher",
+      "milliseconds": 10
+    },
+    {
+      "name": "Accessibility",
+      "milliseconds": 10
+    },
+    {
+      "name": "About",
+      "milliseconds": 10
+    },
+    {
+      "name": "Appearance",
+      "milliseconds": 10
+    },
+    {
+      "name": "Home",
+      "milliseconds": 12
+    }
+  ]
+}
