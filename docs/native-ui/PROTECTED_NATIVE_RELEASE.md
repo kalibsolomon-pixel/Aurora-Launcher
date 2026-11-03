@@ -1,7 +1,7 @@
 # Protected native preview release
 
-Native 2.0.1 is the current stable release. See its
-[release record](../releases/NATIVE_2_0_1_RELEASE.md) for the verified current
+Native 2.1.0 is the current stable release. See its
+[release record](../releases/NATIVE_2_1_0_RELEASE.md) for the verified current
 authority and exact protected workflow result. The 2.0.0 bootstrap record below
 is historical; always observe the live authority parent before dispatch.
 
