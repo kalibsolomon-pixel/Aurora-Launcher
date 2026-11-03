@@ -1,6 +1,7 @@
 // Home widgets: a small fixed grid with add, remove and reorder. Rust builds
 // every card from existing launcher records (gameplay history, instance
 // state, system media sessions); cards never poll or compute on their own.
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Icon, Icons } from "icons.slint";
 import { Button, ButtonKind, IconButton, Spinner, Dropdown, Tooltip, KeyboardFocus, FocusRing } from "components.slint";
@@ -11,6 +12,10 @@ export struct WidgetLine {
     label: string,
     value: string,
     detail: string,
+    target-id: string,
+    playable: bool,
+    favorite: bool,
+    artwork: image,
 }
 
 export struct WidgetView {
@@ -35,6 +40,12 @@ export global Widgets {
     in property <[WidgetChoice]> available;
     in property <[string]> available-names;
     in-out property <bool> editing: false;
+    callback quick-play(string, string);
+    callback favorite-server(string, bool);
+    callback server-view(bool);
+    callback refresh-servers();
+    in property <bool> refreshing-servers;
+    in-out property <bool> favorites: false;
     callback add(string);
     callback remove(string);
     callback move(string, int);
@@ -50,6 +61,7 @@ export global Widgets {
     in property <int> grid-rows;
     in property <[string]> names;
     in property <[string]> positions;
+    in-out property <int> playtime-period: 0;
     in property <[PlaytimePoint]> week;
     in property <[PlaytimePoint]> month;
     in property <string> week-peak;
@@ -169,37 +181,66 @@ component WidgetGesture inherits Rectangle {
     if root.resizing: Text { text: "◢"; color: touch.has-hover ? Theme.accent : Theme.text-muted; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
 }
 
+component PlaytimePeriods inherits HorizontalLayout {
+    spacing: 2px;
+    for period[index] in ["7D", "30D", "All"]: Button {
+        text: period; compact: true; selected: Widgets.playtime-period == index;
+        kind: Widgets.playtime-period == index ? ButtonKind.secondary : ButtonKind.ghost;
+        clicked => { Widgets.playtime-period = index; }
+    }
+}
+
 component PlaytimeCard inherits Rectangle {
     in property <WidgetView> item;
     background: Theme.surface;
     border-radius: Theme.radius-lg;
     accessible-role: groupbox;
     accessible-label: "Daily playtime graph";
-    property <bool> expanded: root.width >= 440px;
+    property <bool> expanded: Widgets.playtime-period == 1;
+    property <bool> all-time: Widgets.playtime-period == 2;
     property <[PlaytimePoint]> points: expanded ? Widgets.month : Widgets.week;
     VerticalLayout {
         padding: 14px; spacing: 8px;
-        CardHeader { item: root.item; }
         HorizontalLayout {
-            Text { text: root.expanded ? "Last 30 days" : "Last 7 days"; font-size: Theme.text-metadata; color: Theme.text-secondary; horizontal-stretch: 1; }
-            if root.item.lines.length > 0: Text { text: root.item.lines[root.expanded ? 2 : 1].value; font-size: Theme.text-body; font-weight: 600; color: Theme.text; }
+            spacing: 4px;
+            CardHeader { item: root.item; horizontal-stretch: 1; }
+            if root.width >= 250px && root.item.lines.length > 0: PlaytimePeriods {}
+        }
+        if root.width < 250px && root.item.lines.length > 0: PlaytimePeriods {}
+        if root.item.lines.length == 0: Text {
+            text: root.item.loading ? "Loading playtime..." : root.item.empty;
+            color: Theme.text-muted; font-size: Theme.text-metadata;
+            vertical-stretch: 1; wrap: word-wrap; vertical-alignment: center;
+        }
+        if root.item.lines.length > 0: HorizontalLayout {
+            spacing: 8px;
+            Text { text: root.item.lines[root.all-time ? 3 : (root.expanded ? 2 : 1)].value; font-size: Theme.text-identity; font-weight: 600; color: Theme.text; }
+            Text { text: root.all-time ? "All recorded time" : (root.expanded ? "Last 30 days" : "Last 7 days"); font-size: Theme.text-metadata; color: Theme.text-secondary; horizontal-stretch: 1; vertical-alignment: center; overflow: elide; }
+        }
+        if root.all-time && root.item.lines.length > 0: VerticalLayout {
+            vertical-stretch: 1; alignment: center; spacing: 4px;
+            Text { text: "Last 30 days  " + root.item.lines[2].value; color: Theme.text-secondary; font-size: Theme.text-metadata; }
+            Text { text: "Last 7 days  " + root.item.lines[1].value; color: Theme.text-secondary; font-size: Theme.text-metadata; }
         }
         plot := Rectangle {
+            visible: root.item.lines.length > 0 && !root.all-time;
             vertical-stretch: 1;
-            min-height: 48px;
+            min-height: root.width < 250px ? 32px : 48px;
+            property <length> label-height: root.expanded ? 0px : 16px;
             property <length> cell-width: (self.width - 44px) / max(1, root.points.length);
             Text { x: 0px; y: 0px; width: 40px; height: 14px; horizontal-alignment: left; text: root.expanded ? Widgets.month-peak : Widgets.week-peak; color: Theme.text-muted; font-size: Theme.text-label; }
             Text { x: 0px; width: 40px; height: 14px; y: parent.height - self.height; horizontal-alignment: left; text: "0 min"; color: Theme.text-muted; font-size: Theme.text-label; }
             for point[i] in root.points: Rectangle {
-                x: 44px + i * plot.cell-width; width: plot.cell-width; height: plot.height;
+                x: 44px + i * plot.cell-width; width: plot.cell-width; height: plot.height - plot.label-height;
                 accessible-role: text; accessible-label: point.detail;
-                Rectangle { x: 2px; width: max(2px, parent.width - 4px); height: max(2px, point.fraction * (plot.height - 4px)); y: parent.height - self.height; border-radius: 2px; background: point.fraction > 0 ? (hover.has-hover ? Theme.accent-hover : Theme.accent) : Theme.hover; }
+                Rectangle { x: 2px; width: max(1px, parent.width - 3px); height: max(2px, point.fraction * (plot.height - 4px)); y: parent.height - self.height; border-radius: 2px; background: point.fraction > 0 ? (hover.has-hover ? Theme.accent-hover : Theme.accent) : Theme.hover; }
+                if !root.expanded: Text { y: parent.height + 2px; width: parent.width; text: point.label; color: Theme.text-muted; font-size: Theme.text-label; horizontal-alignment: center; overflow: elide; }
                 hover := TouchArea {}
                 if hover.has-hover: Tooltip { text: point.label + ": " + point.value; x: min(0px, plot.width - i * plot.cell-width - self.width); y: -self.height - 4px; }
             }
         }
-        HorizontalLayout {
-            Text { text: root.points.length > 0 ? root.points[0].label : ""; color: Theme.text-muted; font-size: Theme.text-label; horizontal-stretch: 1; }
+        if root.item.lines.length > 0 && !root.all-time: HorizontalLayout {
+            Text { text: root.expanded && root.points.length > 0 ? root.points[0].label : ""; color: Theme.text-muted; font-size: Theme.text-label; horizontal-stretch: 1; }
             Text { text: "Today · UTC"; color: Theme.text-muted; font-size: Theme.text-label; }
         }
     }
@@ -214,29 +255,53 @@ component ListCard inherits Rectangle {
     clip: true;
     accessible-role: groupbox;
     accessible-label: root.item.title;
-    property <int> visible-lines: max(1, floor((root.height - 70px) / (root.height > 280px ? 44px : 36px)));
+    property <bool> servers: root.item.id == "recent-servers";
+    property <bool> destinations: root.servers || root.item.id == "recent-worlds";
     VerticalLayout {
-        padding: 14px; spacing: 8px;
+        padding: 14px; spacing: 6px;
         CardHeader { item: root.item; first: root.first; last: root.last; }
-        Rectangle {
+        if root.servers: HorizontalLayout {
+            spacing: 4px;
+            Button { text: "Recent"; compact: true; kind: ButtonKind.ghost; selected: !Widgets.favorites; clicked => { Widgets.favorites = false; Widgets.server-view(false); } }
+            Button { text: "Favorites"; compact: true; kind: ButtonKind.ghost; selected: Widgets.favorites; clicked => { Widgets.favorites = true; Widgets.server-view(true); } }
+            if root.item.lines.length > 0: IconButton { icon: Icons.refresh; label: "Refresh server status"; size: 30px; enabled: !Widgets.refreshing-servers; clicked => { Widgets.refresh-servers(); } }
+        }
+        if root.item.lines.length == 0 && !root.item.loading: Text {
+            vertical-stretch: 1; text: root.item.empty; color: Theme.text-muted; font-size: Theme.text-metadata;
+            wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center;
+        }
+        if root.item.lines.length > 0: ScrollView {
             vertical-stretch: 1;
-            if root.item.lines.length == 0 && !root.item.loading: Text {
-                x: (parent.width - self.width) / 2; width: min(parent.width, 400px); height: parent.height;
-                text: root.item.empty; color: Theme.text-muted; font-size: Theme.text-metadata;
-                wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center;
-            }
-            if root.item.lines.length > 0: VerticalLayout {
-                alignment: center; spacing: root.height > 280px ? 12px : 4px;
-                for index in min(root.visible-lines, root.item.lines.length): HorizontalLayout {
-                    property <WidgetLine> line: root.item.lines[index];
-                    height: min(64px, max(32px, (root.height - 70px) / max(1, min(root.visible-lines, root.item.lines.length)) - 12px));
-                    spacing: 8px;
-                    VerticalLayout {
-                        horizontal-stretch: 1; alignment: center; spacing: 2px;
-                        Text { text: line.label; color: Theme.text-secondary; font-size: root.width > 440px && root.height > 280px ? Theme.text-identity : Theme.text-secondary-size; overflow: elide; }
-                        if line.detail != "": Text { text: line.detail; color: Theme.text-muted; font-size: Theme.text-label; overflow: elide; }
+            content-width: self.visible-width;
+            VerticalLayout {
+                alignment: start;
+                for line[index] in root.item.lines: Rectangle {
+                    height: root.destinations ? 48px : 36px;
+                    if index > 0: Rectangle { width: parent.width; height: 1px; background: Theme.border; }
+                    HorizontalLayout {
+                        spacing: 4px;
+                        if line.artwork.width > 0 && root.width >= 240px: Image {
+                            source: line.artwork; width: 28px; height: 28px; y: (parent.height - self.height) / 2; image-fit: contain;
+                        }
+                        VerticalLayout {
+                            horizontal-stretch: 1; alignment: center; spacing: 2px;
+                            Text { text: line.label; color: Theme.text-secondary; font-size: Theme.text-secondary-size; overflow: elide; }
+                            if line.detail != "": Text { text: root.destinations ? line.value + " · " + line.detail : line.detail; color: Theme.text-muted; font-size: Theme.text-label; overflow: elide; }
+                        }
+                        if !root.destinations: Text { text: line.value; color: Theme.text; font-size: Theme.text-secondary-size; vertical-alignment: center; }
+                        if root.servers && line.target-id != "": IconButton {
+                            icon: line.favorite ? Icons.star-filled : Icons.star;
+                            label: (line.favorite ? "Remove favorite " : "Favorite ") + line.label;
+                            size: 30px; y: (parent.height - self.height) / 2;
+                            clicked => { Widgets.favorite-server(line.target-id, !line.favorite); }
+                        }
+                        if root.destinations && line.target-id != "": IconButton {
+                            icon: Icons.play; label: "Quick Play " + line.label;
+                            size: 30px; y: (parent.height - self.height) / 2;
+                            enabled: line.playable && !Widgets.editing;
+                            clicked => { Widgets.quick-play(root.servers ? "server" : "world", line.target-id); }
+                        }
                     }
-                    Text { text: line.value; color: Theme.text; font-size: Theme.text-secondary-size; font-weight: 600; horizontal-alignment: right; vertical-alignment: center; }
                 }
             }
         }
@@ -311,7 +376,7 @@ export component WidgetGrid inherits Rectangle {
             y: row * (root.card-height + root.gap);
             for col in root.columns: Rectangle {
                 x: col * (root.card-width + root.gap); width: root.card-width; height: root.card-height;
-                border-width: 1px; border-color: Theme.border; border-radius: Theme.radius-lg;
+                border-width: 1px; border-color: Theme.border.with-alpha(0.35); border-radius: Theme.radius-lg;
             }
         }
     }
@@ -333,6 +398,19 @@ export component WidgetGrid inherits Rectangle {
         height: Widgets.preview-height * (root.card-height + root.gap) - root.gap;
         border-width: 2px; border-color: Theme.accent; border-radius: Theme.radius-lg;
         background: Theme.accent.with-alpha(0.08);
+    }
+
+    for item in Widgets.items: Rectangle {
+        visible: Widgets.editing && Widgets.active-id != "" && Widgets.active-id != item.id
+            && Widgets.preview-column < item.column + item.width
+            && item.column < Widgets.preview-column + Widgets.preview-width
+            && Widgets.preview-row < item.row + item.height
+            && item.row < Widgets.preview-row + Widgets.preview-height;
+        x: item.column * (root.card-width + root.gap);
+        y: item.row * (root.card-height + root.gap);
+        width: item.width * (root.card-width + root.gap) - root.gap;
+        height: item.height * (root.card-height + root.gap) - root.gap;
+        border-width: 2px; border-color: Theme.error; border-radius: Theme.radius-lg;
     }
 
 }

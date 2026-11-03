@@ -5866,46 +5866,24 @@ fn validate_quick_world(
                 "The saved world identity is invalid.",
             )
         })?;
-    let root = managed.instance_paths(instance).root().join("saves");
-    let target = root.join(world.as_str());
-    let metadata = std::fs::symlink_metadata(&target).map_err(|_| {
-        CommandError::new("quick_world_missing", "This world is no longer available.")
-    })?;
-    let level = std::fs::symlink_metadata(target.join("level.dat"));
-    if !metadata.file_type().is_dir() || !level.is_ok_and(|item| item.file_type().is_file()) {
+    let target = managed
+        .instance_paths(instance)
+        .root()
+        .join("saves")
+        .join(world.as_str());
+    let target = crate::install::coordination::checked_directory(managed.data_root(), &target)
+        .map_err(|_| {
+            CommandError::new(
+                "quick_world_missing",
+                "This world is unavailable or outside its instance.",
+            )
+        })?;
+    if !std::fs::symlink_metadata(target.join("level.dat"))
+        .is_ok_and(|item| item.is_file() && !crate::install::coordination::redirected(&item))
+    {
         return Err(CommandError::new(
             "quick_world_missing",
             "This world is no longer available.",
-        ));
-    }
-    let root_real = std::fs::canonicalize(&root).map_err(|_| {
-        CommandError::new("quick_world_missing", "This world is no longer available.")
-    })?;
-    let instance_real =
-        std::fs::canonicalize(managed.instance_paths(instance).root()).map_err(|_| {
-            CommandError::new(
-                "quick_instance_missing",
-                "The instance for this recent target no longer exists.",
-            )
-        })?;
-    if !std::fs::symlink_metadata(&root).is_ok_and(|item| item.file_type().is_dir())
-        || !root_real.starts_with(instance_real)
-    {
-        return Err(CommandError::new(
-            "quick_world_invalid",
-            "The saved world is outside this instance.",
-        ));
-    }
-    let target_real = std::fs::canonicalize(&target).map_err(|_| {
-        CommandError::new(
-            "quick_world_invalid",
-            "The saved world is outside this instance.",
-        )
-    })?;
-    if !target_real.starts_with(root_real) {
-        return Err(CommandError::new(
-            "quick_world_invalid",
-            "The saved world is outside this instance.",
         ));
     }
     Ok(())
@@ -6641,6 +6619,22 @@ async fn play_instance_with_target(
                     }
                 }));
             }
+            // Minecraft writes this after handling the login packet, for normal
+            // launches as well as Quick Play. A new path cannot replay old data.
+            let logs = managed.instance_paths(&instance).logs().to_path_buf();
+            let activity_log = (presence_version == "1.21.11")
+                .then(|| crate::launch::activity_log::SessionLog::new(managed.data_root(), &logs))
+                .flatten();
+            let spec = match &activity_log {
+                Some(log) => spec.with_activity_log(log.argument()),
+                None if quick_target.is_some() => {
+                    return Err(CommandError::new(
+                        "quick_activity_path_invalid",
+                        "The instance logs directory is unavailable for Quick Play.",
+                    ));
+                }
+                None => spec,
+            };
             let history_path = managed.gameplay_history_file();
             let history_instance = instance.clone();
             let snapshot = crate::launch::process::spawn_supervised_with_bridge(
@@ -6671,6 +6665,11 @@ async fn play_instance_with_target(
                                 } else {
                                     crate::gameplay_history::Outcome::Abnormal
                                 };
+                                if let Some(visit) =
+                                    activity_log.as_ref().and_then(|log| log.read())
+                                {
+                                    let _ = active.record_game_visit(visit);
+                                }
                                 let _ = active.finish(outcome);
                             }
                         }

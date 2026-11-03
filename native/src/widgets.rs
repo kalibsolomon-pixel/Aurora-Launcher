@@ -34,6 +34,9 @@ struct State {
     columns: i32,
     saving: bool,
     daily: Vec<api::DailyPlaytime>,
+    server_favorites: bool,
+    refreshing_servers: bool,
+    server_status: std::collections::HashMap<String, (String, slint::Image)>,
 }
 
 thread_local! {
@@ -69,7 +72,80 @@ pub fn bind(window: &crate::AppWindow) {
         STATE.with(|s| s.borrow_mut().columns = columns);
         edit(|layout| arrange(layout, id.as_str(), column, row, width, height, columns));
     });
+    widgets.on_quick_play(|mode, id| crate::home::quick_play(mode.into(), id.into()));
+    widgets.on_server_view(|favorites| {
+        STATE.with(|s| s.borrow_mut().server_favorites = favorites);
+        render();
+    });
+    widgets.on_refresh_servers(refresh_servers);
+    widgets.on_favorite_server(|id, favorite| {
+        ui::spawn_api(
+            api::favorite_server(ui::host(), id.into(), favorite),
+            |result| match result {
+                Ok(()) => refresh(),
+                Err(error) => ui::error_toast(&error),
+            },
+        );
+    });
     crate::media::bind(window);
+}
+
+fn refresh_servers() {
+    use base64::Engine;
+    let ids = STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        if state.refreshing_servers {
+            return Vec::new();
+        }
+        let ids: Vec<_> = state
+            .data
+            .get("recent-servers")
+            .into_iter()
+            .flatten()
+            .filter(|row| !state.server_favorites || row.favorite)
+            .take(20)
+            .map(|row| row.target_id.to_string())
+            .collect();
+        state.refreshing_servers = !ids.is_empty();
+        ids
+    });
+    if ids.is_empty() {
+        return;
+    }
+    render();
+    ui::spawn_api(api::refresh_server_status(ui::host(), ids), |result| {
+        STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.refreshing_servers = false;
+            if let Ok(statuses) = &result {
+                state.server_status = statuses
+                    .iter()
+                    .map(|row| {
+                        let image = row
+                            .favicon
+                            .as_deref()
+                            .and_then(|s| s.strip_prefix("data:image/png;base64,"))
+                            .filter(|s| s.len() <= 128 * 1024)
+                            .and_then(|s| base64::engine::general_purpose::STANDARD.decode(s).ok())
+                            .and_then(|bytes| {
+                                slint::Image::load_from_data(&bytes, Some("png")).ok()
+                            })
+                            .unwrap_or_default();
+                        let label = if row.status == "online" {
+                            "Online"
+                        } else {
+                            "No response"
+                        };
+                        (row.target_id.clone(), (label.to_owned(), image))
+                    })
+                    .collect();
+            }
+        });
+        if let Err(error) = result {
+            ui::error_toast(&error);
+        }
+        render();
+    });
 }
 
 /// The core's untouched default means "never customized": this host shows
@@ -292,12 +368,29 @@ pub fn refresh() {
     let host = ui::host();
     ui::spawn(
         async move {
-            let playtime = api::playtime(host.clone(), instance.clone()).await;
-            let daily = api::daily_playtime(host.clone(), instance.clone()).await;
-            let servers = api::recent_servers(host.clone(), None, 5).await;
-            let worlds = match &instance {
-                Some(id) => api::recent_worlds(host, Some(id.clone()), 5).await,
-                None => Ok(Vec::new()),
+            let (playtime, daily) = if shown.contains(&"playtime") {
+                (
+                    api::playtime(host.clone(), instance.clone()).await.ok(),
+                    api::daily_playtime(host.clone(), instance.clone())
+                        .await
+                        .unwrap_or_default(),
+                )
+            } else {
+                (None, Vec::new())
+            };
+            let servers = if shown.contains(&"recent-servers") {
+                api::recent_servers(host.clone(), None, 200)
+                    .await
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            let worlds = if shown.contains(&"recent-worlds") {
+                api::recent_worlds(host, instance, 32)
+                    .await
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
             };
             (playtime, daily, servers, worlds)
         },
@@ -309,18 +402,23 @@ pub fn refresh() {
             let names = ui::state(|s| {
                 s.instances()
                     .iter()
-                    .map(|i| (i.id.clone(), i.display_name.clone()))
+                    .map(|i| {
+                        (
+                            i.id.clone(),
+                            (i.display_name.clone(), i.minecraft_version == "1.21.11"),
+                        )
+                    })
                     .collect::<std::collections::HashMap<_, _>>()
             });
             let now = now_secs();
             STATE.with(|s| {
                 let mut s = s.borrow_mut();
                 s.loading = false;
-                s.daily = daily.unwrap_or_default();
+                s.daily = daily;
                 s.data.insert(
                     "playtime",
                     match playtime {
-                        Ok(p) if p.all_time_ms > 0 => vec![
+                        Some(p) if p.all_time_ms > 0 => vec![
                             line("Today", &duration(p.today_ms), ""),
                             line("Last 7 days", &duration(p.last_7_days_ms), ""),
                             line("Last 30 days", &duration(p.last_30_days_ms), ""),
@@ -329,43 +427,33 @@ pub fn refresh() {
                         _ => Vec::new(),
                     },
                 );
-                s.data.insert(
-                    "recent-servers",
-                    servers
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|t| {
-                            let instance = names.get(&t.instance_id).cloned().unwrap_or_default();
-                            line(
-                                &t.display_name,
-                                &relative(t.last_played_at, now),
-                                &if t.favorite {
-                                    format!("Favorite · {instance}")
-                                } else {
-                                    instance
-                                },
-                            )
-                        })
-                        .collect(),
-                );
-                s.data.insert(
-                    "recent-worlds",
-                    worlds
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|t| {
-                            line(
-                                &t.display_name,
-                                &relative(t.last_played_at, now),
-                                &if t.available {
-                                    format!("Played {}", duration(t.duration_ms))
-                                } else {
-                                    "No longer in this instance".into()
-                                },
-                            )
-                        })
-                        .collect(),
-                );
+                for (id, targets) in [("recent-servers", servers), ("recent-worlds", worlds)] {
+                    s.data.insert(
+                        id,
+                        targets
+                            .into_iter()
+                            .map(|target| {
+                                let (instance, compatible) =
+                                    names.get(&target.instance_id).cloned().unwrap_or_default();
+                                WidgetLine {
+                                    label: target.display_name.into(),
+                                    value: relative(target.last_played_at, now).into(),
+                                    detail: if !target.available {
+                                        "Destination unavailable".into()
+                                    } else if !compatible {
+                                        format!("{instance} · Quick Play requires 1.21.11").into()
+                                    } else {
+                                        instance.into()
+                                    },
+                                    target_id: target.id.into(),
+                                    playable: target.available && compatible,
+                                    favorite: target.favorite,
+                                    ..Default::default()
+                                }
+                            })
+                            .collect(),
+                    );
+                }
             });
             render();
         },
@@ -377,6 +465,7 @@ fn line(label: &str, value: &str, detail: &str) -> WidgetLine {
         label: label.into(),
         value: value.into(),
         detail: detail.into(),
+        ..Default::default()
     }
 }
 
@@ -401,7 +490,7 @@ pub fn duration(ms: u64) -> String {
 /// Seconds-since-epoch → "Today", "Yesterday", "3 days ago", "5 weeks ago".
 pub fn relative(at: u64, now: u64) -> String {
     let at = if at > 100_000_000_000 { at / 1000 } else { at };
-    let days = now.saturating_sub(at) / 86_400;
+    let days = (now / 86_400).saturating_sub(at / 86_400);
     match days {
         0 => "Today".into(),
         1 => "Yesterday".into(),
@@ -437,7 +526,7 @@ fn details() -> Vec<WidgetLine> {
 }
 
 pub fn render() {
-    let (layout, data, loading, columns, daily) = STATE.with(|s| {
+    let (layout, data, loading, columns, daily, favorites, status, refreshing) = STATE.with(|s| {
         let s = s.borrow();
         (
             s.layout.clone(),
@@ -445,6 +534,9 @@ pub fn render() {
             s.loading,
             if s.columns == 0 { 6 } else { s.columns },
             s.daily.clone(),
+            s.server_favorites,
+            s.server_status.clone(),
+            s.refreshing_servers,
         )
     });
     let Some(layout) = layout else { return };
@@ -471,8 +563,24 @@ pub fn render() {
                 loading,
             ),
             "recent-servers" => (
-                data.get(id).cloned().unwrap_or_default(),
-                "No servers yet. Servers you join from an Aurora instance appear here.",
+                data.get(id)
+                    .into_iter()
+                    .flatten()
+                    .filter(|row| !favorites || row.favorite)
+                    .cloned()
+                    .map(|mut row| {
+                        if let Some((label, icon)) = status.get(row.target_id.as_str()) {
+                            row.value = format!("{} · {label}", row.value).into();
+                            row.artwork = icon.clone();
+                        }
+                        row
+                    })
+                    .collect(),
+                if favorites {
+                    "No favorite servers yet."
+                } else {
+                    "Observed server visits appear here after Minecraft closes."
+                },
                 loading,
             ),
             "recent-worlds" => (
@@ -536,6 +644,7 @@ pub fn render() {
         } else {
             widgets.set_items(ui::model(items));
         }
+        widgets.set_refreshing_servers(refreshing);
         widgets.set_available_names(ui::model(
             available
                 .iter()
@@ -607,47 +716,59 @@ fn arrange(
     height: i32,
     columns: i32,
 ) {
-    let Some(index) = layout
+    if !layout
         .widgets
         .iter()
-        .position(|w| w.id == id && w.enabled && is_native(id))
-    else {
-        return;
-    };
-    let width = width.clamp(1, 6);
-    let max_column = (columns.clamp(1, 6) - width.min(columns.clamp(1, 6))).min(6 - width);
-    layout.widgets[index].grid = Some(api::WidgetGrid {
-        columns: width as u8,
-        rows: height.clamp(1, 3) as u8,
-        position: Some([column.clamp(0, max_column) as u8, row.clamp(0, 63) as u8]),
-    });
-    // Give the manipulated card first claim, while preserving the saved entry order.
-    let mut prioritized = layout.clone();
-    let moved = prioritized.widgets.remove(index);
-    prioritized.widgets.insert(0, moved);
-    let positions = grid_positions(&prioritized, columns);
-    for (widget, (c, r, w, h)) in prioritized
-        .widgets
-        .iter()
-        .filter(|w| w.enabled && is_native(&w.id))
-        .zip(positions)
+        .any(|w| w.id == id && w.enabled && is_native(id))
     {
-        let target = layout
-            .widgets
-            .iter_mut()
-            .find(|w| w.id == widget.id)
-            .unwrap();
-        let mut grid = target.grid.clone().unwrap_or(api::WidgetGrid {
-            columns: w as u8,
-            rows: h as u8,
-            position: None,
-        });
-        grid.position = Some([c as u8, r as u8]);
-        // A move on a narrow viewport must not erase the saved wider size.
-        if target.id == id {
-            grid.columns = width as u8;
+        return;
+    }
+    let width = width.clamp(1, 6);
+    let height = height.clamp(1, 3);
+    let shown_width = width.min(columns);
+    let column = column.clamp(0, (columns - shown_width).min(6 - width));
+    let row = row.clamp(0, 63);
+    let visible = layout
+        .widgets
+        .iter()
+        .filter(|w| w.enabled && is_native(&w.id));
+    let positions = grid_positions(layout, columns);
+    if visible.zip(&positions).any(|(widget, &(c, r, w, h))| {
+        widget.id != id
+            && column < c + w
+            && c < column + shown_width
+            && row < r + h
+            && r < row + height
+    }) {
+        return;
+    }
+    let mut positions = positions.into_iter();
+    for widget in layout
+        .widgets
+        .iter_mut()
+        .filter(|w| w.enabled && is_native(&w.id))
+    {
+        let (c, r, _, h) = positions.next().expect("one position per visible widget");
+        if widget.id == id {
+            widget.grid = Some(api::WidgetGrid {
+                columns: width as u8,
+                rows: height as u8,
+                position: Some([column as u8, row as u8]),
+            });
+        } else if widget
+            .grid
+            .as_ref()
+            .and_then(|grid| grid.position)
+            .is_none()
+        {
+            // Freeze legacy auto-placed neighbors when the layout first gains an anchor.
+            let grid = widget.grid.get_or_insert_with(|| api::WidgetGrid {
+                columns: if widget.size == "small" { 2 } else { 4 },
+                rows: h as u8,
+                position: None,
+            });
+            grid.position = Some([c.min(6 - i32::from(grid.columns)) as u8, r as u8]);
         }
-        target.grid = Some(grid);
     }
 }
 
@@ -779,7 +900,7 @@ mod tests {
     }
 
     #[test]
-    fn dragging_displaces_collisions_and_preserves_unrecognized_widgets() {
+    fn dragging_refuses_collisions_and_preserves_unrecognized_widgets() {
         let mut layout = HomeLayout {
             widgets: vec![
                 placement("playtime", true),
@@ -788,9 +909,13 @@ mod tests {
             ],
         };
         let unknown = layout.widgets[2].clone();
+        let original = layout.clone();
         arrange(&mut layout, "media", 0, 0, 3, 2, 6);
+        assert_eq!(layout, original);
+        arrange(&mut layout, "media", 2, 0, 3, 2, 6);
         let positions = grid_positions(&layout, 6);
-        assert_eq!(positions[1], (0, 0, 3, 2));
+        assert_eq!(positions[0], (0, 0, 2, 1));
+        assert_eq!(positions[1], (2, 0, 3, 2));
         assert_eq!(layout.widgets[2], unknown);
         let mut cells = std::collections::HashSet::new();
         for (c, r, w, h) in positions {

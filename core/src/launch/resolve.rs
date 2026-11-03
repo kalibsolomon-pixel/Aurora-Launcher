@@ -126,10 +126,13 @@ impl LaunchSpec {
             .push(ResolvedArgument::Sensitive(SecretString::new(
                 value.to_owned(),
             )));
+        self
+    }
+
+    pub(crate) fn with_activity_log(mut self, relative: String) -> Self {
         self.game_arguments
             .push(ResolvedArgument::Plain("--quickPlayPath".into()));
-        self.game_arguments
-            .push(ResolvedArgument::Plain("logs/quickplay.txt".into()));
+        self.game_arguments.push(ResolvedArgument::Plain(relative));
         self
     }
     pub fn instance_id(&self) -> &str {
@@ -914,7 +917,9 @@ mod tests {
                 .unwrap(),
             server: crate::gameplay_history::ServerTarget::parse("private.invalid".into()).unwrap(),
         };
-        let quick = spec.with_quick_target(&target);
+        let quick = spec
+            .with_quick_target(&target)
+            .with_activity_log("logs/aurora-activity-fixture.json".into());
         assert_eq!(quick.java_executable(), java);
         assert_eq!(quick.jvm_arguments(), jvm);
         assert!(

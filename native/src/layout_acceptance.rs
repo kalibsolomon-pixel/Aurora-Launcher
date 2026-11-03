@@ -582,14 +582,29 @@ fn responsive_widget(app: &AppWindow, id: &str, columns: i32, rows: i32) {
             empty: "No servers yet.".into(),
             ..Default::default()
         });
-    if id == "recent-worlds" {
-        item.title = "Worlds".into();
+    if matches!(id, "recent-worlds" | "recent-servers") {
+        let world = id == "recent-worlds";
+        item.title = if world { "Worlds" } else { "Servers" }.into();
         item.lines = ui_model(
             (0..8)
                 .map(|i| crate::WidgetLine {
-                    label: format!("Saved world {i}").into(),
+                    label: if world {
+                        format!("Workshop world {i}")
+                    } else {
+                        format!("Workshop server {i}")
+                    }
+                    .into(),
                     detail: "Minecraft 1.21.11".into(),
-                    value: "Today".into(),
+                    value: if !world && i == 0 {
+                        "Today · Online"
+                    } else {
+                        "Today"
+                    }
+                    .into(),
+                    target_id: format!("fixture-{i}").into(),
+                    playable: i != 2,
+                    favorite: !world && i == 0,
+                    ..Default::default()
                 })
                 .collect(),
         );
@@ -630,6 +645,20 @@ fn scenes() -> Vec<(&'static str, Scene)> {
         }),
         ("responsive-chart-narrow", |app| {
             responsive_widget(app, "playtime", 1, 3)
+        }),
+        ("ui2-servers", |app| {
+            responsive_widget(app, "recent-servers", 3, 2)
+        }),
+        ("ui2-worlds", |app| {
+            responsive_widget(app, "recent-worlds", 3, 2)
+        }),
+        ("ui2-playtime-30d", |app| {
+            responsive_widget(app, "playtime", 3, 1);
+            app.global::<crate::Widgets>().set_playtime_period(1);
+        }),
+        ("ui2-playtime-all", |app| {
+            responsive_widget(app, "playtime", 3, 1);
+            app.global::<crate::Widgets>().set_playtime_period(2);
         }),
         ("dashboard-compact", |app| dashboard(app, false, false)),
         ("dashboard-large", |app| dashboard(app, false, true)),

@@ -884,6 +884,45 @@ pub struct Recorder {
     >,
 }
 impl Recorder {
+    pub(crate) fn record_game_visit(
+        &self,
+        visit: crate::launch::activity_log::GameVisit,
+    ) -> Result<(), ()> {
+        let stamp = visit.written_at;
+        if stamp < self.started_at || stamp > now() {
+            return Ok(());
+        }
+        self.store.edit(|doc| {
+            let Some(session) = doc.sessions.iter_mut().find(|s| s.id == self.id) else {
+                return;
+            };
+            // The optional bridge can already have recorded this same visit,
+            // including the transition to Unknown when its receiver stops.
+            if session.visits.iter().any(|item| {
+                item.mode == visit.mode
+                    && item.world == visit.world
+                    && item.server == visit.server
+                    && item.started_at <= stamp
+                    && item.ended_at >= stamp
+            }) {
+                return;
+            }
+            if session.visits.len() == MAX_VISITS {
+                session.visits.remove(0);
+            }
+            session.visits.push(Visit {
+                mode: visit.mode,
+                started_at: stamp,
+                ended_at: stamp,
+                duration_ms: 0,
+                world: visit.world,
+                server: visit.server,
+                display: visit.display,
+            });
+            session.visits.sort_by_key(|item| item.started_at);
+        })
+    }
+
     pub fn observe(
         &self,
         mode: Mode,
