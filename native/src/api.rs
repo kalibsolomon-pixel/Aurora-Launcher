@@ -743,6 +743,21 @@ pub async fn daily_playtime(
     blocking(move || convert(app::get_daily_playtime(host, instance_id, 30))).await?
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaytimeInterval {
+    pub start_day: u64,
+    pub end_day: u64,
+    pub duration_ms: u64,
+}
+
+pub async fn historical_playtime(
+    host: Host,
+    instance_id: Option<String>,
+) -> ApiResult<Vec<PlaytimeInterval>> {
+    blocking(move || convert(app::get_historical_playtime(host, instance_id))).await?
+}
+
 pub async fn playtime(host: Host, instance_id: Option<String>) -> ApiResult<Playtime> {
     blocking(move || convert(app::get_playtime_summary(host, instance_id))).await?
 }
@@ -764,7 +779,27 @@ pub async fn recent_servers(
     instance_id: Option<String>,
     limit: usize,
 ) -> ApiResult<Vec<RecentTarget>> {
-    blocking(move || convert(app::get_recent_servers(host, instance_id, limit))).await?
+    blocking(move || convert(app::get_home_servers(host, instance_id, limit))).await?
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedDestination {
+    pub id: String,
+    pub display_name: String,
+    pub identity: String,
+    pub last_played_ms: u64,
+    pub detail: String,
+    pub icon: Option<Vec<u8>>,
+    pub favorite: bool,
+}
+
+pub async fn saved_destinations(
+    host: Host,
+    instance: String,
+    worlds: bool,
+) -> ApiResult<Vec<SavedDestination>> {
+    blocking(move || convert(app::get_saved_destinations(host, instance, worlds))).await?
 }
 
 #[derive(Deserialize)]
@@ -781,6 +816,14 @@ pub async fn refresh_server_status(
 ) -> ApiResult<Vec<ServerStatus>> {
     let request = request(json!({ "targetIds": target_ids }))?;
     convert(app::refresh_recent_server_status(host, request).await)
+}
+
+pub async fn refresh_saved_server_status(
+    host: Host,
+    instance: String,
+    ids: Vec<String>,
+) -> ApiResult<Vec<ServerStatus>> {
+    convert(app::refresh_saved_server_status(host, instance, ids).await)
 }
 
 pub async fn recent_worlds(
@@ -864,7 +907,14 @@ pub async fn quick_play(
 }
 
 pub async fn favorite_server(host: Host, target_id: String, favorite: bool) -> ApiResult<()> {
-    blocking(move || convert(app::set_recent_server_favorite(host, target_id, favorite))).await?
+    blocking(move || {
+        if target_id.contains(':') {
+            convert(app::set_saved_server_favorite(host, target_id, favorite))
+        } else {
+            convert(app::set_recent_server_favorite(host, target_id, favorite))
+        }
+    })
+    .await?
 }
 
 pub async fn runtime_status(host: Host, instance_id: String) -> ApiResult<RuntimeStatus> {

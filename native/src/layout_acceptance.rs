@@ -652,13 +652,24 @@ fn scenes() -> Vec<(&'static str, Scene)> {
         ("ui2-worlds", |app| {
             responsive_widget(app, "recent-worlds", 3, 2)
         }),
+        ("ui2-saved-servers", |app| {
+            responsive_widget(app, "recent-servers", 3, 2);
+            app.global::<crate::Widgets>().set_saved_servers(true);
+        }),
+        ("ui2-saved-worlds", |app| {
+            responsive_widget(app, "recent-worlds", 3, 2);
+            app.global::<crate::Widgets>().set_saved_worlds(true);
+        }),
         ("ui2-playtime-30d", |app| {
             responsive_widget(app, "playtime", 3, 1);
             app.global::<crate::Widgets>().set_playtime_period(1);
         }),
         ("ui2-playtime-all", |app| {
             responsive_widget(app, "playtime", 3, 1);
-            app.global::<crate::Widgets>().set_playtime_period(2);
+            let widgets = app.global::<crate::Widgets>();
+            widgets.set_historical(widgets.get_week());
+            widgets.set_historical_peak(widgets.get_week_peak());
+            widgets.set_playtime_period(2);
         }),
         ("dashboard-compact", |app| dashboard(app, false, false)),
         ("dashboard-large", |app| dashboard(app, false, true)),
@@ -1208,6 +1219,40 @@ fn settings_sections_accept_keyboard_navigation_and_preserve_theme_accents() {
             );
         }
     }
+}
+
+/// One scenario per process so working set and CPU can be sampled externally.
+#[test]
+#[ignore = "opt-in optimized UI-2 resource sample"]
+fn ui2_resource_scene() {
+    let scenario = std::env::var("AURORA_UI2_RESOURCE_SCENE").unwrap();
+    let ready = std::env::var_os("AURORA_UI2_RESOURCE_READY").unwrap();
+    slint::platform::set_platform(Box::new(RenderPlatform)).unwrap();
+    let (app, adapter) = window((1120., 760.), 1.);
+    let scene = if scenario == "navigation" {
+        "ui2-saved-servers"
+    } else {
+        &scenario
+    };
+    let (_, setup) = scenes()
+        .into_iter()
+        .find(|(name, _)| *name == scene)
+        .unwrap();
+    setup(&app);
+    let _ = render(&app, &adapter, "resource-setup");
+    std::fs::write(ready, std::process::id().to_string()).unwrap();
+    if scenario == "navigation" {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let nav = app.global::<Nav>();
+        for _ in 0..40 {
+            nav.set_page(Page::Instances);
+            let _ = render(&app, &adapter, "resource-away");
+            nav.set_page(Page::Home);
+            let _ = render(&app, &adapter, "resource-home");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+    std::thread::sleep(std::time::Duration::from_secs(12));
 }
 
 #[test]

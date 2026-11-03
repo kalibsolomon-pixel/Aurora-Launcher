@@ -832,13 +832,12 @@ fn history_query(
     let instance = instance_id
         .map(crate::instances::InstanceId::new)
         .transpose()?;
-    let store =
-        crate::gameplay_history::Store::open(paths.gameplay_history_file()).map_err(|_| {
-            CommandError::new(
-                "gameplay_history_unavailable",
-                "Local gameplay history is unavailable or damaged.",
-            )
-        })?;
+    let store = crate::gameplay_history::Store::open_managed(&paths).map_err(|_| {
+        CommandError::new(
+            "gameplay_history_unavailable",
+            "Local gameplay history is unavailable or damaged.",
+        )
+    })?;
     Ok((store, instance))
 }
 pub fn get_playtime_summary(
@@ -877,6 +876,24 @@ pub fn get_daily_playtime(
             CommandError::new(
                 "gameplay_history_unavailable",
                 "Daily playtime is unavailable.",
+            )
+        })
+}
+pub fn get_historical_playtime(
+    app: Host,
+    instance_id: Option<String>,
+) -> Result<Vec<crate::gameplay_history::PlaytimeInterval>, CommandError> {
+    let (store, instance) = history_query(&app, instance_id)?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    store
+        .historical_playtime(instance.as_ref(), now)
+        .map_err(|_| {
+            CommandError::new(
+                "gameplay_history_unavailable",
+                "Historical playtime is unavailable.",
             )
         })
 }
@@ -920,13 +937,26 @@ pub fn get_recent_servers(
     instance_id: Option<String>,
     limit: usize,
 ) -> Result<Vec<crate::gameplay_history::RecentTarget>, CommandError> {
+    server_rows(app, instance_id, limit, false)
+}
+
+pub fn get_home_servers(
+    app: Host,
+    instance_id: Option<String>,
+    limit: usize,
+) -> Result<Vec<crate::gameplay_history::RecentTarget>, CommandError> {
+    server_rows(app, instance_id, limit, true)
+}
+
+fn server_rows(
+    app: Host,
+    instance_id: Option<String>,
+    limit: usize,
+    include_unvisited_favorites: bool,
+) -> Result<Vec<crate::gameplay_history::RecentTarget>, CommandError> {
     let (store, instance) = history_query(&app, instance_id)?;
     let mut entries = store
-        .recent(
-            crate::gameplay_history::Mode::Multiplayer,
-            instance.as_ref(),
-            limit,
-        )
+        .server_rows(instance.as_ref(), limit, include_unvisited_favorites)
         .map_err(|_| {
             CommandError::new(
                 "gameplay_history_unavailable",
@@ -951,6 +981,158 @@ pub fn get_recent_servers(
         };
     }
     Ok(entries)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedDestinationDto {
+    id: String,
+    display_name: String,
+    identity: String,
+    last_played_ms: u64,
+    detail: String,
+    icon: Option<Vec<u8>>,
+    favorite: bool,
+}
+
+fn saved_instance(
+    paths: &ManagedPaths,
+    id: String,
+) -> Result<crate::instances::InstanceId, CommandError> {
+    let instance = crate::instances::InstanceId::new(id)?;
+    if InstanceRegistry::load(&paths.instance_registry_file())?
+        .find(&instance)
+        .is_none()
+    {
+        return Err(CommandError::new(
+            "quick_instance_missing",
+            "The saved destination's instance no longer exists.",
+        ));
+    }
+    Ok(instance)
+}
+
+fn saved_error() -> CommandError {
+    CommandError::new(
+        "saved_destinations_unavailable",
+        "The instance's saved destinations could not be read.",
+    )
+}
+
+fn saved_servers(
+    paths: &ManagedPaths,
+    instance: &crate::instances::InstanceId,
+) -> Result<Vec<crate::saved_servers::SavedServer>, CommandError> {
+    match crate::saved_servers::read(paths, instance) {
+        Ok(servers) => Ok(servers),
+        Err(crate::saved_servers::ReadError::Missing) => Ok(Vec::new()),
+        Err(_) => Err(saved_error()),
+    }
+}
+
+pub fn get_saved_destinations(
+    app: Host,
+    instance_id: String,
+    worlds: bool,
+) -> Result<Vec<SavedDestinationDto>, CommandError> {
+    use crate::gameplay_history::{Mode, target_id};
+    let paths = managed_paths(&app)?;
+    let instance = saved_instance(&paths, instance_id)?;
+    if worlds {
+        let mut entries =
+            crate::saved_worlds::read(&paths, &instance).map_err(|_| saved_error())?;
+        entries.sort_by(|a, b| {
+            b.last_played_ms
+                .cmp(&a.last_played_ms)
+                .then_with(|| a.directory.as_str().cmp(b.directory.as_str()))
+        });
+        return Ok(entries
+            .into_iter()
+            .enumerate()
+            .map(|(index, world)| SavedDestinationDto {
+                id: format!(
+                    "{instance}:{}",
+                    target_id(Mode::Singleplayer, &instance, world.directory.as_str())
+                ),
+                display_name: world
+                    .display_name
+                    .unwrap_or_else(|| world.directory.as_str().to_owned()),
+                identity: world.directory.as_str().to_owned(),
+                last_played_ms: world.last_played_ms,
+                detail: world
+                    .game_mode
+                    .into_iter()
+                    .chain(world.version_name.as_deref())
+                    .collect::<Vec<_>>()
+                    .join(" · "),
+                icon: (index < 12)
+                    .then(|| crate::saved_worlds::read_icon(&paths, &instance, &world.directory))
+                    .flatten(),
+                favorite: false,
+            })
+            .collect());
+    }
+    let (history, _) = history_query(&app, None)?;
+    let favorites: std::collections::HashSet<_> = history
+        .server_rows(Some(&instance), 200, true)
+        .map_err(|_| saved_error())?
+        .into_iter()
+        .filter(|row| row.favorite)
+        .map(|row| row.id)
+        .collect();
+    Ok(saved_servers(&paths, &instance)?
+        .into_iter()
+        .map(|server| {
+            let identity = server.target.as_str().to_owned();
+            let id = target_id(Mode::Multiplayer, &instance, &identity);
+            SavedDestinationDto {
+                favorite: favorites.contains(&id),
+                id: format!("{instance}:{id}"),
+                display_name: server.name.unwrap_or_else(|| identity.clone()),
+                identity,
+                last_played_ms: 0,
+                detail: String::new(),
+                icon: server.icon,
+            }
+        })
+        .collect())
+}
+
+fn saved_target_id<'a>(
+    paths: &ManagedPaths,
+    id: &'a str,
+) -> Result<(crate::instances::InstanceId, &'a str), CommandError> {
+    let (instance, hash) = id.split_once(':').ok_or_else(saved_error)?;
+    if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(saved_error());
+    }
+    Ok((saved_instance(paths, instance.to_owned())?, hash))
+}
+
+pub fn set_saved_server_favorite(
+    app: Host,
+    id: String,
+    favorite: bool,
+) -> Result<(), CommandError> {
+    use crate::gameplay_history::{Mode, target_id};
+    let paths = managed_paths(&app)?;
+    let (instance, hash) = saved_target_id(&paths, &id)?;
+    let server = saved_servers(&paths, &instance)?
+        .into_iter()
+        .find(|entry| target_id(Mode::Multiplayer, &instance, entry.target.as_str()) == hash)
+        .ok_or_else(saved_error)?;
+    let display = server
+        .name
+        .unwrap_or_else(|| server.target.as_str().to_owned());
+    let (history, _) = history_query(&app, None)?;
+    history
+        .set_saved_server_favorite(instance, server.target, display, favorite)
+        .map_err(|_| {
+            CommandError::new(
+                "server_favorite_unavailable",
+                "The favorite could not be saved. Check local history and the 100-favorite limit.",
+            )
+        })
 }
 
 /// Saves a local favorite for an opaque Recent Servers target id.
@@ -990,13 +1172,12 @@ pub async fn refresh_recent_server_status(
         ));
     }
     let managed = managed_paths(&app)?;
-    let store =
-        crate::gameplay_history::Store::open(managed.gameplay_history_file()).map_err(|_| {
-            CommandError::new(
-                "gameplay_history_unavailable",
-                "Local gameplay history is unavailable or damaged.",
-            )
-        })?;
+    let store = crate::gameplay_history::Store::open_managed(&managed).map_err(|_| {
+        CommandError::new(
+            "gameplay_history_unavailable",
+            "Local gameplay history is unavailable or damaged.",
+        )
+    })?;
     Ok(crate::server_enrichment::refresh(
         &managed,
         &store,
@@ -1005,6 +1186,37 @@ pub async fn refresh_recent_server_status(
     )
     .await)
 }
+pub async fn refresh_saved_server_status(
+    app: Host,
+    instance_id: String,
+    target_ids: Vec<String>,
+) -> Result<Vec<crate::server_enrichment::RecentServerPresentation>, CommandError> {
+    use crate::gameplay_history::{Mode, target_id};
+    if target_ids.len() > 20 {
+        return Err(saved_error());
+    }
+    let paths = managed_paths(&app)?;
+    let instance = saved_instance(&paths, instance_id)?;
+    let requested: std::collections::HashSet<_> = target_ids.into_iter().collect();
+    let resolved = saved_servers(&paths, &instance)?
+        .into_iter()
+        .filter_map(|entry| {
+            let hash = target_id(Mode::Multiplayer, &instance, entry.target.as_str());
+            let id = format!("{instance}:{hash}");
+            requested
+                .contains(&id)
+                .then_some((id, entry.name, entry.target))
+        })
+        .take(20)
+        .collect();
+    Ok(crate::server_enrichment::refresh_resolved(
+        &paths,
+        resolved,
+        crate::server_enrichment::RefreshOptions::default(),
+    )
+    .await)
+}
+
 pub fn set_home_widgets(
     app: Host,
     request: crate::home_widgets::HomeLayout,
@@ -5895,8 +6107,8 @@ pub async fn quick_play_history(
 ) -> Result<LaunchProcessDto, CommandError> {
     use crate::gameplay_history::{Mode, QuickLaunchTarget, ServerTarget};
     let mode = match request.mode.as_str() {
-        "world" => Mode::Singleplayer,
-        "server" => Mode::Multiplayer,
+        "world" | "saved-world" => Mode::Singleplayer,
+        "server" | "saved-server" => Mode::Multiplayer,
         _ => {
             return Err(CommandError::new(
                 "quick_target_invalid",
@@ -5905,22 +6117,52 @@ pub async fn quick_play_history(
         }
     };
     let managed = managed_paths(&app)?;
-    let store =
-        crate::gameplay_history::Store::open(managed.gameplay_history_file()).map_err(|_| {
+    let target = if request.mode.starts_with("saved-") {
+        use crate::gameplay_history::target_id;
+        let (instance, hash) = saved_target_id(&managed, &request.target_id)?;
+        match mode {
+            Mode::Singleplayer => {
+                let world = crate::saved_worlds::read(&managed, &instance)
+                    .map_err(|_| saved_error())?
+                    .into_iter()
+                    .find(|entry| target_id(mode, &instance, entry.directory.as_str()) == hash)
+                    .ok_or_else(saved_error)?;
+                QuickLaunchTarget::Singleplayer {
+                    instance,
+                    world: world.directory,
+                }
+            }
+            Mode::Multiplayer => {
+                let server = saved_servers(&managed, &instance)?
+                    .into_iter()
+                    .find(|entry| target_id(mode, &instance, entry.target.as_str()) == hash)
+                    .ok_or_else(saved_error)?;
+                QuickLaunchTarget::Multiplayer {
+                    instance,
+                    server: server.target,
+                }
+            }
+            _ => unreachable!(),
+        }
+    } else {
+        let store = crate::gameplay_history::Store::open_managed(&managed).map_err(|_| {
             CommandError::new(
                 "gameplay_history_unavailable",
                 "Local gameplay history is unavailable or damaged.",
             )
         })?;
-    let target = store
-        .quick_target(mode, &request.target_id)
-        .map_err(|_| CommandError::new("quick_target_invalid", "The recent target is invalid."))?
-        .ok_or_else(|| {
-            CommandError::new(
-                "quick_target_stale",
-                "This recent target is no longer in local history.",
-            )
-        })?;
+        store
+            .quick_target(mode, &request.target_id)
+            .map_err(|_| {
+                CommandError::new("quick_target_invalid", "The recent target is invalid.")
+            })?
+            .ok_or_else(|| {
+                CommandError::new(
+                    "quick_target_stale",
+                    "This recent target is no longer in local history.",
+                )
+            })?
+    };
     let instance = match &target {
         QuickLaunchTarget::Singleplayer { instance, world } => {
             validate_quick_world(&managed, instance, world)?;
@@ -6635,8 +6877,9 @@ async fn play_instance_with_target(
                 }
                 None => spec,
             };
-            let history_path = managed.gameplay_history_file();
+            let history_paths = managed.clone();
             let history_instance = instance.clone();
+            let observation = std::sync::Mutex::new(None);
             let snapshot = crate::launch::process::spawn_supervised_with_bridge(
                 spec,
                 managed.instance_paths(&instance).logs(),
@@ -6644,11 +6887,25 @@ async fn play_instance_with_target(
                     match snapshot.status {
                         crate::launch::state::LaunchProcessStatus::Running => {
                             if let Ok(store) =
-                                crate::gameplay_history::Store::open(history_path.clone())
+                                crate::gameplay_history::Store::open_managed(&history_paths)
                             {
-                                if let Ok(active) = store.start(history_instance.clone()) {
+                                let id = activity_log
+                                    .as_ref()
+                                    .map_or_else(uuid::Uuid::new_v4, |log| log.id());
+                                if let Ok(active) =
+                                    store.start_with_id(history_instance.clone(), id)
+                                {
+                                    let active = Arc::new(active);
                                     if let Ok(mut guard) = recorder.lock() {
-                                        *guard = Some(Arc::new(active));
+                                        *guard = Some(active.clone());
+                                    }
+                                    if let Some(log) = activity_log.clone()
+                                        && let Ok(mut guard) = observation.lock()
+                                    {
+                                        *guard =
+                                            Some(crate::launch::activity_log::Observation::start(
+                                                log, active,
+                                            ));
                                     }
                                 }
                             }
@@ -6665,10 +6922,10 @@ async fn play_instance_with_target(
                                 } else {
                                     crate::gameplay_history::Outcome::Abnormal
                                 };
-                                if let Some(visit) =
-                                    activity_log.as_ref().and_then(|log| log.read())
+                                if let Some(watcher) =
+                                    observation.lock().ok().and_then(|mut guard| guard.take())
                                 {
-                                    let _ = active.record_game_visit(visit);
+                                    watcher.finish();
                                 }
                                 let _ = active.finish(outcome);
                             }

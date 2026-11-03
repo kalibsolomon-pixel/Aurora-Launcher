@@ -34,7 +34,11 @@ struct State {
     columns: i32,
     saving: bool,
     daily: Vec<api::DailyPlaytime>,
+    historical: Vec<api::PlaytimeInterval>,
     server_favorites: bool,
+    saved_servers: bool,
+    saved_worlds: bool,
+    saved_errors: std::collections::HashMap<&'static str, String>,
     refreshing_servers: bool,
     server_status: std::collections::HashMap<String, (String, slint::Image)>,
 }
@@ -75,8 +79,25 @@ pub fn bind(window: &crate::AppWindow) {
     });
     widgets.on_quick_play(|mode, id| crate::home::quick_play(mode.into(), id.into()));
     widgets.on_server_view(|favorites| {
-        STATE.with(|s| s.borrow_mut().server_favorites = favorites);
+        STATE.with(|s| {
+            let mut s = s.borrow_mut();
+            s.server_favorites = favorites;
+            s.saved_servers = false;
+            s.saved_errors.remove("saved-servers");
+        });
         render();
+    });
+    widgets.on_saved_view(|worlds, saved| {
+        STATE.with(|s| {
+            let mut s = s.borrow_mut();
+            if worlds {
+                s.saved_worlds = saved;
+            } else {
+                s.saved_servers = saved;
+                s.server_favorites = false;
+            }
+        });
+        refresh();
     });
     widgets.on_refresh_servers(refresh_servers);
     widgets.on_favorite_server(|id, favorite| {
@@ -93,60 +114,89 @@ pub fn bind(window: &crate::AppWindow) {
 
 fn refresh_servers() {
     use base64::Engine;
-    let ids = STATE.with(|state| {
+    let (ids, saved_instance) = STATE.with(|state| {
         let mut state = state.borrow_mut();
         if state.refreshing_servers {
-            return Vec::new();
+            return (Vec::new(), None);
         }
         let ids: Vec<_> = state
             .data
-            .get("recent-servers")
+            .get(if state.saved_servers {
+                "saved-servers"
+            } else {
+                "recent-servers"
+            })
             .into_iter()
             .flatten()
-            .filter(|row| !state.server_favorites || row.favorite)
+            .filter(|row| {
+                state.saved_servers
+                    || (if state.server_favorites {
+                        row.favorite
+                    } else {
+                        !row.unvisited_favorite
+                    })
+            })
             .take(20)
             .map(|row| row.target_id.to_string())
             .collect();
         state.refreshing_servers = !ids.is_empty();
-        ids
+        (
+            ids,
+            if state.saved_servers {
+                state.instance.clone()
+            } else {
+                None
+            },
+        )
     });
     if ids.is_empty() {
         return;
     }
     render();
-    ui::spawn_api(api::refresh_server_status(ui::host(), ids), |result| {
-        STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            state.refreshing_servers = false;
-            if let Ok(statuses) = &result {
-                state.server_status = statuses
-                    .iter()
-                    .map(|row| {
-                        let image = row
-                            .favicon
-                            .as_deref()
-                            .and_then(|s| s.strip_prefix("data:image/png;base64,"))
-                            .filter(|s| s.len() <= 128 * 1024)
-                            .and_then(|s| base64::engine::general_purpose::STANDARD.decode(s).ok())
-                            .and_then(|bytes| {
-                                slint::Image::load_from_data(&bytes, Some("png")).ok()
-                            })
-                            .unwrap_or_default();
-                        let label = if row.status == "online" {
-                            "Online"
-                        } else {
-                            "No response"
-                        };
-                        (row.target_id.clone(), (label.to_owned(), image))
-                    })
-                    .collect();
+    let host = ui::host();
+    ui::spawn_api(
+        async move {
+            match saved_instance {
+                Some(instance) => api::refresh_saved_server_status(host, instance, ids).await,
+                None => api::refresh_server_status(host, ids).await,
             }
-        });
-        if let Err(error) = result {
-            ui::error_toast(&error);
-        }
-        render();
-    });
+        },
+        |result| {
+            STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.refreshing_servers = false;
+                if let Ok(statuses) = &result {
+                    state.server_status = statuses
+                        .iter()
+                        .map(|row| {
+                            let image = row
+                                .favicon
+                                .as_deref()
+                                .and_then(|s| s.strip_prefix("data:image/png;base64,"))
+                                .filter(|s| s.len() <= 128 * 1024)
+                                .and_then(|s| {
+                                    base64::engine::general_purpose::STANDARD.decode(s).ok()
+                                })
+                                .and_then(|bytes| {
+                                    slint::Image::load_from_data(&bytes, Some("png")).ok()
+                                })
+                                .unwrap_or_default();
+                            let label = if row.status == "online" {
+                                "Online"
+                            } else {
+                                "No response"
+                            };
+                            (row.target_id.clone(), (label.to_owned(), image))
+                        })
+                        .collect();
+                }
+            });
+            if let Err(error) = result {
+                ui::error_toast(&error);
+            }
+            render();
+        },
+    );
 }
 
 fn default_layout() -> HomeLayout {
@@ -371,12 +421,15 @@ pub fn refresh() {
     let wants_history = shown
         .iter()
         .any(|id| matches!(*id, "playtime" | "recent-servers" | "recent-worlds"));
-    let serial = STATE.with(|s| {
+    let (serial, saved_servers, saved_worlds) = STATE.with(|s| {
         let mut s = s.borrow_mut();
         s.serial += 1;
         s.instance = instance.clone();
+        s.data.remove("saved-worlds");
+        s.data.remove("saved-servers");
+        s.saved_errors.clear();
         s.loading = wants_history;
-        s.serial
+        (s.serial, s.saved_servers, s.saved_worlds)
     });
     render();
     if !wants_history {
@@ -385,15 +438,18 @@ pub fn refresh() {
     let host = ui::host();
     ui::spawn(
         async move {
-            let (playtime, daily) = if shown.contains(&"playtime") {
+            let (playtime, daily, historical) = if shown.contains(&"playtime") {
                 (
                     api::playtime(host.clone(), instance.clone()).await.ok(),
                     api::daily_playtime(host.clone(), instance.clone())
                         .await
                         .unwrap_or_default(),
+                    api::historical_playtime(host.clone(), instance.clone())
+                        .await
+                        .unwrap_or_default(),
                 )
             } else {
-                (None, Vec::new())
+                (None, Vec::new(), Vec::new())
             };
             let servers = if shown.contains(&"recent-servers") {
                 api::recent_servers(host.clone(), None, 200)
@@ -403,15 +459,28 @@ pub fn refresh() {
                 Vec::new()
             };
             let worlds = if shown.contains(&"recent-worlds") {
-                api::recent_worlds(host, instance, 32)
+                api::recent_worlds(host.clone(), instance.clone(), 32)
                     .await
                     .unwrap_or_default()
             } else {
                 Vec::new()
             };
-            (playtime, daily, servers, worlds)
+            let mut saved = Vec::new();
+            if let Some(instance) = instance {
+                for (recent, key, enabled, world) in [
+                    ("recent-servers", "saved-servers", saved_servers, false),
+                    ("recent-worlds", "saved-worlds", saved_worlds, true),
+                ] {
+                    if enabled && shown.contains(&recent) {
+                        let result =
+                            api::saved_destinations(host.clone(), instance.clone(), world).await;
+                        saved.push((key, instance.clone(), world, result));
+                    }
+                }
+            }
+            (playtime, daily, historical, servers, worlds, saved)
         },
-        move |(playtime, daily, servers, worlds)| {
+        move |(playtime, daily, historical, servers, worlds, saved)| {
             let current = STATE.with(|s| s.borrow().serial == serial);
             if !current {
                 return;
@@ -432,6 +501,7 @@ pub fn refresh() {
                 let mut s = s.borrow_mut();
                 s.loading = false;
                 s.daily = daily;
+                s.historical = historical;
                 s.data.insert(
                     "playtime",
                     match playtime {
@@ -454,7 +524,11 @@ pub fn refresh() {
                                     names.get(&target.instance_id).cloned().unwrap_or_default();
                                 WidgetLine {
                                     label: target.display_name.into(),
-                                    value: relative(target.last_played_at, now).into(),
+                                    value: if target.last_played_at == 0 {
+                                        "Favorite".into()
+                                    } else {
+                                        relative(target.last_played_at, now).into()
+                                    },
                                     detail: if !target.available {
                                         "Destination unavailable".into()
                                     } else if !compatible {
@@ -465,11 +539,63 @@ pub fn refresh() {
                                     target_id: target.id.into(),
                                     playable: target.available && compatible,
                                     favorite: target.favorite,
+                                    unvisited_favorite: target.last_played_at == 0,
                                     ..Default::default()
                                 }
                             })
                             .collect(),
                     );
+                }
+                for (key, id, worlds, result) in saved {
+                    let (instance, compatible) = names.get(&id).cloned().unwrap_or_default();
+                    match result {
+                        Ok(entries) => {
+                            s.data.insert(
+                                key,
+                                entries
+                                    .into_iter()
+                                    .map(|entry| {
+                                        let value = if worlds && entry.last_played_ms != 0 {
+                                            format!(
+                                                "{} · {}",
+                                                entry.identity,
+                                                relative(entry.last_played_ms / 1000, now)
+                                            )
+                                        } else {
+                                            entry.identity
+                                        };
+                                        let detail = if entry.detail.is_empty() {
+                                            instance.clone()
+                                        } else {
+                                            format!("{instance} · {}", entry.detail)
+                                        };
+                                        WidgetLine {
+                                            label: entry.display_name.into(),
+                                            value: value.into(),
+                                            detail: detail.into(),
+                                            target_id: entry.id.into(),
+                                            playable: compatible,
+                                            favorite: entry.favorite,
+                                            unvisited_favorite: false,
+                                            artwork: entry
+                                                .icon
+                                                .and_then(|bytes| {
+                                                    slint::Image::load_from_data(
+                                                        &bytes,
+                                                        Some("png"),
+                                                    )
+                                                    .ok()
+                                                })
+                                                .unwrap_or_default(),
+                                        }
+                                    })
+                                    .collect(),
+                            );
+                        }
+                        Err(error) => {
+                            s.saved_errors.insert(key, error.message);
+                        }
+                    }
                 }
             });
             render();
@@ -543,7 +669,20 @@ fn details() -> Vec<WidgetLine> {
 }
 
 pub fn render() {
-    let (layout, data, loading, columns, daily, favorites, status, refreshing) = STATE.with(|s| {
+    let (
+        layout,
+        data,
+        loading,
+        columns,
+        daily,
+        historical,
+        favorites,
+        status,
+        refreshing,
+        saved_servers,
+        saved_worlds,
+        saved_errors,
+    ) = STATE.with(|s| {
         let s = s.borrow();
         (
             s.layout.clone(),
@@ -551,9 +690,13 @@ pub fn render() {
             s.loading,
             if s.columns == 0 { 6 } else { s.columns },
             s.daily.clone(),
+            s.historical.clone(),
             s.server_favorites,
             s.server_status.clone(),
             s.refreshing_servers,
+            s.saved_servers,
+            s.saved_worlds,
+            s.saved_errors.clone(),
         )
     });
     let Some(layout) = layout else { return };
@@ -580,29 +723,60 @@ pub fn render() {
                 loading,
             ),
             "recent-servers" => (
-                data.get(id)
+                data.get(if saved_servers { "saved-servers" } else { id })
                     .into_iter()
                     .flatten()
-                    .filter(|row| !favorites || row.favorite)
+                    .filter(|row| {
+                        saved_servers
+                            || (if favorites {
+                                row.favorite
+                            } else {
+                                !row.unvisited_favorite
+                            })
+                    })
                     .cloned()
                     .map(|mut row| {
                         if let Some((label, icon)) = status.get(row.target_id.as_str()) {
                             row.value = format!("{} · {label}", row.value).into();
-                            row.artwork = icon.clone();
+                            if icon.size().width > 0 {
+                                row.artwork = icon.clone();
+                            }
                         }
                         row
                     })
                     .collect(),
-                if favorites {
+                if saved_servers {
+                    saved_errors
+                        .get("saved-servers")
+                        .map(String::as_str)
+                        .unwrap_or(if has_instance {
+                            "No saved servers in this instance."
+                        } else {
+                            "Choose an instance to browse its saved servers."
+                        })
+                } else if favorites {
                     "No favorite servers yet."
                 } else {
-                    "Observed server visits appear here after Minecraft closes."
+                    "Observed server visits appear here as Aurora records them."
                 },
                 loading,
             ),
             "recent-worlds" => (
-                data.get(id).cloned().unwrap_or_default(),
-                "No worlds yet. Singleplayer worlds you play in this instance appear here.",
+                data.get(if saved_worlds { "saved-worlds" } else { id })
+                    .cloned()
+                    .unwrap_or_default(),
+                if saved_worlds {
+                    saved_errors
+                        .get("saved-worlds")
+                        .map(String::as_str)
+                        .unwrap_or(if has_instance {
+                            "No saved worlds in this instance."
+                        } else {
+                            "Choose an instance to browse its saved worlds."
+                        })
+                } else {
+                    "No worlds yet. Singleplayer worlds you play in this instance appear here."
+                },
                 loading,
             ),
             "instance-details" => (details(), "Choose an instance to see its details.", false),
@@ -696,6 +870,22 @@ pub fn render() {
         ));
         widgets.set_week(ui::model(chart_points(&daily, 7)));
         widgets.set_month(ui::model(chart_points(&daily, 30)));
+        let month_compact: Vec<_> = daily
+            .chunks(5)
+            .filter_map(|chunk| {
+                Some(api::PlaytimeInterval {
+                    start_day: chunk.first()?.day,
+                    end_day: chunk.last()?.day,
+                    duration_ms: chunk.iter().map(|day| day.duration_ms).sum(),
+                })
+            })
+            .collect();
+        let (points, peak) = interval_points(&month_compact);
+        widgets.set_month_compact(ui::model(points));
+        widgets.set_month_compact_peak(peak.into());
+        let (points, peak) = interval_points(&historical);
+        widgets.set_historical(ui::model(points));
+        widgets.set_historical_peak(peak.into());
         widgets.set_week_peak(
             duration(
                 daily
@@ -835,6 +1025,37 @@ pub(crate) fn grid_positions(layout: &HomeLayout, columns: i32) -> Vec<(i32, i32
         }
     }
     result
+}
+
+fn interval_points(intervals: &[api::PlaytimeInterval]) -> (Vec<crate::PlaytimePoint>, String) {
+    let peak = intervals
+        .iter()
+        .map(|interval| interval.duration_ms)
+        .max()
+        .unwrap_or(0)
+        .max(60_000);
+    let today = intervals.last().map_or(0, |interval| interval.end_day);
+    let points = intervals
+        .iter()
+        .map(|interval| {
+            let from = today - interval.start_day;
+            let until = today - interval.end_day;
+            let label = match (from, until) {
+                (0, 0) => "Today".to_owned(),
+                (from, 0) => format!("Last {} days", from + 1),
+                (from, until) if from == until => format!("{from} days ago"),
+                (from, until) => format!("{from}–{until} days ago"),
+            };
+            let value = duration(interval.duration_ms);
+            crate::PlaytimePoint {
+                detail: format!("{label} (UTC), {value}").into(),
+                label: label.into(),
+                value: value.into(),
+                fraction: interval.duration_ms as f32 / peak as f32,
+            }
+        })
+        .collect();
+    (points, duration(peak))
 }
 
 pub(crate) fn chart_points(

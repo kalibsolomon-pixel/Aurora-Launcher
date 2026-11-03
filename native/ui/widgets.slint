@@ -15,6 +15,7 @@ export struct WidgetLine {
     target-id: string,
     playable: bool,
     favorite: bool,
+    unvisited-favorite: bool,
     artwork: image,
 }
 
@@ -43,6 +44,9 @@ export global Widgets {
     callback quick-play(string, string);
     callback favorite-server(string, bool);
     callback server-view(bool);
+    callback saved-view(bool, bool);
+    in-out property <bool> saved-servers;
+    in-out property <bool> saved-worlds;
     callback refresh-servers();
     in property <bool> refreshing-servers;
     in-out property <bool> favorites: false;
@@ -67,6 +71,10 @@ export global Widgets {
     in property <[PlaytimePoint]> month;
     in property <string> week-peak;
     in property <string> month-peak;
+    in property <[PlaytimePoint]> historical;
+    in property <string> historical-peak;
+    in property <[PlaytimePoint]> month-compact;
+    in property <string> month-compact-peak;
     in-out property <int> edit-index: 0;
 
     // System media session (Windows Global System Media Transport Controls).
@@ -200,7 +208,9 @@ component PlaytimeCard inherits Rectangle {
     accessible-label: "Daily playtime graph";
     property <bool> expanded: Widgets.playtime-period == 1;
     property <bool> all-time: Widgets.playtime-period == 2;
-    property <[PlaytimePoint]> points: expanded ? Widgets.month : Widgets.week;
+    property <bool> compact-month: expanded && root.width < 320px && Widgets.month-compact.length > 0;
+    property <[PlaytimePoint]> points: all-time ? Widgets.historical : (expanded ? (compact-month ? Widgets.month-compact : Widgets.month) : Widgets.week);
+    property <string> peak: all-time ? Widgets.historical-peak : (expanded ? (compact-month ? Widgets.month-compact-peak : Widgets.month-peak) : Widgets.week-peak);
     VerticalLayout {
         padding: 14px; spacing: 8px;
         HorizontalLayout {
@@ -219,30 +229,25 @@ component PlaytimeCard inherits Rectangle {
             Text { text: root.item.lines[root.all-time ? 3 : (root.expanded ? 2 : 1)].value; font-size: Theme.text-identity; font-weight: 600; color: Theme.text; }
             Text { text: root.all-time ? "All recorded time" : (root.expanded ? "Last 30 days" : "Last 7 days"); font-size: Theme.text-metadata; color: Theme.text-secondary; horizontal-stretch: 1; vertical-alignment: center; overflow: elide; }
         }
-        if root.all-time && root.item.lines.length > 0: VerticalLayout {
-            vertical-stretch: 1; alignment: center; spacing: 4px;
-            Text { text: "Last 30 days  " + root.item.lines[2].value; color: Theme.text-secondary; font-size: Theme.text-metadata; }
-            Text { text: "Last 7 days  " + root.item.lines[1].value; color: Theme.text-secondary; font-size: Theme.text-metadata; }
-        }
         plot := Rectangle {
-            visible: root.item.lines.length > 0 && !root.all-time;
+            visible: root.item.lines.length > 0 && root.points.length > 0;
             vertical-stretch: 1;
             min-height: root.width < 250px ? 32px : 48px;
-            property <length> label-height: root.expanded ? 0px : 16px;
+            property <length> label-height: root.expanded || root.all-time ? 0px : 16px;
             property <length> cell-width: (self.width - 44px) / max(1, root.points.length);
-            Text { x: 0px; y: 0px; width: 40px; height: 14px; horizontal-alignment: left; text: root.expanded ? Widgets.month-peak : Widgets.week-peak; color: Theme.text-muted; font-size: Theme.text-label; }
+            Text { x: 0px; y: 0px; width: 40px; height: 14px; horizontal-alignment: left; text: root.peak; color: Theme.text-muted; font-size: Theme.text-label; }
             Text { x: 0px; width: 40px; height: 14px; y: parent.height - self.height; horizontal-alignment: left; text: "0 min"; color: Theme.text-muted; font-size: Theme.text-label; }
             for point[i] in root.points: Rectangle {
                 x: 44px + i * plot.cell-width; width: plot.cell-width; height: plot.height - plot.label-height;
                 accessible-role: text; accessible-label: point.detail;
-                Rectangle { x: 2px; width: max(1px, parent.width - 3px); height: max(2px, point.fraction * (plot.height - 4px)); y: parent.height - self.height; border-radius: 2px; background: point.fraction > 0 ? (hover.has-hover ? Theme.accent-hover : Theme.accent) : Theme.hover; }
-                if !root.expanded: Text { y: parent.height + 2px; width: parent.width; text: point.label; color: Theme.text-muted; font-size: Theme.text-label; horizontal-alignment: center; overflow: elide; }
+                Rectangle { x: 2px; width: max(1px, parent.width - 3px); height: max(2px, point.fraction * max(0px, parent.height - 4px)); y: parent.height - self.height; border-radius: 2px; background: point.fraction > 0 ? (hover.has-hover ? Theme.accent-hover : Theme.accent) : Theme.hover; }
+                if !root.expanded && !root.all-time: Text { y: parent.height + 2px; width: parent.width; text: point.label; color: Theme.text-muted; font-size: Theme.text-label; horizontal-alignment: center; overflow: elide; }
                 hover := TouchArea {}
                 if hover.has-hover: Tooltip { text: point.label + ": " + point.value; x: min(0px, plot.width - i * plot.cell-width - self.width); y: -self.height - 4px; }
             }
         }
-        if root.item.lines.length > 0 && !root.all-time: HorizontalLayout {
-            Text { text: root.expanded && root.points.length > 0 ? root.points[0].label : ""; color: Theme.text-muted; font-size: Theme.text-label; horizontal-stretch: 1; }
+        if root.item.lines.length > 0 && root.points.length > 0: HorizontalLayout {
+            Text { text: (root.expanded || root.all-time) && root.points.length > 0 ? root.points[0].label : ""; color: Theme.text-muted; font-size: Theme.text-label; horizontal-stretch: 1; }
             Text { text: "Today · UTC"; color: Theme.text-muted; font-size: Theme.text-label; }
         }
     }
@@ -259,14 +264,48 @@ component ListCard inherits Rectangle {
     accessible-label: root.item.title;
     property <bool> servers: root.item.id == "recent-servers";
     property <bool> destinations: root.servers || root.item.id == "recent-worlds";
+    function server-view(index: int) {
+        Widgets.favorites = index == 1;
+        Widgets.saved-servers = index == 2;
+        if (index == 2) {
+            Widgets.saved-view(false, true);
+        } else {
+            Widgets.server-view(index == 1);
+        }
+    }
     VerticalLayout {
         padding: 14px; spacing: 6px;
         CardHeader { item: root.item; first: root.first; last: root.last; }
-        if root.servers: HorizontalLayout {
+        if root.servers && root.width >= 260px: HorizontalLayout {
             spacing: 4px;
-            Button { text: "Recent"; compact: true; kind: ButtonKind.ghost; selected: !Widgets.favorites; clicked => { Widgets.favorites = false; Widgets.server-view(false); } }
-            Button { text: "Favorites"; compact: true; kind: ButtonKind.ghost; selected: Widgets.favorites; clicked => { Widgets.favorites = true; Widgets.server-view(true); } }
+            Button { text: "Recent"; compact: true; kind: ButtonKind.ghost; selected: !Widgets.favorites && !Widgets.saved-servers; clicked => { root.server-view(0); } }
+            Button { text: "Favorites"; compact: true; kind: ButtonKind.ghost; selected: Widgets.favorites; clicked => { root.server-view(1); } }
+            Button { text: "Saved"; compact: true; kind: ButtonKind.ghost; selected: Widgets.saved-servers; clicked => { root.server-view(2); } }
             if root.item.lines.length > 0: Button { icon: Icons.refresh; compact: true; kind: ButtonKind.ghost; accessible-description-text: "Refresh server status"; enabled: !Widgets.refreshing-servers; clicked => { Widgets.refresh-servers(); } }
+        }
+        if root.servers && root.width < 260px: HorizontalLayout {
+            spacing: 4px;
+            Dropdown {
+                min-width: 0px; min-height: 30px; horizontal-stretch: 1;
+                model: ["Recent", "Favorites", "Saved"];
+                label: "Server view"; controlled: true;
+                current-index: Widgets.saved-servers ? 2 : (Widgets.favorites ? 1 : 0);
+                selected(index) => { root.server-view(index); }
+            }
+            if root.item.lines.length > 0: IconButton {
+                icon: Icons.refresh; size: 30px; label: "Refresh server status";
+                enabled: !Widgets.refreshing-servers;
+                clicked => { Widgets.refresh-servers(); }
+            }
+        }
+        if root.destinations && !root.servers: HorizontalLayout {
+            spacing: 4px;
+            Button { text: "Recent"; compact: true; kind: ButtonKind.ghost; selected: !Widgets.saved-worlds; clicked => { Widgets.saved-worlds = false; Widgets.saved-view(true, false); } }
+            Button { text: "Saved"; compact: true; kind: ButtonKind.ghost; selected: Widgets.saved-worlds; clicked => { Widgets.saved-worlds = true; Widgets.saved-view(true, true); } }
+        }
+        if root.item.loading && root.item.lines.length == 0: Text {
+            text: "Loading destinations…"; color: Theme.text-muted; font-size: Theme.text-metadata;
+            vertical-stretch: 1; vertical-alignment: center; horizontal-alignment: center;
         }
         if root.item.lines.length == 0 && !root.item.loading: Text {
             vertical-stretch: 1; text: root.item.empty; color: Theme.text-muted; font-size: Theme.text-metadata;
@@ -285,6 +324,9 @@ component ListCard inherits Rectangle {
                         if line.artwork.width > 0 && root.width >= 240px: Image {
                             source: line.artwork; width: 28px; height: 28px; y: (parent.height - self.height) / 2; image-fit: contain;
                         }
+                        if root.destinations && line.artwork.width == 0 && root.width >= 240px: Icon {
+                            path: root.item.icon; size: 28px; y: (parent.height - self.height) / 2; color: Theme.text-muted;
+                        }
                         VerticalLayout {
                             horizontal-stretch: 1; alignment: center; spacing: 2px;
                             Text { text: line.label; color: Theme.text-secondary; font-size: Theme.text-secondary-size; overflow: elide; }
@@ -301,7 +343,7 @@ component ListCard inherits Rectangle {
                             icon: Icons.play; label: "Quick Play " + line.label;
                             size: 30px; y: (parent.height - self.height) / 2;
                             enabled: line.playable && !Widgets.editing;
-                            clicked => { Widgets.quick-play(root.servers ? "server" : "world", line.target-id); }
+                            clicked => { Widgets.quick-play(root.servers ? (Widgets.saved-servers ? "saved-server" : "server") : (Widgets.saved-worlds ? "saved-world" : "world"), line.target-id); }
                         }
                     }
                 }
