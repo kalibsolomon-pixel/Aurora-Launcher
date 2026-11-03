@@ -92,3 +92,197 @@ Private working set on the repeat was 8.75 MiB for UI-1 and 8.99 MiB for UI-2. T
 - `43ba09fd0ae793b9b068f44b9feae5bd3db73949` — Capture native gameplay visits and refine Home widgets
 
 - `d3a60ba233cc6598399120d895842d799f05d136` — Polish widget editing and verify world Quick Play arguments
+
+## UI-2 completion continuation — November 3, 2026
+
+Starting HEAD was `31ad199d147770181db80f0620eedf1536b10ad2` on
+`codex/native-ui-2`. The linked checkout contained three changed tracked files
+and three new Rust modules. The continuation retained those modules and their
+fixtures, corrected their compile errors and integrated them in implementation
+commit `b32701295e52235039b8145f9bbc15c4f08d30a4`. The original partial
+acceptance record above describes the earlier revision.
+
+### Saved destinations
+
+- Saved Servers and Saved Worlds browse the selected managed instance on
+  demand. Recent lists use gameplay evidence. Server favorites can exist with
+  zero visits and remain visible in Favorites after removal from `servers.dat`.
+  Saved rows show the validated address or directory identity and the owning
+  instance. World rows also show Minecraft-recorded activity, mode and version
+  when available. LastPlayed is separate from Aurora's observed visits.
+- Discovery opens read-only snapshots after managed ancestry checks and rejects
+  redirected files. It walks the save directory entries without inspecting
+  region files. Malformed server documents surface an error. Missing lists
+  surface an empty state. Unreadable worlds are skipped independently.
+- One borrowed-span NBT reader now serves discovery and the existing
+  raw-preserving instance sync. It bounds nesting to 32, payload nodes to
+  32,768, list entries to 4,096, strings to the format's unsigned 16-bit
+  length and array payloads to 16 MiB. Duplicate compound keys, malformed tags
+  and truncated documents are rejected. Walk state and decoded label allocations
+  are bounded by those limits. Server input is capped at 1 MiB. Each world
+  document is capped at 2 MiB compressed and 16 MiB expanded, with gzip
+  checksum/trailer validation. Browsing examines at most 1,024 save directory
+  entries and surfaces at most 200 worlds or 200 servers per selected instance.
+- World artwork is loaded for the first 12 sorted rows and stored server
+  artwork for at most 20 rows. Validated images use the existing favicon
+  policy. Other rows use a vector fallback at widths that have room for
+  artwork. Explicit server status refresh reuses the bounded cache and query
+  policy for at most 20 rows. Status refresh supplies no gameplay evidence.
+- Quick Play resolves the row against its registered instance and current
+  saved metadata, then uses the existing validated 1.21.11 launch path.
+  The Slint cards keep the unified scrollable rows and separators. Narrow
+  server cards use the shared keyboard-accessible selector.
+
+The recovered dependency additions are `flate2` for bounded gzip and
+`notify 8.2.1` for native directory events, with the kqueue backend selected
+for macOS. `simd_cesu8`, already in the lockfiles transitively, is now used
+directly for Java modified UTF-8 display labels. Both Cargo lockfiles were
+updated. No watcher is created at idle.
+
+### Gameplay history and Playtime
+
+A supervised Minecraft 1.21.11 launch receives a unique artifact filename.
+One nonrecursive notification subscription filters changes to that filename.
+A complete bounded JSON snapshot can be recorded during play, with duplicate
+snapshots suppressed and a serialized final read on child exit. The optional
+bridge remains available. Filesystem notifications can coalesce writes, so
+a record replaced before any read may be lost.
+
+The spawned session's UUID and instance identify the artifact on restart.
+The history store reconciles a surviving complete artifact for an interrupted
+session when it first opens in the new process. It derives no elapsed time
+from the artifact and does not reattach to or stop the orphan. The artifact
+is kept so a later restart can recover a newer final write. Visits written
+after reconciliation can be recovered on a subsequent launcher restart.
+The restart path does not extend existing session duration or restore
+authentication material.
+
+Playtime uses retained session and archive data. The 7D view uses daily UTC
+buckets. The 30D view uses daily buckets at wider sizes and five-day totals
+in a narrow card. All shows the all-recorded total and up to twelve bars
+over the retained date range, using daily bins for short histories and
+whole-week intervals for longer ones. Zero bins represent gaps in recorded
+activity. Partial sessions contribute only their persisted duration.
+
+### Owner-attended gameplay
+
+Use a disposable Fabric 1.21.11 instance and an entitled Minecraft account
+during the attended session. Launch normally, join Server A, disconnect and
+join Server B in the same game process, then exit and verify both in Recent
+Servers. Enter a disposable local world and verify its Recent Worlds entry.
+Test the Saved and Recent Quick Play actions for both destination types.
+Restart the launcher while the game is running and confirm that a surviving
+artifact can be reconciled without adding session time or stopping the game.
+These checks remain open. The continuation used synthetic gameplay artifacts,
+disposable files and the native software-renderer test harness.
+
+### Verification
+
+Rust formatting and the locked core all-target check passed on Windows.
+The locked core suite passed 1,131 tests with 31 ignored. The Windows
+Credential Manager round trip was excluded to keep the run off the owner's
+credential store. The suite exercised bounded NBT and gzip, duplicate
+destination names, unsafe world identities, icon decoding, gameplay artifact
+watching and restart reconciliation, independent favorites, Playtime midnight
+splits, supervised child lifecycle and structured multiplayer and singleplayer
+Quick Play arguments. Installation and release regressions remained enabled.
+
+The final locked native suite passed 59 application tests and five integration
+tests. The opt-in resource scenario is excluded from those totals. The native
+software renderer exercised 720 × 520, 1120 × 760 and 1600 × 1000 logical sizes
+and 100%, 125%, 150% and 200% scales. Existing grid regressions exercised
+pointer capture and offsets, integer move and resize previews, collision
+refusal, Escape, keyboard editing, layout reset, persistence and preservation
+of unknown widget entries. The grid implementation stayed in place.
+
+The focused follow-up drove the Saved tab and its first Quick Play button
+through Slint pointer events and verified the saved-server mode and stable
+row identity dispatched by the renderer.
+
+### Continuation renders
+
+- [Saved Servers at 1120 × 760](ui2-evidence/completion-saved-servers.png)
+- [Saved Worlds at 720 × 520 and 200% scale](ui2-evidence/completion-saved-worlds-200pct.png)
+- [Playtime All with two-week buckets](ui2-evidence/completion-playtime-all.png)
+- [Playtime 30D](ui2-evidence/completion-playtime-30d.png)
+- [Playtime 30D in a one-column card](ui2-evidence/completion-playtime-30d-narrow.png)
+- [Grid editor placement preview](ui2-evidence/completion-grid-preview.png)
+
+These are Windows software-renderer frames from the real Slint component
+tree with synthetic fixture data. The original before images remain in the
+earlier evidence section.
+
+The focused renderer rerun passed seven tests with its resource scene
+excluded from the test count. The fixture and evidence commit is
+`2606ffa826b5782f84fc90ab3e78a990c9026dc3`. The compact date-label fix
+and its final render are in `49acb96a8692e3ffdb4d20284b9a3bbdf3e38301`.
+
+A native debug boot created a real Windows window and initialized a fresh
+disposable managed root. No desktop input automation or authenticated
+Minecraft was used.
+
+### Resource sampling
+
+The first optimized Windows candidate used the repository release profile and
+the disposable data-root feature. This build preceded the final API-only
+separation of unvisited favorites and the narrow Playtime footer fix. Each sample started a real native window
+with a fresh empty managed root, settled for eight seconds and measured the
+next twelve seconds.
+
+| Sample | Final working set | Final private memory | CPU during sample |
+| --- | ---: | ---: | ---: |
+| First optimized boot | 46.64 MiB | 9.77 MiB | 0.000 s |
+| Optimized repeat | 32.98 MiB | 9.93 MiB | 0.000 s |
+
+The repeat is near the previous UI-2 repeat of 32.83 MiB working set and
+9.87 MiB private memory. The higher first working-set sample is also close to
+the earlier 46.65 MiB first run, while private memory stayed in a narrow
+range. These samples do not establish a regression or an improvement. The
+first optimized executable was 33.87 MiB. Its SHA-256 was
+`082ad0974f5bf836ebd51a5c0e5416f9ed53d22f12c9f36164db8a32376d01de`.
+
+The optimized core loopback refresh fixture exercised a successful response
+alongside a slow peer. Across 16 process samples it peaked at 11.78 MiB
+working set and 2.05 MiB private memory, with 0.0312 CPU seconds at the last
+sample. This is a backend-only test process and includes the local test
+servers. It measures the controlled query path and should be read separately
+from launcher working set.
+
+Populated scenarios used separate optimized Slint software-renderer test
+processes at 1120 × 760, with link-time optimization disabled for the
+measurement build. Each scenario used the same disposable fixture data as
+the render tests. Sampling began after the first frame and lasted eight
+seconds. The navigation case made 40 round trips between Home and Instances.
+
+| Scenario | Final working set | Final private memory | CPU during sample |
+| --- | ---: | ---: | ---: |
+| Saved Servers | 33.73 MiB | 4.64 MiB | 0.0000 s |
+| Saved Worlds | 17.64 MiB | 3.16 MiB | 0.0000 s |
+| Playtime All | 17.25 MiB | 3.13 MiB | 0.0000 s |
+| Widget editor | 18.29 MiB | 3.59 MiB | 0.0000 s |
+| Repeated Home navigation | 18.43 MiB | 3.53 MiB | 0.2187 s |
+
+The Saved Servers process started the interval at 19.21 MiB working set and
+4.64 MiB private memory. Its later total working set rose without a sampled
+increase in private memory or CPU. These headless samples cover renderer
+cost and are separate from the real-window launcher idle measurements.
+They do not isolate file discovery latency or establish a cross-revision
+improvement. A separate no-LTO diagnostic boot measured 48.45 MiB working
+set, 11.08 MiB private memory and 0.000 CPU seconds in its first sample. Its
+profile and executable size differ, so it was excluded from the idle repeat
+comparison.
+
+### Closing result
+
+**PASS — UI-2 IMPLEMENTATION COMPLETE**
+
+The final implementation source is `49acb96a8692e3ffdb4d20284b9a3bbdf3e38301`.
+The locked Windows build with production features succeeded in the release
+profile with link-time optimization disabled and 16 codegen units for this
+verification run. The final source also booted in a real Windows window
+against a new disposable root in the debug configuration. The measurements
+above identify their separate build and fixture profiles.
+
+No tracked file from the starting baseline was removed. The implementation,
+test fixtures and evidence were committed locally on `codex/native-ui-2`.
+The owner-attended gameplay checks above remain open.
