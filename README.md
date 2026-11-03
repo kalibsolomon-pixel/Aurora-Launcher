@@ -1,15 +1,15 @@
-# Aurora Launcher 2.0.1 — Native Rust Minecraft Launcher
+# Aurora Launcher 2.1.0 — Native Rust Minecraft Launcher
 
 Aurora Launcher is a Windows x64 launcher for Minecraft: Java Edition, with a
-native Rust/Slint interface and isolated Minecraft instances. Native 2.0.1
-improves modpack reliability and keeps Discover pagination clear during downloads.
+native Rust/Slint interface and isolated Minecraft instances. Native 2.1.0
+refines the native interface and adds gameplay history and Quick Play.
 
 ## Download and install
 
-Native 2.0.1 is published through the native stable channel as
-`native-v2.0.1`. Get the [Windows x64 installer](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v2.0.1/Aurora.Native.Preview_2.0.1_x64-setup.exe)
-or review its signatures and hashes on the [native release page](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/native-v2.0.1).
-Run `Aurora.Native.Preview_2.0.1_x64-setup.exe`, open Aurora Launcher Native
+Native 2.1.0 is published through the native stable channel as
+`native-v2.1.0`. Get the [Windows x64 installer](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v2.1.0/Aurora.Native.Preview_2.1.0_x64-setup.exe)
+or review its signatures and hashes on the [native release page](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/native-v2.1.0).
+Run `Aurora.Native.Preview_2.1.0_x64-setup.exe`, open Aurora Launcher Native
 Preview, sign in with Microsoft, and create or select an instance. Minecraft:
 Java Edition ownership is required.
 
@@ -40,7 +40,7 @@ measurements and their limits are in the [benchmark record](docs/native-ui/BENCH
 
 Start with the [documentation index](docs/README.md),
 [architecture](ARCHITECTURE.md), and [release instructions](RELEASING.md).
-The [Native 2.0.1 release record](docs/releases/NATIVE_2_0_1_RELEASE.md) records
+The [Native 2.1.0 release record](docs/releases/NATIVE_2_1_0_RELEASE.md) records
 publication, signing, artifact hashes, and validation.
 Historical development and acceptance reports remain in the organized docs tree.
 
@@ -59,5 +59,5 @@ cargo build --manifest-path native/Cargo.toml --locked --release
 
 Use `npm ci` and `npm test` for release-tool validation. Native is the only
 application build. Existing package/data identifiers retain their compatibility
-names, including `native-preview`; GitHub 2.0.1 is a stable release.
+names, including `native-preview`; GitHub 2.1.0 is a stable release.
 See [AGENTS.md](AGENTS.md) for repository and security boundaries.
