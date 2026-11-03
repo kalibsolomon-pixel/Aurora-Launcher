@@ -12,8 +12,8 @@ and exact-child process supervision remain Rust-owned. Native update discovery,
 minisign verification, staging and NSIS handoff use the established native updater.
 Existing package/data/credential names and native signed schema are unchanged.
 
-Native 2.0.0 is now the stable/latest GitHub release. The immutable 2.0.0 installer
-was already native-only; repository cleanup does not rebuild or replace it.
+Native 2.0.1 is the stable/latest GitHub release. The immutable 2.0.0 installer
+remains available and unchanged.
 Historical WebView releases/data and update authority remain untouched.
 
 The dated engineering sections below are retained historical records. References

@@ -1,10 +1,10 @@
 # Aurora Launcher Native 2.0.1 release record
 
-**BLOCKED — PROTECTED APPROVAL REQUIRED**
+**RELEASED — AURORA LAUNCHER NATIVE 2.0.1 VERIFIED**
 
-Both corrections are integrated and locally validated. Public 2.0.1 publication,
-production signing and authority advancement have not completed. This document
-must not be read as a released verdict.
+Both corrections are in the exact tagged source. The protected build, signing,
+immutable publication and native authority advancement completed. Independently
+downloaded public bytes match the accepted signed CI artifact and discovery offer.
 
 ## Source and release identity
 
@@ -16,31 +16,32 @@ must not be read as a released verdict.
 - Notification correction: `62fc4e0e96633b74af96ad4767a913dd877a9980`.
 - Version, title and notes: `e9da01dab6384270f39b552e8aac767abd1c9fb5`.
 - Integration: [PR #2](https://github.com/kalibsolomon-pixel/Aurora-Launcher/pull/2).
-- Version/tag: `2.0.1` / `native-v2.0.1` (tag not yet created).
-- Intended title: Aurora Launcher Native 2.0.1 — Modpack Reliability and Download UI Fixes.
-- Intended release URL: https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/native-v2.0.1 (not yet published).
+- Version/tag: `2.0.1` / `native-v2.0.1`, verified at the exact integrated source above.
+- Release title: Aurora Launcher Native 2.0.1 — Modpack Reliability and Download UI Fixes.
+- Public release: [immutable GitHub release 432112669](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/tag/native-v2.0.1), published 2026-11-03T00:22:25Z, stable and Latest.
 - Identity retained: `com.aurora.launcher.native-preview`, channel `native-preview`, Slint, Windows x86_64, `nsis-per-user`.
 - Native/core Rust metadata, both Cargo lockfiles, npm metadata/lockfile and workflow default agree on 2.0.1. PE resources, application display and NSIS derive this version from native Cargo metadata.
 
 ## Artifacts and protected workflow
 
-- Installer: `Aurora.Native.Preview_2.0.1_x64-setup.exe`.
-- Official installer SHA-256: pending protected CI signing; no public bytes yet.
-- Official extracted executable SHA-256: pending the exact signed CI installer.
-- Protected workflow: [Run 41547960793](https://github.com/kalibsolomon-pixel/Aurora-Launcher/actions/runs/41547960793), exact source above. Resolve passed; build is waiting for required owner review of `launcher-production`. Publication and authority jobs have not started.
+- Installer: [Aurora.Native.Preview_2.0.1_x64-setup.exe](https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v2.0.1/Aurora.Native.Preview_2.0.1_x64-setup.exe).
+- Official installer SHA-256: `8598d38b9ab7e0e1cff8ba42acb0124374e826d4c1b89a19f359176e7cbf28dd` (10,218,269 bytes).
+- Official extracted executable SHA-256: `7c31def9b9c1fdab805e5b692ecb071cc3b4fad9b82217f3c740e199f64c20c6` (33,668,096 bytes); extracted without executing the installer.
+- Protected workflow: [run 41547960793](https://github.com/kalibsolomon-pixel/Aurora-Launcher/actions/runs/41547960793), exact source above. Resolve, Windows build/signing, publication and authority jobs succeeded.
+- Accepted signed CI artifact: `13193331076`; GitHub reported ZIP SHA-256 `e47c793e2622911ea8ba6bcc4512946946e388be907487a768e48baf52ce22f0`. Its extracted signed files were verified before the publication review.
 - Local optimized build and NSIS result: passed (`cargo build --release --locked`, 9m31s; existing NSIS 3.11). Local EXE and installer ProductVersion/FileVersion are 2.0.1; PE x64 and production package/feature rejection guards passed.
 - Local validation-only executable SHA-256: `8346b486aee0a05780fd313bcef905236cc4e553cdfe86e7927f980090d1bf00` (34,161,152 bytes).
-- Local validation-only installer SHA-256: `9d42008fe9ab6106cbd982801598678e445dc0609f1c588195ef49440e537303` (10,238,436 bytes). These local builds have no production signing/authority configuration and are not candidates for publication; official hashes must come from this run's exact signed CI artifact.
-- Production installer/envelope signatures: pending protected signing; no local private key or disposable test key used for distribution.
+- Local validation-only installer SHA-256: `9d42008fe9ab6106cbd982801598678e445dc0609f1c588195ef49440e537303` (10,238,436 bytes). These local builds have no production signing/authority configuration and are not candidates for publication; the official hashes above are from this run's exact signed CI artifact.
+- Production installer and envelope signatures passed on the exact downloaded CI files and independently downloaded public files. The complete signed inventory matched and the extracted x64 payload contains the established package, production public key and native discovery endpoint, with no acceptance flags or test identity.
 - Production trust fingerprint retained: `bb2998279b09a39daeb44cd405a2f0f6d664fa751ce3d02e002463f89f8c50bc` (SHA-256 of trimmed encoded public key).
 - Authenticode remains unconfigured under the established 2.0.0 publisher policy. Updater signatures do not claim Windows publisher identity.
-- Required owner action: approve the `launcher-production` deployment for run 41547960793 through GitHub Review deployments. This is the repository required-reviewer gate, not a request to change protections.
+- The owner explicitly delegated the three required reviews. Each review used the normal protected GitHub environment gate; protection rules and signing configuration were unchanged.
 
 The actual reviewed current workflow is `.github/workflows/native-release.yml`;
 `native-preview-release.yml` was renamed during the native-only transition. No
 workflow or signing identity was created. Requested inputs retain minimum native
 version `1.4.2`, exact source SHA, publication/advancement enabled and the observed
-native authority parent. Publication and authority have separate protected gates.
+native authority parent. Publication and authority passed their separate protected gates in order.
 
 ## Notification acceptance
 
@@ -90,28 +91,26 @@ This is a development boot, not acceptance of a production-signed installer.
 ## Authority, public downloads and preservation
 
 - Native authority before: `c663d66f28fee33d611021200fae5f00b42668e8`, version 2.0.0.
-- Native authority after/current: unchanged `c663d66f28fee33d611021200fae5f00b42668e8` pending protected release.
+- Native authority after: `0146fba27066b10166c2444e78d9d44798e4cb05`, a non-forced fast-forward with the previous authority as its sole parent. The public signed discovery envelope is byte-identical to the release; SHA-256 `fd59876504daa817153db3ec76bb6c8a4cdefbee52464c2c9237ac459cf30c5c`.
 - Legacy WebView authority before/after: `df7e824b2e49f8a5b9d2447ca2314bcafa21d119` (unchanged).
-- Public 2.0.1 download/signature/discovery verification: pending; no eligibility or distribution success is claimed yet. Keeping minimum `1.4.2` preserves the existing 2.0.0 upgrade path once signed 2.0.1 is published; native/WebView identity separation remains enforced.
+- All six public 2.0.1 files were downloaded without authentication and matched the accepted CI inventory, with both signatures independently verified. The public 2.0.0 executable contains the same production trust key and discovery endpoint; the signed 2.0.1 offer is eligible for it (minimum 1.4.2). Legacy WebView authority and package isolation remain unchanged.
 - All six immutable 2.0.0 assets were downloaded without authentication and matched GitHub's recorded SHA-256 values; the existing installer/envelope signatures and inventory passed `native-update.mjs verify` with the production public key.
 - 2.0.0 installer SHA-256 remains `b72888bb1a57921e94b0fdbdec895c834c2f1522b4437f346827e1de3e28e09f`.
-- Existing public native discovery envelope SHA-256 remains `63e1187c2528aaff4344e6f034815d675324799c7e193d2d46690658b1b0ba10`.
+- The immutable 2.0.0 release envelope remains unchanged at SHA-256 `63e1187c2528aaff4344e6f034815d675324799c7e193d2d46690658b1b0ba10`; discovery now serves the 2.0.1 envelope above.
 - 2.0.0 tag remains `33af6a6b619c375ed84b7ff495ff125c282386cd`; immutable assets/history were not overwritten.
 - Initial status/index/tracked/untracked/history/worktrees, public assets and both authority refs were recorded under the task's temporary evidence directory. Every baseline tracked file still exists; no deletion diff or generated game/runtime data was staged. The original correction branch remains preserved.
 - No cleanup/reset/force-push, key rotation, protection change, owner instance/world/account/credential access, WebView installation change or Client modification was performed. Only the disposable boot process was closed; the pre-existing owner process remained running.
 
-## Remaining acceptance and completion
+## Remaining owner acceptance
 
-After the required protected signing review, inspect this run's exact private
-signed installer/envelope/inventory before approving publication, then verify
-immutable unauthenticated public bytes before approving native authority
-advancement. Complete exact production signature, executable/installer identity,
-source/tag, native 2.0.0 update eligibility, public discovery and README/download
-metadata verification before changing this verdict to RELEASED. Do not rebuild
-accepted bytes between gates or install over owner data automatically.
+No disposable Windows VM/profile was available for a live production-signed
+upgrade/restart. Exact signed bytes, installer payload identity, public update
+eligibility, source-level UI interaction and the isolated development boot were
+verified. The unchanged installer was not run against the owner’s installation,
+and no owner account, instance, credential or world was loaded or changed.
 
 Once 2.0.1 is installed, the owner can perform:
 Repair → Ready → Launch Minecraft → Exit → Check. The affected instance should
 remain Ready. This owner-only follow-up has not been performed here.
 
-Detailed logs, hashes and headless renders remain in `C:\Users\kalib\AppData\Local\Temp\aurora-native-201-20261102-182821`. This evidence follow-up is on `codex/native-2.0.1-release-record`; main remains at the exact dispatched release source while approval is pending.
+Detailed logs, hashes and headless renders remain in `C:\Users\kalib\AppData\Local\Temp\aurora-native-201-20261102-182821`. The documentation follow-up records the completed workflow without changing the tagged release source.

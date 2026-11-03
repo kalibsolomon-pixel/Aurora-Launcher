@@ -227,7 +227,7 @@ lives in `core/`; it has no Tauri, WebView or frontend runtime dependency.
   downloads, authentication, installation, filesystem changes or launch into UI.
 - Readiness remains deep verification, triggered by changed inputs or explicit
   refresh, with at most one in-flight check.
-- Native 2.0.0 is stable/latest. Preserve existing native-preview identifiers,
+- Native 2.0.1 is stable/latest. Preserve existing native-preview identifiers,
   credentials, data paths, artifact names and signed update schema as compatibility
   contracts. They do not imply a GitHub prerelease. Never auto-migrate old WebView
   data or change the historical WebView authority.

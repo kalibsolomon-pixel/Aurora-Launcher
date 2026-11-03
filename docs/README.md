@@ -3,6 +3,7 @@
 - [Canonical architecture](../ARCHITECTURE.md)
 - [Release instructions](../RELEASING.md)
 - [Native-only stable transition](native-ui/NATIVE_ONLY_TRANSITION.md)
+- [Native 2.0.1 release record](releases/NATIVE_2_0_1_RELEASE.md)
 - [Native 2.0.0 release record](releases/NATIVE_2_0_0_RELEASE.md)
 - [Protected native release procedure](native-ui/PROTECTED_NATIVE_RELEASE.md)
 - [Update authority contract](releases/UPDATE_AUTHORITY.md)
