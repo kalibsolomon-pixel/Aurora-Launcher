@@ -247,7 +247,7 @@ component PlaytimeCard inherits Rectangle {
             }
         }
         if root.item.lines.length > 0 && root.points.length > 0: HorizontalLayout {
-            Text { text: (root.expanded || root.all-time) && root.points.length > 0 ? root.points[0].label : ""; color: Theme.text-muted; font-size: Theme.text-label; horizontal-stretch: 1; }
+            Text { text: root.width >= 225px && (root.expanded || root.all-time) ? root.points[0].label : ""; color: Theme.text-muted; font-size: Theme.text-label; horizontal-stretch: 1; overflow: elide; }
             Text { text: "Today · UTC"; color: Theme.text-muted; font-size: Theme.text-label; }
         }
     }

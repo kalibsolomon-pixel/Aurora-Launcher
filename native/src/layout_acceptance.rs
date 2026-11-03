@@ -699,6 +699,31 @@ fn scenes() -> Vec<(&'static str, Scene)> {
             responsive_widget(app, "playtime", 3, 1);
             app.global::<crate::Widgets>().set_playtime_period(1);
         }),
+        ("ui2-playtime-30d-narrow", |app| {
+            responsive_widget(app, "playtime", 1, 2);
+            let widgets = app.global::<crate::Widgets>();
+            let points = [0, 2, 1, 0, 3, 2]
+                .into_iter()
+                .enumerate()
+                .map(|(index, hours)| {
+                    let back = (5 - index) * 5;
+                    let label = if back == 0 {
+                        "Last 5 days".into()
+                    } else {
+                        format!("{}–{} days ago", back + 4, back)
+                    };
+                    crate::PlaytimePoint {
+                        label: label.clone().into(),
+                        detail: format!("{label} (UTC), {hours} h").into(),
+                        value: format!("{hours} h").into(),
+                        fraction: hours as f32 / 3.,
+                    }
+                })
+                .collect();
+            widgets.set_month_compact(ui_model(points));
+            widgets.set_month_compact_peak("3 h".into());
+            widgets.set_playtime_period(1);
+        }),
         ("ui2-playtime-all", |app| {
             responsive_widget(app, "playtime", 3, 1);
             let widgets = app.global::<crate::Widgets>();
