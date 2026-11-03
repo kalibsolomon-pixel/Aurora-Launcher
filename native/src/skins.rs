@@ -3,7 +3,7 @@
 //! talks to Minecraft services with the Rust-owned session; the UI receives
 //! only decoded pixels, names and ids.
 
-use slint::ComponentHandle;
+use slint::{ComponentHandle, Model, VecModel};
 use std::sync::Arc;
 
 use crate::api::{self, Cape, Cosmetics, HeadAvatar, SkinPreset, Texture};
@@ -773,6 +773,19 @@ fn render_presets() {
                 }
             })
             .collect();
-        window.global::<Skins>().set_presets(ui::model(rows));
+        let current = skins.get_presets();
+        if let Some(model) = current.as_any().downcast_ref::<VecModel<SkinRow>>()
+            && model.row_count() == rows.len()
+            && model.iter().zip(&rows).all(|(old, new)| old.id == new.id)
+        {
+            // A thumbnail or favorite update should keep the row's focus and editor.
+            for (index, row) in rows.into_iter().enumerate() {
+                if model.row_data(index).as_ref() != Some(&row) {
+                    model.set_row_data(index, row);
+                }
+            }
+        } else {
+            skins.set_presets(ui::model(rows));
+        }
     });
 }
