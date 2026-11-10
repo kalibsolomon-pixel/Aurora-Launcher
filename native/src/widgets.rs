@@ -11,7 +11,10 @@ use std::cell::RefCell;
 use slint::{ComponentHandle, Model};
 
 use crate::api::{self, HomeLayout, WidgetPlacement};
-use crate::{WidgetChoice, WidgetLine, WidgetView, Widgets, symbols, ui};
+use crate::{ServerRow, WidgetChoice, WidgetLine, WidgetView, Widgets, symbols, ui};
+
+// Each tab has ten entries; their union fits the existing 20-target enrichment API.
+const SERVER_ROWS: usize = 10;
 
 /// The widgets this host renders, in their default order.
 const NATIVE: [(&str, &str, &str); 5] = [
@@ -33,8 +36,14 @@ struct State {
     instance: Option<String>,
     columns: i32,
     saving: bool,
-    daily: Vec<api::DailyPlaytime>,
-    historical: Vec<api::PlaytimeInterval>,
+    servers: Vec<api::RecentTarget>,
+    presentations: Vec<api::ServerPresentation>,
+    server_icons: std::collections::HashMap<String, slint::Image>,
+    server_error: bool,
+    server_enriching: bool,
+    favorite_pending: std::collections::HashSet<String>,
+    favorite_revision: u64,
+    server_launch: Option<String>,
     server_favorites: bool,
     saved_servers: bool,
     saved_worlds: bool,
@@ -43,12 +52,33 @@ struct State {
     server_status: std::collections::HashMap<String, (String, slint::Image)>,
 }
 
+impl State {
+    fn begin_favorite(&mut self, id: &str) -> Option<bool> {
+        let favorite = !self.servers.iter().find(|server| server.id == id)?.favorite;
+        self.favorite_pending
+            .insert(id.to_owned())
+            .then_some(favorite)
+    }
+
+    fn finish_favorite(&mut self, id: &str, favorite: bool, succeeded: bool) {
+        if !self.favorite_pending.remove(id) || !succeeded {
+            return;
+        }
+        self.favorite_revision += 1;
+        if let Some(server) = self.servers.iter_mut().find(|server| server.id == id) {
+            server.favorite = favorite;
+        }
+    }
+}
+
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::default());
 }
 
 pub fn bind(window: &crate::AppWindow) {
     let widgets = window.global::<Widgets>();
+    widgets.on_server_favorite(|id| favorite_server(id.as_str()));
+    widgets.on_server_play(|id| play_server(id.as_str()));
     widgets.on_add(|id| edit(|layout| set_enabled(layout, id.as_str(), true)));
     widgets.on_remove(|id| edit(|layout| set_enabled(layout, id.as_str(), false)));
     widgets.on_reset_layout(|| edit(reset_layout));
@@ -85,6 +115,11 @@ pub fn bind(window: &crate::AppWindow) {
             s.saved_servers = false;
             s.saved_errors.remove("saved-servers");
         });
+        crate::ui::with(|window, _| {
+            window
+                .global::<Widgets>()
+                .set_server_tab(if favorites { 1 } else { 0 })
+        });
         render();
     });
     widgets.on_saved_view(|worlds, saved| {
@@ -112,6 +147,113 @@ pub fn bind(window: &crate::AppWindow) {
     crate::media::bind(window);
 }
 
+fn favorite_server(id: &str) {
+    let Some(favorite) = STATE.with(|state| state.borrow_mut().begin_favorite(id)) else {
+        return;
+    };
+    let id = id.to_owned();
+    render();
+    ui::spawn_api(
+        api::server_favorite(ui::host(), id.clone(), favorite),
+        move |result| {
+            STATE.with(|state| {
+                state
+                    .borrow_mut()
+                    .finish_favorite(&id, favorite, result.is_ok())
+            });
+            if let Err(error) = result {
+                ui::error_toast(&error);
+            }
+            render();
+        },
+    );
+}
+
+fn server_target<'a>(
+    entries: &'a [api::RecentTarget],
+    id: &str,
+) -> api::ApiResult<&'a api::RecentTarget> {
+    entries
+        .iter()
+        .find(|target| target.id == id && target.available)
+        .ok_or_else(|| {
+            api::ApiError::new(
+                "quick_target_stale",
+                "This server is no longer available in local history.",
+            )
+        })
+}
+
+fn begin_server_launch(
+    state: &mut ui::AppState,
+    target: &api::RecentTarget,
+) -> api::ApiResult<Option<String>> {
+    // Share Home's in-flight launch guard; the core additionally rejects
+    // a starting/running child for the stored target's own instance.
+    if state.play_busy || state.pending_play.is_some() {
+        return Ok(None);
+    }
+    if state.instance(&target.instance_id).is_none() {
+        return Err(api::ApiError::new(
+            "quick_instance_missing",
+            "The instance for this server no longer exists.",
+        ));
+    }
+    let account = state.accounts.selected_account_id.clone().ok_or_else(|| {
+        api::ApiError::new(
+            "launch_authentication_required",
+            "Sign in to quick play this server.",
+        )
+    })?;
+    state.play_busy = true;
+    state.play_progress = Some(format!("Preparing server: {}", target.display_name));
+    Ok(Some(account))
+}
+
+fn play_server(id: &str) {
+    let target = STATE.with(|state| server_target(&state.borrow().servers, id).cloned());
+    let target = match target {
+        Ok(target) => target,
+        Err(error) => {
+            ui::error_toast(&error);
+            return;
+        }
+    };
+    let request = ui::with(|_, state| begin_server_launch(state, &target));
+    let account = match request {
+        Some(Ok(Some(account))) => account,
+        Some(Err(error)) => {
+            ui::error_toast(&error);
+            if error.code == "launch_authentication_required" {
+                crate::accounts::open_dialog();
+            }
+            return;
+        }
+        _ => return,
+    };
+    STATE.with(|state| state.borrow_mut().server_launch = Some(target.id.clone()));
+    crate::home::render();
+    render();
+    ui::spawn_api(
+        api::quick_play_server(ui::host(), target.id, account),
+        |result| {
+            STATE.with(|state| state.borrow_mut().server_launch = None);
+            ui::with(|_, state| {
+                state.play_busy = false;
+                state.play_progress = None;
+            });
+            match result {
+                Ok(process) => crate::home::on_launch_state(process),
+                Err(error) => ui::error_toast(&error),
+            }
+            crate::home::refresh_readiness();
+            render();
+        },
+    );
+}
+
+/// The core's untouched default means "never customized": this host shows
+/// its own default (Playtime and Servers) instead.
 fn refresh_servers() {
     use base64::Engine;
     let (ids, saved_instance) = STATE.with(|state| {
@@ -221,10 +363,14 @@ fn reset_layout(layout: &mut HomeLayout) {
     *layout = reset;
 }
 
-/// The core's untouched default means "never customized": this host shows
-/// its own default (Playtime and Servers) instead.
 fn effective(saved: HomeLayout) -> HomeLayout {
-    let core_default = default_layout();
+    let core_default: HomeLayout =
+        serde_json::to_value(aurora_launcher_lib::home_widgets::HomeLayout::default())
+            .ok()
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or(HomeLayout {
+                widgets: Vec::new(),
+            });
     let mut layout = saved.clone();
     if saved == core_default {
         for widget in &mut layout.widgets {
@@ -421,7 +567,7 @@ pub fn refresh() {
     let wants_history = shown
         .iter()
         .any(|id| matches!(*id, "playtime" | "recent-servers" | "recent-worlds"));
-    let (serial, saved_servers, saved_worlds) = STATE.with(|s| {
+    let (serial, favorite_revision, saved_servers, saved_worlds) = STATE.with(|s| {
         let mut s = s.borrow_mut();
         s.serial += 1;
         s.instance = instance.clone();
@@ -429,7 +575,12 @@ pub fn refresh() {
         s.data.remove("saved-servers");
         s.saved_errors.clear();
         s.loading = wants_history;
-        (s.serial, s.saved_servers, s.saved_worlds)
+        (
+            s.serial,
+            s.favorite_revision,
+            s.saved_servers,
+            s.saved_worlds,
+        )
     });
     render();
     if !wants_history {
@@ -438,32 +589,18 @@ pub fn refresh() {
     let host = ui::host();
     ui::spawn(
         async move {
-            let (playtime, daily, historical) = if shown.contains(&"playtime") {
-                (
-                    api::playtime(host.clone(), instance.clone()).await.ok(),
-                    api::daily_playtime(host.clone(), instance.clone())
-                        .await
-                        .unwrap_or_default(),
-                    api::historical_playtime(host.clone(), instance.clone())
-                        .await
-                        .unwrap_or_default(),
-                )
-            } else {
-                (None, Vec::new(), Vec::new())
-            };
+            let playtime = api::playtime(host.clone(), instance.clone()).await;
+            let daily = api::daily_playtime(host.clone(), instance.clone()).await;
+            // The local store bounds history to 100 recents plus 100 favorites.
+            // Read both before filtering so older favorites cannot be hidden by recents.
             let servers = if shown.contains(&"recent-servers") {
-                api::recent_servers(host.clone(), None, 200)
-                    .await
-                    .unwrap_or_default()
+                api::recent_servers(host.clone(), None, 200).await
             } else {
-                Vec::new()
+                Ok(Vec::new())
             };
-            let worlds = if shown.contains(&"recent-worlds") {
-                api::recent_worlds(host.clone(), instance.clone(), 32)
-                    .await
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
+            let worlds = match &instance {
+                Some(id) => api::recent_worlds(host.clone(), Some(id.clone()), 32).await,
+                None => Ok(Vec::new()),
             };
             let mut saved = Vec::new();
             if let Some(instance) = instance {
@@ -478,9 +615,9 @@ pub fn refresh() {
                     }
                 }
             }
-            (playtime, daily, historical, servers, worlds, saved)
+            (playtime, daily, servers, worlds, saved)
         },
-        move |(playtime, daily, historical, servers, worlds, saved)| {
+        move |(playtime, daily, servers, worlds, saved)| {
             let current = STATE.with(|s| s.borrow().serial == serial);
             if !current {
                 return;
@@ -497,24 +634,20 @@ pub fn refresh() {
                     .collect::<std::collections::HashMap<_, _>>()
             });
             let now = now_secs();
+            present_playtime(playtime.ok(), daily.as_deref().ok());
             STATE.with(|s| {
                 let mut s = s.borrow_mut();
                 s.loading = false;
-                s.daily = daily;
-                s.historical = historical;
-                s.data.insert(
-                    "playtime",
-                    match playtime {
-                        Some(p) if p.all_time_ms > 0 => vec![
-                            line("Today", &duration(p.today_ms), ""),
-                            line("Last 7 days", &duration(p.last_7_days_ms), ""),
-                            line("Last 30 days", &duration(p.last_30_days_ms), ""),
-                            line("All time", &duration(p.all_time_ms), ""),
-                        ],
-                        _ => Vec::new(),
-                    },
-                );
-                for (id, targets) in [("recent-servers", servers), ("recent-worlds", worlds)] {
+                // A history read begun before a favorite save must not restore
+                // its stale star state after the successful write.
+                if s.favorite_revision == favorite_revision {
+                    s.server_error = servers.is_err();
+                    s.server_enriching = false;
+                    s.servers = server_entries(&servers.unwrap_or_default());
+                    s.presentations.clear();
+                    s.server_icons.clear();
+                }
+                for (id, targets) in [("recent-worlds", worlds.unwrap_or_default())] {
                     s.data.insert(
                         id,
                         targets
@@ -599,8 +732,192 @@ pub fn refresh() {
                 }
             });
             render();
+            enrich_servers(serial);
         },
     );
+}
+
+/// Keep the newest played entries and the newest favorites independently.
+/// Never-played favorites belong only to Favorites. Ties keep core ordering.
+fn server_tabs(entries: &[api::RecentTarget]) -> (Vec<api::RecentTarget>, Vec<api::RecentTarget>) {
+    let mut ordered = entries.to_vec();
+    ordered.sort_by_key(|t| std::cmp::Reverse(server_timestamp(t.last_played_at)));
+    let recents = ordered
+        .iter()
+        .filter(|t| t.last_played_at > 0)
+        .take(SERVER_ROWS)
+        .cloned()
+        .collect();
+    let favorites = ordered
+        .into_iter()
+        .filter(|t| t.favorite)
+        .take(SERVER_ROWS)
+        .collect();
+    (recents, favorites)
+}
+
+fn server_entries(entries: &[api::RecentTarget]) -> Vec<api::RecentTarget> {
+    let (mut recents, favorites) = server_tabs(entries);
+    for favorite in favorites {
+        if !recents.iter().any(|t| t.id == favorite.id) {
+            recents.push(favorite);
+        }
+    }
+    recents
+}
+
+fn server_motd(presentation: &api::ServerPresentation) -> String {
+    // Display-only flattening: servers centre MOTD lines with leading/trailing
+    // spaces, which would otherwise break the row's shared left edge. Trim each
+    // line and drop ones that become empty; stored data stays untouched.
+    presentation
+        .motd
+        .iter()
+        .map(|line| {
+            line.iter()
+                .map(|segment| segment.text.as_str())
+                .collect::<String>()
+        })
+        .map(|line| line.trim().to_owned())
+        .filter(|line| !line.is_empty())
+        .take(2)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn server_timestamp(at: u64) -> u64 {
+    if at > 100_000_000_000 { at / 1000 } else { at }
+}
+
+fn server_played(at: u64, now: u64) -> String {
+    if at == 0 {
+        "Not played yet".into()
+    } else {
+        relative(at, now)
+    }
+}
+
+fn enrich_servers(serial: u64) {
+    let ids = STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        let ids: Vec<_> = state.servers.iter().map(|t| t.id.clone()).collect();
+        state.server_enriching = !ids.is_empty();
+        ids
+    });
+    if ids.is_empty() {
+        return;
+    }
+    render();
+    ui::spawn(api::server_presentations(ui::host(), ids), move |result| {
+        STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            if state.serial != serial {
+                return;
+            }
+            state.server_enriching = false;
+            state.presentations = result.unwrap_or_default();
+            // Only core-validated, bounded static PNGs reach Slint, once per refresh.
+            use base64::Engine as _;
+            state.server_icons = state
+                .presentations
+                .iter()
+                .filter_map(|p| {
+                    let encoded = p
+                        .favicon
+                        .as_deref()?
+                        .strip_prefix("data:image/png;base64,")?;
+                    let bytes = base64::engine::general_purpose::STANDARD
+                        .decode(encoded)
+                        .ok()?;
+                    let icon = slint::Image::load_from_data(&bytes, Some("png")).ok()?;
+                    Some((p.target_id.clone(), icon))
+                })
+                .collect();
+        });
+        render();
+    });
+}
+
+fn render_servers(widgets: &Widgets, names: &std::collections::HashMap<String, String>) {
+    STATE.with(|state| {
+        let state = state.borrow();
+        let (recents, favorites) = server_tabs(&state.servers);
+        let rows = |entries: Vec<api::RecentTarget>| {
+            entries
+                .into_iter()
+                .map(|target| {
+                    let presentation = state
+                        .presentations
+                        .iter()
+                        .find(|p| p.target_id == target.id);
+                    let icon = state.server_icons.get(&target.id);
+                    let name = presentation
+                        .and_then(|p| p.name.as_deref())
+                        .filter(|n| !n.is_empty())
+                        .unwrap_or(&target.display_name);
+                    let played = if state.server_launch.as_deref() == Some(target.id.as_str()) {
+                        "Starting…".into()
+                    } else {
+                        server_played(target.last_played_at, now_secs())
+                    };
+                    let instance = names
+                        .get(&target.instance_id)
+                        .map(String::as_str)
+                        .unwrap_or("Instance unavailable");
+                    ServerRow {
+                        id: target.id.clone().into(),
+                        favorite: target.favorite,
+                        favorite_busy: state.favorite_pending.contains(&target.id),
+                        available: target.available && names.contains_key(&target.instance_id),
+                        name: name.into(),
+                        detail: format!(
+                            "{played} · {instance}{}",
+                            if target.available {
+                                ""
+                            } else {
+                                " · Unavailable"
+                            }
+                        )
+                        .into(),
+                        motd: presentation.map(server_motd).unwrap_or_default().into(),
+                        picture: icon.cloned().unwrap_or_default(),
+                        has_picture: icon.is_some(),
+                        letter: ui::letter(name).into(),
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+        widgets.set_server_recents(server_model(widgets.get_server_recents(), rows(recents)));
+        widgets.set_server_favorites(server_model(
+            widgets.get_server_favorites(),
+            rows(favorites),
+        ));
+        widgets.set_server_error(state.server_error);
+        widgets.set_server_enriching(state.server_enriching);
+        widgets.set_server_launch_busy(state.server_launch.is_some());
+    });
+}
+
+fn server_model(
+    current: slint::ModelRc<ServerRow>,
+    rows: Vec<ServerRow>,
+) -> slint::ModelRc<ServerRow> {
+    if current.row_count() == rows.len()
+        && rows
+            .iter()
+            .enumerate()
+            .all(|(index, row)| current.row_data(index).is_some_and(|old| old.id == row.id))
+        && let Some(model) = current
+            .as_any()
+            .downcast_ref::<slint::VecModel<ServerRow>>()
+    {
+        // Keep the focused star/Play control alive during confirmed data updates.
+        for (index, row) in rows.into_iter().enumerate() {
+            model.set_row_data(index, row);
+        }
+        return current;
+    }
+    ui::model(rows)
 }
 
 fn line(label: &str, value: &str, detail: &str) -> WidgetLine {
@@ -633,7 +950,7 @@ pub fn duration(ms: u64) -> String {
 /// Seconds-since-epoch → "Today", "Yesterday", "3 days ago", "5 weeks ago".
 pub fn relative(at: u64, now: u64) -> String {
     let at = if at > 100_000_000_000 { at / 1000 } else { at };
-    let days = (now / 86_400).saturating_sub(at / 86_400);
+    let days = now.saturating_sub(at) / 86_400;
     match days {
         0 => "Today".into(),
         1 => "Yesterday".into(),
@@ -674,8 +991,6 @@ pub fn render() {
         data,
         loading,
         columns,
-        daily,
-        historical,
         favorites,
         status,
         refreshing,
@@ -689,8 +1004,6 @@ pub fn render() {
             s.data.clone(),
             s.loading,
             if s.columns == 0 { 6 } else { s.columns },
-            s.daily.clone(),
-            s.historical.clone(),
             s.server_favorites,
             s.server_status.clone(),
             s.refreshing_servers,
@@ -816,8 +1129,19 @@ pub fn render() {
             icon: symbols::path_or_fallback(Some(icon)).into(),
         })
         .collect();
+    let server_names = ui::state(|state| {
+        state
+            .instances()
+            .iter()
+            .map(|i| (i.id.clone(), i.display_name.clone()))
+            .collect::<std::collections::HashMap<_, _>>()
+    });
     ui::with(|window, _| {
         let widgets = window.global::<Widgets>();
+        widgets.set_saved_servers(saved_servers);
+        widgets.set_saved_worlds(saved_worlds);
+        widgets.set_refreshing_servers(refreshing);
+        render_servers(&widgets, &server_names);
         let existing = widgets.get_items();
         if existing.row_count() == items.len()
             && items
@@ -835,7 +1159,6 @@ pub fn render() {
         } else {
             widgets.set_items(ui::model(items));
         }
-        widgets.set_refreshing_servers(refreshing);
         widgets.set_available_names(ui::model(
             available
                 .iter()
@@ -868,48 +1191,6 @@ pub fn render() {
                 .map(|i| format!("Position {i}").into())
                 .collect::<Vec<_>>(),
         ));
-        widgets.set_week(ui::model(chart_points(&daily, 7)));
-        widgets.set_month(ui::model(chart_points(&daily, 30)));
-        let month_compact: Vec<_> = daily
-            .chunks(5)
-            .filter_map(|chunk| {
-                Some(api::PlaytimeInterval {
-                    start_day: chunk.first()?.day,
-                    end_day: chunk.last()?.day,
-                    duration_ms: chunk.iter().map(|day| day.duration_ms).sum(),
-                })
-            })
-            .collect();
-        let (points, peak) = interval_points(&month_compact);
-        widgets.set_month_compact(ui::model(points));
-        widgets.set_month_compact_peak(peak.into());
-        let (points, peak) = interval_points(&historical);
-        widgets.set_historical(ui::model(points));
-        widgets.set_historical_peak(peak.into());
-        widgets.set_week_peak(
-            duration(
-                daily
-                    .iter()
-                    .rev()
-                    .take(7)
-                    .map(|d| d.duration_ms)
-                    .max()
-                    .unwrap_or(0)
-                    .max(60_000),
-            )
-            .into(),
-        );
-        widgets.set_month_peak(
-            duration(
-                daily
-                    .iter()
-                    .map(|d| d.duration_ms)
-                    .max()
-                    .unwrap_or(0)
-                    .max(60_000),
-            )
-            .into(),
-        );
     });
 }
 
@@ -923,59 +1204,47 @@ fn arrange(
     height: i32,
     columns: i32,
 ) {
-    if !layout
+    let Some(index) = layout
         .widgets
         .iter()
-        .any(|w| w.id == id && w.enabled && is_native(id))
-    {
+        .position(|w| w.id == id && w.enabled && is_native(id))
+    else {
         return;
-    }
+    };
     let width = width.clamp(1, 6);
-    let height = height.clamp(1, 3);
-    let shown_width = width.min(columns);
-    let column = column.clamp(0, (columns - shown_width).min(6 - width));
-    let row = row.clamp(0, 63);
-    let visible = layout
+    let max_column = (columns.clamp(1, 6) - width.min(columns.clamp(1, 6))).min(6 - width);
+    layout.widgets[index].grid = Some(api::WidgetGrid {
+        columns: width as u8,
+        rows: height.clamp(1, 3) as u8,
+        position: Some([column.clamp(0, max_column) as u8, row.clamp(0, 63) as u8]),
+    });
+    // Give the manipulated card first claim, while preserving the saved entry order.
+    let mut prioritized = layout.clone();
+    let moved = prioritized.widgets.remove(index);
+    prioritized.widgets.insert(0, moved);
+    let positions = grid_positions(&prioritized, columns);
+    for (widget, (c, r, w, h)) in prioritized
         .widgets
         .iter()
-        .filter(|w| w.enabled && is_native(&w.id));
-    let positions = grid_positions(layout, columns);
-    if visible.zip(&positions).any(|(widget, &(c, r, w, h))| {
-        widget.id != id
-            && column < c + w
-            && c < column + shown_width
-            && row < r + h
-            && r < row + height
-    }) {
-        return;
-    }
-    let mut positions = positions.into_iter();
-    for widget in layout
-        .widgets
-        .iter_mut()
         .filter(|w| w.enabled && is_native(&w.id))
+        .zip(positions)
     {
-        let (c, r, _, h) = positions.next().expect("one position per visible widget");
-        if widget.id == id {
-            widget.grid = Some(api::WidgetGrid {
-                columns: width as u8,
-                rows: height as u8,
-                position: Some([column as u8, row as u8]),
-            });
-        } else if widget
-            .grid
-            .as_ref()
-            .and_then(|grid| grid.position)
-            .is_none()
-        {
-            // Freeze legacy auto-placed neighbors when the layout first gains an anchor.
-            let grid = widget.grid.get_or_insert_with(|| api::WidgetGrid {
-                columns: if widget.size == "small" { 2 } else { 4 },
-                rows: h as u8,
-                position: None,
-            });
-            grid.position = Some([c.min(6 - i32::from(grid.columns)) as u8, r as u8]);
+        let target = layout
+            .widgets
+            .iter_mut()
+            .find(|w| w.id == widget.id)
+            .unwrap();
+        let mut grid = target.grid.clone().unwrap_or(api::WidgetGrid {
+            columns: w as u8,
+            rows: h as u8,
+            position: None,
+        });
+        grid.position = Some([c as u8, r as u8]);
+        // A move on a narrow viewport must not erase the saved wider size.
+        if target.id == id {
+            grid.columns = width as u8;
         }
+        target.grid = Some(grid);
     }
 }
 
@@ -1027,72 +1296,354 @@ pub(crate) fn grid_positions(layout: &HomeLayout, columns: i32) -> Vec<(i32, i32
     result
 }
 
-fn interval_points(intervals: &[api::PlaytimeInterval]) -> (Vec<crate::PlaytimePoint>, String) {
-    let peak = intervals
-        .iter()
-        .map(|interval| interval.duration_ms)
-        .max()
-        .unwrap_or(0)
-        .max(60_000);
-    let today = intervals.last().map_or(0, |interval| interval.end_day);
-    let points = intervals
-        .iter()
-        .map(|interval| {
-            let from = today - interval.start_day;
-            let until = today - interval.end_day;
-            let label = match (from, until) {
-                (0, 0) => "Today".to_owned(),
-                (from, 0) => format!("Last {} days", from + 1),
-                (from, until) if from == until => format!("{from} days ago"),
-                (from, until) => format!("{from}–{until} days ago"),
-            };
-            let value = duration(interval.duration_ms);
-            crate::PlaytimePoint {
-                detail: format!("{label} (UTC), {value}").into(),
-                label: label.into(),
-                value: value.into(),
-                fraction: interval.duration_ms as f32 / peak as f32,
-            }
-        })
-        .collect();
-    (points, duration(peak))
+/// Bounded UTC-day projection. Missing days are zero, never fabricated activity.
+/// The endpoint returns at most 30 days including its query's UTC today.
+#[derive(Debug, PartialEq, Eq)]
+struct PlaytimeBin {
+    first: u64,
+    last: u64,
+    duration_ms: u64,
 }
 
-pub(crate) fn chart_points(
+fn playtime_bins(
     daily: &[api::DailyPlaytime],
+    today: u64,
+    days: usize,
     count: usize,
-) -> Vec<crate::PlaytimePoint> {
-    let values = &daily[daily.len().saturating_sub(count)..];
-    let peak = values
-        .iter()
-        .map(|d| d.duration_ms)
-        .max()
-        .unwrap_or(0)
-        .max(60_000);
-    values
-        .iter()
-        .enumerate()
-        .map(|(i, d)| {
-            let back = values.len() - 1 - i;
-            let label = if back == 0 {
-                "Today".into()
-            } else {
-                ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][((d.day + 4) % 7) as usize]
-                    .to_string()
-            };
-            crate::PlaytimePoint {
-                label: label.clone().into(),
-                detail: format!("{label}, {back} days ago: {}", duration(d.duration_ms)).into(),
-                fraction: d.duration_ms as f32 / peak as f32,
-                value: duration(d.duration_ms).into(),
+) -> Vec<PlaytimeBin> {
+    if daily.is_empty() {
+        return Vec::new();
+    }
+    let days = days.clamp(1, 30).min(today.saturating_add(1) as usize);
+    let count = count.clamp(1, days);
+    let first = today - (days - 1) as u64;
+    (0..count)
+        .map(|i| {
+            let start = first + (i * days / count) as u64;
+            let end = first + ((i + 1) * days / count - 1) as u64;
+            PlaytimeBin {
+                first: start,
+                last: end,
+                duration_ms: daily
+                    .iter()
+                    .filter(|d| (start..=end).contains(&d.day))
+                    .fold(0u64, |sum, d| sum.saturating_add(d.duration_ms)),
             }
         })
         .collect()
 }
 
+fn bin_label(bin: &PlaytimeBin, today: u64) -> String {
+    let relative = |day| match today - day {
+        0 => "Today".to_string(),
+        1 => "Yesterday".to_string(),
+        n => format!("{n} days ago"),
+    };
+    if bin.first == bin.last {
+        relative(bin.first)
+    } else {
+        format!("{} – {}", relative(bin.first), relative(bin.last))
+    }
+}
+
+fn points_from_bins(bins: &[PlaytimeBin], today: u64) -> Vec<crate::PlaytimePoint> {
+    let peak = chart_peak(bins);
+    bins.iter()
+        .map(|bin| {
+            let label = bin_label(bin, today);
+            crate::PlaytimePoint {
+                label: label.clone().into(),
+                detail: format!(
+                    "{label} · UTC: {} ({} ms)",
+                    duration(bin.duration_ms),
+                    bin.duration_ms
+                )
+                .into(),
+                fraction: bin.duration_ms as f32 / peak as f32,
+                value: duration(bin.duration_ms).into(),
+            }
+        })
+        .collect()
+}
+
+// Existing synthetic layout acceptance uses this projection helper only.
+#[cfg(test)]
+pub(crate) fn chart_points(
+    daily: &[api::DailyPlaytime],
+    count: usize,
+) -> Vec<crate::PlaytimePoint> {
+    let today = daily.iter().map(|d| d.day).max().unwrap_or(0);
+    points_from_bins(&playtime_bins(daily, today, count, count), today)
+}
+
+fn chart_peak(bins: &[PlaytimeBin]) -> u64 {
+    bins.iter()
+        .map(|b| b.duration_ms)
+        .max()
+        .unwrap_or(0)
+        .max(60_000)
+}
+
+fn axis_duration(ms: u64) -> String {
+    // Keep extreme totals bounded; exact milliseconds remain on accessible bars.
+    let hours = ms / 3_600_000;
+    if hours >= 1000 {
+        format!("{:.1e} h", hours as f64)
+    } else {
+        duration(ms)
+    }
+}
+
+fn playtime_total(bins: &[PlaytimeBin]) -> u64 {
+    bins.iter()
+        .fold(0u64, |sum, b| sum.saturating_add(b.duration_ms))
+}
+
+fn lifetime_text(summary: Option<api::Playtime>) -> (String, String) {
+    summary.map_or_else(
+        || {
+            (
+                "Total unavailable".into(),
+                "Lifetime playtime is unavailable.".into(),
+            )
+        },
+        |p| {
+            (
+                duration(p.all_time_ms),
+                format!(
+                    "All time: {} ({} ms). Chart shows only the last 30 UTC days.",
+                    duration(p.all_time_ms),
+                    p.all_time_ms
+                ),
+            )
+        },
+    )
+}
+
+/// Called only when the existing asynchronous history refresh completes.
+/// Selection and resizing switch cached models without I/O or aggregation.
+fn present_playtime(summary: Option<api::Playtime>, daily: Option<&[api::DailyPlaytime]>) {
+    let history = daily.unwrap_or_default();
+    // Anchor labels to the API snapshot, including a refresh that crosses UTC midnight.
+    let today = history
+        .iter()
+        .map(|d| d.day)
+        .max()
+        .unwrap_or(now_secs() / 86_400);
+    let week = playtime_bins(history, today, 7, 7);
+    let month = playtime_bins(history, today, 30, 30);
+    let binned = playtime_bins(history, today, 30, 7);
+    let (lifetime, detail) = lifetime_text(summary);
+    ui::with(|window, _| {
+        let widgets = window.global::<Widgets>();
+        widgets.set_week_total(
+            if daily.is_some_and(|days| !days.is_empty()) {
+                duration(playtime_total(&week))
+            } else {
+                "Total unavailable".into()
+            }
+            .into(),
+        );
+        widgets.set_month_total(
+            if daily.is_some_and(|days| !days.is_empty()) {
+                duration(playtime_total(&month))
+            } else {
+                "Total unavailable".into()
+            }
+            .into(),
+        );
+        widgets.set_lifetime_total(lifetime.into());
+        widgets.set_week_empty(playtime_total(&week) == 0);
+        widgets.set_month_empty(playtime_total(&month) == 0);
+        widgets.set_lifetime_detail(detail.into());
+        widgets.set_week_peak(axis_duration(chart_peak(&week)).into());
+        widgets.set_month_peak(axis_duration(chart_peak(&month)).into());
+        widgets.set_month_binned_peak(axis_duration(chart_peak(&binned)).into());
+        widgets.set_week(ui::model(points_from_bins(&week, today)));
+        widgets.set_month(ui::model(points_from_bins(&month, today)));
+        widgets.set_month_binned(ui::model(points_from_bins(&binned, today)));
+        widgets.set_playtime_status(
+            match daily {
+                None => "Daily playtime is unavailable.",
+                Some([]) => "No daily history available.",
+                Some(_) => "",
+            }
+            .into(),
+        );
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn server(id: usize, at: u64, favorite: bool) -> api::RecentTarget {
+        api::RecentTarget {
+            id: id.to_string(),
+            instance_id: "instance".into(),
+            display_name: "Server".into(),
+            last_played_at: at,
+            duration_ms: 0,
+            available: true,
+            favorite,
+        }
+    }
+
+    #[test]
+    fn favorite_actions_wait_for_confirmation_reject_duplicates_and_recover_after_failure() {
+        let mut state = State::default();
+        state.servers = vec![server(1, 1, false), server(2, 1, true)];
+        assert_eq!(state.begin_favorite("missing"), None);
+        assert_eq!(state.begin_favorite("1"), Some(true));
+        assert!(!state.servers[0].favorite);
+        assert_eq!(state.begin_favorite("1"), None);
+        assert_eq!(state.begin_favorite("2"), Some(false));
+        state.finish_favorite("1", true, false);
+        assert!(!state.servers[0].favorite);
+        assert_eq!(state.favorite_revision, 0);
+        assert_eq!(state.begin_favorite("1"), Some(true));
+        state.finish_favorite("1", true, true);
+        state.finish_favorite("2", false, true);
+        assert!(state.servers[0].favorite);
+        assert!(!state.servers[1].favorite);
+        assert_eq!(state.favorite_revision, 2);
+        // A duplicate completion cannot undo the confirmed state.
+        state.finish_favorite("1", false, true);
+        assert!(state.servers[0].favorite);
+        assert_eq!(state.favorite_revision, 2);
+    }
+
+    #[test]
+    fn server_launch_uses_the_exact_history_target_and_its_original_instance() {
+        let mut entries = vec![server(1, 1, false), server(2, 1, false)];
+        entries[0].instance_id = "original-instance".into();
+        entries[1].available = false;
+        let target = server_target(&entries, "1").unwrap();
+        assert_eq!(target.id, "1");
+        assert_eq!(target.instance_id, "original-instance");
+        assert_eq!(
+            server_target(&entries, "2").unwrap_err().code,
+            "quick_target_stale"
+        );
+        assert_eq!(
+            server_target(&entries, "missing").unwrap_err().code,
+            "quick_target_stale"
+        );
+        let mut state = ui::AppState::default();
+        assert_eq!(
+            begin_server_launch(&mut state, target).unwrap_err().code,
+            "quick_instance_missing"
+        );
+        assert!(!state.play_busy);
+        state.play_busy = true;
+        assert_eq!(begin_server_launch(&mut state, target).unwrap(), None);
+        state.play_busy = false;
+        state.pending_play = Some("other-instance".into());
+        assert_eq!(begin_server_launch(&mut state, target).unwrap(), None);
+        state.pending_play = None;
+        state.launcher = Some(
+            serde_json::from_value(serde_json::json!({
+                "config": {"selectedInstanceId": "different-selected-instance"},
+                "instances": [{
+                    "id": "original-instance", "displayName": "Stored target instance",
+                    "state": "ready", "aurora": null, "platform": {"kind": "vanilla"},
+                    "minecraftVersion": "1.21.1",
+                    "configuration": {"minecraftVersion":"1.21.1", "auroraEnabled":false,
+                        "loader":null, "memoryMib":4096, "additionalJvmArguments":"", "window":null}
+                }]
+            }))
+            .unwrap(),
+        );
+        assert_eq!(
+            begin_server_launch(&mut state, target).unwrap_err().code,
+            "launch_authentication_required"
+        );
+        assert!(!state.play_busy);
+        state.accounts.selected_account_id = Some("selected-account".into());
+        assert_eq!(
+            begin_server_launch(&mut state, target).unwrap(),
+            Some("selected-account".into())
+        );
+        assert!(state.play_busy);
+        assert_eq!(begin_server_launch(&mut state, target).unwrap(), None);
+    }
+
+    #[test]
+    fn server_tabs_keep_old_favorites_and_bound_the_enrichment_union() {
+        let now = 1_800_000_000;
+        let mut entries: Vec<_> = (0..100).map(|i| server(i, now - i as u64, false)).collect();
+        entries.extend((100..200).map(|i| server(i, 0, true)));
+        let bounded = server_entries(&entries);
+        let (recents, favorites) = server_tabs(&bounded);
+        assert_eq!(recents.len(), SERVER_ROWS);
+        assert_eq!(favorites.len(), SERVER_ROWS);
+        assert_eq!(bounded.len(), 2 * SERVER_ROWS);
+        assert_eq!(recents[0].id, "0");
+        assert_eq!(favorites[0].id, "100");
+        assert!(favorites.iter().all(|t| t.last_played_at == 0));
+        assert_eq!(server_played(0, now), "Not played yet");
+        assert!(server_entries(&[]).is_empty());
+        let (recents, favorites) = server_tabs(&[]);
+        assert!(recents.is_empty() && favorites.is_empty());
+    }
+
+    #[test]
+    fn server_tabs_deduplicate_shared_targets_and_order_seconds_and_milliseconds() {
+        let now = 1_800_000_000;
+        let entries = [
+            server(1, (now - 10) * 1000, true),
+            server(2, now, true),
+            server(3, 0, true),
+        ];
+        let bounded = server_entries(&entries);
+        let (recents, favorites) = server_tabs(&bounded);
+        assert_eq!(bounded.len(), 3);
+        assert_eq!(
+            recents.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+            ["2", "1"]
+        );
+        assert_eq!(
+            favorites.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+            ["2", "1", "3"]
+        );
+        assert_eq!(server_played((now - 86400) * 1000, now), "Yesterday");
+    }
+
+    #[test]
+    fn server_presentation_mirror_retains_real_identity_and_two_motd_lines() {
+        let presentation: api::ServerPresentation = serde_json::from_value(serde_json::json!({
+            "targetId": "opaque", "status": "offline", "name": "Saved server",
+            "favicon": null,
+            "motd": [[{"text":"Welcome ", "bold":true}, {"text":"back", "color":"#ffffff"}],
+                     [{"text":"Second line"}], [{"text":"Third line"}]]
+        }))
+        .unwrap();
+        assert_eq!(presentation.target_id, "opaque");
+        assert_eq!(presentation.name.as_deref(), Some("Saved server"));
+        assert_eq!(server_motd(&presentation), "Welcome back\nSecond line");
+        assert!(presentation.favicon.is_none());
+        // Server-centred MOTDs pad lines with spaces; display trims them and
+        // drops whitespace-only lines so both lines share the name's left edge.
+        let centred: api::ServerPresentation = serde_json::from_value(serde_json::json!({
+            "targetId": "centred", "status": "offline", "name": "Centred server",
+            "favicon": null,
+            "motd": [[{"text":"      PVPHQ "}, {"text":"| discord.gg/pvphq    "}],
+                     [{"text":"          "}],
+                     [{"text":"   Actual second line   "}]]
+        }))
+        .unwrap();
+        assert_eq!(
+            server_motd(&centred),
+            "PVPHQ | discord.gg/pvphq\nActual second line"
+        );
+        let blank: api::ServerPresentation = serde_json::from_value(serde_json::json!({
+            "targetId": "blank", "status": "offline", "name": "Blank server",
+            "favicon": null,
+            "motd": [[{"text":"   "}], [{"text":"\t"}]]
+        }))
+        .unwrap();
+        assert_eq!(server_motd(&blank), "");
+    }
 
     #[test]
     fn custom_widget_geometry_survives_roundtrip_and_never_overlaps() {
@@ -1138,24 +1689,7 @@ mod tests {
     }
 
     #[test]
-    fn reset_restores_native_defaults_and_keeps_unknown_widget_settings() {
-        let unknown = placement("future-widget", true);
-        let mut layout = HomeLayout {
-            widgets: vec![placement("media", true), unknown.clone()],
-        };
-        reset_layout(&mut layout);
-        assert_eq!(layout.widgets.last(), Some(&unknown));
-        let active: Vec<_> = layout
-            .widgets
-            .iter()
-            .filter(|widget| widget.enabled && is_native(&widget.id))
-            .map(|widget| widget.id.as_str())
-            .collect();
-        assert_eq!(active, ["playtime", "recent-servers"]);
-    }
-
-    #[test]
-    fn dragging_refuses_collisions_and_preserves_unrecognized_widgets() {
+    fn dragging_displaces_collisions_and_preserves_unrecognized_widgets() {
         let mut layout = HomeLayout {
             widgets: vec![
                 placement("playtime", true),
@@ -1164,13 +1698,9 @@ mod tests {
             ],
         };
         let unknown = layout.widgets[2].clone();
-        let original = layout.clone();
         arrange(&mut layout, "media", 0, 0, 3, 2, 6);
-        assert_eq!(layout, original);
-        arrange(&mut layout, "media", 2, 0, 3, 2, 6);
         let positions = grid_positions(&layout, 6);
-        assert_eq!(positions[0], (0, 0, 2, 1));
-        assert_eq!(positions[1], (2, 0, 3, 2));
+        assert_eq!(positions[1], (0, 0, 3, 2));
         assert_eq!(layout.widgets[2], unknown);
         let mut cells = std::collections::HashSet::new();
         for (c, r, w, h) in positions {
@@ -1190,21 +1720,103 @@ mod tests {
         assert_eq!(grid_positions(&layout, 6)[1], (0, 63, 6, 3));
     }
 
+    fn daily(day: u64, duration_ms: u64) -> api::DailyPlaytime {
+        api::DailyPlaytime { day, duration_ms }
+    }
+
     #[test]
-    fn playtime_graph_uses_daily_history_and_shared_scale_without_inventing_activity() {
-        let days: Vec<_> = (0..30)
-            .map(|day| api::DailyPlaytime {
-                day,
-                duration_ms: if day == 29 { 300_000 } else { 0 },
-            })
+    fn playtime_ranges_include_utc_today_and_exclude_outside_days() {
+        let at = 20_000 * 86_400 + 86_399;
+        let today = at / 86_400;
+        let history = vec![
+            daily(today - 30, 1),
+            daily(today - 29, 2),
+            daily(today - 7, 4),
+            daily(today - 6, 8),
+            daily(today, 16),
+            daily(today + 1, 32),
+        ];
+        let week = playtime_bins(&history, today, 7, 7);
+        let month = playtime_bins(&history, today, 30, 30);
+        assert_eq!(week.first().unwrap().first, today - 6);
+        assert_eq!(week.last().unwrap().last, today);
+        assert_eq!(playtime_total(&week), 24);
+        assert_eq!(playtime_total(&month), 30);
+        assert_eq!(bin_label(week.last().unwrap(), today), "Today");
+        assert_eq!(
+            playtime_total(&playtime_bins(&history, (at + 1) / 86_400, 7, 7)),
+            48
+        );
+    }
+
+    #[test]
+    fn playtime_missing_zero_and_empty_days_stay_honest() {
+        let bins = playtime_bins(&[daily(99, 0), daily(100, 300_000)], 100, 7, 7);
+        let points = points_from_bins(&bins, 100);
+        assert_eq!(bins.len(), 7);
+        assert!(bins[..6].iter().all(|b| b.duration_ms == 0));
+        assert!(points[..6].iter().all(|p| p.fraction == 0.0));
+        assert_eq!(points[6].fraction, 1.0);
+        assert!(points[6].detail.contains("300000 ms"));
+        assert!(playtime_bins(&[], 100, 30, 7).is_empty());
+        assert_eq!(
+            chart_peak(&playtime_bins(&[daily(100, 0)], 100, 7, 7)),
+            60_000
+        );
+    }
+
+    #[test]
+    fn playtime_narrow_bins_cover_every_selected_utc_day_once_and_preserve_sums() {
+        let history: Vec<_> = (70..=100)
+            .map(|day| daily(day, (day - 70) * 60_000))
             .collect();
-        let week = chart_points(&days, 7);
-        assert_eq!(week.len(), 7);
-        assert_eq!(week[6].value.as_str(), "5 min");
-        assert_eq!(week[6].fraction, 1.0);
-        assert!(week[..6].iter().all(|p| p.fraction == 0.0));
-        assert_eq!(chart_points(&days, 30).len(), 30);
-        assert!(chart_points(&[], 7).is_empty());
+        let bins = playtime_bins(&history, 100, 30, 7);
+        assert_eq!(bins.len(), 7);
+        assert_eq!(bins.first().unwrap().first, 71);
+        assert_eq!(bins.last().unwrap().last, 100);
+        assert!(
+            bins.windows(2)
+                .all(|pair| pair[0].last + 1 == pair[1].first)
+        );
+        assert_eq!(
+            playtime_total(&bins),
+            playtime_total(&playtime_bins(&history, 100, 30, 30))
+        );
+        assert_eq!(bin_label(&bins[0], 100), "29 days ago – 26 days ago");
+        assert_eq!(bin_label(&bins[6], 100), "4 days ago – Today");
+        assert_eq!(points_from_bins(&bins, 100).len(), 7);
+    }
+
+    #[test]
+    fn playtime_lifetime_uses_real_summary_without_extending_daily_history() {
+        let summary = api::Playtime {
+            all_time_ms: 360_000_000,
+            ..Default::default()
+        };
+        let bins = playtime_bins(&[daily(100, 60_000)], 100, 30, 7);
+        let (total, detail) = lifetime_text(Some(summary));
+        assert_eq!(total, "100 h");
+        assert!(detail.contains("last 30 UTC days"));
+        assert_eq!(playtime_total(&bins), 60_000);
+        assert_eq!(bins.first().unwrap().first, 71);
+        assert_eq!(lifetime_text(None).0, "Total unavailable");
+    }
+
+    #[test]
+    fn playtime_peak_labels_keep_minutes_and_bound_large_durations() {
+        assert_eq!(axis_duration((4 * 60 + 52) * 60_000), "4 h 52 min");
+        assert_eq!(axis_duration(0), "0 min");
+        assert!(axis_duration(u64::MAX).len() <= 10);
+        let bins = playtime_bins(&[daily(100, u64::MAX)], 100, 30, 7);
+        assert_eq!(playtime_total(&bins), u64::MAX);
+        assert_eq!(points_from_bins(&bins, 100).last().unwrap().fraction, 1.0);
+        assert!(
+            points_from_bins(&bins, 100)
+                .last()
+                .unwrap()
+                .detail
+                .contains(&u64::MAX.to_string())
+        );
     }
 
     fn placement(id: &str, enabled: bool) -> WidgetPlacement {

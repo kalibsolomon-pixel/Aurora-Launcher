@@ -136,6 +136,18 @@ fn load_installed_context(
             "Only Modrinth modpacks support updates in this build.",
         ));
     }
+    // Update reconciliation (game transitions, projected mod validation,
+    // loader comparison) is proven for Fabric packs only. Forge and NeoForge
+    // pack instances are refused before discovery or any download.
+    if !matches!(
+        pack.identity.loader,
+        crate::instances::platform::PlatformPin::Fabric { .. }
+    ) {
+        return Err(fail(
+            "pack_update_unsupported_loader",
+            "Updating Forge/NeoForge modpacks isn't supported yet.",
+        ));
+    }
     Ok(InstalledContext {
         instance,
         record,
@@ -647,8 +659,16 @@ pub async fn build_plan(
             "The pack version changed while preparing the update. Review it again.",
         ));
     }
+    // Discovery admits only Fabric-only candidates; the parsed index must
+    // agree before any Fabric-specific comparison below.
+    if resolved.pack.loader.kind != crate::mrpack::PackLoaderKind::Fabric {
+        return Err(fail(
+            "pack_update_unsupported_loader",
+            "This pack update changes the mod loader away from Fabric, which Aurora cannot apply.",
+        ));
+    }
     let target_minecraft = resolved.pack.minecraft_version.clone();
-    let target_loader = resolved.pack.fabric_loader_version.clone();
+    let target_loader = resolved.pack.loader.version.clone();
     let game_transition = context.record.installed().minecraft_version != target_minecraft
         || context
             .record
@@ -1330,7 +1350,7 @@ fn classify(
             .installed()
             .platform
             .version()
-            .is_none_or(|version| version != pack.fabric_loader_version);
+            .is_none_or(|version| version != pack.loader.version);
 
     let new_optional_unselected: Vec<String> = pack
         .optional_files
@@ -1367,7 +1387,7 @@ fn classify(
             .version()
             .unwrap_or_default()
             .to_string(),
-        loader_candidate: resolved.pack.fabric_loader_version.clone(),
+        loader_candidate: resolved.pack.loader.version.clone(),
         game_transition,
         rows,
         counts,
@@ -1392,7 +1412,7 @@ fn classify(
         new_overrides: pack.overrides.clone(),
         resolutions: resolutions.to_vec(),
         target_minecraft: resolved.pack.minecraft_version.clone(),
-        target_loader: resolved.pack.fabric_loader_version.clone(),
+        target_loader: resolved.pack.loader.version.clone(),
         next_components,
         next_overrides,
         next_divergences,
@@ -1823,7 +1843,10 @@ fn build_next_documents(
             artifact_sha512: reconciliation.archive_sha512.clone(),
             artifact_sha256: reconciliation.archive.sha256.as_hex(),
             minecraft_version: reconciliation.target_minecraft.clone(),
-            fabric_loader_version: reconciliation.target_loader.clone(),
+            // Updates are Fabric-only (`build_plan` refuses other loaders).
+            loader: crate::instances::platform::PlatformPin::Fabric {
+                version: reconciliation.target_loader.clone(),
+            },
             installed_at_unix_seconds: now,
         },
         components,
@@ -4727,7 +4750,7 @@ mod tests {
         let (v1, _) = canonical_specs();
         let bad_index = serde_json::json!({
             "formatVersion": 1, "game": "minecraft", "versionId": "3.0.0", "name": "Fixture Pack",
-            "files": [], "dependencies": {"minecraft": MC, "forge": "1.0"}
+            "files": [], "dependencies": {"minecraft": MC, "quilt-loader": "1.0"}
         });
         let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
         writer

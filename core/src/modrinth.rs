@@ -256,7 +256,9 @@ impl Client {
         sort: BrowseSort,
         offset: u32,
     ) -> Result<SearchPage, Error> {
-        if kind == BrowseKind::Mod && !matches!(context.loader.as_str(), "fabric" | "neoforge") {
+        if kind == BrowseKind::Mod
+            && !matches!(context.loader.as_str(), "fabric" | "neoforge" | "forge")
+        {
             return Err(Error::NoCompatibleVersion);
         }
         if query.len() > 160 || offset > 10_000 || categories.len() > 8 {
@@ -515,8 +517,15 @@ impl Client {
         recognized: &RecognizedFile,
         destination: &str,
         expected_size: u64,
-        _minecraft_version: &str,
+        loader: &str,
     ) -> Result<ProviderInstallPlan, Error> {
+        // `loader` is the Modrinth loader tag of the pack's loader family
+        // (`PlatformPin::provider_loader`). A mod must carry exactly that tag,
+        // the same rule individual-mod installs apply to an instance of
+        // that family (a NeoForge pack needs `neoforge`, not `forge`).
+        if !matches!(loader, "fabric" | "forge" | "neoforge") {
+            return Err(Error::InvalidRequest);
+        }
         let (directory, file_name) = destination.split_once('/').ok_or(Error::InvalidRequest)?;
         let kind = match directory {
             "mods" => ContentType::Mod,
@@ -533,7 +542,7 @@ impl Client {
         if content_type(&project.project_type)? != kind
             || recognized.file_size != expected_size
             || (kind == ContentType::Mod
-                && (!recognized.loaders.iter().any(|loader| loader == "fabric")
+                && (!recognized.loaders.iter().any(|value| value == loader)
                     || !pack_client_environment(&recognized.environment)))
         {
             return Err(Error::DependencyConflict);
@@ -553,7 +562,7 @@ impl Client {
             display_version: Some(recognized.version_number.clone()),
             compatibility: ContentCompatibility {
                 minecraft_versions: recognized.game_versions.clone(),
-                loader: (kind == ContentType::Mod).then(|| "fabric".into()),
+                loader: (kind == ContentType::Mod).then(|| loader.into()),
                 environment: Some(recognized.environment.clone()),
             },
             dependencies: recognized.dependencies.clone(),
@@ -659,21 +668,27 @@ impl Client {
         versions.sort_by(|a, b| b.date_published.cmp(&a.date_published));
         let choices: Vec<_> = versions
             .iter()
-            .map(|version| VersionChoice {
-                id: version.id.clone(),
-                name: version.name.clone(),
-                version_number: version.version_number.clone(),
-                version_type: version.version_type.clone(),
-                date_published: version.date_published.clone(),
-                environment: version.environment.clone(),
-                loaders: version.loaders.clone(),
+            .map(|version| {
+                let (archive_size, unsupported_reason) = if kind == BrowseKind::Modpack {
+                    self.pack_version_support(version)
+                } else {
+                    (None, None)
+                };
+                VersionChoice {
+                    id: version.id.clone(),
+                    name: version.name.clone(),
+                    version_number: version.version_number.clone(),
+                    version_type: version.version_type.clone(),
+                    date_published: version.date_published.clone(),
+                    environment: version.environment.clone(),
+                    loaders: version.loaders.clone(),
+                    game_versions: version.game_versions.clone(),
+                    archive_size,
+                    unsupported_reason,
+                }
             })
             .collect();
-        let default_version_id = choices
-            .iter()
-            .find(|item| item.version_type == "release")
-            .or_else(|| choices.first())
-            .map(|item| item.id.clone());
+        let default_version_id = default_version(&choices).map(|item| item.id.clone());
         Ok(ProjectDetails {
             project_id: project.id,
             title: project.title,
@@ -686,6 +701,41 @@ impl Client {
             default_version_id,
             project_type: kind,
         })
+    }
+
+    /// A modpack version's published archive size and, when Aurora cannot
+    /// install it, why: the same pre-download rules `modpacks` resolution
+    /// applies (an archive must exist on the official CDN, its loader and
+    /// Minecraft metadata must be installable, and it must fit the archive
+    /// limit). Nothing is downloaded.
+    fn pack_version_support(&self, version: &VersionDto) -> (Option<u64>, Option<String>) {
+        let Some(file) = pack_archive_file(version) else {
+            return (
+                None,
+                Some(
+                    "This version publishes no .mrpack archive, so Aurora can't install it.".into(),
+                ),
+            );
+        };
+        let size = Some(file.size);
+        if self
+            .official_file_source(&file.url, &file.hashes.sha512, file.size)
+            .is_err()
+        {
+            return (
+                size,
+                Some("This version's archive isn't published on Modrinth's CDN, so Aurora can't download it.".into()),
+            );
+        }
+        if let Some(refusal) =
+            crate::modpacks::metadata_refusal(&version.loaders, &version.game_versions)
+        {
+            return (size, Some(refusal.message));
+        }
+        if file.size > crate::mrpack::MAX_PACK_BYTES {
+            return (size, Some(crate::modpacks::ARCHIVE_LIMIT_MESSAGE.into()));
+        }
+        (size, None)
     }
 
     /// Cosmetic metadata only, using the same project authority and CDN policy as Browse.
@@ -906,6 +956,9 @@ impl Client {
                 date_published: version.date_published.clone(),
                 environment: version.environment.clone(),
                 loaders: version.loaders.clone(),
+                game_versions: version.game_versions.clone(),
+                archive_size: None,
+                unsupported_reason: None,
             });
         Ok(UpdateDiscovery {
             current_version_type: current.version_type,
@@ -1131,12 +1184,14 @@ fn compatible(context: &Context, kind: ContentType, version: &VersionDto) -> boo
 
 fn compatible_browse(context: &Context, kind: BrowseKind, version: &VersionDto) -> bool {
     if kind == BrowseKind::Modpack {
-        // Modrinth packs remain a Fabric-only surface in this build; a
-        // NeoForge pack is excluded here and rejected explicitly at the
-        // pack boundary.
-        return version.loaders.iter().any(|loader| loader == "fabric");
+        // Every published modpack version is listed. Versions Aurora cannot
+        // install (Quilt, unknown loaders, unsupported Minecraft ranges) are
+        // annotated with the reason (`pack_version_support`), not hidden.
+        return true;
     }
-    if kind == BrowseKind::Mod && !matches!(context.loader.as_str(), "fabric" | "neoforge") {
+    if kind == BrowseKind::Mod
+        && !matches!(context.loader.as_str(), "fabric" | "neoforge" | "forge")
+    {
         return false;
     }
     version
@@ -1151,6 +1206,20 @@ fn compatible_browse(context: &Context, kind: BrowseKind, version: &VersionDto) 
             BrowseKind::ResourcePack => version.loaders.iter().any(|value| value == "minecraft"),
             BrowseKind::ShaderPack | BrowseKind::Modpack => true,
         }
+}
+
+/// The preselected version: the newest one Aurora can install, preferring
+/// the release channel; `None` when no listed version is installable.
+/// `choices` is newest first.
+fn default_version(choices: &[VersionChoice]) -> Option<&VersionChoice> {
+    let installable = || {
+        choices
+            .iter()
+            .filter(|item| item.unsupported_reason.is_none())
+    };
+    installable()
+        .find(|item| item.version_type == "release")
+        .or_else(|| installable().next())
 }
 
 fn validate_id(id: &str) -> Result<(), Error> {
@@ -1541,6 +1610,17 @@ pub struct VersionChoice {
     pub date_published: String,
     pub environment: String,
     pub loaders: Vec<String>,
+    /// Minecraft versions this exact version lists (provider metadata).
+    pub game_versions: Vec<String>,
+    /// Published byte size of a modpack version's `.mrpack` archive, known
+    /// before any download. `None` for other kinds or without an archive.
+    pub archive_size: Option<u64>,
+    /// Why Aurora cannot install this modpack version, decided from its
+    /// published metadata by the same rules resolution applies before the
+    /// archive download. `None` when nothing refuses it yet (the verified
+    /// archive is still checked); always `None` for other kinds, whose
+    /// incompatible versions are not listed.
+    pub unsupported_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1798,11 +1878,19 @@ mod tests {
             ContentType::Mod,
             &neoforge_file
         ));
-        // Modpacks remain a Fabric-only provider surface.
-        assert!(!compatible_browse(
+        // Every modpack version is listed; Quilt ones are annotated as not
+        // installable by `pack_version_support`, never hidden.
+        assert!(compatible_browse(
             &neoforge_context,
             BrowseKind::Modpack,
             &neoforge_pack
+        ));
+        let mut quilt_pack = neoforge_pack.clone();
+        quilt_pack.loaders = vec!["quilt".into()];
+        assert!(compatible_browse(
+            &neoforge_context,
+            BrowseKind::Modpack,
+            &quilt_pack
         ));
     }
     fn context() -> Context {
@@ -2542,11 +2630,109 @@ mod tests {
         assert_eq!(resolved.plans.len(), 1);
         assert_eq!(resolved.plans[0].project_id, FABRIC_API_PROJECT);
     }
+    #[test]
+    fn forge_instances_accept_forge_mods_only() {
+        let mut context = context();
+        context.loader = "forge".into();
+        let mut forge_mod: VersionDto =
+            serde_json::from_value(version("11112222", "AAAABBBB", json!([]))).unwrap();
+        forge_mod.loaders = vec!["forge".into()];
+        assert!(compatible(&context, ContentType::Mod, &forge_mod));
+        let fabric_mod: VersionDto =
+            serde_json::from_value(version("11112223", "AAAABBBC", json!([]))).unwrap();
+        assert!(!compatible(&context, ContentType::Mod, &fabric_mod));
+        // Forge modpack versions are listed whatever the browsing instance.
+        assert!(compatible_browse(&context, BrowseKind::Modpack, &forge_mod));
+        context.loader = "fabric".into();
+        assert!(compatible(&context, ContentType::Mod, &fabric_mod));
+        assert!(!compatible(&context, ContentType::Mod, &forge_mod));
+        assert!(compatible_browse(
+            &context,
+            BrowseKind::Modpack,
+            &fabric_mod
+        ));
+    }
+
+    #[tokio::test]
+    async fn pack_components_accept_exactly_what_individual_mod_installs_accept() {
+        let mut routes = HashMap::new();
+        routes.insert(
+            "/v2/project/AAAABBBB".to_owned(),
+            project("AAAABBBB", "mod"),
+        );
+        let server = server(routes);
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        for family in ["fabric", "forge", "neoforge"] {
+            for tags in [
+                vec!["fabric"],
+                vec!["forge"],
+                vec!["neoforge"],
+                vec!["forge", "neoforge"],
+            ] {
+                let mut individual_version: VersionDto =
+                    serde_json::from_value(version("11112222", "AAAABBBB", json!([]))).unwrap();
+                individual_version.loaders = tags.iter().map(|tag| (*tag).to_owned()).collect();
+                let mut instance = context();
+                instance.loader = family.into();
+                let individual = compatible(&instance, ContentType::Mod, &individual_version);
+                let recognized = RecognizedFile {
+                    queried_sha512: "a".repeat(128),
+                    project_id: "AAAABBBB".into(),
+                    version_id: "11112222".into(),
+                    version_number: "1.0.0".into(),
+                    version_name: "Test release".into(),
+                    version_type: "release".into(),
+                    date_published: "2026-01-01T00:00:00Z".into(),
+                    game_versions: vec!["1.21.11".into()],
+                    loaders: individual_version.loaders.clone(),
+                    environment: "client_and_server".into(),
+                    dependencies: Vec::new(),
+                    file_name: "11112222.jar".into(),
+                    file_size: 4,
+                    official_url: "https://cdn.modrinth.com/data/test/file.jar".into(),
+                };
+                let planned = client
+                    .pack_component_plan(&recognized, "mods/11112222.jar", 4, family)
+                    .await;
+                assert_eq!(planned.is_ok(), individual, "{family} {tags:?}");
+                match planned {
+                    Ok(plan) => assert_eq!(plan.compatibility.loader.as_deref(), Some(family)),
+                    Err(error) => assert!(matches!(error, Error::DependencyConflict)),
+                }
+            }
+        }
+        // Only modded provider families plan pack components.
+        let recognized_vanilla = client
+            .pack_component_plan(
+                &RecognizedFile {
+                    queried_sha512: "a".repeat(128),
+                    project_id: "AAAABBBB".into(),
+                    version_id: "11112222".into(),
+                    version_number: "1.0.0".into(),
+                    version_name: "Test release".into(),
+                    version_type: "release".into(),
+                    date_published: "2026-01-01T00:00:00Z".into(),
+                    game_versions: vec!["1.21.11".into()],
+                    loaders: vec!["quilt".into()],
+                    environment: "client_and_server".into(),
+                    dependencies: Vec::new(),
+                    file_name: "11112222.jar".into(),
+                    file_size: 4,
+                    official_url: "https://cdn.modrinth.com/data/test/file.jar".into(),
+                },
+                "mods/11112222.jar",
+                4,
+                "quilt",
+            )
+            .await;
+        assert!(matches!(recognized_vanilla, Err(Error::InvalidRequest)));
+    }
+
     #[tokio::test]
     async fn unsupported_provider_platform_fails_closed_before_network() {
         let mut context = context();
         let client = Client::for_testing("http://127.0.0.1:1/v2/");
-        for loader in ["forge", "vanilla"] {
+        for loader in ["vanilla"] {
             context.loader = loader.into();
             assert!(matches!(
                 client.search(&context, ContentType::Mod, "", 0).await,
@@ -3416,10 +3602,9 @@ mod tests {
             "/v2/project/PACK0001".into(),
             project("PACK0001", "modpack"),
         );
-        routes.insert(
-            "/v2/project/PACK0001/version".into(),
-            json!([version("pack0002", "PACK0001", json!([]))]),
-        );
+        let mut pack = version("pack0002", "PACK0001", json!([]));
+        pack["files"][0]["filename"] = json!("pack0002.mrpack");
+        routes.insert("/v2/project/PACK0001/version".into(), json!([pack]));
         let server = server(routes);
         let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
         let details = client
@@ -3439,6 +3624,242 @@ mod tests {
                 .await,
             Err(Error::NoCompatibleVersion)
         ));
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn pack_version(
+        id: &str,
+        date: &str,
+        channel: &str,
+        loaders: &[&str],
+        games: &[&str],
+        url: &str,
+        filename: &str,
+        size: u64,
+    ) -> Value {
+        json!({
+            "id": id, "project_id": "PACK0001", "name": format!("Pack {id}"),
+            "version_number": format!("v-{id}"), "version_type": channel,
+            "date_published": date, "game_versions": games, "loaders": loaders,
+            "environment": "client_and_server",
+            "files": [{ "hashes": {"sha512": "a".repeat(128)}, "url": url,
+                "filename": filename, "primary": true, "size": size, "file_type": null }],
+            "dependencies": []
+        })
+    }
+
+    async fn pack_choices(versions: Vec<Value>) -> ProjectDetails {
+        let mut routes: HashMap<String, Value> = HashMap::new();
+        routes.insert(
+            "/v2/project/PACK0001".into(),
+            project("PACK0001", "modpack"),
+        );
+        routes.insert("/v2/project/PACK0001/version".into(), json!(versions));
+        let server = server(routes);
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        client
+            .details_browse(&context(), BrowseKind::Modpack, "PACK0001")
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn pack_versions_are_annotated_not_hidden_and_default_to_the_newest_installable_release()
+    {
+        let cdn = "https://cdn.modrinth.com/data/PACK0001/versions/x/pack.mrpack";
+        let mrpack = "pack.mrpack";
+        let date = |month: u32| format!("2026-{month:02}-01T00:00:00Z");
+        let fab = &["fabric"][..];
+        let details = pack_choices(vec![
+            pack_version(
+                "beta0001",
+                &date(9),
+                "beta",
+                fab,
+                &["1.21.1"],
+                cdn,
+                mrpack,
+                10,
+            ),
+            pack_version(
+                "quilt001",
+                &date(8),
+                "release",
+                &["quilt"],
+                &["1.21.1"],
+                cdn,
+                mrpack,
+                10,
+            ),
+            pack_version(
+                "unkn0001",
+                &date(7),
+                "release",
+                &["liteloader"],
+                &["1.21.1"],
+                cdn,
+                mrpack,
+                10,
+            ),
+            pack_version(
+                "forgeold",
+                &date(6),
+                "release",
+                &["forge"],
+                &["1.12.2"],
+                cdn,
+                mrpack,
+                10,
+            ),
+            pack_version(
+                "neoold01",
+                &date(5),
+                "release",
+                &["neoforge"],
+                &["1.21.1"],
+                cdn,
+                mrpack,
+                10,
+            ),
+            pack_version(
+                "noarch01",
+                &date(4),
+                "release",
+                fab,
+                &["1.21.1"],
+                cdn,
+                "pack.jar",
+                10,
+            ),
+            pack_version(
+                "offcdn01",
+                &date(3),
+                "release",
+                fab,
+                &["1.21.1"],
+                "https://example.com/p.mrpack",
+                mrpack,
+                10,
+            ),
+            pack_version(
+                "huge0001",
+                &date(2),
+                "release",
+                fab,
+                &["1.21.1"],
+                cdn,
+                mrpack,
+                crate::mrpack::MAX_PACK_BYTES + 1,
+            ),
+            pack_version(
+                "forge001",
+                &date(1),
+                "release",
+                &["forge"],
+                &["1.20.1"],
+                cdn,
+                mrpack,
+                4096,
+            ),
+            pack_version(
+                "neo00001",
+                "2025-12-01T00:00:00Z",
+                "release",
+                &["neoforge"],
+                &["26.2"],
+                cdn,
+                mrpack,
+                10,
+            ),
+        ])
+        .await;
+        let ids: Vec<_> = details.versions.iter().map(|v| v.id.as_str()).collect();
+        assert_eq!(ids.len(), 10, "nothing is hidden: {ids:?}");
+        let reason = |id: &str| {
+            details
+                .versions
+                .iter()
+                .find(|v| v.id == id)
+                .unwrap()
+                .unsupported_reason
+                .clone()
+        };
+        for (id, expected) in [
+            ("quilt001", "does not support Quilt"),
+            ("unkn0001", "Aurora installs Fabric, Forge and NeoForge"),
+            ("forgeold", "Forge for Minecraft 1.15 and newer"),
+            ("neoold01", "year-numbered"),
+            ("noarch01", ".mrpack archive"),
+            ("offcdn01", "CDN"),
+            ("huge0001", "512 MiB"),
+        ] {
+            let reason = reason(id).unwrap_or_else(|| panic!("{id} must be annotated"));
+            assert!(reason.contains(expected), "{id}: {reason}");
+        }
+        for id in ["beta0001", "forge001", "neo00001"] {
+            assert_eq!(reason(id), None, "{id}");
+        }
+        let forge = details
+            .versions
+            .iter()
+            .find(|v| v.id == "forge001")
+            .unwrap();
+        assert_eq!(forge.game_versions, ["1.20.1"]);
+        assert_eq!(forge.loaders, ["forge"]);
+        assert_eq!(forge.version_type, "release");
+        assert_eq!(forge.archive_size, Some(4096));
+        assert_eq!(
+            details
+                .versions
+                .iter()
+                .find(|v| v.id == "noarch01")
+                .unwrap()
+                .archive_size,
+            None
+        );
+        // Not the newest version (a beta), nor the newest release (Quilt):
+        // the newest release Aurora can install.
+        assert_eq!(details.default_version_id.as_deref(), Some("forge001"));
+
+        // Only a pre-release is installable: it becomes the default.
+        let only_beta = pack_choices(vec![
+            pack_version(
+                "quilt001",
+                &date(8),
+                "release",
+                &["quilt"],
+                &["1.21.1"],
+                cdn,
+                mrpack,
+                10,
+            ),
+            pack_version(
+                "beta0001",
+                &date(7),
+                "beta",
+                fab,
+                &["1.21.1"],
+                cdn,
+                mrpack,
+                10,
+            ),
+        ])
+        .await;
+        assert_eq!(only_beta.default_version_id.as_deref(), Some("beta0001"));
+        // Nothing installable: still listed, with no default.
+        let none = pack_choices(vec![pack_version(
+            "quilt001",
+            &date(8),
+            "release",
+            &["quilt"],
+            &["1.21.1"],
+            cdn,
+            mrpack,
+            10,
+        )])
+        .await;
+        assert_eq!(none.versions.len(), 1);
+        assert_eq!(none.default_version_id, None);
     }
 
     #[tokio::test]

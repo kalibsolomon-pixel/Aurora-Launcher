@@ -455,6 +455,8 @@ async fn probe(path: &Path, timeout: Duration) -> Result<String, ExternalJavaErr
     let error_file = "-XX:ErrorFile=/dev/null";
     command
         .args([
+            // Java 8 predates CreateCoredumpOnCrash; tolerate it.
+            "-XX:+IgnoreUnrecognizedVMOptions",
             error_file,
             "-XX:-CreateCoredumpOnCrash",
             "-XshowSettings:properties",

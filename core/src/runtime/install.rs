@@ -248,7 +248,10 @@ async fn ensure_runtime_with_policy(
         .entries()
         .iter()
         .filter_map(|entry| match entry {
-            RuntimeEntry::File { path, artifact, .. } => Some((path.clone(), artifact.clone())),
+            // Empty files are materialized locally, never downloaded.
+            RuntimeEntry::File { path, artifact, .. } if artifact.size_bytes() > 0 => {
+                Some((path.clone(), artifact.clone()))
+            }
             _ => None,
         })
         .collect();
@@ -330,9 +333,13 @@ async fn ensure_runtime_with_policy(
                     std::fs::create_dir_all(parent)
                         .map_err(|error| materialization(path, error))?;
                 }
-                let source = acquired.get(path).expect("every planned file was acquired");
-                let copied =
-                    std::fs::copy(source, &target).map_err(|error| materialization(path, error))?;
+                let copied = if artifact.size_bytes() == 0 {
+                    std::fs::File::create(&target).map_err(|error| materialization(path, error))?;
+                    0
+                } else {
+                    let source = acquired.get(path).expect("every planned file was acquired");
+                    std::fs::copy(source, &target).map_err(|error| materialization(path, error))?
+                };
                 if copied != artifact.size_bytes() {
                     return Err(RuntimeInstallError::Materialization {
                         path: path.clone(),
@@ -780,9 +787,15 @@ async fn run_java_diagnostic(
         let error_file = "-XX:ErrorFile=NUL";
         #[cfg(not(windows))]
         let error_file = "-XX:ErrorFile=/dev/null";
+        // Java 8 (jre-legacy) predates CreateCoredumpOnCrash; tolerate it.
         let output = run_process(
             executable,
-            &[error_file, "-XX:-CreateCoredumpOnCrash", "-version"],
+            &[
+                "-XX:+IgnoreUnrecognizedVMOptions",
+                error_file,
+                "-XX:-CreateCoredumpOnCrash",
+                "-version",
+            ],
             timeout,
         )
         .await?;

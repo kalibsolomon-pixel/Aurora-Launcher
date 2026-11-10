@@ -2,22 +2,25 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
-import { Button, ButtonKind, Tabs, TextField, Dropdown, EmptyState, Spinner, PageTitle, Glyph } from "../components.slint";
+import { Button, ButtonKind, Tabs, TextField, Dropdown, EmptyState, Spinner, PageTitle, ContentArtwork, ContentList, ContentRowBackground, Divider } from "../components.slint";
 import { Discover, ProjectRow } from "../state.slint";
 
 component ProjectLine inherits Rectangle {
     in property <ProjectRow> item;
+    in property <bool> show-separator: false;
+    in property <bool> first-row: false;
+    in property <bool> last-row: false;
     height: max(92px, layout.preferred-height);
-    border-radius: Theme.radius-md;
-    background: touch.has-hover ? Theme.hover : Theme.surface;
+    background: transparent;
     accessible-role: list-item;
     accessible-label: root.item.title;
     accessible-description: root.item.description;
+    ContentRowBackground { width: parent.width; height: parent.height; first-row: root.first-row; last-row: root.last-row; hovered: touch.has-hover; }
     touch := TouchArea { }
     layout := HorizontalLayout {
         padding: 16px;
         spacing: 16px;
-        Glyph { y: (parent.height - self.height) / 2; letter: root.item.letter; picture: root.item.picture; has-picture: root.item.has-picture; size: 48px; }
+        ContentArtwork { y: (parent.height - self.height) / 2; letter: root.item.letter; picture: root.item.picture; has-picture: root.item.has-picture; }
         VerticalLayout {
             horizontal-stretch: 1;
             alignment: center;
@@ -41,6 +44,7 @@ component ProjectLine inherits Rectangle {
             clicked => { Discover.install(root.item.id); }
         }
     }
+    if root.show-separator: Divider { x: 16px; y: parent.height - self.height; width: parent.width - 32px; }
 }
 
 export component DiscoverPage inherits Rectangle {
@@ -50,8 +54,9 @@ export component DiscoverPage inherits Rectangle {
         HorizontalLayout {
             spacing: Theme.space-3;
             PageTitle { text: "Discover"; horizontal-stretch: 1; vertical-alignment: center; }
-            if Discover.has-instances: Text { text: "Install into"; color: Theme.text-muted; font-size: Theme.text-secondary-size; vertical-alignment: center; }
-            if Discover.has-instances: Dropdown {
+            // A modpack chooses its destination inside its own review.
+            if Discover.has-instances && Discover.kind != 3: Text { text: "Install into"; color: Theme.text-muted; font-size: Theme.text-secondary-size; vertical-alignment: center; }
+            if Discover.has-instances && Discover.kind != 3: Dropdown {
                 width: 240px;
                 label: "Target instance";
                 model: Discover.instance-names;
@@ -100,11 +105,16 @@ export component DiscoverPage inherits Rectangle {
             vertical-stretch: 1;
             VerticalLayout {
                 padding: 4px;
-                spacing: 8px;
                 alignment: start;
-                accessible-role: list;
-                accessible-label: "Results";
-                for row in Discover.results: ProjectLine { item: row; }
+                ContentList {
+                    accessible-label: "Results";
+                    for row[i] in Discover.results: ProjectLine {
+                        item: row;
+                        first-row: i == 0;
+                        last-row: i == Discover.results.length - 1;
+                        show-separator: i < Discover.results.length - 1;
+                    }
+                }
             }
         }
         if Discover.loading: HorizontalLayout { alignment: center; padding: Theme.space-5; Spinner { size: 22px; } }

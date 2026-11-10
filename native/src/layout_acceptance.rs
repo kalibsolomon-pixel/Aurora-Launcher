@@ -720,23 +720,23 @@ fn scenes() -> Vec<(&'static str, Scene)> {
                     }
                 })
                 .collect();
-            widgets.set_month_compact(ui_model(points));
-            widgets.set_month_compact_peak("3 h".into());
-            widgets.set_playtime_period(1);
+            widgets.set_month_binned(ui_model(points));
+            widgets.set_month_binned_peak("3 h".into());
+            widgets.set_playtime_range(1);
         }),
         ("ui2-playtime-all", |app| {
             responsive_widget(app, "playtime", 3, 1);
             let widgets = app.global::<crate::Widgets>();
-            widgets.set_historical(ui_model(
+            widgets.set_month_binned(ui_model(
                 [4, 0, 2, 1, 6, 3, 8]
                     .into_iter()
                     .enumerate()
                     .map(|(index, hours)| {
-                        let ago = (6 - index) * 14;
+                        let ago = (6 - index) * 4;
                         let label = if ago == 0 {
-                            "Last 14 days".into()
+                            "Last 4 days".into()
                         } else {
-                            format!("{}–{} days ago", ago + 13, ago)
+                            format!("{}–{} days ago", ago + 3, ago)
                         };
                         crate::PlaytimePoint {
                             label: label.clone().into(),
@@ -747,8 +747,11 @@ fn scenes() -> Vec<(&'static str, Scene)> {
                     })
                     .collect(),
             ));
-            widgets.set_historical_peak("8 h".into());
-            widgets.set_playtime_period(2);
+            widgets.set_month_binned_peak("8 h".into());
+            widgets.set_lifetime_total("32 h".into());
+            widgets
+                .set_lifetime_detail("32 h recorded in total; chart shows the last 30 days".into());
+            widgets.set_playtime_range(2);
         }),
         ("dashboard-compact", |app| dashboard(app, false, false)),
         ("dashboard-large", |app| dashboard(app, false, true)),
@@ -1001,6 +1004,18 @@ fn scenes() -> Vec<(&'static str, Scene)> {
             import_review(app, false);
         }),
         ("local-mrpack-review", |app| local_pack(app)),
+        ("pack-version-choice", |app| {
+            crate::discover::tests::layout_scene(app, false, false)
+        }),
+        ("pack-review-new-instance", |app| {
+            crate::discover::tests::layout_scene(app, false, true)
+        }),
+        ("pack-destination-existing", |app| {
+            crate::discover::tests::layout_scene(app, true, false)
+        }),
+        ("pack-review-existing", |app| {
+            crate::discover::tests::layout_scene(app, true, true)
+        }),
         ("settings-java-valid", |app| {
             java_settings(app, true);
             scroll_down(app, 330.0);
@@ -1170,6 +1185,35 @@ fn discover_download_notification_clears_pagination_at_every_size_and_scale() {
     assert_eq!(*retried.borrow(), [2]);
 }
 
+/// Each step of the Modrinth pack dialog, from the real Discover presenter,
+/// also scrolled to its review lists (named BMPs with `AURORA_LAYOUT_OUT`).
+#[test]
+fn pack_flow_dialog_renders_each_step() {
+    let _ = slint::platform::set_platform(Box::new(RenderPlatform));
+    for (scene, merge, review) in [
+        ("pack-version-choice", false, false),
+        ("pack-review-new-instance", false, true),
+        ("pack-destination-existing", true, false),
+        ("pack-review-existing", true, true),
+    ] {
+        let (app, adapter) = window((1120., 1000.), 1.);
+        crate::discover::tests::layout_scene(&app, merge, review);
+        let pixels = render(&app, &adapter, &format!("{scene}-1120x1000"));
+        assert!(
+            pixels
+                .iter()
+                .any(|p| p.r != pixels[0].r || p.g != pixels[0].g),
+            "{scene} rendered blank"
+        );
+        let discover = app.global::<Discover>();
+        assert_eq!(discover.get_can_install(), review, "{scene}");
+        if review {
+            scroll_down(&app, 320.);
+            render(&app, &adapter, &format!("{scene}-1120x1000-scrolled"));
+        }
+    }
+}
+
 #[test]
 fn skin_favorite_controls_use_stable_identity_for_pointer_and_keyboard() {
     let _ = slint::platform::set_platform(Box::new(RenderPlatform));
@@ -1215,11 +1259,11 @@ fn skin_favorite_controls_use_stable_identity_for_pointer_and_keyboard() {
 fn content_artwork_tracks_the_visible_window_on_long_lists() {
     let _ = slint::platform::set_platform(Box::new(RenderPlatform));
     let (app, adapter) = window((720., 520.), 1.);
-    let ranges: Rc<RefCell<Vec<(i32, i32)>>> = Rc::default();
+    let ranges: Rc<RefCell<Vec<(String, bool)>>> = Rc::default();
     let observed = ranges.clone();
     app.global::<Instances>()
-        .on_content_artwork_window(move |first, end| {
-            observed.borrow_mut().push((first, end));
+        .on_content_icon_visible(move |_, id, visible| {
+            observed.borrow_mut().push((id.to_string(), visible));
         });
     scenes()
         .into_iter()
@@ -1231,17 +1275,18 @@ fn content_artwork_tracks_the_visible_window_on_long_lists() {
         ranges
             .borrow()
             .iter()
-            .any(|&(first, end)| first == 0 && (1..12).contains(&end))
+            .any(|(id, visible)| id == "fixture-0" && *visible)
     );
     scroll_down(&app, 5_000.);
     render(&app, &adapter, "ui1-artwork-scrolled");
     render(&app, &adapter, "ui1-artwork-scrolled-settled");
-    assert!(
-        ranges
-            .borrow()
-            .iter()
-            .any(|&(first, end)| first > 30 && end > first)
-    );
+    assert!(ranges.borrow().iter().any(|(id, visible)| {
+        *visible
+            && id
+                .strip_prefix("fixture-")
+                .and_then(|id| id.parse::<usize>().ok())
+                .is_some_and(|index| index > 30)
+    }));
 }
 
 #[test]
@@ -1318,8 +1363,9 @@ fn ui2_saved_tab_and_quick_play_route_the_saved_row_identity() {
             .push((mode.to_string(), id.to_string()));
     });
     let _ = render(&app, &adapter, "ui2-saved-bindings");
-    click(&app, 422., 372.);
+    click(&app, 310., 372.);
     assert_eq!(*views.borrow(), [(false, true)]);
+    render(&app, &adapter, "ui2-saved-selected");
     click(&app, 560., 416.);
     assert_eq!(
         *plays.borrow(),
@@ -1399,7 +1445,27 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
         observed.borrow_mut().push((id.to_string(), c, r, w, h));
     });
     render(&app, &adapter, "drag-editor-before");
-    let y = 440.;
+    // Home's selected-instance section can change height. Find the actual
+    // Playtime drag handle through its interaction contract, rather than
+    // pressing an old page coordinate that may now hit a different control.
+    let y = (0..760)
+        .step_by(4)
+        .find_map(|y| {
+            widgets.set_editing(true);
+            let position = LogicalPosition::new(200., y as f32);
+            app.window().dispatch_event(WindowEvent::PointerPressed {
+                position,
+                button: PointerEventButton::Left,
+            });
+            let found = widgets.get_active_id() == "playtime";
+            app.window().dispatch_event(WindowEvent::PointerReleased {
+                position,
+                button: PointerEventButton::Left,
+            });
+            found.then_some(y as f32)
+        })
+        .expect("visible Playtime header must accept a pointer press");
+    assert!(changes.borrow().is_empty(), "hit testing must not persist");
     let from = LogicalPosition::new(200., y);
     let to = LogicalPosition::new(380., y + 210.);
     app.window().dispatch_event(WindowEvent::PointerPressed {
@@ -1443,8 +1509,24 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     );
 
     // The actual corner handle snaps both dimensions and emits one final edit.
-    let corner = LogicalPosition::new(407., 592.);
-    let larger = LogicalPosition::new(573., 702.);
+    let corner_y = ((y as usize + 44)..760)
+        .step_by(4)
+        .find_map(|y| {
+            let position = LogicalPosition::new(407., y as f32);
+            app.window().dispatch_event(WindowEvent::PointerPressed {
+                position,
+                button: PointerEventButton::Left,
+            });
+            let found = widgets.get_active_id() == "playtime";
+            app.window().dispatch_event(WindowEvent::PointerReleased {
+                position,
+                button: PointerEventButton::Left,
+            });
+            found.then_some(y as f32)
+        })
+        .expect("visible Playtime resize handle must accept a pointer press");
+    let corner = LogicalPosition::new(407., corner_y);
+    let larger = LogicalPosition::new(573., corner_y + 110.);
     app.window()
         .dispatch_event(WindowEvent::PointerMoved { position: corner });
     app.window().dispatch_event(WindowEvent::PointerPressed {
@@ -1630,7 +1712,16 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     let seen = opens.clone();
     app.global::<crate::Home>()
         .on_open_settings(move || *seen.borrow_mut() += 1);
-    click(&app, 398., 192.);
+    // The gear follows the responsive launch controls; locate it by its
+    // keyboard action rather than an obsolete absolute pointer position.
+    for _ in 0..32 {
+        key(&app, Key::Tab);
+        key(&app, Key::Return);
+        if *opens.borrow() > 0 {
+            break;
+        }
+        key(&app, Key::Escape);
+    }
     assert_eq!(
         *opens.borrow(),
         1,
@@ -1689,11 +1780,29 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     let log = choices.clone();
     app.global::<crate::InstanceSync>()
         .on_resolve_conflict(move |index, use_source| log.borrow_mut().push((index, use_source)));
-    click(&app, 304., 324.);
-    click(&app, 470., 324.);
+    // Settings descriptions wrap differently at minimum width. Search inside
+    // the content column, clear of the Settings section navigation.
+    let mut conflict_y = None;
+    for _ in 0..8 {
+        for y in (100..500).step_by(8) {
+            click(&app, 300., y as f32);
+            if !choices.borrow().is_empty() {
+                conflict_y = Some(y as f32);
+                break;
+            }
+        }
+        if conflict_y.is_some() {
+            break;
+        }
+        scroll_down(&app, 240.);
+        render(&app, &adapter, "pandora4-conflict-input-scrolled");
+    }
+    let conflict_y = conflict_y.expect("the first conflict action remains pointer-reachable");
+    assert_eq!(*choices.borrow(), [(0, true)]);
+    click(&app, 470., conflict_y);
     assert_eq!(*choices.borrow(), [(0, true), (0, false)]);
     // Tab transfers focus between native buttons and Return activates the next.
-    click(&app, 304., 324.);
+    click(&app, 300., conflict_y);
     key(&app, Key::Tab);
     key(&app, Key::Return);
     assert_eq!(choices.borrow().last(), Some(&(0, false)));

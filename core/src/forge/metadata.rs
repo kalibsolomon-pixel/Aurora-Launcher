@@ -115,25 +115,42 @@ fn parse_absolute(url: &str) -> Result<Url, ForgeMetadataError> {
 pub struct ForgeVersionId(String);
 
 impl ForgeVersionId {
-    /// Exact, reviewed compatibility set. Discovery is broader than execution.
-    /// Historical synthetic F1B fixtures remain available to unit tests only.
-    pub fn is_reviewed(&self) -> bool {
-        matches!(
-            self.as_str(),
-            "1.20.1-47.4.10" | "1.20.4-49.2.0" | "1.21.11-61.2.0"
-        ) || (cfg!(test) && self.as_str() == "1.21.1-52.1.16")
+    /// Whether this build can be installed: every Forge build for Minecraft
+    /// 1.15 or newer (including the year-numbered 26.x releases) and 1.14.4
+    /// from 28.1.16. Builds for Minecraft before 1.13 use the legacy
+    /// installer, LaunchWrapper and historical Mojang metadata, which Aurora
+    /// rejects. Builds from 1.13.2 through 1.14.4-28.1.15 split the client
+    /// with jarsplitter 1.0.x-1.1.1 and publish digests that today's Mojang
+    /// client no longer reproduces; Forge's own installer fails them too.
+    pub fn is_supported(&self) -> bool {
+        let minecraft = dotted_number_key(self.minecraft_version());
+        if minecraft.first().is_some_and(|major| *major > 1) {
+            return true;
+        }
+        match minecraft.as_slice().cmp([1, 14, 4].as_slice()) {
+            std::cmp::Ordering::Greater => true,
+            std::cmp::Ordering::Equal => {
+                dotted_number_key(self.build()).as_slice() >= [28, 1, 16].as_slice()
+            }
+            std::cmp::Ordering::Less => false,
+        }
     }
 
-    pub fn require_reviewed(&self) -> Result<(), ForgeMetadataError> {
-        if self.is_reviewed() {
+    pub fn require_supported(&self) -> Result<(), ForgeMetadataError> {
+        if self.is_supported() {
             return Ok(());
         }
-        Err(ForgeMetadataError::Unsupported {
-            reason: format!(
-                "Forge {} is discoverable but has no reviewed installer compatibility in Aurora",
-                self
-            ),
-        })
+        let minecraft = dotted_number_key(self.minecraft_version());
+        let reason = if minecraft.as_slice() >= [1, 13].as_slice() {
+            format!(
+                "Forge {self} cannot be installed: Mojang's current Minecraft client no longer matches the jar this build patches (Forge's own installer fails the same way). Choose Forge 28.1.16 or newer for 1.14.4, or a newer Minecraft version"
+            )
+        } else {
+            format!(
+                "Forge {self} uses the legacy installer; Aurora supports Forge for Minecraft 1.14.4 and newer"
+            )
+        };
+        Err(ForgeMetadataError::Unsupported { reason })
     }
 
     /// Validates and wraps one combined version id.
@@ -311,17 +328,24 @@ pub struct ForgeVersionList {
 }
 
 impl ForgeVersionList {
+    /// The installable builds for one Minecraft version, newest first. When
+    /// Forge publishes no recommended build for that version (common for
+    /// short-lived and current versions), the newest build stands in as the
+    /// stable choice, matching the promotions document's "latest" entry.
     pub fn installable_for_minecraft(&self, game: &MinecraftVersionId) -> Vec<ForgeVersionEntry> {
-        self.for_minecraft(game)
+        let mut entries: Vec<ForgeVersionEntry> = self
+            .for_minecraft(game)
             .into_iter()
-            .filter(|entry| {
-                matches!(
-                    entry.version().as_str(),
-                    "1.20.1-47.4.10" | "1.20.4-49.2.0" | "1.21.11-61.2.0"
-                )
-            })
-            .collect()
+            .filter(|entry| entry.version().is_supported())
+            .collect();
+        if !entries.iter().any(ForgeVersionEntry::stable) {
+            if let Some(newest) = entries.first_mut() {
+                newest.stable = true;
+            }
+        }
+        entries
     }
+
     /// Builds the listing from the official Maven metadata XML and the
     /// promotions document. Unattributable version strings are filtered
     /// out (they remain real repository versions, but this launcher
@@ -676,7 +700,10 @@ impl InstallProfileDocument {
             serde_json::from_str(text).map_err(|error| ForgeMetadataError::Malformed {
                 reason: format!("the Forge install profile is unusable: {error}"),
             })?;
-        if document.spec != 1 {
+        // Spec 0 (Minecraft 1.13.2 through 1.16.5) and spec 1 share every
+        // field Aurora consumes; spec 1 only added processor sides and the
+        // server jar path.
+        if document.spec > 1 {
             return Err(ForgeMetadataError::Unsupported {
                 reason: format!(
                     "the Forge install profile uses spec {} which this launcher does not support",
@@ -960,11 +987,28 @@ impl VersionProfileDocument {
             serde_json::from_str(text).map_err(|error| ForgeMetadataError::Malformed {
                 reason: format!("the Forge version profile is unusable: {error}"),
             })?;
-        if document
-            .logging
-            .as_object()
-            .map(|value| !value.is_empty())
-            .unwrap_or(true)
+        // Early 1.13.2 builds repeat Mojang's own client log4j2 block (an
+        // older copy of client-1.12.xml). Mojang's current configuration for
+        // the base game stays authoritative, so that exact shape is accepted
+        // and ignored; any other logging override is refused.
+        let mojang_client_logging = document.logging.as_object().is_some_and(|logging| {
+            logging.len() == 1
+                && logging.get("client").is_some_and(|client| {
+                    client.get("type").and_then(|v| v.as_str()) == Some("log4j2-xml")
+                        && client.get("argument").and_then(|v| v.as_str())
+                            == Some("-Dlog4j.configurationFile=${path}")
+                        && client
+                            .pointer("/file/url")
+                            .and_then(|v| v.as_str())
+                            .is_some_and(|url| url.starts_with("https://launcher.mojang.com/"))
+                })
+        });
+        if !mojang_client_logging
+            && document
+                .logging
+                .as_object()
+                .map(|value| !value.is_empty())
+                .unwrap_or(true)
         {
             return Err(ForgeMetadataError::Unsupported {
                 reason:
@@ -991,6 +1035,8 @@ impl VersionProfileDocument {
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawArguments {
+    // ModLauncher profiles before 1.16.5 publish game arguments only.
+    #[serde(default)]
     jvm: Vec<String>,
     game: Vec<String>,
 }
@@ -1025,6 +1071,28 @@ pub fn read_installer_documents(
     let profile = InstallProfileDocument::from_json(&profile_text)?;
     let version = VersionProfileDocument::from_json(&version_text)?;
     Ok((profile, version))
+}
+
+/// Whether the verified installer carries exactly one entry at `entry_name`
+/// (a leading-slash installer path such as `/maven/<repository path>`).
+pub fn installer_contains_entry(
+    installer_path: &Path,
+    entry_name: &str,
+) -> Result<bool, ForgeMetadataError> {
+    let name = entry_name
+        .strip_prefix('/')
+        .filter(|name| is_safe_forward_path(name))
+        .ok_or_else(|| ForgeMetadataError::Malformed {
+            reason: format!("'{entry_name}' is not a safe installer-embedded path"),
+        })?;
+    let file =
+        std::fs::File::open(installer_path).map_err(|error| ForgeMetadataError::Malformed {
+            reason: format!("the verified Forge installer jar could not be opened: {error}"),
+        })?;
+    let archive = zip::ZipArchive::new(file).map_err(|error| ForgeMetadataError::Malformed {
+        reason: format!("the verified Forge installer jar is not a readable archive: {error}"),
+    })?;
+    Ok(archive.file_names().filter(|entry| *entry == name).count() == 1)
 }
 
 /// Extracts one installer-embedded file (the binpatch bundle) to an

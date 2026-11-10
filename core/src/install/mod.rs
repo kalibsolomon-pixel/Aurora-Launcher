@@ -597,7 +597,65 @@ pub async fn install_game(
             Some(format!("forge {}", forge.forge_version())),
         );
 
-        for library in forge.installer_libraries() {
+        // Spec-0 installers (Minecraft 1.13.2-1.16.5) embed the Forge jars
+        // under maven/ with no download URL. Take them from the verified
+        // installer, each pinned by its published SHA-1. A URL-less game
+        // library the installer does not carry is a processor output.
+        let embedded_game = plan.libraries().iter().filter_map(|library| match library {
+            GameLibrary::Forge(entry) if !entry.artifact().is_downloadable() => Some(entry),
+            _ => None,
+        });
+        let embedded_tools = forge
+            .installer_libraries()
+            .iter()
+            .filter(|library| !library.artifact().is_downloadable());
+        for (library, required) in embedded_game
+            .map(|library| (library, false))
+            .chain(embedded_tools.map(|library| (library, true)))
+        {
+            check_cancel(context)?;
+            let entry = format!("/maven/{}", library.path());
+            let embedded =
+                crate::forge::metadata::installer_contains_entry(&installer.path, &entry)
+                    .map_err(|error| InstallError::InvalidSource(error.to_string()))?;
+            if !embedded {
+                if required {
+                    return Err(InstallError::InvalidSource(format!(
+                        "the Forge installer tool {} has no download and is not embedded in the installer",
+                        library.coordinate().as_maven_string()
+                    )));
+                }
+                continue;
+            }
+            std::fs::create_dir_all(cache.staging_dir())
+                .map_err(|error| InstallError::Storage(error.into()))?;
+            let extracted = cache.new_staging_path();
+            crate::forge::metadata::extract_installer_entry(&installer.path, &entry, &extracted)
+                .map_err(|error| InstallError::InvalidSource(error.to_string()))?;
+            let imported = cache
+                .import_local_sha1(
+                    &extracted,
+                    library.artifact().sha1(),
+                    library.artifact().size_bytes(),
+                )
+                .await;
+            let _ = std::fs::remove_file(&extracted);
+            let artifact = imported.map_err(InstallError::Acquisition)?;
+            files.push(PlannedFile {
+                source: artifact.path.clone(),
+                relative: format!("libraries/{}", library.path()),
+                trust: artifact.trust(),
+                size_bytes: artifact.bytes,
+                role: InstalledFileRole::Library,
+                origin: artifact.origin,
+            });
+        }
+
+        for library in forge
+            .installer_libraries()
+            .iter()
+            .filter(|library| library.artifact().is_downloadable())
+        {
             check_cancel(context)?;
             let artifact = acquire_forge_library(&cache, library, context).await?;
             completed += 1;
@@ -915,6 +973,24 @@ pub async fn install_game(
     }
     let processing_finished = Instant::now();
     let _ = processing_finished;
+
+    // URL-less launch libraries must actually exist, whether extracted from
+    // the verified installer or produced by its processors. Never publish a
+    // completion manifest that silently omits a planned classpath entry.
+    for library in plan.libraries() {
+        if let GameLibrary::Forge(entry) = library {
+            if !entry.artifact().is_downloadable()
+                && !files
+                    .iter()
+                    .any(|file| file.relative == format!("libraries/{}", entry.path()))
+            {
+                return Err(InstallError::InvalidSource(format!(
+                    "required Forge launch library {} has no download and was neither embedded in the installer nor produced by a client processor",
+                    entry.coordinate().as_maven_string()
+                )));
+            }
+        }
+    }
 
     // ---- Staged validation: every file re-verified before completion.
     transaction_receipt
@@ -3601,6 +3677,13 @@ mod tests {
     /// `chain_mode` selects the synthetic tool's behavior for the client
     /// chain steps ("write" or "fail").
     fn synthetic_forge_game_with_chain_mode(chain_mode: &str) -> (Fixture, GameInstallPlan) {
+        synthetic_forge_game_with_embedded_library(chain_mode, None)
+    }
+
+    fn synthetic_forge_game_with_embedded_library(
+        chain_mode: &str,
+        embedded: Option<bool>,
+    ) -> (Fixture, GameInstallPlan) {
         let Some((tool, _java)) = crate::neoforge::processors::test_tools::tool_and_java() else {
             panic!("this synthetic world requires the compiled processor tool");
         };
@@ -3813,6 +3896,21 @@ mod tests {
             bootstrap.len(),
         );
 
+        let mut version: serde_json::Value = serde_json::from_str(&version).unwrap();
+        let embedded_bytes = b"embedded Forge launch library";
+        if embedded.is_some() {
+            version["libraries"]
+                .as_array_mut()
+                .unwrap()
+                .push(serde_json::json!({
+                    "name": "example:required:1", "downloads": {"artifact": {
+                        "path": "example/required/1/required-1.jar", "url": "",
+                        "sha1": sha1_hex(embedded_bytes), "size": embedded_bytes.len()
+                    }}
+                }));
+        }
+        let version = version.to_string();
+
         // The synthetic installer jar embeds both documents plus the
         // binpatch entry, and is itself served with a sidecar digest.
         let installer = {
@@ -3829,6 +3927,15 @@ mod tests {
                         .start_file(name, zip::write::SimpleFileOptions::default())
                         .unwrap();
                     writer.write_all(&bytes).unwrap();
+                }
+                if embedded == Some(true) {
+                    writer
+                        .start_file(
+                            "maven/example/required/1/required-1.jar",
+                            zip::write::SimpleFileOptions::default(),
+                        )
+                        .unwrap();
+                    writer.write_all(embedded_bytes).unwrap();
                 }
                 writer.finish().unwrap();
             }
@@ -3882,6 +3989,56 @@ mod tests {
             broken,
         };
         (fixture, plan)
+    }
+
+    #[tokio::test]
+    async fn forge_followup_url_less_launch_library_must_be_embedded_or_produced() {
+        let (_tool, java) = crate::neoforge::processors::test_tools::tool_and_java()
+            .expect("regression requires the test JDK");
+        for embedded in [false, true] {
+            let (fixture, plan) =
+                synthetic_forge_game_with_embedded_library("write", Some(embedded));
+            let (managed, root) = neoforge_managed_root("forge-required-launch-library");
+            let instance =
+                crate::instances::InstanceId::new(uuid::Uuid::new_v4().simple().to_string())
+                    .unwrap();
+            let context = test_context(fixture.server.base_url()).with_processor_java(java.clone());
+            let result = install_game(
+                &managed,
+                &instance,
+                &plan,
+                &context,
+                &mut |_| {},
+                InstallFaults::default(),
+            )
+            .await;
+            if embedded {
+                let installed = result.unwrap();
+                assert!(
+                    installed
+                        .manifest()
+                        .files()
+                        .iter()
+                        .any(|f| f.path() == "libraries/example/required/1/required-1.jar")
+                );
+            } else {
+                let error = result
+                    .expect_err("missing launch library must fail before commit")
+                    .to_string();
+                assert!(
+                    error.contains("example:required:1") && error.contains("neither embedded"),
+                    "{error}"
+                );
+                assert!(
+                    !managed
+                        .instance_paths(&instance)
+                        .game()
+                        .join(INSTALLED_GAME_FILE_NAME)
+                        .exists()
+                );
+            }
+            std::fs::remove_dir_all(root).unwrap();
+        }
     }
 
     #[tokio::test]

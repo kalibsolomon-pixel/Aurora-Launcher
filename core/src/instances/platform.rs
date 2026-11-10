@@ -13,6 +13,14 @@ pub enum PlatformPin {
     Quilt { version: String },
 }
 impl PlatformPin {
+    /// Individual-mod capabilities; modpack support has a separate boundary.
+    pub fn supports_mods(&self) -> bool {
+        matches!(
+            self,
+            Self::Fabric { .. } | Self::Forge { .. } | Self::NeoForge { .. }
+        )
+    }
+
     pub fn kind(&self) -> &'static str {
         match self {
             Self::Vanilla {} => "vanilla",

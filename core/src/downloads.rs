@@ -734,8 +734,9 @@ fn check_declared_length(
 /// Streams the response body into the staging file while feeding the caller's
 /// verification closure, then flushes completely to disk.
 ///
-/// On any failure the partial staging file is removed before returning, so a
-/// failed transfer never leaves debris.
+/// On any failure, including an interrupting content job's cancellation
+/// observed between chunks, the partial staging file is removed before
+/// returning, so a failed transfer never leaves debris.
 async fn stream_body(
     response: reqwest::Response,
     destination: &Path,
@@ -767,6 +768,12 @@ async fn stream_body_inner(
         .await
         .map_err(DownloadError::from_transport)?
     {
+        // A job created to interrupt its transfers (a review) observes its
+        // cancellation between chunks; other jobs, work outside any job and
+        // commit shields never fail here. The caller removes the partial
+        // staging file, which was never trusted, so nothing is promoted.
+        crate::content_jobs::transfer_checkpoint().map_err(|_| DownloadError::Cancelled)?;
+        crate::content_jobs::record_streamed(chunk.len() as u64);
         verify(&chunk)?;
         file.write_all(&chunk)
             .await
@@ -1275,6 +1282,84 @@ mod tests {
             !destination.exists(),
             "failed staging files must be removed"
         );
+    }
+
+    /// A slowly streamed body and a content job cancelled once its first
+    /// bytes arrive (never before the transfer starts).
+    async fn cancel_mid_stream(
+        test: &str,
+        control: crate::content_jobs::Control,
+        shield: bool,
+    ) -> (
+        Result<DownloadedFile, DownloadError>,
+        std::path::PathBuf,
+        crate::content_jobs::Control,
+        usize,
+    ) {
+        let body: Vec<u8> = (0..900u32).map(|i| (i % 251) as u8).collect();
+        let digest = digest_of(&body);
+        let served = body.clone();
+        let server = serve(move |_request| {
+            TestResponse::ok(&served).with_drip_delay(Duration::from_millis(2))
+        });
+        let destination = staging_path(test);
+        let source = source_for(&server, "/pack.bin", &digest, Some(body.len() as u64));
+        let watcher = control.clone();
+        let canceller = tokio::spawn(async move {
+            while watcher.streamed_bytes() == 0 {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+            watcher.cancel();
+        });
+        let result = control
+            .run(async {
+                let _commit = shield.then(|| crate::content_jobs::commit().unwrap());
+                download(&source, &destination, &short_options()).await
+            })
+            .await;
+        canceller.await.unwrap();
+        (result, destination, control, body.len())
+    }
+
+    #[tokio::test]
+    async fn an_interrupting_job_cancelled_mid_stream_stops_and_removes_its_staging_file() {
+        let control = crate::content_jobs::Control::interrupting_transfers();
+        let (result, destination, control, size) =
+            cancel_mid_stream("cancel-mid", control, false).await;
+        assert!(
+            matches!(result, Err(DownloadError::Cancelled)),
+            "{result:?}"
+        );
+        assert!(!destination.exists(), "the partial staging file is removed");
+        assert!(control.cancellation_observed());
+        let streamed = control.streamed_bytes();
+        assert!(streamed > 0 && streamed < size as u64, "{streamed}");
+        // Cancellation is final, never retried.
+        assert!(!crate::transfer::is_transient(&DownloadError::Cancelled));
+    }
+
+    #[tokio::test]
+    async fn an_installations_or_shielded_active_transfer_settles_verified() {
+        for (test, control, shield) in [
+            (
+                "cancel-ordinary",
+                crate::content_jobs::Control::default(),
+                false,
+            ),
+            (
+                "cancel-shield",
+                crate::content_jobs::Control::interrupting_transfers(),
+                true,
+            ),
+        ] {
+            let (result, destination, control, size) =
+                cancel_mid_stream(test, control, shield).await;
+            let downloaded = result.expect("the active transfer settles");
+            assert_eq!(downloaded.bytes, size as u64, "{test}");
+            assert_eq!(std::fs::read(&destination).unwrap().len(), size, "{test}");
+            assert!(!control.cancellation_observed(), "{test}");
+            assert_eq!(control.streamed_bytes(), size as u64, "{test}");
+        }
     }
 
     #[tokio::test]

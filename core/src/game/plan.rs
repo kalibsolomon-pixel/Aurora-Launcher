@@ -489,6 +489,26 @@ pub(crate) fn merge_library_sets(
     minecraft: &MinecraftInstallPlan,
     loader_libraries: Vec<GameLibrary>,
 ) -> Result<Vec<GameLibrary>, CompositionError> {
+    merge_library_sets_with(minecraft, loader_libraries, false)
+}
+
+/// [`merge_library_sets`] for loaders whose official profile deliberately
+/// replaces vanilla libraries (Forge publishes newer log4j, JNA and
+/// SoundSystem builds): a loader library at a different version replaces the
+/// Mojang entry of the same identity in place. Conflicts between loader
+/// libraries remain hard errors.
+pub(crate) fn merge_library_sets_loader_overrides(
+    minecraft: &MinecraftInstallPlan,
+    loader_libraries: Vec<GameLibrary>,
+) -> Result<Vec<GameLibrary>, CompositionError> {
+    merge_library_sets_with(minecraft, loader_libraries, true)
+}
+
+fn merge_library_sets_with(
+    minecraft: &MinecraftInstallPlan,
+    loader_libraries: Vec<GameLibrary>,
+    loader_overrides_minecraft: bool,
+) -> Result<Vec<GameLibrary>, CompositionError> {
     let mut libraries: Vec<GameLibrary> =
         Vec::with_capacity(minecraft.libraries().len() + loader_libraries.len());
 
@@ -496,7 +516,7 @@ pub(crate) fn merge_library_sets(
                     identity: LibraryIdentity<'_>,
                     version: &str|
      -> Result<(), CompositionError> {
-        for planned in &libraries {
+        for (index, planned) in libraries.iter().enumerate() {
             let (existing_identity, existing_version) = match planned {
                 GameLibrary::Minecraft(entry) => (
                     mojang_identity(entry.coordinate()),
@@ -519,6 +539,13 @@ pub(crate) fn merge_library_sets(
                 if existing_version == version {
                     return Ok(()); // exact duplicate: one requirement suffices
                 }
+                if loader_overrides_minecraft
+                    && matches!(planned, GameLibrary::Minecraft(_))
+                    && !matches!(library, GameLibrary::Minecraft(_))
+                {
+                    libraries[index] = library;
+                    return Ok(());
+                }
                 return Err(CompositionError::LibraryConflict {
                     existing: planned.coordinate_string(),
                     conflicting: library.coordinate_string(),
@@ -534,6 +561,10 @@ pub(crate) fn merge_library_sets(
         let version = entry.coordinate().version().to_owned();
         push(GameLibrary::Minecraft(entry.clone()), identity, &version)?;
     }
+    // Preserve every loader requirement, including those collapsed against
+    // vanilla. Otherwise A:1 (vanilla), A:1 (loader), A:2 (loader) would
+    // silently accept the loader's conflicting versions as an override.
+    let mut loader_requirements = std::collections::BTreeMap::new();
     for library in loader_libraries {
         let (identity, version) = match &library {
             GameLibrary::Minecraft(entry) => (
@@ -558,6 +589,17 @@ pub(crate) fn merge_library_sets(
             identity.1.to_owned(),
             identity.2.map(str::to_owned),
         );
+        if let Some((existing_version, existing_coordinate)) = loader_requirements.insert(
+            identity.clone(),
+            (version.clone(), library.coordinate_string()),
+        ) {
+            if existing_version != version {
+                return Err(CompositionError::LibraryConflict {
+                    existing: existing_coordinate,
+                    conflicting: library.coordinate_string(),
+                });
+            }
+        }
         push(
             library,
             (&identity.0, &identity.1, identity.2.as_deref()),
@@ -660,6 +702,64 @@ mod tests {
             ),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn forge_followup_conflicting_loader_versions_survive_vanilla_deduplication() {
+        use crate::forge::metadata::{
+            ForgeMavenEndpoints, ForgeVersionId, InstallProfileDocument, ProfileLibrary,
+            VersionProfileDocument,
+        };
+        let profile = InstallProfileDocument::from_json(include_str!(
+            "../forge/fixtures/1.21.11-61.2.0-install_profile.json"
+        ))
+        .unwrap();
+        let mut version = VersionProfileDocument::from_json(include_str!(
+            "../forge/fixtures/1.21.11-61.2.0-version.json"
+        ))
+        .unwrap();
+        let make = |v: &str| ProfileLibrary {
+            name: format!("com.mojang:brigadier:{v}"),
+            path: format!("com/mojang/brigadier/{v}/brigadier-{v}.jar"),
+            url: format!(
+                "https://libraries.minecraft.net/com/mojang/brigadier/{v}/brigadier-{v}.jar"
+            ),
+            sha1: "1832adbc4eee60faa097bb1409be305a0abbf3d2".into(),
+            size: 1000,
+        };
+        for versions in [
+            ["1.0.18", "2.0"],
+            ["2.0", "1.0.18"],
+            ["2.0", "3.0"],
+            ["2.0", "2.0"],
+            ["1.0.18", "1.0.18"],
+        ] {
+            version.libraries = versions.iter().map(|v| make(v)).collect();
+            let forge = crate::forge::plan::ForgePlan::from_documents(
+                &profile,
+                &version,
+                &crate::minecraft::metadata::MinecraftVersionId::new("1.21.11").unwrap(),
+                &ForgeVersionId::new("1.21.11-61.2.0").unwrap(),
+                &ForgeMavenEndpoints::official(),
+                crate::integrity::Sha1Digest::parse("0000000000000000000000000000000000000000")
+                    .unwrap(),
+            )
+            .unwrap();
+            let result = crate::forge::plan::compose_forge_game_plan(minecraft_plan(), forge);
+            if versions[0] == versions[1] {
+                let plan = result.expect("a single loader version may replace vanilla or repeat");
+                assert_eq!(plan.libraries().len(), 1);
+                assert_eq!(
+                    plan.libraries()[0].coordinate_string(),
+                    format!("com.mojang:brigadier:{}", versions[0])
+                );
+            } else {
+                assert!(
+                    matches!(result, Err(CompositionError::LibraryConflict { .. })),
+                    "{versions:?}"
+                );
+            }
+        }
     }
 
     #[test]

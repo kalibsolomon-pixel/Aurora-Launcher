@@ -6,7 +6,7 @@ use std::{
     fmt, fs, io,
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 const SCHEMA: u32 = 2;
@@ -228,6 +228,101 @@ pub struct SessionRecord {
     outcome: Option<Outcome>,
     mode: Mode,
     visits: Vec<Visit>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    owner: Option<SessionOwner>,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SessionOwner {
+    pid: u32,
+    // Windows creation FILETIME; Linux boot ID + process start ticks. Unlike
+    // a PID alone, these identities cannot mistake a reused PID for the owner.
+    started_at: String,
+}
+impl SessionOwner {
+    fn current() -> Result<Self, ()> {
+        let pid = std::process::id();
+        #[cfg(any(windows, target_os = "linux"))]
+        let started_at = process_start(pid)?.ok_or(())?;
+        #[cfg(not(any(windows, target_os = "linux")))]
+        let started_at = {
+            static ID: OnceLock<String> = OnceLock::new();
+            ID.get_or_init(|| uuid::Uuid::new_v4().to_string()).clone()
+        };
+        Ok(Self { pid, started_at })
+    }
+
+    fn alive(&self) -> bool {
+        match process_start(self.pid) {
+            Ok(Some(started_at)) => started_at == self.started_at,
+            Ok(None) => false,
+            // Access denied/unsupported platforms do not prove a crash. Keep
+            // the recording open rather than interrupting another launcher.
+            Err(()) => true,
+        }
+    }
+}
+
+#[cfg(windows)]
+fn process_start(pid: u32) -> Result<Option<String>, ()> {
+    use windows_sys::Win32::{
+        Foundation::{CloseHandle, ERROR_INVALID_PARAMETER, FILETIME, GetLastError},
+        System::Threading::{GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
+    };
+    // SAFETY: the process handle is queried only, and all FILETIME pointers
+    // refer to initialized local storage. Every opened handle is closed.
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return if GetLastError() == ERROR_INVALID_PARAMETER {
+                Ok(None)
+            } else {
+                Err(())
+            };
+        }
+        let mut creation: FILETIME = std::mem::zeroed();
+        let mut exit: FILETIME = std::mem::zeroed();
+        let mut kernel: FILETIME = std::mem::zeroed();
+        let mut user: FILETIME = std::mem::zeroed();
+        let queried = GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user);
+        CloseHandle(handle);
+        if queried == 0 {
+            return Err(());
+        }
+        if exit.dwHighDateTime != 0 || exit.dwLowDateTime != 0 {
+            return Ok(None);
+        }
+        let ticks = (u64::from(creation.dwHighDateTime) << 32) | u64::from(creation.dwLowDateTime);
+        Ok(Some(ticks.to_string()))
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn process_start(pid: u32) -> Result<Option<String>, ()> {
+    let stat = match fs::read_to_string(format!("/proc/{pid}/stat")) {
+        Ok(stat) => stat,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err(()),
+    };
+    // The comm field is parenthesized and can itself contain spaces or ')'.
+    let fields: Vec<_> = stat
+        .rsplit_once(')')
+        .ok_or(())?
+        .1
+        .split_whitespace()
+        .collect();
+    if matches!(fields.first(), Some(&"Z" | &"X")) {
+        return Ok(None);
+    }
+    let ticks = fields.get(19).ok_or(())?.parse::<u64>().map_err(|_| ())?;
+    let boot = fs::read_to_string("/proc/sys/kernel/random/boot_id").map_err(|_| ())?;
+    Ok(Some(format!("{}:{ticks}", boot.trim())))
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+fn process_start(_pid: u32) -> Result<Option<String>, ()> {
+    Err(())
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -461,6 +556,31 @@ fn memory() -> &'static Mutex<HashMap<PathBuf, Document>> {
     static DOCS: OnceLock<Mutex<HashMap<PathBuf, Document>>> = OnceLock::new();
     DOCS.get_or_init(|| Mutex::new(HashMap::new()))
 }
+fn lock_history(path: &Path) -> Result<fs::File, ()> {
+    // Dropping the file releases the OS lock, including on process exit. The
+    // empty sidecar stays in place: unlinking it can split competing lockers
+    // across different files. Never lock the atomically replaced JSON itself.
+    fs::create_dir_all(path.parent().ok_or(())?).map_err(|_| ())?;
+    let mut lock_path = path.as_os_str().to_owned();
+    lock_path.push(".lock");
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(PathBuf::from(lock_path))
+        .map_err(|_| ())?;
+    let started = Instant::now();
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(file),
+            Err(fs::TryLockError::WouldBlock) if started.elapsed() < Duration::from_secs(2) => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(_) => return Err(()),
+        }
+    }
+}
 fn read(path: &Path) -> Result<Document, ()> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
@@ -600,11 +720,14 @@ impl Store {
 
     fn open_inner(path: PathBuf, paths: Option<&crate::paths::ManagedPaths>) -> Result<Self, ()> {
         let mut map = memory().lock().map_err(|_| ())?;
-        if !map.contains_key(&path) {
+        {
+            let _guard = lock_history(&path)?;
             let mut doc = read(&path)?;
             let mut changed = false;
             for session in &mut doc.sessions {
-                if session.ended_at.is_none() {
+                if session.ended_at.is_none()
+                    && session.owner.as_ref().is_none_or(|owner| !owner.alive())
+                {
                     session.ended_at = Some(
                         session
                             .started_at
@@ -640,10 +763,16 @@ impl Store {
         Ok(Self { path })
     }
     fn edit(&self, edit: impl FnOnce(&mut Document)) -> Result<(), ()> {
+        self.update(|doc| {
+            edit(doc);
+            Ok(())
+        })
+    }
+    fn update(&self, edit: impl FnOnce(&mut Document) -> Result<(), ()>) -> Result<(), ()> {
         let mut map = memory().lock().map_err(|_| ())?;
-        let current = map.get(&self.path).ok_or(())?;
-        let mut next = current.clone();
-        edit(&mut next);
+        let _guard = lock_history(&self.path)?;
+        let mut next = read(&self.path)?;
+        edit(&mut next)?;
         next.retain()?;
         write(&self.path, &next)?;
         map.insert(self.path.clone(), next);
@@ -660,6 +789,7 @@ impl Store {
     ) -> Result<Recorder, ()> {
         let id = id.to_string();
         let started_at = now();
+        let owner = Some(SessionOwner::current()?);
         self.edit(|doc| {
             doc.sessions.push(SessionRecord {
                 id: id.clone(),
@@ -670,6 +800,7 @@ impl Store {
                 outcome: None,
                 mode: Mode::Unknown,
                 visits: Vec::new(),
+                owner,
             })
         })?;
         Ok(Recorder {
@@ -876,64 +1007,57 @@ impl Store {
         display: String,
         favorite: bool,
     ) -> Result<(), ()> {
-        let mut map = memory().lock().map_err(|_| ())?;
-        let mut next = map.get(&self.path).ok_or(())?.clone();
-        let index = next
-            .servers
-            .iter()
-            .position(|item| item.instance == instance && item.server == server);
-        if favorite
-            && !index.is_some_and(|i| next.servers[i].favorite)
-            && next.servers.iter().filter(|item| item.favorite).count() >= MAX_FAVORITE_SERVERS
-        {
-            return Err(());
-        }
-        if let Some(index) = index {
-            if !favorite && next.servers[index].last_played_at == 0 {
-                next.servers.remove(index);
-            } else {
-                next.servers[index].favorite = favorite;
+        self.update(|next| {
+            let index = next
+                .servers
+                .iter()
+                .position(|item| item.instance == instance && item.server == server);
+            if favorite
+                && !index.is_some_and(|i| next.servers[i].favorite)
+                && next.servers.iter().filter(|item| item.favorite).count() >= MAX_FAVORITE_SERVERS
+            {
+                return Err(());
             }
-        } else if favorite {
-            next.servers.push(ServerHistory {
-                instance,
-                server,
-                display,
-                last_played_at: 0,
-                duration_ms: 0,
-                favorite,
-            });
-        }
-        next.retain()?;
-        write(&self.path, &next)?;
-        map.insert(self.path.clone(), next);
-        Ok(())
+            if let Some(index) = index {
+                if !favorite && next.servers[index].last_played_at == 0 {
+                    next.servers.remove(index);
+                } else {
+                    next.servers[index].favorite = favorite;
+                }
+            } else if favorite {
+                next.servers.push(ServerHistory {
+                    instance,
+                    server,
+                    display,
+                    last_played_at: 0,
+                    duration_ms: 0,
+                    favorite,
+                });
+            }
+            Ok(())
+        })
     }
 
     pub fn set_server_favorite(&self, id: &str, favorite: bool) -> Result<(), ()> {
-        // The existing process-wide history mutex serializes with bridge writes.
-        let mut map = memory().lock().map_err(|_| ())?;
-        let mut next = map.get(&self.path).ok_or(())?.clone();
-        let entry = next
-            .servers
-            .iter()
-            .position(|s| target_id(Mode::Multiplayer, &s.instance, s.server.as_str()) == id)
-            .ok_or(())?;
-        if favorite
-            && !next.servers[entry].favorite
-            && next.servers.iter().filter(|s| s.favorite).count() >= MAX_FAVORITE_SERVERS
-        {
-            return Err(());
-        }
-        if !favorite && next.servers[entry].last_played_at == 0 {
-            next.servers.remove(entry);
-        } else {
-            next.servers[entry].favorite = favorite;
-        }
-        next.retain()?;
-        write(&self.path, &next)?;
-        map.insert(self.path.clone(), next);
-        Ok(())
+        self.update(|doc| {
+            let entry = doc
+                .servers
+                .iter()
+                .position(|s| target_id(Mode::Multiplayer, &s.instance, s.server.as_str()) == id)
+                .ok_or(())?;
+            if favorite
+                && !doc.servers[entry].favorite
+                && doc.servers.iter().filter(|s| s.favorite).count() >= MAX_FAVORITE_SERVERS
+            {
+                return Err(());
+            }
+            if !favorite && doc.servers[entry].last_played_at == 0 {
+                doc.servers.remove(entry);
+            } else {
+                doc.servers[entry].favorite = favorite;
+            }
+            Ok(())
+        })
     }
 }
 #[derive(Clone, Debug, Serialize)]
@@ -1205,9 +1329,245 @@ mod tests {
         fs::remove_file(path).unwrap();
     }
 
+    mod multi_process {
+        use super::*;
+
+        // Evicting the process-local cache models a second launcher's independent
+        // memory without starting a GUI or touching the owner's history file.
+        fn independent_open(path: &Path) -> Store {
+            memory().lock().unwrap().remove(path);
+            Store::open(path.to_path_buf()).unwrap()
+        }
+
+        #[test]
+        fn another_launcher_preserves_a_live_recording() {
+            let file = path();
+            let first = Store::open(file.clone()).unwrap();
+            let recording = first.start(id()).unwrap();
+            let second = independent_open(&file);
+            let sessions = second.sessions().unwrap();
+            assert!(
+                sessions[0].ended_at.is_none(),
+                "live recording was interrupted"
+            );
+            assert!(sessions[0].outcome.is_none());
+            recording.finish(Outcome::Normal).unwrap();
+            assert_eq!(
+                read(&file).unwrap().sessions[0].outcome,
+                Some(Outcome::Normal)
+            );
+            fs::remove_file(file).unwrap();
+        }
+
+        #[test]
+        fn independent_launchers_keep_interleaved_edits() {
+            let file = path();
+            let first = Store::open(file.clone()).unwrap();
+            let stale = memory().lock().unwrap().get(&file).unwrap().clone();
+            let second = independent_open(&file);
+            first
+                .edit(|doc| doc.sessions.push(server_session(1, "first.invalid", id())))
+                .unwrap();
+            // The second process still has its original empty cache.
+            memory().lock().unwrap().insert(file.clone(), stale);
+            second
+                .edit(|doc| doc.sessions.push(server_session(2, "second.invalid", id())))
+                .unwrap();
+            let persisted = read(&file).unwrap();
+            assert_eq!(persisted.sessions.len(), 2, "an independent edit was lost");
+            assert_eq!(second.sessions().unwrap().len(), 2);
+            fs::remove_file(file).unwrap();
+        }
+
+        #[test]
+        fn recovery_interrupts_legacy_sessions_and_reused_pids() {
+            let file = path();
+            let store = Store::open(file.clone()).unwrap();
+            let mut legacy = server_session(1, "legacy.invalid", id());
+            legacy.ended_at = None;
+            legacy.outcome = None;
+            let mut reused = legacy.clone();
+            reused.id = uuid::Uuid::new_v4().to_string();
+            let mut owner = SessionOwner::current().unwrap();
+            owner.started_at.push_str("-previous-process");
+            reused.owner = Some(owner);
+            store
+                .edit(|doc| doc.sessions.extend([legacy, reused]))
+                .unwrap();
+            let persisted: serde_json::Value =
+                serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+            assert!(persisted["sessions"][0].get("owner").is_none());
+            let reopened = independent_open(&file);
+            for session in reopened.sessions().unwrap() {
+                // Unsupported platforms deliberately preserve owners of unknown
+                // liveness; legacy sessions still recover everywhere.
+                if session.owner.is_none() || cfg!(any(windows, target_os = "linux")) {
+                    assert_eq!(session.outcome, Some(Outcome::Interrupted));
+                    assert_eq!(session.ended_at, Some(2));
+                }
+            }
+            fs::remove_file(file).unwrap();
+        }
+
+        #[test]
+        fn stale_favorite_edit_keeps_another_launchers_updates() {
+            let file = path();
+            let first = Store::open(file.clone()).unwrap();
+            first
+                .edit(|doc| doc.sessions.push(server_session(1, "first.invalid", id())))
+                .unwrap();
+            let row = first.recent(Mode::Multiplayer, None, 1).unwrap().remove(0);
+            let stale = memory().lock().unwrap().get(&file).unwrap().clone();
+            let second = independent_open(&file);
+            second
+                .edit(|doc| doc.sessions.push(server_session(2, "second.invalid", id())))
+                .unwrap();
+            memory().lock().unwrap().insert(file.clone(), stale);
+            first.set_server_favorite(&row.id, true).unwrap();
+            let persisted = read(&file).unwrap();
+            assert_eq!(persisted.sessions.len(), 2);
+            assert_eq!(persisted.servers.len(), 2);
+            assert!(persisted.servers.iter().any(|s| s.favorite));
+            fs::remove_file(file).unwrap();
+        }
+
+        #[test]
+        fn stale_saved_favorite_edit_keeps_another_launchers_updates() {
+            let file = path();
+            let first = Store::open(file.clone()).unwrap();
+            let stale = memory().lock().unwrap().get(&file).unwrap().clone();
+            let second = independent_open(&file);
+            second
+                .edit(|doc| doc.sessions.push(server_session(2, "second.invalid", id())))
+                .unwrap();
+            memory().lock().unwrap().insert(file.clone(), stale);
+            first
+                .set_saved_server_favorite(
+                    id(),
+                    ServerTarget::parse("saved.invalid".into()).unwrap(),
+                    "Saved server".into(),
+                    true,
+                )
+                .unwrap();
+            let persisted = read(&file).unwrap();
+            assert_eq!(persisted.sessions.len(), 1);
+            assert_eq!(persisted.servers.len(), 2);
+            assert!(persisted.servers.iter().any(|s| s.favorite));
+            fs::remove_file(file).unwrap();
+        }
+
+        #[test]
+        fn corrupt_external_edit_is_not_overwritten_and_keeps_cache() {
+            let file = path();
+            let store = Store::open(file.clone()).unwrap();
+            store
+                .edit(|doc| doc.sessions.push(server_session(1, "first.invalid", id())))
+                .unwrap();
+            fs::write(&file, b"broken").unwrap();
+            assert!(store.edit(|doc| doc.sessions.clear()).is_err());
+            assert_eq!(fs::read(&file).unwrap(), b"broken");
+            assert_eq!(store.sessions().unwrap().len(), 1);
+            fs::remove_file(file).unwrap();
+        }
+
+        #[test]
+        fn history_lock_is_exclusive_bounded_and_released_on_drop() {
+            let file = path();
+            let store = Store::open(file.clone()).unwrap();
+            store
+                .edit(|doc| doc.sessions.push(server_session(1, "locked.invalid", id())))
+                .unwrap();
+            let original = fs::read(&file).unwrap();
+            let guard = lock_history(&file).unwrap();
+            let started = Instant::now();
+            assert!(store.edit(|_| panic!("edit ran without the lock")).is_err());
+            assert!(started.elapsed() >= Duration::from_secs(2));
+            assert_eq!(fs::read(&file).unwrap(), original);
+            assert_eq!(store.sessions().unwrap().len(), 1);
+            drop(guard);
+            store.edit(|doc| doc.sessions.clear()).unwrap();
+            assert!(read(&file).unwrap().sessions.is_empty());
+            fs::remove_file(file).unwrap();
+        }
+
+        fn child_command(file: &Path, action: &str) -> std::process::Command {
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                command.creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
+            }
+            command
+                .args([
+                    "--exact",
+                    "gameplay_history::tests::multi_process::history_child_writer",
+                    "--nocapture",
+                ])
+                .env("AURORA_HISTORY_TEST_FILE", file)
+                .env("AURORA_HISTORY_TEST_ACTION", action);
+            command
+        }
+
+        // Runs only in explicitly spawned test processes, never in the launcher.
+        #[test]
+        fn history_child_writer() {
+            let Some(file) = std::env::var_os("AURORA_HISTORY_TEST_FILE") else {
+                return;
+            };
+            let file = PathBuf::from(file);
+            let store = Store::open(file.clone()).unwrap();
+            if std::env::var("AURORA_HISTORY_TEST_ACTION").unwrap() == "abandon" {
+                let _recording = store.start(id()).unwrap();
+                // Simulate a recording launcher exiting without finish().
+            } else {
+                for index in 0..12 {
+                    store
+                        .edit(|doc| {
+                            doc.sessions
+                                .push(server_session(index, "child.invalid", id()))
+                        })
+                        .unwrap();
+                }
+            }
+        }
+
+        #[test]
+        #[cfg(any(windows, target_os = "linux"))]
+        fn exited_launcher_is_recovered() {
+            let file = path();
+            let output = child_command(&file, "abandon").output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stdout)
+            );
+            let session = &read(&file).unwrap().sessions[0];
+            assert!(session.ended_at.is_none());
+            assert!(!session.owner.as_ref().unwrap().alive());
+            let reopened = Store::open(file.clone()).unwrap();
+            assert_eq!(
+                reopened.sessions().unwrap()[0].outcome,
+                Some(Outcome::Interrupted)
+            );
+            fs::remove_file(file).unwrap();
+        }
+
+        #[test]
+        fn concurrent_process_writers_preserve_every_session() {
+            let file = path();
+            let mut first = child_command(&file, "edits").spawn().unwrap();
+            let mut second = child_command(&file, "edits").spawn().unwrap();
+            assert!(first.wait().unwrap().success());
+            assert!(second.wait().unwrap().success());
+            assert_eq!(read(&file).unwrap().sessions.len(), 24);
+            fs::remove_file(file).unwrap();
+        }
+    }
+
     fn server_session(index: u64, address: &str, instance: InstanceId) -> SessionRecord {
         SessionRecord {
             id: uuid::Uuid::new_v4().to_string(),
+            owner: None,
             instance,
             started_at: index,
             ended_at: Some(index + 1),
@@ -1564,6 +1924,7 @@ mod tests {
                 for index in 0..=MAX_SESSIONS {
                     doc.sessions.push(SessionRecord {
                         id: uuid::Uuid::new_v4().to_string(),
+                        owner: None,
                         instance: id(),
                         started_at: base - index as u64,
                         ended_at: Some(base - index as u64 + 1),
@@ -1592,6 +1953,7 @@ mod tests {
             .edit(|doc| {
                 doc.sessions.push(SessionRecord {
                     id: uuid::Uuid::new_v4().to_string(),
+                    owner: None,
                     instance: id(),
                     started_at: start,
                     ended_at: Some(start + 10),

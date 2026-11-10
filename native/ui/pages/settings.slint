@@ -3,8 +3,8 @@
 import { ScrollView, AboutSlint } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
-import { Button, ButtonKind, Toggle, Dropdown, Group, SettingRow, PageTitle, FocusRing, KeyboardFocus, Label, TextField } from "../components.slint";
-import { Settings, SettingsSection, Accounts, Swatch, AccentPicker, Nav, Page } from "../state.slint";
+import { Button, ButtonKind, Toggle, Slider, Dropdown, Group, SettingRow, PageTitle, FocusRing, KeyboardFocus, Label, TextField } from "../components.slint";
+import { Settings, SettingsSection, Accounts, Swatch, AccentPicker, Borealis, Nav, Page } from "../state.slint";
 import { Widgets } from "../widgets.slint";
 import { SyncSettings } from "../syncing.slint";
 
@@ -147,7 +147,24 @@ export component SettingsPage inherits HorizontalLayout {
                         selected(index) => { Settings.background-changed(index); }
                     }
                 }
-
+                SettingRow {
+                label: "Motion";
+                detail: "Borealis drift speed. 0: Static / reduced motion." + (Borealis.accelerated ? "" : " Software rendering keeps Borealis static.");
+                HorizontalLayout {
+                    spacing: 10px;
+                    Text { text: round(Settings.motion-speed); width: 32px; color: Theme.text-secondary; font-size: Theme.text-body; horizontal-alignment: right; vertical-alignment: center; }
+                    Slider {
+                        width: 220px;
+                        label: "Motion speed";
+                        minimum: 0;
+                        maximum: 100;
+                        step: 1;
+                        value <=> Settings.motion-speed;
+                        changed(value) => { Settings.motion-preview-changed(value); }
+                        released(value) => { Settings.motion-speed-changed(value); }
+                    }
+                }
+            }
                 if Settings.appearance-error != "": Text { text: Settings.appearance-error; color: Theme.error; wrap: word-wrap; }
             }
 
@@ -239,7 +256,7 @@ export component SettingsPage inherits HorizontalLayout {
                 SettingRow {
                     label: "Reduce motion";
                     detail: "Stops transitions and Borealis motion.";
-                    Toggle { label: "Reduce motion"; checked <=> Settings.reduce-motion; toggled(value) => { Settings.reduce-motion-changed(value); } }
+                    Toggle { label: "Reduce motion"; checked: Theme.reduce-motion; toggled(value) => { Settings.motion-speed-changed(value ? 0 : 50); } }
                 }
                 if Settings.appearance-error != "": Text { text: Settings.appearance-error; color: Theme.error; wrap: word-wrap; }
             }

@@ -356,6 +356,18 @@ pub struct CommandError {
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     conflict: Option<crate::instance_content::ProviderConflict>,
+    /// The instance a failed or cancelled new-pack install created and
+    /// kept (still installing and resumable). Absent when none was created.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    instance_id: Option<String>,
+}
+
+impl From<crate::modpacks::PackInstallError> for CommandError {
+    fn from(error: crate::modpacks::PackInstallError) -> Self {
+        let mut command = Self::new(error.code, error.message);
+        command.instance_id = error.instance_id.map(|id| id.to_string());
+        command
+    }
 }
 
 impl From<crate::instances::InvalidInstanceRecord> for CommandError {
@@ -381,6 +393,7 @@ impl CommandError {
             code: code.into(),
             message: message.into(),
             conflict: None,
+            instance_id: None,
         }
     }
 }
@@ -2626,6 +2639,24 @@ pub async fn retry_instance_install(
     let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
         .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
 
+    // A modpack instance resumes its own reviewed pack installation (which
+    // needs the provider); every other instance re-runs the ordinary
+    // installer. The registry read here only routes: resume re-checks the
+    // record under the instance operation lock.
+    if InstanceRegistry::load(&managed_paths.instance_registry_file())?
+        .find(&instance)
+        .is_some_and(|record| record.pack().is_some())
+    {
+        return Box::pin(resume_pack_instance(
+            &app,
+            &managed_paths,
+            &endpoints,
+            &crate::modrinth::Client::official(),
+            &instance,
+        ))
+        .await;
+    }
+
     let record = crate::instances::lifecycle::retry_instance_install(
         &managed_paths,
         &managed_paths.instance_registry_file(),
@@ -3096,6 +3127,39 @@ pub async fn get_installed_mod_icons(
         .map_err(|_| CommandError::new("mod_icons_unavailable", "Icon loading did not complete."))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InstalledPackIconsRequest {
+    instance_id: String,
+    content_type: crate::instance_content::ContentType,
+    files: Vec<crate::mod_icons::PackIconRequest>,
+}
+pub async fn get_installed_pack_icons(
+    app: Host,
+    request: InstalledPackIconsRequest,
+) -> Result<Vec<crate::mod_icons::PackIconResult>, CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = registered_instance(&managed, &request.instance_id)?;
+    if request.files.len() > 128
+        || request.content_type == crate::instance_content::ContentType::Mod
+    {
+        return Err(CommandError::new(
+            "pack_icons_invalid_request",
+            "Invalid saved-pack artwork request.",
+        ));
+    }
+    tokio::task::spawn_blocking(move || {
+        crate::mod_icons::load_packs(&managed, &id, request.content_type, &request.files)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pack_icons_unavailable",
+            "Pack artwork loading did not complete.",
+        )
+    })
+}
+
 /// Enables or disables one current user-managed JAR through a same-directory
 /// rename and returns the resulting authoritative inventory.
 pub async fn set_instance_mod_enabled(
@@ -3216,11 +3280,7 @@ pub fn get_instance_content_context(
             .map(|pin| pin.version.clone()),
         environment: "client".to_owned(),
         modrinth_available: record.installed().platform.provider_loader().is_ok(),
-        mods_loadable: matches!(
-            record.installed().platform,
-            crate::instances::platform::PlatformPin::Fabric { .. }
-                | crate::instances::platform::PlatformPin::NeoForge { .. }
-        ),
+        mods_loadable: record.installed().platform.supports_mods(),
     })
 }
 
@@ -3879,11 +3939,61 @@ pub async fn install_modrinth_pack(
         &request.selected_optional,
         &fingerprint,
         &mut |phase| {
+            // The job's own stage attributes the phase to this exact
+            // Downloads task even when several pack installs run at once.
+            crate::content_jobs::set_stage(phase);
             let _ = app.emit("modpack-progress", serde_json::json!({ "phase": phase }));
         },
     ))
+    .await?;
+    Ok(InstanceSummary::from_record(&record))
+}
+
+/// Typed request for resuming one kept, still-installing modpack instance.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResumeModrinthPackRequest {
+    instance_id: String,
+}
+
+/// Resumes the interrupted new-pack installation of the named instance,
+/// finishing that same instance (never creating another).
+pub async fn resume_modrinth_pack(
+    app: Host,
+    request: ResumeModrinthPackRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let managed = managed_paths(&app)?;
+    let instance = crate::instances::InstanceId::new(request.instance_id.trim())?;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("pack_configuration_invalid", error.to_string()))?;
+    Box::pin(resume_pack_instance(
+        &app,
+        &managed,
+        &endpoints,
+        &crate::modrinth::Client::official(),
+        &instance,
+    ))
     .await
-    .map_err(|error| CommandError::new(error.code, error.message))?;
+}
+
+async fn resume_pack_instance(
+    app: &Host,
+    managed: &ManagedPaths,
+    endpoints: &crate::instances::lifecycle::InstanceEndpoints,
+    provider: &crate::modrinth::Client,
+    instance: &crate::instances::InstanceId,
+) -> Result<InstanceSummary, CommandError> {
+    let record = Box::pin(crate::modpacks::resume(
+        managed,
+        endpoints,
+        provider,
+        instance,
+        &mut |phase| {
+            crate::content_jobs::set_stage(phase);
+            let _ = app.emit("modpack-progress", serde_json::json!({ "phase": phase }));
+        },
+    ))
+    .await?;
     Ok(InstanceSummary::from_record(&record))
 }
 
@@ -3896,6 +4006,33 @@ pub struct ModrinthPackMergeRequest {
     #[serde(default)]
     selected_optional: Vec<String>,
     fingerprint: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModrinthPackDestinationsRequest {
+    project_id: String,
+    version_id: String,
+}
+
+/// Every instance, marked as a compatible or incompatible destination for
+/// adding this exact pack version (with reasons). Read-only and decided from
+/// Modrinth's version metadata and the registry; nothing is downloaded.
+// Every command here returns the same `CommandError` shape.
+#[allow(clippy::result_large_err)]
+pub async fn get_modrinth_pack_destinations(
+    app: Host,
+    request: ModrinthPackDestinationsRequest,
+) -> Result<Vec<crate::pack_merge::PackDestination>, CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::pack_merge::destinations(
+        &managed,
+        &crate::modrinth::Client::official(),
+        &request.project_id,
+        &request.version_id,
+    )
+    .await
+    .map_err(|error| CommandError::new(error.code, error.message))
 }
 
 /// Read-only review of merging an exact pack version into an existing instance.
@@ -3939,6 +4076,9 @@ pub async fn install_modrinth_pack_merge(
         &request.selected_optional,
         &fingerprint,
         &mut |phase| {
+            // The job's own stage attributes the phase to this exact
+            // Downloads task even when several pack installs run at once.
+            crate::content_jobs::set_stage(phase);
             let _ = app.emit("modpack-progress", serde_json::json!({ "phase": phase }));
         },
     )
@@ -4041,7 +4181,8 @@ pub struct ModpackDetails {
     name: String,
     pack_version: String,
     minecraft_version: String,
-    fabric_loader_version: String,
+    /// The installed loader pin (`{kind, version}`), as recorded in pack state.
+    loader: crate::instances::platform::PlatformPin,
     component_count: usize,
     override_count: usize,
     divergences: Vec<crate::pack_state::PackDivergence>,
@@ -4082,7 +4223,7 @@ pub fn get_modpack_details(
         name: pack.identity.name.clone(),
         pack_version: pack.identity.pack_version.clone(),
         minecraft_version: pack.identity.minecraft_version.clone(),
-        fabric_loader_version: pack.identity.fabric_loader_version.clone(),
+        loader: pack.identity.loader.clone(),
         component_count: pack.components.len(),
         override_count: pack.overrides.len(),
         divergences: pack.divergences.clone(),
@@ -6392,7 +6533,7 @@ async fn calculate_play_readiness(
     let mut mod_issues = Vec::new();
     if let (Some(plan), Some(record)) = (&runtime_plan, registry.find(instance_id)) {
         let loader_family = record.installed().platform.kind();
-        if matches!(loader_family, "fabric" | "neoForge")
+        if record.installed().platform.supports_mods()
             && managed.instance_paths(instance_id).mods().is_dir()
         {
             let mut inventory = crate::instance_mods::scan(managed, instance_id)?;
@@ -6579,7 +6720,7 @@ async fn play_instance_with_target(
             ));
         }
         let launch_loader_family = record.installed().platform.kind();
-        if matches!(launch_loader_family, "fabric" | "neoForge")
+        if record.installed().platform.supports_mods()
             && managed.instance_paths(&instance).mods().is_dir()
         {
             let mut inventory = crate::instance_mods::scan(&managed, &instance)?;
@@ -6750,7 +6891,7 @@ async fn play_instance_with_target(
                 .transpose()
                 .map_err(|error| CommandError::new("launch_custom_java_invalid", error.message))?;
             let validated_loader_family = record.installed().platform.kind();
-            if matches!(validated_loader_family, "fabric" | "neoForge")
+            if record.installed().platform.supports_mods()
                 && managed.instance_paths(&instance).mods().is_dir()
             {
                 let mut inventory = crate::instance_mods::scan(&managed, &instance)?;

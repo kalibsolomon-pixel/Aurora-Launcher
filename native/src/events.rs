@@ -96,6 +96,8 @@ pub fn dispatch(name: &str, payload: Value) {
         "modpack-progress" => {
             if let Ok(event) = serde_json::from_value::<Phase>(payload) {
                 crate::discover::progress(&event.phase);
+                // The running task reads its own stage from its job control.
+                crate::activity::refresh();
             }
         }
         "launch-progress" => {

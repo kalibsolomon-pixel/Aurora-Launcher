@@ -6,7 +6,7 @@ import { ScrollView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon, Icons } from "../icons.slint";
 import {
-    Button, ButtonKind, IconButton, Glyph, StatusPill, Tone, Toggle, Slider, TextField, Tabs,
+    Button, ButtonKind, IconButton, ContentArtwork, ContentList, ContentRowBackground, StatusPill, Tone, Toggle, Slider, TextField, Tabs,
     Group, SettingRow, Divider, EmptyState, Spinner, PageTitle, FocusRing, KeyboardFocus,
     InstanceIcon, Dropdown, ProgressBar, UnifiedList,
 } from "../components.slint";
@@ -97,20 +97,35 @@ export component InstancesPage inherits Rectangle {
 
 component ContentLine inherits Rectangle {
     in property <ContentRow> item;
-    height: 68px;
-    background: touch.has-hover ? Theme.hover : transparent;
-    in property <bool> divided;
-    in property <string> fallback;
-    if divided: Divider { x: 14px; width: parent.width - 28px; y: 0px; }
+    // Follows the scroll position. Rendering reads only the copy below, which
+    // changes when a row crosses the margin, so scrolling keeps the list's
+    // cached layer instead of repainting every row on every frame.
+    in property <bool> near-view: false;
+    private property <bool> artwork-visible: false;
+    changed near-view => { root.show-artwork(); }
+    init => { root.show-artwork(); }
+    function show-artwork() {
+        root.artwork-visible = root.near-view;
+        Instances.content-icon-visible(Instances.id, root.item.id, root.near-view);
+    }
+    in property <bool> show-separator: false;
+    in property <bool> first-row: false;
+    in property <bool> last-row: false;
+    height: max(56px, layout.preferred-height);
+    background: transparent;
     accessible-role: list-item;
     accessible-label: root.item.title;
     accessible-description: root.item.detail + (root.item.update-text != "" ? ". " + root.item.update-text : "");
+    ContentRowBackground { width: parent.width; height: parent.height; first-row: root.first-row; last-row: root.last-row; hovered: touch.has-hover; }
     touch := TouchArea { }
     layout := HorizontalLayout {
         padding-left: 14px;
         padding-right: 10px;
         spacing: 12px;
-        Glyph { y: (parent.height - self.height) / 2; size: 46px; letter: root.item.letter; fallback-icon: root.item.is-mod ? "" : root.fallback; picture: root.item.picture; has-picture: root.item.has-picture; }
+        Rectangle {
+            width: 48px; height: 48px;
+            if root.artwork-visible: ContentArtwork { letter: root.item.letter; picture: root.item.picture; has-picture: root.item.has-picture; }
+        }
         VerticalLayout {
             horizontal-stretch: 1;
             alignment: center;
@@ -160,6 +175,7 @@ component ContentLine inherits Rectangle {
             clicked => { Instances.content-remove(root.item.id, root.item.title); }
         }
     }
+    if root.show-separator: Divider { x: 16px; y: parent.height - self.height; width: parent.width - 32px; }
 }
 
 component LaunchBlockerLine inherits HorizontalLayout {
@@ -206,7 +222,9 @@ component ConfigurationTab inherits VerticalLayout {
             label: Instances.cfg-loader-label;
             detail: Instances.cfg-loader-note;
             Dropdown {
-                width: 220px;
+                min-width: 220px;
+                max-width: 380px;
+                horizontal-stretch: 1;
                 label: Instances.cfg-loader-label;
                 model: Instances.cfg-loader-versions;
                 current-index <=> Instances.cfg-loader-version-index;
@@ -223,7 +241,9 @@ component ConfigurationTab inherits VerticalLayout {
             label: "Runtime";
             detail: Instances.cfg-java-index == 0 ? "Managed by Aurora: the exact version this game requires, verified and installed automatically." : "Your own Java installation, used to launch this instance only.";
             Dropdown {
-                width: 260px;
+                min-width: 220px;
+                max-width: 380px;
+                horizontal-stretch: 1;
                 label: "Java runtime";
                 model: ["Managed by Aurora (recommended)", "Custom Java executable"];
                 current-index <=> Instances.cfg-java-index;
@@ -266,13 +286,37 @@ component ConfigurationTab inherits VerticalLayout {
         SettingRow {
             label: "Maximum memory";
             detail: "MiB (512–32768)";
-            TextField {
-                width: 160px;
-                label: "Maximum memory in MiB";
-                text <=> Instances.memory-mib-text;
-                max-length: 5;
-                edited => { Instances.config-edited(); }
-                accepted => { Instances.config-edited(); }
+            HorizontalLayout {
+                spacing: Theme.space-1;
+                TextField {
+                    width: 132px;
+                    height: 56px;
+                    label: "Maximum memory in MiB";
+                    text <=> Instances.memory-mib-text;
+                    max-length: 5;
+                    enabled: !Instances.config-busy && !Instances.installing;
+                    edited => { Instances.config-edited(); }
+                    accepted => { Instances.config-edited(); }
+                }
+                VerticalLayout {
+                    spacing: 0px;
+                    IconButton {
+                        size: 28px;
+                        show-tooltip: false;
+                        icon: "M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z";
+                        label: "Increase maximum memory by 1 GiB";
+                        enabled: !Instances.config-busy && !Instances.installing;
+                        clicked => { Instances.memory-step(1); }
+                    }
+                    IconButton {
+                        size: 28px;
+                        show-tooltip: false;
+                        icon: Icons.expand;
+                        label: "Decrease maximum memory by 1 GiB";
+                        enabled: !Instances.config-busy && !Instances.installing;
+                        clicked => { Instances.memory-step(-1); }
+                    }
+                }
             }
         }
         SettingRow {
@@ -327,14 +371,19 @@ component ConfigurationTab inherits VerticalLayout {
     }
     Group {
         title: "Identity";
-        SettingRow {
-            label: "Name and icon";
-            detail: Instances.name + " · " + Instances.icon-label;
-            HorizontalLayout {
-                spacing: 10px;
-                InstanceIcon { y: (parent.height - self.height) / 2; path: Instances.icon; size: 36px; }
-                Button { y: (parent.height - self.height) / 2; text: "Edit"; icon: Icons.edit; clicked => { Instances.rename-start(); } }
+        HorizontalLayout {
+            spacing: Theme.space-3;
+            padding-top: Theme.space-2;
+            padding-bottom: Theme.space-2;
+            InstanceIcon { y: (parent.height - self.height) / 2; path: Instances.icon; size: 64px; }
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                spacing: Theme.space-1;
+                Text { text: Instances.name; font-size: Theme.text-identity; font-weight: 600; color: Theme.text; wrap: word-wrap; }
+                Text { text: Instances.icon-label; font-size: Theme.text-metadata; color: Theme.text-muted; wrap: word-wrap; }
             }
+            Button { y: (parent.height - self.height) / 2; text: "Edit"; icon: Icons.edit; compact: true; kind: ButtonKind.ghost; accessible-description-text: "Edit instance name and icon"; clicked => { Instances.rename-start(); } }
         }
     }
     Group {
@@ -446,13 +495,14 @@ component ContentTab inherits VerticalLayout {
         border-radius: Theme.radius-lg;
         EmptyState { icon: Icons.extension; title: "Nothing installed"; message: "Use Find more to browse Modrinth, or place files in the instance folder."; }
     }
-    if Instances.content.length > 0: UnifiedList {
-        property <int> first: max(0, floor((root.visible-top - self.absolute-position.y) / 68px));
-        property <int> end: max(first, ceil((root.visible-top + root.visible-height - self.absolute-position.y) / 68px));
-        init => { Instances.content-artwork-window(first, end); }
-        changed first => { Instances.content-artwork-window(first, end); }
-        changed end => { Instances.content-artwork-window(first, end); }
-        for row[index] in Instances.content: ContentLine { item: row; divided: index > 0; fallback: root.noun == "shaders" ? Icons.sparkle : Icons.image; }
+    content-list := ContentList {
+        for row[i] in Instances.content: ContentLine {
+            item: row;
+            near-view: self.y + self.height + content-list.y >= root.visible-top - 64px && self.y + content-list.y <= root.visible-top + root.visible-height + 64px;
+            first-row: i == 0;
+            last-row: i == Instances.content.length - 1;
+            show-separator: i < Instances.content.length - 1;
+        }
     }
 }
 
@@ -495,9 +545,9 @@ export component WorkspacePage inherits ScrollView {
             current <=> Instances.tab;
             selected(index) => { Instances.tab-changed(index); }
         }
-        if Instances.tab == 0: ContentTab { noun: "mods"; visible-top: root.absolute-position.y; visible-height: root.height; }
-        if Instances.tab == 1: ContentTab { noun: "resource packs"; visible-top: root.absolute-position.y; visible-height: root.height; }
-        if Instances.tab == 2: ContentTab { noun: "shaders"; visible-top: root.absolute-position.y; visible-height: root.height; }
-        if Instances.tab == 3: ConfigurationTab { }
+        if Instances.tab == 0: ContentTab { noun: "mods"; visible-top: -root.content-y - self.y; visible-height: root.visible-height; }
+        if Instances.tab == 1: ContentTab { noun: "resource packs"; visible-top: -root.content-y - self.y; visible-height: root.visible-height; }
+        if Instances.tab == 2: ContentTab { noun: "shaders"; visible-top: -root.content-y - self.y; visible-height: root.visible-height; }
+        if Instances.tab == 3: ConfigurationTab { max-width: 1120px; }
     }
 }

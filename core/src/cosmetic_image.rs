@@ -131,10 +131,20 @@ pub(crate) fn validate(bytes: &[u8], policy: Policy) -> Option<ValidatedPng> {
 /// Decode one bounded static PNG directly to a small RGBA thumbnail.
 /// Used for installed mod icons; no original-size image reaches the UI.
 pub(crate) fn thumbnail_rgba(bytes: &[u8], side: u32) -> Option<(u32, u32, Vec<u8>)> {
+    thumbnail_rgba_impl(bytes, side, false)
+}
+
+/// High-DPI content artwork. Area filtering uses premultiplied alpha so small
+/// transparent logos do not acquire dark fringes. Never enlarge source pixels.
+pub(crate) fn artwork_thumbnail_rgba(bytes: &[u8], side: u32) -> Option<(u32, u32, Vec<u8>)> {
+    thumbnail_rgba_impl(bytes, side, true)
+}
+
+fn thumbnail_rgba_impl(bytes: &[u8], side: u32, quality: bool) -> Option<(u32, u32, Vec<u8>)> {
     if bytes.is_empty()
         || bytes.len() > ARTWORK.max_encoded_bytes
         || !bytes.starts_with(b"\x89PNG\r\n\x1a\n")
-        || !(1..=64).contains(&side)
+        || !(1..=if quality { 96 } else { 64 }).contains(&side)
     {
         return None;
     }
@@ -177,6 +187,40 @@ pub(crate) fn thumbnail_rgba(bytes: &[u8], side: u32) -> Option<(u32, u32, Vec<u
     let mut out = Vec::with_capacity((width * height * 4) as usize);
     for y in 0..height {
         for x in 0..width {
+            if quality {
+                let x0 = x as f64 * frame.width as f64 / width as f64;
+                let x1 = (x + 1) as f64 * frame.width as f64 / width as f64;
+                let y0 = y as f64 * frame.height as f64 / height as f64;
+                let y1 = (y + 1) as f64 * frame.height as f64 / height as f64;
+                let mut sum = [0.0_f64; 4];
+                for sy in y0.floor() as usize..y1.ceil() as usize {
+                    let wy = (y1.min((sy + 1) as f64) - y0.max(sy as f64)).max(0.0);
+                    for sx in x0.floor() as usize..x1.ceil() as usize {
+                        let weight = wy * (x1.min((sx + 1) as f64) - x0.max(sx as f64)).max(0.0);
+                        let i = (sy * frame.width as usize + sx) * channels;
+                        let rgba = match channels {
+                            4 => [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]],
+                            3 => [pixels[i], pixels[i + 1], pixels[i + 2], 255],
+                            2 => [pixels[i], pixels[i], pixels[i], pixels[i + 1]],
+                            _ => [pixels[i], pixels[i], pixels[i], 255],
+                        };
+                        let alpha = rgba[3] as f64 * weight;
+                        for c in 0..3 {
+                            sum[c] += rgba[c] as f64 * alpha;
+                        }
+                        sum[3] += alpha;
+                    }
+                }
+                for c in 0..3 {
+                    out.push(if sum[3] == 0.0 {
+                        0
+                    } else {
+                        (sum[c] / sum[3]).round() as u8
+                    });
+                }
+                out.push((sum[3] / ((x1 - x0) * (y1 - y0))).round() as u8);
+                continue;
+            }
             let sx = (x as u64 * frame.width as u64 / width as u64) as usize;
             let sy = (y as u64 * frame.height as u64 / height as u64) as usize;
             let i = (sy * frame.width as usize + sx) * channels;

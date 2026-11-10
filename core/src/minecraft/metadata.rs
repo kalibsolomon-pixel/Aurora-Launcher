@@ -23,11 +23,16 @@
 //! ## Modern-document policy
 //!
 //! Aurora targets modern Minecraft. Documents are expected to carry the
-//! `arguments` object, self-contained release metadata, and per-platform
-//! classifier libraries instead of legacy `natives`/`classifiers`/`extract`
-//! structures; historical shapes (`inheritsFrom`, `minecraftArguments`,
-//! old_beta/old_alpha) are rejected deliberately as unsupported rather than
-//! half-resolved.
+//! `arguments` object and self-contained release metadata; historical
+//! shapes (`inheritsFrom`, `minecraftArguments`, old_beta/old_alpha) are
+//! rejected deliberately as unsupported rather than half-resolved.
+//!
+//! Native libraries arrive in two shapes. Since 1.19 each native is its own
+//! `…:natives-<os>` library restricted by rules. 1.13 through 1.18.2 publish
+//! one library with a `natives` OS map and matching `classifiers` downloads;
+//! parsing rewrites each such entry into the modern shape (the plain jar plus
+//! one rule-restricted `natives-…` library per OS), so planning, verified
+//! acquisition and extraction see a single model.
 
 use std::fmt;
 
@@ -245,10 +250,10 @@ impl VersionManifest {
 /// The per-version metadata document (external DTO shape).
 ///
 /// Only fields needed for planning are represented; irrelevant fields are
-/// ignored. Legacy structures (`inheritsFrom`, `minecraftArguments`,
-/// library `natives`/`extract`/`classifiers`) are parsed as detection
-/// sentinels and rejected deliberately, so a historical document can never be
-/// silently half-resolved.
+/// ignored. Legacy structures (`inheritsFrom`, `minecraftArguments`) are
+/// parsed as detection sentinels and rejected deliberately, so a historical
+/// document can never be silently half-resolved. Classifier-native library
+/// entries are rewritten into per-platform native libraries on parse.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VersionDocument {
@@ -393,6 +398,110 @@ pub enum ArgumentValueDocument {
     Many(Vec<String>),
 }
 
+/// The operating-system names Mojang's `natives` maps and rules use.
+const NATIVE_OS_NAMES: [&str; 3] = ["windows", "osx", "linux"];
+
+/// Rewrites one 1.13-1.18.2 classifier-native library into the modern shape:
+/// the plain jar (when published) plus one `<name>:natives-…` library per
+/// operating system, each carrying the original rules followed by
+/// disallow rules for every other OS. Modern entries pass through unchanged.
+fn split_classifier_natives(
+    id: &str,
+    library: &LibraryDocument,
+) -> Result<Vec<LibraryDocument>, MetadataError> {
+    let Some(natives) = &library.natives else {
+        if library.extract.is_some() || library.downloads.classifiers.is_some() {
+            return Err(MetadataError::Unsupported(format!(
+                "version '{id}' library {} publishes classifier downloads without a natives map",
+                library.name
+            )));
+        }
+        return Ok(vec![library.clone()]);
+    };
+    let invalid = |reason: String| MetadataError::DocumentInvalid {
+        reason: format!("version '{id}' library {}: {reason}", library.name),
+    };
+    if let Some(extract) = &library.extract {
+        // The extractor always omits META-INF; that is the only exclusion
+        // Mojang publishes.
+        let excludes = extract.get("exclude").and_then(|v| v.as_array());
+        let only_meta_inf = extract.as_object().is_some_and(|o| o.len() == 1)
+            && excludes.is_some_and(|list| list.iter().all(|v| v.as_str() == Some("META-INF/")));
+        if !only_meta_inf {
+            return Err(MetadataError::Unsupported(format!(
+                "version '{id}' library {} declares native extraction rules other than excluding META-INF/",
+                library.name
+            )));
+        }
+    }
+    let natives = natives
+        .as_object()
+        .ok_or_else(|| invalid("the natives map is not an object".into()))?;
+    let classifiers = library
+        .downloads
+        .classifiers
+        .as_ref()
+        .and_then(|value| value.as_object())
+        .ok_or_else(|| invalid("a natives map needs classifier downloads".into()))?;
+
+    let mut split = Vec::with_capacity(natives.len() + 1);
+    if library.downloads.artifact.is_some() {
+        let mut plain = library.clone();
+        plain.natives = None;
+        plain.extract = None;
+        plain.downloads.classifiers = None;
+        split.push(plain);
+    }
+    for (os, classifier) in natives {
+        if !NATIVE_OS_NAMES.contains(&os.as_str()) {
+            return Err(invalid(format!("unknown natives operating system '{os}'")));
+        }
+        let classifier = classifier
+            .as_str()
+            .filter(|c| c.starts_with("natives-") && !c.contains(['$', '{', '}', ':']))
+            .ok_or_else(|| {
+                MetadataError::Unsupported(format!(
+                    "version '{id}' library {} uses a templated or unusual native classifier",
+                    library.name
+                ))
+            })?;
+        let download = classifiers
+            .get(classifier)
+            .ok_or_else(|| invalid(format!("no '{classifier}' download is published")))?;
+        let artifact: ArtifactDocument =
+            serde_json::from_value(download.clone()).map_err(|error| {
+                invalid(format!("the '{classifier}' download is malformed: {error}"))
+            })?;
+        let mut rules = library.rules.clone().unwrap_or_else(|| {
+            vec![
+                serde_json::from_value(serde_json::json!({"action": "allow"})).expect("allow rule"),
+            ]
+        });
+        for other in NATIVE_OS_NAMES
+            .iter()
+            .filter(|other| **other != os.as_str())
+        {
+            rules.push(
+                serde_json::from_value(
+                    serde_json::json!({"action": "disallow", "os": {"name": other}}),
+                )
+                .expect("disallow rule"),
+            );
+        }
+        split.push(LibraryDocument {
+            name: format!("{}:{classifier}", library.name),
+            downloads: LibraryDownloadsDocument {
+                artifact: Some(artifact),
+                classifiers: None,
+            },
+            rules: Some(rules),
+            natives: None,
+            extract: None,
+        });
+    }
+    Ok(split)
+}
+
 impl ArgumentValueDocument {
     /// The argument strings this value contributes, in document order.
     pub fn values(&self) -> Vec<String> {
@@ -477,19 +586,14 @@ impl VersionDocument {
                     reason: format!("version '{id}' has an unnamed library at index {index}"),
                 });
             }
-            if library.natives.is_some() || library.extract.is_some() {
-                return Err(MetadataError::Unsupported(format!(
-                    "version '{id}' uses legacy native-classifier libraries ({}); Aurora supports the modern per-platform library model only",
-                    library.name
-                )));
-            }
-            if library.downloads.classifiers.is_some() {
-                return Err(MetadataError::Unsupported(format!(
-                    "version '{id}' library {} publishes classifier downloads; Aurora supports the modern per-platform library model only",
-                    library.name
-                )));
-            }
         }
+        let mut libraries = Vec::with_capacity(document.libraries.len());
+        for library in &document.libraries {
+            libraries.extend(split_classifier_natives(id, library)?);
+        }
+        let mut document = document;
+        document.libraries = libraries;
+        let id = document.id.as_str();
 
         if let Some(logging) = &document.logging {
             if let Some(client) = &logging.client {
@@ -1027,9 +1131,88 @@ mod tests {
             "\"name\": \"at.yawk.lz4:lz4-java:1.10.1\",\n\"natives\": { \"linux\": \"natives-linux\" }, \"extract\": { \"exclude\": [ \"META-INF/\" ] }",
             1,
         );
+        // A natives map without its classifier downloads is malformed.
         assert!(matches!(
             VersionDocument::from_json(&natives),
-            Err(MetadataError::Unsupported(_))
+            Err(MetadataError::DocumentInvalid { .. })
+        ));
+    }
+
+    /// One official 1.16.5 LWJGL entry (trimmed to two operating systems).
+    fn classifier_native_document(natives: &str, extract: &str) -> String {
+        version_document_fixture().replacen(
+            "\"libraries\": [",
+            &format!(
+                r#""libraries": [{{
+                    "name": "org.lwjgl:lwjgl:3.2.2",
+                    "downloads": {{
+                        "artifact": {{ "path": "org/lwjgl/lwjgl/3.2.2/lwjgl-3.2.2.jar", "sha1": "8ad6294407e15780b43e84929c40e4c5e997972e", "size": 321900, "url": "https://libraries.minecraft.net/org/lwjgl/lwjgl/3.2.2/lwjgl-3.2.2.jar" }},
+                        "classifiers": {{
+                            "natives-linux": {{ "path": "org/lwjgl/lwjgl/3.2.2/lwjgl-3.2.2-natives-linux.jar", "sha1": "ae7976827ca2a3741f6b9a843a89bacd637af350", "size": 124776, "url": "https://libraries.minecraft.net/org/lwjgl/lwjgl/3.2.2/lwjgl-3.2.2-natives-linux.jar" }},
+                            "natives-windows": {{ "path": "org/lwjgl/lwjgl/3.2.2/lwjgl-3.2.2-natives-windows.jar", "sha1": "0957733f20d8b9b6d18ef1e0e08b4f57ba0ceb0f", "size": 274436, "url": "https://libraries.minecraft.net/org/lwjgl/lwjgl/3.2.2/lwjgl-3.2.2-natives-windows.jar" }}
+                        }}
+                    }},
+                    "natives": {natives}{extract},
+                    "rules": [ {{ "action": "allow" }}, {{ "action": "disallow", "os": {{ "name": "osx" }} }} ]
+                }},"#
+            ),
+            1,
+        )
+    }
+
+    #[test]
+    fn classifier_native_libraries_split_into_per_platform_natives() {
+        let document = VersionDocument::from_json(&classifier_native_document(
+            r#"{ "linux": "natives-linux", "windows": "natives-windows" }"#,
+            r#", "extract": { "exclude": [ "META-INF/" ] }"#,
+        ))
+        .unwrap();
+        let split: Vec<&LibraryDocument> = document
+            .libraries
+            .iter()
+            .filter(|library| library.name.starts_with("org.lwjgl:lwjgl:3.2.2"))
+            .collect();
+        let names: Vec<&str> = split.iter().map(|library| library.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "org.lwjgl:lwjgl:3.2.2",
+                "org.lwjgl:lwjgl:3.2.2:natives-linux",
+                "org.lwjgl:lwjgl:3.2.2:natives-windows",
+            ]
+        );
+        assert!(split.iter().all(|library| library.natives.is_none()
+            && library.extract.is_none()
+            && library.downloads.classifiers.is_none()));
+        let windows = split[2];
+        assert_eq!(
+            windows.downloads.artifact.as_ref().unwrap().path.as_deref(),
+            Some("org/lwjgl/lwjgl/3.2.2/lwjgl-3.2.2-natives-windows.jar")
+        );
+        // Original rules first, then one disallow per other OS.
+        assert_eq!(windows.rules.as_ref().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn unusual_classifier_native_shapes_stay_unsupported() {
+        for (natives, extract) in [
+            (r#"{ "windows": "natives-windows-${arch}" }"#, ""),
+            (
+                r#"{ "windows": "natives-windows" }"#,
+                r#", "extract": { "exclude": [ "META-INF/", "lib/" ] }"#,
+            ),
+        ] {
+            assert!(matches!(
+                VersionDocument::from_json(&classifier_native_document(natives, extract)),
+                Err(MetadataError::Unsupported(_))
+            ));
+        }
+        assert!(matches!(
+            VersionDocument::from_json(&classifier_native_document(
+                r#"{ "windows": "natives-macos" }"#,
+                ""
+            )),
+            Err(MetadataError::DocumentInvalid { .. })
         ));
     }
 

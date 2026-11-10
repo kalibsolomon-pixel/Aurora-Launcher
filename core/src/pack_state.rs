@@ -10,10 +10,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::instance_content::{ContentState, ContentType, ProviderIdentity};
 use crate::instances::InstanceId;
+use crate::instances::platform::PlatformPin;
 use crate::integrity::{ArtifactDigest, verify_file};
 use crate::paths::ManagedPaths;
 
-const SCHEMA_VERSION: u32 = 2;
+/// Schema 3 records the pack's loader as a platform pin (`loader`), so one
+/// document shape covers Fabric, Forge and NeoForge. Schemas 1 and 2 are
+/// Fabric-only (`fabricLoaderVersion`) and migrate in memory.
+const SCHEMA_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -26,7 +30,12 @@ pub struct PackIdentity {
     pub artifact_sha512: String,
     pub artifact_sha256: String,
     pub minecraft_version: String,
-    pub fabric_loader_version: String,
+    /// The exact installed loader, in the instance's platform-pin format
+    /// (`{"kind": "forge", "version": "1.20.1-47.4.10"}`): Fabric and NeoForge
+    /// carry their loader version, Forge its `<minecraft>-<build>` identity.
+    /// It must equal the registry record's installed platform. Only Fabric,
+    /// Forge and NeoForge are valid here.
+    pub loader: PlatformPin,
     pub installed_at_unix_seconds: u64,
 }
 
@@ -158,7 +167,16 @@ impl InstalledPack {
             || id.name.is_empty()
             || id.pack_version.is_empty()
             || id.minecraft_version.is_empty()
-            || id.fabric_loader_version.is_empty()
+            || !matches!(
+                id.loader,
+                PlatformPin::Fabric { .. }
+                    | PlatformPin::Forge { .. }
+                    | PlatformPin::NeoForge { .. }
+            )
+            || id
+                .loader
+                .version()
+                .is_none_or(|version| version.is_empty() || version.len() > 128)
             || !hex(&id.artifact_sha512, 128)
             || !hex(&id.artifact_sha256, 64)
         {
@@ -237,13 +255,13 @@ impl InstalledPack {
     }
 
     pub fn from_json(text: &str) -> Result<Self, PackStateError> {
-        let value: serde_json::Value =
+        let mut value: serde_json::Value =
             serde_json::from_str(text).map_err(|_| PackStateError::Malformed)?;
         let version = value
             .get("schemaVersion")
             .and_then(serde_json::Value::as_u64)
             .ok_or(PackStateError::Malformed)?;
-        if version != 1 && version != u64::from(SCHEMA_VERSION) {
+        if !matches!(version, 1 | 2) && version != u64::from(SCHEMA_VERSION) {
             return Err(PackStateError::UnsupportedSchema(version));
         }
         if version == 1 && value.get("divergences").is_some() {
@@ -251,10 +269,15 @@ impl InstalledPack {
             // them is not a migration candidate.
             return Err(PackStateError::Malformed);
         }
+        if matches!(version, 1 | 2) {
+            migrate_fabric_identity(&mut value)?;
+        }
         let mut parsed: Self =
             serde_json::from_value(value).map_err(|_| PackStateError::Malformed)?;
         // In-memory migration only: schema-1 state gains an empty divergence
-        // list. The next explicit pack operation persists the schema-2 form.
+        // list, and schema-1/2 Fabric identity becomes a Fabric loader pin.
+        // The next explicit pack operation persists the schema-3 form; a
+        // document is never rewritten merely because it was read.
         parsed.schema_version = SCHEMA_VERSION;
         parsed.validate_document()?;
         Ok(parsed)
@@ -358,7 +381,7 @@ impl InstalledPack {
             return Err(PackStateError::InstanceMismatch);
         }
         if record.installed().minecraft_version != self.identity.minecraft_version
-            || record.installed().platform.version() != Some(&self.identity.fabric_loader_version)
+            || record.installed().platform != self.identity.loader
         {
             return Err(PackStateError::InstanceMismatch);
         }
@@ -440,6 +463,30 @@ impl InstalledPack {
         }
         Ok(())
     }
+}
+
+/// Schemas 1 and 2 were Fabric-only: their identity carries exactly a string
+/// `fabricLoaderVersion` and no `loader`. That becomes the equivalent Fabric
+/// platform pin. Anything else (a `loader` field, a non-string or missing
+/// version) is not a document those schemas wrote and stays malformed;
+/// other unknown identity fields still fail deserialization afterwards.
+fn migrate_fabric_identity(value: &mut serde_json::Value) -> Result<(), PackStateError> {
+    let identity = value
+        .get_mut("identity")
+        .and_then(serde_json::Value::as_object_mut)
+        .ok_or(PackStateError::Malformed)?;
+    if identity.contains_key("loader") {
+        return Err(PackStateError::Malformed);
+    }
+    let version = match identity.remove("fabricLoaderVersion") {
+        Some(serde_json::Value::String(version)) => version,
+        _ => return Err(PackStateError::Malformed),
+    };
+    identity.insert(
+        "loader".into(),
+        serde_json::json!({"kind": "fabric", "version": version}),
+    );
+    Ok(())
 }
 
 /// Pack-owned paths the running game legitimately rewrites. Minecraft saves
@@ -554,6 +601,320 @@ fn reparse(_: &std::fs::Metadata) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::instances::platform::InstalledConfiguration;
+    use crate::instances::settings::{InstanceConfiguration, LoaderConfiguration, LoaderPolicy};
+    use crate::instances::{InstanceRecord, InstanceRegistry, InstanceState, PackRegistryIdentity};
+    use sha2::{Digest as _, Sha256};
+
+    const JAR: &[u8] = b"pack component bytes";
+
+    /// One registered pack instance on disk: a registry record whose
+    /// installed platform is `platform`, and one pack-owned mod file.
+    struct StateWorld {
+        root: PathBuf,
+        managed: ManagedPaths,
+        instance: InstanceId,
+    }
+
+    impl Drop for StateWorld {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn state_world(label: &str, minecraft: &str, platform: PlatformPin) -> StateWorld {
+        let root = std::env::temp_dir().join(format!(
+            "aurora-pack-state-{label}-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let managed = ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let instance = InstanceId::new(uuid::Uuid::new_v4().simple().to_string()).unwrap();
+        let mods = managed.instance_paths(&instance).root().join("mods");
+        std::fs::create_dir_all(&mods).unwrap();
+        std::fs::write(mods.join("a.jar"), JAR).unwrap();
+        let version = platform.version().unwrap().to_owned();
+        let policy = LoaderPolicy::Pinned { version };
+        let mut configuration = InstanceConfiguration::for_minecraft_version(minecraft);
+        configuration.set_aurora_enabled(false);
+        configuration.set_loader(match &platform {
+            PlatformPin::Fabric { .. } => LoaderConfiguration::Fabric { policy },
+            PlatformPin::Forge { .. } => LoaderConfiguration::Forge { policy },
+            _ => LoaderConfiguration::NeoForge { policy },
+        });
+        let mut record = InstanceRecord::from_installed(
+            instance.clone(),
+            "Pack state",
+            InstanceState::Ready,
+            InstalledConfiguration {
+                minecraft_version: minecraft.into(),
+                platform,
+                aurora: None,
+            },
+            configuration,
+        )
+        .unwrap();
+        record
+            .set_pack(PackRegistryIdentity {
+                provider: "modrinth".into(),
+                project_id: "PACK0001".into(),
+                version_id: "VERS0001".into(),
+                name: "Pack".into(),
+                pack_version: "1".into(),
+            })
+            .unwrap();
+        let mut registry = InstanceRegistry::empty();
+        registry.instances_mut().push(record);
+        std::fs::create_dir_all(managed.launcher_dir()).unwrap();
+        registry.save(&managed.instance_registry_file()).unwrap();
+        StateWorld {
+            root,
+            managed,
+            instance,
+        }
+    }
+
+    fn document(instance: &InstanceId, minecraft: &str, loader: PlatformPin) -> InstalledPack {
+        InstalledPack::new(
+            instance.clone(),
+            PackIdentity {
+                provider: "modrinth".into(),
+                project_id: "PACK0001".into(),
+                version_id: "VERS0001".into(),
+                name: "Pack".into(),
+                pack_version: "1".into(),
+                artifact_sha512: "a".repeat(128),
+                artifact_sha256: "b".repeat(64),
+                minecraft_version: minecraft.into(),
+                loader,
+                installed_at_unix_seconds: 1,
+            },
+            vec![OwnedComponent {
+                path: "mods/a.jar".into(),
+                sha256: format!("{:x}", Sha256::digest(JAR)),
+                sha512: "d".repeat(128),
+                provider: None,
+                provider_version_id: None,
+            }],
+            vec![],
+            vec![],
+        )
+        .unwrap()
+    }
+
+    fn state_file(world: &StateWorld) -> PathBuf {
+        world
+            .managed
+            .instance_paths(&world.instance)
+            .root()
+            .join("pack-installed.json")
+    }
+
+    /// The schema-1/2 form of a schema-3 Fabric document, as those builds wrote it.
+    fn legacy_fabric(current: &InstalledPack, schema: u64) -> serde_json::Value {
+        let mut value = serde_json::to_value(current).unwrap();
+        value["schemaVersion"] = serde_json::json!(schema);
+        let identity = value["identity"].as_object_mut().unwrap();
+        let loader = identity.remove("loader").unwrap();
+        identity.insert("fabricLoaderVersion".into(), loader["version"].clone());
+        if schema == 1 {
+            value.as_object_mut().unwrap().remove("divergences");
+        }
+        value
+    }
+
+    #[test]
+    fn schema_one_and_two_fabric_state_loads_validates_and_persists_schema_three_only_on_save() {
+        let fabric = PlatformPin::Fabric {
+            version: "0.16.0".into(),
+        };
+        for schema in [1, 2] {
+            let world = state_world(&format!("legacy-{schema}"), "1.21.1", fabric.clone());
+            let current = document(&world.instance, "1.21.1", fabric.clone());
+            let legacy = serde_json::to_string_pretty(&legacy_fabric(&current, schema)).unwrap();
+            assert!(legacy.contains("fabricLoaderVersion"));
+            let path = state_file(&world);
+            std::fs::write(&path, &legacy).unwrap();
+
+            let loaded = InstalledPack::load(&world.managed, &world.instance)
+                .unwrap()
+                .unwrap();
+            assert_eq!(loaded, current, "schema {schema}");
+            assert_eq!(loaded.identity.loader, fabric);
+            loaded.validate_installed(&world.managed).unwrap();
+            // Reading and validating never rewrite the document.
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), legacy);
+
+            // The next explicit pack operation persists the schema-3 form.
+            let mut next = loaded.clone();
+            next.identity.installed_at_unix_seconds = 2;
+            next.replace(&world.managed, &loaded).unwrap();
+            let stored: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            assert_eq!(stored["schemaVersion"], 3);
+            assert_eq!(
+                stored["identity"]["loader"],
+                serde_json::json!({"kind": "fabric", "version": "0.16.0"})
+            );
+            assert!(stored["identity"].get("fabricLoaderVersion").is_none());
+            let reloaded = InstalledPack::load(&world.managed, &world.instance)
+                .unwrap()
+                .unwrap();
+            assert_eq!(reloaded, next);
+            reloaded.validate_installed(&world.managed).unwrap();
+        }
+    }
+
+    #[test]
+    fn schema_three_forge_and_neoforge_state_round_trips_against_the_registry_pin() {
+        for (label, minecraft, pin, other) in [
+            (
+                "forge",
+                "1.20.1",
+                PlatformPin::Forge {
+                    version: "1.20.1-47.4.10".into(),
+                },
+                // The bare build the pack index declares is not the pin.
+                PlatformPin::Forge {
+                    version: "47.4.10".into(),
+                },
+            ),
+            (
+                "neoforge",
+                "26.2",
+                PlatformPin::NeoForge {
+                    version: "26.2.0.88".into(),
+                },
+                PlatformPin::NeoForge {
+                    version: "26.2.0.80".into(),
+                },
+            ),
+        ] {
+            let world = state_world(label, minecraft, pin.clone());
+            let state = document(&world.instance, minecraft, pin.clone());
+            state.save(&world.managed).unwrap();
+            let stored: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(state_file(&world)).unwrap())
+                    .unwrap();
+            assert_eq!(stored["schemaVersion"], 3);
+            assert_eq!(
+                stored["identity"]["loader"],
+                serde_json::to_value(&pin).unwrap()
+            );
+            let loaded = InstalledPack::load(&world.managed, &world.instance)
+                .unwrap()
+                .unwrap();
+            assert_eq!(loaded, state, "{label}");
+            loaded.validate_installed(&world.managed).unwrap();
+            let mut wrong = loaded.clone();
+            wrong.identity.loader = other;
+            assert!(matches!(
+                wrong.validate_installed(&world.managed),
+                Err(PackStateError::InstanceMismatch)
+            ));
+            // A second save never replaces the existing document.
+            assert!(state.save(&world.managed).is_err());
+        }
+    }
+
+    #[test]
+    fn unknown_schemas_and_non_fabric_legacy_documents_fail_closed_and_are_never_overwritten() {
+        let instance = InstanceId::new("1234567890abcdef1234567890abcdef").unwrap();
+        let fabric = PlatformPin::Fabric {
+            version: "0.16.0".into(),
+        };
+        let current = serde_json::to_value(document(&instance, "1.21.1", fabric.clone())).unwrap();
+        let legacy = legacy_fabric(&document(&instance, "1.21.1", fabric), 2);
+        let edit = |base: &serde_json::Value, change: &dyn Fn(&mut serde_json::Value)| {
+            let mut value = base.clone();
+            change(&mut value);
+            value.to_string()
+        };
+        for schema in [0, 4, 99] {
+            let text = edit(&current, &|v| {
+                v["schemaVersion"] = serde_json::json!(schema)
+            });
+            assert!(
+                matches!(
+                    InstalledPack::from_json(&text),
+                    Err(PackStateError::UnsupportedSchema(found)) if found == schema
+                ),
+                "{schema}"
+            );
+        }
+        let forge_loader = serde_json::json!({"kind": "forge", "version": "1.20.1-47.4.10"});
+        let malformed = [
+            // Schema-2 documents are Fabric-only: no loader pin, no Forge fields.
+            edit(&legacy, &|v| {
+                let identity = v["identity"].as_object_mut().unwrap();
+                identity.remove("fabricLoaderVersion");
+                identity.insert("loader".into(), forge_loader.clone());
+            }),
+            edit(&legacy, &|v| {
+                v["identity"]["loader"] = forge_loader.clone();
+            }),
+            edit(&legacy, &|v| {
+                v["identity"]["forgeVersion"] = serde_json::json!("47.4.10");
+            }),
+            edit(&legacy, &|v| {
+                v["identity"]["fabricLoaderVersion"] = serde_json::json!(16);
+            }),
+            edit(&legacy, &|v| {
+                v["identity"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("fabricLoaderVersion");
+            }),
+            // Schema 3 carries only the loader pin, for a modded platform.
+            edit(&current, &|v| {
+                v["identity"]["fabricLoaderVersion"] = serde_json::json!("0.16.0");
+            }),
+            edit(&current, &|v| {
+                v["identity"]["loader"] = serde_json::json!({"kind": "vanilla"});
+            }),
+            edit(&current, &|v| {
+                v["identity"]["loader"] = serde_json::json!({"kind": "quilt", "version": "0.26.0"});
+            }),
+            edit(&current, &|v| {
+                v["identity"]["loader"] = serde_json::json!({"kind": "forge", "version": ""});
+            }),
+            edit(&current, &|v| {
+                v["identity"].as_object_mut().unwrap().remove("loader");
+            }),
+        ];
+        for text in &malformed {
+            assert!(
+                matches!(
+                    InstalledPack::from_json(text),
+                    Err(PackStateError::Malformed)
+                ),
+                "{text}"
+            );
+        }
+        // A damaged document on disk is reported, never replaced.
+        let world = state_world(
+            "damaged",
+            "1.20.1",
+            PlatformPin::Forge {
+                version: "1.20.1-47.4.10".into(),
+            },
+        );
+        let path = state_file(&world);
+        std::fs::write(&path, &malformed[0]).unwrap();
+        assert!(matches!(
+            InstalledPack::load(&world.managed, &world.instance),
+            Err(PackStateError::Malformed)
+        ));
+        let fresh = document(
+            &world.instance,
+            "1.20.1",
+            PlatformPin::Forge {
+                version: "1.20.1-47.4.10".into(),
+            },
+        );
+        assert!(fresh.save(&world.managed).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), malformed[0]);
+    }
 
     #[test]
     fn state_rejects_unknown_schema_damage_and_conflicting_ownership() {
@@ -566,7 +927,9 @@ mod tests {
             artifact_sha512: "a".repeat(128),
             artifact_sha256: "b".repeat(64),
             minecraft_version: "1.21.1".into(),
-            fabric_loader_version: "0.16.0".into(),
+            loader: PlatformPin::Fabric {
+                version: "0.16.0".into(),
+            },
             installed_at_unix_seconds: 1,
         };
         let state = InstalledPack::new(
@@ -596,11 +959,16 @@ mod tests {
             if !keep_divergences {
                 object.remove("divergences");
             }
+            if version < 3 {
+                let identity = object["identity"].as_object_mut().unwrap();
+                identity.remove("loader");
+                identity.insert("fabricLoaderVersion".into(), serde_json::json!("0.16.0"));
+            }
             serde_json::to_string(&value).unwrap()
         };
         assert!(matches!(
-            InstalledPack::from_json(&rewritten(3, true)),
-            Err(PackStateError::UnsupportedSchema(3))
+            InstalledPack::from_json(&rewritten(4, true)),
+            Err(PackStateError::UnsupportedSchema(4))
         ));
         // A schema-1 document claiming divergences is malformed, not a
         // migration candidate.

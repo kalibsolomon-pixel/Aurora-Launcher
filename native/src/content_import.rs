@@ -65,14 +65,14 @@ fn import_modpack() {
 pub fn local_pack_note(found: &serde_json::Value) -> String {
     let text = |key: &str| found[key].as_str().unwrap_or("");
     format!(
-        "Local file {} is {} {} on Modrinth (exact SHA-512 match). Its verified local bytes are used for this version; choosing another version downloads that one from Modrinth instead.\nPack: {} {} · Minecraft {} · Fabric {} · {}",
+        "Local file {} is {} {} on Modrinth (exact SHA-512 match). Its verified local bytes are used for this version; choosing another version downloads that one from Modrinth instead.\nPack: {} {} · Minecraft {} · {} · {}",
         text("fileName"),
         text("title"),
         text("versionNumber"),
         text("name"),
         text("packVersion"),
         text("minecraftVersion"),
-        text("fabricLoaderVersion"),
+        crate::discover::pack_loader_label(found),
         size_label(found["sizeBytes"].as_u64().unwrap_or(0)),
     )
 }
@@ -96,10 +96,22 @@ mod tests {
         let note = local_pack_note(&serde_json::json!({
             "fileName": "pack.mrpack", "title": "Fixture Pack", "versionNumber": "1.0.0",
             "name": "Fixture", "packVersion": "1.0.0", "minecraftVersion": "1.21.1",
-            "fabricLoaderVersion": "0.16.0", "sizeBytes": 2048
+            "loader": "fabric", "loaderVersion": "0.16.0", "sizeBytes": 2048
         }));
         assert!(note.starts_with("Local file pack.mrpack is Fixture Pack 1.0.0 on Modrinth"));
         assert!(note.ends_with("Minecraft 1.21.1 · Fabric 0.16.0 · 2.0 KiB"));
+        let forge = local_pack_note(&serde_json::json!({
+            "fileName": "pack.mrpack", "title": "Forge Pack", "versionNumber": "2.0.0",
+            "name": "Forge", "packVersion": "2.0.0", "minecraftVersion": "1.20.1",
+            "loader": "forge", "loaderVersion": "47.4.10", "sizeBytes": 2048
+        }));
+        assert!(forge.ends_with("Minecraft 1.20.1 · Forge 47.4.10 · 2.0 KiB"));
+        assert_eq!(
+            crate::discover::pack_loader_label(&serde_json::json!({
+                "loader": "neoForge", "loaderVersion": "26.2.0.88"
+            })),
+            "NeoForge 26.2.0.88"
+        );
     }
 }
 

@@ -23,6 +23,7 @@ fn fail(code: &'static str, message: impl Into<String>) -> PackInstallError {
     PackInstallError {
         code,
         message: message.into(),
+        instance_id: None,
     }
 }
 
@@ -39,7 +40,9 @@ pub struct LocalPackMatch {
     pub name: String,
     pub pack_version: String,
     pub minecraft_version: String,
-    pub fabric_loader_version: String,
+    /// The pack's one mod loader and its version as the index declares it.
+    pub loader: crate::mrpack::PackLoaderKind,
+    pub loader_version: String,
     pub sha512: String,
 }
 
@@ -178,7 +181,8 @@ pub async fn recognize(
         name: pack.name,
         pack_version: pack.pack_version,
         minecraft_version: pack.minecraft_version,
-        fabric_loader_version: pack.fabric_loader_version,
+        loader: pack.loader.kind,
+        loader_version: pack.loader.version,
         sha512: sha512.as_hex(),
     })
 }
@@ -404,8 +408,8 @@ mod tests {
                 "unsupported-loader.mrpack",
                 archive(
                     &serde_json::json!({
-                        "formatVersion": 1, "game": "minecraft", "versionId": "x", "name": "Forge pack",
-                        "files": [], "dependencies": {"minecraft": "1.20.1", "forge": "47.2.0"}
+                        "formatVersion": 1, "game": "minecraft", "versionId": "x", "name": "Quilt pack",
+                        "files": [], "dependencies": {"minecraft": "1.20.1", "quilt-loader": "0.26.0"}
                     }),
                     &[],
                 ),

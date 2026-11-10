@@ -9,6 +9,57 @@ use crate::{AccentPicker, AppWindow, Settings, Swatch, Theme, Tone};
 
 const BACKGROUNDS: [&str; 2] = ["simple", "borealis"];
 
+#[derive(Clone, Debug, PartialEq)]
+struct AppearanceRequest {
+    revision: u64,
+    theme: String,
+    accent: serde_json::Value,
+    background: String,
+    motion: u8,
+}
+
+#[derive(Default)]
+struct AppearanceQueue {
+    revision: u64,
+    in_flight: Option<AppearanceRequest>,
+    pending: Option<AppearanceRequest>,
+}
+
+impl AppearanceQueue {
+    fn enqueue(&mut self, mut request: AppearanceRequest) -> Option<AppearanceRequest> {
+        self.revision = self.revision.wrapping_add(1);
+        request.revision = self.revision;
+        if self.in_flight.is_some() {
+            self.pending = Some(request);
+            None
+        } else {
+            self.in_flight = Some(request.clone());
+            Some(request)
+        }
+    }
+
+    fn finish(&mut self, revision: u64) -> Option<(AppearanceRequest, Option<AppearanceRequest>)> {
+        if self.in_flight.as_ref()?.revision != revision {
+            return None;
+        }
+        let completed = self.in_flight.take()?;
+        let pending = self.pending.take();
+        // The caller dispatches this request directly, so register it before
+        // any later release or completion can observe the queue.
+        self.in_flight = pending.clone();
+        Some((completed, pending))
+    }
+
+    fn latest(&self) -> Option<AppearanceRequest> {
+        self.pending.as_ref().or(self.in_flight.as_ref()).cloned()
+    }
+}
+
+thread_local! {
+    static APPEARANCE_SAVE: std::cell::RefCell<AppearanceQueue> = std::cell::RefCell::new(AppearanceQueue::default());
+    static MOTION_PREVIEW_ACTIVE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 pub fn bind(window: &AppWindow) {
     crate::syncing::bind(window);
     let settings = window.global::<Settings>();
@@ -32,14 +83,7 @@ pub fn bind(window: &AppWindow) {
         let Some(background) = BACKGROUNDS.get(index as usize) else {
             return;
         };
-        let Some((theme, accent, motion)) = ui::state(|s| {
-            s.appearance
-                .as_ref()
-                .map(|a| (a.theme.clone(), a.accent.clone(), a.aurora_motion_speed))
-        }) else {
-            return;
-        };
-        submit(theme, accent, (*background).to_owned(), motion);
+        save_background((*background).to_owned());
     });
     bind_accent_picker(window);
     settings.on_discord_changed(save_discord);
@@ -53,11 +97,13 @@ pub fn bind(window: &AppWindow) {
             }
         });
     });
-    settings.on_reduce_motion_changed(|value| {
-        // Reduced motion follows the existing motion preference: 0 means none.
-        ui::with(|window, _| window.global::<Theme>().set_reduce_motion(value));
-        crate::borealis::sync();
-        save_motion(if value { 0 } else { 50 });
+    settings.on_motion_preview_changed(|value| {
+        MOTION_PREVIEW_ACTIVE.with(|active| active.set(true));
+        preview_motion(value);
+    });
+    settings.on_motion_speed_changed(|value| {
+        MOTION_PREVIEW_ACTIVE.with(|active| active.set(false));
+        save_motion(preview_motion(value));
     });
     settings.on_toggle_desktop_shortcut(|| {
         let present = ui::with(|window, _| window.global::<Settings>().get_desktop_present())
@@ -225,63 +271,158 @@ pub fn apply_appearance(appearance: Appearance) {
                 .position(|b| *b == appearance.background)
                 .unwrap_or(0) as i32,
         );
-        let reduce = appearance.aurora_motion_speed == 0;
-        settings.set_reduce_motion(reduce);
-        window.global::<Theme>().set_reduce_motion(reduce);
+        // An acknowledged response never overwrites an unreleased slider draft.
+        if !MOTION_PREVIEW_ACTIVE.with(std::cell::Cell::get) {
+            settings.set_motion_speed(f32::from(appearance.aurora_motion_speed));
+            window
+                .global::<Theme>()
+                .set_reduce_motion(appearance.aurora_motion_speed == 0);
+        }
         state.appearance = Some(appearance);
     });
     crate::borealis::sync();
 }
 
+fn desired_appearance() -> Option<AppearanceRequest> {
+    let queued = APPEARANCE_SAVE.with(|slot| slot.borrow().latest());
+    queued.or_else(|| {
+        ui::state(|state| {
+            state
+                .appearance
+                .as_ref()
+                .map(|appearance| AppearanceRequest {
+                    revision: 0,
+                    theme: appearance.theme.clone(),
+                    accent: appearance.accent.clone(),
+                    background: appearance.background.clone(),
+                    motion: appearance.aurora_motion_speed,
+                })
+        })
+    })
+}
+
+fn normalize_motion(value: f32) -> u8 {
+    value.round().clamp(0.0, 100.0) as u8
+}
+
+fn preview_motion(value: f32) -> u8 {
+    let motion = normalize_motion(value);
+    ui::with(|window, _| {
+        window
+            .global::<Settings>()
+            .set_motion_speed(f32::from(motion));
+        window.global::<Theme>().set_reduce_motion(motion == 0);
+    });
+    crate::borealis::sync();
+    motion
+}
+
+/// Navigation discards only an unreleased draft; a released request remains
+/// the latest value even if its serialized save is still running.
+pub fn cancel_motion_preview() {
+    if !MOTION_PREVIEW_ACTIVE.with(|active| active.replace(false)) {
+        return;
+    }
+    if let Some(request) = desired_appearance() {
+        preview_motion(f32::from(request.motion));
+    }
+}
+
 fn save_appearance(theme: Option<String>, accent: Option<serde_json::Value>) {
-    let Some((theme, accent, background, motion)) = ui::state(|s| {
-        let current = s.appearance.as_ref()?;
-        Some((
-            theme.unwrap_or_else(|| current.theme.clone()),
-            accent.unwrap_or_else(|| current.accent.clone()),
-            current.background.clone(),
-            current.aurora_motion_speed,
-        ))
-    }) else {
+    let Some(mut request) = desired_appearance() else {
         return;
     };
-    submit(theme, accent, background, motion);
+    if let Some(theme) = theme {
+        request.theme = theme;
+    }
+    if let Some(accent) = accent {
+        request.accent = accent;
+    }
+    submit(request);
+}
+
+fn save_background(background: String) {
+    let Some(mut request) = desired_appearance() else {
+        return;
+    };
+    request.background = background;
+    submit(request);
 }
 
 fn save_motion(motion: u8) {
-    let Some((theme, accent, background)) = ui::state(|s| {
-        s.appearance
-            .as_ref()
-            .map(|a| (a.theme.clone(), a.accent.clone(), a.background.clone()))
-    }) else {
+    let Some(mut request) = desired_appearance() else {
         return;
     };
-    submit(theme, accent, background, motion);
+    request.motion = motion;
+    submit(request);
 }
 
-fn submit(theme: String, accent: serde_json::Value, background: String, motion: u8) {
+fn submit(request: AppearanceRequest) {
+    let dispatch = APPEARANCE_SAVE.with(|slot| slot.borrow_mut().enqueue(request));
     ui::with(|window, _| {
         let settings = window.global::<Settings>();
         settings.set_appearance_busy(true);
         settings.set_appearance_error("".into());
     });
+    if let Some(request) = dispatch {
+        dispatch_appearance(request);
+    }
+}
+
+fn dispatch_appearance(request: AppearanceRequest) {
+    let revision = request.revision;
     ui::spawn(
-        api::set_appearance(ui::host(), theme, accent, background, motion),
-        |result| {
-            ui::with(|window, _| window.global::<Settings>().set_appearance_busy(false));
-            match result {
-                Ok(appearance) => apply_appearance(appearance),
-                Err(error) => {
-                    ui::with(|window, _| {
-                        window
-                            .global::<Settings>()
-                            .set_appearance_error(error.message.clone().into())
-                    });
-                    ui::toast(error.message, Tone::Error);
+        api::set_appearance(
+            ui::host(),
+            request.theme.clone(),
+            request.accent.clone(),
+            request.background.clone(),
+            request.motion,
+        ),
+        move |result| complete_appearance(revision, result),
+    );
+}
+
+fn complete_appearance(revision: u64, result: api::ApiResult<Appearance>) {
+    let Some((_completed, pending)) =
+        APPEARANCE_SAVE.with(|slot| slot.borrow_mut().finish(revision))
+    else {
+        return;
+    };
+
+    match result {
+        Ok(appearance) => {
+            if pending.is_some() {
+                // The serialized write is now the acknowledged disk baseline,
+                // but its stale whole-appearance response never reaches the UI.
+                // The already-coalesced pending request retains every newer field.
+                ui::with(|_, state| state.appearance = Some(appearance));
+            } else {
+                apply_appearance(appearance);
+            }
+        }
+        Err(error) => {
+            if pending.is_none() {
+                // Restore the latest acknowledged fields, including any merged
+                // successes, without a compensating write.
+                if let Some(appearance) = ui::state(|state| state.appearance.clone()) {
+                    apply_appearance(appearance);
                 }
             }
-        },
-    );
+            ui::with(|window, _| {
+                window
+                    .global::<Settings>()
+                    .set_appearance_error(error.message.clone().into())
+            });
+            ui::toast(error.message, Tone::Error);
+        }
+    }
+
+    if let Some(next) = pending {
+        dispatch_appearance(next);
+    } else {
+        ui::with(|window, _| window.global::<Settings>().set_appearance_busy(false));
+    }
 }
 
 // ---- Custom accent picker -------------------------------------------------
@@ -796,4 +937,80 @@ fn apply_client_update() {
             }
         },
     );
+}
+
+#[cfg(test)]
+mod appearance_save_tests {
+    use super::{AppearanceQueue, AppearanceRequest, normalize_motion};
+
+    fn request(motion: u8) -> AppearanceRequest {
+        AppearanceRequest {
+            revision: 0,
+            theme: "oled".into(),
+            accent: serde_json::json!({ "type": "custom", "hex": "#ffffff" }),
+            background: "borealis".into(),
+            motion,
+        }
+    }
+
+    #[test]
+    fn motion_is_rounded_and_clamped_without_changing_saved_precision() {
+        assert_eq!(normalize_motion(0.0), 0);
+        assert_eq!(normalize_motion(37.0), 37);
+        assert_eq!(normalize_motion(37.4), 37);
+        assert_eq!(normalize_motion(50.0), 50);
+        assert_eq!(normalize_motion(100.0), 100);
+        assert_eq!(normalize_motion(-2.0), 0);
+        assert_eq!(normalize_motion(120.0), 100);
+    }
+
+    #[test]
+    fn rapid_releases_keep_one_in_flight_and_only_the_latest_pending_snapshot() {
+        let mut queue = AppearanceQueue::default();
+        let first = queue
+            .enqueue(request(50))
+            .expect("first request dispatches");
+        assert_eq!(first.motion, 50);
+
+        let mut middle = request(37);
+        middle.theme = "midnight".into();
+        assert!(queue.enqueue(middle).is_none());
+        let mut latest = request(90);
+        latest.background = "simple".into();
+        latest.accent = serde_json::json!({ "type": "preset", "id": "blue" });
+        assert!(queue.enqueue(latest.clone()).is_none());
+        latest.revision = 3;
+        assert_eq!(queue.latest(), Some(latest.clone()));
+
+        let (completed, pending) = queue.finish(first.revision).expect("ordered completion");
+        assert_eq!(completed, first);
+        assert_eq!(pending, Some(latest.clone()));
+        assert_eq!(queue.in_flight, Some(latest.clone()));
+        assert!(queue.pending.is_none());
+
+        // Production dispatches the returned request without re-enqueueing it.
+        // A release during that write must remain pending, and both writes
+        // must still be able to complete.
+        let mut during_follow_up = latest.clone();
+        during_follow_up.motion = 100;
+        assert!(queue.enqueue(during_follow_up).is_none());
+        let (completed, follow_up) = queue.finish(latest.revision).unwrap();
+        assert_eq!(completed, latest);
+        let follow_up = follow_up.expect("latest release follows the active write");
+        assert_eq!(follow_up.motion, 100);
+        assert_eq!(follow_up.background, "simple");
+        assert_eq!(follow_up.theme, "oled");
+        assert!(queue.finish(follow_up.revision).is_some());
+        assert!(queue.latest().is_none());
+    }
+
+    #[test]
+    fn stale_or_duplicate_completion_cannot_finish_a_newer_request() {
+        let mut queue = AppearanceQueue::default();
+        let first = queue.enqueue(request(70)).unwrap();
+        assert!(queue.enqueue(request(90)).is_none());
+        assert!(queue.finish(first.revision + 1).is_none());
+        assert_eq!(queue.latest().unwrap().motion, 90);
+        assert!(queue.finish(first.revision).unwrap().1.unwrap().motion == 90);
+    }
 }

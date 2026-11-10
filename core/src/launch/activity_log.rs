@@ -259,6 +259,7 @@ mod tests {
         assert!(visits.iter().all(|visit| visit.duration_ms == 0));
         assert!(!path.exists());
         fs::remove_file(history).unwrap();
+        fs::remove_file(root.join("history.json.lock")).unwrap();
         fs::remove_dir(logs).unwrap();
         fs::remove_dir(root).unwrap();
     }
@@ -281,7 +282,16 @@ mod tests {
         )
         .unwrap();
         fs::create_dir_all(paths.launcher_dir()).unwrap();
-        fs::copy(root.join("before.json"), paths.gameplay_history_file()).unwrap();
+        let mut saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.join("before.json")).unwrap()).unwrap();
+        // A restart must represent an abandoned session, not this still-live
+        // test process. Legacy sessions without an owner recover on every OS.
+        saved["sessions"][0]["owner"] = serde_json::Value::Null;
+        fs::write(
+            paths.gameplay_history_file(),
+            serde_json::to_vec(&saved).unwrap(),
+        )
+        .unwrap();
         let recovered = Store::open_managed(&paths).unwrap();
         let recent = recovered
             .recent(Mode::Singleplayer, Some(&instance), 10)
@@ -351,6 +361,8 @@ mod tests {
         );
         fs::remove_file(restarted).unwrap();
         fs::remove_file(path).unwrap();
+        fs::remove_file(root.join("reopened.json.lock")).unwrap();
+        fs::remove_file(root.join("history.json.lock")).unwrap();
         fs::remove_dir(logs).unwrap();
         fs::remove_dir(root).unwrap();
     }

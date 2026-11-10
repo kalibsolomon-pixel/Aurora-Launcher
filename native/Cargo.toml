@@ -1,6 +1,6 @@
 [package]
 name = "aurora-native"
-version = "2.1.0"
+version = "2.1.1"
 description = "Native (Slint) host for Aurora Launcher"
 authors = ["Aurora Launcher contributors"]
 edition = "2024"
@@ -18,13 +18,15 @@ name = "aurora-native"
 path = "src/main.rs"
 
 [features]
-default = []
+default = ["renderer-femtovg"]
 # Acceptance builds only: honor AURORA_DIAGNOSTIC_DATA_ROOT in release builds
 # so measurements never open the owner's data. Never enabled for distribution.
 disposable-data-root = ["aurora-launcher/disposable-data-root"]
 native-update-acceptance = ["disposable-data-root", "aurora-launcher/native-update-acceptance"]
-# Opt-in OpenGL renderer for comparison; the software renderer is the default
-# because it measured materially lower memory (docs/native-ui/BENCHMARKS.md).
+# Accelerated default for responsive translucent Borealis surfaces. Software
+# remains compiled as the unsupported-driver fallback and can be selected with
+# SLINT_BACKEND=winit-software or a --no-default-features build. The accelerated
+# path trades higher driver/private memory for lower CPU and dispatch latency.
 renderer-femtovg = ["slint/renderer-femtovg"]
 
 [dependencies]

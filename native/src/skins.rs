@@ -773,6 +773,7 @@ fn render_presets() {
                 }
             })
             .collect();
+        crate::perf_trace::mark("skins", format_args!("rows={}", rows.len()));
         let current = skins.get_presets();
         if let Some(model) = current.as_any().downcast_ref::<VecModel<SkinRow>>()
             && model.row_count() == rows.len()

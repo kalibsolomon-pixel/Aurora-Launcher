@@ -3,8 +3,15 @@
 // state, system media sessions); cards never poll or compute on their own.
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
+import { Home } from "state.slint";
 import { Icon, Icons } from "icons.slint";
-import { Button, ButtonKind, IconButton, Spinner, Dropdown, Tooltip, KeyboardFocus, FocusRing } from "components.slint";
+import { Button, ButtonKind, IconButton, Spinner, Dropdown, Tooltip, KeyboardFocus, FocusRing, Tabs, ContentList, ContentRowBackground, ContentArtwork } from "components.slint";
+
+export struct ServerRow {
+    id: string, favorite: bool, favorite-busy: bool, available: bool,
+    name: string, detail: string, motd: string,
+    picture: image, has-picture: bool, letter: string,
+}
 
 export struct PlaytimePoint { label: string, value: string, detail: string, fraction: float }
 
@@ -37,6 +44,14 @@ export struct WidgetChoice {
 }
 
 export global Widgets {
+    in property <bool> server-launch-busy;
+    callback server-favorite(string);
+    callback server-play(string);
+    in property <[ServerRow]> server-recents;
+    in property <[ServerRow]> server-favorites;
+    in property <bool> server-error;
+    in property <bool> server-enriching;
+    in-out property <int> server-tab: 0;
     in property <[WidgetView]> items;
     in property <[WidgetChoice]> available;
     in property <[string]> available-names;
@@ -69,12 +84,19 @@ export global Widgets {
     in-out property <int> playtime-period: 0;
     in property <[PlaytimePoint]> week;
     in property <[PlaytimePoint]> month;
+    in property <[PlaytimePoint]> month-binned;
     in property <string> week-peak;
     in property <string> month-peak;
-    in property <[PlaytimePoint]> historical;
-    in property <string> historical-peak;
-    in property <[PlaytimePoint]> month-compact;
-    in property <string> month-compact-peak;
+    in property <string> month-binned-peak;
+    in property <string> week-total;
+    in property <string> month-total;
+    in property <bool> week-empty;
+    in property <bool> month-empty;
+    in property <string> lifetime-total;
+    in property <string> lifetime-detail;
+    in property <string> playtime-status: "Loading playtime…";
+    // Session-only choice. Width changes presentation, never the selected period.
+    in-out property <int> playtime-range: 0;
     in-out property <int> edit-index: 0;
 
     // System media session (Windows Global System Media Transport Controls).
@@ -191,64 +213,176 @@ component WidgetGesture inherits Rectangle {
     if root.resizing: Text { text: "◢"; color: touch.has-hover ? Theme.accent : Theme.text-muted; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
 }
 
-component PlaytimePeriods inherits HorizontalLayout {
-    spacing: 2px;
-    for period[index] in ["7D", "30D", "All"]: Button {
-        text: period; compact: true; selected: Widgets.playtime-period == index;
-        kind: Widgets.playtime-period == index ? ButtonKind.secondary : ButtonKind.ghost;
-        clicked => { Widgets.playtime-period = index; }
-    }
-}
-
 component PlaytimeCard inherits Rectangle {
     in property <WidgetView> item;
     background: Theme.surface;
     border-radius: Theme.radius-lg;
     accessible-role: groupbox;
-    accessible-label: "Daily playtime graph";
-    property <bool> expanded: Widgets.playtime-period == 1;
-    property <bool> all-time: Widgets.playtime-period == 2;
-    property <bool> compact-month: expanded && root.width < 320px && Widgets.month-compact.length > 0;
-    property <[PlaytimePoint]> points: all-time ? Widgets.historical : (expanded ? (compact-month ? Widgets.month-compact : Widgets.month) : Widgets.week);
-    property <string> peak: all-time ? Widgets.historical-peak : (expanded ? (compact-month ? Widgets.month-compact-peak : Widgets.month-peak) : Widgets.week-peak);
+    accessible-label: "Playtime";
+    property <bool> narrow: root.width < 440px;
+    property <[PlaytimePoint]> points: Widgets.playtime-range == 0 ? Widgets.week : narrow ? Widgets.month-binned : Widgets.month;
+    property <string> peak: Widgets.playtime-range == 0 ? Widgets.week-peak : narrow ? Widgets.month-binned-peak : Widgets.month-peak;
+    property <string> total: Widgets.playtime-range == 0 ? Widgets.week-total : Widgets.playtime-range == 1 ? Widgets.month-total : Widgets.lifetime-total;
     VerticalLayout {
-        padding: 14px; spacing: 8px;
+        padding: 14px; spacing: 4px;
+        CardHeader { item: root.item; }
+        if !root.narrow: Tabs {
+            height: 30px; model: ["7 days", "30 days", "All time"];
+            current <=> Widgets.playtime-range;
+        }
+        if root.narrow: Dropdown {
+            min-width: 0px; height: 30px;
+            horizontal-stretch: 1; label: "Playtime range";
+            model: ["7 days", "30 days", "All time"];
+            current-index <=> Widgets.playtime-range;
+        }
         HorizontalLayout {
-            spacing: 4px;
-            CardHeader { item: root.item; horizontal-stretch: 1; }
-            if root.width >= 250px && root.item.lines.length > 0: PlaytimePeriods {}
-        }
-        if root.width < 250px && root.item.lines.length > 0: PlaytimePeriods {}
-        if root.item.lines.length == 0: Text {
-            text: root.item.loading ? "Loading playtime..." : root.item.empty;
-            color: Theme.text-muted; font-size: Theme.text-metadata;
-            vertical-stretch: 1; wrap: word-wrap; vertical-alignment: center;
-        }
-        if root.item.lines.length > 0: HorizontalLayout {
-            spacing: 8px;
-            Text { text: root.item.lines[root.all-time ? 3 : (root.expanded ? 2 : 1)].value; font-size: Theme.text-identity; font-weight: 600; color: Theme.text; }
-            Text { text: root.all-time ? "All recorded time" : (root.expanded ? "Last 30 days" : "Last 7 days"); font-size: Theme.text-metadata; color: Theme.text-secondary; horizontal-stretch: 1; vertical-alignment: center; overflow: elide; }
+            Text {
+                horizontal-stretch: 1;
+                text: root.item.loading ? "Loading…" : root.total;
+                font-size: Theme.text-body; font-weight: 600; color: Theme.text;
+                wrap: word-wrap;
+                accessible-role: text;
+                accessible-label: Widgets.playtime-range == 2 ? Widgets.lifetime-detail : self.text;
+            }
         }
         plot := Rectangle {
             visible: root.item.lines.length > 0 && root.points.length > 0;
             vertical-stretch: 1;
-            min-height: root.width < 250px ? 32px : 48px;
-            property <length> label-height: root.expanded || root.all-time ? 0px : 16px;
-            property <length> cell-width: (self.width - 44px) / max(1, root.points.length);
-            Text { x: 0px; y: 0px; width: 40px; height: 14px; horizontal-alignment: left; text: root.peak; color: Theme.text-muted; font-size: Theme.text-label; }
-            Text { x: 0px; width: 40px; height: 14px; y: parent.height - self.height; horizontal-alignment: left; text: "0 min"; color: Theme.text-muted; font-size: Theme.text-label; }
+            min-height: 24px;
+            property <bool> ready: !root.item.loading && Widgets.playtime-status == "";
+            // Measure the full label instead of clipping it to the old 40px gutter.
+            property <length> gutter: peak-label.preferred-width + 8px;
+            property <length> cell-width: max(0px, self.width - self.gutter) / max(1, root.points.length);
+            peak-label := Text { visible: plot.ready; x: 0px; y: 0px; height: 14px; text: root.peak; color: Theme.text-muted; font-size: Theme.text-label; }
+            Text { visible: plot.ready; x: 0px; height: 14px; y: parent.height - self.height; text: "0 min"; color: Theme.text-muted; font-size: Theme.text-label; }
+            if !plot.ready: Text {
+                width: parent.width; height: parent.height;
+                text: root.item.loading ? "Loading playtime…" : Widgets.playtime-status;
+                wrap: word-wrap; color: Theme.text-muted; font-size: Theme.text-metadata;
+                vertical-alignment: center;
+            }
+            if plot.ready && (Widgets.playtime-range == 0 ? Widgets.week-empty : Widgets.month-empty): Text {
+                x: plot.gutter; width: max(0px, parent.width - plot.gutter); height: parent.height;
+                text: "No playtime in this period."; wrap: word-wrap;
+                color: Theme.text-muted; font-size: Theme.text-label;
+                vertical-alignment: center;
+            }
+            // Subtle 1px chart baseline at the bars' base, from the label gutter to the right edge.
+            if plot.ready: Rectangle { y: parent.height - 1px; x: parent.gutter; width: parent.width - parent.gutter; height: 1px; background: Theme.border; }
             for point[i] in root.points: Rectangle {
-                x: 44px + i * plot.cell-width; width: plot.cell-width; height: plot.height - plot.label-height;
+                visible: plot.ready;
+                x: plot.gutter + i * plot.cell-width; width: plot.cell-width; height: plot.height;
                 accessible-role: text; accessible-label: point.detail;
-                Rectangle { x: 2px; width: max(1px, parent.width - 3px); height: max(2px, point.fraction * max(0px, parent.height - 4px)); y: parent.height - self.height; border-radius: 2px; background: point.fraction > 0 ? (hover.has-hover ? Theme.accent-hover : Theme.accent) : Theme.hover; }
-                if !root.expanded && !root.all-time: Text { y: parent.height + 2px; width: parent.width; text: point.label; color: Theme.text-muted; font-size: Theme.text-label; horizontal-alignment: center; overflow: elide; }
+                // Discrete centered columns: cap thickness so wide cells (7 bars / 7 summed bins)
+                // never read edge-to-edge; 12px total inset keeps many-cell (30 daily) views apart too.
+                Rectangle { x: (parent.width - self.width) / 2; width: min(20px, max(2px, parent.width - 12px)); height: max(2px, point.fraction * (plot.height - 4px)); y: parent.height - self.height; border-radius: 2px; background: point.fraction > 0 ? (hover.has-hover ? Theme.accent-hover : Theme.accent) : Theme.hover; }
                 hover := TouchArea {}
-                if hover.has-hover: Tooltip { text: point.label + ": " + point.value; x: min(0px, plot.width - i * plot.cell-width - self.width); y: -self.height - 4px; }
+                if hover.has-hover && plot.ready: Tooltip { text: point.detail; x: min(0px, plot.width - plot.gutter - i * plot.cell-width - self.width); y: -self.height - 4px; }
             }
         }
-        if root.item.lines.length > 0 && root.points.length > 0: HorizontalLayout {
-            Text { text: root.width >= 225px && (root.expanded || root.all-time) ? root.points[0].label : ""; color: Theme.text-muted; font-size: Theme.text-label; horizontal-stretch: 1; overflow: elide; }
-            Text { text: "Today · UTC"; color: Theme.text-muted; font-size: Theme.text-label; }
+        HorizontalLayout {
+            Text {
+                text: root.item.loading || Widgets.playtime-status != "" ? "" : "Chart: last " + (Widgets.playtime-range == 0 ? "7" : "30") + " days · UTC" + (root.narrow && Widgets.playtime-range != 0 ? " · 7 summed bins" : "");
+                color: Theme.text-muted; font-size: Theme.text-label; wrap: word-wrap;
+                accessible-role: text;
+                accessible-label: self.text + (Widgets.playtime-range == 2 ? ". Total covers all time; earlier daily history is not shown." : "") + (root.narrow && Widgets.playtime-range != 0 ? ". Seven summed date bins." : ". Daily bars.");
+            }
+        }
+    }
+}
+
+component ServersCard inherits Rectangle {
+    in property <WidgetView> item;
+    property <[ServerRow]> rows: Widgets.server-tab == 0 ? Widgets.server-recents : Widgets.server-favorites;
+    background: Theme.surface;
+    border-radius: Theme.radius-lg;
+    clip: true;
+    accessible-role: groupbox;
+    accessible-label: "Servers";
+    VerticalLayout {
+        padding: 14px; spacing: 4px;
+        HorizontalLayout {
+            height: 28px;
+            CardHeader { item: root.item; horizontal-stretch: 1; }
+            if Widgets.server-enriching && !root.item.loading: Spinner { size: 14px; }
+        }
+        Tabs {
+            height: 30px;
+            model: ["Recents", "Favorites", "Saved"];
+            current <=> Widgets.server-tab;
+            selected(index) => {
+                list.content-y = 0px;
+                if index == 2 { Widgets.saved-servers = true; Widgets.saved-view(false, true); }
+            }
+        }
+        body := Rectangle {
+            vertical-stretch: 1;
+            if root.rows.length == 0: Text {
+                width: parent.width; height: parent.height;
+                text: root.item.loading ? "Loading servers…" : Widgets.server-error ? "Server history is unavailable." : Widgets.server-tab == 0 ? "Servers you have played appear here." : "No favorite servers yet.";
+                wrap: word-wrap; color: Theme.text-muted; font-size: Theme.text-metadata;
+                vertical-alignment: center;
+            }
+            list := ScrollView {
+                visible: root.rows.length > 0;
+                width: parent.width; height: parent.height;
+                content-width: self.visible-width;
+                // The real card height determines the viewport, never the saved size preset.
+                content-height: root.rows.length * 88px;
+                forward-focus: scroll-focus;
+                accessible-role: groupbox;
+                accessible-label: Widgets.server-tab == 0 ? "Recent servers" : "Favorite servers";
+                ContentList {
+                    width: list.visible-width; height: root.rows.length * 88px;
+                    for row[i] in root.rows: Rectangle {
+                        height: 88px;
+                        accessible-role: list-item;
+                        accessible-label: row.name + ". " + row.detail + ". " + row.motd;
+                        ContentRowBackground { width: parent.width; height: parent.height; first-row: i == 0; last-row: i == root.rows.length - 1; hovered: hover.has-hover; }
+                        hover := TouchArea { }
+                        HorizontalLayout {
+                            padding-top: 12px; padding-bottom: 12px; padding-left: 16px; padding-right: 8px; spacing: 10px;
+                            ContentArtwork { cross-axis-self-alignment: center; picture: row.picture; has-picture: row.has-picture; letter: row.letter; }
+                            VerticalLayout {
+                                horizontal-stretch: 1; spacing: 2px; alignment: center;
+                                Text { text: row.name; color: Theme.text; font-size: Theme.text-body; font-weight: 600; overflow: elide; }
+                                Text { text: row.detail; color: Theme.text-muted; font-size: Theme.text-label; overflow: elide; }
+                                if row.motd != "": Text { text: row.motd; color: Theme.text-secondary; font-size: Theme.text-label; overflow: elide; }
+                            }
+                            VerticalLayout {
+                                spacing: 0px; alignment: center;
+                                IconButton {
+                                    size: 32px;
+                                    icon: row.favorite ? "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" : "M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zm-10 6.16l-3.76 2.27.99-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88.99 4.28L12 15.4z";
+                                    selected: row.favorite;
+                                    label: (row.favorite ? "Remove favorite: " : "Add favorite: ") + row.name;
+                                    enabled: !row.favorite-busy && !Widgets.editing;
+                                    clicked => { Widgets.server-favorite(row.id); }
+                                }
+                                IconButton {
+                                    size: 32px; icon: Icons.play;
+                                    label: "Quick play: " + row.name;
+                                    enabled: row.available && !Widgets.server-launch-busy && !Home.busy && !Widgets.editing;
+                                    clicked => { Widgets.server-play(row.id); }
+                                }
+                            }
+                        }
+                        if i < root.rows.length - 1: Rectangle { y: parent.height - 1px; x: 74px; width: parent.width - 74px; height: 1px; background: Theme.border; }
+                    }
+                }
+                scroll-focus := KeyboardFocus {
+                    key-pressed(event) => {
+                        let bottom = min(0px, list.visible-height - list.content-height);
+                        if event.text == Key.DownArrow || event.text == Key.PageDown { list.content-y = max(bottom, list.content-y - (event.text == Key.PageDown ? list.visible-height : 88px)); return accept; }
+                        if event.text == Key.UpArrow || event.text == Key.PageUp { list.content-y = min(0px, list.content-y + (event.text == Key.PageUp ? list.visible-height : 88px)); return accept; }
+                        if event.text == Key.Home { list.content-y = 0px; return accept; }
+                        if event.text == Key.End { list.content-y = bottom; return accept; }
+                        reject
+                    }
+                }
+            }
+            FocusRing { width: parent.width; height: parent.height; shown: scroll-focus.has-focus && scroll-focus.focus-visible; }
         }
     }
 }
@@ -352,8 +486,10 @@ component ListCard inherits Rectangle {
     }
 }
 
+// Transport glyphs are self-explanatory; labels stay for assistive technology.
 component MediaButton inherits IconButton {
     size: 34px;
+    show-tooltip: false;
 }
 
 component MediaCard inherits Rectangle {
@@ -431,7 +567,8 @@ export component WidgetGrid inherits Rectangle {
         height: item.height * (root.card-height + root.gap) - root.gap;
         if item.id == "media": MediaCard { width: parent.width; height: parent.height; item: item; first: i == 0; last: i == Widgets.items.length - 1; }
         if item.id == "playtime": PlaytimeCard { width: parent.width; height: parent.height; item: item; }
-        if item.id != "media" && item.id != "playtime": ListCard { width: parent.width; height: parent.height; item: item; first: i == 0; last: i == Widgets.items.length - 1; }
+        if item.id == "recent-servers" && !Widgets.saved-servers: ServersCard { width: parent.width; height: parent.height; item: item; }
+        if item.id != "media" && item.id != "playtime" && (item.id != "recent-servers" || Widgets.saved-servers): ListCard { width: parent.width; height: parent.height; item: item; first: i == 0; last: i == Widgets.items.length - 1; }
         if Widgets.editing: WidgetGesture { x: 8px; y: 8px; width: parent.width - 54px; height: 40px; item: item; columns: root.columns; column-pitch: root.card-width + root.gap; row-pitch: root.card-height + root.gap; }
         if Widgets.editing: WidgetGesture { x: parent.width - 32px; y: parent.height - 32px; width: 32px; height: 32px; resizing: true; item: item; columns: root.columns; column-pitch: root.card-width + root.gap; row-pitch: root.card-height + root.gap; }
     }

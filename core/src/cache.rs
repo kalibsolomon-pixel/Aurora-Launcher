@@ -298,6 +298,58 @@ impl ArtifactCache {
         Ok(VerifiedLocalArtifact { path, bytes: size })
     }
 
+    /// Local bytes (for example an entry of an already-verified installer)
+    /// pinned by an expected SHA-1 published in trusted metadata. The copy is
+    /// verified before promotion into the SHA-1 store.
+    pub async fn import_local_sha1(
+        &self,
+        source: &Path,
+        sha1: &Sha1Digest,
+        size: Option<u64>,
+    ) -> Result<VerifiedSha1Artifact, AcquisitionError> {
+        crate::content_jobs::checkpoint()
+            .map_err(|_| AcquisitionError::Download(DownloadError::Cancelled))?;
+        let verified_path = self.verified_sha1_path(sha1);
+        let expected = Expected::Sha1 {
+            digest: sha1,
+            size_bytes: size,
+        };
+        let _flight = crate::transfer::single_flight(format!("sha1:{}", sha1.as_hex())).await;
+        if let Some(bytes) = self.validate_existing(&verified_path, expected).await? {
+            return Ok(VerifiedSha1Artifact {
+                path: verified_path,
+                sha1: *sha1,
+                bytes,
+                origin: ArtifactOrigin::CacheHit,
+            });
+        }
+        self.prepare_staging(&self.sha1_store_dir())?;
+        let staging = self.new_staging_path();
+        let result = (|| {
+            std::fs::copy(source, &staging).map_err(AcquisitionError::StoreIo)?;
+            verify_file_sha1(&staging, sha1, size).map_err(|error| {
+                AcquisitionError::Download(DownloadError::Sha256Mismatch {
+                    expected: sha1.as_hex(),
+                    actual: error.to_string(),
+                })
+            })
+        })();
+        let bytes = match result {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                let _ = std::fs::remove_file(&staging);
+                return Err(error);
+            }
+        };
+        self.promote(&staging, &verified_path, expected).await?;
+        Ok(VerifiedSha1Artifact {
+            path: verified_path,
+            sha1: *sha1,
+            bytes,
+            origin: ArtifactOrigin::Downloaded,
+        })
+    }
+
     /// Record that the verified SHA-256 object also has a provider-published
     /// SHA-512, after re-hashing the stored bytes against both digests and the
     /// size. [`ArtifactCache::acquire_sha512`] re-verifies every hit anyway, so
@@ -1043,6 +1095,66 @@ mod tests {
         assert_eq!(std::fs::read(&artifact.path).unwrap(), expected_body);
         assert_eq!(stored_files(&cache), vec![expected_digest.as_hex()]);
         assert!(staging_files(&cache).is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_review_cancelled_mid_stream_leaves_no_store_object_or_staging() {
+        use sha2::Sha512;
+        let body: Vec<u8> = (0..900u32).map(|i| (i % 251) as u8).collect();
+        let sha512: String = Sha512::digest(&body)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        let served = body.clone();
+        let server = serve(move |_request| {
+            TestResponse::ok(&served).with_drip_delay(Duration::from_millis(2))
+        });
+        let (_root, cache) = test_cache("cancel-mid-stream");
+        // A review's job: cancellation interrupts its active transfer.
+        let source = Sha512ArtifactSource::loopback_http_for_testing(
+            &format!("{}/pack.mrpack", server.base_url()),
+            &sha512,
+            Some(body.len() as u64),
+        )
+        .unwrap();
+        let control = crate::content_jobs::Control::interrupting_transfers();
+        let watcher = control.clone();
+        let canceller = tokio::spawn(async move {
+            while watcher.streamed_bytes() == 0 {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+            watcher.cancel();
+        });
+        let result = control.run(cache.acquire_sha512(&source)).await;
+        canceller.await.unwrap();
+
+        assert!(
+            matches!(
+                result,
+                Err(AcquisitionError::Download(DownloadError::Cancelled))
+            ),
+            "{:?}",
+            result.err()
+        );
+        assert!(control.streamed_bytes() < body.len() as u64);
+        assert_eq!(server.request_count(), 1, "cancellation is never retried");
+        let store = std::fs::read_dir(cache.store_dir())
+            .map(|entries| entries.count())
+            .unwrap_or(0);
+        assert_eq!(store, 0, "no store object exists");
+        assert!(staging_files(&cache).is_empty());
+        let map = cache
+            .managed
+            .cache_dir()
+            .join(ARTIFACTS_DIR)
+            .join("sha512-map")
+            .join(&sha512);
+        assert!(!map.exists(), "no digest mapping points anywhere");
+
+        // The same archive later acquires and verifies normally.
+        let artifact = cache.acquire_sha512(&source).await.unwrap();
+        assert_eq!(artifact.origin, ArtifactOrigin::Downloaded);
+        assert_eq!(std::fs::read(&artifact.path).unwrap(), body);
     }
 
     #[tokio::test]

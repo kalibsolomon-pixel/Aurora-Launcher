@@ -1,5 +1,5 @@
 //! Cosmetic installed-mod icons: local JAR metadata only, never network or extraction.
-//! Static 48px pixels are memoized by verified JAR digest, including absent icons.
+//! Static high-DPI pixels are memoized by verified JAR digest, including absent icons.
 use crate::{
     instance_mods,
     instances::InstanceId,
@@ -14,8 +14,8 @@ use std::{
     path::Path,
     sync::{Mutex, OnceLock},
 };
-const CACHE_LIMIT: usize = 512;
-const ICON_SIDE: u32 = 48;
+const CACHE_LIMIT: usize = 128;
+const ICON_SIDE: u32 = 96;
 const MAX_JAR: u64 = 512 * 1024 * 1024;
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -123,7 +123,7 @@ pub(crate) fn pack_archive_icon(path: &Path) -> Option<Bitmap> {
 }
 
 pub(crate) fn bitmap(bytes: &[u8]) -> Option<Bitmap> {
-    let (width, height, rgba) = crate::cosmetic_image::thumbnail_rgba(bytes, ICON_SIDE)?;
+    let (width, height, rgba) = crate::cosmetic_image::artwork_thumbnail_rgba(bytes, ICON_SIDE)?;
     Some(Bitmap {
         width,
         height,
@@ -149,7 +149,13 @@ fn extract(path: &Path) -> Option<Bitmap> {
             }
         }
     }
-    bitmap(&read_member(&mut zip, &icon?, MAX_ICON_BYTES)?)
+    let bytes = read_member(&mut zip, &icon?, 512 * 1024)?;
+    let (width, height, rgba) = crate::cosmetic_image::artwork_thumbnail_rgba(&bytes, ICON_SIDE)?;
+    Some(Bitmap {
+        width,
+        height,
+        rgba_base64: Base64::encode_string(&rgba),
+    })
 }
 pub fn load(
     paths: &ManagedPaths,
@@ -204,6 +210,110 @@ pub fn load(
         .collect()
 }
 
+/// A closed content kind and a direct-child name select local saved artwork.
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackIconRequest {
+    pub file_name: String,
+    pub sha256: Option<String>,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackIconResult {
+    pub file_name: String,
+    pub bitmap: Option<Bitmap>,
+}
+
+pub fn load_packs(
+    paths: &ManagedPaths,
+    instance: &InstanceId,
+    kind: crate::instance_content::ContentType,
+    requests: &[PackIconRequest],
+) -> Vec<PackIconResult> {
+    use crate::instance_content::{ContentType, validate_directory, validate_file_name};
+    if requests.len() > 128 || kind == ContentType::Mod {
+        return Vec::new();
+    }
+    let Ok(directory) = validate_directory(paths, instance, kind) else {
+        return Vec::new();
+    };
+    requests
+        .iter()
+        .map(|request| {
+            let bitmap = (|| {
+                validate_file_name(&request.file_name).ok()?;
+                let path = directory.join(&request.file_name);
+                let metadata = std::fs::symlink_metadata(&path).ok()?;
+                if metadata.file_type().is_symlink() || reparse_point(&metadata) {
+                    return None;
+                }
+                let bytes = if metadata.is_dir() {
+                    // Admit the pack directory itself, then the one regular root PNG.
+                    let canonical = std::fs::canonicalize(&path).ok()?;
+                    if canonical.parent() != Some(std::fs::canonicalize(&directory).ok()?.as_path())
+                    {
+                        return None;
+                    }
+                    let png =
+                        instance_mods::validate_current_regular_file(&path, "pack.png").ok()?;
+                    let file = std::fs::File::open(png).ok()?;
+                    if file.metadata().ok()?.len() > 512 * 1024 {
+                        return None;
+                    }
+                    let mut bytes = Vec::new();
+                    file.take(512 * 1024 + 1).read_to_end(&mut bytes).ok()?;
+                    if bytes.len() > 512 * 1024 {
+                        return None;
+                    }
+                    bytes
+                } else {
+                    if !metadata.is_file()
+                        || metadata.len() > MAX_JAR
+                        || !request.file_name.to_ascii_lowercase().ends_with(".zip")
+                    {
+                        return None;
+                    }
+                    let path = instance_mods::validate_current_regular_file(
+                        &directory,
+                        &request.file_name,
+                    )
+                    .ok()?;
+                    if let Some(hash) = &request.sha256 {
+                        let digest = ArtifactDigest::parse(hash).ok()?;
+                        verify_file(&path, &digest, Some(metadata.len())).ok()?;
+                    }
+                    let mut zip = zip::ZipArchive::new(std::fs::File::open(path).ok()?).ok()?;
+                    if zip.len() > 4096 {
+                        return None;
+                    }
+                    read_member(&mut zip, "pack.png", 512 * 1024)?
+                };
+                let (width, height, rgba) =
+                    crate::cosmetic_image::artwork_thumbnail_rgba(&bytes, ICON_SIDE)?;
+                Some(Bitmap {
+                    width,
+                    height,
+                    rgba_base64: Base64::encode_string(&rgba),
+                })
+            })();
+            PackIconResult {
+                file_name: request.file_name.clone(),
+                bitmap,
+            }
+        })
+        .collect()
+}
+
+#[cfg(windows)]
+fn reparse_point(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    metadata.file_attributes() & 0x400 != 0
+}
+#[cfg(not(windows))]
+fn reparse_point(_: &std::fs::Metadata) -> bool {
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,6 +332,118 @@ mod tests {
             .unwrap();
         zip.write_all(bytes).unwrap();
         zip.finish().unwrap();
+    }
+    fn png_rgba(width: u32, height: u32, pixels: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut bytes, width, height);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().unwrap();
+            writer.write_image_data(pixels).unwrap();
+            writer.finish().unwrap();
+        }
+        bytes
+    }
+    #[test]
+    fn quality_artwork_preserves_aspect_alpha_and_averages_detail_without_upscaling() {
+        let png = png_rgba(2, 1, &[255, 0, 0, 255, 0, 0, 255, 0]);
+        let (w, h, pixels) = crate::cosmetic_image::artwork_thumbnail_rgba(&png, 1).unwrap();
+        assert_eq!((w, h), (1, 1));
+        assert_eq!(pixels, [255, 0, 0, 128]);
+        let (_, _, pixels) = crate::cosmetic_image::artwork_thumbnail_rgba(&png, 96).unwrap();
+        assert_eq!(pixels.len(), 2 * 4);
+        let checker: Vec<u8> = (0..8)
+            .flat_map(|i| {
+                if i % 2 == 0 {
+                    [0, 0, 0, 255]
+                } else {
+                    [255, 255, 255, 255]
+                }
+            })
+            .collect();
+        let png = png_rgba(4, 2, &checker);
+        let (w, h, pixels) = crate::cosmetic_image::artwork_thumbnail_rgba(&png, 2).unwrap();
+        assert_eq!((w, h), (2, 1));
+        assert_eq!(pixels, [128, 128, 128, 255, 128, 128, 128, 255]);
+        assert!(crate::cosmetic_image::artwork_thumbnail_rgba(&png, 97).is_none());
+        assert!(
+            crate::cosmetic_image::artwork_thumbnail_rgba(
+                &crate::cosmetic_image::fixtures::animated_png(),
+                96
+            )
+            .is_none()
+        );
+    }
+    #[test]
+    fn saved_zip_and_directory_artwork_is_local_bounded_and_path_checked() {
+        let root = std::env::temp_dir().join(format!("aurora-pack-icons-{}", uuid::Uuid::new_v4()));
+        let paths = ManagedPaths::from_app_local_data_dir(root.clone()).unwrap();
+        let id = InstanceId::new("pack-icon-fixture").unwrap();
+        let directory = paths.instance_paths(&id).root().join("resourcepacks");
+        std::fs::create_dir_all(directory.join("folder")).unwrap();
+        let png = crate::cosmetic_image::fixtures::png(128, 64);
+        std::fs::write(directory.join("folder/pack.png"), &png).unwrap();
+        let archive = directory.join("local.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&archive).unwrap());
+        zip.start_file("pack.png", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(&png).unwrap();
+        zip.finish().unwrap();
+        let request = |name: &str| PackIconRequest {
+            file_name: name.into(),
+            sha256: None,
+        };
+        let kind = crate::instance_content::ContentType::ResourcePack;
+        for name in ["folder", "local.zip"] {
+            let result = load_packs(&paths, &id, kind, &[request(name)]);
+            let bitmap = result[0].bitmap.as_ref().unwrap();
+            assert_eq!((bitmap.width, bitmap.height), (96, 48));
+        }
+        for name in [
+            "../local.zip",
+            "/local.zip",
+            "C:/local.zip",
+            "folder/pack.png",
+            "absent.zip",
+        ] {
+            assert!(
+                load_packs(&paths, &id, kind, &[request(name)])[0]
+                    .bitmap
+                    .is_none()
+            );
+        }
+        assert!(
+            load_packs(
+                &paths,
+                &id,
+                kind,
+                &[PackIconRequest {
+                    file_name: "local.zip".into(),
+                    sha256: Some("a".repeat(64))
+                }]
+            )[0]
+            .bitmap
+            .is_none()
+        );
+        std::fs::write(directory.join("folder/pack.png"), vec![0; 512 * 1024 + 1]).unwrap();
+        assert!(
+            load_packs(&paths, &id, kind, &[request("folder")])[0]
+                .bitmap
+                .is_none()
+        );
+        assert!(
+            load_packs(
+                &paths,
+                &id,
+                crate::instance_content::ContentType::Mod,
+                &[request("local.zip")]
+            )
+            .is_empty()
+        );
+        assert!(load_packs(&paths, &id, kind, &vec![request("local.zip"); 129]).is_empty());
+        // Only this exact unique disposable root was created by this test.
+        std::fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn pack_artwork_uses_only_a_bounded_root_png() {
@@ -251,7 +473,7 @@ mod tests {
         let path = fixture.join("pack.png");
         std::fs::write(&path, png).unwrap();
         let image = pack_directory_icon(&path).unwrap();
-        assert_eq!((image.width, image.height), (48, 24));
+        assert_eq!((image.width, image.height), (96, 48));
         std::fs::remove_file(path).unwrap();
         std::fs::remove_dir(fixture).unwrap();
     }
@@ -288,7 +510,7 @@ mod tests {
                 "fabric.mod.json"
             )
             .as_deref(),
-            Some("best.png")
+            Some("large.png")
         );
         assert!(member(br#"{"icon": 42}"#, "fabric.mod.json").is_none());
     }
@@ -314,7 +536,7 @@ mod tests {
         };
         let cold = load(&paths, &id, &[request.clone()]);
         let cold_time = start.elapsed();
-        assert_eq!(cold[0].bitmap.as_ref().unwrap().width, 48);
+        assert_eq!(cold[0].bitmap.as_ref().unwrap().width, 96);
         std::fs::rename(&path, mods.join("test.jar.disabled")).unwrap();
         let start = std::time::Instant::now();
         for _ in 0..100 {
@@ -335,7 +557,7 @@ mod tests {
             "mod icons cold={:?} warm100={:?} thumbnailBytes={}",
             cold_time,
             start.elapsed(),
-            48 * 24 * 4
+            96 * 48 * 4
         );
         assert!(
             load(

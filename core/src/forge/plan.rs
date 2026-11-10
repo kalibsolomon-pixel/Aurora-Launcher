@@ -35,7 +35,7 @@ use crate::forge::metadata::{
 };
 use crate::game::plan::{
     CompositionError, GameInstallPlan, GameJavaRequirement, GameLibrary, LoaderPlan,
-    installer_library_satisfied_by, merge_library_sets,
+    installer_library_satisfied_by, merge_library_sets_loader_overrides,
 };
 use crate::integrity::Sha1Digest;
 use crate::minecraft::metadata::MinecraftVersionId;
@@ -426,14 +426,17 @@ impl ForgePlan {
         endpoints: &ForgeMavenEndpoints,
         installer_sha1: Sha1Digest,
     ) -> Result<Self, ForgePlanError> {
-        loader.require_reviewed()?;
+        loader.require_supported()?;
+        // The FML entry points: ModLauncher (1.13.2-1.16.5), cpw's
+        // BootstrapLauncher (1.17.1-1.20.1), Forge's BootstrapLauncher
+        // (1.20.2) and ForgeBootstrap (1.20.3+).
         if !matches!(
             version.main_class.as_str(),
             "net.minecraftforge.bootstrap.ForgeBootstrap"
+                | "net.minecraftforge.bootstrap.BootstrapLauncher"
                 | "cpw.mods.bootstraplauncher.BootstrapLauncher"
-        ) || (version.main_class == "cpw.mods.bootstraplauncher.BootstrapLauncher"
-            && loader.as_str() != "1.20.1-47.4.10")
-        {
+                | "cpw.mods.modlauncher.Launcher"
+        ) {
             return Err(ForgePlanError::Data {
                 token: "mainClass".into(),
                 reason: "unsupported Forge installer launch generation".into(),
@@ -455,7 +458,10 @@ impl ForgePlan {
         }
         let expected_version_id =
             format!("{}-forge-{}", loader.minecraft_version(), loader.build());
-        if profile.version_id != expected_version_id || version.id != expected_version_id {
+        // Some 1.20.3 builds publish the id without the second hyphen.
+        let compact_version_id = format!("{}-forge{}", loader.minecraft_version(), loader.build());
+        let identifies = |id: &str| id == expected_version_id || id == compact_version_id;
+        if !identifies(&profile.version_id) || version.id != profile.version_id {
             return Err(ForgePlanError::Identity {
                 what: "the installer documents do not identify the requested Forge version",
                 expected: expected_version_id,
@@ -486,8 +492,9 @@ impl ForgePlan {
         let processors = profile
             .processors
             .iter()
-            .filter(|processor| processor.applies_to_client())
-            .map(|processor| {
+            .enumerate()
+            .filter(|(_, processor)| processor.applies_to_client())
+            .map(|(index, processor)| {
                 let jar = ForgeCoordinate::parse(&processor.jar).map_err(ForgePlanError::Coordinate)?;
                 let mut classpath = Vec::with_capacity(processor.classpath.len());
                 for entry in &processor.classpath {
@@ -517,6 +524,12 @@ impl ForgePlan {
                     if matches!(pair[0].as_str(), "--output" | "--slim" | "--extra") {
                         if let Some(token) = pair[1].strip_prefix('{').and_then(|v| v.strip_suffix('}')) {
                             if !outputs.iter().any(|rule| rule.token == token) {
+                                // Only the known 1.17.1 vignette -> binarypatcher
+                                // patched-client output varies. Explicit output
+                                // rules and every other data digest remain binding.
+                                if token == "PATCHED" && variable_1171_patched_client(profile, index, loader) {
+                                    continue;
+                                }
                                 if let Some(value) = profile.data.get(&format!("{token}_SHA")) {
                                     let digest = value.client.strip_prefix('\'').and_then(|v| v.strip_suffix('\'')).ok_or_else(|| ForgePlanError::Output { token: token.into(), reason: "expected a quoted published SHA-1".into() })?;
                                     outputs.push(ForgeProcessorOutputRule { token: token.into(), sha1: Sha1Digest::parse(digest).map_err(|e| ForgePlanError::Output { token: token.into(), reason: e.to_string() })? });
@@ -559,6 +572,43 @@ impl ForgePlan {
             data,
         })
     }
+}
+
+fn variable_1171_patched_client(
+    profile: &InstallProfileDocument,
+    index: usize,
+    loader: &ForgeVersionId,
+) -> bool {
+    let processor = &profile.processors[index];
+    loader.minecraft_version() == "1.17.1"
+        && processor.jar == "net.minecraftforge:binarypatcher:1.0.12"
+        && processor.args
+            == [
+                "--clean",
+                "{MC_SRG}",
+                "--output",
+                "{PATCHED}",
+                "--apply",
+                "{BINPATCH}",
+            ]
+        && profile.data.get("PATCHED").is_some_and(|value| {
+            value.client == format!("[net.minecraftforge:forge:{loader}:client]")
+        })
+        && profile.processors[..index]
+            .iter()
+            .rev()
+            .find(|step| step.applies_to_client())
+            .is_some_and(|step| {
+                step.jar == "net.minecraftforge.lex:vignette:0.2.0.16"
+                    && step
+                        .args
+                        .windows(2)
+                        .any(|pair| pair == ["--jar-in", "{MC_SLIM}"])
+                    && step
+                        .args
+                        .windows(2)
+                        .any(|pair| pair == ["--jar-out", "{MC_SRG}"])
+            })
 }
 
 /// One data-token value of the install profile, normalized to its kind.
@@ -706,14 +756,13 @@ pub fn compose_forge_game_plan(
         }
     }
 
-    if forge.main_class == "cpw.mods.bootstraplauncher.BootstrapLauncher" {
-        // Aurora's fixed vanilla filename differs from the official launcher's
-        // <version>.jar. Keep that jar last on the classpath, but exclude it
-        // from SecureJarHandler's module discovery just like upstream does.
-        for argument in &mut forge.jvm_arguments {
-            if argument.starts_with("-DignoreList=") {
-                argument.push_str(",client.jar");
-            }
+    // Aurora's fixed vanilla filename differs from the official launcher's
+    // <version>.jar. Keep that jar last on the classpath, but exclude it
+    // from module discovery just like upstream does (BootstrapLauncher
+    // generations publish the ignore list).
+    for argument in &mut forge.jvm_arguments {
+        if argument.starts_with("-DignoreList=") {
+            argument.push_str(",client.jar");
         }
     }
 
@@ -723,7 +772,7 @@ pub fn compose_forge_game_plan(
         .cloned()
         .map(GameLibrary::Forge)
         .collect();
-    let libraries = merge_library_sets(&minecraft, loader_libraries)?;
+    let libraries = merge_library_sets_loader_overrides(&minecraft, loader_libraries)?;
 
     // The installer-tool set overlaps the composed client set (1.20.4's
     // gson 2.10.1, 1.20.1's jopt-simple 5.0.4 — byte-identical official
@@ -994,6 +1043,109 @@ mod tests {
             parse_data_value("LIT", &document.data["LIT"]).unwrap(),
             (_, ForgeDataValue::Literal(value)) if value == "value"
         ));
+    }
+
+    #[test]
+    fn forge_followup_variable_hash_exception_is_output_and_generation_scoped() {
+        use crate::forge::metadata::{ProfileDataValue, ProfileProcessor};
+        for (mc, build, vignette, expected_patched) in [
+            (
+                "1.17.1",
+                "37.1.1",
+                "net.minecraftforge.lex:vignette:0.2.0.16",
+                false,
+            ),
+            ("1.17.1", "37.1.1", "other:vignette:0.2.0.16", true),
+            (
+                "1.17.1",
+                "37.1.1",
+                "net.minecraftforge.lex:vignette:9.0",
+                true,
+            ),
+            (
+                "1.20.1",
+                "47.4.10",
+                "net.minecraftforge.lex:vignette:0.2.0.16",
+                true,
+            ),
+        ] {
+            let (mut profile, mut version) = fixture_documents();
+            let pin = format!("{mc}-{build}");
+            profile.minecraft_version = mc.into();
+            profile.version_id = format!("{mc}-forge-{build}");
+            version.id = profile.version_id.clone();
+            version.inherits_from = mc.into();
+            profile.data.get_mut("PATCHED").unwrap().client =
+                format!("[net.minecraftforge:forge:{pin}:client]");
+            profile.data.insert(
+                "DETERMINISTIC".into(),
+                ProfileDataValue {
+                    client: "[example:deterministic:1]".into(),
+                    server: "'unused'".into(),
+                },
+            );
+            profile.data.insert(
+                "DETERMINISTIC_SHA".into(),
+                ProfileDataValue {
+                    client: "'1111111111111111111111111111111111111111'".into(),
+                    server: "'unused'".into(),
+                },
+            );
+            let processor = |jar: &str, args: &[&str]| ProfileProcessor {
+                sides: None,
+                jar: jar.into(),
+                classpath: vec![],
+                args: args.iter().map(|s| (*s).into()).collect(),
+                outputs: vec![],
+            };
+            profile.processors = vec![
+                processor("example:tool:1", &["--output", "{DETERMINISTIC}"]),
+                processor(
+                    vignette,
+                    &["--jar-in", "{MC_SLIM}", "--jar-out", "{MC_SRG}"],
+                ),
+                processor(
+                    "net.minecraftforge:binarypatcher:1.0.12",
+                    &[
+                        "--clean",
+                        "{MC_SRG}",
+                        "--output",
+                        "{PATCHED}",
+                        "--apply",
+                        "{BINPATCH}",
+                    ],
+                ),
+            ];
+            let build_plan = |profile: &InstallProfileDocument| {
+                ForgePlan::from_documents(
+                    profile,
+                    &version,
+                    &MinecraftVersionId::new(mc).unwrap(),
+                    &ForgeVersionId::new(&pin).unwrap(),
+                    &ForgeMavenEndpoints::official(),
+                    Sha1Digest::parse("0000000000000000000000000000000000000000").unwrap(),
+                )
+                .unwrap()
+            };
+            let plan = build_plan(&profile);
+            assert_eq!(
+                plan.processors()[0].outputs().len(),
+                1,
+                "deterministic output lost its digest: {pin}"
+            );
+            assert_eq!(
+                !plan.processors()[2].outputs().is_empty(),
+                expected_patched,
+                "{pin} {vignette}"
+            );
+            profile.processors[2]
+                .outputs
+                .push(crate::forge::metadata::ProfileProcessorOutput {
+                    token: "PATCHED".into(),
+                    sha1: Sha1Digest::parse("2222222222222222222222222222222222222222").unwrap(),
+                });
+            assert_eq!(build_plan(&profile).processors()[2].outputs().len(), 1);
+        }
     }
 
     #[test]

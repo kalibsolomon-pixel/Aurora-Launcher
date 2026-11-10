@@ -4,7 +4,6 @@
 // and DPI keep working). Elsewhere `custom` stays false and the native frame
 // is used.
 import { Theme } from "theme.slint";
-import { Icon } from "icons.slint";
 import { FocusRing, KeyboardFocus } from "components.slint";
 
 export global Chrome {
@@ -22,18 +21,22 @@ export global Chrome {
     callback resize(string);
 }
 
-export global CaptionGlyphs {
-    out property <string> minimize: "M6 11.5H18V12.5H6Z";
-    out property <string> maximize: "M6 6H18V18H6ZM7 7V17H17V7Z";
-    out property <string> restore: "M8 6H18V16H16V15H17V7H9V8H8ZM6 8H16V18H6ZM7 9V17H15V9Z";
-    out property <string> close: "M6.7 6 12 11.3 17.3 6 18 6.7 12.7 12 18 17.3 17.3 18 12 12.7 6.7 18 6 17.3 11.3 12 6 6.7Z";
-}
+enum CaptionGlyph { minimize, maximize, restore, close }
 
+// Caption glyphs are drawn from rectangles and strokes snapped to whole
+// physical pixels, so their one-pixel lines stay crisp at every display scale
+// (filled outline paths smear and notch at these sizes).
 component CaptionButton inherits Rectangle {
-    in property <string> glyph;
+    in property <CaptionGlyph> glyph;
     in property <string> label;
     in property <bool> danger: false;
     callback clicked();
+    property <color> ink: root.danger && touch.has-hover ? Theme.error : touch.has-hover ? Theme.accent : Theme.text-secondary;
+    property <length> line: max(1phx, round(1px / 1phx) * 1phx);
+    property <length> box: round(10px / 1phx) * 1phx;
+    property <length> inset: round(2px / 1phx) * 1phx;
+    property <length> left: round((root.width - root.box) / 2 / 1phx) * 1phx;
+    property <length> top: round((root.height - root.box) / 2 / 1phx) * 1phx;
     width: 52px;
     height: Chrome.title-height;
     background: transparent;
@@ -44,12 +47,34 @@ component CaptionButton inherits Rectangle {
     Rectangle {
         x: 4px; y: 6px; width: parent.width - 8px; height: parent.height - 12px;
         border-radius: Theme.radius-md;
-        background: touch.pressed ? (root.danger ? Theme.error-soft : Theme.accent-soft) : touch.has-hover ? (root.danger ? Theme.error-soft : Theme.hover) : Theme.surface;
+        background: touch.pressed ? (root.danger ? Theme.error-soft : Theme.accent-soft) : touch.has-hover ? (root.danger ? Theme.error-soft : Theme.hover) : transparent;
     }
-    Icon {
-        path: root.glyph;
-        size: 22px;
-        color: root.danger && touch.has-hover ? Theme.error : touch.has-hover ? Theme.accent : Theme.text-secondary;
+    if root.glyph == CaptionGlyph.minimize: Rectangle {
+        x: root.left; y: root.top + round(root.box / 2 / 1phx) * 1phx; width: root.box; height: root.line;
+        background: root.ink;
+    }
+    if root.glyph == CaptionGlyph.maximize: Rectangle {
+        x: root.left; y: root.top; width: root.box; height: root.box;
+        border-width: root.line; border-color: root.ink;
+    }
+    if root.glyph == CaptionGlyph.restore: Rectangle {
+        x: root.left; y: root.top + root.inset; width: root.box - root.inset; height: self.width;
+        border-width: root.line; border-color: root.ink;
+    }
+    if root.glyph == CaptionGlyph.restore: Rectangle {
+        x: root.left + root.inset; y: root.top; width: root.box - root.inset; height: root.line;
+        background: root.ink;
+    }
+    if root.glyph == CaptionGlyph.restore: Rectangle {
+        x: root.left + root.box - root.line; y: root.top; width: root.line; height: root.box - root.inset;
+        background: root.ink;
+    }
+    if root.glyph == CaptionGlyph.close: Path {
+        x: root.left; y: root.top; width: root.box; height: root.box;
+        viewbox-width: 10; viewbox-height: 10;
+        commands: "M0 0L10 10M10 0L0 10";
+        stroke: root.ink;
+        stroke-width: root.line;
     }
     touch := TouchArea { clicked => { focus.pointer-focus(); root.clicked(); } }
     focus := KeyboardFocus { focus-on-click: false; key-pressed(event) => { if (event.text == " " || event.text == Key.Return) { root.clicked(); return accept; } reject } }
@@ -70,9 +95,9 @@ export component TitleBar inherits Rectangle {
     }
     HorizontalLayout {
         alignment: end;
-        CaptionButton { glyph: CaptionGlyphs.minimize; label: "Minimize"; clicked => { Chrome.minimize(); } }
-        CaptionButton { glyph: Chrome.maximized ? CaptionGlyphs.restore : CaptionGlyphs.maximize; label: Chrome.maximized ? "Restore" : "Maximize"; clicked => { Chrome.toggle-maximize(); } }
-        CaptionButton { glyph: CaptionGlyphs.close; label: "Close"; danger: true; clicked => { Chrome.close(); } }
+        CaptionButton { glyph: CaptionGlyph.minimize; label: "Minimize"; clicked => { Chrome.minimize(); } }
+        CaptionButton { glyph: Chrome.maximized ? CaptionGlyph.restore : CaptionGlyph.maximize; label: Chrome.maximized ? "Restore" : "Maximize"; clicked => { Chrome.toggle-maximize(); } }
+        CaptionButton { glyph: CaptionGlyph.close; label: "Close"; danger: true; clicked => { Chrome.close(); } }
     }
 }
 
