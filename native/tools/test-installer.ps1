@@ -10,7 +10,7 @@ Copy-Item -LiteralPath $source -Destination $payload
 if (!$?) { throw 'Acceptance packaging failed' }
 $installer = (Get-ChildItem -LiteralPath (Join-Path $root 'artifacts') -Filter '*setup.exe').FullName
 $installation = Join-Path $root 'installation'
-$exe = Join-Path $installation 'aurora-native.exe'
+$exe = Join-Path $installation 'aurora-launcher.exe'
 $marker = Join-Path $installation 'native-package.ini'
 $link = Join-Path $root 'start.lnk'
 $registry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\com.aurora.launcher.native-preview.acceptance.' + $id
@@ -33,6 +33,42 @@ $sentinel=Join-Path $installation 'user-sentinel.txt'
 $results.reinstallExit=Run-Setup
 if ($results.reinstallExit -ne 0) { throw 'Reinstall failed' }
 $expectedHash=(Get-FileHash -LiteralPath $exe).Hash
+# Exercise the real filename transition inside this unique acceptance identity.
+$legacyExe=Join-Path $installation 'aurora-native.exe'
+$shell=New-Object -ComObject WScript.Shell
+Move-Item -LiteralPath $exe -Destination $legacyExe
+$results.unknownLegacyVersionExit=Run-Setup
+if ($results.unknownLegacyVersionExit -eq 0 -or (Test-Path -LiteralPath $exe) -or (Get-FileHash -LiteralPath $legacyExe).Hash -ne $expectedHash) { throw 'Unknown legacy executable version was not preserved/refused' }
+$legacyMarker=[IO.File]::ReadAllText($marker) -replace 'Version=[^\r\n]+','Version=2.1.0'
+[IO.File]::WriteAllText($marker,$legacyMarker)
+Copy-Item -LiteralPath $legacyExe -Destination $exe
+$results.ambiguousNamesExit=Run-Setup
+if ($results.ambiguousNamesExit -eq 0 -or (Get-FileHash -LiteralPath $legacyExe).Hash -ne $expectedHash -or (Get-FileHash -LiteralPath $exe).Hash -ne $expectedHash) { throw 'Ambiguous executable names were not preserved/refused' }
+# Remove only the exact duplicate this fixture just created.
+Remove-Item -LiteralPath $exe
+$legacyLock=[IO.File]::Open($legacyExe,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+try { $results.legacyInUseExit=Run-Setup } finally { $legacyLock.Dispose() }
+if ($results.legacyInUseExit -eq 0 -or (Test-Path -LiteralPath $exe) -or (Get-FileHash -LiteralPath $legacyExe).Hash -ne $expectedHash) { throw 'In-use legacy executable was changed' }
+$badMarker=$legacyMarker.Replace(('com.aurora.launcher.native-preview.acceptance.'+$id),'foreign.application')
+[IO.File]::WriteAllText($marker,$badMarker)
+$results.foreignLegacyPackageExit=Run-Setup
+if ($results.foreignLegacyPackageExit -eq 0 -or (Test-Path -LiteralPath $exe) -or (Get-FileHash -LiteralPath $legacyExe).Hash -ne $expectedHash) { throw 'Unknown legacy package was changed' }
+[IO.File]::WriteAllText($marker,$legacyMarker)
+Move-Item -LiteralPath $link -Destination (Join-Path $root 'legacy-start.lnk')
+$legacyLink=$shell.CreateShortcut((Join-Path $root 'legacy-start.lnk'));$legacyLink.TargetPath=$legacyExe;$legacyLink.Save()
+$foreignLegacyDesktop=Join-Path $root 'legacy-desktop.lnk'
+$foreign=$shell.CreateShortcut($foreignLegacyDesktop);$foreign.TargetPath=Join-Path $env:WINDIR 'notepad.exe';$foreign.Save()
+$foreignLegacyHash=(Get-FileHash -LiteralPath $foreignLegacyDesktop).Hash
+$results.legacyMigrationExit=Run-Setup
+if ($results.legacyMigrationExit -ne 0 -or !(Test-Path -LiteralPath $exe) -or (Test-Path -LiteralPath $legacyExe) -or (Get-FileHash -LiteralPath $exe).Hash -ne $expectedHash -or (Test-Path -LiteralPath (Join-Path $root 'legacy-start.lnk')) -or (Get-FileHash -LiteralPath $foreignLegacyDesktop).Hash -ne $foreignLegacyHash -or $shell.CreateShortcut($link).TargetPath -ne $exe) { throw 'Legacy filename/shortcut migration failed' }
+$results.legacyMigrationPreservedSentinel=[IO.File]::ReadAllText($sentinel) -eq 'NATIVE9 user content must survive'
+if (!$results.legacyMigrationPreservedSentinel) { throw 'Migration changed user content' }
+# A desktop entry belonging to the archived application must not block upgrade.
+$foreignDesktop=Join-Path $root 'desktop.lnk'
+$foreign=$shell.CreateShortcut($foreignDesktop);$foreign.TargetPath=Join-Path $env:WINDIR 'notepad.exe';$foreign.Save()
+$foreignDesktopHash=(Get-FileHash -LiteralPath $foreignDesktop).Hash
+$results.foreignDesktopPreservedExit=Run-Setup
+if ($results.foreignDesktopPreservedExit -ne 0 -or (Get-FileHash -LiteralPath $foreignDesktop).Hash -ne $foreignDesktopHash) { throw 'Foreign desktop shortcut was changed' }
 $createdMutex=$false
 $installerMutex=[Threading.Mutex]::new($true,('Local\AuroraNativeInstaller.com.aurora.launcher.native-preview.acceptance.'+$id),[ref]$createdMutex)
 try {

@@ -29,7 +29,7 @@ exact source SHA, numeric version, supported minimum installed native version an
 the exact observed native authority parent. Signing, publication and authority
 advancement retain their existing protected environments and review requirements.
 Future native releases are stable GitHub releases and become Latest. Tags remain
-`native-v<version>`; installers remain `Aurora.Native.Preview_<version>_x64-setup.exe`.
+`native-v<version>`; installers from 2.1.1 use `Aurora.Launcher_<version>_x64-setup.exe`.
 
 The existing package/data/credential/channel identifiers containing `native-preview`
 are compatibility contracts, not a prerelease designation. Do not rename them or
@@ -48,3 +48,5 @@ installer acceptance and describe any update/restart verification limits.
 See [protected native procedure](docs/native-ui/PROTECTED_NATIVE_RELEASE.md),
 [2.1.0 release record](docs/releases/NATIVE_2_1_0_RELEASE.md), and
 [historical release instructions](docs/releases/archive/RELEASING_PRE_NATIVE_ONLY.md).
+
+Public product, executable, release and installer names follow [the permanent naming contract](docs/releases/BRANDING_CONTRACT.md). Releases from 2.1.1 use `aurora-launcher.exe` and Aurora Launcher Windows metadata. Clients through 2.1.0 require one manual installer upgrade because their shipped updater fixes the earlier filename. Historical signed releases remain immutable and verifiable.

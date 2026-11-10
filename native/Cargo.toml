@@ -14,7 +14,7 @@ build = "build.rs"
 [workspace]
 
 [[bin]]
-name = "aurora-native"
+name = "aurora-launcher"
 path = "src/main.rs"
 
 [features]

@@ -13,11 +13,10 @@
 //!   The Settings page may create and remove it. Creation and removal are
 //!   offered only for installed production builds: a development or build-
 //!   output executable must never become a permanent user shortcut.
-//! - **Start menu** — normally owned by the installers. Both Aurora
-//!   installers create Start-menu shortcuts and remove them on uninstall
-//!   (WiX lays out `Programs\Aurora Launcher\Aurora Launcher.lnk`; NSIS
-//!   writes `Programs\Aurora Launcher.lnk` by default). When no slot already
-//!   holds a shortcut to this executable, Settings may write the user's NSIS
+//! - **Start menu** — normally owned by the installer in
+//!   `Programs\Aurora Launcher\Aurora Launcher.lnk`. Historical flat slots
+//!   remain readable for ownership detection. When no slot already holds a
+//!   shortcut to this executable, Settings may write the grouped installer
 //!   slot (the same path the installer uses, so uninstall still removes it);
 //!   it never duplicates an installer shortcut and never overwrites or
 //!   removes anything it cannot prove is Aurora's.
@@ -48,7 +47,7 @@ use std::path::{Path, PathBuf};
 ///
 /// This is the compatibility contract with the installers (both name their
 /// shortcuts after the product name) and with the Settings page copy.
-pub const PRODUCT_NAME: &str = "Aurora Launcher Native Preview";
+pub const PRODUCT_NAME: &str = "Aurora Launcher";
 
 /// The `.lnk` file name of every Aurora-managed shortcut slot.
 pub fn shortcut_file_name() -> String {
@@ -294,17 +293,20 @@ impl ShortcutContext {
     /// Adds Aurora to the Start menu's app list.
     ///
     /// An existing shortcut to this executable (installer- or launcher-made)
-    /// is success with nothing written. Otherwise the user's NSIS slot is
+    /// is success with nothing written. Otherwise the installer's grouped slot is
     /// written, unless something Aurora cannot prove it owns occupies it.
     pub fn create_start_menu_shortcut(&self) -> Result<ShortcutPresence, ShortcutError> {
         if self.start_menu_presence() == ShortcutPresence::Present {
             return Ok(ShortcutPresence::Present);
         }
-        let slot = self.programs_dir.join(shortcut_file_name());
+        let slot = self
+            .programs_dir
+            .join(PRODUCT_NAME)
+            .join(shortcut_file_name());
         match classify_shortcut(&self.evidence(&slot), &self.target_exe) {
             ShortcutPresence::Conflict => Err(ShortcutError::Conflict),
             ShortcutPresence::Present | ShortcutPresence::Absent => {
-                std::fs::create_dir_all(&self.programs_dir)
+                std::fs::create_dir_all(slot.parent().expect("Start menu group"))
                     .map_err(|error| ShortcutError::Io(error.to_string()))?;
                 windows_impl::write_shortcut(
                     &slot,
@@ -730,7 +732,10 @@ mod tests {
                 context.create_start_menu_shortcut()?,
                 ShortcutPresence::Present
             );
-            let start_slot = context.programs_dir.join(shortcut_file_name());
+            let start_slot = context
+                .programs_dir
+                .join(PRODUCT_NAME)
+                .join(shortcut_file_name());
             // Hosted runners may expose TEMP through an 8.3 alias
             // (RUNNER~1), while ShellLink records the long account path.
             // Normalize the fixture before either shortcut lifecycle checks
@@ -818,7 +823,7 @@ mod tests {
             assert_eq!(context.remove_desktop_shortcut()?, ShortcutPresence::Absent);
 
             // Installer-owned Start-menu slots report presence read-only.
-            let msi_layout = start_menu_slots(&context.programs_dir)[1].clone();
+            let msi_layout = start_menu_slots(&context.programs_dir)[0].clone();
             std::fs::create_dir_all(msi_layout.parent().unwrap())?;
             windows_impl::write_shortcut(
                 &msi_layout,

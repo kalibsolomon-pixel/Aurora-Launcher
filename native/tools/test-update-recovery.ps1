@@ -5,7 +5,7 @@ $prefix=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')+'\aurora-n
 if(!$Root.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase) -or !(Test-Path -LiteralPath (Join-Path $Root 'NATIVE-RELEASE-DISPOSABLE.txt'))){throw 'Marked disposable signed-update root required'}
 $accepted=Get-Content -LiteralPath (Join-Path $Root 'results.json') -Raw | ConvertFrom-Json
 if(!$accepted.passed -or $accepted.packageId -notmatch '^com\.aurora\.launcher\.native-preview\.acceptance\.[a-f0-9]{32}$'){throw 'Successful isolated signed acceptance required first'}
-$exe=Join-Path $Root 'installation/aurora-native.exe'
+$exe=Join-Path $Root 'installation/aurora-launcher.exe'
 $installer=Join-Path $Root 'signed-installer.exe'
 $sentinel=Join-Path $Root 'managed/instances/user-owned/saves/World/sentinel.dat'
 $expected=(Get-FileHash -LiteralPath $exe).Hash

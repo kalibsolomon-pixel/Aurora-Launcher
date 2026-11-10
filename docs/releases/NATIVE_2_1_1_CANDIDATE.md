@@ -1,5 +1,7 @@
 # Native 2.1.1 protected release candidate
 
+This is the historical preparation record before the owner confirmed permanent public naming on 2026-11-10. Its earlier filename decision is superseded by [the naming and migration contract](BRANDING_CONTRACT.md). Protected run 42814502513 was canceled before signing; the replacement must use the corrected source and newly built artifacts.
+
 This records source preparation, not publication. The owner authorized source integration, commits, protected signing, immutable publication, and monotonic native authority advancement on 2026-11-10. GitHub environment approvals and production credential controls remain required.
 
 ## Source reconciliation

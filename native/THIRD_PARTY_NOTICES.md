@@ -1,4 +1,4 @@
-# Third-party notices — Aurora Launcher native host
+# Third-party notices — Aurora Launcher
 
 The native host (`native/`) adds these components to the launcher core,
 which keeps its existing dependency notices.

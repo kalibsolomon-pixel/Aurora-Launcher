@@ -17,7 +17,12 @@ Unicode true
 !ifndef OUTPUT
 !error "OUTPUT is required"
 !endif
-!define PRODUCT "Aurora Launcher Native Preview"
+!define PRODUCT "Aurora Launcher"
+; Keep the established installation location and package/data identity. This is
+; an internal compatibility path, not the application or download name.
+!define INSTALL_FOLDER "Aurora Launcher Native Preview"
+!define EXECUTABLE "aurora-launcher.exe"
+!define LEGACY_EXECUTABLE "aurora-native.exe"
 !ifdef ACCEPTANCE_ROOT
 !define PACKAGE_ID "com.aurora.launcher.native-preview.acceptance.${ACCEPTANCE_ID}"
 !else
@@ -26,14 +31,14 @@ Unicode true
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PACKAGE_ID}"
 Name "${PRODUCT}"
 OutFile "${OUTPUT}"
-InstallDir "$LOCALAPPDATA\${PRODUCT}"
+InstallDir "$LOCALAPPDATA\${INSTALL_FOLDER}"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 Icon "..\assets\icon.ico"
 UninstallIcon "..\assets\icon.ico"
 VIProductVersion "${VERSION}.0"
 VIAddVersionKey "ProductName" "${PRODUCT}"
-VIAddVersionKey "FileDescription" "Aurora native preview installer"
+VIAddVersionKey "FileDescription" "Aurora Launcher installer"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "LegalCopyright" "Aurora Launcher contributors"
@@ -50,6 +55,9 @@ Var StartSlot
 Var DesktopSlot
 Var Previous
 Var Activated
+Var InstalledExe
+Var LegacyStartSlot
+Var LegacyDesktopSlot
 
 !macro SlotOwned SLOT
   StrCpy $9 0
@@ -64,7 +72,10 @@ Var Activated
         ${If} $3 == 0
           ${IShellLink::GetPath} $0 '(t .r2, i ${NSIS_MAX_STRLEN}, p 0, i 0).r3'
           ${If} $3 == 0
-          ${AndIf} $2 == "$INSTDIR\aurora-native.exe"
+          ${AndIf} $2 == "$INSTDIR\${EXECUTABLE}"
+            StrCpy $9 1
+          ${ElseIf} $3 == 0
+          ${AndIf} $2 == "$INSTDIR\${LEGACY_EXECUTABLE}"
             StrCpy $9 1
           ${EndIf}
         ${EndIf}
@@ -96,32 +107,42 @@ Var Activated
 !macro InitPaths
   SetShellVarContext current
   SetRegView 64
+  StrCpy $InstalledExe "${EXECUTABLE}"
   ; Ignore /D: the shipped preview has one distinct, fixed per-user identity.
 !ifdef ACCEPTANCE_ROOT
   StrCpy $INSTDIR "${ACCEPTANCE_ROOT}\installation"
   StrCpy $StartSlot "${ACCEPTANCE_ROOT}\start.lnk"
   StrCpy $DesktopSlot "${ACCEPTANCE_ROOT}\desktop.lnk"
+  StrCpy $LegacyStartSlot "${ACCEPTANCE_ROOT}\legacy-start.lnk"
+  StrCpy $LegacyDesktopSlot "${ACCEPTANCE_ROOT}\legacy-desktop.lnk"
 !else
-  StrCpy $INSTDIR "$LOCALAPPDATA\${PRODUCT}"
-  StrCpy $StartSlot "$SMPROGRAMS\${PRODUCT}.lnk"
+  StrCpy $INSTDIR "$LOCALAPPDATA\${INSTALL_FOLDER}"
+  StrCpy $StartSlot "$SMPROGRAMS\${PRODUCT}\${PRODUCT}.lnk"
   StrCpy $DesktopSlot "$DESKTOP\${PRODUCT}.lnk"
+  StrCpy $LegacyStartSlot "$SMPROGRAMS\${INSTALL_FOLDER}.lnk"
+  StrCpy $LegacyDesktopSlot "$DESKTOP\${INSTALL_FOLDER}.lnk"
 !endif
   !insertmacro CheckAncestors "$INSTDIR"
+  !insertmacro CheckAncestors "$StartSlot"
+  !insertmacro CheckAncestors "$DesktopSlot"
+  !insertmacro CheckAncestors "$LegacyStartSlot"
+  !insertmacro CheckAncestors "$LegacyDesktopSlot"
   System::Call 'ole32::CoInitializeEx(p 0, i 2)'
 !macroend
 
 Function .onInit
   ${IfNot} ${RunningX64}
-    Abort "This native preview requires Windows x64."
+    Abort "Aurora Launcher requires Windows x64."
   ${EndIf}
   !insertmacro InitPaths
   System::Call 'kernel32::CreateMutexW(p 0, i 1, w "Local\AuroraNativeInstaller.${PACKAGE_ID}") p.r0 ?e'
   Pop $1
   ${If} $0 P= 0
   ${OrIf} $1 == 183
-    Abort "Another native installer is running."
+    Abort "Another Aurora Launcher installer is running."
   ${EndIf}
-  !insertmacro CheckAncestors "$INSTDIR\aurora-native.exe"
+  !insertmacro CheckAncestors "$INSTDIR\${EXECUTABLE}"
+  !insertmacro CheckAncestors "$INSTDIR\${LEGACY_EXECUTABLE}"
   !insertmacro CheckAncestors "$INSTDIR\LICENSE.txt"
   !insertmacro CheckAncestors "$INSTDIR\THIRD_PARTY_NOTICES.txt"
   !insertmacro CheckAncestors "$INSTDIR\MaterialSymbols-LICENSE.txt"
@@ -161,7 +182,8 @@ Function .onInit
     ; its fixed files only when every owned slot is absent; unknown/malformed
     ; package evidence or any collision remains a hard conflict.
     IfFileExists "$INSTDIR\native-package.ini" unknown
-    IfFileExists "$INSTDIR\aurora-native.exe" unknown
+    IfFileExists "$INSTDIR\${EXECUTABLE}" unknown
+    IfFileExists "$INSTDIR\${LEGACY_EXECUTABLE}" unknown
     IfFileExists "$INSTDIR\uninstall.exe" unknown
     IfFileExists "$INSTDIR\LICENSE.txt" unknown
     IfFileExists "$INSTDIR\THIRD_PARTY_NOTICES.txt" unknown
@@ -170,17 +192,33 @@ Function .onInit
     IfFileExists "$INSTDIR\native-previous.exe" unknown
     Goto slots
     unknown:
-    Abort "This directory contains unrecognized native package files. No files were changed."
+    Abort "This directory contains unrecognized launcher package files. No files were changed."
   ${EndIf}
   ReadINIStr $0 "$INSTDIR\native-package.ini" "Package" "Version"
   ${VersionCompare} "$0" "${VERSION}" $1
   ${If} $1 == 1
-    Abort "A newer native preview is installed. Downgrades require a separately reviewed rollback."
+    Abort "A newer Aurora Launcher version is installed. Downgrades require a separately reviewed rollback."
   ${EndIf}
-  IfFileExists "$INSTDIR\aurora-native.exe" 0 slots
-  System::Call 'kernel32::CreateFileW(w "$INSTDIR\aurora-native.exe", i 0x40010000, i 1, p 0, i 3, i 0, p 0) p.r0'
+  ; Only a recognized prior package may supply the old executable slot.
+  ; Both names at once are ambiguous; preserve them for explicit recovery.
+  IfFileExists "$INSTDIR\${LEGACY_EXECUTABLE}" 0 probe
+  IfFileExists "$INSTDIR\${EXECUTABLE}" ambiguous
+  ${If} $0 != "1.4.2"
+  ${AndIf} $0 != "1.4.3"
+  ${AndIf} $0 != "2.0.0"
+  ${AndIf} $0 != "2.0.1"
+  ${AndIf} $0 != "2.1.0"
+    Abort "The earlier installation version is unrecognized. Existing files were preserved."
+  ${EndIf}
+  StrCpy $InstalledExe "${LEGACY_EXECUTABLE}"
+  Goto probe
+  ambiguous:
+  Abort "Both launcher executable names exist. Preserve them and review the installation before retrying."
+  probe:
+  IfFileExists "$INSTDIR\$InstalledExe" 0 slots
+  System::Call 'kernel32::CreateFileW(w "$INSTDIR\$InstalledExe", i 0x40010000, i 1, p 0, i 3, i 0, p 0) p.r0'
   ${If} $0 P= -1
-    Abort "Close the native preview before installing."
+    Abort "Close Aurora Launcher before installing."
   ${EndIf}
   System::Call 'kernel32::CloseHandle(p r0)'
   slots:
@@ -193,12 +231,13 @@ Function .onInit
   IfFileExists "$DesktopSlot" 0 done
   !insertmacro SlotOwned "$DesktopSlot"
   ${If} $9 != 1
-    Abort "The desktop shortcut is owned by another application."
+    ; The archived launcher may own the unqualified desktop name. Keep it.
+    StrCpy $DesktopSlot ""
   ${EndIf}
   done:
 FunctionEnd
 
-Section "Native application" Main
+Section "Aurora Launcher" Main
   SectionIn RO
   ; Refuse unknown interrupted transactions. Preserve all recovery evidence.
   IfFileExists "$INSTDIR\native-new.exe" conflict
@@ -210,14 +249,14 @@ Section "Native application" Main
   IfErrors failed
   StrCpy $Previous 0
   StrCpy $Activated 0
-  IfFileExists "$INSTDIR\aurora-native.exe" 0 activate
+  IfFileExists "$INSTDIR\$InstalledExe" 0 activate
   ClearErrors
-  Rename "$INSTDIR\aurora-native.exe" "$INSTDIR\native-previous.exe"
+  Rename "$INSTDIR\$InstalledExe" "$INSTDIR\native-previous.exe"
   IfErrors failed
   StrCpy $Previous 1
   activate:
   ClearErrors
-  Rename "$INSTDIR\native-new.exe" "$INSTDIR\aurora-native.exe"
+  Rename "$INSTDIR\native-new.exe" "$INSTDIR\${EXECUTABLE}"
   IfErrors restore
   StrCpy $Activated 1
   File /oname=LICENSE.txt "..\..\LICENSE"
@@ -230,41 +269,61 @@ Section "Native application" Main
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "Aurora Launcher contributors"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\aurora-native.exe"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${EXECUTABLE}"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" '$\"$INSTDIR\uninstall.exe$\"'
   WriteRegStr HKCU "${UNINSTALL_KEY}" "QuietUninstallString" '$\"$INSTDIR\uninstall.exe$\" /S'
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
-  CreateShortcut "$StartSlot" "$INSTDIR\aurora-native.exe"
+!ifndef ACCEPTANCE_ROOT
+  CreateDirectory "$SMPROGRAMS\${PRODUCT}"
+!endif
+  CreateShortcut "$StartSlot" "$INSTDIR\${EXECUTABLE}"
   IfErrors restore
+  ; Retire only shortcuts proven to target this package's exact directory.
+  !insertmacro SlotOwned "$LegacyStartSlot"
+  ${If} $9 == 1
+    Delete "$LegacyStartSlot"
+  ${EndIf}
+  !insertmacro SlotOwned "$LegacyDesktopSlot"
+  ${If} $9 == 1
+    ${If} $DesktopSlot != ""
+      CreateShortcut "$DesktopSlot" "$INSTDIR\${EXECUTABLE}"
+      IfErrors restore
+    ${EndIf}
+    Delete "$LegacyDesktopSlot"
+  ${EndIf}
   ; Only this operation's previous executable is retired after activation.
   Delete "$INSTDIR\native-previous.exe"
   Goto done
   restore:
   ${If} $Activated == 1
-    Delete "$INSTDIR\aurora-native.exe"
+    Delete "$INSTDIR\${EXECUTABLE}"
   ${EndIf}
   ${If} $Previous == 1
-    Rename "$INSTDIR\native-previous.exe" "$INSTDIR\aurora-native.exe"
+    Rename "$INSTDIR\native-previous.exe" "$INSTDIR\$InstalledExe"
   ${EndIf}
   failed:
   Delete "$INSTDIR\native-new.exe"
   SetErrorLevel 2
-  Abort "Installation failed. Close the native preview and retry. Recovery files, if present, have been preserved."
+  Abort "Installation failed. Close Aurora Launcher and retry. Recovery files, if present, have been preserved."
   conflict:
   SetErrorLevel 3
-  Abort "An interrupted native installation needs review. Existing files have been preserved."
+  Abort "An interrupted Aurora Launcher installation needs review. Existing files have been preserved."
   done:
 SectionEnd
 
 Section /o "Desktop shortcut" Desktop
-  CreateShortcut "$DesktopSlot" "$INSTDIR\aurora-native.exe"
+  ${If} $DesktopSlot != ""
+    CreateShortcut "$DesktopSlot" "$INSTDIR\${EXECUTABLE}"
+  ${Else}
+    DetailPrint "The existing desktop shortcut belongs to another application and was preserved."
+  ${EndIf}
 SectionEnd
 
 Function .onInstSuccess
   ${GetOptions} $Parameters "/RESTART" $0
   ${IfNot} ${Errors}
-    Exec '$\"$INSTDIR\aurora-native.exe$\"'
+    Exec '$\"$INSTDIR\${EXECUTABLE}$\"'
   ${EndIf}
 FunctionEnd
 
@@ -275,26 +334,27 @@ Function un.onInit
   ${If} $0 P= 0
   ${OrIf} $1 == 183
     SetErrorLevel 2
-    Abort "Another native installer is running. Close it before uninstalling."
+    Abort "Another Aurora Launcher installer is running. Close it before uninstalling."
   ${EndIf}
-  !insertmacro CheckAncestors "$INSTDIR\aurora-native.exe"
+  !insertmacro CheckAncestors "$INSTDIR\${EXECUTABLE}"
+  !insertmacro CheckAncestors "$INSTDIR\${LEGACY_EXECUTABLE}"
   !insertmacro CheckAncestors "$INSTDIR\native-package.ini"
   !insertmacro CheckAncestors "$INSTDIR\LICENSE.txt"
   !insertmacro CheckAncestors "$INSTDIR\THIRD_PARTY_NOTICES.txt"
   !insertmacro CheckAncestors "$INSTDIR\MaterialSymbols-LICENSE.txt"
   ReadINIStr $0 "$INSTDIR\native-package.ini" "Package" "Identity"
   ${If} $0 != "${PACKAGE_ID}"
-    Abort "Native installation ownership could not be verified."
+    Abort "Aurora Launcher installation ownership could not be verified."
   ${EndIf}
 FunctionEnd
 
 Section "Uninstall"
   ; No delete-data option. No wildcard Delete or recursive RMDir. Sentinel or
   ; unknown files keep the install directory present; all game data is outside.
-  Delete "$INSTDIR\aurora-native.exe"
-  IfFileExists "$INSTDIR\aurora-native.exe" 0 shortcuts
+  Delete "$INSTDIR\${EXECUTABLE}"
+  IfFileExists "$INSTDIR\${EXECUTABLE}" 0 shortcuts
   SetErrorLevel 2
-  Abort "Close the native preview before uninstalling. Data is preserved."
+  Abort "Close Aurora Launcher before uninstalling. Data is preserved."
   shortcuts:
   !insertmacro SlotOwned "$StartSlot"
   ${If} $9 == 1
@@ -311,4 +371,7 @@ Section "Uninstall"
   Delete "$INSTDIR\uninstall.exe"
   DeleteRegKey HKCU "${UNINSTALL_KEY}"
   RMDir "$INSTDIR"
+!ifndef ACCEPTANCE_ROOT
+  RMDir "$SMPROGRAMS\${PRODUCT}"
+!endif
 SectionEnd

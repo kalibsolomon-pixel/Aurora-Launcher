@@ -1,4 +1,4 @@
-# Native Aurora identity
+# Aurora Launcher assets
 
 `aurora.svg` is copied byte for byte from the owner-confirmed
 `C:\Users\kalib\Downloads\aurora-refined.svg` (owner-approved option B).

@@ -147,23 +147,23 @@ fn main() -> Result<(), slint::PlatformError> {
         let sync_host = host.clone();
         host.spawn(async move {
             if api::initialize_sync(sync_host).await.is_err() {
-                eprintln!("[aurora-native] automatic sync preferences unavailable; see Settings");
+                eprintln!("[aurora-launcher] automatic sync preferences unavailable; see Settings");
             }
         });
     }
     load();
     window.run()?;
-    eprintln!("[aurora-native] window closed; stopping background work");
+    eprintln!("[aurora-launcher] window closed; stopping background work");
 
     // Bounded shutdown: Discord presence is cleared (≤ 3 s inside), then
     // background tasks get 2 s. A supervised game keeps running; it is never
     // terminated by the launcher closing.
     runtime.block_on(aurora_launcher_lib::discord::shutdown());
-    eprintln!("[aurora-native] integrations stopped");
+    eprintln!("[aurora-launcher] integrations stopped");
     ui::release();
     drop(window);
     runtime.shutdown_timeout(std::time::Duration::from_secs(2));
-    eprintln!("[aurora-native] exited cleanly");
+    eprintln!("[aurora-launcher] exited cleanly");
     Ok(())
 }
 
