@@ -105,16 +105,24 @@ test('native publication uploads verified draft bytes and selects native as late
   await assert.rejects(publishNativeRelease({...d,api:wrongTagApi,upload,download}));
   assert.equal(mutations.length,beforeWrongTag+1,'tag mismatch must stop before draft creation');
 });
-test('native authority verifies public artifacts then advances only isolated ref, with stale-parent refusal',async()=>{
+for (const scenario of [
+  {name:'immediate read-back',staleReads:0},
+  {name:'stale read-back',staleReads:2},
+  {name:'uncertain write response',staleReads:2,uncertain:true},
+  {name:'rejected write',staleReads:7,rejected:true,fails:/read-back remained/},
+  {name:'read-back never converges',staleReads:7,fails:/read-back remained/},
+  {name:'unexpected third commit',staleReads:0,foreign:true,fails:/Native authority moved/},
+  {name:'malformed ref identity',staleReads:0,malformed:true,fails:/ref identity/},
+]) test(`native authority advances once: ${scenario.name}`,async()=>{
   const f=fixture(),d=await directory(f),parent='b'.repeat(40),commit='c'.repeat(40),tree='d'.repeat(40),blob=blobSha(f.envelope);
-  let current=parent;const writes=[];
+  let current=parent,staleReads=0,updated=false;const writes=[],waits=[];
   const assets=[];const publicBytes=new Map();
   for(const name of [...d.metadata.artifacts.map(a=>a.name),'native-release-assets.json']){const bytes=await readFile(join(d.directory,name));publicBytes.set(name,bytes);assets.push({name,size:bytes.length,browser_download_url:`https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v${f.version}/${name}`});}
   const api=async(path,options={})=>{
     if(path.startsWith('/releases/tags/'))return {tag_name:`native-v${f.version}`,target_commitish:d.metadata.sourceSha,prerelease:false,draft:false,immutable:true,assets};
     if(path===`/git/ref/tags/native-v${f.version}`)return {ref:`refs/tags/native-v${f.version}`,object:{type:'commit',sha:d.metadata.sourceSha}};
-    if(path==='/git/ref/heads/launcher-native-update-authority')return {ref:nativeRef,object:{type:'commit',sha:current}};
-    if(options.method){writes.push(path);if(path==='/git/blobs')return {sha:blob};if(path==='/git/trees')return {sha:tree};if(path==='/git/commits')return {sha:commit};if(path==='/git/refs/heads/launcher-native-update-authority'){assert.equal(options.body.force,false);current=commit;return {};}}
+    if(path==='/git/ref/heads/launcher-native-update-authority')return {ref:updated&&scenario.malformed?'refs/heads/unrelated':nativeRef,object:{type:'commit',sha:updated&&scenario.foreign?'f'.repeat(40):staleReads-->0?parent:current}};
+    if(options.method){writes.push(path);if(path==='/git/blobs')return {sha:blob};if(path==='/git/trees')return {sha:tree};if(path==='/git/commits')return {sha:commit};if(path==='/git/refs/heads/launcher-native-update-authority'){assert.equal(options.body.force,false);updated=true;staleReads=scenario.staleReads;if(scenario.rejected)throw Error('Write denied');current=commit;if(scenario.uncertain)throw Error('Response lost after accepted write');return {};}}
     if(path===`/git/commits/${parent}`)return {sha:parent,tree:{sha:emptyTreeSha},parents:[],message:nativeInitialization};
     if(path===`/git/commits/${commit}`)return {sha:commit,tree:{sha:tree},parents:[{sha:parent}]};
     if(path===`/git/trees/${tree}`)return {sha:tree,truncated:false,tree:[{path:'native-update.json',type:'blob',mode:'100644',sha:blob}]};
@@ -122,11 +130,20 @@ test('native authority verifies public artifacts then advances only isolated ref
     throw Error(`Unexpected path ${path}`);
   };
   const download=async(url)=>url===nativeAuthority?f.envelope:publicBytes.get(url.split('/').at(-1));
-  const options={...d,api,download,key:f.key,expectedParent:'e'.repeat(40)};
+  const options={...d,api,download,key:f.key,expectedParent:'e'.repeat(40),wait:async(ms)=>waits.push(ms)};
   await assert.rejects(advanceNativeAuthority(options));assert.equal(writes.length,0);
-  await advanceNativeAuthority({...options,expectedParent:parent});
-  assert.equal(current,commit);assert.equal(writes.at(-1),'/git/refs/heads/launcher-native-update-authority');
+  if(scenario.fails)await assert.rejects(advanceNativeAuthority({...options,expectedParent:parent}),scenario.fails);
+  else await advanceNativeAuthority({...options,expectedParent:parent});
+  assert.equal(current,scenario.rejected?parent:commit);assert.equal(writes.at(-1),'/git/refs/heads/launcher-native-update-authority');
+  assert.equal(writes.filter(p=>p==='/git/refs/heads/launcher-native-update-authority').length,1);
   assert.ok(writes.every(p=>!p.includes('/heads/launcher-update-authority')));
+  assert.equal(waits.length,Math.min(scenario.staleReads,6));
+  assert.ok(waits.every(ms=>ms===1000));
+  if(!scenario.fails) {
+    const before=writes.length;
+    assert.equal(await advanceNativeAuthority({...options,expectedParent:commit}),'unchanged');
+    assert.equal(writes.length,before,'identical authority recovery must be read-only');
+  }
 });
 test('native protected workflow is manual, scoped and signing fails closed',async()=>{
   const text=await readFile(new URL('../../.github/workflows/native-release.yml',import.meta.url),'utf8');
