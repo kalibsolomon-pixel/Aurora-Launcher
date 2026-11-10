@@ -4,6 +4,7 @@
 - [Release instructions](../RELEASING.md)
 - [Permanent naming and upgrade compatibility](releases/BRANDING_CONTRACT.md)
 - [Rust application transition](native-ui/NATIVE_ONLY_TRANSITION.md)
+- [Aurora Launcher 2.1.1 release record](releases/NATIVE_2_1_1_RELEASE.md)
 - [Aurora Launcher 2.1.0 release record](releases/NATIVE_2_1_0_RELEASE.md)
 - [Aurora Launcher 2.0.1 release record](releases/NATIVE_2_0_1_RELEASE.md)
 - [Aurora Launcher 2.0.0 release record](releases/NATIVE_2_0_0_RELEASE.md)

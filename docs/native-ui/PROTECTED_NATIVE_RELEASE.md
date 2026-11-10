@@ -2,10 +2,14 @@
 
 Owner naming decision, 2026-11-10: releases from 2.1.1 use **Aurora Launcher**, `aurora-launcher.exe` and `Aurora.Launcher_<version>_x64-setup.exe`. Follow the [naming and migration contract](../releases/BRANDING_CONTRACT.md). Published older signed assets and historical records below retain their original names. The superseded 2.1.1 run `42814502513` was canceled before signing; replacement approval must apply to the corrected exact source.
 
-Native 2.1.0 is the current stable release. See its
-[release record](../releases/NATIVE_2_1_0_RELEASE.md) for the verified current
+Aurora Launcher 2.1.1 is the current stable release. See its
+[release record](../releases/NATIVE_2_1_1_RELEASE.md) for the verified current
 authority and exact protected workflow result. The 2.0.0 bootstrap record below
 is historical; always observe the live authority parent before dispatch.
+Run #4 published 2.1.1 and advanced authority but failed its immediate API
+read-back. Independent read-only verification confirmed the exact public bytes
+and signatures. Never rerun publication or repeat the authority write for that
+release to make the historical job green.
 
 ## Native 2.0.0 release continuation
 

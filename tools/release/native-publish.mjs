@@ -88,9 +88,23 @@ export async function advanceNativeAuthority(options) {
   const previous=await inspectAuthority(api,expectedParent,key);
   const bytes=await readFile(join(directory,'native-update.json'));
   const unchanged=nativeAdvancement(previous,bytes,key)==='unchanged';
+  const confirmRef=async(sha)=>{
+    for(let attempt=0;attempt<7;attempt++) {
+      const observed=await api(refPath);
+      if(observed.ref!==nativeRef || observed.object?.type!=='commit') throw Error('Unexpected native authority ref identity');
+      const observedSha=requireSha(observed.object.sha);
+      if(observedSha===sha)return;
+      // GitHub can briefly serve the pre-write ref after accepting the PATCH.
+      // Only that exact parent is retryable. Never repeat a write or tolerate
+      // a third commit, malformed ref, rewind, or same-version replacement.
+      if(sha===expectedParent || observedSha!==expectedParent) throw Error(`Native authority moved: expected ${sha}, observed ${observedSha}`);
+      if(attempt<6)await (options.wait??(ms=>new Promise(done=>setTimeout(done,ms))))(1000);
+    }
+    throw Error('Native authority read-back remained at previous parent; retain ref and inspect; no write was retried');
+  };
   const verifyRaw=async(sha)=>{
     for(let attempt=0;attempt<7;attempt++) {
-      if((await api(refPath)).object.sha!==sha)throw Error('Native authority moved during public verification');
+      await confirmRef(sha);
       let publicBytes;
       try {publicBytes=await download(nativeAuthority,bytes.length);} catch { /* bounded read-only CDN recovery */ }
       if(publicBytes?.equals(bytes)) {console.log(`VERIFIED ${sha}`);return;}
@@ -109,8 +123,8 @@ export async function advanceNativeAuthority(options) {
   // Non-forced fast-forward only. Protected ref + dedicated App + workflow
   // concurrency exclude other writers. An uncertain write is inspected, never retried.
   try {await api(updatePath,{method:'PATCH',body:{sha:commit.sha,force:false}});}
-  catch {if((await api(refPath)).object.sha!==commit.sha) throw Error('Native authority outcome requires manual inspection');}
-  if((await api(refPath)).object.sha!==commit.sha) throw Error('Native authority moved');
+  catch { /* The read-only confirmation below resolves an uncertain write. */ }
+  await confirmRef(commit.sha);
   console.log(`PUBLISHED ${commit.sha}`);
   await verifyRaw(commit.sha);
   return commit.sha;
@@ -124,7 +138,7 @@ async function main() {
   const token=mode==='advance'?authorityToken(process.env):process.env.GH_TOKEN;
   if(!token) throw Error('Protected credential missing');
   const api=async(path,{method='GET',body,allowMissing=false}={})=>{
-    const r=await fetch(`https://api.github.com/repos/${repository}${path}`,{method,body:body?JSON.stringify(body):undefined,redirect:'error',signal:AbortSignal.timeout(30000),headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'}});
+    const r=await fetch(`https://api.github.com/repos/${repository}${path}`,{method,body:body?JSON.stringify(body):undefined,redirect:'error',signal:AbortSignal.timeout(30000),headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','Content-Type':'application/json','Cache-Control':'no-cache','X-GitHub-Api-Version':'2022-11-28'}});
     if(r.status===404 && allowMissing) return null;
     if(!r.ok) throw Error(`Native API HTTP ${r.status}`);
     return r.json();
