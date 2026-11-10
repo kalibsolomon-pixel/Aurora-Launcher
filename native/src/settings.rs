@@ -130,7 +130,7 @@ pub fn bind(window: &AppWindow) {
         ui::with(|w, _| {
             let settings = w.global::<Settings>();
             settings.set_launcher_dialog_open(true);
-            settings.set_launcher_update_detail("Download the signed native preview installer, then choose Exit and install. The installer preserves preview data and restarts the native application. WebView stable uses a separate installation and update authority.".into());
+            settings.set_launcher_update_detail("Download the signed Aurora Launcher installer, then choose Exit and install. The installer preserves your application data and restarts Aurora Launcher.".into());
         });
     });
     settings.on_download_launcher_update(|| launcher_operation(false));

@@ -110,7 +110,11 @@ fn version(value: &str) -> Result<semver::Version, Error> {
 }
 
 fn installer_name(version: &str) -> String {
-    format!("Aurora.Native.Preview_{version}_x64-setup.exe")
+    #[cfg(not(feature = "native-update-acceptance"))]
+    if self::version(version).is_ok_and(|v| v < semver::Version::new(2, 1, 1)) {
+        return format!("Aurora.Native.Preview_{version}_x64-setup.exe");
+    }
+    format!("Aurora.Launcher_{version}_x64-setup.exe")
 }
 
 impl Offer {
@@ -234,13 +238,13 @@ fn configured_key() -> Result<&'static str, Error> {
         {
             return Err(Error::new(
                 "updater_unconfigured",
-                "Native preview updates are not enabled. Use the separately accepted native installer.",
+                "Aurora Launcher updates are not enabled. Install the latest Aurora Launcher release.",
             ));
         }
         let value = UPDATER_PUBKEY.ok_or_else(|| {
             Error::new(
                 "updater_unconfigured",
-                "Native update verification is not configured.",
+                "Aurora Launcher update verification is not configured.",
             )
         })?;
         key(value)?;
@@ -251,7 +255,7 @@ fn configured_key() -> Result<&'static str, Error> {
 fn client(artifacts: bool) -> Result<reqwest::Client, Error> {
     crate::downloads::ensure_rustls_crypto_provider();
     reqwest::Client::builder()
-        .user_agent(concat!("aurora-native/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("aurora-launcher/", env!("CARGO_PKG_VERSION")))
         .timeout(std::time::Duration::from_secs(300))
         .connect_timeout(std::time::Duration::from_secs(15))
         .read_timeout(std::time::Duration::from_secs(30))
@@ -492,13 +496,16 @@ pub async fn install(app: &Host, presented: &str) -> Result<LauncherUpdateStatus
     }) {
         return Err(Error::new(
             "native_update_busy",
-            "Close running games before installing a native update.",
+            "Close running games before updating Aurora Launcher.",
         ));
     }
     let mut slot = pending().lock().expect("native update slot");
-    let candidate = slot
-        .as_ref()
-        .ok_or_else(|| Error::new("update_not_downloaded", "Download the native update first."))?;
+    let candidate = slot.as_ref().ok_or_else(|| {
+        Error::new(
+            "update_not_downloaded",
+            "Download the Aurora Launcher update first.",
+        )
+    })?;
     if candidate.offer != offer
         || presented != offer.version
         || !is_upgrade(presented, &app.version())
@@ -509,22 +516,22 @@ pub async fn install(app: &Host, presented: &str) -> Result<LauncherUpdateStatus
     #[cfg(not(feature = "native-update-acceptance"))]
     let expected = crate::host::platform_local_data_dir("Aurora Launcher Native Preview")
         .map_err(|_| failure())?
-        .join("aurora-native.exe");
+        .join("aurora-launcher.exe");
     #[cfg(feature = "native-update-acceptance")]
-    let expected =
-        PathBuf::from(env!("AURORA_NATIVE_ACCEPTANCE_ROOT")).join("installation/aurora-native.exe");
+    let expected = PathBuf::from(env!("AURORA_NATIVE_ACCEPTANCE_ROOT"))
+        .join("installation/aurora-launcher.exe");
     safe_directory(executable.parent().ok_or_else(failure)?)?;
     if executable.canonicalize().ok() != expected.canonicalize().ok() || !expected.is_file() {
         return Err(Error::new(
             "native_update_installation_required",
-            "Install the native preview package before applying updates.",
+            "Install Aurora Launcher before applying updates.",
         ));
     }
     safe_directory(candidate.path.parent().ok_or_else(failure)?)?;
     verify_installer(&candidate.path, &candidate.offer, configured_key()?)?;
     // The installer opens this exact live process before waiting for it. No
     // process-name discovery/termination and no in-place running-exe overwrite.
-    std::process::Command::new(&candidate.path).args(["/S", "/RESTART", &format!("/UPDATEPID={}", std::process::id())]).spawn().map_err(|_| Error::new("update_install_failed", "The verified native installer could not start. The installed version is unchanged."))?;
+    std::process::Command::new(&candidate.path).args(["/S", "/RESTART", &format!("/UPDATEPID={}", std::process::id())]).spawn().map_err(|_| Error::new("update_install_failed", "The verified Aurora Launcher installer could not start. The installed version is unchanged."))?;
     *slot = None;
     Ok(status(app, &offer, LauncherPhase::Installing))
 }
@@ -532,6 +539,39 @@ pub async fn install(app: &Host, presented: &str) -> Result<LauncherUpdateStatus
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[cfg(not(feature = "native-update-acceptance"))]
+    fn launcher_names_keep_one_exact_filename_per_release_version() {
+        assert_eq!(
+            installer_name("2.1.0"),
+            "Aurora.Native.Preview_2.1.0_x64-setup.exe"
+        );
+        assert_eq!(
+            installer_name("2.1.1"),
+            "Aurora.Launcher_2.1.1_x64-setup.exe"
+        );
+        assert_eq!(
+            installer_name("3.0.0"),
+            "Aurora.Launcher_3.0.0_x64-setup.exe"
+        );
+        let fixture = fixture();
+        let payload = decode(fixture["valid"]["payload"].as_str().unwrap()).unwrap();
+        let mut offer: Offer = serde_json::from_slice(&payload).unwrap();
+        offer.version = "2.1.1".into();
+        offer.url = format!(
+            "https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v2.1.1/{}",
+            installer_name("2.1.1")
+        );
+        assert!(offer.validate("2.1.0").is_ok());
+        offer.url = offer
+            .url
+            .replace("Aurora.Launcher_", "Aurora.Native.Preview_");
+        assert!(offer.validate("2.1.0").is_err());
+        offer.version = "2.1.0".into();
+        offer.url = "https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v2.1.0/Aurora.Launcher_2.1.0_x64-setup.exe".into();
+        assert!(offer.validate("2.0.1").is_err());
+    }
+
     fn fixture() -> serde_json::Value {
         serde_json::from_str(include_str!("fixtures/native-test.json")).unwrap()
     }

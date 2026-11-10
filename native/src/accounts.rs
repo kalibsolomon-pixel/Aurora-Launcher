@@ -31,7 +31,7 @@ pub fn bind(window: &AppWindow) {
         ui::with(|w, s| {
             if let Some(account) = s.accounts.accounts.iter().find(|a| a.account_id == id.as_str()) {
                 REMOVE_ACCOUNT.with(|slot| *slot.borrow_mut() = Some(id.to_string()));
-                w.global::<Accounts>().set_remove_label(format!("Remove {} from the native preview? Its preview credential will be deleted. Production account credentials and all instances are preserved.", account.minecraft_name).into());
+                w.global::<Accounts>().set_remove_label(format!("Remove {} from Aurora Launcher? Its saved sign-in credential will be deleted. All instances are preserved.", account.minecraft_name).into());
                 w.global::<Accounts>().set_remove_open(true);
             }
         });

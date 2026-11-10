@@ -370,7 +370,7 @@ export component AppWindow inherits Window {
     }
 
     if Settings.launcher-dialog-open: Dialog {
-        title: "Native preview update";
+        title: "Aurora Launcher update";
         dismissible: !Settings.launcher-update-busy;
         dismissed => { Settings.launcher-dialog-open = false; }
         Text { text: Settings.launcher-update-detail; color: Theme.text-secondary; wrap: word-wrap; }

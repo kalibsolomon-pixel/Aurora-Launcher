@@ -263,7 +263,7 @@ export component SettingsPage inherits HorizontalLayout {
 
             if Settings.section == SettingsSection.about: Group {
                 title: "About";
-                SettingRow { label: "Aurora Launcher " + Settings.version; detail: "Native preview · " + Settings.renderer; }
+                SettingRow { label: "Aurora Launcher " + Settings.version; detail: Settings.renderer; }
                 Label { text: "Aurora Launcher is open source under the MIT license. The native interface is built with Slint under the Slint Royalty-free License 2.0."; wrap: word-wrap; }
                 HorizontalLayout {
                     alignment: start;

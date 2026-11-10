@@ -25,13 +25,13 @@ try {
             # Optimized acceptance only: parallel ThinLTO avoids repeating the
             # distribution's expensive whole-program LTO for two test versions.
             # The ordinary distribution profile and artifact remain unchanged.
-            cargo rustc --manifest-path native/Cargo.toml --locked --release --features native-update-acceptance --bin aurora-native -- -C lto=thin -C codegen-units=16 *> (Join-Path $Root "build-$version.txt")
+            cargo rustc --manifest-path native/Cargo.toml --locked --release --features native-update-acceptance --bin aurora-launcher -- -C lto=thin -C codegen-units=16 *> (Join-Path $Root "build-$version.txt")
             if($LASTEXITCODE){throw "Acceptance build $version failed; inspect $Root"}
-            $binary=Join-Path $Root "aurora-native-$version.exe"
-            Copy-Item -LiteralPath (Join-Path $repo 'native/target/release/aurora-native.exe') -Destination $binary
+            $binary=Join-Path $Root "aurora-launcher-$version.exe"
+            Copy-Item -LiteralPath (Join-Path $repo 'native/target/release/aurora-launcher.exe') -Destination $binary
             & (Join-Path $PSScriptRoot 'package-windows.ps1') -Binary $binary -OutputDirectory (Join-Path $Root 'artifacts') -AcceptanceRoot $Root -AcceptanceId $id -AcceptanceVersion $version *> (Join-Path $Root "package-$version.txt")
             if(!$?){throw 'Acceptance packaging failed'}
-            $installer=Join-Path $Root "artifacts/Acceptance-$id-Aurora.Native.Preview_${version}_x64-setup.exe"
+            $installer=Join-Path $Root "artifacts/Acceptance-$id-Aurora.Launcher_${version}_x64-setup.exe"
             if($version -eq '1.4.2') {
                 $setup=Start-Process -FilePath $installer -ArgumentList '/S' -WindowStyle Hidden -PassThru -Wait
                 if($setup.ExitCode){throw 'Source installation failed'}
@@ -45,7 +45,7 @@ try {
         New-Item -ItemType Directory -Path (Split-Path $sentinel) -Force | Out-Null
         [IO.File]::WriteAllBytes($sentinel,[Text.Encoding]::UTF8.GetBytes('User world must survive signed native update.'))
         $before=(Get-FileHash -LiteralPath $sentinel).Hash
-        $installed=Join-Path $Root 'installation/aurora-native.exe'
+        $installed=Join-Path $Root 'installation/aurora-launcher.exe'
         $sourceHash=(Get-FileHash -LiteralPath $installed).Hash
         if($server.HasExited){throw 'The isolated signing helper exited before acceptance'}
         $source=Start-Process -FilePath $installed -WindowStyle Hidden -PassThru -RedirectStandardError (Join-Path $Root 'source-stderr.txt') -RedirectStandardOutput (Join-Path $Root 'source-stdout.txt')

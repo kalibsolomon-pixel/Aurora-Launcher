@@ -20,4 +20,4 @@ for(const path of ['core/Cargo.lock','native/Cargo.lock']){
 }
 if(lock.version!==version||lock.packages?.['']?.version!==version)throw Error('npm lock version differs');
 if(process.argv.length>2 && (process.argv.length!==4||!['--release','--native-release'].includes(process.argv[2])||process.argv[3]!==version))throw Error('Requested release differs from native source');
-console.log(`Aurora Launcher native version contract: ${version}`);
+console.log(`Aurora Launcher version contract: ${version}`);

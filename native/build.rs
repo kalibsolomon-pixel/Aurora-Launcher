@@ -7,7 +7,9 @@ fn main() {
         println!("cargo:rerun-if-changed=assets/icon.ico");
         let mut resource = winresource::WindowsResource::new();
         resource.set_icon("assets/icon.ico");
-        resource.set("ProductName", "Aurora Launcher (native preview)");
+        resource.set("ProductName", "Aurora Launcher");
+        resource.set("OriginalFilename", "aurora-launcher.exe");
+        resource.set("InternalName", "aurora-launcher");
         resource.set("FileDescription", "Aurora Launcher");
         #[cfg(feature = "native-update-acceptance")]
         {

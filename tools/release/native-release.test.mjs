@@ -51,9 +51,28 @@ test('native authority never downgrades or accepts same-version drift',()=>{
   assert.throws(()=>nativeAdvancement(a.envelope,drift,a.key));
   assert.throws(()=>authorityToken({GH_TOKEN:'ordinary',AURORA_AUTHORITY_TOKEN:'ordinary'}));
 });
+
+test('Aurora Launcher filenames preserve signed history and require the corrected name for future releases', async()=>{
+  assert.equal(nativeName('2.1.0'),'Aurora.Native.Preview_2.1.0_x64-setup.exe');
+  assert.equal(nativeName('2.1.1'),'Aurora.Launcher_2.1.1_x64-setup.exe');
+  assert.equal(nativeName('3.0.0'),'Aurora.Launcher_3.0.0_x64-setup.exe');
+  const old=fixture('2.1.0'),next=fixture('2.1.1',old.pair);
+  assert.equal(verifyNativeEnvelope(old.envelope,old.key).version,'2.1.0');
+  assert.equal(verifyNativeEnvelope(next.envelope,old.key).version,'2.1.1');
+  assert.equal(nativeAdvancement(old.envelope,next.envelope,old.key),'advance');
+  assert.throws(()=>nativeAdvancement(next.envelope,old.envelope,old.key));
+  for(const f of [old,next]) {
+    const url=f.payload.url.replace(nativeName(f.version), f.version==='2.1.0'?'Aurora.Launcher_2.1.0_x64-setup.exe':'Aurora.Native.Preview_2.1.1_x64-setup.exe');
+    const bytes=Buffer.from(JSON.stringify({...f.payload,url}));
+    const envelope=Buffer.from(JSON.stringify({payload:bytes.toString('base64'),signature:f.signature(bytes,'native-update-payload.json')}));
+    assert.throws(()=>verifyNativeEnvelope(envelope,old.key));
+  }
+  const d=await directory(next);
+  assert.equal((await verifyNativeDirectory(d.directory,old.key,'2.1.1','a'.repeat(40))).artifacts[0].name,nativeName('2.1.1'));
+});
 test('native publication uploads verified draft bytes and selects native as latest stable',async()=>{
   const f=fixture('2.0.1'),d=await directory(f),uploaded=new Map(),mutations=[];
-  const patchTitle='Aurora Launcher Native 2.0.1 — Modpack Reliability and Download UI Fixes';
+  const patchTitle='Aurora Launcher 2.0.1 — Modpack Reliability and Download UI Fixes';
   let expectedTitle=patchTitle;
   const release={id:42,tag_name:`native-v${f.version}`,target_commitish:d.metadata.sourceSha,prerelease:false,draft:true,immutable:false,assets:[]};
   const api=async(path,options={})=>{
@@ -68,10 +87,10 @@ test('native publication uploads verified draft bytes and selects native as late
   };
   const upload=async(id,name,bytes)=>{assert.equal(id,42);uploaded.set(name,bytes);release.assets.push({id:release.assets.length+1,name,size:bytes.length,browser_download_url:`https://github.com/kalibsolomon-pixel/Aurora-Launcher/releases/download/native-v${f.version}/${name}`});};
   const download=async(url,size,privateAsset)=>{const name=privateAsset?release.assets.find(a=>url.endsWith('/'+a.id)).name:url.split('/').at(-1);const bytes=uploaded.get(name);assert.equal(bytes.length,size);return bytes;};
-  await assert.rejects(publishNativeRelease({...d,api,upload,download,releaseNotes:'# Aurora Launcher Native 2.0.0 — Wrong version'}));
+  await assert.rejects(publishNativeRelease({...d,api,upload,download,releaseNotes:'# Aurora Launcher 2.0.0 — Wrong version'}));
   assert.equal(mutations.length,0,'invalid notes must not create a tag');
   await publishNativeRelease({...d,api,upload,download,releaseNotes:`# ${patchTitle}\n\nPatch fixes.`});
-  expectedTitle='Aurora Launcher Native 2.0.1';
+  expectedTitle='Aurora Launcher 2.0.1';
   assert.deepEqual(mutations,['/git/refs','/releases','/releases/42']);
   assert.equal(uploaded.size,6);
   assert.throws(()=>releaseIdentity({...release,prerelease:true},f.version,d.metadata.sourceSha,true));

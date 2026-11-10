@@ -29,6 +29,14 @@ a requirement to release Launcher for every compatible Client version. See
 
 ## Purpose and stack
 
+The public product name is **Aurora Launcher**. Windows executable and resource
+metadata must use `aurora-launcher.exe` and `Aurora Launcher`; new installer
+downloads use `Aurora.Launcher_<version>_x64-setup.exe`. Do not add Native or Native
+Preview to public product, shortcut, download, or release names. Keep existing
+package IDs, data/credential paths, the `native-preview` update channel and
+authority refs stable. Historical signed assets retain their original names.
+See `docs/releases/BRANDING_CONTRACT.md` and the release branding regression tests.
+
 Aurora Launcher is the standalone, cross-platform launcher for the separate Aurora Fabric client mod. The application is native Rust with a Slint interface over the Rust launcher core. Tauri, WebView, Svelte and the web frontend are retired; do not reintroduce them. The launcher consumes Aurora as a future versioned artifact; never copy or couple to the mod's source tree.
 
 ## Commands
@@ -229,9 +237,10 @@ lives in `core/`; it has no Tauri, WebView or frontend runtime dependency.
   downloads, authentication, installation, filesystem changes or launch into UI.
 - Readiness remains deep verification, triggered by changed inputs or explicit
   refresh, with at most one in-flight check.
-- Native 2.0.1 is stable/latest. Preserve existing native-preview identifiers,
-  credentials, data paths, artifact names and signed update schema as compatibility
-  contracts. They do not imply a GitHub prerelease. Never auto-migrate old WebView
+- Observe the latest published version before releasing. Preserve native-preview
+  identifiers, credentials, data paths, historical signed artifact names and the
+  signed update schema as compatibility contracts. New public names follow the
+  branding contract above. These identifiers do not imply a GitHub prerelease. Never auto-migrate old WebView
   data or change the historical WebView authority.
 - The native-preview core feature is only a compatibility marker for existing
   build commands; it cannot enable a WebView host. Acceptance builds retain their

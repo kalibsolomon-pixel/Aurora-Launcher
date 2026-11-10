@@ -14,7 +14,7 @@ const signature=(bytes,name)=>{
   return Buffer.from(`untrusted comment: LOCAL ACCEPTANCE ONLY\n${Buffer.concat([Buffer.from('ED'),keyId,sig]).toString('base64')}\ntrusted comment: ${comment}\n${sign(null,Buffer.concat([sig,Buffer.from(comment)]),privateKey).toString('base64')}\n`).toString('base64');
 };
 let origin, signed;
-const name='Aurora.Native.Preview_1.4.3_x64-setup.exe';
+const name='Aurora.Launcher_1.4.3_x64-setup.exe';
 const server=createServer((req,res)=>{
   if(!signed && existsSync(join(root,'signed-installer.exe'))) {
     const bytes=readFileSync(join(root,'signed-installer.exe'));

@@ -189,7 +189,7 @@ mod imp {
         }
         let _apartment = Apartment;
         let Ok(manager) = Manager::RequestAsync().and_then(|op| op.get()) else {
-            eprintln!("[aurora-native] media sessions are unavailable on this system");
+            eprintln!("[aurora-launcher] media sessions are unavailable on this system");
             return;
         };
         let notify = events.clone();

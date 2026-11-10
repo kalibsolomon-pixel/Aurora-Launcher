@@ -1,4 +1,4 @@
-# Aurora Launcher Native 2.1.1 — Modrinth Modpacks and Native Interface Improvements
+# Aurora Launcher 2.1.1
 
 Modrinth modpacks can create a new instance or add compatible content to an existing instance using Fabric, Forge, or NeoForge. Review now identifies the Minecraft and loader versions, destination, component limits, preserved configuration files, and installation progress. Failed new-instance installs can resume using the same instance instead of creating a duplicate.
 
@@ -14,6 +14,6 @@ Known limits:
 
 The owner-attended Fabric/Forge/NeoForge Modrinth modpack matrix was **waived by the owner as a release gate**. It was not run or passed. No live modpack installation or gameplay validation is claimed for that matrix. Automated validation is recorded separately against the exact release source.
 
-The package identity remains `com.aurora.launcher.native-preview` and the update channel remains `native-preview`. The established `Aurora.Native.Preview_2.1.1_x64-setup.exe` installer naming protocol is retained for compatibility with published native clients. Native and historical WebView release/update authorities remain separate.
+The package identity remains `com.aurora.launcher.native-preview` and the update channel remains `native-preview`. The executable is `aurora-launcher.exe` and the installer is `Aurora.Launcher_2.1.1_x64-setup.exe`. Users of 2.1.0 and earlier must run this installer manually once because their shipped updater requires the earlier filename. The installer preserves application data and migrates recognized existing executable and shortcut names. Later updates use the signed updater. Native and historical WebView release/update authorities remain separate.
 
 Production updater signatures authenticate release content. Windows Authenticode publisher signing remains unconfigured; updater signatures do not establish Authenticode publisher identity.

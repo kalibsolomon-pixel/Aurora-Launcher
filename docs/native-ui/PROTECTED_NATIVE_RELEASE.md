@@ -1,4 +1,6 @@
-# Protected native preview release
+# Protected Aurora Launcher release
+
+Owner naming decision, 2026-11-10: releases from 2.1.1 use **Aurora Launcher**, `aurora-launcher.exe` and `Aurora.Launcher_<version>_x64-setup.exe`. Follow the [naming and migration contract](../releases/BRANDING_CONTRACT.md). Published older signed assets and historical records below retain their original names. The superseded 2.1.1 run `42814502513` was canceled before signing; replacement approval must apply to the corrected exact source.
 
 Native 2.1.0 is the current stable release. See its
 [release record](../releases/NATIVE_2_1_0_RELEASE.md) for the verified current
@@ -37,7 +39,7 @@ remain unchanged. Current acceptance: [docs/releases/archive/NATIVE_RELEASE_READ
 
 Native retains `com.aurora.launcher.native-preview`, Windows x86_64,
 `nsis-per-user`, independent numeric version ordering, `native-v<version>` tags,
-and `Aurora.Native.Preview_<version>_x64-setup.exe`. Discovery is the existing
+and `Aurora.Launcher_<version>_x64-setup.exe` from 2.1.1. Discovery is the existing
 proposed `launcher-native-update-authority/native-update.json` endpoint. Native
 offers bind product/channel/Slint/platform/architecture/package/source/version,
 expected size/hash and both updater signatures. Neither stream can consume the

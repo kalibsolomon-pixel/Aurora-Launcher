@@ -1,4 +1,4 @@
-name: Native stable protected release
+name: Aurora Launcher protected release
 on:
   workflow_dispatch:
     inputs:
@@ -144,7 +144,7 @@ jobs:
           $dir=Join-Path $env:RUNNER_TEMP 'native-release'
           $key=Join-Path $env:RUNNER_TEMP 'native-public-key.txt'
           [IO.File]::WriteAllText($key,$env:AURORA_UPDATER_PUBKEY.Trim())
-          $installer=Join-Path $dir "Aurora.Native.Preview_$($env:VERSION)_x64-setup.exe"
+          $installer=Join-Path $dir "Aurora.Launcher_$($env:VERSION)_x64-setup.exe"
           node node_modules/@tauri-apps/cli/tauri.js signer sign $installer *> $null
           if ($LASTEXITCODE) { throw 'Installer signing failed' }
           $payload=Join-Path $dir 'native-update-payload.json'
@@ -160,7 +160,7 @@ jobs:
           if ($LASTEXITCODE) { throw 'Signed candidate validation failed' }
       - uses: actions/upload-artifact@v4
         with:
-          name: native-signed-${{ inputs.version }}-${{ inputs.source_sha }}
+          name: aurora-launcher-signed-${{ inputs.version }}-${{ inputs.source_sha }}
           path: ${{ runner.temp }}/native-release/*
           retention-days: 7
           if-no-files-found: error
@@ -182,7 +182,7 @@ jobs:
           node-version: '24'
       - uses: actions/download-artifact@v4
         with:
-          name: native-signed-${{ inputs.version }}-${{ inputs.source_sha }}
+          name: aurora-launcher-signed-${{ inputs.version }}-${{ inputs.source_sha }}
           path: native-release
       - name: Publish accepted exact bytes, publish the native stable release as latest
         env:
@@ -211,7 +211,7 @@ jobs:
           node-version: '24'
       - uses: actions/download-artifact@v4
         with:
-          name: native-signed-${{ inputs.version }}-${{ inputs.source_sha }}
+          name: aurora-launcher-signed-${{ inputs.version }}-${{ inputs.source_sha }}
           path: native-release
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0, same protected authority process
         id: authority
