@@ -123,7 +123,7 @@ pub(crate) fn pack_archive_icon(path: &Path) -> Option<Bitmap> {
 }
 
 pub(crate) fn bitmap(bytes: &[u8]) -> Option<Bitmap> {
-    let (width, height, rgba) = crate::cosmetic_image::thumbnail_rgba(bytes, ICON_SIDE)?;
+    let (width, height, rgba) = crate::cosmetic_image::artwork_thumbnail_rgba(bytes, ICON_SIDE)?;
     Some(Bitmap {
         width,
         height,
@@ -473,7 +473,7 @@ mod tests {
         let path = fixture.join("pack.png");
         std::fs::write(&path, png).unwrap();
         let image = pack_directory_icon(&path).unwrap();
-        assert_eq!((image.width, image.height), (48, 24));
+        assert_eq!((image.width, image.height), (96, 48));
         std::fs::remove_file(path).unwrap();
         std::fs::remove_dir(fixture).unwrap();
     }
