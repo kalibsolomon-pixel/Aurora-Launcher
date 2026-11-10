@@ -1,0 +1,89 @@
+// Borealis band layers shared by the window background and the sidebar panels.
+
+// Displacement of one pre-blurred Borealis band from its rest placement:
+// offsets are fractions of the window, turn is degrees, grow is added scale.
+// The all-zero default is the static rest pose.
+export struct BorealisPose { dx: float, dy: float, turn: float, grow-x: float, grow-y: float }
+
+// Cached-raster Borealis presentation. Rust starts no phase source unless the
+// actual renderer is accelerated, the window is visible, and speed is nonzero.
+export global Borealis {
+    in property <BorealisPose> band-0;
+    in property <BorealisPose> band-1;
+    in property <BorealisPose> band-2;
+    in property <BorealisPose> band-3;
+    in property <bool> accelerated: false;
+}
+
+// Static dark base plus four curved aurora bands laid out for an area of
+// `area-width` x `area-height` (the window). A sidebar panel places it at the
+// negative of its own window position, clipped, so the bands line up exactly
+// with the background behind the sidebar. borealis.rs mirrors these rest
+// placements.
+export component BorealisBackdrop inherits Rectangle {
+    in property <length> area-width;
+    in property <length> area-height;
+    width: area-width;
+    height: area-height;
+    accessible-role: none;
+    Image {
+        width: root.area-width;
+        height: root.area-height;
+        source: @image-url("../assets/borealis-base.png");
+        image-fit: fill;
+        image-rendering: smooth;
+        accessible-role: none;
+    }
+    Image {
+        width: root.area-width * 1.65 + root.area-height * 0.4;
+        height: root.area-height * 0.7;
+        x: root.area-width * (0.58 + Borealis.band-2.dx) - self.width / 2;
+        y: root.area-height * (0.9 + Borealis.band-2.dy) - self.height / 2;
+        transform-rotation: (-6 + Borealis.band-2.turn) * 1deg;
+        transform-scale-x: (1 + Borealis.band-2.grow-x) * 100%;
+        transform-scale-y: (1 + Borealis.band-2.grow-y) * 100%;
+        source: @image-url("../assets/borealis-band-2.png");
+        image-fit: fill;
+        image-rendering: smooth;
+        accessible-role: none;
+    }
+    Image {
+        width: root.area-width * 1.85 + root.area-height * 0.4;
+        height: root.area-height * 0.7;
+        x: root.area-width * (0.72 + Borealis.band-1.dx) - self.width / 2;
+        y: root.area-height * (0.14 + Borealis.band-1.dy) - self.height / 2;
+        transform-rotation: (10 + Borealis.band-1.turn) * 1deg;
+        transform-scale-x: (1 + Borealis.band-1.grow-x) * 100%;
+        transform-scale-y: (1 + Borealis.band-1.grow-y) * 100%;
+        source: @image-url("../assets/borealis-band-1.png");
+        image-fit: fill;
+        image-rendering: smooth;
+        accessible-role: none;
+    }
+    Image {
+        width: root.area-width * 1.7 + root.area-height * 0.4;
+        height: root.area-height * 0.78;
+        x: root.area-width * (0.42 + Borealis.band-0.dx) - self.width / 2;
+        y: root.area-height * (0.66 + Borealis.band-0.dy) - self.height / 2;
+        transform-rotation: (-14 + Borealis.band-0.turn) * 1deg;
+        transform-scale-x: (1 + Borealis.band-0.grow-x) * 100%;
+        transform-scale-y: (1 + Borealis.band-0.grow-y) * 100%;
+        source: @image-url("../assets/borealis-band-0.png");
+        image-fit: fill;
+        image-rendering: smooth;
+        accessible-role: none;
+    }
+    Image {
+        width: root.area-width * 1.6 + root.area-height * 0.4;
+        height: root.area-height * 0.52;
+        x: root.area-width * (0.48 + Borealis.band-3.dx) - self.width / 2;
+        y: root.area-height * (0.42 + Borealis.band-3.dy) - self.height / 2;
+        transform-rotation: (10 + Borealis.band-3.turn) * 1deg;
+        transform-scale-x: (1 + Borealis.band-3.grow-x) * 100%;
+        transform-scale-y: (1 + Borealis.band-3.grow-y) * 100%;
+        source: @image-url("../assets/borealis-band-3.png");
+        image-fit: fill;
+        image-rendering: smooth;
+        accessible-role: none;
+    }
+}

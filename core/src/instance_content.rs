@@ -1735,15 +1735,24 @@ pub async fn install_provider_plans(
     install_provider_plans_reviewed(managed, instance, plans, Some(&revision)).await
 }
 
-/// Install every file authored by one exact pack snapshot. Pack provenance is
-/// per file; project identity remains useful for dependency and ownership guards.
+/// Install every file authored by one exact pack snapshot into a newly
+/// created pack instance. Pack provenance is per file; project identity
+/// remains useful for dependency and ownership guards. The larger
+/// [`MAX_NEW_PACK_PROVIDER_PLANS`] bound applies only because the instance
+/// holds no provider state yet; anything else is refused.
 pub(crate) async fn install_pack_provider_plans(
     managed: &ManagedPaths,
     instance: &InstanceId,
     plans: Vec<ProviderInstallPlan>,
 ) -> Result<Vec<ProviderRecord>, ContentError> {
+    if !ContentState::load(managed, instance)?.entries.is_empty() {
+        return Err(ContentError::StateMalformed(
+            "a new pack instance already holds provider content".into(),
+        ));
+    }
     let revision = local_inventory_revision(managed, instance)?;
-    let acquired = acquire_provider_plans(managed, plans).await?;
+    let acquired =
+        acquire_provider_plans_within(managed, plans, MAX_NEW_PACK_PROVIDER_PLANS).await?;
     activate_provider_transaction_with_revision(
         managed,
         instance,
@@ -1872,7 +1881,7 @@ pub(crate) fn local_inventory_revision(
 /// Reconcile a provider graph with locally hashed capabilities. A published
 /// SHA-512 match establishes project identity for resolution only; it never
 /// creates ownership. Otherwise verified candidate metadata establishes the
-/// identity and the parent's actual Fabric predicate governs satisfaction.
+/// identity and the parent's loader-specific predicate governs satisfaction.
 pub async fn reconcile_provider_resolution(
     managed: &ManagedPaths,
     instance: &InstanceId,
@@ -1952,8 +1961,11 @@ pub async fn reconcile_provider_resolution(
                 ProviderArtifactSource::Sha512(s) => cache.acquire_sha512(s).await,
             }
             .map_err(|e| ContentError::Acquisition(e.to_string()))?;
-            let (metadata, warnings) =
-                crate::instance_mods::inspect_fabric_metadata(&artifact.path, artifact.bytes);
+            let (metadata, warnings) = crate::instance_mods::inspect_mod_metadata(
+                &artifact.path,
+                artifact.bytes,
+                &platform_kind,
+            );
             if warnings
                 .iter()
                 .any(|w| w.code.starts_with("nested_") || w.code == "mixin_metadata_invalid")
@@ -1979,10 +1991,12 @@ pub async fn reconcile_provider_resolution(
                 .map(|r| r.requirement.clone())
                 .collect();
             let constraints = if constraints.is_empty() {
-                vec![format!(
-                    "={}",
-                    candidate.version.as_deref().unwrap_or("unknown")
-                )]
+                let version = candidate.version.as_deref().unwrap_or("unknown");
+                vec![if platform_kind == "fabric" {
+                    format!("={version}")
+                } else {
+                    format!("[{version}]")
+                }]
             } else {
                 constraints
             };
@@ -2011,9 +2025,10 @@ pub async fn reconcile_provider_resolution(
                     .as_ref()
                     .and_then(|m| crate::mod_compatibility::version_for(m, &candidate.id))
                     .is_some_and(|v| {
-                        constraints
-                            .iter()
-                            .all(|p| crate::fabric::versions::satisfies(v, p) == Ok(true))
+                        constraints.iter().all(|p| {
+                            crate::mod_compatibility::satisfies_for_family(v, p, &platform_kind)
+                                == Ok(true)
+                        })
                     })
             });
         if let Some(entry) = existing {
@@ -2144,12 +2159,39 @@ pub async fn preview_provider_conflicts(
     Ok(conflicts)
 }
 
+/// Most provider components one install operation acquires and activates
+/// in an instance that may already hold user content: one reviewed install's
+/// dependency graph (it mirrors the resolver's 64-project graph bound), a
+/// pack merge, or a lifecycle update. Merge review refuses larger batches
+/// first.
+pub(crate) const MAX_PROVIDER_PLANS_PER_OPERATION: usize = 64;
+
+/// Most Modrinth-recognized components the creation of a *new* pack
+/// instance activates. That transaction runs once, in a freshly created
+/// instance with no provider state or user content (enforced in
+/// [`install_pack_provider_plans`]), for a pack already bounded by the
+/// `.mrpack` parser (8,192 entries). Nothing in acquisition or activation
+/// scales beyond linearly with this count except the per-file
+/// case-insensitive collision scan (`read_dir`, quadratic in directory
+/// entries), and its rollback removes exactly the names the transaction
+/// created. Unrecognized pack files were never bounded by the 64 limit.
+/// New-pack review refuses larger packs before any instance exists.
+pub(crate) const MAX_NEW_PACK_PROVIDER_PLANS: usize = 512;
+
 pub(crate) async fn acquire_provider_plans(
     managed: &ManagedPaths,
     plans: Vec<ProviderInstallPlan>,
 ) -> Result<Vec<(ProviderRecord, PathBuf, u64)>, ContentError> {
+    acquire_provider_plans_within(managed, plans, MAX_PROVIDER_PLANS_PER_OPERATION).await
+}
+
+async fn acquire_provider_plans_within(
+    managed: &ManagedPaths,
+    plans: Vec<ProviderInstallPlan>,
+    limit: usize,
+) -> Result<Vec<(ProviderRecord, PathBuf, u64)>, ContentError> {
     crate::content_jobs::checkpoint().map_err(|_| ContentError::Cancelled)?;
-    if plans.is_empty() || plans.len() > 64 {
+    if plans.is_empty() || plans.len() > limit {
         return Err(ContentError::StateMalformed(
             "provider plan size is invalid".into(),
         ));
@@ -2357,6 +2399,12 @@ fn activate_provider_transaction_with_revision(
         let mut created = Vec::new();
         let result = (|| {
             for ((record, source, bytes), target) in acquired.iter().zip(targets.iter()) {
+                #[cfg(test)]
+                if activation_fault::fails_after(created.len()) {
+                    return Err(ContentError::Io(std::io::Error::other(
+                        "deterministic activation fault",
+                    )));
+                }
                 let digest = ArtifactDigest::parse(&record.sha256)
                     .map_err(|_| ContentError::HashMismatch)?;
                 verify_file(source, &digest, Some(*bytes))
@@ -2401,6 +2449,27 @@ fn activate_provider_transaction_with_revision(
         }
         Ok(acquired.into_iter().map(|(record, _, _)| record).collect())
     })
+}
+
+/// Test-only fault injection inside the activation copy loop, so rollback
+/// of a partially activated batch is observable. Thread-local: it affects
+/// only activations on the configuring test's own thread.
+#[cfg(test)]
+pub(crate) mod activation_fault {
+    use std::cell::Cell;
+
+    thread_local! {
+        static FAIL_AFTER: Cell<Option<usize>> = const { Cell::new(None) };
+    }
+
+    /// Fail the next activation once it has created `count` files.
+    pub(crate) fn fail_after(count: Option<usize>) {
+        FAIL_AFTER.with(|cell| cell.set(count));
+    }
+
+    pub(super) fn fails_after(created: usize) -> bool {
+        FAIL_AFTER.with(|cell| cell.get() == Some(created))
+    }
 }
 
 fn same_file(left: &ProviderRecord, right: &ProviderRecord) -> bool {
@@ -2472,7 +2541,7 @@ fn validate_projected_artifacts_scoped(
         ),
     };
     let loader_family = record.installed().platform.kind();
-    if !matches!(loader_family, "fabric" | "neoForge") {
+    if !record.installed().platform.supports_mods() {
         return Ok(());
     }
     let mut inventory = match std::fs::symlink_metadata(managed.instance_paths(instance).mods()) {
@@ -3425,7 +3494,7 @@ impl fmt::Display for ContentError {
             Self::Acquisition(reason) => write!(formatter, "content acquisition failed: {reason}"),
             Self::InvalidProviderArtifact => write!(
                 formatter,
-                "the provider artifact is not a valid Fabric mod JAR"
+                "the provider artifact is not a valid mod JAR for this instance's loader"
             ),
             Self::RequiredByInstalledContent => {
                 formatter.write_str("this content is still required by another installed item")
@@ -3872,6 +3941,13 @@ mod tests {
         ) {
             config.set_loader(LoaderConfiguration::Vanilla {});
         }
+        if let crate::instances::platform::PlatformPin::Forge { version } = &platform {
+            config.set_loader(LoaderConfiguration::Forge {
+                policy: crate::instances::settings::LoaderPolicy::Pinned {
+                    version: version.clone(),
+                },
+            });
+        }
         let mut registry = InstanceRegistry::empty();
         registry.instances_mut().push(
             InstanceRecord::from_installed(
@@ -4065,6 +4141,144 @@ mod tests {
             ),
         }
     }
+    #[tokio::test]
+    async fn forge_followup_provider_install_checks_metadata_dependencies_and_capabilities() {
+        let jar = |id: &str, version: &str, dependencies: &str| {
+            let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+            zip.start_file(
+                "META-INF/mods.toml",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            zip.write_all(format!("modLoader=\"javafml\"\nloaderVersion=\"[61,)\"\n[[mods]]\nmodId=\"{id}\"\nversion=\"{version}\"\n{dependencies}").as_bytes()).unwrap();
+            zip.finish().unwrap().into_inner()
+        };
+        for (local_dependency, forge_range, allowed) in [
+            (false, "[61,)", true),
+            (true, "[61,)", true),
+            (false, "[100,)", false),
+        ] {
+            let fixture = Fixture::new();
+            register_no_aurora(
+                &fixture,
+                crate::instances::platform::PlatformPin::Forge {
+                    version: "1.21.11-61.2.0".into(),
+                },
+            );
+            fixture.dir(ContentType::Mod);
+            let host = crate::host::Host::native(
+                Ok(fixture.root.clone()),
+                "2.0.1",
+                tokio::runtime::Handle::current(),
+                |_, _| {},
+            );
+            let context = crate::application::get_instance_content_context(
+                host,
+                serde_json::from_value(
+                    serde_json::json!({"instanceId": fixture.instance.as_str()}),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            let context = serde_json::to_value(context).unwrap();
+            assert_eq!(context["modsLoadable"], true);
+            assert_eq!(context["modrinthAvailable"], true);
+            let dependency = jar("dependency", "2.5", "");
+            let parent = jar(
+                "parent",
+                "1",
+                &format!(
+                    "[[dependencies.parent]]\nmodId=\"dependency\"\nmandatory=true\nversionRange=\"[2,3)\"\n[[dependencies.parent]]\nmodId=\"forge\"\nmandatory=true\nversionRange=\"{forge_range}\"\n"
+                ),
+            );
+            if local_dependency {
+                std::fs::write(
+                    fixture.dir(ContentType::Mod).join("local-dependency.jar"),
+                    &dependency,
+                )
+                .unwrap();
+            }
+            let served_dependency = dependency.clone();
+            let served_parent = parent.clone();
+            let server = TestServer::spawn(Arc::new(move |r: &TestRequest| {
+                TestResponse::ok(if r.path == "/dependency" {
+                    &served_dependency
+                } else {
+                    &served_parent
+                })
+            }));
+            let mut plans = vec![
+                fixture_plan(&server, "dependency", "BBBBCCCC", &dependency, vec![]),
+                fixture_plan(
+                    &server,
+                    "parent",
+                    "AAAABBBB",
+                    &parent,
+                    vec![ProviderDependency {
+                        kind: DependencyKind::Required,
+                        provider: "modrinth".into(),
+                        project_id: "BBBBCCCC".into(),
+                        version_id: None,
+                    }],
+                ),
+            ];
+            for plan in &mut plans {
+                plan.compatibility.loader = Some("forge".into());
+            }
+            let mut resolved = crate::modrinth::Resolved {
+                preview: crate::modrinth::InstallPreview {
+                    inventory_revision: None,
+                    project_id: "AAAABBBB".into(),
+                    version_id: "11112222".into(),
+                    content_type: ContentType::Mod,
+                    items: vec![],
+                    warnings: vec![],
+                },
+                plans,
+            };
+            reconcile_provider_resolution(&fixture.managed, &fixture.instance, &mut resolved)
+                .await
+                .unwrap();
+            assert_eq!(resolved.plans.len(), if local_dependency { 1 } else { 2 });
+            let requirements = preview_provider_requirements(
+                &fixture.managed,
+                &fixture.instance,
+                &resolved.plans,
+                21,
+            )
+            .await;
+            if !allowed {
+                assert!(
+                    matches!(requirements, Err(ContentError::ModCollision(_))),
+                    "{requirements:?}"
+                );
+                assert!(!fixture.dir(ContentType::Mod).join("parent.jar").exists());
+                continue;
+            }
+            requirements.unwrap();
+            let records = install_provider_plans_reviewed(
+                &fixture.managed,
+                &fixture.instance,
+                resolved.plans,
+                resolved.preview.inventory_revision.as_deref(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(records.len(), if local_dependency { 1 } else { 2 });
+            let reloaded = ContentState::load(&fixture.managed, &fixture.instance).unwrap();
+            assert_eq!(reloaded.entries.len(), records.len());
+            let inventory =
+                crate::instance_mods::scan(&fixture.managed, &fixture.instance).unwrap();
+            assert!(inventory.entries.iter().all(|e| e.metadata.is_some()));
+            assert!(
+                inventory
+                    .entries
+                    .iter()
+                    .any(|e| e.metadata.as_ref().unwrap().id == "parent")
+            );
+        }
+    }
+
     #[tokio::test]
     async fn local_dependency_satisfaction_install_reload_removal_and_changed_update() {
         let fixture = no_aurora_fixture();

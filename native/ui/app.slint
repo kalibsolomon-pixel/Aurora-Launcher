@@ -8,9 +8,10 @@ import { Icon, Icons } from "icons.slint";
 import {
     Button, ButtonKind, IconButton, Toggle, Checkbox, Dropdown, TextField, Dialog, Toast, Tone,
     Avatar, StatusPill, Spinner, ProgressBar, FocusRing, KeyboardFocus, EmptyState, Divider,
-    Tooltip, InstanceIcon, UnifiedList,
+    Tooltip, InstanceIcon, ContentList, ContentRowBackground,
 } from "components.slint";
-import { Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, SettingsSection, InstanceSync, SyncChoice, Skins, AccountRow, IconPicker, AccentPicker, Activity, ActivityRow, ContentImport } from "state.slint";
+import { BorealisBackdrop } from "borealis.slint";
+import { Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, SettingsSection, Borealis, InstanceSync, SyncChoice, Skins, AccountRow, IconPicker, AccentPicker, Activity, ActivityRow, ContentImport } from "state.slint";
 import { IdentityDialog, IconPickerDialog } from "dialogs.slint";
 import { AccentPickerPopover } from "popovers.slint";
 import { Chrome, TitleBar, DragArea, ResizeEdges } from "chrome.slint";
@@ -21,11 +22,23 @@ import { DiscoverPage } from "pages/discover.slint";
 import { SettingsPage } from "pages/settings.slint";
 import { SkinsPage } from "pages/skins.slint";
 
-export { Recovery, Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, SettingsSection, InstanceSync, SyncChoice, Skins, Tone, IconPicker, AccentPicker, Chrome, Widgets, WidgetChoice, WidgetLine, WidgetView, Activity, ActivityRow, ContentImport }
+export { Recovery, Theme, Nav, Page, Shell, Home, Instances, Discover, Accounts, Settings, SettingsSection, Borealis, InstanceSync, SyncChoice, Skins, Tone, IconPicker, AccentPicker, Chrome, Widgets, WidgetChoice, WidgetLine, WidgetView, Activity, ActivityRow, ContentImport }
+
+// Sidebar glyphs: the same Material outlines as `Icons`, as SVG images so they
+// are rasterized at their exact physical size. Drawn as filled paths at this
+// size they showed notched and doubled edges.
+global NavGlyphs {
+    out property <image> home: @image-url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'/></svg>");
+    out property <image> instances: @image-url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M5.3 21.5Q4.6 21.5 4 21Q3.5 20.4 3.5 19.7V8.5Q3.1 8.3 2.8 7.8Q2.5 7.4 2.5 6.9V4.3Q2.5 3.6 3 3Q3.6 2.5 4.3 2.5H19.7Q20.4 2.5 21 3Q21.5 3.6 21.5 4.3V6.9Q21.5 7.4 21.2 7.8Q20.9 8.3 20.5 8.5V19.7Q20.5 20.4 20 21Q19.4 21.5 18.7 21.5ZM5 8.7V19.6Q5 19.8 5.1 19.9Q5.2 20 5.4 20H18.7Q18.8 20 18.9 19.9Q19 19.8 19 19.7V8.7ZM4.3 7.2H19.7Q19.8 7.2 19.9 7.1Q20 7 20 6.9V4.3Q20 4.2 19.9 4.1Q19.8 4 19.7 4H4.3Q4.2 4 4.1 4.1Q4 4.2 4 4.3V6.9Q4 7 4.1 7.1Q4.2 7.2 4.3 7.2ZM9.2 13.4H14.8V12H9.2ZM12 14.3Q12 14.3 12 14.3Q12 14.3 12 14.3Q12 14.3 12 14.3Q12 14.3 12 14.3Z'/></svg>");
+    out property <image> discover: @image-url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 10.9c-.61 0-1.1.49-1.1 1.1s.49 1.1 1.1 1.1c.61 0 1.1-.49 1.1-1.1s-.49-1.1-1.1-1.1zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm2.19 12.19L6 18l3.81-8.19L18 6l-3.81 8.19z'/></svg>");
+    out property <image> person: @image-url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>");
+    out property <image> settings: @image-url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z'/></svg>");
+    out property <image> download: @image-url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z'/></svg>");
+}
 
 component NavItem inherits Rectangle {
     in property <string> label;
-    in property <string> icon;
+    in property <image> icon;
     in property <bool> active;
     // Hover or keyboard focus shows the window-level tooltip.
     out property <bool> hinted: touch.has-hover || (focus.has-focus && focus.focus-visible);
@@ -38,7 +51,17 @@ component NavItem inherits Rectangle {
     accessible-item-selected: active;
     accessible-action-default => { activated(); }
     forward-focus: focus;
-    Icon { path: root.icon; size: 28px; color: root.active ? Theme.accent : touch.has-hover ? Theme.text : Theme.text-secondary; }
+    // The glyph starts on a whole physical pixel; the logo row leaves the
+    // items on fractional offsets, which smeared every icon edge.
+    Image {
+        x: round((root.absolute-position.x + (root.width - self.width) / 2) / 1phx) * 1phx - root.absolute-position.x;
+        y: round((root.absolute-position.y + (root.height - self.height) / 2) / 1phx) * 1phx - root.absolute-position.y;
+        width: 28px;
+        height: 28px;
+        source: root.icon;
+        colorize: root.active ? Theme.accent : touch.has-hover ? Theme.text : Theme.text-secondary;
+        accessible-role: none;
+    }
     touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); root.activated(); } }
     focus := KeyboardFocus {
         focus-on-click: false;
@@ -60,7 +83,15 @@ component AccountButton inherits Rectangle {
     accessible-action-default => { Accounts.open-dialog(); }
     forward-focus: focus;
     if Accounts.has-account: Avatar { initial: Accounts.initial; picture: Accounts.avatar; has-picture: Accounts.has-avatar; size: 32px; }
-    if !Accounts.has-account: Icon { path: Icons.person; size: 28px; color: touch.has-hover ? Theme.text : Theme.text-secondary; }
+    if !Accounts.has-account: Image {
+        x: round((root.absolute-position.x + (root.width - self.width) / 2) / 1phx) * 1phx - root.absolute-position.x;
+        y: round((root.absolute-position.y + (root.height - self.height) / 2) / 1phx) * 1phx - root.absolute-position.y;
+        width: 28px;
+        height: 28px;
+        source: NavGlyphs.person;
+        colorize: touch.has-hover ? Theme.text : Theme.text-secondary;
+        accessible-role: none;
+    }
     touch := TouchArea { mouse-cursor: pointer; clicked => { focus.pointer-focus(); Accounts.open-dialog(); } }
     focus := KeyboardFocus {
         focus-on-click: false;
@@ -73,11 +104,16 @@ component AccountButton inherits Rectangle {
 }
 
 /// One download/install in the Downloads panel.
-component ActivityLine inherits Rectangle {
+component ActivityLine inherits ContentRowBackground {
     in property <ActivityRow> item;
     height: layout.preferred-height;
-    in property <bool> divided;
-    if divided: Divider { x: 12px; width: parent.width - 24px; y: 0px; }
+    if !root.last-row: Rectangle {
+        x: 10px;
+        y: parent.height - 1px;
+        width: parent.width - 20px;
+        height: 1px;
+        background: Theme.border;
+    }
     accessible-role: list-item;
     accessible-label: root.item.title + ", " + root.item.phase;
     accessible-description: root.item.message;
@@ -106,12 +142,17 @@ component ActivityLine inherits Rectangle {
     }
 }
 
-component AccountLine inherits Rectangle {
+component AccountLine inherits ContentRowBackground {
     in property <AccountRow> item;
     height: 56px;
-    in property <bool> divided;
-    background: touch.has-hover ? Theme.hover : transparent;
-    if divided: Divider { x: 12px; width: parent.width - 24px; y: 0px; }
+    hovered: touch.has-hover;
+    if !root.last-row: Rectangle {
+        x: 56px;
+        y: parent.height - 1px;
+        width: parent.width - self.x - 8px;
+        height: 1px;
+        background: Theme.border;
+    }
     accessible-role: list-item;
     accessible-label: root.item.name;
     accessible-description: root.item.status;
@@ -148,18 +189,13 @@ export component AppWindow inherits Window {
     default-font-size: 14px;
     default-font-family: "Segoe UI";
 
-    // Borealis: one static, pre-blurred layer under translucent surfaces.
-    // No decorative timer: this image never requests a redraw by itself.
-    if Theme.borealis: Image {
-        x: -24px;
-        y: -16px;
-        width: root.width + 48px;
-        height: root.height + 32px;
-        source: @image-url("../assets/borealis-bands.png");
-        image-fit: fill;
-        image-rendering: smooth;
-        accessible-role: none;
-    }
+    // Static dark base plus four curved aurora bands, each blurred once when
+    // the assets were generated (no runtime blur). Rust moves, turns and
+    // stretches the bands from one stoppable phase source; motion 0, hidden
+    // windows and software rendering keep the all-zero rest pose. Each band
+    // overscans the window (with a height term for tall windows) so its ends
+    // never enter view; borealis.rs tests that bound.
+    if Theme.borealis: BorealisBackdrop { area-width: root.width; area-height: root.height; }
 
     HorizontalLayout {
         Rectangle {
@@ -183,15 +219,15 @@ export component AppWindow inherits Window {
                     }
                 }
                 Rectangle { height: 18px; }
-                home-nav := NavItem { label: "Home"; icon: Icons.home; active: Nav.page == Page.home; activated => { Nav.navigate(Page.home); } }
-                instances-nav := NavItem { label: "Instances"; icon: Icons.instances; active: Nav.page == Page.instances; activated => { Nav.navigate(Page.instances); } }
-                discover-nav := NavItem { label: "Discover"; icon: Icons.discover; active: Nav.page == Page.discover; activated => { Nav.navigate(Page.discover); } }
-                skins-nav := NavItem { label: "Skins"; icon: Icons.person; active: Nav.page == Page.skins; activated => { Nav.navigate(Page.skins); } }
-                settings-nav := NavItem { label: "Settings"; icon: Icons.settings; active: Nav.page == Page.settings; activated => { Nav.navigate(Page.settings); } }
+                home-nav := NavItem { label: "Home"; icon: NavGlyphs.home; active: Nav.page == Page.home; activated => { Nav.navigate(Page.home); } }
+                instances-nav := NavItem { label: "Instances"; icon: NavGlyphs.instances; active: Nav.page == Page.instances; activated => { Nav.navigate(Page.instances); } }
+                discover-nav := NavItem { label: "Discover"; icon: NavGlyphs.discover; active: Nav.page == Page.discover; activated => { Nav.navigate(Page.discover); } }
+                skins-nav := NavItem { label: "Skins"; icon: NavGlyphs.person; active: Nav.page == Page.skins; activated => { Nav.navigate(Page.skins); } }
+                settings-nav := NavItem { label: "Settings"; icon: NavGlyphs.settings; active: Nav.page == Page.settings; activated => { Nav.navigate(Page.settings); } }
                 Rectangle { vertical-stretch: 1; }
                 downloads-nav := NavItem {
                     label: Activity.active > 0 ? "Downloads (" + Activity.active + " active)" : "Downloads";
-                    icon: Icons.download;
+                    icon: NavGlyphs.download;
                     active: Activity.open || Activity.active > 0;
                     activated => { Activity.open = !Activity.open; }
                     if Activity.active > 0: Rectangle {
@@ -274,9 +310,39 @@ export component AppWindow inherits Window {
                 }
                 Text { text: Discover.project-summary; color: Theme.text-secondary; wrap: word-wrap; }
                 Text { text: Discover.compatibility; color: Theme.text-muted; wrap: word-wrap; font-size: Theme.text-metadata; }
-                Dropdown { label: "Project version"; model: Discover.versions; current-index <=> Discover.version-index; enabled: !Discover.install-busy && !Discover.details-loading; selected => { Discover.version-changed(); } }
-                if Discover.kind == 3: Dropdown { label: "Modpack installation workflow"; model: ["New modpack instance", "Add to target instance"]; current-index <=> Discover.pack-mode; enabled: !Discover.install-busy && !Discover.details-loading; selected => { Discover.version-changed(); } }
-                if Discover.kind == 3 && Discover.pack-mode == 1: Text { text: "Target: " + (Discover.instance-index >= 0 ? Discover.instance-names[Discover.instance-index] : "Choose an instance in Discover first"); color: Theme.text-secondary; wrap: word-wrap; }
+                if Discover.kind == 3: Text { text: "Pack version"; color: Theme.text-muted; font-size: Theme.text-metadata; }
+                Dropdown { label: Discover.kind == 3 ? "Pack version" : "Project version"; model: Discover.versions; current-index <=> Discover.version-index; enabled: !Discover.install-busy && !Discover.details-loading; selected => { Discover.version-changed(); } }
+                if Discover.version-detail != "": Text { text: Discover.version-detail; color: Theme.text-secondary; wrap: word-wrap; font-size: Theme.text-secondary-size; }
+                if Discover.version-problem != "": Text { text: Discover.version-problem; color: Theme.warning; wrap: word-wrap; font-size: Theme.text-secondary-size; }
+                if Discover.kind == 3 && Discover.version-installable: Text { text: "Destination"; color: Theme.text-muted; font-size: Theme.text-metadata; }
+                if Discover.kind == 3 && Discover.version-installable: Dropdown { label: "Destination"; model: ["New instance", "Add to an existing instance"]; current-index <=> Discover.pack-mode; enabled: !Discover.install-busy && !Discover.details-loading; selected => { Discover.destination-mode-changed(); } }
+                if Discover.kind == 3 && Discover.version-installable && Discover.pack-mode == 1: VerticalLayout {
+                    spacing: 6px;
+                    if Discover.destinations-note != "": Text { text: Discover.destinations-note; color: Theme.text-muted; wrap: word-wrap; font-size: Theme.text-metadata; }
+                    for row[i] in Discover.destinations: VerticalLayout {
+                        spacing: 0px;
+                        Checkbox {
+                            text: row.name;
+                            checked: row.selected;
+                            enabled: row.compatible && !Discover.details-loading && !Discover.install-busy;
+                            toggled => { Discover.choose-destination(i); }
+                        }
+                        HorizontalLayout { padding-left: 28px; Text { text: row.detail; color: row.compatible ? Theme.text-muted : Theme.warning; wrap: word-wrap; font-size: Theme.text-metadata; } }
+                    }
+                }
+                if Discover.review-facts.length > 0: Rectangle {
+                    background: Theme.surface;
+                    border-radius: Theme.radius-md;
+                    VerticalLayout {
+                        padding: 10px;
+                        spacing: 4px;
+                        for fact in Discover.review-facts: HorizontalLayout {
+                            spacing: 12px;
+                            Text { width: 120px; text: fact.label; color: Theme.text-muted; font-size: Theme.text-secondary-size; }
+                            Text { horizontal-stretch: 1; text: fact.value; color: Theme.text; wrap: word-wrap; font-size: Theme.text-secondary-size; }
+                        }
+                    }
+                }
                 if Discover.review-text != "": Text { text: Discover.review-text; color: Theme.text-secondary; wrap: word-wrap; font-size: Theme.text-secondary-size; }
                 for file in Discover.optional-files: Checkbox {
                     text: file.path;
@@ -287,14 +353,19 @@ export component AppWindow inherits Window {
                 if Discover.detail-error != "": Text { text: Discover.detail-error; color: Theme.error; wrap: word-wrap; }
             }
         }
-        if Discover.details-loading: HorizontalLayout { spacing: 8px; Spinner { } Text { text: "Loading and verifying review…"; color: Theme.text-secondary; } }
+        if Discover.details-loading: VerticalLayout {
+            spacing: 6px;
+            HorizontalLayout { spacing: 8px; Spinner { } Text { horizontal-stretch: 1; text: Discover.review-progress != "" ? Discover.review-progress : "Loading…"; color: Theme.text-secondary; wrap: word-wrap; } }
+            if Discover.review-fraction >= 0: ProgressBar { progress: Discover.review-fraction; label: Discover.review-progress; }
+        }
         if Discover.progress != "": Text { text: Discover.progress; color: Theme.text-secondary; wrap: word-wrap; }
         HorizontalLayout {
             alignment: end;
             spacing: 8px;
             Button { text: "Close"; enabled: !Discover.install-busy; clicked => { Discover.close-details(); } }
-            Button { text: "Review installation"; enabled: !Discover.details-loading && !Discover.install-busy && Discover.version-index >= 0; clicked => { Discover.review(); } }
-            Button { text: "Install reviewed content"; kind: ButtonKind.primary; enabled: Discover.can-install; loading: Discover.install-busy; clicked => { Discover.confirm-install(); } }
+            if Discover.details-loading && Discover.review-cancellable: Button { text: "Cancel review"; clicked => { Discover.cancel-review(); } }
+            Button { text: "Review installation"; enabled: Discover.can-review && !Discover.details-loading && !Discover.install-busy; clicked => { Discover.review(); } }
+            Button { text: Discover.confirm-label; kind: ButtonKind.primary; enabled: Discover.can-install; loading: Discover.install-busy; clicked => { Discover.confirm-install(); } }
         }
     }
 
@@ -324,19 +395,12 @@ export component AppWindow inherits Window {
             wrap: word-wrap;
         }
         ScrollView {
-            vertical-stretch: 1;
-            VerticalLayout {
-                alignment: start;
-                spacing: 8px;
-                if Accounts.rows.length > 0: UnifiedList {
-                    for row[index] in Accounts.rows: VerticalLayout {
-                        if row.selected || index == (Accounts.has-account ? 1 : 0): Text {
-                            height: 30px; x: 12px; vertical-alignment: center;
-                            text: row.selected ? "Active account" : "Other accounts";
-                            color: Theme.text-secondary;
-                        }
-                        AccountLine { item: row; divided: index > (Accounts.has-account ? 1 : 0); }
-                    }
+            height: min(Accounts.rows.length * 56px, min(240px, max(0px, root.height - 320px)));
+            ContentList {
+                for row[index] in Accounts.rows: AccountLine {
+                    item: row;
+                    first-row: index == 0;
+                    last-row: index == Accounts.rows.length - 1;
                 }
             }
         }
@@ -469,23 +533,24 @@ export component AppWindow inherits Window {
         title: "Downloads";
         sidebar-anchored: true;
         dialog-width: 460px;
-        dismissed => { Activity.open = false; downloads-nav.focus(); }
-        Text { text: Activity.summary; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
-        ScrollView {
-            vertical-stretch: 1;
-            VerticalLayout {
-                alignment: start;
-                if Activity.rows.length == 0: EmptyState {
-                    icon: Icons.download;
-                    title: "No downloads";
-                    message: "Installs you start from Discover will appear here.";
-                }
-                if Activity.rows.length > 0: UnifiedList {
-                    for row[index] in Activity.rows: ActivityLine { item: row; divided: index > 0; }
+        dismissed => { Activity.open = false; }
+        if Activity.summary != "": Text { text: Activity.summary; color: Theme.text-secondary; font-size: Theme.text-secondary-size; wrap: word-wrap; }
+        if Activity.rows.length == 0: Text { text: "Installs you start from Discover appear here. Several can run at once; installs into the same instance take turns."; color: Theme.text-muted; font-size: Theme.text-metadata; wrap: word-wrap; }
+        if Activity.rows.length > 0: activity-scroll := ScrollView {
+            height: min(activity-list.preferred-height, min(380px, max(120px, root.height - 260px)));
+            content-width: self.visible-width;
+            content-height: activity-list.preferred-height;
+            activity-list := ContentList {
+                width: activity-scroll.visible-width;
+                height: self.preferred-height;
+                for row[index] in Activity.rows: ActivityLine {
+                    item: row;
+                    first-row: index == 0;
+                    last-row: index == Activity.rows.length - 1;
                 }
             }
         }
-        HorizontalLayout {
+        if Activity.rows.length > Activity.active: HorizontalLayout {
             alignment: end;
             Button { text: "Clear finished"; kind: ButtonKind.ghost; compact: true; enabled: Activity.rows.length > Activity.active; clicked => { Activity.clear(); } }
         }

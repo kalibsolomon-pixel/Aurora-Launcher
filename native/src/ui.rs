@@ -43,6 +43,9 @@ pub struct AppState {
     pub install_progress: Option<(String, f32)>,
     pub avatars: std::collections::HashMap<String, slint::Image>,
     pub workspace: Option<crate::instances::Workspace>,
+    pub content_cache: crate::content_cache::ContentCache,
+    /// Request identity survives closing/reopening the same workspace.
+    pub content_serial: u64,
     pub discover: crate::discover::DiscoverState,
     pub toast_serial: u64,
     pub skin_presets: Vec<crate::api::SkinPreset>,
@@ -174,7 +177,7 @@ where
 {
     match tokio::spawn(work).await {
         Ok(value)=>value,
-        Err(_)=>Err(ApiError{code:"native_operation_failed".into(),message:"The operation stopped unexpectedly. Check the game status and review recovery before retrying.".into()}),
+        Err(_)=>Err(ApiError{code:"native_operation_failed".into(),message:"The operation stopped unexpectedly. Check the game status and review recovery before retrying.".into(),instance_id:None}),
     }
 }
 pub fn spawn_api<F, T>(work: F, done: impl FnOnce(crate::api::ApiResult<T>) + Send + 'static)

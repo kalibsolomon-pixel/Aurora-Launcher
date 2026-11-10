@@ -5,17 +5,27 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Icon, Icons } from "icons.slint";
+import { BorealisBackdrop } from "borealis.slint";
 
 export enum ButtonKind { primary, secondary, ghost, danger }
 export enum Tone { neutral, success, warning, error, working, accent }
 
 /// Keyboard ownership never intercepts the press intended for a TouchArea.
 /// Pointer handlers call pointer-focus; Tab/programmatic focus keeps a ring.
+/// Modifier and Print Screen presses (such as a screenshot shortcut) do not
+/// turn the ring on after a pointer click.
 export component KeyboardFocus inherits FocusScope {
     focus-on-click: false;
     out property <bool> focus-visible: true;
     focus-gained(reason) => { if (reason == FocusReason.tab-navigation) { focus-visible = true; } if (reason == FocusReason.pointer-click) { focus-visible = false; } }
-    capture-key-pressed(event) => { focus-visible = true; reject }
+    capture-key-pressed(event) => {
+        if (event.text != Key.Shift && event.text != Key.ShiftR && event.text != Key.Control && event.text != Key.ControlR
+            && event.text != Key.Alt && event.text != Key.AltGr && event.text != Key.Meta && event.text != Key.MetaR
+            && event.text != Key.CapsLock && event.text != Key.SysReq) {
+            focus-visible = true;
+        }
+        reject
+    }
     public function pointer-focus() { self.focus(); focus-visible = false; }
 }
 
@@ -136,9 +146,11 @@ export component Button inherits Rectangle {
     FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; radius: root.border-radius; }
 }
 
-/// An icon-only button. `label` is its accessible name and tooltip text.
+/// An icon-only button. `label` is its accessible name and, unless
+/// `show-tooltip` is false, its tooltip text.
 export component IconButton inherits Rectangle {
     in property <bool> tooltip-above: false;
+    in property <bool> show-tooltip: true;
     in property <string> icon;
     in property <string> label;
     in property <bool> enabled: true;
@@ -164,7 +176,7 @@ export component IconButton inherits Rectangle {
             reject
         }
     }
-    if (touch.has-hover || focus.has-focus) && root.label != "": Tooltip { text: root.label; x: (root.width - self.width) / 2; y: root.tooltip-above ? -self.height - 6px : root.height + 6px; }
+    if root.show-tooltip && (touch.has-hover || focus.has-focus) && root.label != "": Tooltip { text: root.label; x: (root.width - self.width) / 2; y: root.tooltip-above ? -self.height - 6px : root.height + 6px; }
     FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; radius: root.border-radius; }
 }
 
@@ -184,7 +196,9 @@ export component Toggle inherits Rectangle {
     accessible-enabled: enabled;
     accessible-action-default => { if (enabled) { root.flip(); } }
     forward-focus: focus;
-    background: !enabled ? (checked ? Theme.accent-strong : Theme.control-track) : checked ? (touch.has-hover ? Theme.accent-hover : Theme.accent-strong) : (touch.has-hover ? Theme.control-track.brighter(0.18) : Theme.control-track);
+    // The ON track is the accent itself: derived hover/strong fills collapse
+    // to grey for low-chroma accents (e.g. white) and read as OFF.
+    background: !enabled ? (checked ? Theme.accent-strong : Theme.raised) : checked ? Theme.accent : (touch.has-hover ? Theme.border-strong : Theme.hover);
     opacity: enabled ? 1 : 0.55;
     animate background { duration: Theme.motion-fast; }
     function flip() { root.checked = !root.checked; root.toggled(root.checked); }
@@ -271,8 +285,15 @@ export component Slider inherits Rectangle {
     accessible-value-minimum: minimum;
     accessible-value-maximum: maximum;
     accessible-value-step: step;
-    accessible-action-increment => { root.set-value(root.value + root.step); root.released(root.value); }
-    accessible-action-decrement => { root.set-value(root.value - root.step); root.released(root.value); }
+    accessible-enabled: root.enabled;
+    accessible-action-set-value(v) => {
+        if (root.enabled && v.is-float()) {
+            root.set-value(v.to-float());
+            root.released(root.value);
+        }
+    }
+    accessible-action-increment => { if (root.enabled) { root.set-value(root.value + root.step); root.released(root.value); } }
+    accessible-action-decrement => { if (root.enabled) { root.set-value(root.value - root.step); root.released(root.value); } }
     forward-focus: focus;
     function set-value(v: float) {
         root.value = clamp(round(v / root.step) * root.step, root.minimum, root.maximum);
@@ -392,17 +413,30 @@ export component Dropdown inherits Rectangle {
     in property <bool> enabled: true;
     in property <string> label;
     in property <string> placeholder: "Select";
+    // Split controls keep the acknowledged value in accessibility while using
+    // only the arrow visually; the menu can span the complete parent control.
+    in property <bool> arrow-only: false;
+    in property <length> popup-width: root.width;
     // Persisted selectors keep displaying Rust's last acknowledged value.
     in property <bool> controlled: false;
     callback selected(int);
     min-height: Theme.control-height;
-    min-width: 160px;
+    min-width: arrow-only ? 56px : 160px;
     horizontal-stretch: 0;
     vertical-stretch: 0;
     border-radius: Theme.radius-md;
-    background: !enabled ? Theme.surface : touch.pressed ? Theme.pressed : touch.has-hover ? Theme.hover : Theme.raised;
+    // Explicit corners: the split control overrides two of them on one
+    // instance, which otherwise leaves every other dropdown square.
+    border-top-left-radius: self.border-radius;
+    border-top-right-radius: self.border-radius;
+    border-bottom-left-radius: self.border-radius;
+    border-bottom-right-radius: self.border-radius;
+    background: !enabled ? Theme.surface
+        : arrow-only ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent-strong)
+        : touch.pressed ? Theme.pressed : touch.has-hover ? Theme.hover : Theme.raised;
     accessible-role: combobox;
-    accessible-label: label;
+    accessible-label: arrow-only ? label + ": " + (current-index >= 0 && current-index < model.length ? model[current-index] : placeholder) : label;
+    accessible-description: arrow-only ? "Choose the instance to launch" : "";
     accessible-value: current-index >= 0 && current-index < model.length ? model[current-index] : "";
     accessible-enabled: enabled;
     accessible-action-default => { if (enabled) { popup.show(); } }
@@ -414,10 +448,11 @@ export component Dropdown inherits Rectangle {
         }
     }
     HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 8px;
+        padding-left: root.arrow-only ? 0px : 12px;
+        padding-right: root.arrow-only ? 0px : 8px;
         spacing: 8px;
-        Text {
+        alignment: center;
+        if !root.arrow-only: Text {
             horizontal-stretch: 1;
             text: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : root.placeholder;
             color: root.enabled ? Theme.text : Theme.text-muted;
@@ -425,7 +460,7 @@ export component Dropdown inherits Rectangle {
             vertical-alignment: center;
             overflow: elide;
         }
-        Icon { y: (parent.height - self.height) / 2; path: Icons.expand; size: 18px; color: Theme.text-muted; }
+        Icon { y: (parent.height - self.height) / 2; path: Icons.expand; size: 18px; color: root.arrow-only && root.enabled ? Theme.accent-contrast : Theme.text-muted; }
     }
     touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.pointer-focus(); popup.show(); } }
     focus := KeyboardFocus {
@@ -440,22 +475,27 @@ export component Dropdown inherits Rectangle {
     }
     FocusRing { x: -3px; y: -3px; width: root.width + 6px; height: root.height + 6px; shown: focus.has-focus && focus.focus-visible; radius: root.border-radius; }
     popup := PopupWindow {
-        x: 0;
+        x: root.arrow-only ? root.width - root.popup-width : 0px;
         y: root.height + 4px;
-        width: root.width;
+        width: root.popup-width;
         height: min(280px, root.model.length * 32px + 8px);
         close-policy: close-on-click-outside;
+        // Opaque, one step lighter than the field, so the list stays legible
+        // over Borealis and over raised page content.
         Rectangle {
-            background: Theme.raised;
-            border-radius: Theme.radius-md;
+            background: Theme.hover.with-alpha(1);
+            border-radius: Theme.radius-lg;
             border-width: 1px;
             border-color: Theme.border-strong;
+            drop-shadow-blur: 16px;
+            drop-shadow-offset-y: 6px;
+            drop-shadow-color: #00000080;
             ScrollView { VerticalLayout {
                 padding: 4px;
                 for item[i] in root.model: Rectangle {
                     height: 32px;
-                    border-radius: Theme.radius-sm;
-                    background: option.has-hover ? Theme.hover : transparent;
+                    border-radius: Theme.radius-md;
+                    background: option.has-hover ? Theme.border-strong : transparent;
                     accessible-role: list-item;
                     accessible-label: item;
                     accessible-item-selected: i == root.current-index;
@@ -468,6 +508,68 @@ export component Dropdown inherits Rectangle {
                 }
             } }
         }
+    }
+}
+
+/// One launch surface with independent, keyboard-accessible Play and selection.
+/// Selection remains controlled by the caller's last acknowledged instance.
+export component SplitLaunchControl inherits Rectangle {
+    in property <[string]> model;
+    in property <int> current-index: -1;
+    in property <bool> can-play: false;
+    in property <bool> loading: false;
+    in property <bool> running: false;
+    in property <string> play-description;
+    callback play();
+    callback selected(int);
+    // Taller and narrower than a toolbar control: it is the page's one primary action.
+    property <length> arrow-width: 60px;
+    min-width: 260px;
+    preferred-width: 300px;
+    min-height: 64px;
+    max-height: 64px;
+    horizontal-stretch: 1;
+    accessible-role: groupbox;
+    accessible-label: "Launch selected instance";
+    Button {
+        x: 0px;
+        width: parent.width - root.arrow-width;
+        control-height: 64px;
+        text: "Play";
+        icon: root.running ? "" : Icons.play;
+        kind: ButtonKind.primary;
+        enabled: root.can-play;
+        loading: root.loading;
+        border-top-right-radius: 0px;
+        border-bottom-right-radius: 0px;
+        accessible-description-text: root.play-description;
+        clicked => { root.play(); }
+    }
+    Dropdown {
+        x: parent.width - self.width;
+        width: root.arrow-width;
+        min-height: 64px;
+        max-height: 64px;
+        model: root.model;
+        current-index: root.current-index;
+        controlled: true;
+        arrow-only: true;
+        popup-width: root.width;
+        label: "Selected instance";
+        placeholder: "Choose an instance";
+        enabled: root.model.length > 0;
+        border-top-left-radius: 0px;
+        border-bottom-left-radius: 0px;
+        selected(index) => { root.selected(index); }
+    }
+    // The divider spans the full height so the two halves read as one card.
+    Rectangle {
+        x: parent.width - root.arrow-width;
+        y: 0px;
+        width: 1px;
+        height: parent.height;
+        background: root.can-play || root.loading ? Theme.accent-contrast.with-alpha(0.25) : Theme.border-strong;
+        accessible-role: none;
     }
 }
 
@@ -558,6 +660,43 @@ export component Divider inherits Rectangle {
     background: Theme.border;
 }
 
+/// One adjoining content list: rows provide their own separators and states.
+export component ContentList inherits Rectangle {
+    background: Theme.surface;
+    border-radius: Theme.radius-md;
+    clip: true;
+    accessible-role: list;
+    VerticalLayout {
+        spacing: 0px;
+        @children
+    }
+}
+
+/// Hover paint follows only the group's outer corners; normal rows stay transparent.
+export component ContentRowBackground inherits Rectangle {
+    in property <bool> first-row: false;
+    in property <bool> last-row: false;
+    in property <bool> hovered: false;
+    background: transparent;
+    if root.hovered: Rectangle {
+        width: parent.width;
+        height: parent.height;
+        background: Theme.hover;
+        border-radius: root.first-row || root.last-row ? Theme.radius-md : 0px;
+    }
+    if root.hovered && root.first-row && !root.last-row: Rectangle {
+        y: parent.height / 2;
+        width: parent.width;
+        height: parent.height / 2;
+        background: Theme.hover;
+    }
+    if root.hovered && !root.first-row && root.last-row: Rectangle {
+        width: parent.width;
+        height: parent.height / 2;
+        background: Theme.hover;
+    }
+}
+
 /// A compact status label; tone is never the only carrier of meaning.
 export component StatusPill inherits Rectangle {
     in property <string> text;
@@ -628,6 +767,13 @@ export component Dialog inherits Rectangle {
         Rectangle {
             background: root.sidebar-anchored ? transparent : Theme.scrim;
             init => { escape.focus(); }
+            // A sidebar panel opens as an extension of the sidebar: the sidebar
+            // stays undimmed and the panel joins its edge at full height.
+            if root.sidebar-anchored: Rectangle {
+                x: 72px;
+                width: parent.width - 72px;
+                background: Theme.scrim;
+            }
             TouchArea { clicked => { if (root.dismissible) { root.dismissed(); } } }
             escape := KeyboardFocus {
                 focus-on-click: false;
@@ -637,17 +783,34 @@ export component Dialog inherits Rectangle {
                 }
                 panel := Rectangle {
                     x: root.sidebar-anchored ? 72px : (root.width - self.width) / 2;
-                    y: root.sidebar-anchored ? 16px : (root.height - self.height) / 2;
-                    width: min(root.dialog-width, root.width - (root.sidebar-anchored ? 88px : 48px));
-                    height: root.sidebar-anchored ? root.height - 32px : min(content.preferred-height, root.height - 48px);
-                    background: Theme.raised;
-                    border-radius: Theme.radius-lg;
-                    border-width: 1px;
+                    y: root.sidebar-anchored ? 0px : (root.height - self.height) / 2;
+                    width: min(root.dialog-width, root.width - (root.sidebar-anchored ? 120px : 48px));
+                    height: root.sidebar-anchored ? root.height : min(content.preferred-height, root.height - 48px);
+                    // Under Borealis a sidebar panel shows the window's own bands,
+                    // aligned to the background and tinted like the sidebar, so it
+                    // reads as the sidebar widening while hiding the page beneath.
+                    background: root.sidebar-anchored ? (Theme.borealis ? Theme.background : Theme.sidebar.with-alpha(1)) : Theme.raised.with-alpha(1);
+                    border-radius: root.sidebar-anchored ? 0px : Theme.radius-lg;
+                    border-width: root.sidebar-anchored ? 0px : 1px;
                     border-color: Theme.border;
+                    clip: root.sidebar-anchored;
                     accessible-role: groupbox;
                     accessible-label: root.title;
+                    if root.sidebar-anchored && Theme.borealis: BorealisBackdrop {
+                        x: -panel.x;
+                        y: -panel.y;
+                        area-width: root.width;
+                        area-height: root.height;
+                    }
+                    if root.sidebar-anchored && Theme.borealis: Rectangle { background: Theme.sidebar; }
                     TouchArea { }
+                    if root.sidebar-anchored: Rectangle {
+                        x: parent.width - 1px;
+                        width: 1px;
+                        background: Theme.border-strong;
+                    }
                     content := VerticalLayout {
+                        alignment: start;
                         padding: Theme.space-5;
                         spacing: Theme.space-3;
                         HorizontalLayout {
@@ -700,15 +863,29 @@ export component Glyph inherits Rectangle {
     in property <image> picture;
     in property <bool> has-picture: false;
     in property <length> size: 40px;
+    in property <bool> fit-content: false;
     width: size;
     height: size;
     border-radius: size > 32px ? Theme.radius-md : Theme.radius-sm;
     background: Theme.hover;
     clip: true;
     accessible-role: none;
-    if root.has-picture: Image { width: root.size; height: root.size; source: root.picture; image-fit: cover; image-rendering: smooth; }
+    if root.has-picture: Image { width: root.size; height: root.size; source: root.picture; image-fit: root.fit-content ? contain : cover; image-rendering: smooth; }
     if !root.has-picture && root.fallback-icon != "": Icon { path: root.fallback-icon; size: root.size * 0.47; }
     if !root.has-picture && root.fallback-icon == "": Text { text: root.letter; color: Theme.text; font-size: root.size * 0.42; font-weight: 600; }
+}
+
+/// Shared 48-logical-pixel artwork for installed and discovered content.
+export component ContentArtwork inherits Glyph {
+    size: 48px;
+    fit-content: true;
+    if !root.has-picture && root.letter == "": Icon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        path: Icons.image;
+        size: 22px;
+        color: Theme.text-muted;
+    }
 }
 
 /// A round account avatar with an initial fallback.

@@ -3,6 +3,8 @@
 // callbacks. Screens only read these globals and invoke callbacks — they hold
 // no launcher authority of their own.
 import { Tone } from "components.slint";
+import { Borealis, BorealisPose } from "borealis.slint";
+export { Borealis, BorealisPose }
 
 export struct InstanceRow {
     id: string,
@@ -184,6 +186,7 @@ export global Instances {
     in property <bool> config-busy: false;
     in property <string> config-error;
     callback config-edited();
+    callback memory-step(int);
     callback save-config();
     callback revert-config();
 
@@ -213,7 +216,7 @@ export global Instances {
     in property <string> content-error;
     in-out property <string> content-filter;
     callback content-filter-changed(string);
-    callback content-artwork-window(int, int);
+    callback content-icon-visible(string, string, bool);
     callback content-toggle(string, bool);
     callback content-remove(string, string);
     callback content-open-folder();
@@ -365,6 +368,10 @@ export global IconPicker {
 }
 
 export struct OptionalPackFile { path: string, selected: bool }
+/// One instance as a pack destination; Rust (the core) decides `compatible`.
+export struct PackDestinationRow { name: string, detail: string, compatible: bool, selected: bool }
+/// One labelled line of the review summary.
+export struct ReviewFact { label: string, value: string }
 export global Discover {
     in-out property <int> loader-index: 0;
     in property <[string]> category-names: ["All categories"];
@@ -405,9 +412,26 @@ export global Discover {
     in property <string> detail-error;
     in property <string> review-text;
     in property <string> progress;
+    // What the selected version installs, or why Aurora cannot install it.
+    in property <string> version-detail;
+    in property <string> version-problem;
+    in property <bool> version-installable: false;
+    // Destination inside the pack review: pack-mode 1 lists every instance.
+    in property <[PackDestinationRow]> destinations;
+    in property <string> destinations-note;
+    in property <[ReviewFact]> review-facts;
+    in property <bool> can-review: false;
+    in property <string> confirm-label: "Install reviewed content";
+    // Review preparation status; review-fraction < 0 when no honest total exists.
+    in property <string> review-progress;
+    in property <float> review-fraction: -1;
+    in property <bool> review-cancellable: false;
     callback details(string);
     callback version-changed();
+    callback destination-mode-changed();
+    callback choose-destination(int);
     callback review();
+    callback cancel-review();
     callback confirm-install();
     callback close-details();
 }
@@ -560,7 +584,8 @@ export global Settings {
     in-out property <int> theme-index: 0;
     in property <[Swatch]> accents;
     in property <string> accent-id;
-    in-out property <bool> reduce-motion: false;
+    // Draft shown by the slider; Rust persists it only on release/keyboard/UIA.
+    in-out property <float> motion-speed: 50;
     in property <bool> appearance-busy: false;
     in property <string> appearance-error;
     callback theme-changed(int);
@@ -568,7 +593,8 @@ export global Settings {
     // The custom swatch shows the saved custom color, or "+" when none.
     in property <bool> has-custom-accent: false;
     in property <color> custom-accent-color;
-    callback reduce-motion-changed(bool);
+    callback motion-preview-changed(float);
+    callback motion-speed-changed(float);
     in property <[string]> background-labels: ["Simple", "Borealis"];
     in property <[string]> background-descriptions: ["Plain surfaces in the selected theme.", "Soft, stylized aurora bands behind translucent surfaces."];
     in-out property <int> background-index: 0;

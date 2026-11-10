@@ -36,7 +36,8 @@ struct Task {
     id: u64,
     title: String,
     detail: String,
-    /// Serialization key: the target instance, or None for a new instance.
+    /// Serialization key: the target instance, or None for a new instance
+    /// that does not exist yet.
     key: Option<String>,
     project: String,
     phase: Phase,
@@ -45,6 +46,69 @@ struct Task {
     /// Automatic waits after transient instance-lock contention.
     lock_waits: u8,
     control: Control,
+    /// The instance a failed or cancelled new-pack install created and kept.
+    /// Retry resumes it instead of installing (and duplicating) again.
+    resume: Option<String>,
+}
+
+impl Task {
+    /// Remembers the kept instance a failed or cancelled run reports. From
+    /// then on the task's key is that instance, so it serializes with other
+    /// work on it, and Retry resumes it. A failure before any instance was
+    /// created reports none and keeps the original job.
+    fn remember_kept_instance(&mut self, error: &crate::api::ApiError) {
+        if let Some(instance) = &error.instance_id {
+            self.key = Some(instance.clone());
+            self.resume = Some(instance.clone());
+        }
+    }
+
+    /// Retry of a kept instance resumes it, and says so.
+    fn retry_label(&self) -> &'static str {
+        if self.resume.is_some() {
+            "Waiting to resume the kept instance."
+        } else {
+            "Waiting to retry."
+        }
+    }
+
+    fn start_label(&self) -> &'static str {
+        if self.resume.is_some() {
+            "Resuming the kept instance…"
+        } else {
+            "Downloading and verifying…"
+        }
+    }
+
+    /// The work the next run performs.
+    fn next_job(&self) -> Job {
+        match &self.resume {
+            Some(instance) => resume_job(instance.clone()),
+            None => Rc::clone(&self.job),
+        }
+    }
+}
+
+fn resume_job(instance: String) -> Job {
+    Rc::new(move || {
+        let (host, instance) = (ui::host(), instance.clone());
+        Box::pin(async move { crate::api::resume_pack(host, instance).await })
+    })
+}
+
+/// A run that ended after its cancellation was observed. A kept instance
+/// stays named, with the core's own wording when it already explains it.
+fn cancelled(error: crate::api::ApiError) -> crate::api::ApiError {
+    let message = match &error.instance_id {
+        Some(_) if error.code == "installation_cancelled" => error.message,
+        Some(_) => "Installation cancelled. The new instance was kept and can be resumed from Downloads or Instances.".into(),
+        None => "Installation cancelled. No uncommitted content was activated.".into(),
+    };
+    crate::api::ApiError {
+        code: "installation_cancelled".into(),
+        message,
+        instance_id: error.instance_id,
+    }
 }
 
 #[derive(Default)]
@@ -91,7 +155,7 @@ pub fn bind(window: &crate::AppWindow) {
                 task.control = Control::default();
                 task.lock_waits = 0;
                 task.phase = Phase::Pending;
-                task.message = "Waiting to retry.".into();
+                task.message = task.retry_label().into();
             }
         });
         pump();
@@ -130,6 +194,7 @@ pub fn submit(
             job: Rc::new(job),
             lock_waits: 0,
             control: Control::default(),
+            resume: None,
         });
         // Keep the panel bounded: drop the oldest finished entries.
         while q.tasks.len() > 30 {
@@ -184,11 +249,11 @@ fn pump() {
                 continue;
             }
             task.phase = Phase::Running;
-            task.message = "Downloading and verifying…".into();
+            task.message = task.start_label().into();
             if task.key.is_some() {
                 running_keys.push(task.key.clone());
             }
-            started.push((task.id, Rc::clone(&task.job), task.control.clone()));
+            started.push((task.id, task.next_job(), task.control.clone()));
         }
         started
     });
@@ -210,10 +275,7 @@ fn pump() {
                                 if control.cancellation_observed()
                                     && !error.code.contains("rollback") =>
                             {
-                                Err(crate::api::ApiError::new(
-                                    "installation_cancelled",
-                                    "Installation cancelled. No uncommitted content was activated.",
-                                ))
+                                Err(cancelled(error))
                             }
                             result => result,
                         }
@@ -237,6 +299,9 @@ fn finish(id: u64, result: ApiResult<serde_json::Value>) {
     let waiting = QUEUE.with(|q| {
         let mut q = q.borrow_mut();
         let task = q.tasks.iter_mut().find(|t| t.id == id)?;
+        if let Err(error) = &result {
+            task.remember_kept_instance(error);
+        }
         match &result {
             Err(error) if error.code == "installation_cancelled" => {
                 task.phase = Phase::Cancelled;
@@ -249,9 +314,9 @@ fn finish(id: u64, result: ApiResult<serde_json::Value>) {
                 task.message = "Waiting for another change to this instance to finish.".into();
                 Some(task.lock_waits)
             }
-            Ok(_) => {
+            Ok(value) => {
                 task.phase = Phase::Completed;
-                task.message = "Installed and verified.".into();
+                task.message = completion_message(value);
                 None
             }
             Err(error) => {
@@ -278,6 +343,30 @@ fn finish(id: u64, result: ApiResult<serde_json::Value>) {
     }
     crate::discover::after_install();
     pump();
+}
+
+/// The truthful outcome of a completed task, from the core's own result:
+/// a new (or resumed) pack instance, a merge into an existing instance, or
+/// ordinary content.
+fn completion_message(value: &serde_json::Value) -> String {
+    if let (Some(added), Some(kept)) = (value["added"].as_u64(), value["keptExisting"].as_array()) {
+        let mut message = format!(
+            "Added {added} files; {} already present.",
+            value["alreadyPresent"].as_u64().unwrap_or(0)
+        );
+        if !kept.is_empty() {
+            message.push_str(&format!(
+                " Kept {} of your differing config files.",
+                kept.len()
+            ));
+        }
+        message.push_str(" The instance will not follow pack updates.");
+        return message;
+    }
+    if let (Some(name), Some(_)) = (value["displayName"].as_str(), value["id"].as_str()) {
+        return format!("Created and verified the instance '{name}'.");
+    }
+    "Installed and verified.".into()
 }
 
 fn sync_timer() {
@@ -313,6 +402,35 @@ fn phase_label(phase: Phase) -> &'static str {
     }
 }
 
+/// A running task's row stage and message. A modpack job reports its own
+/// named step (attributed through its content-job control, so concurrent
+/// packs never share one); other jobs show the content-job phase.
+fn running_status(phase: JobPhase, stage: Option<&str>, message: &str) -> (&'static str, String) {
+    if phase == JobPhase::Cancelling {
+        return ("Cancelling", message.to_owned());
+    }
+    if let Some((stage, label)) = stage.and_then(crate::discover::modpack_phase) {
+        let stage = match (stage, phase) {
+            // Downloads verify each file after transfer.
+            ("Downloading", JobPhase::Verifying) => "Verifying",
+            (stage, _) => stage,
+        };
+        return (stage, format!("{label}…"));
+    }
+    let stage = match phase {
+        JobPhase::Queued | JobPhase::Downloading => "Downloading",
+        JobPhase::Verifying => "Verifying",
+        JobPhase::Installing => "Installing",
+        JobPhase::Cancelling => "Cancelling",
+    };
+    (stage, message.to_owned())
+}
+
+/// Re-renders the Downloads rows now (for example on a modpack step).
+pub fn refresh() {
+    render();
+}
+
 fn render() {
     let (rows, summary, active) = QUEUE.with(|q| {
         let q = q.borrow();
@@ -320,19 +438,20 @@ fn render() {
             .tasks
             .iter()
             .rev()
-            .map(|t| ActivityRow {
+            .map(|t| {
+                let (phase, message) = if t.phase == Phase::Running {
+                    running_status(t.control.phase(), t.control.stage(), &t.message)
+                } else {
+                    (phase_label(t.phase), t.message.clone())
+                };
+                (t, phase, message)
+            })
+            .map(|(t, phase, message)| ActivityRow {
                 id: t.id as i32,
                 title: t.title.clone().into(),
                 detail: t.detail.clone().into(),
-                phase: (if t.phase == Phase::Running {
-                    match t.control.phase() {
-                        JobPhase::Queued | JobPhase::Downloading => "Downloading",
-                        JobPhase::Verifying => "Verifying",
-                        JobPhase::Installing => "Installing",
-                        JobPhase::Cancelling => "Cancelling",
-                    }
-                } else { phase_label(t.phase) }).into(),
-                message: t.message.clone().into(),
+                phase: phase.into(),
+                message: message.into(),
                 tone: match t.phase {
                     Phase::Completed => crate::Tone::Success,
                     Phase::Failed => crate::Tone::Error,
@@ -368,4 +487,149 @@ fn render() {
         activity.set_active(active as i32);
     });
     crate::discover::render_busy();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn new_pack_task() -> Task {
+        Task {
+            id: 1,
+            title: "Pack".into(),
+            detail: "New modpack instance".into(),
+            key: None,
+            project: "PACK0001".into(),
+            phase: Phase::Failed,
+            message: String::new(),
+            job: Rc::new(|| Box::pin(async { Ok(serde_json::Value::Null) })),
+            lock_waits: 0,
+            control: Control::default(),
+            resume: None,
+        }
+    }
+
+    fn error(code: &str, instance: Option<&str>) -> crate::api::ApiError {
+        let mut error = crate::api::ApiError::new(code, "message");
+        error.instance_id = instance.map(str::to_owned);
+        error
+    }
+
+    #[test]
+    fn a_failure_before_instance_creation_retries_the_original_install() {
+        let mut task = new_pack_task();
+        task.remember_kept_instance(&error("pack_download_failed", None));
+        assert_eq!(task.key, None);
+        assert_eq!(task.resume, None);
+        assert!(Rc::ptr_eq(&task.next_job(), &task.job));
+    }
+
+    #[test]
+    fn a_kept_instance_becomes_the_key_and_retry_resumes_it() {
+        for code in ["pack_component_install_failed", "installation_cancelled"] {
+            let mut task = new_pack_task();
+            task.remember_kept_instance(&error(code, Some("abc123")));
+            assert_eq!(task.key.as_deref(), Some("abc123"), "{code}");
+            assert_eq!(task.resume.as_deref(), Some("abc123"), "{code}");
+            assert!(!Rc::ptr_eq(&task.next_job(), &task.job), "{code}");
+            // A later resume failure without an id keeps resuming the same
+            // instance; it never falls back to a fresh install.
+            task.remember_kept_instance(&error("pack_download_failed", None));
+            assert_eq!(task.resume.as_deref(), Some("abc123"));
+            assert_eq!(task.key.as_deref(), Some("abc123"));
+        }
+    }
+
+    #[test]
+    fn observed_cancellation_keeps_the_kept_instance_and_its_wording() {
+        let mut core = error("installation_cancelled", Some("abc123"));
+        core.message = "Installation cancelled. The instance 'Pack' was kept.".into();
+        let kept = cancelled(core);
+        assert_eq!(kept.instance_id.as_deref(), Some("abc123"));
+        assert_eq!(
+            kept.message,
+            "Installation cancelled. The instance 'Pack' was kept."
+        );
+        let other = cancelled(error("pack_instance_failed", Some("abc123")));
+        assert_eq!(other.code, "installation_cancelled");
+        assert_eq!(other.instance_id.as_deref(), Some("abc123"));
+        assert!(other.message.contains("kept"), "{}", other.message);
+        let none = cancelled(error("pack_download_failed", None));
+        assert_eq!(none.instance_id, None);
+        assert_eq!(
+            none.message,
+            "Installation cancelled. No uncommitted content was activated."
+        );
+    }
+
+    #[test]
+    fn the_core_error_shape_carries_the_kept_instance_id() {
+        let parsed: crate::api::ApiError = serde_json::from_value(serde_json::json!({
+            "code": "pack_component_install_failed", "message": "m", "instanceId": "abc123"
+        }))
+        .unwrap();
+        assert_eq!(parsed.instance_id.as_deref(), Some("abc123"));
+        let plain: crate::api::ApiError =
+            serde_json::from_value(serde_json::json!({"code": "c", "message": "m"})).unwrap();
+        assert_eq!(plain.instance_id, None);
+    }
+
+    #[test]
+    fn completion_messages_follow_the_core_result() {
+        let merge = serde_json::json!({"instanceId":"abc","added":3,"alreadyPresent":2,
+            "overridesWritten":1,"keptExisting":["config/a.toml"]});
+        assert_eq!(
+            completion_message(&merge),
+            "Added 3 files; 2 already present. Kept 1 of your differing config files. The instance will not follow pack updates."
+        );
+        let created = serde_json::json!({"id":"abc","displayName":"Fixture Pack","state":"ready"});
+        assert_eq!(
+            completion_message(&created),
+            "Created and verified the instance 'Fixture Pack'."
+        );
+        assert_eq!(
+            completion_message(&serde_json::json!({"installed":[]})),
+            "Installed and verified."
+        );
+    }
+
+    #[test]
+    fn a_retried_kept_instance_is_labelled_as_resuming() {
+        let mut task = new_pack_task();
+        assert_eq!(task.retry_label(), "Waiting to retry.");
+        assert_eq!(task.start_label(), "Downloading and verifying…");
+        task.remember_kept_instance(&error("pack_component_install_failed", Some("abc123")));
+        assert_eq!(task.retry_label(), "Waiting to resume the kept instance.");
+        assert_eq!(task.start_label(), "Resuming the kept instance…");
+    }
+
+    #[test]
+    fn a_running_modpack_row_shows_its_own_stage() {
+        for phase in aurora_launcher_lib::modpacks::progress_phase::ALL {
+            let (stage, message) = running_status(JobPhase::Downloading, Some(*phase), "Queued.");
+            let (expected, label) = crate::discover::modpack_phase(phase).unwrap();
+            if *phase != "downloading" {
+                assert_eq!(stage, expected, "{phase}");
+            }
+            assert_eq!(message, format!("{label}…"));
+        }
+        // Game setup downloads are not reported as pack downloads.
+        assert_eq!(
+            running_status(JobPhase::Downloading, Some("installingGame"), "").0,
+            "Installing game"
+        );
+        assert_eq!(
+            running_status(JobPhase::Verifying, Some("downloading"), "").0,
+            "Verifying"
+        );
+        // Cancellation and ordinary content jobs keep their wording.
+        assert_eq!(
+            running_status(JobPhase::Cancelling, Some("installingGame"), "Cancelling…"),
+            ("Cancelling", "Cancelling…".to_owned())
+        );
+        assert_eq!(
+            running_status(JobPhase::Installing, None, "Downloading and verifying…"),
+            ("Installing", "Downloading and verifying…".to_owned())
+        );
+    }
 }

@@ -161,7 +161,9 @@ impl RuntimeInstalledState {
                         && !entry.executable => {}
                 RuntimeStateEntryKind::File
                     if entry.target.is_none()
-                        && entry.size_bytes.is_some_and(|size| size > 0)
+                        && entry.size_bytes.is_some_and(|size| {
+                            size > 0 || entry.sha1.as_deref() == Some(super::plan::EMPTY_SHA1)
+                        })
                         && entry.sha1.is_some() =>
                 {
                     Sha1Digest::parse(entry.sha1.as_deref().unwrap()).map_err(|error| {

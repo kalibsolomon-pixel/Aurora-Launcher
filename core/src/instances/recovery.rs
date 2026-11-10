@@ -131,8 +131,7 @@ fn plan(paths: &ManagedPaths, id: &InstanceId) -> Result<Plan, RecoveryError> {
             || pack.identity.name != expected.name
             || pack.identity.pack_version != expected.pack_version
             || pack.identity.minecraft_version != record.installed().minecraft_version
-            || Some(pack.identity.fabric_loader_version.as_str())
-                != record.installed().platform.version()
+            || pack.identity.loader != record.installed().platform
         {
             return Err(fail(
                 "The pack and instance identities disagree; preserve their metadata for inspection.",
@@ -528,7 +527,9 @@ mod tests {
                 artifact_sha512: "a".repeat(128),
                 artifact_sha256: "b".repeat(64),
                 minecraft_version: "26.2".into(),
-                fabric_loader_version: "0.19.5".into(),
+                loader: crate::instances::platform::PlatformPin::Fabric {
+                    version: "0.19.5".into(),
+                },
                 installed_at_unix_seconds: 1,
             },
             vec![OwnedComponent {

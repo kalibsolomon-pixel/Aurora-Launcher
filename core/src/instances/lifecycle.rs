@@ -418,26 +418,40 @@ pub async fn create_instance(
     Ok(record)
 }
 
-/// Creates the game foundation for a Modrinth pack while retaining the
-/// `installing` registry state. Pack files, owned overrides, and pack state
-/// must be installed and validated before `complete_pack_instance` is called.
-pub async fn begin_pack_instance(
+/// Allocates a Modrinth pack instance and persists its explicit `installing`
+/// registry record. `before_record` runs under the new instance's operation
+/// lock before the record is persisted (the caller's durable resume intent),
+/// so every persisted pack record created here has that intent on disk; a
+/// failure there persists no record. The game foundation is installed next
+/// by [`install_pack_game`]; pack files, owned overrides, and pack state must
+/// be installed and validated before `complete_pack_instance` is called.
+pub async fn create_pack_record(
     managed: &ManagedPaths,
     registry_path: &Path,
     endpoints: &InstanceEndpoints,
     request: CreateInstanceRequest,
     pack_identity: super::PackRegistryIdentity,
-    progress: &mut (dyn FnMut(InstanceProgress) + Send),
+    before_record: &mut (dyn FnMut(&InstanceRecord) -> Result<(), InstanceError> + Send),
 ) -> Result<(InstanceRecord, InstanceOperationGuard), InstanceError> {
     request.configuration().validate()?;
+    // Fabric, Forge and NeoForge packs all install through the ordinary
+    // validated resolver and installer below; Aurora is never added.
     if request.configuration().aurora_enabled()
-        || request.configuration().loader().kind() != super::settings::LoaderKind::Fabric
+        || !matches!(
+            request.configuration().loader().kind(),
+            super::settings::LoaderKind::Fabric
+                | super::settings::LoaderKind::Forge
+                | super::settings::LoaderKind::NeoForge
+        )
+        || !matches!(
+            request.configuration().loader().policy(),
+            super::settings::LoaderPolicy::Pinned { .. }
+        )
     {
         return Err(InstanceError::ReleaseInvalid(
-            "a Modrinth pack requires an independent Fabric instance without Aurora".into(),
+            "a Modrinth pack requires an independent, exactly pinned Fabric, Forge or NeoForge instance without Aurora".into(),
         ));
     }
-    progress(report(InstancePhase::ResolvingRelease, None));
     let installed =
         resolve_installed_configuration(endpoints, request.configuration(), None).await?;
     let instance_id = allocate_instance_id(managed, registry_path)?;
@@ -450,23 +464,80 @@ pub async fn begin_pack_instance(
     )?;
     record.set_pack(pack_identity)?;
     let operation = lock_instance_operation(managed, record.id())?;
+    before_record(&record)?;
     {
         let _guard = registry_lock();
         let mut registry = InstanceRegistry::load(registry_path)?;
         registry.instances_mut().push(record.clone());
         registry.save(registry_path)?;
     }
+    Ok((record, operation))
+}
+
+/// Installs (or, on resume, re-installs) the game foundation of an
+/// `installing` pack record through the ordinary validated component
+/// installer, unless a complete, valid game matching the record's exact
+/// Minecraft and loader pin is already installed. Returns whether the
+/// installer ran. Aurora is never added to a pack instance.
+pub async fn install_pack_game(
+    managed: &ManagedPaths,
+    registry_path: &Path,
+    endpoints: &InstanceEndpoints,
+    record: &InstanceRecord,
+    operation: &InstanceOperationGuard,
+    progress: &mut (dyn FnMut(InstanceProgress) + Send),
+) -> Result<bool, InstanceError> {
+    if &operation.instance != record.id() {
+        return Err(InstanceError::ReleaseInvalid(
+            "Pack installation ownership does not match the instance.".into(),
+        ));
+    }
+    if record.pack().is_none()
+        || record.state() != InstanceState::Installing
+        || record.installed().aurora.is_some()
+    {
+        return Err(InstanceError::NotReady {
+            instance_id: record.id().to_string(),
+            reason: "only an installing modpack instance without Aurora installs its game here"
+                .into(),
+        });
+    }
+    if pack_game_matches(managed, record)? {
+        return Ok(false);
+    }
     install_instance_components(
         managed,
         registry_path,
         endpoints,
-        &record,
+        record,
         progress,
         InstanceFaults::default(),
         false,
     )
     .await?;
-    Ok((record, operation))
+    Ok(true)
+}
+
+/// Read-only: a complete, valid game whose manifest names exactly the
+/// record's Minecraft version and platform pin.
+fn pack_game_matches(
+    managed: &ManagedPaths,
+    record: &InstanceRecord,
+) -> Result<bool, InstanceError> {
+    let _game_guard = crate::install::read_game_target(managed, record.id())?;
+    match crate::install::validate_installed_game_under_lock(managed, record.id()) {
+        Ok(GameValidationOutcome::Installed(validation))
+            if validation.status == GameValidationStatus::Valid => {}
+        Ok(_) | Err(InstallError::RecoveryRequired { .. }) => return Ok(false),
+        Err(error) => return Err(error.into()),
+    }
+    let game_root = managed.instance_paths(record.id()).game().to_path_buf();
+    Ok(crate::install::state::load_installed_state(&game_root)
+        .map_err(InstanceError::GameInstallState)?
+        .is_some_and(|game| {
+            game.minecraft_version() == record.installed().minecraft_version
+                && game.platform() == record.installed().platform
+        }))
 }
 
 /// The pack marker and all owned bytes must already be present. This is the
@@ -575,7 +646,10 @@ pub async fn retry_instance_install(
         // Ready. Real damage is reported precisely and the record stays
         // retryable; nothing is downloaded, wiped, or overwritten. This
         // runs after the registry-read scope above closes: the completion
-        // gate takes the registry lock itself.
+        // gate takes the registry lock itself. Resuming an interrupted pack
+        // install needs the provider, so hosts route pack records to
+        // `modpacks::resume` (application `retry_instance_install`); this
+        // provider-free path remains the completion-only fallback.
         return complete_pack_instance(
             managed,
             registry_path,
@@ -3092,7 +3166,7 @@ pub(crate) mod tests {
                 version: "0.19.5".into(),
             },
         ));
-        let error = begin_pack_instance(
+        let (created, operation) = create_pack_record(
             &world.managed,
             &world.registry_path(),
             &world.endpoints(),
@@ -3104,10 +3178,21 @@ pub(crate) mod tests {
                 name: "Fixture pack".into(),
                 pack_version: "1.0".into(),
             },
+            &mut |_| Ok(()),
+        )
+        .await
+        .unwrap();
+        let error = install_pack_game(
+            &world.managed,
+            &world.registry_path(),
+            &world.endpoints(),
+            &created,
+            &operation,
             &mut |_| {},
         )
         .await
         .unwrap_err();
+        drop(operation);
         assert!(matches!(error, InstanceError::GameInstall(_)), "{error}");
         let registry = world.load_registry();
         assert_eq!(registry.instances().len(), 1);
@@ -5339,7 +5424,9 @@ pub(crate) mod tests {
                 artifact_sha512: "a".repeat(128),
                 artifact_sha256: "b".repeat(64),
                 minecraft_version: "26.2".into(),
-                fabric_loader_version: "0.19.5".into(),
+                loader: crate::instances::platform::PlatformPin::Fabric {
+                    version: "0.19.5".into(),
+                },
                 installed_at_unix_seconds: 1,
             },
             vec![OwnedComponent {

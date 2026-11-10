@@ -2,7 +2,7 @@
 //! (configuration, health, and installed content). Every mutation goes
 //! through the validated application services; the UI keeps only drafts.
 
-use slint::{ComponentHandle, Model, VecModel};
+use slint::{ComponentHandle, Model};
 
 use crate::api::{self, InstanceConfiguration, InstanceSummary, LauncherState, WindowSize};
 use crate::ui;
@@ -14,12 +14,16 @@ pub struct Workspace {
     pub id: String,
     pub base: Option<InstanceConfiguration>,
     pub content: Vec<ContentItem>,
-    pub content_artwork: std::collections::HashMap<String, Option<slint::Image>>,
+    pub content_tab: Option<i32>,
+    pub content_revision: Option<u64>,
+    pub mod_icons: std::collections::HashMap<String, Option<slint::Image>>,
     pub client_preview: Option<api::AuroraTransition>,
     pub icons_pending: std::collections::HashSet<String>,
-    pub artwork_order: std::collections::VecDeque<String>,
-    pub artwork_window: (usize, usize),
     pub content_serial: u64,
+    pub icons_visible: std::collections::HashSet<String>,
+    pub icons_loading: bool,
+    pub icons_failed: std::collections::HashSet<String>,
+    pub icon_order: std::collections::VecDeque<String>,
     pub filter: String,
     pub pending_remove: Option<(String, String)>,
     /// The last explicit update check of the current content tab.
@@ -31,13 +35,26 @@ pub struct Workspace {
     pub cfg_loader_versions: Vec<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct ContentItem {
-    pub icon_source: Option<api::ModIconRequest>,
-    pub pack_file: Option<String>,
+    pub icon_source: Option<ContentIconSource>,
     pub row: ContentRow,
     /// Modrinth project id when the file is provider-managed.
     pub project: Option<String>,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum ContentIconSource {
+    Mod(api::ModIconRequest),
+    Pack(api::PackIconRequest, String),
+}
+impl ContentIconSource {
+    fn key(&self) -> String {
+        match self {
+            Self::Mod(source) => source.sha256.clone(),
+            Self::Pack(_, key) => key.clone(),
+        }
+    }
 }
 
 /// Workspace tabs. Content tabs come first and their index equals the
@@ -81,10 +98,7 @@ pub fn bind(window: &AppWindow) {
     instances.on_open(|id| open_workspace(id.to_string(), TAB_MODS));
     instances.on_create(open_create);
     instances.on_close_workspace(|| {
-        ui::with(|window, state| {
-            state.workspace = None;
-            window.global::<Nav>().set_workspace_open(false);
-        });
+        ui::with(close_workspace);
     });
     instances.on_tab_changed(|tab| load_tab(tab));
     instances.on_play(|| {
@@ -104,6 +118,21 @@ pub fn bind(window: &AppWindow) {
         }
     });
     instances.on_config_edited(render_dirty);
+    instances.on_memory_step(|direction| {
+        ui::with(|window, state| {
+            let instances = window.global::<Instances>();
+            if state.workspace.is_none()
+                || instances.get_config_busy()
+                || instances.get_installing()
+            {
+                return;
+            }
+            if let Ok(value) = stepped_memory_mib(&instances.get_memory_mib_text(), direction) {
+                instances.set_memory_mib_text(value.to_string().into());
+            }
+        });
+        render_dirty();
+    });
     instances.on_revert_config(|| {
         ui::with(|window, state| {
             if let Some(base) = state.workspace.as_ref().and_then(|w| w.base.clone()) {
@@ -118,14 +147,6 @@ pub fn bind(window: &AppWindow) {
     instances.on_client_confirm(confirm_client);
     instances.on_validate(validate);
     instances.on_repair(|| install_or_repair(false));
-    instances.on_content_artwork_window(|first, end| {
-        ui::with(|_, state| {
-            if let Some(workspace) = state.workspace.as_mut() {
-                workspace.artwork_window = (first.max(0) as usize, end.max(0) as usize);
-            }
-        });
-        load_content_artwork();
-    });
     instances.on_content_filter_changed(|text| {
         ui::with(|_, state| {
             if let Some(workspace) = state.workspace.as_mut() {
@@ -133,7 +154,32 @@ pub fn bind(window: &AppWindow) {
             }
         });
         render_content();
-        load_content_artwork();
+    });
+    instances.on_content_icon_visible(|instance_id, id, visible| {
+        // Slint may report layout visibility while a model update still holds
+        // AppState. Queue it onto the next event turn rather than reborrow it.
+        let _ = slint::invoke_from_event_loop(move || {
+            let serial = ui::with(|_, state| {
+                let workspace = state.workspace.as_mut()?;
+                if workspace.id != instance_id.as_str()
+                    || !workspace.content.iter().any(|item| item.row.id == id)
+                {
+                    return None;
+                }
+                let changed = if visible {
+                    workspace.icons_visible.insert(id.to_string())
+                } else {
+                    workspace.icons_visible.remove(id.as_str())
+                };
+                trim_icon_cache(workspace);
+                changed.then_some(workspace.content_serial)
+            })
+            .flatten();
+            if let Some(serial) = serial {
+                render_content();
+                load_mod_icons(serial);
+            }
+        });
     });
     instances.on_content_toggle(toggle_content);
     instances.on_content_remove(|id, title| {
@@ -168,20 +214,8 @@ pub fn bind(window: &AppWindow) {
         }
     });
     instances.on_content_refresh(|| {
-        let tab = ui::with(|window, state| {
-            let tab = window.global::<Instances>().get_tab();
-            if let Some(workspace) = state.workspace.as_mut() {
-                let prefix = format!("{tab}:");
-                workspace
-                    .content_artwork
-                    .retain(|key, _| !key.starts_with(&prefix));
-                workspace
-                    .artwork_order
-                    .retain(|key| !key.starts_with(&prefix));
-            }
-            tab
-        })
-        .unwrap_or(0);
+        invalidate_content_cache();
+        let tab = ui::with(|window, _| window.global::<Instances>().get_tab()).unwrap_or(0);
         load_tab(tab);
         crate::content_updates::check();
     });
@@ -312,6 +346,7 @@ pub fn show_settings(id: String) {
 pub fn open_workspace(id: String, tab: i32) {
     let found = ui::with(|window, state| {
         let instance = state.instance(&id)?.clone();
+        remember_content(state);
         state.workspace = Some(Workspace {
             id: id.clone(),
             base: Some(instance.configuration.clone()),
@@ -498,6 +533,7 @@ fn confirm_client() {
     ui::spawn(
         api::apply_aurora(ui::host(), id.clone(), enabled, fingerprint),
         move |result| {
+            invalidate_content_cache();
             if let Err(error) = result {
                 ui::error_toast(&error);
             }
@@ -587,6 +623,17 @@ fn memory_mib(text: &str) -> Result<u32, String> {
         .ok_or_else(|| {
             format!("Enter a whole number from {MIN_MEMORY_MIB} to {MAX_MEMORY_MIB} MiB.")
         })
+}
+
+/// Step only a valid draft; invalid manual input remains intact for correction.
+fn stepped_memory_mib(text: &str, direction: i32) -> Result<u32, String> {
+    use aurora_launcher_lib::instances::settings::{MAX_MEMORY_MIB, MIN_MEMORY_MIB};
+    let current = memory_mib(text)?;
+    Ok(match direction {
+        1 => current.saturating_add(1024).min(MAX_MEMORY_MIB),
+        -1 => current.saturating_sub(1024).max(MIN_MEMORY_MIB),
+        _ => current,
+    })
 }
 
 fn read_draft(
@@ -789,36 +836,47 @@ fn save_configuration() {
         return;
     };
     ui::spawn(
-        api::update_configuration(ui::host(), id, base, draft),
-        |result| {
-            ui::with(|window, state| {
-                let instances = window.global::<Instances>();
-                instances.set_config_busy(false);
-                match result {
-                    Ok(updated) => {
-                        if let Some(workspace) = state.workspace.as_mut() {
-                            workspace.base = Some(updated.configuration.clone());
-                        }
-                        write_draft(window, &updated.configuration);
-                        instances.set_config_dirty(false);
-                        ui::toast(
-                            if needs_install(&updated) {
-                                "Settings saved. Install them to apply the new game version or loader."
-                            } else {
-                                "Settings saved."
-                            },
-                            Tone::Success,
-                        );
-                    }
-                    Err(error) => instances.set_config_error(error.message.into()),
-                }
-            });
+        api::update_configuration(ui::host(), id.clone(), base, draft),
+        move |result| {
+            apply_saved_configuration(&id, result);
             reload(|| {
                 seed_game_settings();
                 crate::home::refresh_readiness();
             });
         },
     );
+}
+
+fn apply_saved_configuration(id: &str, result: api::ApiResult<InstanceSummary>) {
+    let message = ui::with(|window, state| {
+        let workspace = state
+            .workspace
+            .as_mut()
+            .filter(|workspace| workspace.id == id)?;
+        let instances = window.global::<Instances>();
+        instances.set_config_busy(false);
+        match result {
+            Ok(updated) => {
+                workspace.base = Some(updated.configuration.clone());
+                write_draft(window, &updated.configuration);
+                instances.set_config_dirty(false);
+                Some(if needs_install(&updated) {
+                    "Settings saved. Install them to apply the new game version or loader."
+                } else {
+                    "Settings saved."
+                })
+            }
+            Err(error) => {
+                instances.set_config_error(error.message.into());
+                None
+            }
+        }
+    })
+    .flatten();
+    // Toast enters ui::with itself. Publish only after the state borrow ends.
+    if let Some(message) = message {
+        ui::toast(message, Tone::Success);
+    }
 }
 
 fn load_memory_hint(id: String) {
@@ -929,6 +987,7 @@ fn install_or_repair(install: bool) {
         }
     };
     ui::spawn(work, move |result| {
+        invalidate_content_cache();
         crate::home::clear_progress();
         ui::with(|window, _| window.global::<Instances>().set_health_busy(false));
         match result {
@@ -955,54 +1014,121 @@ fn install_or_repair(install: bool) {
     });
 }
 
-thread_local! {
-    static CONTENT_SERIAL: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
-}
-
-fn next_content_serial() -> u64 {
-    CONTENT_SERIAL.with(|serial| {
-        let next = serial.get() + 1;
-        serial.set(next);
-        next
-    })
-}
-
-fn load_tab(tab: i32) {
-    if !(TAB_MODS..TAB_SETTINGS).contains(&tab) {
+fn remember_content(state: &mut ui::AppState) {
+    let Some(workspace) = state.workspace.as_ref() else {
+        return;
+    };
+    let Some(tab) = workspace.content_tab else {
+        return;
+    };
+    // Enforce the limit before cloning rows, including transient allocations.
+    if workspace.content.len() > crate::content_cache::MAX_ROWS {
+        state.content_cache.invalidate(&workspace.id);
         return;
     }
-    let Some((id, serial)) = ui::with(|window, state| {
+    state.content_cache.put(
+        &workspace.id,
+        tab,
+        crate::content_cache::Snapshot {
+            items: workspace.content.clone(),
+            icons: workspace.mod_icons.clone(),
+            revision: workspace.content_revision,
+        },
+    );
+}
+
+/// Shared by the sidebar and the workspace back button. Explicit workspace
+/// opening uses set_page directly, preserving Home's settings shortcut.
+pub fn close_workspace(window: &AppWindow, state: &mut ui::AppState) {
+    remember_content(state);
+    state.workspace = None;
+    window.global::<Nav>().set_workspace_open(false);
+}
+
+fn invalidate_content_cache() {
+    ui::with(|_, state| {
+        state.content_cache.clear();
+        if let Some(workspace) = state.workspace.as_mut() {
+            workspace.content_tab = None;
+            workspace.content_revision = None;
+        }
+    });
+}
+
+/// Installs the cached snapshot synchronously, before any worker is scheduled.
+fn begin_content_tab(tab: i32) -> Option<(String, u64)> {
+    ui::with(|window, state| {
+        remember_content(state);
+        let id = state.workspace.as_ref()?.id.clone();
+        let cached = state.content_cache.get(&id, tab);
+        let hit = cached.is_some();
+        let cached = cached.unwrap_or_default();
+        state.content_serial += 1;
         let workspace = state.workspace.as_mut()?;
-        workspace.content_serial = next_content_serial();
-        workspace.content.clear();
+        let same_tab = workspace.content_tab == Some(tab);
+        workspace.content_serial = state.content_serial;
+        workspace.content_tab = hit.then_some(tab);
+        workspace.content_revision = cached.revision;
+        workspace.content = cached.items;
+        workspace.mod_icons = cached.icons;
+        workspace.icon_order = workspace.mod_icons.keys().cloned().collect();
         workspace.icons_pending.clear();
+        if !same_tab {
+            workspace.icons_visible.clear();
+        }
+        workspace.icons_loading = false;
+        workspace.icons_failed.clear();
         if workspace.updates.tab != tab {
             workspace.updates = crate::content_updates::Updates::default();
         }
         let instances = window.global::<Instances>();
-        instances.set_content_loading(true);
+        instances.set_content_loading(!hit);
         instances.set_content_error("".into());
-        Some((workspace.id.clone(), workspace.content_serial))
+        Some((id, workspace.content_serial))
     })
-    .flatten() else {
+    .flatten()
+}
+
+fn load_tab(tab: i32) {
+    crate::perf_trace::mark("tab", tab);
+    if !(TAB_MODS..TAB_SETTINGS).contains(&tab) {
+        return;
+    }
+    let Some((id, serial)) = begin_content_tab(tab) else {
         return;
     };
     render_content();
     let host = ui::host();
+    let work_id = id.clone();
     if tab == TAB_MODS {
-        ui::spawn(api::instance_mods(host, id.clone()), move |result| {
-            apply_content(&id, serial, result.map(mod_items))
-        });
-    } else {
-        let kind = CONTENT_KINDS[tab as usize];
         ui::spawn(
-            api::instance_content(host, id.clone(), kind),
-            move |result| {
+            async move {
+                let revision =
+                    crate::content_cache::folder_revision(host.clone(), work_id.clone(), tab).await;
+                (revision, api::instance_mods(host, work_id).await)
+            },
+            move |(revision, result)| {
+                apply_content(&id, tab, serial, revision, result.map(mod_items));
+            },
+        );
+    } else {
+        ui::spawn(
+            async move {
+                let revision =
+                    crate::content_cache::folder_revision(host.clone(), work_id.clone(), tab).await;
+                (
+                    revision,
+                    api::instance_content(host, work_id, CONTENT_KINDS[tab as usize]).await,
+                )
+            },
+            move |(revision, result)| {
                 apply_content(
                     &id,
+                    tab,
                     serial,
+                    revision,
                     result.map(|inventory| pack_items(inventory, tab == 1)),
-                )
+                );
             },
         );
     }
@@ -1052,10 +1178,11 @@ fn mod_items(inventory: api::ModInventory) -> Vec<ContentItem> {
                 })
                 .unwrap_or_default();
             ContentItem {
-                pack_file: None,
-                icon_source: entry.sha256.as_ref().map(|hash| api::ModIconRequest {
-                    file_name: entry.file_name.clone(),
-                    sha256: hash.clone(),
+                icon_source: entry.sha256.as_ref().map(|hash| {
+                    ContentIconSource::Mod(api::ModIconRequest {
+                        file_name: entry.file_name.clone(),
+                        sha256: hash.clone(),
+                    })
                 }),
                 project: modrinth_project(entry.provenance.as_ref()),
                 row: ContentRow {
@@ -1085,24 +1212,23 @@ fn pack_items(inventory: api::ContentInventory, hide_bundled: bool) -> Vec<Conte
                 .size_bytes
                 .map(|bytes| format!("{:.1} MB", bytes as f64 / 1_048_576.0))
                 .unwrap_or_default();
-            let mut detail = Vec::new();
-            if let Some(version) = entry
-                .provenance
-                .as_ref()
-                .and_then(|p| p.display_version.as_ref())
-            {
-                detail.push(version.clone());
-            }
+            let mut detail = vec![entry.file_name.clone()];
             if !size.is_empty() {
                 detail.push(size);
             }
             if entry.management.activation_managed_in_game {
                 detail.push("Selected in game".into());
             }
-            detail.push(entry.file_name.clone());
             ContentItem {
-                icon_source: None,
-                pack_file: Some(entry.file_name),
+                icon_source: matches!(entry.file_type.as_str(), "zip" | "directory").then(|| {
+                    ContentIconSource::Pack(
+                        api::PackIconRequest {
+                            file_name: entry.file_name.clone(),
+                            sha256: entry.sha256.clone(),
+                        },
+                        format!("pack:{}:{}", hide_bundled, entry.entry_id),
+                    )
+                }),
                 project: modrinth_project(entry.provenance.as_ref()),
                 row: ContentRow {
                     id: entry.entry_id.into(),
@@ -1143,166 +1269,301 @@ fn modrinth_project(provenance: Option<&api::Provenance>) -> Option<String> {
         .map(|p| p.project_id.clone())
 }
 
-fn apply_content(id: &str, serial: u64, result: api::ApiResult<Vec<ContentItem>>) {
-    ui::with(|window, state| {
-        let Some(workspace) = state.workspace.as_mut() else {
-            return;
-        };
-        if workspace.id != id || workspace.content_serial != serial {
-            return;
+fn apply_content(
+    id: &str,
+    tab: i32,
+    serial: u64,
+    revision: Option<u64>,
+    result: api::ApiResult<Vec<ContentItem>>,
+) {
+    let applied = ui::with(|window, state| {
+        let workspace = state.workspace.as_mut()?;
+        if workspace.id != id
+            || workspace.content_serial != serial
+            || window.global::<Instances>().get_tab() != tab
+        {
+            return None;
         }
         let instances = window.global::<Instances>();
         instances.set_content_loading(false);
-        workspace.icons_pending.clear();
         match result {
             Ok(items) => {
-                workspace.content = items;
+                instances.set_content_error("".into());
+                let changed = workspace.content_tab != Some(tab)
+                    || workspace.content != items
+                    || workspace.content_revision != revision;
+                if changed {
+                    // Discard any artwork batch started for the cached view
+                    // before this authoritative refresh finished.
+                    state.content_serial += 1;
+                    workspace.content_serial = state.content_serial;
+                    workspace.icons_pending.clear();
+                    workspace.icons_loading = false;
+                    workspace.icons_failed.clear();
+                    let artwork_changed =
+                        revision.is_none() || workspace.content_revision != revision;
+                    workspace.content = items;
+                    workspace.content_tab = Some(tab);
+                    workspace.content_revision = revision;
+                    let hashes: std::collections::HashSet<_> = workspace
+                        .content
+                        .iter()
+                        .filter_map(|item| item.icon_source.as_ref().map(ContentIconSource::key))
+                        .collect();
+                    workspace.mod_icons.retain(|key, _| {
+                        hashes.contains(key) && !(artwork_changed && key.starts_with("pack:"))
+                    });
+                    workspace
+                        .icon_order
+                        .retain(|key| workspace.mod_icons.contains_key(key));
+                }
+                Some((changed, workspace.content_serial))
             }
-            Err(error) => instances.set_content_error(error.message.into()),
+            Err(error) => {
+                state.content_cache.invalidate(id);
+                workspace.content_tab = None;
+                instances.set_content_error(error.message.into());
+                Some((false, workspace.content_serial))
+            }
         }
-    });
-    render_content();
-    load_content_artwork();
+    })
+    .flatten();
+    let Some((changed, icon_serial)) = applied else {
+        return;
+    };
+    if changed {
+        render_content();
+    }
+    load_mod_icons(icon_serial);
 }
 
-impl ContentItem {
-    fn artwork_key(&self, tab: i32) -> Option<String> {
-        if let Some(source) = &self.icon_source {
-            return Some(source.sha256.clone());
-        }
-        self.pack_file.as_ref()?;
-        match tab {
-            1 => Some(format!(
-                "1:{}:{}",
-                self.row.id,
-                self.project.as_deref().unwrap_or_default()
-            )),
-            2 => self.project.as_ref().map(|project| format!("2:{project}")),
-            _ => None,
-        }
-    }
+const ICON_BATCH: usize = 8;
+const ICON_CACHE: usize = 64;
 
-    fn matches(&self, filter: &str) -> bool {
-        filter.is_empty()
-            || self.row.title.to_lowercase().contains(filter)
-            || self.row.detail.to_lowercase().contains(filter)
+/// One decoded batch result: file-embedded pixels, or a provider artwork PNG.
+enum LoadedIcon {
+    Rgba((u32, u32, Vec<u8>)),
+    Png(Vec<u8>),
+}
+
+fn trim_icon_cache(workspace: &mut Workspace) {
+    let visible: std::collections::HashSet<_> = workspace
+        .content
+        .iter()
+        .filter(|item| workspace.icons_visible.contains(item.row.id.as_str()))
+        .filter_map(|item| item.icon_source.as_ref().map(ContentIconSource::key))
+        .collect();
+    let attempts = workspace.icon_order.len();
+    for _ in 0..attempts {
+        if workspace.mod_icons.len() <= ICON_CACHE {
+            break;
+        }
+        let Some(key) = workspace.icon_order.pop_front() else {
+            break;
+        };
+        if visible.contains(&key) {
+            workspace.icon_order.push_back(key);
+        } else {
+            workspace.mod_icons.remove(&key);
+        }
     }
 }
 
-const ARTWORK_CACHE_LIMIT: usize = 96;
-const ARTWORK_BATCH_LIMIT: usize = 48;
+fn artwork_row(workspace: &Workspace, item: &ContentItem) -> ContentRow {
+    let mut row = item.row.clone();
+    // Only the cache and currently visible model rows retain image references.
+    row.picture = slint::Image::default();
+    row.has_picture = false;
+    if let Some(image) = item
+        .icon_source
+        .as_ref()
+        .filter(|_| workspace.icons_visible.contains(item.row.id.as_str()))
+        .and_then(|source| workspace.mod_icons.get(&source.key()))
+        .and_then(|image| image.as_ref())
+    {
+        row.picture = image.clone();
+        row.has_picture = true;
+    }
+    row
+}
 
-fn load_content_artwork() {
+fn visible_icon_sources(workspace: &Workspace) -> Vec<ContentIconSource> {
+    let filter = workspace.filter.to_lowercase();
+    workspace
+        .content
+        .iter()
+        .filter(|item| {
+            workspace.icons_visible.contains(item.row.id.as_str())
+                && (filter.is_empty()
+                    || item.row.title.to_lowercase().contains(&filter)
+                    || item.row.detail.to_lowercase().contains(&filter))
+        })
+        .filter_map(|item| item.icon_source.clone())
+        .filter(|source| {
+            let key = source.key();
+            !workspace.mod_icons.contains_key(&key)
+                && !workspace.icons_pending.contains(&key)
+                && !workspace.icons_failed.contains(&key)
+        })
+        .take(ICON_BATCH)
+        .collect()
+}
+
+fn load_mod_icons(serial: u64) {
     let request = ui::with(|window, state| {
         let tab = window.global::<Instances>().get_tab();
-        if !(TAB_MODS..TAB_SETTINGS).contains(&tab) {
+        if !(0..3).contains(&tab) {
             return None;
         }
         let workspace = state.workspace.as_mut()?;
-        if !workspace.icons_pending.is_empty() {
+        if workspace.content_serial != serial || workspace.icons_loading {
             return None;
         }
-        let (first, end) = workspace.artwork_window;
-        let count = end.saturating_sub(first).min(ARTWORK_BATCH_LIMIT);
-        let filter = workspace.filter.to_lowercase();
-        let mut files = Vec::new();
-        for item in workspace
+        let files = visible_icon_sources(workspace);
+        if files.is_empty() {
+            return None;
+        }
+        for source in &files {
+            workspace.icons_pending.insert(source.key());
+        }
+        // Provider-managed rows fall back to their project's artwork when the file
+        // carries none (shader packs never ship a pack.png).
+        let projects: std::collections::HashMap<String, String> = workspace
             .content
             .iter()
-            .filter(|item| item.matches(&filter))
-            .skip(first)
-            .take(count)
-        {
-            if let Some(key) = item.artwork_key(tab) {
-                if !workspace.content_artwork.contains_key(&key)
-                    && workspace.icons_pending.insert(key.clone())
-                {
-                    files.push((
-                        key,
-                        item.icon_source.clone(),
-                        item.pack_file.clone(),
-                        item.project.clone(),
-                    ));
-                }
-            }
-        }
-        (!files.is_empty()).then(|| (workspace.id.clone(), workspace.content_serial, tab, files))
+            .filter_map(|item| Some((item.icon_source.as_ref()?.key(), item.project.clone()?)))
+            .collect();
+        workspace.icons_loading = true;
+        Some((workspace.id.clone(), tab, files, projects))
     })
     .flatten();
-    let Some((id, serial, tab, files)) = request else {
+    let Some((id, tab, files, projects)) = request else {
         return;
     };
     let host = ui::host();
+    let artwork_host = host.clone();
     let expected_id = id.clone();
+    let keys: Vec<_> = files.iter().map(ContentIconSource::key).collect();
     ui::spawn(
         async move {
-            use base64::Engine;
-            let mods: Vec<_> = files
-                .iter()
-                .filter_map(|(_, source, _, _)| source.clone())
-                .collect();
-            let mut mod_results = std::collections::HashMap::new();
-            if !mods.is_empty() {
-                for result in api::mod_icons(host.clone(), id.clone(), mods)
-                    .await
-                    .unwrap_or_default()
-                {
-                    mod_results.insert(result.sha256, result.bitmap);
+            let bitmaps: Vec<_> = if tab == TAB_MODS {
+                let requests = files
+                    .iter()
+                    .filter_map(|source| match source {
+                        ContentIconSource::Mod(request) => Some(request.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                let results = api::mod_icons(host, id, requests).await?;
+                files
+                    .iter()
+                    .map(|source| {
+                        let key = source.key();
+                        let bitmap = results
+                            .iter()
+                            .find(|result| result.sha256 == key)
+                            .and_then(|result| result.bitmap.as_ref());
+                        (key, bitmap)
+                    })
+                    .map(|(key, bitmap)| (key, decode_icon(bitmap).map(LoadedIcon::Rgba)))
+                    .collect()
+            } else {
+                let requests = files
+                    .iter()
+                    .filter_map(|source| match source {
+                        ContentIconSource::Pack(request, _) => Some(request.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                let results =
+                    api::pack_icons(host, id, CONTENT_KINDS[tab as usize], requests).await?;
+                files
+                    .iter()
+                    .map(|source| {
+                        let bitmap = match source {
+                            ContentIconSource::Pack(request, _) => results
+                                .iter()
+                                .find(|result| result.file_name == request.file_name)
+                                .and_then(|result| result.bitmap.as_ref()),
+                            _ => None,
+                        };
+                        (source.key(), decode_icon(bitmap).map(LoadedIcon::Rgba))
+                    })
+                    .collect()
+            };
+            // Cache-first in the core: a stored project icon is read from disk and
+            // only an uncached project touches the provider once.
+            let mut bitmaps = bitmaps;
+            for (key, icon) in &mut bitmaps {
+                if icon.is_none() {
+                    if let Some(project) = projects.get(key) {
+                        *icon = api::project_artwork(artwork_host.clone(), project.clone())
+                            .await
+                            .ok()
+                            .flatten()
+                            .map(LoadedIcon::Png);
+                    }
                 }
             }
-            let mut images = Vec::new();
-            for (key, source, file, project) in files {
-                let bitmap = if source.is_some() {
-                    mod_results.remove(&key).flatten()
-                } else if let Some(file) = file {
-                    api::pack_icon(host.clone(), id.clone(), tab == 1, file, project)
-                        .await
-                        .ok()
-                        .flatten()
-                } else {
-                    None
-                };
-                let pixels = bitmap.and_then(|bitmap| {
-                    if bitmap.width > 48 || bitmap.height > 48 {
-                        return None;
-                    }
-                    let bytes = base64::engine::general_purpose::STANDARD
-                        .decode(bitmap.rgba_base64)
-                        .ok()?;
-                    Some((bitmap.width, bitmap.height, bytes))
-                });
-                images.push((key, pixels));
+            // Decoding/transferring only the current bounded batch avoids waiting for
+            // the entire installed inventory before its first visible icons appear.
+            fn decode_icon(bitmap: Option<&api::ModIconBitmap>) -> Option<(u32, u32, Vec<u8>)> {
+                use base64::Engine;
+                let bitmap = bitmap?;
+                if bitmap.width == 0
+                    || bitmap.height == 0
+                    || bitmap.width > 96
+                    || bitmap.height > 96
+                {
+                    return None;
+                }
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(&bitmap.rgba_base64)
+                    .ok()?;
+                (bytes.len() == bitmap.width as usize * bitmap.height as usize * 4).then_some((
+                    bitmap.width,
+                    bitmap.height,
+                    bytes,
+                ))
             }
-            images
+            Ok::<_, api::ApiError>(bitmaps)
         },
-        move |images| {
-            let applied = ui::with(|_, state| {
+        move |result| {
+            ui::with(|_, state| {
                 let Some(workspace) = state.workspace.as_mut() else {
-                    return false;
+                    return;
                 };
                 if workspace.id != expected_id || workspace.content_serial != serial {
-                    return false;
+                    return;
                 }
-                workspace.icons_pending.clear();
-                // Keep two maximum batches and evict the oldest entries first.
-                for (key, pixels) in images {
-                    if workspace.artwork_order.len() >= ARTWORK_CACHE_LIMIT {
-                        if let Some(old) = workspace.artwork_order.pop_front() {
-                            workspace.content_artwork.remove(&old);
+                workspace.icons_loading = false;
+                for key in &keys {
+                    workspace.icons_pending.remove(key);
+                }
+                match result {
+                    Ok(icons) => {
+                        for (key, icon) in icons {
+                            let image = icon.and_then(|icon| match icon {
+                                LoadedIcon::Rgba((w, h, bytes)) => {
+                                    ui::rectangular_image(&bytes, w, h)
+                                }
+                                LoadedIcon::Png(bytes) => {
+                                    slint::Image::load_from_data(&bytes, Some("png")).ok()
+                                }
+                            });
+                            workspace.mod_icons.insert(key.clone(), image);
+                            workspace.icon_order.retain(|old| old != &key);
+                            workspace.icon_order.push_back(key);
                         }
                     }
-                    let image =
-                        pixels.and_then(|(w, h, bytes)| ui::rectangular_image(&bytes, w, h));
-                    workspace.artwork_order.push_back(key.clone());
-                    workspace.content_artwork.insert(key, image);
+                    // Do not retry a failed batch continuously; refresh clears this
+                    // transient suppression, unlike a genuinely absent icon cache.
+                    Err(_) => workspace.icons_failed.extend(keys),
                 }
-                true
-            })
-            .unwrap_or(false);
-            if applied {
-                render_content();
-                load_content_artwork();
-            }
+                trim_icon_cache(workspace);
+            });
+            render_content();
+            load_mod_icons(serial);
         },
     );
 }
@@ -1326,17 +1587,13 @@ pub fn render_content() {
                 workspace
                     .content
                     .iter()
-                    .filter(|item| item.matches(&filter))
+                    .filter(|item| {
+                        filter.is_empty()
+                            || item.row.title.to_lowercase().contains(&filter)
+                            || item.row.detail.to_lowercase().contains(&filter)
+                    })
                     .map(|item| {
-                        let mut row = item.row.clone();
-                        if let Some(image) = item
-                            .artwork_key(tab)
-                            .and_then(|key| workspace.content_artwork.get(&key))
-                            .and_then(|image| image.as_ref())
-                        {
-                            row.picture = image.clone();
-                            row.has_picture = true;
-                        }
+                        let mut row = artwork_row(workspace, item);
                         crate::content_updates::decorate(
                             &mut row,
                             item.project.as_deref(),
@@ -1354,26 +1611,46 @@ pub fn render_content() {
             .count();
         instances.set_updates_summary(updates.summary.clone().into());
         instances.set_updates_count(count as i32);
-        let current = instances.get_content();
-        if let Some(model) = current.as_any().downcast_ref::<VecModel<ContentRow>>()
-            && model.row_count() == rows.len()
-            && model.iter().zip(&rows).all(|(old, new)| old.id == new.id)
-        {
-            // Keep the row and its keyboard focus alive as artwork arrives.
-            for (index, row) in rows.into_iter().enumerate() {
-                if model.row_data(index).as_ref() != Some(&row) {
-                    model.set_row_data(index, row);
-                }
-            }
-        } else {
-            instances.set_content(ui::model(rows));
-        }
+        crate::perf_trace::mark(
+            "content",
+            format_args!(
+                "rows={} loading={}",
+                rows.len(),
+                instances.get_content_loading()
+            ),
+        );
+        instances.set_content(content_model(instances.get_content(), rows));
     });
+}
+
+fn content_model(
+    current: slint::ModelRc<ContentRow>,
+    rows: Vec<ContentRow>,
+) -> slint::ModelRc<ContentRow> {
+    if current.row_count() == rows.len()
+        && rows
+            .iter()
+            .enumerate()
+            .all(|(i, row)| current.row_data(i).is_some_and(|old| old.id == row.id))
+        && let Some(model) = current
+            .as_any()
+            .downcast_ref::<slint::VecModel<ContentRow>>()
+    {
+        for (i, row) in rows.into_iter().enumerate() {
+            if model.row_data(i).as_ref() != Some(&row) {
+                model.set_row_data(i, row);
+            }
+        }
+        current
+    } else {
+        ui::model(rows)
+    }
 }
 
 /// After a queued install or update settles: reload the open content tab and
 /// refresh update badges that described the superseded files.
 pub fn after_content_change() {
+    invalidate_content_cache();
     let tab = ui::with(|window, state| {
         state.workspace.as_ref()?;
         Some(window.global::<Instances>().get_tab())
@@ -1388,7 +1665,10 @@ pub fn after_content_change() {
 fn toggle_content(entry: slint::SharedString, enabled: bool) {
     let Some((id, tab, serial)) = ui::with(|window, state| {
         let workspace = state.workspace.as_mut()?;
-        workspace.content_serial = next_content_serial();
+        state.content_cache.invalidate(&workspace.id);
+        workspace.content_tab = None;
+        state.content_serial += 1;
+        workspace.content_serial = state.content_serial;
         Some((
             workspace.id.clone(),
             window.global::<Instances>().get_tab(),
@@ -1426,7 +1706,10 @@ fn remove_content() {
         instances.set_remove_open(false);
         let workspace = state.workspace.as_mut()?;
         let (entry, _) = workspace.pending_remove.take()?;
-        workspace.content_serial = next_content_serial();
+        state.content_cache.invalidate(&workspace.id);
+        workspace.content_tab = None;
+        state.content_serial += 1;
+        workspace.content_serial = state.content_serial;
         Some((
             workspace.id.clone(),
             instances.get_tab(),
@@ -1469,7 +1752,9 @@ fn finish_mutation(id: &str, serial: u64, result: api::ApiResult<Vec<ContentItem
     }
     match result {
         Ok(items) => {
-            apply_content(id, serial, Ok(items));
+            let tab =
+                ui::with(|window, _| window.global::<Instances>().get_tab()).unwrap_or(TAB_MODS);
+            apply_content(id, tab, serial, None, Ok(items));
             crate::home::refresh_readiness();
         }
         Err(error) => {
@@ -2227,6 +2512,307 @@ fn draft_platform(
 mod tests {
     use super::*;
 
+    fn test_ui(root: Option<std::path::PathBuf>) -> (AppWindow, tokio::runtime::Runtime) {
+        struct TestPlatform;
+        impl slint::platform::Platform for TestPlatform {
+            fn create_window_adapter(
+                &self,
+            ) -> Result<std::rc::Rc<dyn slint::platform::WindowAdapter>, slint::PlatformError>
+            {
+                Ok(
+                    slint::platform::software_renderer::MinimalSoftwareWindow::new(
+                        slint::platform::software_renderer::RepaintBufferType::NewBuffer,
+                    ),
+                )
+            }
+        }
+        let _ = slint::platform::set_platform(Box::new(TestPlatform));
+        let window = AppWindow::new().unwrap();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let host = aurora_launcher_lib::host::Host::native(
+            root.ok_or_else(|| "headless UI regression".into()),
+            "test",
+            runtime.handle().clone(),
+            |_, _| {},
+        );
+        ui::install(window.clone_strong(), host, runtime.handle().clone());
+        bind(&window);
+        (window, runtime)
+    }
+
+    #[test]
+    fn saving_stepped_memory_publishes_success_without_reborrowing_state() {
+        let (window, _runtime) = test_ui(None);
+        let base: InstanceConfiguration = serde_json::from_value(serde_json::json!({
+            "minecraftVersion":"1.21.1", "auroraEnabled":false,
+            "loader":{"kind":"vanilla"}, "memoryMib":4096,
+            "additionalJvmArguments":"", "window":null
+        }))
+        .unwrap();
+        ui::with(|window, state| {
+            state.workspace = Some(Workspace {
+                id: "test-instance".into(),
+                base: Some(base.clone()),
+                ..Default::default()
+            });
+            write_draft(window, &base);
+        });
+        window.global::<Instances>().invoke_memory_step(-1);
+        let draft = ui::with(|window, state| {
+            read_draft(window, &base, state.workspace.as_ref().unwrap()).unwrap()
+        })
+        .unwrap();
+        assert_eq!(draft.memory_mib, 3072);
+        let updated = InstanceSummary {
+            id: "test-instance".into(),
+            display_name: "Test".into(),
+            state: "ready".into(),
+            aurora: None,
+            platform: api::Platform {
+                kind: "vanilla".into(),
+                version: None,
+            },
+            pack: None,
+            minecraft_version: "1.21.1".into(),
+            configuration: draft.clone(),
+            recovery: None,
+        };
+        apply_saved_configuration("test-instance", Ok(updated));
+        assert_eq!(
+            ui::state(|s| s.workspace.as_ref().unwrap().base.clone()),
+            Some(draft)
+        );
+        assert!(!window.global::<Instances>().get_config_busy());
+        assert!(!window.global::<Instances>().get_config_dirty());
+        assert_eq!(
+            window.global::<crate::Shell>().get_toast_text(),
+            "Settings saved."
+        );
+        ui::release();
+    }
+
+    #[test]
+    fn sidebar_instances_always_returns_to_selection_from_every_page() {
+        let (window, _runtime) = test_ui(None);
+        crate::bind_navigation(&window);
+        for page in [
+            Page::Home,
+            Page::Discover,
+            Page::Settings,
+            Page::Skins,
+            Page::Instances,
+        ] {
+            ui::with(|window, state| {
+                state.workspace = Some(Workspace {
+                    id: "test".into(),
+                    ..Default::default()
+                });
+                window.global::<Nav>().set_workspace_open(true);
+                window.global::<Nav>().set_page(page);
+            });
+            window.global::<Nav>().invoke_navigate(Page::Instances);
+            assert_eq!(window.global::<Nav>().get_page(), Page::Instances);
+            assert!(!window.global::<Nav>().get_workspace_open());
+            assert!(ui::state(|state| state.workspace.is_none()));
+        }
+        ui::release();
+    }
+
+    #[test]
+    fn content_reentry_restores_rows_and_icon_keys_and_rejects_stale_scans() {
+        let (window, _runtime) = test_ui(None);
+        let item = ContentItem {
+            row: ContentRow {
+                id: "mod".into(),
+                title: "Installed mod".into(),
+                ..Default::default()
+            },
+            project: Some("project".into()),
+            icon_source: Some(ContentIconSource::Mod(api::ModIconRequest {
+                file_name: "mod.jar".into(),
+                sha256: "hash".into(),
+            })),
+        };
+        ui::with(|window, state| {
+            state.workspace = Some(Workspace {
+                id: "one".into(),
+                content: vec![item.clone()],
+                content_tab: Some(TAB_MODS),
+                content_revision: Some(7),
+                ..Default::default()
+            });
+            state
+                .workspace
+                .as_mut()
+                .unwrap()
+                .mod_icons
+                .insert("hash".into(), None);
+            window.global::<Instances>().set_tab(TAB_MODS);
+            close_workspace(window, state);
+            state.workspace = Some(Workspace {
+                id: "one".into(),
+                ..Default::default()
+            });
+            window.global::<Nav>().set_workspace_open(true);
+        });
+        let (_, first) = begin_content_tab(TAB_MODS).unwrap();
+        render_content();
+        assert!(!window.global::<Instances>().get_content_loading());
+        assert_eq!(window.global::<Instances>().get_content().row_count(), 1);
+        assert!(ui::state(|state| state
+            .workspace
+            .as_ref()
+            .unwrap()
+            .mod_icons
+            .contains_key("hash")));
+        let model = window.global::<Instances>().get_content();
+        apply_content("one", TAB_MODS, first, Some(7), Ok(vec![item.clone()]));
+        assert!(std::ptr::eq(
+            model.as_any(),
+            window.global::<Instances>().get_content().as_any()
+        ));
+        ui::with(|window, state| {
+            close_workspace(window, state);
+            state.workspace = Some(Workspace {
+                id: "one".into(),
+                ..Default::default()
+            });
+        });
+        let (_, second) = begin_content_tab(TAB_MODS).unwrap();
+        assert_ne!(
+            first, second,
+            "request identities survive same-instance reopen"
+        );
+        apply_content("one", TAB_MODS, first, Some(8), Ok(vec![]));
+        assert_eq!(
+            ui::state(|state| state.workspace.as_ref().unwrap().content.len()),
+            1
+        );
+        window.global::<Instances>().set_tab(1);
+        let (_, pack_serial) = begin_content_tab(1).unwrap();
+        assert!(window.global::<Instances>().get_content_loading());
+        apply_content("one", TAB_MODS, second, Some(8), Ok(vec![]));
+        assert!(ui::state(|state| state
+            .workspace
+            .as_ref()
+            .unwrap()
+            .content
+            .is_empty()));
+        apply_content("one", 1, pack_serial, Some(9), Ok(vec![item]));
+        assert_eq!(window.global::<Instances>().get_content().row_count(), 1);
+        invalidate_content_cache();
+        assert!(
+            ui::with(|_, state| state.content_cache.get("one", 0).is_none()
+                && state.content_cache.get("one", 1).is_none())
+            .unwrap()
+        );
+        assert!(ui::state(|state| state
+            .workspace
+            .as_ref()
+            .unwrap()
+            .content_tab
+            .is_none()));
+        ui::release();
+    }
+
+    #[test]
+    #[ignore = "requires AURORA_CONTENT_TIMING_ROOT pointing at a disposable registered fixture"]
+    fn installed_content_navigation_timing_harness() {
+        let root =
+            std::path::PathBuf::from(std::env::var_os("AURORA_CONTENT_TIMING_ROOT").unwrap());
+        // Safety: the harness explicitly refuses the platform owner data root.
+        assert!(root.join("launcher/instances.json").is_file());
+        assert!(
+            root.components()
+                .any(|part| part.as_os_str() == "timing-fixture")
+        );
+        assert_eq!(
+            aurora_launcher_lib::paths::ManagedPaths::from_app_local_data_dir(root.clone())
+                .unwrap()
+                .data_root(),
+            root
+        );
+        let (window, runtime) = test_ui(Some(root));
+        let host = ui::host();
+        let scan = |tab| {
+            if tab == TAB_MODS {
+                mod_items(
+                    runtime
+                        .block_on(api::instance_mods(host.clone(), "timing-instance".into()))
+                        .unwrap(),
+                )
+            } else {
+                pack_items(
+                    runtime
+                        .block_on(api::instance_content(
+                            host.clone(),
+                            "timing-instance".into(),
+                            CONTENT_KINDS[tab as usize],
+                        ))
+                        .unwrap(),
+                    tab == 1,
+                )
+            }
+        };
+        for tab in 0..3 {
+            let mut before = Vec::new();
+            for _ in 0..2 {
+                let start = std::time::Instant::now();
+                let items = scan(tab);
+                let rows = items.into_iter().map(|item| item.row).collect();
+                window
+                    .global::<Instances>()
+                    .set_content(content_model(Default::default(), rows));
+                before.push(start.elapsed().as_secs_f64() * 1000.0);
+            }
+            ui::with(|window, state| {
+                state.content_cache.clear();
+                state.workspace = Some(Workspace {
+                    id: "timing-instance".into(),
+                    ..Default::default()
+                });
+                window.global::<Instances>().set_tab(tab);
+            });
+            let start = std::time::Instant::now();
+            let (_, serial) = begin_content_tab(tab).unwrap();
+            render_content();
+            let revision = runtime.block_on(crate::content_cache::folder_revision(
+                host.clone(),
+                "timing-instance".into(),
+                tab,
+            ));
+            let items = scan(tab);
+            let count = items.len();
+            assert!(count > 0);
+            apply_content("timing-instance", tab, serial, revision, Ok(items.clone()));
+            let first = start.elapsed().as_secs_f64() * 1000.0;
+            ui::with(|window, state| {
+                close_workspace(window, state);
+                state.workspace = Some(Workspace {
+                    id: "timing-instance".into(),
+                    ..Default::default()
+                });
+            });
+            let start = std::time::Instant::now();
+            let (_, serial) = begin_content_tab(tab).unwrap();
+            render_content();
+            let second = start.elapsed().as_secs_f64() * 1000.0;
+            assert_eq!(
+                window.global::<Instances>().get_content().row_count(),
+                count
+            );
+            assert!(!window.global::<Instances>().get_content_loading());
+            // The real background refresh follows publication; it must leave
+            // identical rows and artwork keys intact.
+            apply_content("timing-instance", tab, serial, revision, Ok(scan(tab)));
+            println!(
+                "CONTENT_TIMING kind={} rows={} before_first_ms={:.3} before_second_ms={:.3} after_first_ms={:.3} after_second_ms={:.3}",
+                CONTENT_KINDS[tab as usize], count, before[0], before[1], first, second
+            );
+        }
+        ui::release();
+    }
+
     #[test]
     fn bundled_resource_packs_are_hidden_while_personal_packs_remain() {
         let entry = |name: &str, pack_owned: bool| serde_json::json!({"entryId":name,"fileName":name,"displayName":name,"packOwned":pack_owned,"management":{"canRemove":!pack_owned,"canToggle":true,"active":false,"activationManagedInGame":false}});
@@ -2260,6 +2846,162 @@ mod tests {
         }
         for value in [512, 2048, 4096, 32768] {
             assert_eq!(memory_mib(&format!(" {value} ")).unwrap(), value);
+        }
+    }
+
+    #[test]
+    fn visible_icon_work_is_batched_filtered_and_excludes_cached_pending_and_failed() {
+        let mut workspace = Workspace::default();
+        for i in 0..100 {
+            workspace.content.push(ContentItem {
+                icon_source: Some(ContentIconSource::Mod(api::ModIconRequest {
+                    file_name: format!("{i}.jar"),
+                    sha256: format!("{i:064x}"),
+                })),
+                row: ContentRow {
+                    id: i.to_string().into(),
+                    title: format!("row{i}").into(),
+                    ..Default::default()
+                },
+                project: None,
+            });
+        }
+        assert!(visible_icon_sources(&workspace).is_empty());
+        workspace
+            .icons_visible
+            .extend((0..20).map(|i| i.to_string()));
+        workspace.mod_icons.insert(format!("{:064x}", 0), None);
+        workspace.icons_pending.insert(format!("{:064x}", 1));
+        workspace.icons_failed.insert(format!("{:064x}", 2));
+        let keys: Vec<_> = visible_icon_sources(&workspace)
+            .iter()
+            .map(ContentIconSource::key)
+            .collect();
+        assert_eq!(
+            keys,
+            (3..11).map(|i| format!("{i:064x}")).collect::<Vec<_>>()
+        );
+        workspace.filter = "row9".into();
+        assert_eq!(visible_icon_sources(&workspace).len(), 1);
+        workspace.icons_visible.clear();
+        assert!(visible_icon_sources(&workspace).is_empty());
+    }
+    #[test]
+    fn artwork_publishes_batches_releases_offscreen_rows_and_trims_unpinned_cache() {
+        let mut workspace = Workspace::default();
+        let image = ui::rectangular_image(&[255, 0, 0, 255], 1, 1).unwrap();
+        for i in 0..ICON_CACHE + ICON_BATCH {
+            workspace.content.push(ContentItem {
+                icon_source: Some(ContentIconSource::Mod(api::ModIconRequest {
+                    file_name: format!("{i}.jar"),
+                    sha256: format!("{i:064x}"),
+                })),
+                row: ContentRow {
+                    id: i.to_string().into(),
+                    letter: "M".into(),
+                    ..Default::default()
+                },
+                project: None,
+            });
+            workspace.icons_visible.insert(i.to_string());
+        }
+        let first = visible_icon_sources(&workspace);
+        assert_eq!(first.len(), ICON_BATCH);
+        for source in first {
+            let key = source.key();
+            workspace.mod_icons.insert(key.clone(), Some(image.clone()));
+            workspace.icon_order.push_back(key);
+        }
+        // The first batch is publishable while later visible rows still wait.
+        let model = ui::model(
+            workspace
+                .content
+                .iter()
+                .map(|item| artwork_row(&workspace, item))
+                .collect::<Vec<_>>(),
+        );
+        assert!(model.row_data(0).unwrap().has_picture);
+        assert!(!model.row_data(ICON_BATCH).unwrap().has_picture);
+        assert_eq!(
+            visible_icon_sources(&workspace)[0].key(),
+            format!("{:064x}", ICON_BATCH)
+        );
+        for item in &workspace.content[ICON_BATCH..] {
+            let key = item.icon_source.as_ref().unwrap().key();
+            workspace.mod_icons.insert(key.clone(), Some(image.clone()));
+            workspace.icon_order.push_back(key);
+        }
+        // Visible rows are pinned. Once hidden, their cache entries are evictable
+        // even when no further batch completes to trigger eviction.
+        trim_icon_cache(&mut workspace);
+        assert_eq!(workspace.mod_icons.len(), ICON_CACHE + ICON_BATCH);
+        workspace.icons_visible.retain(|id| id == "0");
+        trim_icon_cache(&mut workspace);
+        assert_eq!(workspace.mod_icons.len(), ICON_CACHE);
+        assert!(workspace.mod_icons.contains_key(&format!("{:064x}", 0)));
+        let updated = content_model(
+            model.clone(),
+            workspace
+                .content
+                .iter()
+                .map(|item| artwork_row(&workspace, item))
+                .collect(),
+        );
+        assert!(std::ptr::eq(model.as_any(), updated.as_any()));
+        for i in 1..updated.row_count() {
+            let row = updated.row_data(i).unwrap();
+            assert!(!row.has_picture);
+            assert!(row.picture.to_rgba8().is_none());
+        }
+        // A genuine absence keeps the honest letter fallback without reloading.
+        workspace.mod_icons.insert(format!("{:064x}", 0), None);
+        let absent = artwork_row(&workspace, &workspace.content[0]);
+        assert!(!absent.has_picture);
+        assert!(absent.picture.to_rgba8().is_none());
+        assert_eq!(absent.letter, "M");
+        assert!(visible_icon_sources(&workspace).is_empty());
+    }
+
+    #[test]
+    fn content_artwork_updates_keep_row_models_stable_until_ids_change() {
+        let first = ContentRow {
+            id: "a".into(),
+            title: "before".into(),
+            ..Default::default()
+        };
+        let model = ui::model(vec![first.clone()]);
+        let before = model.as_any() as *const dyn std::any::Any;
+        let updated = content_model(
+            model,
+            vec![ContentRow {
+                title: "after".into(),
+                ..first
+            }],
+        );
+        assert!(std::ptr::eq(before, updated.as_any()));
+        assert_eq!(updated.row_data(0).unwrap().title, "after");
+        let replacement = content_model(
+            updated.clone(),
+            vec![ContentRow {
+                id: "b".into(),
+                ..Default::default()
+            }],
+        );
+        assert!(!std::ptr::eq(updated.as_any(), replacement.as_any()));
+    }
+
+    #[test]
+    fn memory_steps_preserve_validation_and_clamp_to_core_bounds() {
+        assert_eq!(stepped_memory_mib("4096", 1).unwrap(), 5120);
+        assert_eq!(stepped_memory_mib("4096", -1).unwrap(), 3072);
+        assert_eq!(stepped_memory_mib(" 2048 ", 1).unwrap(), 3072);
+        assert_eq!(stepped_memory_mib("512", -1).unwrap(), 512);
+        assert_eq!(stepped_memory_mib("1000", -1).unwrap(), 512);
+        assert_eq!(stepped_memory_mib("32000", 1).unwrap(), 32768);
+        assert_eq!(stepped_memory_mib("32768", 1).unwrap(), 32768);
+        for text in ["", "bad", "4096.0", "511", "32769"] {
+            assert!(stepped_memory_mib(text, 1).is_err());
+            assert!(stepped_memory_mib(text, -1).is_err());
         }
     }
 

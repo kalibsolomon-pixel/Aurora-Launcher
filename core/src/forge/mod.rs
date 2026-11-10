@@ -21,6 +21,7 @@
 //! into an instance, or launched by this module.
 
 pub mod metadata;
+pub(crate) mod mods;
 pub mod plan;
 pub mod processors;
 
@@ -56,7 +57,7 @@ pub async fn resolve_forge_plan(
     loader: &ForgeVersionId,
     options: &DownloadOptions,
 ) -> Result<ForgePlan, ForgeResolutionError> {
-    loader.require_reviewed()?;
+    loader.require_supported()?;
     if loader.minecraft_version() != game.as_str() {
         return Err(ForgeResolutionError::UnknownVersion {
             minecraft_version: game.as_str().to_owned(),
@@ -201,3 +202,6 @@ mod compatibility_tests;
 
 #[cfg(test)]
 mod processor_chain_tests;
+
+#[cfg(test)]
+mod live_acceptance_tests;

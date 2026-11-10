@@ -193,6 +193,8 @@ pub fn install(window: &AppWindow) {
                 }
                 _ => {}
             }
+            // Revalidate actual OS visibility before any Borealis update.
+            crate::borealis::sync();
             EventResult::Propagate
         });
 }

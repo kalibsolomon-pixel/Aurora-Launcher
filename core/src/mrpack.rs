@@ -14,6 +14,8 @@ use zip::ZipArchive;
 
 pub const MAX_PACK_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_INDEX_BYTES: u64 = 1024 * 1024;
+/// Longest Minecraft or loader version an index may declare.
+const MAX_DEPENDENCY_VERSION: usize = 128;
 const MAX_ENTRIES: usize = 8192;
 const MAX_OVERRIDE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_EXPANDED_BYTES: u64 = 512 * 1024 * 1024;
@@ -42,11 +44,36 @@ struct IndexFile {
     env: Option<FileEnvironment>,
 }
 
+/// The format requires `sha1` and `sha512` and allows other algorithms,
+/// which "will usually be ignored". Aurora ignores them too, but only after
+/// bounding them (see [`extra_hashes_bounded`]); every other index object
+/// keeps rejecting unknown fields.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct FileHashes {
     sha1: String,
     sha512: String,
+    /// Additional algorithms. A non-string value fails deserialization
+    /// (`pack_invalid_index`); the values are never used.
+    #[serde(flatten)]
+    extra: BTreeMap<String, String>,
+}
+
+const MAX_EXTRA_HASHES: usize = 8;
+const MAX_EXTRA_HASH_NAME: usize = 32;
+const MAX_EXTRA_HASH_VALUE: usize = 256;
+
+/// Extra hash entries stay small, named like algorithms, and string-valued,
+/// so an index cannot grow arbitrary payloads under `hashes`.
+fn extra_hashes_bounded(extra: &BTreeMap<String, String>) -> bool {
+    extra.len() <= MAX_EXTRA_HASHES
+        && extra.iter().all(|(name, value)| {
+            !name.is_empty()
+                && name.len() <= MAX_EXTRA_HASH_NAME
+                && name
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+                && value.len() <= MAX_EXTRA_HASH_VALUE
+        })
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -93,13 +120,77 @@ pub enum OverrideLayer {
     Client,
 }
 
+/// The one mod loader a pack index requires (its `dependencies` key).
+/// Serialized names are the instance platform kinds (`fabric`, `forge`,
+/// `neoForge`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PackLoaderKind {
+    Fabric,
+    Forge,
+    NeoForge,
+}
+
+impl PackLoaderKind {
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Fabric => "Fabric",
+            Self::Forge => "Forge",
+            Self::NeoForge => "NeoForge",
+        }
+    }
+}
+
+/// The exact loader a pack index declares, in the index's own format:
+/// `fabric-loader` and `neoforge` name the loader version; `forge` names
+/// only the Forge build (`47.4.10`), never the `<minecraft>-<build>` pin.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackLoader {
+    pub kind: PackLoaderKind,
+    pub version: String,
+}
+
+impl PackLoader {
+    /// The exact installed platform pin this loader becomes for the pack's
+    /// Minecraft version: Fabric and NeoForge keep the declared version;
+    /// Forge combines it into the `<minecraft>-<build>` identity
+    /// (`forge::metadata::ForgeVersionId`) Forge instances pin.
+    pub fn platform_pin(&self, minecraft_version: &str) -> crate::instances::platform::PlatformPin {
+        use crate::instances::platform::PlatformPin;
+        let version = self.version.clone();
+        match self.kind {
+            PackLoaderKind::Fabric => PlatformPin::Fabric { version },
+            PackLoaderKind::Forge => PlatformPin::Forge {
+                version: format!("{minecraft_version}-{version}"),
+            },
+            PackLoaderKind::NeoForge => PlatformPin::NeoForge { version },
+        }
+    }
+}
+
+/// Why an index's loader dependencies are not installable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoaderRefusal {
+    /// `quilt-loader`.
+    Quilt,
+    /// A dependency key the format may add later, or one Aurora does not know.
+    Unknown,
+    /// More than one loader key.
+    Multiple,
+    /// Only `minecraft`.
+    Missing,
+    /// An empty or overlong Minecraft or loader version.
+    InvalidVersion,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PackPlan {
     pub name: String,
     pub pack_version: String,
     pub minecraft_version: String,
-    pub fabric_loader_version: String,
+    pub loader: PackLoader,
     pub required_files: Vec<PackFile>,
     pub optional_files: Vec<PackFile>,
     pub excluded_paths: Vec<String>,
@@ -131,7 +222,7 @@ pub enum PackError {
     InvalidArchive,
     InvalidIndex,
     UnsupportedFormat,
-    UnsupportedLoader,
+    UnsupportedLoader(LoaderRefusal),
     InvalidPath,
     PathCollision,
     InvalidHash,
@@ -162,7 +253,7 @@ impl PackError {
             Self::InvalidArchive => "pack_invalid_archive",
             Self::InvalidIndex => "pack_invalid_index",
             Self::UnsupportedFormat => "pack_unsupported_format",
-            Self::UnsupportedLoader => "pack_unsupported_loader",
+            Self::UnsupportedLoader(_) => "pack_unsupported_loader",
             Self::InvalidPath => "pack_invalid_path",
             Self::PathCollision => "pack_path_collision",
             Self::InvalidHash => "pack_invalid_hash",
@@ -196,9 +287,23 @@ impl fmt::Display for PackError {
             }
             Self::InvalidIndex => "The pack index is missing, malformed, or too large.",
             Self::UnsupportedFormat => "Aurora supports Minecraft .mrpack format version 1 only.",
-            Self::UnsupportedLoader => {
-                "This pack requires a mod loader Aurora does not install as a pack (NeoForge .mrpack support is not part of this build)."
-            }
+            Self::UnsupportedLoader(reason) => match reason {
+                LoaderRefusal::Quilt => {
+                    "This pack requires Quilt Loader. Aurora does not support Quilt."
+                }
+                LoaderRefusal::Unknown => {
+                    "This pack requires a mod loader Aurora does not install. Aurora installs Fabric, Forge and NeoForge modpacks."
+                }
+                LoaderRefusal::Multiple => {
+                    "This pack names more than one mod loader. Aurora installs packs for exactly one of Fabric, Forge or NeoForge."
+                }
+                LoaderRefusal::Missing => {
+                    "This pack names no mod loader. Aurora installs Fabric, Forge and NeoForge modpacks."
+                }
+                LoaderRefusal::InvalidVersion => {
+                    "The pack's Minecraft or mod loader version is missing or malformed."
+                }
+            },
             Self::InvalidPath => {
                 "A pack file names a path outside Aurora's supported game-content roots."
             }
@@ -235,6 +340,7 @@ const LAUNCHER_OWNED_ROOT_NAMES: &[&str] = &[
     "aurora-retained.json",
     "content-managed.json",
     "pack-installed.json",
+    "pack-install-pending.json",
     "pack-update.json",
     "instances.json",
 ];
@@ -519,17 +625,32 @@ fn parse_reader<R: Read + Seek>(reader: R) -> Result<PackPlan, PackError> {
         .filter(|s| !s.is_empty())
         .ok_or(PackError::InvalidIndex)?
         .clone();
-    let fabric_loader_version = index
-        .dependencies
-        .get("fabric-loader")
-        .filter(|s| !s.is_empty())
-        .ok_or(PackError::UnsupportedLoader)?
-        .clone();
-    if index.dependencies.len() != 2
-        || minecraft_version.len() > 128
-        || fabric_loader_version.len() > 128
-    {
-        return Err(PackError::UnsupportedLoader);
+    // Exactly `minecraft` plus one supported loader. Other keys, including
+    // ones the format may add later, are refused rather than ignored.
+    let mut loader = None;
+    for (key, version) in &index.dependencies {
+        let kind = match key.as_str() {
+            "minecraft" => continue,
+            "fabric-loader" => PackLoaderKind::Fabric,
+            "forge" => PackLoaderKind::Forge,
+            "neoforge" => PackLoaderKind::NeoForge,
+            "quilt-loader" => return Err(PackError::UnsupportedLoader(LoaderRefusal::Quilt)),
+            _ => return Err(PackError::UnsupportedLoader(LoaderRefusal::Unknown)),
+        };
+        if loader.is_some() {
+            return Err(PackError::UnsupportedLoader(LoaderRefusal::Multiple));
+        }
+        if version.is_empty() || version.len() > MAX_DEPENDENCY_VERSION {
+            return Err(PackError::UnsupportedLoader(LoaderRefusal::InvalidVersion));
+        }
+        loader = Some(PackLoader {
+            kind,
+            version: version.clone(),
+        });
+    }
+    let loader = loader.ok_or(PackError::UnsupportedLoader(LoaderRefusal::Missing))?;
+    if minecraft_version.len() > MAX_DEPENDENCY_VERSION {
+        return Err(PackError::UnsupportedLoader(LoaderRefusal::InvalidVersion));
     }
     let mut destinations = HashSet::new();
     let mut required_files = Vec::new();
@@ -540,7 +661,10 @@ fn parse_reader<R: Read + Seek>(reader: R) -> Result<PackPlan, PackError> {
         if !destinations.insert(path.to_lowercase()) {
             return Err(PackError::PathCollision);
         }
-        if !digest_shape(&file.hashes.sha1, 40) || !digest_shape(&file.hashes.sha512, 128) {
+        if !digest_shape(&file.hashes.sha1, 40)
+            || !digest_shape(&file.hashes.sha512, 128)
+            || !extra_hashes_bounded(&file.hashes.extra)
+        {
             return Err(PackError::InvalidHash);
         }
         if file.downloads.is_empty()
@@ -599,14 +723,18 @@ fn parse_reader<R: Read + Seek>(reader: R) -> Result<PackPlan, PackError> {
             size,
             layer,
         };
+        // The format applies `overrides/` first and lets `client-overrides/`
+        // overwrite it, so the client layer wins whatever the ZIP entry
+        // order. Two entries of one layer for one destination stay a
+        // collision (archive names already differ only by case there).
         let key = path.to_lowercase();
         if let Some(previous) = overrides.get(&key) {
             let previous: &OverrideFile = previous;
             if previous.layer == layer {
                 return Err(PackError::PathCollision);
             }
-            if layer == OverrideLayer::Common {
-                return Err(PackError::PathCollision);
+            if previous.layer == OverrideLayer::Client {
+                continue;
             }
         }
         overrides.insert(key, override_file);
@@ -615,7 +743,7 @@ fn parse_reader<R: Read + Seek>(reader: R) -> Result<PackPlan, PackError> {
         name: index.name,
         pack_version: index.version_id,
         minecraft_version,
-        fabric_loader_version,
+        loader,
         required_files,
         optional_files,
         excluded_paths,
@@ -651,12 +779,108 @@ mod tests {
         );
     }
 
+    fn with_dependencies(dependencies: &str) -> String {
+        format!(
+            r#"{{"formatVersion":1,"game":"minecraft","versionId":"v1","name":"Pack","files":[],"dependencies":{dependencies}}}"#
+        )
+    }
+
     #[test]
-    fn a_neoforge_mrpack_is_rejected_with_an_explicit_phase_k_message() {
-        let index = r#"{"formatVersion":1,"game":"minecraft","versionId":"v1","name":"Neo Pack","files":[],"dependencies":{"minecraft":"26.2","neoforge":"26.2.0.88"}}"#;
-        let error = pack(index, &[]).unwrap_err();
-        assert_eq!(error.code(), "pack_unsupported_loader");
-        assert!(error.to_string().contains("NeoForge"), "{error}");
+    fn fabric_forge_and_neoforge_indexes_parse_into_their_exact_loader() {
+        use crate::instances::platform::PlatformPin;
+        for (dependencies, kind, version, pin) in [
+            (
+                r#"{"minecraft":"1.21.1","fabric-loader":"0.16.0"}"#,
+                PackLoaderKind::Fabric,
+                "0.16.0",
+                PlatformPin::Fabric {
+                    version: "0.16.0".into(),
+                },
+            ),
+            (
+                r#"{"minecraft":"1.20.1","forge":"47.4.10"}"#,
+                PackLoaderKind::Forge,
+                "47.4.10",
+                PlatformPin::Forge {
+                    version: "1.20.1-47.4.10".into(),
+                },
+            ),
+            (
+                r#"{"minecraft":"26.2","neoforge":"26.2.0.88"}"#,
+                PackLoaderKind::NeoForge,
+                "26.2.0.88",
+                PlatformPin::NeoForge {
+                    version: "26.2.0.88".into(),
+                },
+            ),
+        ] {
+            let plan = pack(&with_dependencies(dependencies), &[]).unwrap();
+            assert_eq!(plan.loader.kind, kind, "{dependencies}");
+            assert_eq!(plan.loader.version, version);
+            assert_eq!(plan.loader.platform_pin(&plan.minecraft_version), pin);
+        }
+    }
+
+    #[test]
+    fn quilt_unknown_multiple_missing_and_malformed_loaders_are_refused_explicitly() {
+        let long = "1".repeat(MAX_DEPENDENCY_VERSION + 1);
+        let cases = [
+            (
+                r#"{"minecraft":"1.21.1","quilt-loader":"0.26.0"}"#.to_owned(),
+                LoaderRefusal::Quilt,
+                "Quilt",
+            ),
+            (
+                r#"{"minecraft":"1.21.1","fabric-loader":"0.16.0","quilt-loader":"0.26.0"}"#
+                    .to_owned(),
+                LoaderRefusal::Quilt,
+                "Quilt",
+            ),
+            (
+                r#"{"minecraft":"1.21.1","liteloader":"1.0"}"#.to_owned(),
+                LoaderRefusal::Unknown,
+                "Fabric, Forge and NeoForge",
+            ),
+            (
+                r#"{"minecraft":"1.21.1","fabric-loader":"0.16.0","forge":"47.4.10"}"#.to_owned(),
+                LoaderRefusal::Multiple,
+                "more than one mod loader",
+            ),
+            (
+                r#"{"minecraft":"1.21.1"}"#.to_owned(),
+                LoaderRefusal::Missing,
+                "names no mod loader",
+            ),
+            (
+                r#"{"minecraft":"1.21.1","forge":""}"#.to_owned(),
+                LoaderRefusal::InvalidVersion,
+                "malformed",
+            ),
+            (
+                format!(r#"{{"minecraft":"1.21.1","neoforge":"{long}"}}"#),
+                LoaderRefusal::InvalidVersion,
+                "malformed",
+            ),
+            (
+                format!(r#"{{"minecraft":"{long}","fabric-loader":"0.16.0"}}"#),
+                LoaderRefusal::InvalidVersion,
+                "malformed",
+            ),
+        ];
+        for (dependencies, reason, wording) in cases {
+            let error = pack(&with_dependencies(&dependencies), &[]).unwrap_err();
+            assert!(
+                matches!(error, PackError::UnsupportedLoader(found) if found == reason),
+                "{dependencies}: {error:?}"
+            );
+            assert_eq!(error.code(), "pack_unsupported_loader");
+            assert!(error.to_string().contains(wording), "{error}");
+        }
+        // Without `minecraft` the index is unusable whatever the loader.
+        assert!(matches!(
+            pack(&with_dependencies(r#"{"forge":"47.4.10"}"#), &[]),
+            Err(PackError::InvalidIndex)
+        ));
     }
     use std::io::{Cursor, Write};
 
@@ -719,6 +943,153 @@ mod tests {
     }
 
     #[test]
+    fn client_overrides_win_whatever_the_archive_entry_order() {
+        for entries in [
+            [
+                ("overrides/config/a.toml", b"common".as_slice()),
+                ("client-overrides/config/A.toml", b"client".as_slice()),
+            ],
+            [
+                ("client-overrides/config/A.toml", b"client".as_slice()),
+                ("overrides/config/a.toml", b"common".as_slice()),
+            ],
+        ] {
+            let plan = pack(&index(""), &entries).unwrap();
+            assert_eq!(plan.overrides.len(), 1, "{entries:?}");
+            let chosen = &plan.overrides[0];
+            assert_eq!(chosen.layer, OverrideLayer::Client);
+            assert_eq!(chosen.path, "config/A.toml");
+            assert_eq!(chosen.sha256, format!("{:x}", Sha256::digest(b"client")));
+        }
+    }
+
+    #[test]
+    fn same_layer_duplicates_and_index_destinations_still_collide() {
+        for layer in ["overrides", "client-overrides"] {
+            let first = format!("{layer}/config/a.toml");
+            let second = format!("{layer}/config/A.toml");
+            assert!(
+                matches!(
+                    pack(
+                        &index(""),
+                        &[
+                            (first.as_str(), b"a".as_slice()),
+                            (second.as_str(), b"b".as_slice())
+                        ]
+                    ),
+                    Err(PackError::PathCollision)
+                ),
+                "{layer}"
+            );
+            let component = format!("{layer}/mods/A.jar");
+            assert!(
+                matches!(
+                    pack(
+                        &index(&file("mods/a.jar", "required")),
+                        &[(component.as_str(), b"x".as_slice())]
+                    ),
+                    Err(PackError::PathCollision)
+                ),
+                "{layer}"
+            );
+        }
+        // Both layers naming an index destination still collide with it.
+        assert!(matches!(
+            pack(
+                &index(&file("mods/a.jar", "required")),
+                &[
+                    ("client-overrides/mods/a.jar", b"c".as_slice()),
+                    ("overrides/mods/a.jar", b"o".as_slice())
+                ]
+            ),
+            Err(PackError::PathCollision)
+        ));
+    }
+
+    #[test]
+    fn extra_hash_algorithms_are_bounded_and_ignored() {
+        let sha1 = "a".repeat(40);
+        let sha512 = "b".repeat(128);
+        let with_hashes = |hashes: String| {
+            index(&format!(
+                r#"{{"path":"mods/a.jar","hashes":{hashes},"downloads":["https://cdn.modrinth.com/file.jar"],"fileSize":4}}"#
+            ))
+        };
+        let extra = with_hashes(format!(
+            r#"{{"sha1":"{sha1}","sha512":"{sha512}","sha256":"{}","murmur2":"1234"}}"#,
+            "c".repeat(64)
+        ));
+        let plan = pack(&extra, &[]).unwrap();
+        assert_eq!(plan.required_files[0].sha1, sha1);
+        assert_eq!(plan.required_files[0].sha512, sha512);
+
+        let missing_sha512 = with_hashes(format!(r#"{{"sha1":"{sha1}","sha256":"{sha1}"}}"#));
+        assert!(matches!(
+            pack(&missing_sha512, &[]),
+            Err(PackError::InvalidIndex)
+        ));
+        let missing_sha1 = with_hashes(format!(r#"{{"sha512":"{sha512}"}}"#));
+        assert!(matches!(
+            pack(&missing_sha1, &[]),
+            Err(PackError::InvalidIndex)
+        ));
+        let malformed_sha1 = with_hashes(format!(
+            r#"{{"sha1":"{}","sha512":"{sha512}","sha256":"{}"}}"#,
+            "z".repeat(40),
+            "c".repeat(64)
+        ));
+        assert!(matches!(
+            pack(&malformed_sha1, &[]),
+            Err(PackError::InvalidHash)
+        ));
+        let duplicate_sha1 = with_hashes(format!(
+            r#"{{"sha1":"{sha1}","sha1":"{sha1}","sha512":"{sha512}"}}"#
+        ));
+        assert!(pack(&duplicate_sha1, &[]).is_err());
+        // Non-string extra values are malformed index data.
+        let numeric = with_hashes(format!(
+            r#"{{"sha1":"{sha1}","sha512":"{sha512}","sha256":7}}"#
+        ));
+        assert!(matches!(pack(&numeric, &[]), Err(PackError::InvalidIndex)));
+        let nested = with_hashes(format!(
+            r#"{{"sha1":"{sha1}","sha512":"{sha512}","sha256":{{"x":"y"}}}}"#
+        ));
+        assert!(matches!(pack(&nested, &[]), Err(PackError::InvalidIndex)));
+        // Bounded count, name and value length.
+        let many: String = (0..=MAX_EXTRA_HASHES)
+            .map(|i| format!(r#","alg{i}":"00""#))
+            .collect();
+        let too_many = with_hashes(format!(r#"{{"sha1":"{sha1}","sha512":"{sha512}"{many}}}"#));
+        assert!(matches!(pack(&too_many, &[]), Err(PackError::InvalidHash)));
+        let long_value = with_hashes(format!(
+            r#"{{"sha1":"{sha1}","sha512":"{sha512}","sha256":"{}"}}"#,
+            "c".repeat(MAX_EXTRA_HASH_VALUE + 1)
+        ));
+        assert!(matches!(
+            pack(&long_value, &[]),
+            Err(PackError::InvalidHash)
+        ));
+        let long_name = with_hashes(format!(
+            r#"{{"sha1":"{sha1}","sha512":"{sha512}","{}":"00"}}"#,
+            "h".repeat(MAX_EXTRA_HASH_NAME + 1)
+        ));
+        assert!(matches!(pack(&long_name, &[]), Err(PackError::InvalidHash)));
+        let odd_name = with_hashes(format!(
+            r#"{{"sha1":"{sha1}","sha512":"{sha512}","sha 256":"00"}}"#
+        ));
+        assert!(matches!(pack(&odd_name, &[]), Err(PackError::InvalidHash)));
+        // Unknown fields outside `hashes` remain refused.
+        let unknown_file_field = index(
+            &file("mods/a.jar", "required")
+                .replace(r#""fileSize":4"#, r#""fileSize":4,"sha256":"x""#),
+        );
+        assert!(matches!(
+            pack(&unknown_file_field, &[]),
+            Err(PackError::InvalidIndex)
+        ));
+    }
+
+    #[test]
     fn rejects_paths_collisions_and_unsupported_loader() {
         for path in [
             "../mods/a.jar",
@@ -742,10 +1113,10 @@ mod tests {
             pack(&index(&files), &[]),
             Err(PackError::PathCollision)
         ));
-        let forge = index("").replace("fabric-loader", "forge");
+        let quilt = index("").replace("fabric-loader", "quilt-loader");
         assert!(matches!(
-            pack(&forge, &[]),
-            Err(PackError::UnsupportedLoader)
+            pack(&quilt, &[]),
+            Err(PackError::UnsupportedLoader(LoaderRefusal::Quilt))
         ));
     }
 
@@ -821,6 +1192,8 @@ mod tests {
             "overrides/C:/config/a",
             "client-overrides/config\\..\\a",
             "overrides/pack-installed.json",
+            "overrides/pack-install-pending.json",
+            "client-overrides/Pack-Install-Pending.json",
             "overrides/game/versions/x.jar",
             "client-overrides/Aurora-Installed.json",
             "overrides/.aurora-transition-stage-1/a",

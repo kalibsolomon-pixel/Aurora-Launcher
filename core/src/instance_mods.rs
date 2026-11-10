@@ -1139,14 +1139,16 @@ pub(crate) fn platform_kind_of(managed: &ManagedPaths, instance: &InstanceId) ->
 /// Reads one mod JAR's metadata in the format its instance's loader
 /// family declares. The instance platform is the authority: NeoForge
 /// instances read `META-INF/neoforge.mods.toml` (with the legacy
-/// `META-INF/mods.toml` spelling accepted), everything else reads
-/// `fabric.mod.json`.
+/// `META-INF/mods.toml` spelling accepted), Forge reads `META-INF/mods.toml`,
+/// and Fabric retains its own `fabric.mod.json` reader.
 pub(crate) fn inspect_mod_metadata(
     path: &Path,
     jar_size: u64,
     platform_kind: &str,
 ) -> (Option<ModMetadata>, Vec<ModWarning>) {
-    if platform_kind == "neoForge" {
+    if platform_kind == "forge" {
+        crate::forge::mods::inspect(path, jar_size)
+    } else if platform_kind == "neoForge" {
         inspect_neoforge_metadata(path, jar_size)
     } else {
         inspect_fabric_metadata(path, jar_size)
@@ -2132,6 +2134,8 @@ fn derive_local_warnings(entries: &mut [ModEntry], platform_kind: &str, loader_m
     // `fabricloader`.
     let builtins: Vec<&str> = if platform_kind == "neoForge" {
         vec!["minecraft", "neoforge", "forge", "java"]
+    } else if platform_kind == "forge" {
+        vec!["minecraft", "forge", "java"]
     } else {
         vec!["minecraft", "fabricloader", "java"]
     };
@@ -2760,6 +2764,69 @@ mod tests {
     use super::*;
 
     #[test]
+    fn forge_followup_reads_mods_toml_without_accepting_fabric_or_neoforge_only_jars() {
+        let root =
+            std::env::temp_dir().join(format!("aurora-forge-metadata-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("mod.jar");
+        let write = |name: &str, bytes: &[u8]| {
+            use std::io::Write as _;
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+            zip.start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(bytes).unwrap();
+            zip.finish().unwrap();
+        };
+        write(
+            "META-INF/mods.toml",
+            br#"modLoader="javafml"
+loaderVersion="[36,)"
+[[mods]]
+modId="example"
+version="1.0"
+description="""A multiline
+Forge description."""
+[[dependencies.example]]
+modId="forge"
+mandatory=true
+versionRange="[36,)"
+side="BOTH"
+[[dependencies.example]]
+modId="optional"
+mandatory=false
+versionRange="[1,)"
+side="CLIENT"
+[[dependencies.example]]
+modId="serveronly"
+mandatory=true
+versionRange="[1,)"
+side="SERVER"
+"#,
+        );
+        let (metadata, warnings) =
+            inspect_mod_metadata(&path, std::fs::metadata(&path).unwrap().len(), "forge");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let metadata = metadata.expect("Forge mods.toml must parse");
+        assert_eq!(metadata.id, "example");
+        assert_eq!(metadata.depends.len(), 1);
+        assert_eq!(metadata.depends[0].mod_id, "forge");
+        assert_eq!(metadata.recommends.len(), 1);
+        assert!(inspect_mod_metadata(&path, 0, "fabric").0.is_none());
+        write(
+            "META-INF/neoforge.mods.toml",
+            b"[[mods]]\nmodId=\"example\"\nversion=\"1.0\"",
+        );
+        assert!(inspect_mod_metadata(&path, 0, "forge").0.is_none());
+        write(
+            "fabric.mod.json",
+            br#"{"schemaVersion":1,"id":"example","version":"1.0"}"#,
+        );
+        assert!(inspect_mod_metadata(&path, 0, "forge").0.is_none());
+        assert!(inspect_mod_metadata(&path, 0, "fabric").0.is_some());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn neoforge_mod_metadata_normalizes_into_the_shared_model() {
         let directory =
             std::env::temp_dir().join(format!("aurora-neoforge-mods-test-{}", std::process::id()));
@@ -3380,7 +3447,9 @@ versionRange="[1,2)"
                 artifact_sha512: "a".repeat(128),
                 artifact_sha256: "b".repeat(64),
                 minecraft_version: "26.2".into(),
-                fabric_loader_version: "0.19.5".into(),
+                loader: crate::instances::platform::PlatformPin::Fabric {
+                    version: "0.19.5".into(),
+                },
                 installed_at_unix_seconds: 1,
             },
             vec![OwnedComponent {

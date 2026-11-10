@@ -14,6 +14,7 @@ mod activity;
 mod api;
 mod borealis;
 mod chrome;
+mod content_cache;
 mod content_import;
 mod content_updates;
 #[cfg(test)]
@@ -30,6 +31,7 @@ mod layout_acceptance;
 #[cfg(test)]
 mod loading_tests;
 mod media;
+mod perf_trace;
 mod player;
 mod preview;
 #[cfg(feature = "disposable-data-root")]
@@ -100,6 +102,7 @@ fn main() -> Result<(), slint::PlatformError> {
     );
 
     chrome::install(&window);
+    borealis::install(&window);
     bind_navigation(&window);
     home::bind(&window);
     recovery::bind(&window);
@@ -164,29 +167,62 @@ fn main() -> Result<(), slint::PlatformError> {
     Ok(())
 }
 
-/// The software renderer is the measured default (docs/native-ui/BENCHMARKS.md).
-/// `SLINT_BACKEND` still overrides it for diagnostics.
+/// Prefer the accelerated renderer. Winit probes driver support before window
+/// creation and can choose its compiled software fallback. This selector retry
+/// covers backend selection errors; it does not promise recovery from later
+/// graphics-context loss. Explicit SLINT_BACKEND overrides remain intact.
 fn select_renderer() -> Result<(), slint::PlatformError> {
     if std::env::var_os("SLINT_BACKEND").is_some() {
+        #[cfg(debug_assertions)]
+        if diagnostic_no_activate() {
+            return renderer_selector().select();
+        }
         return Ok(());
     }
-    slint::BackendSelector::new()
+    #[cfg(feature = "renderer-femtovg")]
+    if renderer_selector()
+        .backend_name("winit".into())
+        .renderer_name("femtovg".into())
+        .select()
+        .is_ok()
+    {
+        return Ok(());
+    }
+    renderer_selector()
         .backend_name("winit".into())
         .renderer_name("software".into())
         .select()
 }
 
+/// Opt-in test launches must not activate while their native window is created.
+/// A post-creation ShowNoActivate cannot prevent that earlier focus transition.
+fn renderer_selector() -> slint::BackendSelector {
+    let selector = slint::BackendSelector::new();
+    #[cfg(debug_assertions)]
+    if diagnostic_no_activate() {
+        return selector
+            .with_winit_window_attributes_hook(|attributes| attributes.with_active(false));
+    }
+    selector
+}
+
+#[cfg(debug_assertions)]
+fn diagnostic_no_activate() -> bool {
+    std::env::var_os("AURORA_DIAGNOSTIC_NO_ACTIVATE").as_deref() == Some(std::ffi::OsStr::new("1"))
+}
+
 fn bind_navigation(window: &AppWindow) {
     window.global::<Nav>().on_navigate(|page| {
+        perf_trace::mark("nav", format_args!("{page:?}"));
+        settings::cancel_motion_preview();
         ui::with(|window, state| {
             let nav = window.global::<Nav>();
             if page != Page::Home {
                 state.pending_play = None;
             }
-            if page == Page::Instances && nav.get_page() == Page::Instances {
-                // Activating Instances again returns to the list.
-                state.workspace = None;
-                nav.set_workspace_open(false);
+            if page == Page::Instances {
+                // Every sidebar activation starts at instance selection.
+                instances::close_workspace(window, state);
             }
             nav.set_page(page);
         });
@@ -228,7 +264,6 @@ fn load() {
                 let settings = window.global::<Settings>();
                 settings.set_version(status.launcher_version.clone().into());
                 settings.set_data_root(status.managed_data_root.clone().into());
-                settings.set_renderer(renderer_label().into());
                 window
                     .global::<Shell>()
                     .set_version(status.launcher_version.into());
@@ -283,11 +318,4 @@ fn load() {
             });
         },
     );
-}
-
-fn renderer_label() -> String {
-    match std::env::var("SLINT_BACKEND") {
-        Ok(backend) => format!("Slint {backend}"),
-        Err(_) => "Slint software renderer".into(),
-    }
 }

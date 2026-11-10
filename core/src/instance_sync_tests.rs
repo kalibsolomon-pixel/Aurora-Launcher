@@ -177,7 +177,9 @@ fn pack_owned_destination_content_is_never_a_sync_target() {
             artifact_sha512: "a".repeat(128),
             artifact_sha256: "b".repeat(64),
             minecraft_version: "1.21.11".into(),
-            fabric_loader_version: "0.19.5".into(),
+            loader: crate::instances::platform::PlatformPin::Fabric {
+                version: "0.19.5".into(),
+            },
             installed_at_unix_seconds: 1,
         },
         vec![crate::pack_state::OwnedComponent {

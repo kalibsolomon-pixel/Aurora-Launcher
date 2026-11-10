@@ -202,16 +202,19 @@ impl JavaRuntimePlan {
                     downloads,
                 } => {
                     let raw = downloads.raw;
-                    if raw.size == 0 {
-                        return Err(RuntimePlanError::Metadata(format!(
-                            "runtime file '{path}' has zero size"
-                        )));
-                    }
                     let sha1 = Sha1Digest::parse(&raw.sha1).map_err(|error| {
                         RuntimePlanError::Metadata(format!(
                             "runtime file '{path}' has an invalid SHA-1: {error}"
                         ))
                     })?;
+                    // jre-legacy publishes genuinely empty files; they are
+                    // created locally (never downloaded) and must carry the
+                    // empty-content digest.
+                    if raw.size == 0 && sha1.as_hex() != EMPTY_SHA1 {
+                        return Err(RuntimePlanError::Metadata(format!(
+                            "runtime file '{path}' has zero size but a non-empty SHA-1"
+                        )));
+                    }
                     validate_artifact_url(&raw.url).map_err(|reason| {
                         RuntimePlanError::Metadata(format!(
                             "runtime file '{path}' has an unusable URL: {reason}"
@@ -370,6 +373,9 @@ pub(crate) fn validate_component(component: &str) -> Result<(), RuntimePlanError
     }
 }
 
+/// The SHA-1 of zero bytes.
+pub(crate) const EMPTY_SHA1: &str = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
+
 pub(crate) fn validate_relative_path(path: &str) -> Result<(), RuntimePlanError> {
     if path.is_empty()
         || path.len() > MAX_RUNTIME_PATH_LENGTH
@@ -379,13 +385,15 @@ pub(crate) fn validate_relative_path(path: &str) -> Result<(), RuntimePlanError>
     {
         return Err(RuntimePlanError::UnsafePath(path.to_owned()));
     }
+    // '@' appears in jre-legacy's HiDPI resources (lib/deploy/splash@2x.gif);
+    // it has no special meaning in file names on any supported platform.
     if path.split('/').any(|segment| {
         segment.is_empty()
             || segment == "."
             || segment == ".."
             || !segment
                 .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '@'))
     }) {
         return Err(RuntimePlanError::UnsafePath(path.to_owned()));
     }
@@ -569,6 +577,8 @@ mod tests {
             assert!(validate_relative_path(path).is_err(), "{path}");
         }
         assert!(validate_relative_path("bin/java").is_ok());
+        assert!(validate_relative_path("lib/deploy/splash@2x.gif").is_ok());
+        assert!(validate_relative_path("bin/java$x").is_err());
         assert!(validate_link_target("legal/compiler/LICENSE", "../base/LICENSE").is_ok());
         assert!(validate_link_target("top-link", "../outside").is_err());
         assert!(validate_component("java-runtime-epsilon").is_ok());

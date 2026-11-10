@@ -18,6 +18,10 @@ use serde_json::{Value, json};
 pub struct ApiError {
     pub code: String,
     pub message: String,
+    /// The instance a failed or cancelled new-pack install created and kept
+    /// (still installing); `resume_pack` finishes it. Absent otherwise.
+    #[serde(default, rename = "instanceId")]
+    pub instance_id: Option<String>,
 }
 
 impl ApiError {
@@ -25,6 +29,7 @@ impl ApiError {
         Self {
             code: code.to_owned(),
             message: message.into(),
+            instance_id: None,
         }
     }
 }
@@ -548,6 +553,10 @@ pub struct ContentEntry {
     pub management: ContentManagement,
     #[serde(default)]
     pub provenance: Option<Provenance>,
+    #[serde(default)]
+    pub file_type: String,
+    #[serde(default)]
+    pub sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -603,6 +612,31 @@ pub struct VersionChoice {
     pub name: String,
     pub version_number: String,
     pub loaders: Vec<String>,
+    #[serde(default)]
+    pub version_type: String,
+    #[serde(default)]
+    pub game_versions: Vec<String>,
+    /// Published `.mrpack` byte size (modpacks only), known before download.
+    #[serde(default)]
+    pub archive_size: Option<u64>,
+    /// The core's reason Aurora cannot install this modpack version.
+    #[serde(default)]
+    pub unsupported_reason: Option<String>,
+}
+
+/// One instance as a destination for adding an exact pack version
+/// (`pack_merge::PackDestination`). The core decides `compatible`.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PackDestination {
+    pub instance_id: String,
+    pub display_name: String,
+    pub minecraft_version: String,
+    pub loader: String,
+    pub loader_version: Option<String>,
+    pub compatible: bool,
+    #[serde(default)]
+    pub reasons: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -824,6 +858,46 @@ pub async fn refresh_saved_server_status(
     ids: Vec<String>,
 ) -> ApiResult<Vec<ServerStatus>> {
     convert(app::refresh_saved_server_status(host, instance, ids).await)
+}
+
+pub async fn server_favorite(host: Host, target_id: String, favorite: bool) -> ApiResult<()> {
+    blocking(move || convert(app::set_recent_server_favorite(host, target_id, favorite))).await?
+}
+
+/// The core resolves the stored target's instance and server, then uses the
+/// normal authenticated, deeply validated launch pipeline.
+pub async fn quick_play_server(
+    host: Host,
+    target_id: String,
+    account_id: String,
+) -> ApiResult<LaunchProcess> {
+    let request =
+        request(json!({ "targetId": target_id, "mode": "server", "accountId": account_id }))?;
+    convert(app::quick_play_history(host, request).await)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ServerMotdSegment {
+    pub text: String,
+}
+
+/// Display-only mirror of the core's sanitized, cache-first status response.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerPresentation {
+    pub target_id: String,
+    pub name: Option<String>,
+    pub motd: Vec<Vec<ServerMotdSegment>>,
+    pub favicon: Option<String>,
+}
+
+pub async fn server_presentations(
+    host: Host,
+    target_ids: Vec<String>,
+) -> ApiResult<Vec<ServerPresentation>> {
+    convert(
+        app::refresh_recent_server_status(host, app::ServerEnrichmentRequest { target_ids }).await,
+    )
 }
 
 pub async fn recent_worlds(
@@ -1065,7 +1139,7 @@ pub async fn instance_mods(host: Host, instance_id: String) -> ApiResult<ModInve
     convert(app::get_instance_mods(host, request).await)
 }
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModIconRequest {
     pub file_name: String,
@@ -1110,6 +1184,28 @@ pub async fn mod_icons(
 ) -> ApiResult<Vec<ModIconResult>> {
     let request = request(json!({"instanceId": id, "files": files}))?;
     convert(app::get_installed_mod_icons(host, request).await)
+}
+
+#[derive(Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackIconRequest {
+    pub file_name: String,
+    pub sha256: Option<String>,
+}
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackIconResult {
+    pub file_name: String,
+    pub bitmap: Option<ModIconBitmap>,
+}
+pub async fn pack_icons(
+    host: Host,
+    id: String,
+    kind: &str,
+    files: Vec<PackIconRequest>,
+) -> ApiResult<Vec<PackIconResult>> {
+    let request = request(json!({"instanceId":id,"contentType":kind,"files":files}))?;
+    convert(app::get_installed_pack_icons(host, request).await)
 }
 
 pub async fn set_mod_enabled(
@@ -1338,12 +1434,30 @@ pub async fn preview_pack(host: Host, merge: bool, value: Value) -> ApiResult<Va
     }
 }
 
+/// Every instance marked as a compatible or incompatible destination for
+/// adding this exact pack version. Read-only; nothing is downloaded.
+pub async fn pack_destinations(
+    host: Host,
+    project: String,
+    version: String,
+) -> ApiResult<Vec<PackDestination>> {
+    let request = request(json!({"projectId": project, "versionId": version}))?;
+    convert(app::get_modrinth_pack_destinations(host, request).await)
+}
+
 pub async fn install_pack(host: Host, merge: bool, value: Value) -> ApiResult<Value> {
     if merge {
         convert(Box::pin(app::install_modrinth_pack_merge(host, request(value)?)).await)
     } else {
         convert(Box::pin(app::install_modrinth_pack(host, request(value)?)).await)
     }
+}
+
+/// Finishes the kept, still-installing instance of an interrupted new-pack
+/// install (`ApiError::instance_id`) instead of creating another instance.
+pub async fn resume_pack(host: Host, instance_id: String) -> ApiResult<Value> {
+    let request = request(json!({ "instanceId": instance_id }))?;
+    convert(Box::pin(app::resume_modrinth_pack(host, request)).await)
 }
 
 // ------------------------------------------------- loader versions

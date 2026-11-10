@@ -5,7 +5,7 @@ use crate::neoforge::versions::satisfies as neoforge_satisfies;
 
 /// Evaluates one relation requirement in the semantics of the instance's
 /// loader family: Fabric predicates for Fabric instances, Maven ranges for
-/// NeoForge instances. Malformed requirements are errors, never matches,
+/// Forge and NeoForge instances. Malformed requirements are errors, never matches,
 /// and an unrecognized family is an error too — no family silently
 /// evaluates under another family's rules.
 pub(crate) fn satisfies_for_family(
@@ -89,6 +89,7 @@ pub(crate) fn usable(entry: &ModEntry) -> bool {
             w.code.starts_with("nested_")
                 || w.code.starts_with("fabric_metadata_")
                 || w.code.starts_with("neoforge_metadata_")
+                || w.code.starts_with("forge_metadata_")
                 || w.code == "mixin_metadata_invalid"
         })
 }
@@ -140,6 +141,14 @@ pub(crate) fn relation_satisfied(
     Ok(found)
 }
 
+// Installed Forge pins include Minecraft; mods.toml requirements name only
+// the Forge build. Do not normalize ordinary mod versions or other loaders.
+fn forge_build_version(loader: &str) -> String {
+    crate::forge::metadata::ForgeVersionId::new(loader)
+        .map(|pin| pin.build().to_owned())
+        .unwrap_or_else(|_| loader.to_owned())
+}
+
 fn issue(
     entry: &ModEntry,
     code: &str,
@@ -184,7 +193,7 @@ pub fn validate(
             let builtin = match relation.mod_id.as_str() {
                 "minecraft" => Some(minecraft.to_owned()),
                 "fabricloader" if loader_family == "fabric" => Some(loader.to_owned()),
-                "forge" if loader_family == "forge" => Some(loader.to_owned()),
+                "forge" if loader_family == "forge" => Some(forge_build_version(loader)),
                 "neoforge" | "forge" if loader_family == "neoForge" => Some(loader.to_owned()),
                 "java" => {
                     if java_major.is_none() {
@@ -248,7 +257,7 @@ pub fn validate(
             let builtin = match relation.mod_id.as_str() {
                 "minecraft" => Some(minecraft.to_owned()),
                 "fabricloader" if loader_family == "fabric" => Some(loader.to_owned()),
-                "forge" if loader_family == "forge" => Some(loader.to_owned()),
+                "forge" if loader_family == "forge" => Some(forge_build_version(loader)),
                 "neoforge" | "forge" if loader_family == "neoForge" => Some(loader.to_owned()),
                 "java" => {
                     if java_major.is_none() {
@@ -340,7 +349,7 @@ mod tests {
     fn unknown_loader_families_have_no_silent_evaluator() {
         // A family without an evaluator is an error, never a match, and
         // never a silent evaluation under Fabric's rules.
-        for family in ["vanilla", "forge", "quilt", ""] {
+        for family in ["vanilla", "quilt", ""] {
             assert!(
                 satisfies_for_family("1.0.0", ">=1.0.0", family).is_err(),
                 "family '{family}' must not silently evaluate"
@@ -355,6 +364,43 @@ mod tests {
     use super::*;
     use crate::instance_mods::inspect_fabric_metadata;
     use std::io::{Cursor, Write};
+
+    #[test]
+    fn forge_followup_builtins_compare_builds_for_dependencies_and_breaks() {
+        for loader in ["1.21.11-61.2.0", "61.2.0"] {
+            let parent = entry(
+                serde_json::json!({"id":"parent","version":"1","depends":{"forge":"[61,62)"},"breaks":{"forge":"[62,)"}}),
+                ModOwnership::UserManaged,
+                true,
+            );
+            assert!(
+                validate(
+                    &inventory(vec![parent]),
+                    "1.21.11",
+                    loader,
+                    Some(21),
+                    "forge"
+                )
+                .is_empty()
+            );
+            let parent = entry(
+                serde_json::json!({"id":"parent","version":"1","breaks":{"forge":"[61,62)"}}),
+                ModOwnership::UserManaged,
+                true,
+            );
+            assert!(
+                validate(
+                    &inventory(vec![parent]),
+                    "1.21.11",
+                    loader,
+                    Some(21),
+                    "forge"
+                )
+                .iter()
+                .any(|i| i.code == "mod_declared_break")
+            );
+        }
+    }
 
     #[test]
     fn neoforge_families_use_maven_ranges_and_neoforge_builtins() {

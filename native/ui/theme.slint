@@ -42,8 +42,8 @@ export global Theme {
     out property <color> muted-soft: #848fa81f;
     out property <color> scrim: #000000a6;
 
-    // Borealis: a pre-blurred static aurora layer behind translucent
-    // surfaces. Static by design: no continuous background redraws.
+    // Borealis: pre-blurred aurora band layers behind translucent surfaces.
+    // They redraw only while Motion is above 0 on a visible accelerated window.
     in-out property <bool> borealis: false;
 
 

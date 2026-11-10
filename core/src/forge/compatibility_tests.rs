@@ -506,33 +506,59 @@ fn official_mapping_generations_preserve_order_paths_and_digest_evidence() {
 }
 
 #[test]
-fn discovery_recommendations_never_advertise_unreviewed_builds() {
-    let xml = "<metadata><versions><version>1.20.1-47.4.26</version><version>1.20.1-47.4.10</version><version>1.20.4-49.2.0</version><version>1.19.2-43.5.0</version></versions></metadata>";
+fn discovery_offers_every_supported_build_and_falls_back_to_newest() {
+    let xml = "<metadata><versions><version>1.20.1-47.4.26</version><version>1.20.1-47.4.10</version><version>1.20.4-49.2.0</version><version>1.19.2-43.5.0</version><version>1.12.2-14.23.5.2860</version></versions></metadata>";
     let listing = ForgeVersionList::from_documents(
         xml,
         r#"{"promos":{"1.20.1-latest":"47.4.26","1.20.1-recommended":"47.4.10"}}"#,
     )
     .unwrap();
     let mc = MinecraftVersionId::new("1.20.1").unwrap();
-    assert_eq!(listing.for_minecraft(&mc).len(), 2);
     let choices = listing.installable_for_minecraft(&mc);
-    assert_eq!(choices.len(), 1);
-    assert_eq!(choices[0].version().as_str(), "1.20.1-47.4.10");
-    assert!(choices[0].stable());
-    let no_recommendation =
-        listing.installable_for_minecraft(&MinecraftVersionId::new("1.20.4").unwrap());
-    assert!(!no_recommendation[0].stable()); // automatic must refuse
-    assert!(
-        listing
-            .installable_for_minecraft(&MinecraftVersionId::new("1.19.2").unwrap())
-            .is_empty()
-    );
+    assert_eq!(choices.len(), 2);
+    assert_eq!(choices[0].version().as_str(), "1.20.1-47.4.26");
+    assert!(!choices[0].stable());
+    assert!(choices[1].stable());
+    // No recommended build: the newest stands in as the automatic choice.
+    let fallback = listing.installable_for_minecraft(&MinecraftVersionId::new("1.19.2").unwrap());
+    assert_eq!(fallback.len(), 1);
+    assert!(fallback[0].stable());
     assert!(
         ForgeVersionId::new("1.19.2-43.5.0")
             .unwrap()
-            .require_reviewed()
-            .is_err()
+            .require_supported()
+            .is_ok()
     );
+    // Legacy-installer generations stay discoverable but unsupported.
+    assert!(
+        listing
+            .installable_for_minecraft(&MinecraftVersionId::new("1.12.2").unwrap())
+            .is_empty()
+    );
+    for legacy in [
+        "1.12.2-14.23.5.2860",
+        "1.13.2-25.0.223",
+        "1.14.2-26.0.63",
+        "1.14.3-27.0.60",
+        "1.14.4-28.1.15",
+        "1.7.10-10.13.4.1614-1.7.10",
+    ] {
+        if let Ok(id) = ForgeVersionId::new(legacy) {
+            assert!(id.require_supported().is_err(), "{legacy}");
+        }
+    }
+    for modern in [
+        "1.14.4-28.1.16",
+        "1.14.4-28.2.26",
+        "1.15-29.0.4",
+        "1.16.5-36.2.42",
+        "26.1-62.0.9",
+    ] {
+        assert!(
+            ForgeVersionId::new(modern).unwrap().is_supported(),
+            "{modern}"
+        );
+    }
     assert!(
         ForgeVersionId::parse_for_minecraft(
             "1.20.1-47.4.10",
@@ -713,4 +739,54 @@ fn both_official_generations_assemble_structured_redacting_launch_specs() {
         assert!(root.parent() == Some(std::env::temp_dir().as_path()));
         std::fs::remove_dir_all(root).unwrap();
     }
+}
+
+/// Opt-in survey over real installer documents extracted to
+/// `AURORA_FORGE_SURVEY_DIR` as `<pin>.install_profile.json` /
+/// `<pin>.version.json`. Reports every pin that does not plan.
+#[test]
+#[ignore = "reads installer documents from AURORA_FORGE_SURVEY_DIR"]
+fn survey_real_installer_documents_plan() {
+    let dir = std::path::PathBuf::from(std::env::var("AURORA_FORGE_SURVEY_DIR").unwrap());
+    let mut failures = Vec::new();
+    let mut count = 0;
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+        let Some(pin) = name.strip_suffix(".install_profile.json") else {
+            continue;
+        };
+        count += 1;
+        let result = (|| -> Result<(), String> {
+            let profile = InstallProfileDocument::from_json(
+                &std::fs::read_to_string(dir.join(&name)).unwrap(),
+            )
+            .map_err(|e| format!("profile: {e}"))?;
+            let version = VersionProfileDocument::from_json(
+                &std::fs::read_to_string(dir.join(format!("{pin}.version.json"))).unwrap(),
+            )
+            .map_err(|e| format!("version: {e}"))?;
+            let loader = ForgeVersionId::new(pin).map_err(|e| e.to_string())?;
+            let game = MinecraftVersionId::new(loader.minecraft_version()).unwrap();
+            ForgePlan::from_documents(
+                &profile,
+                &version,
+                &game,
+                &loader,
+                &ForgeMavenEndpoints::official(),
+                Sha1Digest::parse("0000000000000000000000000000000000000000").unwrap(),
+            )
+            .map_err(|e| format!("plan: {e}"))?;
+            Ok(())
+        })();
+        if let Err(reason) = result {
+            failures.push(format!("{pin}: {reason}"));
+        }
+    }
+    failures.sort();
+    assert!(
+        failures.is_empty(),
+        "{} of {count} failed:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
 }

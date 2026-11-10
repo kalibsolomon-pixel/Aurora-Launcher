@@ -353,9 +353,14 @@ impl InstanceRecord {
             .map_err(InvalidInstanceRecord::Configuration)?;
         if let Some(pack) = &self.pack {
             pack.validate()?;
-            if self.installed.platform.kind() != "fabric" {
+            if !matches!(
+                self.installed.platform,
+                platform::PlatformPin::Fabric { .. }
+                    | platform::PlatformPin::Forge { .. }
+                    | platform::PlatformPin::NeoForge { .. }
+            ) {
                 return Err(InvalidInstanceRecord::Configuration(
-                    "modpacks require Fabric instances".into(),
+                    "modpacks require Fabric, Forge or NeoForge instances".into(),
                 ));
             }
         }

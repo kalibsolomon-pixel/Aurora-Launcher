@@ -554,7 +554,9 @@ mod tests {
             artifact_sha512: hex_seed("archive"),
             artifact_sha256: "a".repeat(64),
             minecraft_version: "1.21.11".into(),
-            fabric_loader_version: "0.19.3".into(),
+            loader: crate::instances::platform::PlatformPin::Fabric {
+                version: "0.19.3".into(),
+            },
             installed_at_unix_seconds: 1,
         };
         let components = [&first, &second]
