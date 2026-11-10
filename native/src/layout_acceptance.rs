@@ -1363,8 +1363,9 @@ fn ui2_saved_tab_and_quick_play_route_the_saved_row_identity() {
             .push((mode.to_string(), id.to_string()));
     });
     let _ = render(&app, &adapter, "ui2-saved-bindings");
-    click(&app, 422., 372.);
+    click(&app, 310., 372.);
     assert_eq!(*views.borrow(), [(false, true)]);
+    render(&app, &adapter, "ui2-saved-selected");
     click(&app, 560., 416.);
     assert_eq!(
         *plays.borrow(),

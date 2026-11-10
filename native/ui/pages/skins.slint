@@ -163,12 +163,13 @@ export component SkinsPage inherits Rectangle {
                     Button { text: "Current skin"; compact: true; kind: ButtonKind.ghost; enabled: Skins.has-current; clicked => { Skins.preview-current(); } }
                     if Skins.has-current: Button { text: "Save to library"; compact: true; enabled: !Skins.busy; clicked => { Skins.save-current(); } }
                 }
+                if root.library-tab == 0: Checkbox { text: "Favorites only"; checked <=> Skins.favorites-only; toggled(value) => { Skins.filter-favorites(value); } }
                 Text { text: root.library-tab == 0 ? "Select a skin to preview" : "Select a cape to view its outward face"; color: Theme.text-secondary; font-size: Theme.text-metadata; wrap: word-wrap; }
                 ScrollView {
                     horizontal-stretch: 1; vertical-stretch: 1;
                     VerticalLayout {
                         padding: 4px; spacing: 6px; alignment: start;
-                        if root.library-tab == 0 && Skins.presets.length == 0: EmptyState { icon: Icons.image; title: "Your skin library"; message: "Import a PNG or save your current skin to get started."; }
+                        if root.library-tab == 0 && Skins.presets.length == 0: EmptyState { icon: Icons.image; title: Skins.favorites-only ? "No favorites yet" : "Your skin library"; message: Skins.favorites-only ? "Turn off Favorites only to see all saved skins." : "Import a PNG or save your current skin to get started."; }
                         if root.library-tab == 0 && Skins.presets.length > 0: ContentList {
                             accessible-label: "Saved skins";
                             for row[i] in Skins.presets: PresetLine { item: row; first-row: i == 0; last-row: i == Skins.presets.length - 1; }
