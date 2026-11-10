@@ -1780,12 +1780,12 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     let log = choices.clone();
     app.global::<crate::InstanceSync>()
         .on_resolve_conflict(move |index, use_source| log.borrow_mut().push((index, use_source)));
-    // Settings descriptions wrap differently at minimum width. Find the real
-    // pointer target in the scrollable page instead of pinning its old y.
+    // Settings descriptions wrap differently at minimum width. Search inside
+    // the content column, clear of the Settings section navigation.
     let mut conflict_y = None;
     for _ in 0..8 {
         for y in (100..500).step_by(8) {
-            click(&app, 180., y as f32);
+            click(&app, 300., y as f32);
             if !choices.borrow().is_empty() {
                 conflict_y = Some(y as f32);
                 break;
@@ -1799,10 +1799,10 @@ fn native10_surfaces_render_at_every_size_and_scale_and_respond_to_input() {
     }
     let conflict_y = conflict_y.expect("the first conflict action remains pointer-reachable");
     assert_eq!(*choices.borrow(), [(0, true)]);
-    click(&app, 390., conflict_y);
+    click(&app, 470., conflict_y);
     assert_eq!(*choices.borrow(), [(0, true), (0, false)]);
     // Tab transfers focus between native buttons and Return activates the next.
-    click(&app, 180., conflict_y);
+    click(&app, 300., conflict_y);
     key(&app, Key::Tab);
     key(&app, Key::Return);
     assert_eq!(choices.borrow().last(), Some(&(0, false)));
