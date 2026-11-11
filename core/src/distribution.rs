@@ -791,7 +791,7 @@ mod tests {
                 .resolve_exact("2.1.2", Some(ReleaseChannel::Stable))
                 .is_some()
         );
-        assert_eq!(production.releases().len(), 4);
+        assert_eq!(production.releases().len(), 7);
         let current = production
             .resolve_exact("3.0.0", Some(ReleaseChannel::Stable))
             .unwrap();

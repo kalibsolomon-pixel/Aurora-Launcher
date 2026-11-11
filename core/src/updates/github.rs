@@ -44,16 +44,16 @@ fn artifact(publication: &Publication) -> Option<(&str, &Asset, &str)> {
     if !parsed.pre.is_empty() || !version.bytes().all(|b| b.is_ascii_digit() || b == b'.') {
         return None;
     }
-    let name = format!("aurora-{version}.jar");
     let matching: Vec<_> = publication
         .assets
         .iter()
-        .filter(|a| a.name == name)
+        .filter(|a| crate::distribution::github::artifact_minecraft(&a.name, version).is_some())
         .collect();
     if matching.len() != 1 {
         return None;
     }
     let asset = matching[0];
+    let name = &asset.name;
     if asset.size == 0
         || asset.size > 32 * 1024 * 1024
         || asset.browser_download_url != format!("{DOWNLOAD_ROOT}{}/{name}", publication.tag_name)
@@ -74,6 +74,12 @@ fn normalized_release(
     digest: &str,
     metadata: &instance_mods::ModMetadata,
 ) -> Result<Option<AuroraRelease>, ClientUpdateError> {
+    if crate::distribution::github::artifact_minecraft(&asset.name, version)
+        .flatten()
+        .is_some_and(|minecraft| minecraft != template.minecraft_version())
+    {
+        return Ok(None);
+    }
     if metadata.id != "aurora"
         || metadata.version.as_deref() != Some(version)
         || metadata.environment.as_deref() == Some("server")
@@ -339,5 +345,46 @@ mod tests {
         release.assets[0].digest = Some(format!("sha256:{}", "f".repeat(64)));
         release.assets[0].browser_download_url = "https://example.invalid/aurora-3.2.0.jar".into();
         assert!(artifact(&release).is_none());
+    }
+
+    #[test]
+    fn version_specific_updates_keep_the_installed_environment() {
+        let profiles = crate::distribution::production_manifest().unwrap();
+        for (version, minecraft) in [("3.2.2", "26.1.2"), ("3.2.3", "26.2"), ("3.3.0", "26.3")] {
+            let template = profiles.resolve_exact(version, None).unwrap();
+            let mut publication: Publication = serde_json::from_value(serde_json::json!({"tag_name":format!("v{version}"),"draft":false,"prerelease":false,"published_at":"2026-11-11T00:00:00Z","assets":[{"name":format!("aurora-{version}-mc{minecraft}.jar"),"browser_download_url":template.artifact().url(),"digest":format!("sha256:{}",template.artifact().sha256()),"size":template.artifact().size_bytes()}]})).unwrap();
+            let (parsed, asset, digest) = artifact(&publication).unwrap();
+            let mut data = metadata();
+            data.version = Some(version.into());
+            data.depends[0].requirement = format!("~{minecraft}");
+            data.depends[2].requirement = ">=25".into();
+            let normalized = normalized_release(template, parsed, asset, digest, &data)
+                .unwrap()
+                .unwrap();
+            assert_eq!(normalized.minecraft_version(), minecraft);
+            assert_eq!(normalized.fabric_loader_version(), "0.20.1");
+            assert_eq!(normalized.fabric_api(), template.fabric_api());
+            let legacy = profiles.resolve_exact("3.0.0", None).unwrap();
+            assert!(
+                normalized_release(legacy, parsed, asset, digest, &data)
+                    .unwrap()
+                    .is_none()
+            );
+            data.depends[0].requirement = "*".into();
+            let other = profiles
+                .releases()
+                .iter()
+                .find(|profile| profile.minecraft_version() != minecraft)
+                .unwrap();
+            assert!(
+                normalized_release(other, parsed, asset, digest, &data)
+                    .unwrap()
+                    .is_none()
+            );
+            publication.assets[0].browser_download_url = publication.assets[0]
+                .browser_download_url
+                .replace("-mc", "-wrong");
+            assert!(artifact(&publication).is_none());
+        }
     }
 }

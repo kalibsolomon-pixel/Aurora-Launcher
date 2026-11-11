@@ -41,7 +41,7 @@ use crate::updates::{UpdateAvailability, parse_release_version};
 /// the manifest and verify the acquired bytes.
 pub const PRODUCTION_MANIFEST_URL: &str = match option_env!("AURORA_CLIENT_MANIFEST_URL") {
     Some(diagnostic) => diagnostic,
-    None => crate::distribution::github::LATEST_RELEASE_URL,
+    None => crate::distribution::github::RELEASES_URL,
 };
 
 /// Hard cap for the fetched manifest document. Manifests are small; a

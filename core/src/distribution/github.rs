@@ -9,8 +9,8 @@ use crate::downloads::{ArtifactSource, DownloadOptions};
 use crate::paths::ManagedPaths;
 use crate::updates::client::ClientUpdateError;
 
-pub const LATEST_RELEASE_URL: &str =
-    "https://api.github.com/repos/kalibsolomon-pixel/Aurora-Client/releases/latest";
+pub const RELEASES_URL: &str =
+    "https://api.github.com/repos/kalibsolomon-pixel/Aurora-Client/releases?per_page=30";
 const REPOSITORY: &str = "https://github.com/kalibsolomon-pixel/Aurora-Client";
 const MAX_METADATA_BYTES: usize = 1024 * 1024;
 const MAX_JAR_BYTES: u64 = 512 * 1024 * 1024;
@@ -40,6 +40,24 @@ fn invalid(reason: impl Into<String>) -> ClientUpdateError {
     ClientUpdateError::ManifestInvalid(reason.into())
 }
 
+/// Recognizes historical JARs and version-specific runtime JARs. The suffix is
+/// only an identity assertion; verified Fabric metadata decides compatibility.
+pub(crate) fn artifact_minecraft<'a>(name: &'a str, version: &str) -> Option<Option<&'a str>> {
+    let suffix = name.strip_prefix(&format!("aurora-{version}"))?;
+    if suffix == ".jar" {
+        return Some(None);
+    }
+    let minecraft = suffix.strip_prefix("-mc")?.strip_suffix(".jar")?;
+    if minecraft.split('.').count() < 2
+        || minecraft
+            .split('.')
+            .any(|part| part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()))
+    {
+        return None;
+    }
+    Some(Some(minecraft))
+}
+
 impl GithubRelease {
     fn artifact(&self) -> Result<(String, ArtifactSource), ClientUpdateError> {
         let version = self
@@ -59,11 +77,14 @@ impl GithubRelease {
                 "Only an official published stable Client release is eligible.",
             ));
         }
-        let name = format!("aurora-{version}.jar");
-        let mut matches = self.assets.iter().filter(|asset| asset.name == name);
+        let mut matches = self
+            .assets
+            .iter()
+            .filter(|asset| artifact_minecraft(&asset.name, version).is_some());
         let asset = matches
             .next()
             .ok_or_else(|| invalid("The published Client JAR is missing."))?;
+        let name = &asset.name;
         if matches.next().is_some()
             || asset.state != "uploaded"
             || asset.size == 0
@@ -88,14 +109,14 @@ impl GithubRelease {
     }
 }
 
-/// Fetches one bounded official release, verifies its JAR through the trusted
-/// cache and derives a normalized release from its actual Fabric dependencies.
+/// Fetches bounded official releases and selects the newest compatible Client
+/// for each managed environment from digest-verified Fabric metadata.
 /// Only cache resources change; no instance, user content or pin is modified.
 pub async fn discover(
     managed: &ManagedPaths,
     options: &DownloadOptions,
 ) -> Result<ReleaseManifest, ClientUpdateError> {
-    discover_at(managed, options, LATEST_RELEASE_URL).await
+    discover_at(managed, options, RELEASES_URL).await
 }
 
 async fn discover_at(
@@ -105,7 +126,7 @@ async fn discover_at(
 ) -> Result<ReleaseManifest, ClientUpdateError> {
     let url =
         url::Url::parse(endpoint).map_err(|_| invalid("Invalid Client discovery endpoint."))?;
-    if endpoint != LATEST_RELEASE_URL
+    if endpoint != RELEASES_URL
         && !(url.scheme() == "http" && crate::downloads::is_loopback_host(&url))
     {
         return Err(invalid(
@@ -147,8 +168,59 @@ async fn discover_at(
         }
         bytes.extend_from_slice(&chunk);
     }
-    let release: GithubRelease = serde_json::from_slice(&bytes)
+    let mut releases: Vec<GithubRelease> = serde_json::from_slice(&bytes)
         .map_err(|_| invalid("GitHub Client release metadata is malformed."))?;
+    if releases.len() > 30 {
+        return Err(invalid("Too many Client release records."));
+    }
+    releases.sort_by_key(|release| {
+        std::cmp::Reverse(crate::updates::parse_release_version(
+            release.tag_name.trim_start_matches('v'),
+        ))
+    });
+    let profiles = super::production_manifest()?;
+    let environments: std::collections::HashSet<_> = profiles
+        .releases()
+        .iter()
+        .map(|profile| profile.minecraft_version())
+        .collect();
+    let mut selected = std::collections::HashSet::new();
+    let mut manifest = ReleaseManifest::from_json(r#"{"schemaVersion":1,"releases":[]}"#)?;
+    for release in releases {
+        if release.draft || release.prerelease || release.published_at.is_none() {
+            continue;
+        }
+        // Historical releases without a runtime JAR remain unavailable.
+        if release.assets.is_empty() {
+            continue;
+        }
+        match discover_release(managed, options, &release).await {
+            Ok(found) => {
+                let candidate = &found.releases()[0];
+                if selected.insert(candidate.minecraft_version().to_owned()) {
+                    manifest = manifest.with_release(candidate.clone())?;
+                }
+            }
+            Err(ClientUpdateError::Incompatible(_)) => continue,
+            Err(error) => return Err(error),
+        }
+        if selected.len() == environments.len() {
+            break;
+        }
+    }
+    if manifest.releases().is_empty() {
+        return Err(ClientUpdateError::Incompatible(
+            "No published Aurora Client supports the managed environments.".into(),
+        ));
+    }
+    Ok(manifest)
+}
+
+async fn discover_release(
+    managed: &ManagedPaths,
+    options: &DownloadOptions,
+    release: &GithubRelease,
+) -> Result<ReleaseManifest, ClientUpdateError> {
     let (version, source) = release.artifact()?;
     let verified = crate::cache::ArtifactCache::new(managed.clone())
         .acquire_with(&source, options)
@@ -170,7 +242,7 @@ async fn discover_at(
             "The verified JAR does not match the published Aurora Client identity.",
         ));
     }
-    normalize(&release, &version, &metadata)
+    normalize(release, &version, &metadata)
 }
 
 fn normalize(
@@ -193,6 +265,17 @@ fn normalize(
     }
     let profiles = super::production_manifest()?;
     for profile in profiles.releases() {
+        let asset = release
+            .assets
+            .iter()
+            .find(|asset| artifact_minecraft(&asset.name, version).is_some())
+            .ok_or_else(|| invalid("The published Client JAR is missing."))?;
+        if artifact_minecraft(&asset.name, version)
+            .flatten()
+            .is_some_and(|minecraft| minecraft != profile.minecraft_version())
+        {
+            continue;
+        }
         let compatible = metadata.depends.iter().all(|dependency| {
             let value = match dependency.mod_id.as_str() {
                 "minecraft" => Some(profile.minecraft_version().to_owned()),
@@ -205,7 +288,13 @@ fn normalize(
                 crate::fabric::versions::satisfies(&value, &dependency.requirement).unwrap_or(false)
             })
         });
-        if !compatible {
+        if !compatible
+            || metadata.environment.as_deref() == Some("server")
+            || metadata
+                .mixin_java_requirements
+                .iter()
+                .any(|mixin| mixin.java_major > profile.java().major_version())
+        {
             continue;
         }
         let (_, artifact) = release.artifact()?;
@@ -247,6 +336,39 @@ mod tests {
             version,
             super::super::production_manifest().unwrap().releases()[0].aurora_version()
         );
+    }
+    #[test]
+    fn version_specific_names_are_exact_and_ambiguous_jars_fail() {
+        for minecraft in ["26.1.2", "26.2", "26.3"] {
+            let mut document = release();
+            let name = format!("aurora-3.1.0-mc{minecraft}.jar");
+            document["assets"][0]["name"] = name.clone().into();
+            document["assets"][0]["browser_download_url"] =
+                format!("{REPOSITORY}/releases/download/v3.1.0/{name}").into();
+            let parsed: GithubRelease = serde_json::from_value(document.clone()).unwrap();
+            assert!(parsed.artifact().is_ok());
+            assert_eq!(artifact_minecraft(&name, "3.1.0"), Some(Some(minecraft)));
+            document["assets"]
+                .as_array_mut()
+                .unwrap()
+                .push(release()["assets"][0].clone());
+            assert!(
+                serde_json::from_value::<GithubRelease>(document)
+                    .unwrap()
+                    .artifact()
+                    .is_err()
+            );
+        }
+        for name in [
+            "aurora-3.1.0-mc.jar",
+            "aurora-3.1.0-mc26..3.jar",
+            "aurora-3.1.0-mc26.3-sources.jar",
+            "aurora-3.1.0-mc../26.3.jar",
+            "aurora-3.1.00-mc26.3.jar",
+            "aurora-3.1.0-mc26.3.jar.exe",
+        ] {
+            assert!(artifact_minecraft(name, "3.1.0").is_none(), "{name}");
+        }
     }
     #[test]
     fn unpublished_foreign_missing_digest_or_ambiguous_artifacts_fail() {
@@ -374,7 +496,7 @@ mod tests {
             let mut document = release();
             document["assets"][0]["size"] = jar.len().into();
             document["assets"][0]["digest"] = format!("sha256:{digest}").into();
-            let body = document.to_string().into_bytes();
+            let body = serde_json::json!([document]).to_string().into_bytes();
             let server = crate::test_support::TestServer::spawn(std::sync::Arc::new(move |_| {
                 crate::test_support::TestResponse::ok(&body)
             }));
@@ -395,5 +517,70 @@ mod tests {
             assert!(!managed.instance_registry_file().exists());
             assert_eq!(std::fs::read(&path).unwrap(), jar);
         }
+    }
+
+    #[tokio::test]
+    async fn discovery_selects_newest_verified_jar_per_minecraft_and_preserves_legacy() {
+        use sha2::Digest as _;
+        use std::io::Write;
+        let managed = ManagedPaths::from_app_local_data_dir(
+            std::env::temp_dir().join(format!("aurora-github-matrix-{}", uuid::Uuid::new_v4())),
+        )
+        .unwrap();
+        let mut documents = Vec::new();
+        for (version, minecraft, java, named) in [
+            ("3.2.2", "26.1.2", 25, true),
+            ("3.2.1", "1.21.11", 21, false),
+            ("3.3.0", "26.3", 25, true),
+            ("3.2.3", "26.2", 25, true),
+            ("3.3.1", "26.3", 25, true),
+        ] {
+            let mut archive = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+            archive
+                .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+                .unwrap();
+            archive.write_all(serde_json::json!({"schemaVersion":1,"id":"aurora","version":version,"environment":"client","depends":{"minecraft":format!("~{minecraft}"),"fabricloader":">=0.16.0","java":format!(">={java}"),"fabric-api":"*"}}).to_string().as_bytes()).unwrap();
+            let jar = archive.finish().unwrap().into_inner();
+            let digest = format!("{:x}", sha2::Sha256::digest(&jar));
+            let path = crate::cache::ArtifactCache::new(managed.clone())
+                .verified_path(&crate::integrity::ArtifactDigest::parse(&digest).unwrap());
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, &jar).unwrap();
+            let name = if named {
+                format!("aurora-{version}-mc{minecraft}.jar")
+            } else {
+                format!("aurora-{version}.jar")
+            };
+            documents.push(serde_json::json!({"tag_name":format!("v{version}"),"html_url":format!("{REPOSITORY}/releases/tag/v{version}"),"draft":false,"prerelease":false,"published_at":"2026-11-11T00:00:00Z","assets":[{"name":name,"browser_download_url":format!("{REPOSITORY}/releases/download/v{version}/{name}"),"size":jar.len(),"digest":format!("sha256:{digest}"),"state":"uploaded"}]}));
+        }
+        let mut draft = documents[0].clone();
+        draft["draft"] = true.into();
+        draft["tag_name"] = "release-manifest".into();
+        documents.push(draft);
+        let body = serde_json::to_vec(&documents).unwrap();
+        let server = crate::test_support::TestServer::spawn(std::sync::Arc::new(move |_| {
+            crate::test_support::TestResponse::ok(&body)
+        }));
+        let found = discover_at(
+            &managed,
+            &DownloadOptions::default(),
+            &format!("{}/releases", server.base_url()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(found.releases().len(), 4);
+        for (minecraft, version, java) in [
+            ("26.1.2", "3.2.2", 25),
+            ("26.2", "3.2.3", 25),
+            ("26.3", "3.3.1", 25),
+            ("1.21.11", "3.2.1", 21),
+        ] {
+            let candidate = found.latest_compatible(minecraft, None).unwrap();
+            assert_eq!(candidate.aurora_version(), version);
+            assert_eq!(candidate.java().major_version(), java);
+        }
+        assert!(found.latest_compatible("26.1", None).is_none());
+        assert_eq!(server.request_count(), 1);
+        assert!(!managed.instance_registry_file().exists());
     }
 }
