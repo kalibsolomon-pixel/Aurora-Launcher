@@ -2088,7 +2088,7 @@ fn instance_badges(
 ) -> Div {
     let mut badges = div().flex().flex_shrink_0().items_center().gap(px(6.));
     if active {
-        badges = badges.child(ui::status_badge(t, "Active", ui::Tone::Success));
+        badges = badges.child(ui::status_badge(t, "Active", ui::Tone::Accent));
     }
     if !compact {
         if let Some(aurora) = &instance.aurora {

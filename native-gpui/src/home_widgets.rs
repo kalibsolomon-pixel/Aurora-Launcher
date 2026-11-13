@@ -101,7 +101,7 @@ const MAX_GRID_ROWS: i32 = 3;
 const MAX_ANCHOR_ROW: i32 = 63;
 
 /// Responsive grid geometry (matches the Slint `WidgetGrid` constants).
-const GRID_GAP: f32 = 14.0;
+const GRID_GAP: f32 = 16.0;
 const MIN_CARD_WIDTH: f32 = 150.0;
 const CARD_HEIGHT: f32 = 304.0;
 
