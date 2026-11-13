@@ -529,7 +529,7 @@ impl RenderOnce for AuroraCheckbox {
         let ring = t.ring;
         let mark = match (self.checked, self.dormant) {
             (true, false) => t.foreground,
-            (true, true) => t.muted_foreground,
+            (true, true) => t.foreground,
             _ => gpui_kit::transparent_black(),
         };
         let mut checkbox = Checkbox::new(self.id)
@@ -556,12 +556,12 @@ impl RenderOnce for AuroraCheckbox {
                     .border_1()
                     .border_color(match (self.checked, self.dormant) {
                         (true, false) => t.accent,
-                        (true, true) => t.border,
+                        (true, true) => t.muted_foreground,
                         _ => t.subtle_foreground,
                     })
                     .bg(match (self.checked, self.dormant) {
                         (true, false) => t.accent,
-                        (true, true) => t.control,
+                        (true, true) => t.control_hover,
                         _ => t.sunken,
                     })
                     .child(crate::symbols::icon(Some("check"), px(16.), mark)),

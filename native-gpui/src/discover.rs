@@ -2878,7 +2878,7 @@ impl Render for Discover {
                                             .focus(move |style| style.border_color(title_hover))
                                             .text_size(px(ui::TEXT_BODY + 1.))
                                             .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(palette.ring)
+                                            .text_color(palette.foreground)
                                             .cursor_pointer()
                                             .hover(|style| style.text_color(title_hover))
                                             .on_click({

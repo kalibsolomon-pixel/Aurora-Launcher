@@ -1772,7 +1772,7 @@ impl Render for Content {
                             .flex_1()
                             .min_w(px(0.))
                             .text_size(px(ui::TEXT_BODY))
-                            .text_color(palette.muted_foreground)
+                            .text_color(palette.foreground.opacity(0.78))
                             .text_ellipsis()
                             .child(gpui::SharedString::from(line.join(" · "))),
                     );

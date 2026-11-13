@@ -3539,7 +3539,7 @@ impl HomeWidgets {
                                                             .left(px(0.))
                                                             .right(px(0.))
                                                             .h(px(1.))
-                                                            .bg(palette.border.opacity(0.75))
+                                                            .bg(palette.subtle_foreground.opacity(0.28))
                                                     }))
                                                     .when(projection.empty_period, |plot| {
                                                         plot.child(

@@ -105,7 +105,7 @@ pub fn eyebrow(t: &AuroraTheme, text: impl Into<SharedString>) -> Div {
     div()
         .text_size(px(TEXT_MICRO))
         .font_weight(FontWeight::BOLD)
-        .text_color(t.subtle_foreground.opacity(0.85))
+        .text_color(t.muted_foreground)
         .child(text.into())
 }
 

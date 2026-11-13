@@ -3198,7 +3198,6 @@ impl Render for InstanceEditor {
             root = root.child(
                 div()
                     .flex()
-                    .items_start()
                     .w_full()
                     .min_w(px(0.))
                     .gap(px(ui::PAGE_GAP))

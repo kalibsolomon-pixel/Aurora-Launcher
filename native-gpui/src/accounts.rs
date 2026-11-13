@@ -1275,6 +1275,7 @@ impl Render for Accounts {
                                 .flex()
                                 .items_center()
                                 .justify_center()
+                                .w_full()
                                 .gap(px(5.))
                                 .h(px(28.))
                                 .px(px(10.))
@@ -1296,6 +1297,7 @@ impl Render for Accounts {
                             )
                             .variant(ButtonVariant::Default)
                             .size(ButtonSize::Small)
+                            .full_width()
                             .disabled(busy)
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.select(select_id.clone(), cx);
