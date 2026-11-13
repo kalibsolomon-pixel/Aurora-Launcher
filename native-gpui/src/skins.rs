@@ -1968,6 +1968,7 @@ impl Render for Skins {
             .child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .items_center()
                     .justify_between()
                     .gap(px(12.))
@@ -2030,6 +2031,7 @@ impl Render for Skins {
             .child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .items_end()
                     .justify_between()
                     .gap(px(12.))
@@ -2165,89 +2167,110 @@ impl Render for Skins {
                 library = library.child(
                     ui::row(&palette, index + 1 == count)
                         .id(format!("skins-row-{}", preset.id))
+                        .flex_wrap()
                         .gap(px(10.))
                         .py(px(10.))
                         .when(previewed, |row| row.bg(palette.accent_soft))
-                        .child(tile)
                         .child(
-                            ui::title_block(
-                                &palette,
-                                preset.name.clone(),
-                                Some(
-                                    format!(
-                                        "{} model{}",
-                                        model_label(&preset.model),
-                                        if preset.favorite { " · Favorite" } else { "" }
+                            div()
+                                .flex()
+                                .flex_1()
+                                .min_w(px(180.))
+                                .items_center()
+                                .gap(px(10.))
+                                .child(tile)
+                                .child(
+                                    ui::title_block(
+                                        &palette,
+                                        preset.name.clone(),
+                                        Some(
+                                            format!(
+                                                "{} model{}",
+                                                model_label(&preset.model),
+                                                if preset.favorite { " · Favorite" } else { "" }
+                                            )
+                                            .into(),
+                                        ),
                                     )
-                                    .into(),
+                                    .flex_1(),
                                 ),
-                            )
-                            .flex_1(),
                         )
                         .child(
-                            AuroraButton::new(format!("skins-preview-{}", preset.id), "Preview")
-                                .size(ButtonSize::Small)
-                                .selected(previewed)
-                                .disabled(locked)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.preview_preset(preview_id.clone(), cx);
-                                })),
-                        )
-                        .child(
-                            icon_button(
-                                &palette,
-                                format!("skins-favorite-{}", preset.id),
-                                "star",
-                                if preset.favorite {
-                                    "Remove favorite"
-                                } else {
-                                    "Favorite"
-                                },
-                                if preset.favorite {
-                                    palette.warning
-                                } else {
-                                    palette.muted_foreground
-                                },
-                                false,
-                            )
-                            .disabled(locked)
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.favorite(favorite_id.clone(), next_favorite, cx);
-                                },
-                            )),
-                        )
-                        .child(
-                            icon_button(
-                                &palette,
-                                format!("skins-rename-{}", preset.id),
-                                "edit",
-                                "Rename",
-                                palette.muted_foreground,
-                                false,
-                            )
-                            .disabled(locked)
-                            .on_click(cx.listener(
-                                move |this, _, window, cx| {
-                                    this.open_rename(rename_id.clone(), window, cx);
-                                },
-                            )),
-                        )
-                        .child(
-                            icon_button(
-                                &palette,
-                                format!("skins-remove-{}", preset.id),
-                                "delete",
-                                "Remove",
-                                palette.danger,
-                                true,
-                            )
-                            .disabled(locked)
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.open_remove_review(remove_id.clone(), cx);
-                                },
-                            )),
+                            div()
+                                .flex()
+                                .flex_shrink_0()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(
+                                    AuroraButton::new(
+                                        format!("skins-preview-{}", preset.id),
+                                        "Preview",
+                                    )
+                                    .size(ButtonSize::Small)
+                                    .selected(previewed)
+                                    .disabled(locked)
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            this.preview_preset(preview_id.clone(), cx);
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    icon_button(
+                                        &palette,
+                                        format!("skins-favorite-{}", preset.id),
+                                        "star",
+                                        if preset.favorite {
+                                            "Remove favorite"
+                                        } else {
+                                            "Favorite"
+                                        },
+                                        if preset.favorite {
+                                            palette.warning
+                                        } else {
+                                            palette.muted_foreground
+                                        },
+                                        false,
+                                    )
+                                    .disabled(locked)
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            this.favorite(favorite_id.clone(), next_favorite, cx);
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    icon_button(
+                                        &palette,
+                                        format!("skins-rename-{}", preset.id),
+                                        "edit",
+                                        "Rename",
+                                        palette.muted_foreground,
+                                        false,
+                                    )
+                                    .disabled(locked)
+                                    .on_click(cx.listener(
+                                        move |this, _, window, cx| {
+                                            this.open_rename(rename_id.clone(), window, cx);
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    icon_button(
+                                        &palette,
+                                        format!("skins-remove-{}", preset.id),
+                                        "delete",
+                                        "Remove",
+                                        palette.danger,
+                                        true,
+                                    )
+                                    .disabled(locked)
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            this.open_remove_review(remove_id.clone(), cx);
+                                        },
+                                    )),
+                                ),
                         ),
                 );
             }
@@ -2261,7 +2284,6 @@ impl Render for Skins {
         }
         let library_card = ui::list_card(&palette).child(library_head).child(library);
         let import_card = ui::card(&palette)
-            .min_h(px(238.))
             .child(ui::section_header(
                 &palette,
                 "Import a skin",
@@ -2405,7 +2427,11 @@ impl Render for Skins {
                 .flex_wrap()
                 .gap(px(ui::PAGE_GAP))
         } else {
-            div().flex().flex_wrap().gap(px(ui::PAGE_GAP))
+            div()
+                .flex()
+                .flex_wrap()
+                .justify_center()
+                .gap(px(ui::PAGE_GAP))
         };
         let import_card = import_card.when(empty_preview, |card| {
             card.bg(gpui::transparent_black())
@@ -2416,27 +2442,41 @@ impl Render for Skins {
         if let Some(preview) = &self.preview {
             appearance_row = appearance_row.child(preview.clone());
         }
-        content = content
-            .child(appearance_row.child(import_card.flex_1().min_w(px(320.))))
-            .when(
-                self.core
-                    .library
-                    .as_ref()
-                    .is_none_or(|list| !list.is_empty())
-                    || self.core.library_error.is_some(),
-                |body| body.child(library_card),
+        let show_library = self
+            .core
+            .library
+            .as_ref()
+            .is_none_or(|list| !list.is_empty())
+            || self.core.library_error.is_some();
+        content = if empty_preview {
+            content
+                .child(appearance_row.child(import_card.flex_1().min_w(px(320.))))
+                .when(show_library, |body| body.child(library_card))
+        } else {
+            content.child(
+                appearance_row.items_start().child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_w(px(280.))
+                        .gap(px(ui::PAGE_GAP))
+                        .child(import_card)
+                        .when(show_library, |column| column.child(library_card)),
+                ),
             )
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(ui::PAGE_GAP))
-                    .items_start()
-                    .child(appearance.flex_1().min_w(px(320.)))
-                    .when(signed_in.is_some(), |row| {
-                        row.child(cape_card.flex_1().min_w(px(240.)))
-                    }),
-            );
+        };
+        content = content.child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap(px(ui::PAGE_GAP))
+                .items_start()
+                .child(appearance.flex_1().min_w(px(320.)))
+                .when(signed_in.is_some(), |row| {
+                    row.child(cape_card.flex_1().min_w(px(240.)))
+                }),
+        );
 
         // Reviewed dialogs: the base dialog owns the focus trap; Enter never
         // confirms and Escape/backdrop close only while this page's own write

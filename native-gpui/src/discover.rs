@@ -2860,11 +2860,13 @@ impl Render for Discover {
                                             })
                                         })
                                         .child(div().truncate().child(project.title.clone()))
-                                        .child(crate::symbols::icon(
-                                            Some("arrow_forward"),
-                                            px(14.),
-                                            palette.ring,
-                                        )),
+                                        .child(
+                                            div()
+                                                .flex_shrink_0()
+                                                .text_size(px(ui::TEXT_CAPTION))
+                                                .text_color(palette.ring)
+                                                .child("Details"),
+                                        ),
                                 ),
                             )
                             .child(

@@ -1847,6 +1847,30 @@ pub struct HomeWidgets {
 }
 
 impl HomeWidgets {
+    pub fn customize_button(&self, entity: Entity<Self>) -> AuroraButton {
+        let editing = self.core.editing;
+        AuroraButton::new(
+            "widgets-customize",
+            if editing { "Done" } else { "Customize" },
+        )
+        .variant(if editing {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Default
+        })
+        .size(ButtonSize::Small)
+        .icon(if editing { "check" } else { "tune" })
+        .disabled(
+            self.host.is_none()
+                || self.core.is_busy()
+                || self.core.blocked
+                || self.core.layout_error.is_some(),
+        )
+        .on_click(move |_, _, cx| {
+            entity.update(cx, |this, cx| this.set_editing(!this.core.editing, cx))
+        })
+    }
+
     /// Builds the inactive page. After activation with a host, the persisted
     /// layout loads first and the visible cards' data follows; with no host it stays in an
     /// unavailable diagnostic state and initiates zero API calls.
@@ -2600,41 +2624,7 @@ impl Render for HomeWidgets {
             .flex()
             .flex_col()
             .gap(px(12.))
-            .text_color(palette.foreground)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(12.))
-                    .child(ui::section_header(
-                        &palette,
-                        "Widgets",
-                        Some("Playtime, servers and more at a glance.".into()),
-                    ))
-                    .child(
-                        AuroraButton::new(
-                            "widgets-customize",
-                            if editing { "Done" } else { "Customize" },
-                        )
-                        .variant(if editing {
-                            ButtonVariant::Primary
-                        } else {
-                            ButtonVariant::Default
-                        })
-                        .size(ButtonSize::Small)
-                        .icon(if editing { "check" } else { "tune" })
-                        .disabled(
-                            no_host
-                                || self.core.is_busy()
-                                || self.core.blocked
-                                || self.core.layout_error.is_some(),
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.set_editing(!this.core.editing, cx);
-                        })),
-                    ),
-            );
+            .text_color(palette.foreground);
 
         if no_host {
             return div().w_full().child(

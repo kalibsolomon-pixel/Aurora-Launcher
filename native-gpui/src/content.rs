@@ -1351,7 +1351,7 @@ impl Render for Content {
             + if self.updates_open { 130. } else { 0. }
             + if self.actions_open { 50. } else { 0. }
             + if self.import_open { 210. } else { 0. };
-        let page_size = ((f32::from(window.viewport_size().height) - reserved) / 58.)
+        let page_size = ((f32::from(window.viewport_size().height) - reserved) / 50.)
             .floor()
             .clamp(1., 8.) as usize;
         let busy = self.is_busy(cx);
@@ -1704,6 +1704,7 @@ impl Render for Content {
                     .flex()
                     .flex_col()
                     .gap(px(2.))
+                    .line_height(px(18.))
                     .min_w(px(0.))
                     .child(
                         div()
@@ -1715,6 +1716,7 @@ impl Render for Content {
                                 div()
                                     .min_w(px(0.))
                                     .text_size(px(ui::TEXT_BODY + 1.))
+                                    .line_height(px(20.))
                                     .font_weight(gpui::FontWeight::SEMIBOLD)
                                     .text_color(palette.foreground)
                                     .when(disabled_row, |d| d.opacity(0.8))
@@ -1810,7 +1812,7 @@ impl Render for Content {
                 });
                 list = list.child(
                     ui::row(t, index == last_index)
-                        .min_h(px(56.))
+                        .min_h(px(50.))
                         .py(px(4.))
                         .child(toggle)
                         .when_some(icon, |row, image| {

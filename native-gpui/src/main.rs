@@ -2172,11 +2172,21 @@ impl Render for Launcher {
             }
             0 => {
                 content = content
-                    .child(ui::page_header(
-                        &palette,
-                        "Home",
-                        Some("Pick up where you left off.".into()),
-                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(16.))
+                            .child(ui::page_header(
+                                &palette,
+                                "Home",
+                                Some("Pick up where you left off.".into()),
+                            ))
+                            .when_some(self.home_widgets.as_ref(), |header, home| {
+                                header.child(home.read(cx).customize_button(home.clone()))
+                            }),
+                    )
                     .children(self.home_children(&palette, cx));
                 if let Some(updates) = &self.client_updates {
                     if updates.read(cx).is_visible() {
