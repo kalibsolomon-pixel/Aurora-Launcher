@@ -2027,7 +2027,7 @@ impl Render for Settings {
                     .flex_wrap()
                     .items_center()
                     .justify_start()
-                    .gap(px(6.));
+                    .gap(px(8.));
                 for (ix, accent) in accents.iter().enumerate() {
                     let color = parse_hex_color(&accent.hex).unwrap_or(palette.accent);
                     let chosen = selected == Some(ix);
@@ -2039,9 +2039,9 @@ impl Render for Settings {
                             .disabled(busy)
                             .flex()
                             .items_center()
-                            .gap(px(6.))
+                            .gap(px(8.))
                             .h(px(32.))
-                            .px(px(8.))
+                            .px(px(10.))
                             .rounded(palette.radius)
                             .bg(palette.control)
                             .border_1()
@@ -2071,9 +2071,9 @@ impl Render for Settings {
                         .disabled(appearance.is_none())
                         .flex()
                         .items_center()
-                        .gap(px(6.))
+                        .gap(px(8.))
                         .h(px(32.))
-                        .px(px(8.))
+                        .px(px(10.))
                         .rounded(palette.radius)
                         .bg(palette.control)
                         .border_1()

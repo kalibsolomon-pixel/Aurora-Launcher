@@ -1652,7 +1652,7 @@ impl Launcher {
                     .gap(px(10.))
                     .pt(px(4.))
                     .child(
-                        div().flex_1().child(
+                        div().child(
                             self.button(
                                 "play",
                                 if needs_sign_in {
@@ -1663,7 +1663,6 @@ impl Launcher {
                             )
                             .variant(ButtonVariant::Primary)
                             .size(ButtonSize::Large)
-                            .full_width()
                             .icon(if needs_sign_in { "login" } else { "play_arrow" })
                             .disabled(if needs_sign_in {
                                 self.controls_blocked()
@@ -1684,7 +1683,7 @@ impl Launcher {
                     )
                     .child(
                         self.button("instance-settings", "Settings")
-                            .variant(ButtonVariant::Ghost)
+                            .variant(ButtonVariant::Default)
                             .size(ButtonSize::Large)
                             .icon("tune")
                             .on_click(cx.listener(|this, _, window, cx| {

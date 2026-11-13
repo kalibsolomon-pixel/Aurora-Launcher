@@ -2394,7 +2394,25 @@ impl Render for Skins {
             );
         }
 
-        let mut appearance_row = div().flex().flex_wrap().gap(px(ui::PAGE_GAP));
+        let empty_preview = self
+            .preview
+            .as_ref()
+            .is_none_or(|preview| !preview.read(cx).has_texture());
+        let mut appearance_row = if empty_preview {
+            ui::card(&palette)
+                .flex_row()
+                .items_center()
+                .flex_wrap()
+                .gap(px(ui::PAGE_GAP))
+        } else {
+            div().flex().flex_wrap().gap(px(ui::PAGE_GAP))
+        };
+        let import_card = import_card.when(empty_preview, |card| {
+            card.bg(gpui::transparent_black())
+                .border_0()
+                .p(px(0.))
+                .min_h(px(0.))
+        });
         if let Some(preview) = &self.preview {
             appearance_row = appearance_row.child(preview.clone());
         }

@@ -1267,24 +1267,28 @@ impl Render for Syncing {
                 let checked = draft.categories.iter().any(|current| current == id);
                 let id = *id;
                 let choice_id = SharedString::from(format!("sync-category-{id}"));
-                let row = ui::setting_row(
-                    t,
-                    *label,
-                    Some(category_detail(id).into()),
-                    index + 1 == CATEGORIES.len(),
-                )
-                .py(px(8.))
-                .child(
-                    AuroraCheckbox::new(choice_id, format!("Include {}", label))
-                        .checked(checked)
-                        .disabled(editing_disabled)
-                        .on_change({
-                            let view = view.clone();
-                            move |next: bool, _, _, cx| {
-                                view.update(cx, |this, cx| this.set_category_checked(id, next, cx));
-                            }
-                        }),
-                );
+                let row = div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .py(px(8.))
+                    .when(index + 1 != CATEGORIES.len(), |row| {
+                        row.border_b_1().border_color(t.border_subtle)
+                    })
+                    .child(
+                        AuroraCheckbox::new(choice_id, format!("Include {}", label))
+                            .checked(checked)
+                            .disabled(editing_disabled)
+                            .on_change({
+                                let view = view.clone();
+                                move |next: bool, _, _, cx| {
+                                    view.update(cx, |this, cx| {
+                                        this.set_category_checked(id, next, cx)
+                                    });
+                                }
+                            }),
+                    )
+                    .child(ui::title_block(t, *label, Some(category_detail(id).into())).flex_1());
                 category_grid = category_grid.child(row);
             }
             if self.section == 0 {

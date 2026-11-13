@@ -1287,7 +1287,7 @@ impl Render for Accounts {
                                 )),
                                 "Select",
                             )
-                            .variant(ButtonVariant::Ghost)
+                            .variant(ButtonVariant::Default)
                             .size(ButtonSize::Small)
                             .disabled(busy)
                             .on_click(cx.listener(move |this, _, _, cx| {

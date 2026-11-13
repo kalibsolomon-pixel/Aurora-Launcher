@@ -131,6 +131,10 @@ pub struct SkinPreview {
     rear: bool,
 }
 impl SkinPreview {
+    pub fn has_texture(&self) -> bool {
+        self.state.scene.skin.is_some() || self.state.scene.cape.is_some()
+    }
+
     pub fn new(
         runtime: tokio::runtime::Handle,
         _window: &mut Window,
@@ -321,7 +325,7 @@ impl Render for SkinPreview {
             .relative()
             .w_full()
             .flex_1()
-            .min_h(px(if neutral { 184. } else { STAGE_HEIGHT }))
+            .min_h(px(if neutral { 120. } else { STAGE_HEIGHT }))
             .flex()
             .flex_col()
             .items_center()
@@ -351,6 +355,9 @@ impl Render for SkinPreview {
             ))
             .border_1()
             .border_color(t.border_subtle)
+            .when(neutral, |stage| {
+                stage.bg(gpui::transparent_black()).border_0()
+            })
             .focus(move |style| style.border_color(ring))
             .on_mouse_down(
                 MouseButton::Left,
@@ -415,6 +422,14 @@ impl Render for SkinPreview {
                             }),
                     )
             })
+            .when(neutral, |stage| {
+                stage.child(
+                    div()
+                        .max_w(px(160.))
+                        .text_center()
+                        .child(ui::caption(&t, "Choose a PNG to preview it here.")),
+                )
+            })
             .when(!neutral, |d| {
                 d.child(
                     // Floating view tools, top-right of the stage. Presses here must
@@ -450,8 +465,8 @@ impl Render for SkinPreview {
         ui::card(&t)
             .gap(px(14.))
             .p(px(16.))
-            .w(px(if neutral { 280. } else { 320. }))
-            .h(px(if neutral { 238. } else { 430. }))
+            .w(px(if neutral { 180. } else { 320. }))
+            .h(px(if neutral { 180. } else { 430. }))
             .when(neutral, |card| {
                 card.bg(gpui::transparent_black()).border_0().p(px(0.))
             })

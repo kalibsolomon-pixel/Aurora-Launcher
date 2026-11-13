@@ -1520,28 +1520,17 @@ impl Render for Content {
                 .border_color(palette.border_subtle)
                 .child(tabs)
                 .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .child(
-                            AuroraButton::new("content-find-more", "Find more")
-                                .size(ButtonSize::Small)
-                                .variant(ButtonVariant::Soft)
-                                .icon("explore")
-                                .on_click(move |_, _, cx| find.update(cx, |s, cx| s.find_more(cx))),
-                        )
-                        .child(
-                            AuroraButton::new("content-actions", "Manage content")
-                                .size(ButtonSize::Small)
-                                .variant(ButtonVariant::Ghost)
-                                .icon("expand_more")
-                                .selected(self.actions_open)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.actions_open = !this.actions_open;
-                                    cx.notify();
-                                })),
-                        ),
+                    div().flex().items_center().gap(px(6.)).child(
+                        AuroraButton::new("content-actions", "Manage content")
+                            .size(ButtonSize::Small)
+                            .variant(ButtonVariant::Ghost)
+                            .icon("expand_more")
+                            .selected(self.actions_open)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.actions_open = !this.actions_open;
+                                cx.notify();
+                            })),
+                    ),
                 )
                 .when(self.actions_open, |toolbar| {
                     toolbar.child(
@@ -1642,6 +1631,15 @@ impl Render for Content {
                                         ),
                                 )
                                 .child(
+                                    AuroraButton::new("content-find-more", "Find more")
+                                        .size(ButtonSize::Small)
+                                        .variant(ButtonVariant::Soft)
+                                        .icon("explore")
+                                        .on_click(move |_, _, cx| {
+                                            find.update(cx, |s, cx| s.find_more(cx))
+                                        }),
+                                )
+                                .child(
                                     AuroraButton::new("content-import-open", "Import local")
                                         .size(ButtonSize::Small)
                                         .icon("upload_file")
@@ -1652,29 +1650,7 @@ impl Render for Content {
                                             cx.notify();
                                         })),
                                 ),
-                        )
-                        .when(window.viewport_size().width >= px(1000.), |header| {
-                            header.child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(24.))
-                                    .child(
-                                        div()
-                                            .w(px(48.))
-                                            .text_center()
-                                            .child(ui::caption(t, "Enabled")),
-                                    )
-                                    .when(self.actions_open, |head| {
-                                        head.child(
-                                            div()
-                                                .w(px(88.))
-                                                .text_center()
-                                                .child(ui::caption(t, "Actions")),
-                                        )
-                                    }),
-                            )
-                        }),
+                        ),
                 );
             }
             if self.loading {
@@ -1834,24 +1810,17 @@ impl Render for Content {
                 });
                 list = list.child(
                     ui::row(t, index == last_index)
+                        .min_h(px(56.))
                         .py(px(4.))
-                        .child(match icon {
-                            Some(image) => art_tile(
+                        .child(toggle)
+                        .when_some(icon, |row, image| {
+                            row.child(art_tile(
                                 gpui::SharedString::from(format!("icon-{}", entry.id)),
                                 Some(image),
                                 &entry.letter,
                                 40.,
                                 &palette,
-                            )
-                            .into_any_element(),
-                            None => art_tile(
-                                gpui::SharedString::from(format!("icon-{}", entry.id)),
-                                None,
-                                &entry.letter,
-                                40.,
-                                &palette,
-                            )
-                            .into_any_element(),
+                            ))
                         })
                         .child(text.flex_1())
                         .child(
@@ -1860,7 +1829,6 @@ impl Render for Content {
                                 .flex_shrink_0()
                                 .items_center()
                                 .gap(px(24.))
-                                .child(toggle)
                                 .when(self.actions_open, |actions| {
                                     actions.child(
                                         div().w(px(88.)).flex().justify_center().child(remove),
