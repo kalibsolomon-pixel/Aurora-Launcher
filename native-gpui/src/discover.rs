@@ -804,13 +804,9 @@ impl DiscoverState {
 
     fn summary(&self) -> String {
         if self.results.len() >= MAX_RESULTS {
-            format!("Showing {MAX_RESULTS} results. Refine your search for more.")
+            format!("Loaded {MAX_RESULTS} results. Refine your search for more.")
         } else if self.total > 0 {
-            format!(
-                "{} shown · {} matches",
-                self.results.len(),
-                grouped(u64::from(self.total))
-            )
+            format!("{} matches", grouped(u64::from(self.total)))
         } else if !self.searching && self.error.is_none() {
             "No matching projects. Try another search.".into()
         } else {
@@ -2538,8 +2534,8 @@ impl Render for Discover {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::theme(cx).clone();
         let compact = window.viewport_size().width < px(1000.);
-        let row_height = if compact { 128. } else { 104. };
-        let reserved = if compact { 420. } else { 370. };
+        let row_height = if compact { 128. } else { 92. };
+        let reserved = if compact { 420. } else { 350. };
         let page_size = ((f32::from(window.viewport_size().height) - reserved) / row_height)
             .floor()
             .clamp(1., 8.) as usize;
@@ -2813,9 +2809,9 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == end)
                     .id(("result", index))
                     .gap(px(14.))
-                    .h(px(if compact { 128. } else { 104. }))
-                    .min_h(px(if compact { 128. } else { 104. }))
-                    .max_h(px(if compact { 128. } else { 104. }))
+                    .h(px(if compact { 128. } else { 92. }))
+                    .min_h(px(if compact { 128. } else { 92. }))
+                    .max_h(px(if compact { 128. } else { 92. }))
                     .flex_shrink_0()
                     .py(px(0.))
                     .hover(move |style| style.bg(hover))
@@ -2842,7 +2838,7 @@ impl Render for Discover {
                                         .items_center()
                                         .gap(px(7.))
                                         .min_w(px(0.))
-                                        .h(px(28.))
+                                        .h(px(24.))
                                         .rounded(palette.radius)
                                         .border_1()
                                         .border_color(gpui_kit::transparent_black())

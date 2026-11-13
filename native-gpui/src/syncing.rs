@@ -1196,8 +1196,8 @@ impl Render for Syncing {
                     }),
             );
 
-            // While the master switch is off the cards keep full contrast; only
-            // their toggles go inert and a notice in each header says why.
+            // Category choices can be drafted while sync is off. Instance and
+            // path controls retain their existing master-switch dependency.
             let child_locked = editing_disabled || !enabled;
             let off_notice = |t: &crate::theme::AuroraTheme| {
                 div()
@@ -1212,7 +1212,7 @@ impl Render for Syncing {
                         px(14.),
                         t.muted_foreground,
                     ))
-                    .child("Paused · saved choices apply only when Sync is on")
+                    .child("Sync is off")
             };
             let mut body = div().flex().flex_col().gap(px(ui::PAGE_GAP));
 
@@ -1249,70 +1249,42 @@ impl Render for Syncing {
             root = root.child(tabs);
 
             // What to sync.
-            let categories = section_card(t).child(
-                div()
-                    .flex()
-                    .items_start()
-                    .justify_between()
-                    .gap(px(12.))
-                    .pb(px(6.))
-                    .child(ui::section_header(
-                        t,
-                        "What to sync",
-                        Some("The kinds of files that stay in step across instances.".into()),
-                    ))
-                    .when(!enabled, |this| this.child(off_notice(t))),
-            );
+            let categories = section_card(t).child(ui::section_header(
+                t,
+                "What to sync",
+                Some(
+                    if enabled {
+                        "Choose the files that stay in step across instances."
+                    } else {
+                        "Edit your choices now. Saving them leaves Sync turned off."
+                    }
+                    .into(),
+                ),
+            ));
             let mut category_grid = div().grid().grid_cols(2).gap_x(px(24.));
             for (index, (id, label)) in CATEGORIES.iter().enumerate() {
                 let checked = draft.categories.iter().any(|current| current == id);
                 let id = *id;
                 let choice_id = SharedString::from(format!("sync-category-{id}"));
-                let row = if !enabled {
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.))
-                        .py(px(8.))
-                        .border_b_1()
-                        .border_color(t.border_subtle)
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(12.))
-                                .child(
-                                    div()
-                                        .text_size(px(ui::TEXT_BODY))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .child(*label),
-                                )
-                                .child(saved_choice(t, choice_id, *label, checked)),
-                        )
-                        .child(ui::muted(t, category_detail(id)))
-                } else {
-                    ui::setting_row(
-                        t,
-                        *label,
-                        Some(category_detail(id).into()),
-                        index + 1 == CATEGORIES.len(),
-                    )
-                    .py(px(8.))
-                    .child(
-                        AuroraToggle::new(choice_id)
-                            .label(*label)
-                            .checked(checked)
-                            .disabled(child_locked)
-                            .on_change({
-                                let view = view.clone();
-                                move |next: bool, _, _, cx| {
-                                    view.update(cx, |this, cx| {
-                                        this.set_category_checked(id, next, cx)
-                                    });
-                                }
-                            }),
-                    )
-                };
+                let row = ui::setting_row(
+                    t,
+                    *label,
+                    Some(category_detail(id).into()),
+                    index + 1 == CATEGORIES.len(),
+                )
+                .py(px(8.))
+                .child(
+                    AuroraToggle::new(choice_id)
+                        .label(*label)
+                        .checked(checked)
+                        .disabled(editing_disabled)
+                        .on_change({
+                            let view = view.clone();
+                            move |next: bool, _, _, cx| {
+                                view.update(cx, |this, cx| this.set_category_checked(id, next, cx));
+                            }
+                        }),
+                );
                 category_grid = category_grid.child(row);
             }
             if self.section == 0 {
@@ -1589,7 +1561,14 @@ impl Render for Syncing {
             let (save_title, save_detail) = if self.write_busy {
                 ("Saving…", "Applying your sync preferences.")
             } else if dirty {
-                ("Unsaved changes", "Apply to save them and start syncing.")
+                (
+                    "Unsaved changes",
+                    if enabled {
+                        "Apply to save them and start syncing."
+                    } else {
+                        "Apply to save your choices. Sync will stay off."
+                    },
+                )
             } else {
                 ("All changes saved", "Your sync preferences are up to date.")
             };
@@ -1959,6 +1938,27 @@ mod tests {
 
     fn err(message: &str) -> ApiResult<api::SyncPolicy> {
         Err(api::ApiError::new("policy_unreadable", message))
+    }
+
+    #[test]
+    fn preparing_category_changes_while_off_never_enables_sync() {
+        let mut off = base_policy();
+        off.enabled = false;
+        let mut state = PolicyState::default();
+        state.loaded(true, Ok(off));
+        state.edit(|draft| set_category(draft, "servers", true));
+
+        let write = state
+            .begin_write()
+            .expect("off-policy choices can be saved");
+        assert!(!write.enabled);
+        assert!(write.categories.iter().any(|id| id == "servers"));
+        let baseline = state.baseline.as_ref().unwrap();
+        assert!(!baseline.enabled);
+        assert!(!baseline.categories.iter().any(|id| id == "servers"));
+        assert!(state.revert());
+        assert!(!state.draft.as_ref().unwrap().enabled);
+        assert!(!state.dirty);
     }
 
     #[test]

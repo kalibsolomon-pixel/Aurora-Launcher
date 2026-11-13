@@ -312,7 +312,7 @@ impl Render for SkinPreview {
             .role(Role::Group)
             .aria_label("Player preview")
             .aria_description(if neutral {
-                "Name your skin and choose Import PNG to preview it here."
+                "Imported skins appear here."
             } else {
                 "Drag or use arrow keys to rotate. Plus and minus zoom; Home resets."
             })
@@ -409,16 +409,18 @@ impl Render for SkinPreview {
                             .text_size(px(ui::TEXT_BODY))
                             .text_color(t.muted_foreground)
                             .child(if neutral {
-                                "Preview a skin"
+                                "Skin preview"
                             } else {
                                 "Player preview unavailable"
                             }),
                     )
                     .when(neutral, |body| {
-                        body.child(div().max_w(px(200.)).text_center().child(ui::caption(
-                            &t,
-                            "Name your skin, then choose Import PNG to preview it here.",
-                        )))
+                        body.child(
+                            div()
+                                .max_w(px(200.))
+                                .text_center()
+                                .child(ui::caption(&t, "Imported skins appear here.")),
+                        )
                     })
             })
             .when(!neutral, |d| {

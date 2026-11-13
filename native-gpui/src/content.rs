@@ -548,6 +548,7 @@ pub struct Content {
     removing: Option<(Target, Entry)>,
     import_open: bool,
     updates_open: bool,
+    actions_open: bool,
     inventory_page: usize,
     updates: Entity<ContentUpdates>,
     _update_events: Subscription,
@@ -661,6 +662,7 @@ impl Content {
             removing: None,
             import_open: false,
             updates_open: false,
+            actions_open: false,
             inventory_page: 0,
             updates,
             _update_events: update_events,
@@ -1347,6 +1349,7 @@ impl Render for Content {
         };
         let reserved = reserved
             + if self.updates_open { 130. } else { 0. }
+            + if self.actions_open { 50. } else { 0. }
             + if self.import_open { 210. } else { 0. };
         let page_size = ((f32::from(window.viewport_size().height) - reserved) / 58.)
             .floor()
@@ -1524,30 +1527,71 @@ impl Render for Content {
                         .child(
                             AuroraButton::new("content-find-more", "Find more")
                                 .size(ButtonSize::Small)
+                                .variant(ButtonVariant::Soft)
                                 .icon("explore")
-                                .on_click(move |_, _, cx| {
-                                    find.update(cx, |s, cx| s.find_more(cx));
-                                }),
+                                .on_click(move |_, _, cx| find.update(cx, |s, cx| s.find_more(cx))),
                         )
                         .child(
-                            AuroraButton::new("content-folder", "Open folder")
+                            AuroraButton::new("content-actions", "More actions")
                                 .size(ButtonSize::Small)
-                                .icon("folder_open")
-                                .disabled(busy)
-                                .on_click(move |_, _, cx| {
-                                    open.read(cx).folder();
-                                }),
-                        )
-                        .child(
-                            AuroraButton::new("content-retry", "Refresh content")
-                                .size(ButtonSize::Small)
-                                .icon("refresh")
-                                .disabled(busy)
-                                .on_click(move |_, _, cx| {
-                                    reload.update(cx, |s, cx| s.refresh(cx));
-                                }),
+                                .variant(ButtonVariant::Ghost)
+                                .icon("expand_more")
+                                .selected(self.actions_open)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.actions_open = !this.actions_open;
+                                    cx.notify();
+                                })),
                         ),
-                );
+                )
+                .when(self.actions_open, |toolbar| {
+                    toolbar.child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap(px(8.))
+                            .pt(px(8.))
+                            .border_t_1()
+                            .border_color(palette.border_subtle)
+                            .child(
+                                AuroraButton::new("content-folder", "Open folder")
+                                    .size(ButtonSize::Small)
+                                    .icon("folder_open")
+                                    .disabled(busy)
+                                    .on_click(move |_, _, cx| open.read(cx).folder()),
+                            )
+                            .child(
+                                AuroraButton::new("content-retry", "Refresh content")
+                                    .size(ButtonSize::Small)
+                                    .icon("refresh")
+                                    .disabled(busy)
+                                    .on_click(move |_, _, cx| {
+                                        reload.update(cx, |s, cx| s.refresh(cx))
+                                    }),
+                            )
+                            .child(
+                                AuroraButton::new(
+                                    "content-updates-open",
+                                    if self.updates_open {
+                                        "Close updates"
+                                    } else {
+                                        "Updates"
+                                    },
+                                )
+                                .size(ButtonSize::Small)
+                                .icon("update")
+                                .selected(self.updates_open)
+                                .disabled(busy || previewing)
+                                .on_click(cx.listener(
+                                    |this, _, _, cx| {
+                                        this.updates_open = !this.updates_open;
+                                        cx.notify();
+                                    },
+                                )),
+                            ),
+                    )
+                });
             let mut list = ui::list_card(t).child(toolbar);
             let query = self.filter.read(cx).value();
             let visible: Vec<_> = self
@@ -1607,26 +1651,6 @@ impl Render for Content {
                                             this.import_open = !this.import_open;
                                             cx.notify();
                                         })),
-                                )
-                                .child(
-                                    AuroraButton::new(
-                                        "content-updates-open",
-                                        if self.updates_open {
-                                            "Close updates"
-                                        } else {
-                                            "Updates"
-                                        },
-                                    )
-                                    .size(ButtonSize::Small)
-                                    .icon("update")
-                                    .selected(self.updates_open)
-                                    .disabled(busy || previewing)
-                                    .on_click(cx.listener(
-                                        |this, _, _, cx| {
-                                            this.updates_open = !this.updates_open;
-                                            cx.notify();
-                                        },
-                                    )),
                                 ),
                         )
                         .when(window.viewport_size().width >= px(1000.), |header| {
@@ -1643,7 +1667,7 @@ impl Render for Content {
                                     )
                                     .child(
                                         div()
-                                            .w(px(72.))
+                                            .w(px(88.))
                                             .text_center()
                                             .child(ui::caption(t, "Actions")),
                                     ),
@@ -1671,6 +1695,13 @@ impl Render for Content {
                 ));
             }
             let total = visible.len();
+            // The pager itself costs a row. If one more item fits without it,
+            // show the whole inventory instead of creating a one-item last page.
+            let page_size = if total == page_size + 1 {
+                total
+            } else {
+                page_size
+            };
             let current_page = self.inventory_page.min(total.saturating_sub(1) / page_size);
             let start = current_page * page_size;
             let end = (start + page_size).min(total);
@@ -1749,7 +1780,9 @@ impl Render for Content {
                 let toggle = match entry.enabled {
                     Some(enabled) => div()
                         .flex()
+                        .w(px(48.))
                         .items_center()
+                        .justify_center()
                         .gap(px(8.))
                         .child(
                             AuroraToggle::new(gpui::SharedString::from(format!(
@@ -1780,6 +1813,7 @@ impl Render for Content {
                     "Remove",
                 )
                 .accessibility_label(format!("Remove {}", entry.name))
+                .icon("delete")
                 .variant(ButtonVariant::Ghost)
                 .size(ButtonSize::Small)
                 .disabled(busy || !entry.remove)
@@ -1825,11 +1859,11 @@ impl Render for Content {
                                 .items_center()
                                 .gap(px(24.))
                                 .child(toggle)
-                                .child(remove),
+                                .child(div().w(px(88.)).flex().justify_center().child(remove)),
                         ),
                 );
             }
-            if total > 0 {
+            if total > page_size {
                 list = list.child(
                     div()
                         .flex()
