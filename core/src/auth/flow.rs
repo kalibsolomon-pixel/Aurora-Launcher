@@ -8,6 +8,7 @@
 
 use std::fmt;
 use std::path::Path;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
@@ -142,55 +143,178 @@ pub fn production_registration() -> Option<OAuthClientConfig> {
 // Process-local login transaction
 // ---------------------------------------------------------------------------
 
-fn login_slot() -> MutexGuard<'static, Option<Arc<Notify>>> {
-    static SLOT: OnceLock<Mutex<Option<Arc<Notify>>>> = OnceLock::new();
+fn login_slot() -> MutexGuard<'static, Option<Arc<LoginControl>>> {
+    static SLOT: OnceLock<Mutex<Option<Arc<LoginControl>>>> = OnceLock::new();
     let slot = SLOT.get_or_init(|| Mutex::new(None));
     slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// The process-local login transaction guard: at most one active sign-in,
-/// cancellable from outside. Cross-process coordination stays deferred.
-struct LoginTransaction {
-    cancel: Arc<Notify>,
+const LOGIN_ACTIVE: u8 = 0;
+const LOGIN_CANCELLED: u8 = 1;
+const LOGIN_COMMITTING: u8 = 2;
+const LOGIN_FINISHED: u8 = 3;
+
+struct LoginControl {
+    phase: AtomicU8,
+    notify: Notify,
 }
 
-impl LoginTransaction {
-    fn acquire() -> Result<Self, AuthError> {
-        let mut slot = login_slot();
-        if slot.is_some() {
-            return Err(AuthError::LoginInProgress);
+/// A single-use request, created before asynchronous dispatch. Contains no
+/// identity, credential or OAuth material. Cancellation is sticky even before
+/// the login future is polled or acquires the process-local transaction slot.
+pub struct LoginRequest {
+    cancellation: LoginCancellation,
+}
+
+impl Default for LoginRequest {
+    fn default() -> Self {
+        Self {
+            cancellation: LoginCancellation(Arc::new(LoginControl {
+                phase: AtomicU8::new(LOGIN_ACTIVE),
+                notify: Notify::new(),
+            })),
         }
-        let cancel = Arc::new(Notify::new());
-        *slot = Some(Arc::clone(&cancel));
-        Ok(Self { cancel })
+    }
+}
+
+impl LoginRequest {
+    pub fn cancellation(&self) -> LoginCancellation {
+        self.cancellation.clone()
+    }
+
+    /// Closes a failed attempt before returning its error. This atomic exchange
+    /// gives cancellation and failure one winner, including application setup
+    /// failures before the authentication transaction has been acquired.
+    pub fn finish_error<E: From<AuthError>>(&self, error: E) -> E {
+        if self
+            .cancellation
+            .0
+            .phase
+            .swap(LOGIN_FINISHED, Ordering::AcqRel)
+            == LOGIN_CANCELLED
+        {
+            AuthError::LoginCancelled.into()
+        } else {
+            error
+        }
+    }
+}
+
+impl Drop for LoginRequest {
+    fn drop(&mut self) {
+        // Also closes requests dropped before their future is ever polled.
+        self.cancellation
+            .0
+            .phase
+            .store(LOGIN_FINISHED, Ordering::Release);
+    }
+}
+
+/// A cancellation capability for one particular sign-in, never a later login.
+#[derive(Clone)]
+pub struct LoginCancellation(Arc<LoginControl>);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoginCancelOutcome {
+    Requested,
+    /// The attempt closed or saving began. Its outcome must be awaited.
+    TooLate,
+}
+
+impl LoginCancellation {
+    pub fn cancel(&self) -> LoginCancelOutcome {
+        match self.0.phase.compare_exchange(
+            LOGIN_ACTIVE,
+            LOGIN_CANCELLED,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) | Err(LOGIN_CANCELLED) => {
+                self.0.notify.notify_one();
+                LoginCancelOutcome::Requested
+            }
+            Err(_) => LoginCancelOutcome::TooLate,
+        }
+    }
+
+    fn check(&self) -> Result<(), AuthError> {
+        if self.0.phase.load(Ordering::Acquire) == LOGIN_CANCELLED {
+            Err(AuthError::LoginCancelled)
+        } else {
+            Ok(())
+        }
     }
 
     async fn cancelled(&self) {
-        self.cancel.notified().await
+        if self.check().is_ok() {
+            // notify_one stores a permit if cancellation races this await.
+            self.0.notify.notified().await;
+        }
+    }
+
+    fn begin_commit(&self) -> Result<(), AuthError> {
+        self.0
+            .phase
+            .compare_exchange(
+                LOGIN_ACTIVE,
+                LOGIN_COMMITTING,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .map(|_| ())
+            .map_err(|_| AuthError::LoginCancelled)
+    }
+}
+
+/// At most one active sign-in; dropping a transaction releases its exact slot.
+struct LoginTransaction {
+    request: LoginRequest,
+}
+
+impl LoginTransaction {
+    fn acquire(request: LoginRequest) -> Result<Self, AuthError> {
+        request
+            .cancellation
+            .check()
+            .map_err(|error| request.finish_error(error))?;
+        let mut slot = login_slot();
+        if slot.is_some() {
+            return Err(request.finish_error(AuthError::LoginInProgress));
+        }
+        *slot = Some(Arc::clone(&request.cancellation.0));
+        Ok(Self { request })
+    }
+
+    async fn cancelled(&self) {
+        self.request.cancellation.cancelled().await
     }
 }
 
 impl Drop for LoginTransaction {
     fn drop(&mut self) {
+        self.request
+            .cancellation
+            .0
+            .phase
+            .store(LOGIN_FINISHED, Ordering::Release);
         let mut slot = login_slot();
         if slot
             .as_ref()
-            .is_some_and(|active| Arc::ptr_eq(active, &self.cancel))
+            .is_some_and(|active| Arc::ptr_eq(active, &self.request.cancellation.0))
         {
             *slot = None;
         }
     }
 }
 
-/// Cancels the active login transaction, if one exists. Returns whether a
-/// login was active. The cancelled transaction's receiver is closed and its
-/// PKCE/state are discarded; a late browser callback cannot resurrect them.
+/// Requests cancellation of the active transaction. Returns whether it was
+/// accepted; persistence already in progress cannot be cancelled. Accepted
+/// cancellation closes its receiver and discards temporary OAuth state.
 pub fn cancel_active_login() -> bool {
     let slot = login_slot();
     match slot.as_ref() {
-        Some(notify) => {
-            notify.notify_one();
-            true
+        Some(control) => {
+            LoginCancellation(Arc::clone(control)).cancel() == LoginCancelOutcome::Requested
         }
         None => false,
     }
@@ -216,14 +340,48 @@ pub async fn sign_in(
     context: &AuthContext<'_>,
     progress: &mut (dyn FnMut(AuthPhase) + Send),
 ) -> Result<AccountRecord, AuthError> {
-    let transaction = LoginTransaction::acquire()?;
+    sign_in_prepared(context, progress, LoginRequest::default()).await
+}
 
+/// Runs the same sign-in with a request whose cancellation capability exists
+/// before dispatch. Cancellation wins through authentication, then an atomic
+/// boundary makes persistence non-cancellable and reports subsequent requests
+/// as TooLate. No account or credential writes occur for accepted cancellation.
+pub async fn sign_in_prepared(
+    context: &AuthContext<'_>,
+    progress: &mut (dyn FnMut(AuthPhase) + Send),
+    request: LoginRequest,
+) -> Result<AccountRecord, AuthError> {
+    let transaction = LoginTransaction::acquire(request)?;
+    let authenticated = tokio::select! {
+        biased;
+        _ = transaction.cancelled() => Err(AuthError::LoginCancelled),
+        result = authenticate_sign_in(context, progress, &transaction.request.cancellation) => result,
+    };
+    let (session, refresh_token) =
+        authenticated.map_err(|error| transaction.request.finish_error(error))?;
+
+    progress(AuthPhase::SavingAccount);
+    transaction
+        .request
+        .cancellation
+        .begin_commit()
+        .map_err(|error| transaction.request.finish_error(error))?;
+    commit_account(context, &session, &refresh_token)
+}
+
+async fn authenticate_sign_in(
+    context: &AuthContext<'_>,
+    progress: &mut (dyn FnMut(AuthPhase) + Send),
+    cancellation: &LoginCancellation,
+) -> Result<(MinecraftSession, SecretString), AuthError> {
     let pkce = PkcePair::generate()?;
     let state = OAuthState::generate()?;
     let receiver = CallbackReceiver::bind()
         .await
         .map_err(|error| AuthError::CallbackListener(error.to_string()))?;
     let redirect_uri = receiver.redirect_uri();
+    cancellation.check()?;
 
     let authorize_url = build_authorization_url(
         context.endpoints.authorize(),
@@ -240,7 +398,6 @@ pub async fn sign_in(
             Ok(code) => code,
             Err(error) => return Err(error.into()),
         },
-        _ = transaction.cancelled() => return Err(AuthError::LoginCancelled),
         _ = tokio::time::sleep(context.options.login_timeout) => {
             return Err(AuthError::LoginTimeout);
         }
@@ -260,10 +417,7 @@ pub async fn sign_in(
 
     let session = downstream_chain(context, &tokens.access_token, progress).await?;
 
-    progress(AuthPhase::SavingAccount);
-    let record = commit_account(context, &session, &tokens.refresh_token)?;
-
-    Ok(record)
+    Ok((session, tokens.refresh_token))
 }
 
 // ---------------------------------------------------------------------------
@@ -1221,6 +1375,242 @@ mod tests {
             .sign_in(BrowserScript::Complete)
             .await
             .expect("a fresh login works after a cancelled one");
+    }
+
+    #[tokio::test]
+    async fn prepared_login_cancelled_before_dispatch_never_opens_browser_or_writes() {
+        let _flow_tests = serialized_flow_tests().await;
+        let setup = TestSetup::new("aurora-auth-cancel-before-dispatch");
+        let request = LoginRequest::default();
+        let cancellation = request.cancellation();
+        assert_eq!(cancellation.cancel(), LoginCancelOutcome::Requested);
+        let browser = |_: &str| -> Result<(), BrowserOpenError> {
+            panic!("a request cancelled before dispatch must not open the browser")
+        };
+        let error = sign_in_prepared(&setup.context(&browser), &mut |_| {}, request)
+            .await
+            .expect_err("pre-dispatch cancellation must settle");
+        assert_eq!(error.code(), "auth_login_cancelled");
+        assert!(!setup.accounts_path.exists());
+        assert!(setup.credentials.load(ACCOUNT_A).unwrap().is_none());
+        assert!(SessionCache::usable(ACCOUNT_A).is_none());
+        assert!(setup.world.lock().unwrap().token_request_bodies.is_empty());
+        assert!(!cancel_active_login());
+    }
+
+    #[tokio::test]
+    async fn dropped_unpolled_and_rejected_requests_close_their_capabilities() {
+        let _flow_tests = serialized_flow_tests().await;
+        let setup = TestSetup::new("aurora-auth-request-lifetime");
+        let browser = scripted_browser(BrowserScript::Nothing);
+        let context = setup.context(&browser);
+        let mut progress = |_| {};
+        let request = LoginRequest::default();
+        let cancellation = request.cancellation();
+        let future = sign_in_prepared(&context, &mut progress, request);
+        drop(future);
+        assert_eq!(cancellation.cancel(), LoginCancelOutcome::TooLate);
+        assert!(!cancel_active_login());
+
+        let active = LoginTransaction::acquire(LoginRequest::default())
+            .ok()
+            .unwrap();
+        let rejected = LoginRequest::default();
+        let rejected_cancellation = rejected.cancellation();
+        assert_eq!(
+            LoginTransaction::acquire(rejected).err().unwrap().code(),
+            "auth_login_in_progress"
+        );
+        assert_eq!(rejected_cancellation.cancel(), LoginCancelOutcome::TooLate);
+        drop(active);
+        assert!(!setup.accounts_path.exists());
+    }
+
+    #[tokio::test]
+    async fn application_setup_failure_closes_request_and_arbitrates_prior_cancel() {
+        let _flow_tests = serialized_flow_tests().await;
+        for cancel_first in [false, true] {
+            let request = crate::application::prepare_microsoft_login();
+            let cancellation = request.cancellation();
+            if cancel_first {
+                assert_eq!(cancellation.cancel(), LoginCancelOutcome::Requested);
+            }
+            let host = crate::host::Host::native(
+                Err("fixture data root unavailable".into()),
+                "fixture",
+                tokio::runtime::Handle::current(),
+                |_, _| {},
+            );
+            let error = crate::application::begin_prepared_microsoft_login(host, request)
+                .await
+                .unwrap_err();
+            if cancel_first {
+                assert_eq!(
+                    serde_json::to_value(error).unwrap()["code"],
+                    "auth_login_cancelled"
+                );
+            }
+            assert_eq!(cancellation.cancel(), LoginCancelOutcome::TooLate);
+        }
+    }
+
+    #[tokio::test]
+    async fn accepted_cancellation_wins_a_ready_auth_error_but_closed_failure_rejects_it() {
+        let _flow_tests = serialized_flow_tests().await;
+        for cancel_in_browser in [true, false] {
+            let setup = TestSetup::new(&format!("aurora-auth-cancel-error-{cancel_in_browser}"));
+            let request = LoginRequest::default();
+            let cancellation = request.cancellation();
+            // Cancellation and a browser error become ready during the same
+            // poll of authenticate_sign_in, after select's cancel branch was
+            // checked. The terminal atomic exchange must choose cancellation.
+            let browser = |_: &str| -> Result<(), BrowserOpenError> {
+                if cancel_in_browser {
+                    assert_eq!(cancellation.cancel(), LoginCancelOutcome::Requested);
+                }
+                Err(BrowserOpenError::new("fixture browser error"))
+            };
+            let error = sign_in_prepared(&setup.context(&browser), &mut |_| {}, request)
+                .await
+                .unwrap_err();
+            assert_eq!(
+                error.code(),
+                if cancel_in_browser {
+                    "auth_login_cancelled"
+                } else {
+                    "auth_browser_open_failure"
+                }
+            );
+            assert_eq!(cancellation.cancel(), LoginCancelOutcome::TooLate);
+            assert!(!setup.accounts_path.exists());
+            assert!(setup.credentials.load(ACCOUNT_A).unwrap().is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_after_callback_and_before_persistence_never_writes() {
+        let _flow_tests = serialized_flow_tests().await;
+        for phase_to_cancel in [
+            AuthPhase::ExchangingMicrosoftToken,
+            AuthPhase::FetchingProfile,
+            AuthPhase::SavingAccount,
+        ] {
+            let setup = TestSetup::new(&format!(
+                "aurora-auth-cancel-at-{}",
+                phase_to_cancel.as_str()
+            ));
+            let browser = scripted_browser(BrowserScript::Complete);
+            let request = LoginRequest::default();
+            let cancellation = request.cancellation();
+            let mut reached = false;
+            let error = sign_in_prepared(
+                &setup.context(&browser),
+                &mut |phase| {
+                    if phase == phase_to_cancel {
+                        reached = true;
+                        assert_eq!(cancellation.cancel(), LoginCancelOutcome::Requested);
+                    }
+                },
+                request,
+            )
+            .await
+            .expect_err("accepted cancellation must prevent persistence");
+            assert!(reached);
+            assert_eq!(error.code(), "auth_login_cancelled");
+            assert!(!setup.accounts_path.exists());
+            assert!(setup.credentials.load(ACCOUNT_A).unwrap().is_none());
+            assert!(SessionCache::usable(ACCOUNT_A).is_none());
+            assert!(!cancel_active_login());
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_after_commit_boundary_honestly_reports_too_late() {
+        let _flow_tests = serialized_flow_tests().await;
+        let setup = TestSetup::new("aurora-auth-cancel-during-commit");
+        let request = LoginRequest::default();
+        let cancellation = request.cancellation();
+        struct ObservedStore<'a> {
+            inner: &'a dyn CredentialStore,
+            cancellation: LoginCancellation,
+            observed: std::sync::atomic::AtomicBool,
+        }
+        impl CredentialStore for ObservedStore<'_> {
+            fn save(
+                &self,
+                id: &str,
+                credential: &PersistedCredential,
+            ) -> Result<(), super::super::credentials::CredentialStoreError> {
+                assert_eq!(self.cancellation.cancel(), LoginCancelOutcome::TooLate);
+                self.observed.store(true, Ordering::Release);
+                self.inner.save(id, credential)
+            }
+            fn load(
+                &self,
+                id: &str,
+            ) -> Result<Option<PersistedCredential>, super::super::credentials::CredentialStoreError>
+            {
+                self.inner.load(id)
+            }
+            fn delete(
+                &self,
+                id: &str,
+            ) -> Result<bool, super::super::credentials::CredentialStoreError> {
+                self.inner.delete(id)
+            }
+        }
+        let store = ObservedStore {
+            inner: &setup.credentials,
+            cancellation: cancellation.clone(),
+            observed: std::sync::atomic::AtomicBool::new(false),
+        };
+        let browser = scripted_browser(BrowserScript::Complete);
+        let mut context = setup.context(&browser);
+        context.credentials = &store;
+        let record = sign_in_prepared(&context, &mut |_| {}, request)
+            .await
+            .expect("commit finishes");
+        assert!(store.observed.load(Ordering::Acquire));
+        assert_eq!(record.account_id(), ACCOUNT_A);
+        assert_eq!(
+            accounts::load(&setup.accounts_path)
+                .unwrap()
+                .accounts()
+                .len(),
+            1
+        );
+        assert!(setup.credentials.load(ACCOUNT_A).unwrap().is_some());
+        assert!(SessionCache::usable(ACCOUNT_A).is_some());
+        assert_eq!(cancellation.cancel(), LoginCancelOutcome::TooLate);
+    }
+
+    #[tokio::test]
+    async fn completed_attempt_cancellation_cannot_cancel_a_later_login() {
+        let _flow_tests = serialized_flow_tests().await;
+        let setup = TestSetup::new("aurora-auth-targeted-cancel-later-login");
+        let browser = scripted_browser(BrowserScript::Complete);
+        let request = LoginRequest::default();
+        let old = request.cancellation();
+        let error = sign_in_prepared(
+            &setup.context(&browser),
+            &mut |phase| {
+                if phase == AuthPhase::ExchangingMicrosoftToken {
+                    old.cancel();
+                }
+            },
+            request,
+        )
+        .await
+        .expect_err("first attempt cancelled");
+        assert_eq!(error.code(), "auth_login_cancelled");
+        let record = sign_in(&setup.context(&browser), &mut |phase| {
+            if phase == AuthPhase::WaitingForMicrosoft {
+                assert_eq!(old.cancel(), LoginCancelOutcome::TooLate);
+            }
+        })
+        .await
+        .expect("old capability cannot affect a new transaction");
+        assert_eq!(record.account_id(), ACCOUNT_A);
     }
 
     #[tokio::test]

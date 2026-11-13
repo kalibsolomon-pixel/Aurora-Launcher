@@ -251,7 +251,9 @@ pub(crate) fn spawn_supervised_with_bridge(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        // A game outlives the launcher window/runtime. Dropping supervision
+        // on shutdown must release the handle without terminating that game.
+        .kill_on_drop(false)
         // Prevent ambient Java injection while retaining the ordinary host
         // environment graphics/audio/native libraries rely on.
         .env_remove("CLASSPATH")
@@ -557,6 +559,52 @@ mod tests {
     #[ignore]
     fn fake_child_slow() {
         std::thread::sleep(Duration::from_millis(500));
+    }
+
+    #[test]
+    #[ignore = "supervised shutdown fixture subprocess"]
+    fn fake_child_survives_launcher_shutdown() {
+        std::fs::write("child-started", b"started").unwrap();
+        std::thread::sleep(Duration::from_millis(600));
+        std::fs::write("child-survived", b"finished").unwrap();
+    }
+
+    #[test]
+    fn launcher_runtime_shutdown_does_not_terminate_the_game() {
+        let root = test_root("shutdown-survival");
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let spec = LaunchSpec::fake_process(
+            "process-shutdown-survival",
+            std::env::current_exe().unwrap(),
+            "launch::process::tests::fake_child_survives_launcher_shutdown",
+            root.clone(),
+        );
+        runtime.block_on(async {
+            spawn_supervised(spec, &root.join("logs"), Arc::new(|_| {})).unwrap();
+        });
+        for _ in 0..100 {
+            if root.join("child-started").is_file() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            root.join("child-started").is_file(),
+            "fixture did not start"
+        );
+        runtime.shutdown_timeout(Duration::from_millis(100));
+        for _ in 0..200 {
+            if root.join("child-survived").is_file() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let survived = root.join("child-survived").is_file();
+        std::fs::remove_dir_all(&root).unwrap();
+        assert!(
+            survived,
+            "closing the launcher's runtime terminated its supervised game"
+        );
     }
 
     #[tokio::test]

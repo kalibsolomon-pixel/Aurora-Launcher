@@ -1685,6 +1685,26 @@ pub async fn begin_login(host: Host) -> ApiResult<AccountSummary> {
     convert(app::begin_microsoft_login(host).await)
 }
 
+pub use app::{LoginCancelOutcome, LoginCancellation};
+
+/// A non-serializable, single-use backend request, bound before async dispatch.
+pub fn prepare_login() -> app::LoginRequest {
+    app::prepare_microsoft_login()
+}
+
+pub async fn begin_prepared_login(
+    host: Host,
+    login: app::LoginRequest,
+) -> ApiResult<AccountSummary> {
+    convert(app::begin_prepared_microsoft_login(host, login).await)
+}
+
+pub async fn cancel_prepared_login(
+    cancellation: LoginCancellation,
+) -> ApiResult<LoginCancelOutcome> {
+    Ok(app::cancel_prepared_microsoft_login(&cancellation))
+}
+
 pub async fn cancel_login() -> ApiResult<()> {
     blocking(|| convert::<_, ()>(app::cancel_microsoft_login())).await?
 }
