@@ -266,10 +266,13 @@ fn empty_queue(t: &crate::theme::AuroraTheme, title: String, body: &'static str)
     div()
         .flex()
         .flex_col()
-        .items_start()
+        .items_center()
         .gap(px(10.))
-        .py(px(28.))
+        .py(px(36.))
         .px(px(24.))
+        .w(px(480.))
+        .max_w_full()
+        .text_center()
         .rounded(t.radius_lg)
         .bg(t.card)
         .border_1()
@@ -1143,18 +1146,31 @@ impl Render for Downloads {
             ));
         if active_rows.is_empty() && finished_rows.is_empty() {
             page = page.child(
-                empty_queue(t, summary.clone(), EMPTY_TEXT)
+                div()
+                    .w_full()
+                    .min_h(px(460.))
+                    .flex()
+                    .items_center()
                     .justify_center()
                     .child(
-                        div().pt(px(8.)).child(
-                            AuroraButton::new("downloads-browse-discover", "Browse Discover")
-                                .variant(ButtonVariant::Primary)
-                                .size(ButtonSize::Medium)
-                                .icon("explore")
-                                .on_click(cx.listener(|_, _, _, cx| {
-                                    cx.emit(DownloadsEvent::OpenDiscover);
-                                })),
-                        ),
+                        empty_queue(t, summary.clone(), EMPTY_TEXT)
+                            .justify_center()
+                            .child(
+                                div().pt(px(8.)).child(
+                                    AuroraButton::new(
+                                        "downloads-browse-discover",
+                                        "Browse Discover",
+                                    )
+                                    .variant(ButtonVariant::Primary)
+                                    .size(ButtonSize::Medium)
+                                    .icon("explore")
+                                    .on_click(cx.listener(
+                                        |_, _, _, cx| {
+                                            cx.emit(DownloadsEvent::OpenDiscover);
+                                        },
+                                    )),
+                                ),
+                            ),
                     ),
             );
         }

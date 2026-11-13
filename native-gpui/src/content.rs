@@ -1272,13 +1272,13 @@ fn icon_button(
     label: String,
 ) -> gpui_kit::base::Button {
     let clear = gpui::transparent_black();
-    // Destructive affordance: danger tint at rest, a danger wash on hover.
+    // Removal opens a review; reserve danger emphasis for that confirmation.
     let ring = t.ring;
     let hover = gpui::Hsla {
         a: 0.16,
         ..t.danger
     };
-    let color = t.danger;
+    let color = t.subtle_foreground;
     gpui_kit::base::Button::new(id)
         .aria_label(label)
         .flex()
@@ -1536,11 +1536,11 @@ impl Render for Content {
                 let (meta, status_word, notes) = describe(&entry.details);
                 let disabled_row = entry.enabled == Some(false);
                 let mut line = vec![entry.file_name.as_str()];
-                line.extend(
-                    meta.iter().copied().filter(|m| {
-                        *m != "No provider provenance" && !entry.file_name.contains(*m)
-                    }),
-                );
+                line.extend(meta.iter().copied().filter(|m| {
+                    *m != "No provider provenance"
+                        && *m != "Added manually"
+                        && !entry.file_name.contains(*m)
+                }));
                 let mut text = div()
                     .flex()
                     .flex_col()

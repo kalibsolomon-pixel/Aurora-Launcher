@@ -703,8 +703,11 @@ impl Launcher {
         let process_serial = self.process_serial;
         let tx = self.tx.clone();
         if showcase() {
+            let signed_in = self.accounts.accounts.iter().any(|saved| {
+                Some(&saved.account_id) == account.as_ref() && saved.status == "signedIn"
+            });
             let decision = api::PlayReadiness {
-                ready: true,
+                ready: signed_in,
                 can_prepare: false,
                 instance_id: id,
                 account_name: self.accounts.selected_account_id.as_ref().and_then(|_| {
@@ -716,9 +719,21 @@ impl Launcher {
                 account_id: account,
                 instance_status: "ready".into(),
                 runtime_status: "ready".into(),
-                account_status: "ready".into(),
+                account_status: if signed_in {
+                    "ready"
+                } else {
+                    "reauthenticationRequired"
+                }
+                .into(),
                 process_status: "idle".into(),
-                blockers: Vec::new(),
+                blockers: if signed_in {
+                    Vec::new()
+                } else {
+                    vec![api::PlayBlocker {
+                        code: "launch_authentication_required".into(),
+                        message: "Sign in to your Minecraft account before playing.".into(),
+                    }]
+                },
             };
             self.rt.spawn(async move {
                 let _ = tx
@@ -1601,6 +1616,10 @@ impl Launcher {
         }
         if let Some(id) = selected.clone() {
             let play_id = id.clone();
+            let needs_sign_in = self
+                .visible_blockers(&id)
+                .iter()
+                .any(|blocker| blocker.code == "launch_authentication_required");
             details = details.child(
                 div()
                     .flex()
@@ -1608,15 +1627,32 @@ impl Launcher {
                     .gap(px(10.))
                     .pt(px(4.))
                     .child(
-                        self.button("play", self.play_label(&id))
-                            .variant(ButtonVariant::Primary)
-                            .size(ButtonSize::Large)
-                            .icon("play_arrow")
-                            .disabled(!self.can_play(&id))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.action("play", play_id.clone(), cx);
+                        self.button(
+                            "play",
+                            if needs_sign_in {
+                                "Sign in to play"
+                            } else {
+                                self.play_label(&id)
+                            },
+                        )
+                        .variant(ButtonVariant::Primary)
+                        .size(ButtonSize::Large)
+                        .icon(if needs_sign_in { "login" } else { "play_arrow" })
+                        .disabled(if needs_sign_in {
+                            self.controls_blocked()
+                        } else {
+                            !self.can_play(&id)
+                        })
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| {
+                                if needs_sign_in {
+                                    this.open_page(1, window, cx);
+                                } else {
+                                    this.action("play", play_id.clone(), cx);
+                                }
                                 cx.notify();
-                            })),
+                            },
+                        )),
                     )
                     .child(
                         self.button("instance-settings", "Settings")
@@ -1716,7 +1752,12 @@ impl Launcher {
                         .into_any_element(),
                 );
             }
-            for (i, blocker) in self.visible_blockers(&id).iter().enumerate() {
+            for (i, blocker) in self
+                .visible_blockers(&id)
+                .iter()
+                .filter(|blocker| blocker.code != "launch_authentication_required")
+                .enumerate()
+            {
                 let action_button = BlockerAction::for_code(&blocker.code).map(|action| {
                     let target = id.clone();
                     self.button(("blocker", i), action.label())
@@ -1904,6 +1945,14 @@ impl Launcher {
             Some(decision) if decision.ready => Some(("Ready to play", ui::Tone::Success)),
             Some(decision) if decision.can_prepare => {
                 Some(("Needs preparation", ui::Tone::Warning))
+            }
+            Some(decision)
+                if decision
+                    .blockers
+                    .iter()
+                    .any(|blocker| blocker.code == "launch_authentication_required") =>
+            {
+                Some(("Sign in needed", ui::Tone::Warning))
             }
             Some(_) => Some(("Action needed", ui::Tone::Warning)),
             None if self.readiness_in_flight || self.load_in_flight => {
@@ -2232,7 +2281,7 @@ impl Render for Launcher {
                             .bg(palette.border_subtle),
                     )
                     .child(
-                        self.button("refresh", "Refresh")
+                        self.button("refresh", "Refresh launcher")
                             .variant(ButtonVariant::Subtle)
                             .size(ButtonSize::Small)
                             .icon("refresh")
@@ -2775,6 +2824,32 @@ mod tests {
     }
     fn readiness() -> api::PlayReadiness {
         serde_json::from_value(serde_json::json!({"ready": true, "instanceId":"old", "accountId":null, "accountName":null, "instanceStatus":"ready", "runtimeStatus":"ready", "accountStatus":"ready", "processStatus":"idle", "blockers":[]})).unwrap()
+    }
+
+    #[test]
+    fn authentication_blocker_has_a_recovery_status_without_claiming_readiness() {
+        let mut state = view();
+        state.readiness_in_flight = false;
+        state.load_in_flight = false;
+        state.readiness = Some(decision(
+            "old",
+            "idle",
+            serde_json::json!([{
+                "code": "launch_authentication_required", "message": "Sign in first."
+            }]),
+        ));
+        assert_eq!(
+            state.readiness_badge("old").map(|badge| badge.0),
+            Some("Sign in needed")
+        );
+        assert!(!state.can_play("old"));
+        assert!(state.readiness_badge("unrelated").is_none());
+        // A running process keeps its own status when a saved session expires.
+        state.readiness.as_mut().unwrap().process_status = "running".into();
+        assert_eq!(
+            state.readiness_badge("old").map(|badge| badge.0),
+            Some("Running")
+        );
     }
     fn instance_json(id: &str) -> serde_json::Value {
         serde_json::json!({

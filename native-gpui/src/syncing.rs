@@ -1579,7 +1579,7 @@ impl Render for Syncing {
                             .items_center()
                             .gap(px(8.))
                             .child(
-                                AuroraButton::new("sync-refresh", "Refresh")
+                                AuroraButton::new("sync-refresh", "Refresh sync")
                                     .variant(ButtonVariant::Ghost)
                                     .disabled(busy)
                                     .on_click({

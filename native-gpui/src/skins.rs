@@ -1791,7 +1791,7 @@ impl Render for Skins {
                 if cosmetics.is_some_and(|c| c.current_skin.is_some()) {
                     "Previewing current appearance".to_string()
                 } else {
-                    "Previewing neutral model".to_string()
+                    "No skin selected".to_string()
                 }
             }
         };
@@ -1822,7 +1822,7 @@ impl Render for Skins {
                     "Current appearance",
                     Some(match signed_in {
                         Some(account) => format!("Appearance for {}.", account.name).into(),
-                        None => "Sign in to manage your skin and capes.".into(),
+                        None => "Sign in to wear skins and capes. Local imports work without an account.".into(),
                     }),
                 ))
                 .child(
@@ -1847,7 +1847,7 @@ impl Render for Skins {
                                 .on_click(cx.listener(|this, _, _, cx| this.preview_current(cx)))
                         })
                         .child(
-                            AuroraButton::new("skins-refresh", "Refresh")
+                            AuroraButton::new("skins-refresh", "Refresh skins")
                                 .size(ButtonSize::Small)
                                 .icon("refresh")
                                 .disabled(locked || no_host)

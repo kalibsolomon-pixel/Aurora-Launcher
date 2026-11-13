@@ -33,14 +33,14 @@ pub fn scrollbar(
     id: impl Into<ElementId>,
     handle: &gpui_kit::ScrollHandle,
 ) -> gpui_kit::base::Scrollbar {
-    let thumb = t.subtle_foreground.opacity(0.65);
-    let active = t.muted_foreground;
+    let thumb = t.subtle_foreground.opacity(0.32);
+    let active = t.muted_foreground.opacity(0.75);
     gpui_kit::base::Scrollbar::vertical(handle)
         .id(id)
         .mode(gpui_kit::base::ScrollbarMode::Always)
         .styles(move |styles| {
             styles
-                .thumb(|style| style.bg(thumb).width(px(5.)).radius(px(3.)))
+                .thumb(|style| style.bg(thumb).width(px(3.)).radius(px(3.)))
                 .thumb_hover(|style| style.bg(active))
                 .thumb_active(|style| style.bg(active))
         })

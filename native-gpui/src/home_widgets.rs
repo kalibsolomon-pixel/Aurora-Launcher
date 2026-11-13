@@ -651,6 +651,7 @@ impl PlaytimeData {
 pub(crate) struct PlaytimeView {
     pub points: Vec<PointView>,
     pub peak: String,
+    pub midpoint: String,
     pub total: String,
     pub total_detail: String,
     /// Rendered instead of the chart while data is loading or missing.
@@ -669,6 +670,7 @@ pub(crate) fn playtime_view(
     let unavailable = |status: &str| PlaytimeView {
         points: Vec::new(),
         peak: String::new(),
+        midpoint: String::new(),
         total: String::new(),
         total_detail: String::new(),
         status: Some(status.into()),
@@ -709,6 +711,7 @@ pub(crate) fn playtime_view(
     PlaytimeView {
         points: points_from_bins(&bins, data.today),
         peak: axis_duration(chart_peak(&bins)),
+        midpoint: axis_duration(chart_peak(&bins) / 2),
         total,
         total_detail,
         status,
@@ -3489,6 +3492,7 @@ impl HomeWidgets {
                                             .pb(px(AXIS_HEIGHT))
                                             .pr(px(8.))
                                             .child(label(projection.peak.clone()))
+                                            .child(label(projection.midpoint.clone()))
                                             .child(label("0 min".into())),
                                     )
                                     .child(
@@ -3512,7 +3516,7 @@ impl HomeWidgets {
                                                             .left(px(0.))
                                                             .right(px(0.))
                                                             .h(px(1.))
-                                                            .bg(palette.border.opacity(0.45))
+                                                            .bg(palette.border.opacity(0.75))
                                                     }))
                                                     .when(projection.empty_period, |plot| {
                                                         plot.child(

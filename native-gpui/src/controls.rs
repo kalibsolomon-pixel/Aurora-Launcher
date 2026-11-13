@@ -73,6 +73,7 @@ pub enum ButtonSize {
 pub struct AuroraButton {
     id: ElementId,
     label: SharedString,
+    accessibility_label: Option<SharedString>,
     variant: ButtonVariant,
     size: ButtonSize,
     icon: Option<&'static str>,
@@ -87,6 +88,7 @@ impl AuroraButton {
         Self {
             id: id.into(),
             label: label.into(),
+            accessibility_label: None,
             variant: ButtonVariant::Default,
             size: ButtonSize::Medium,
             icon: None,
@@ -99,6 +101,12 @@ impl AuroraButton {
 
     pub fn variant(mut self, variant: ButtonVariant) -> Self {
         self.variant = variant;
+        self
+    }
+
+    /// Context for repeated row actions without repeating it in the visible label.
+    pub fn accessibility_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.accessibility_label = Some(label.into());
         self
     }
 
@@ -179,7 +187,11 @@ impl RenderOnce for AuroraButton {
             ButtonSize::Large => (44., 22., 15., 20.),
         };
         let (soft, ring, selected_fg) = (t.accent_soft, t.ring, t.foreground);
-        let icon_color = if nav && self.selected {
+        let (disabled_bg, disabled_fg, disabled_border) =
+            (t.sunken, t.subtle_foreground, t.border_subtle);
+        let icon_color = if self.disabled {
+            disabled_fg
+        } else if nav && self.selected {
             t.ring
         } else if primary || nav {
             fg
@@ -193,7 +205,10 @@ impl RenderOnce for AuroraButton {
         };
 
         let mut button = Button::new(self.id)
-            .aria_label(self.label.clone())
+            .aria_label(
+                self.accessibility_label
+                    .unwrap_or_else(|| self.label.clone()),
+            )
             .disabled(self.disabled)
             .selected(self.selected)
             .flex()
@@ -223,7 +238,12 @@ impl RenderOnce for AuroraButton {
                             .border_color(if nav { clear } else { Hsla { a: 0.55, ..ring } })
                             .text_color(selected_fg)
                     })
-                    .disabled(|style| style.opacity(0.42))
+                    .disabled(|style| {
+                        style
+                            .bg(disabled_bg)
+                            .text_color(disabled_fg)
+                            .border_color(disabled_border)
+                    })
             })
             .when_some(self.icon, |b, icon| {
                 b.child(crate::symbols::icon(Some(icon), px(icon_size), icon_color))
@@ -397,9 +417,17 @@ impl AuroraToggle {
 impl RenderOnce for AuroraToggle {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = theme(cx);
-        let track_on: Hsla = t.accent;
-        let track_off: Hsla = t.surface_hover;
-        let thumb_on: Hsla = t.accent_foreground;
+        let track_on: Hsla = if self.disabled { t.border } else { t.accent };
+        let track_off: Hsla = if self.disabled {
+            t.sunken
+        } else {
+            t.surface_hover
+        };
+        let thumb_on: Hsla = if self.disabled {
+            t.subtle_foreground
+        } else {
+            t.accent_foreground
+        };
         let thumb_off: Hsla = t.muted_foreground;
 
         let mut switch = Switch::new(self.id.clone())
@@ -417,30 +445,22 @@ impl RenderOnce for AuroraToggle {
                     .checked(self.checked)
                     .disabled(self.disabled)
                     .relative()
-                    .w(px(36.))
-                    .h(px(20.))
+                    .w(px(40.))
+                    .h(px(24.))
                     .rounded_full()
                     .bg(track_off)
-                    .styles(|styles| {
-                        styles
-                            .checked(|style| style.bg(track_on))
-                            .disabled(|style| style.opacity(0.45))
-                    })
+                    .styles(|styles| styles.checked(|style| style.bg(track_on)))
                     .child(
                         SwitchThumb::new(self.checked)
                             .disabled(self.disabled)
                             .absolute()
-                            .top(px(2.))
-                            .left(px(2.))
-                            .when(self.checked, |this| this.left(px(18.)))
-                            .size(px(16.))
+                            .top(px(3.))
+                            .left(px(3.))
+                            .when(self.checked, |this| this.left(px(19.)))
+                            .size(px(18.))
                             .rounded_full()
                             .bg(thumb_off)
-                            .styles(|styles| {
-                                styles
-                                    .checked(|style| style.bg(thumb_on))
-                                    .disabled(|style| style.opacity(0.6))
-                            }),
+                            .styles(|styles| styles.checked(|style| style.bg(thumb_on))),
                     ),
             );
 
@@ -522,7 +542,7 @@ impl RenderOnce for AuroraSlider {
                         div()
                             .text_size(px(13.))
                             .text_color(t.foreground)
-                            .child(format!("{}", value.end() as i64)),
+                            .child(format!("{} / 100", value.end() as i64)),
                     ),
             )
             .child(

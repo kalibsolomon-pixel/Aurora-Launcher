@@ -2793,9 +2793,9 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == total)
                     .id(("result", index))
                     .gap(px(14.))
-                    .h(px(76.))
-                    .min_h(px(76.))
-                    .max_h(px(76.))
+                    .h(px(92.))
+                    .min_h(px(92.))
+                    .max_h(px(92.))
                     .flex_shrink_0()
                     .py(px(0.))
                     .hover(move |style| style.bg(hover))
@@ -2853,7 +2853,9 @@ impl Render for Discover {
                             )
                             .child(
                                 div()
-                                    .truncate()
+                                    .overflow_hidden()
+                                    .max_h(px(36.))
+                                    .line_clamp(2)
                                     .text_size(px(ui::TEXT_BODY))
                                     .line_height(px(18.))
                                     .text_color(palette.muted_foreground)
@@ -2864,26 +2866,28 @@ impl Render for Discover {
                         div()
                             .flex()
                             .flex_none()
+                            .flex_col()
                             .w(px(100.))
                             .items_center()
                             .justify_end()
                             .gap(px(8.))
-                            .when(!can_quick_install, |actions| {
+                            .child({
                                 let id = id.clone();
-                                actions.child(
-                                    AuroraButton::new(("details", index), "Details")
-                                        .size(ButtonSize::Small)
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.open_details(id.clone(), window, cx);
-                                        })),
-                                )
+                                AuroraButton::new(("details", index), "Details")
+                                    .accessibility_label(format!("Details for {}", project.title))
+                                    .variant(ButtonVariant::Ghost)
+                                    .size(ButtonSize::Small)
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.open_details(id.clone(), window, cx);
+                                    }))
                             })
                             .when(can_quick_install, |actions| {
                                 actions.child({
                                     let id = id.clone();
                                     AuroraButton::new(("install", index), "Install")
+                                        .accessibility_label(format!("Install {}", project.title))
                                         .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Soft)
+                                        .variant(ButtonVariant::Primary)
                                         .icon("download")
                                         .disabled(installed || row_busy || s.target.is_none())
                                         .on_click(cx.listener(move |this, _, _, cx| {

@@ -190,6 +190,11 @@ impl SkinPreview {
         let Some(request) = self.state.start() else {
             return;
         };
+        if request.skin.is_none() && request.cape.is_none() {
+            self.state.finish(&request, true);
+            self.image = None;
+            return;
+        }
         let mut work = request.clone();
         if work.skin.is_none() {
             // Neutral model: a tonal mannequin texture so the form reads.
@@ -297,7 +302,7 @@ impl Render for SkinPreview {
         };
         let layers_entity = entity.clone();
         let rear = self.rear;
-        let neutral = self.state.scene.skin.is_none();
+        let neutral = self.state.scene.skin.is_none() && self.state.scene.cape.is_none();
 
         // The renderer produces a 320x440 image; the stage shows it scaled down
         // so the whole card (stage + controls) fits a 760px window.
@@ -306,7 +311,11 @@ impl Render for SkinPreview {
             .id("player-preview-surface")
             .role(Role::Group)
             .aria_label("Player preview")
-            .aria_description("Drag or use arrow keys to rotate. Plus and minus zoom; Home resets.")
+            .aria_description(if neutral {
+                "Import a PNG in the local library to preview a skin."
+            } else {
+                "Drag or use arrow keys to rotate. Plus and minus zoom; Home resets."
+            })
             .track_focus(&self.focus)
             .tab_stop(true)
             .relative()
@@ -383,7 +392,7 @@ impl Render for SkinPreview {
                 }
                 cx.stop_propagation();
             }))
-            .when_some(self.image.clone(), |d, image| {
+            .when_some(self.image.clone().filter(|_| !neutral), |d, image| {
                 d.child(
                     div()
                         .relative()
@@ -393,54 +402,55 @@ impl Render for SkinPreview {
                         .child(img(image).w(px(318. * scale)).h(px(438. * scale))),
                 )
             })
-            .when(self.image.is_none(), |d| {
-                d.child(ui::icon_tile(&t, Some("person"), 44., false))
+            .when(neutral || self.image.is_none(), |d| {
+                d.child(ui::icon_tile(&t, Some("checkroom"), 48., false))
                     .child(
                         div()
                             .text_size(px(ui::TEXT_BODY))
                             .text_color(t.muted_foreground)
                             .child(if neutral {
-                                "Neutral model"
+                                "Preview a skin"
                             } else {
                                 "Player preview unavailable"
                             }),
                     )
+                    .when(neutral, |body| {
+                        body.child(div().max_w(px(200.)).text_center().child(ui::caption(
+                            &t,
+                            "Import a PNG from your library to see it here.",
+                        )))
+                    })
             })
-            .child(
-                // Floating view tools, top-right of the stage. Presses here must
-                // not start a rotate-drag on the stage underneath.
-                div()
-                    .absolute()
-                    .top(px(10.))
-                    .right(px(10.))
-                    .flex()
-                    .flex_col()
-                    .gap(px(2.))
-                    .p(px(3.))
-                    .rounded(t.radius_lg)
-                    .bg(t.raised)
-                    .border_1()
-                    .border_color(t.border_subtle)
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(tool("preview-zoom-in", "Zoom in", "zoom_in", |s, cx| {
-                        s.zoom(0.08, cx)
-                    }))
-                    .child(tool("preview-zoom-out", "Zoom out", "zoom_out", |s, cx| {
-                        s.zoom(-0.08, cx)
-                    }))
-                    .child(tool(
-                        "preview-reset",
-                        "Reset view",
-                        "restart_alt",
-                        |s, cx| s.reset(cx),
-                    )),
-            )
-            .when(neutral && self.image.is_some(), |d| {
-                d.child(div().absolute().top(px(10.)).left(px(10.)).child(ui::badge(
-                    &t,
-                    "Neutral model",
-                    ui::Tone::Neutral,
-                )))
+            .when(!neutral, |d| {
+                d.child(
+                    // Floating view tools, top-right of the stage. Presses here must
+                    // not start a rotate-drag on the stage underneath.
+                    div()
+                        .absolute()
+                        .top(px(10.))
+                        .right(px(10.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .p(px(3.))
+                        .rounded(t.radius_lg)
+                        .bg(t.raised)
+                        .border_1()
+                        .border_color(t.border_subtle)
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .child(tool("preview-zoom-in", "Zoom in", "zoom_in", |s, cx| {
+                            s.zoom(0.08, cx)
+                        }))
+                        .child(tool("preview-zoom-out", "Zoom out", "zoom_out", |s, cx| {
+                            s.zoom(-0.08, cx)
+                        }))
+                        .child(tool(
+                            "preview-reset",
+                            "Reset view",
+                            "restart_alt",
+                            |s, cx| s.reset(cx),
+                        )),
+                )
             });
 
         ui::card(&t)
@@ -452,66 +462,68 @@ impl Render for SkinPreview {
             .text_color(t.foreground)
             .child(stage)
             // View segments left, the outer-layers toggle right.
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(8.))
-                    .child(
-                        div()
-                            .flex()
-                            .w(px(132.))
-                            .flex_shrink_0()
-                            .gap(px(2.))
-                            .p(px(3.))
-                            .rounded(t.radius)
-                            .bg(t.sunken)
-                            .border_1()
-                            .border_color(t.border_subtle)
-                            .child(control(
-                                "preview-front",
-                                "Front",
-                                None,
-                                ButtonVariant::Ghost,
-                                !rear,
-                                |s, cx| s.view_back(false, cx),
-                            ))
-                            .child(control(
-                                "preview-back",
-                                "Back",
-                                None,
-                                ButtonVariant::Ghost,
-                                rear,
-                                |s, cx| s.view_back(true, cx),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_shrink_0()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(
-                                div()
-                                    .text_size(px(ui::TEXT_CAPTION))
-                                    .text_color(t.muted_foreground)
-                                    .child("Outer layers"),
-                            )
-                            .child(
-                                AuroraToggle::new("preview-layers")
-                                    .label("Outer layers")
-                                    .checked(self.state.scene.layers)
-                                    .on_change(move |value, _, _, cx| {
-                                        layers_entity.update(cx, |s, cx| {
-                                            s.state.scene.layers = value;
-                                            s.image = None;
-                                            s.changed(cx);
-                                        });
-                                    }),
-                            ),
-                    ),
-            )
+            .when(!neutral, |card| {
+                card.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(8.))
+                        .child(
+                            div()
+                                .flex()
+                                .w(px(132.))
+                                .flex_shrink_0()
+                                .gap(px(2.))
+                                .p(px(3.))
+                                .rounded(t.radius)
+                                .bg(t.sunken)
+                                .border_1()
+                                .border_color(t.border_subtle)
+                                .child(control(
+                                    "preview-front",
+                                    "Front",
+                                    None,
+                                    ButtonVariant::Ghost,
+                                    !rear,
+                                    |s, cx| s.view_back(false, cx),
+                                ))
+                                .child(control(
+                                    "preview-back",
+                                    "Back",
+                                    None,
+                                    ButtonVariant::Ghost,
+                                    rear,
+                                    |s, cx| s.view_back(true, cx),
+                                )),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_shrink_0()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .text_size(px(ui::TEXT_CAPTION))
+                                        .text_color(t.muted_foreground)
+                                        .child("Outer layers"),
+                                )
+                                .child(
+                                    AuroraToggle::new("preview-layers")
+                                        .label("Outer layers")
+                                        .checked(self.state.scene.layers)
+                                        .on_change(move |value, _, _, cx| {
+                                            layers_entity.update(cx, |s, cx| {
+                                                s.state.scene.layers = value;
+                                                s.image = None;
+                                                s.changed(cx);
+                                            });
+                                        }),
+                                ),
+                        ),
+                )
+            })
     }
 }
 

@@ -3138,7 +3138,7 @@ impl Render for InstanceEditor {
             // The one primary action of the configuration form.
             let revert_view = this.clone();
             let revert_id = id.clone();
-            if self.section != 4 || !draft_clean || !self.message.is_empty() {
+            if (1..=3).contains(&self.section) || !draft_clean || !self.message.is_empty() {
                 detail = detail.child(
                     ui::card(&t)
                         .flex_row()

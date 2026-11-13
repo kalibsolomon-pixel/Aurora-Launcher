@@ -547,7 +547,11 @@ fn icon_button(
         .flex_shrink_0()
         .items_center()
         .justify_center()
-        .size(px(28.))
+        .h(px(32.))
+        .px(px(8.))
+        .gap(px(6.))
+        .text_size(px(ui::TEXT_CAPTION))
+        .text_color(t.muted_foreground)
         .rounded(t.radius)
         .bg(clear)
         .border_1()
@@ -561,6 +565,7 @@ fn icon_button(
             px(16.),
             t.muted_foreground,
         ))
+        .child("Remove…")
 }
 
 // ---------------------------------------------------------------------------
@@ -1280,12 +1285,45 @@ impl Render for Accounts {
                             }))
                             .into_any_element()
                         });
+                    let restore_id = id.clone();
+                    let reauth = account.status == "reauthenticationRequired";
                     let actions = div()
                         .flex()
                         .flex_shrink_0()
                         .items_center()
                         .gap(px(6.))
                         .child(slot)
+                        .child(
+                            AuroraButton::new(
+                                gpui_kit::SharedString::from(format!("restore-{id}")),
+                                if reauth {
+                                    "Restore session"
+                                } else {
+                                    "Refresh session"
+                                },
+                            )
+                            .accessibility_label(format!(
+                                "{} session for {}",
+                                if reauth { "Restore" } else { "Refresh" },
+                                account.minecraft_name
+                            ))
+                            .size(ButtonSize::Small)
+                            .disabled(busy)
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    this.refresh_session(restore_id.clone(), cx);
+                                },
+                            )),
+                        )
+                        .when(reauth && selected, |actions| {
+                            actions.child(
+                                AuroraButton::new("selected-sign-in", "Sign in")
+                                    .variant(ButtonVariant::Primary)
+                                    .size(ButtonSize::Small)
+                                    .disabled(busy || self.core.cancel.is_some())
+                                    .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx))),
+                            )
+                        })
                         .child(
                             icon_button(
                                 &palette,
@@ -1339,74 +1377,6 @@ impl Render for Accounts {
                     );
                 }
 
-                // One contextual session action below the account list.
-                let mut side = div().flex().flex_col().gap(px(12.)).w_full();
-                let active = selected_id
-                    .as_deref()
-                    .and_then(|id| rows.iter().copied().find(|a| a.account_id == id));
-                if let Some(account) = active {
-                    let id = account.account_id.clone();
-                    let refresh_id = id.clone();
-                    let reauth = account.status == "reauthenticationRequired";
-                    let explanation = match account.status.as_str() {
-                        "signedIn" => "Your session is valid and ready to play.",
-                        "reauthenticationRequired" => {
-                            "Restore the saved session, or sign in with Microsoft."
-                        }
-                        _ => "This account's session status is unavailable right now.",
-                    };
-                    let sign_in_blocked =
-                        busy || self.core.accounts.is_none() || self.core.cancel.is_some();
-                    let mut actions = div().flex().gap(px(8.));
-                    if reauth {
-                        actions = actions.child(
-                            AuroraButton::new("profile-sign-in-again", "Sign in with Microsoft")
-                                .variant(ButtonVariant::Primary)
-                                .icon("login")
-                                .disabled(sign_in_blocked)
-                                .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx))),
-                        );
-                    }
-                    actions = actions.child(
-                        AuroraButton::new(
-                            gpui_kit::SharedString::from(format!("refresh-session-{id}")),
-                            if reauth {
-                                "Restore session"
-                            } else {
-                                "Refresh session"
-                            },
-                        )
-                        .variant(if reauth {
-                            ButtonVariant::Default
-                        } else {
-                            ButtonVariant::Primary
-                        })
-                        .icon("sync")
-                        .disabled(busy)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.refresh_session(refresh_id.clone(), cx);
-                        })),
-                    );
-                    side = side.child(
-                        ui::card(&palette).child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .gap(px(20.))
-                                .child(
-                                    ui::section_header(
-                                        &palette,
-                                        format!("Session for {}", account.minecraft_name),
-                                        Some(explanation.into()),
-                                    )
-                                    .flex_1()
-                                    .min_w(px(0.)),
-                                )
-                                .child(actions.flex_shrink_0()),
-                        ),
-                    );
-                }
                 let info = ui::card(&palette).child(
                     div()
                         .flex()
@@ -1429,13 +1399,11 @@ impl Render for Accounts {
                                 )
                                 .child(ui::caption(
                                     &palette,
-                                    "Sign-in happens in your browser, and Aurora never sees your password. Sessions are stored in Windows Credential Manager.",
+                                    "Restore session uses the saved credential. Sign in opens Microsoft in your browser; Aurora never sees your password. Credentials stay in Windows Credential Manager.",
                                 )),
                         ),
                 );
-                content = content
-                    .child(div().flex().flex_col().gap(px(16.)).child(list).child(side))
-                    .child(info);
+                content = content.child(list).child(info);
             }
         }
 
