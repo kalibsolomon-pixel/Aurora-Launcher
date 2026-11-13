@@ -16,8 +16,9 @@ use gpui_kit::base::actions::{Confirm, SelectDown, SelectUp};
 use gpui_kit::base::input::{Input, InputAccessibility, InputEditorStyle, InputState};
 use gpui_kit::base::slider::SliderState;
 use gpui_kit::base::{
-    Align, Button, ElementExt, InputBase, POPUP_PRIORITY, Placement, Positioner, RoleOverride,
-    Select, Slider, SliderIndicator, SliderThumb, SliderTrack, Switch, SwitchThumb, SwitchTrack,
+    Align, Button, Checkbox, CheckboxState, ElementExt, InputBase, POPUP_PRIORITY, Placement,
+    Positioner, RoleOverride, Select, Slider, SliderIndicator, SliderThumb, SliderTrack, Switch,
+    SwitchThumb, SwitchTrack,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -246,6 +247,7 @@ impl RenderOnce for AuroraButton {
                             .bg(disabled_bg)
                             .text_color(disabled_fg)
                             .border_color(disabled_border)
+                            .opacity(0.5)
                     })
             })
             .when_some(self.icon, |b, icon| {
@@ -473,6 +475,91 @@ impl RenderOnce for AuroraToggle {
                 switch.on_change(move |next, event, window, cx| on_change(next, event, window, cx));
         }
         switch
+    }
+}
+
+/// File selections are checkboxes; switches remain reserved for on/off operations.
+#[derive(IntoElement)]
+pub struct AuroraCheckbox {
+    id: ElementId,
+    label: SharedString,
+    checked: bool,
+    disabled: bool,
+    on_change: Option<ChangeHandler>,
+}
+
+impl AuroraCheckbox {
+    pub fn new(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            checked: false,
+            disabled: false,
+            on_change: None,
+        }
+    }
+    pub fn checked(mut self, checked: bool) -> Self {
+        self.checked = checked;
+        self
+    }
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+    pub fn on_change(
+        mut self,
+        handler: impl Fn(bool, &ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_change = Some(Rc::new(handler));
+        self
+    }
+}
+
+impl RenderOnce for AuroraCheckbox {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let t = theme(cx);
+        let ring = t.ring;
+        let mark = if self.checked {
+            t.foreground
+        } else {
+            gpui_kit::transparent_black()
+        };
+        let mut checkbox = Checkbox::new(self.id)
+            .accessibility_label(self.label)
+            .checked(self.checked)
+            .disabled(self.disabled)
+            .flex()
+            .items_center()
+            .justify_center()
+            .size(px(36.))
+            .rounded(t.radius)
+            .border_1()
+            .border_color(gpui_kit::transparent_black())
+            .focus_visible(move |style| style.border_color(ring))
+            .hover(|style| style.bg(t.control_hover))
+            .styles(|styles| styles.disabled(|style| style.opacity(0.45)))
+            .child(
+                div()
+                    .size(px(20.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(4.))
+                    .border_1()
+                    .border_color(if self.checked {
+                        t.muted_foreground
+                    } else {
+                        t.subtle_foreground
+                    })
+                    .bg(if self.checked { t.control } else { t.sunken })
+                    .child(crate::symbols::icon(Some("check"), px(16.), mark)),
+            );
+        if let Some(on_change) = self.on_change {
+            checkbox = checkbox.on_change(move |state, event, window, cx| {
+                on_change(state == CheckboxState::Checked, event, window, cx)
+            });
+        }
+        checkbox
     }
 }
 

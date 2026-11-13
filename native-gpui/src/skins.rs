@@ -1826,7 +1826,7 @@ impl Render for Skins {
                 .gap(px(12.))
                 .child(ui::section_header(
                     &palette,
-                    "Current appearance",
+                    if signed_in.is_some() { "Current appearance" } else { "Minecraft account" },
                     Some(match signed_in {
                         Some(account) => format!("Appearance for {}.", account.name).into(),
                         None => "Sign in to wear skins and capes. Local imports work without an account.".into(),
@@ -1862,30 +1862,35 @@ impl Render for Skins {
                         ),
                 ),
         );
-        appearance = appearance.child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(10.))
-                .px(px(12.))
-                .py(px(9.))
-                .rounded(palette.radius)
-                .bg(palette.sunken)
-                .border_1()
-                .border_color(palette.border_subtle)
-                .text_size(px(ui::TEXT_CAPTION))
-                .text_color(palette.muted_foreground)
-                .child(crate::symbols::icon(
-                    Some("view_in_ar"),
-                    px(16.),
-                    palette.ring,
-                ))
-                .child(
-                    div()
-                        .flex_1()
-                        .child(format!("{preview_label} · {cape_label}")),
-                ),
-        );
+        if signed_in.is_some()
+            || matches!(self.core.choice, SkinChoice::Preset(_))
+            || self.core.cape_choice.is_some()
+        {
+            appearance = appearance.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .px(px(12.))
+                    .py(px(9.))
+                    .rounded(palette.radius)
+                    .bg(palette.sunken)
+                    .border_1()
+                    .border_color(palette.border_subtle)
+                    .text_size(px(ui::TEXT_CAPTION))
+                    .text_color(palette.muted_foreground)
+                    .child(crate::symbols::icon(
+                        Some("view_in_ar"),
+                        px(16.),
+                        palette.ring,
+                    ))
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(format!("{preview_label} · {cape_label}")),
+                    ),
+            );
+        }
         match signed_in {
             Some(_) => {
                 if let Some(error) = &self.core.remote_error {
@@ -2395,7 +2400,14 @@ impl Render for Skins {
         }
         content = content
             .child(appearance_row.child(import_card.flex_1().min_w(px(320.))))
-            .child(library_card)
+            .when(
+                self.core
+                    .library
+                    .as_ref()
+                    .is_none_or(|list| !list.is_empty())
+                    || self.core.library_error.is_some(),
+                |body| body.child(library_card),
+            )
             .child(
                 div()
                     .flex()

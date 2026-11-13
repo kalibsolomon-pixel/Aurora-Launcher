@@ -1532,7 +1532,7 @@ impl Render for Content {
                                 .on_click(move |_, _, cx| find.update(cx, |s, cx| s.find_more(cx))),
                         )
                         .child(
-                            AuroraButton::new("content-actions", "More actions")
+                            AuroraButton::new("content-actions", "Manage content")
                                 .size(ButtonSize::Small)
                                 .variant(ButtonVariant::Ghost)
                                 .icon("expand_more")
@@ -1665,12 +1665,14 @@ impl Render for Content {
                                             .text_center()
                                             .child(ui::caption(t, "Enabled")),
                                     )
-                                    .child(
-                                        div()
-                                            .w(px(88.))
-                                            .text_center()
-                                            .child(ui::caption(t, "Actions")),
-                                    ),
+                                    .when(self.actions_open, |head| {
+                                        head.child(
+                                            div()
+                                                .w(px(88.))
+                                                .text_center()
+                                                .child(ui::caption(t, "Actions")),
+                                        )
+                                    }),
                             )
                         }),
                 );
@@ -1814,7 +1816,7 @@ impl Render for Content {
                 )
                 .accessibility_label(format!("Remove {}", entry.name))
                 .icon("delete")
-                .variant(ButtonVariant::Ghost)
+                .variant(ButtonVariant::Subtle)
                 .size(ButtonSize::Small)
                 .disabled(busy || !entry.remove)
                 .on_click(move |_, _, cx| {
@@ -1859,7 +1861,11 @@ impl Render for Content {
                                 .items_center()
                                 .gap(px(24.))
                                 .child(toggle)
-                                .child(div().w(px(88.)).flex().justify_center().child(remove)),
+                                .when(self.actions_open, |actions| {
+                                    actions.child(
+                                        div().w(px(88.)).flex().justify_center().child(remove),
+                                    )
+                                }),
                         ),
                 );
             }

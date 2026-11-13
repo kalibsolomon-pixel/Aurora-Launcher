@@ -2026,9 +2026,8 @@ impl Render for Settings {
                     .flex()
                     .flex_wrap()
                     .items_center()
-                    .justify_end()
-                    .gap(px(6.))
-                    .max_w(px(420.));
+                    .justify_start()
+                    .gap(px(6.));
                 for (ix, accent) in accents.iter().enumerate() {
                     let color = parse_hex_color(&accent.hex).unwrap_or(palette.accent);
                     let chosen = selected == Some(ix);
@@ -2109,7 +2108,10 @@ impl Render for Settings {
                         Some("Used for selection, focus and primary actions.".into()),
                         false,
                     )
-                    .child(div().flex().flex_shrink_0().justify_end().child(swatches)),
+                    .flex_col()
+                    .items_start()
+                    .gap(px(12.))
+                    .child(swatches),
                 );
                 if let Some(picker) = &self.picker {
                     card = card.child(

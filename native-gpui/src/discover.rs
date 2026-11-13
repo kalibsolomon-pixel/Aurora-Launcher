@@ -2534,8 +2534,13 @@ impl Render for Discover {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::theme(cx).clone();
         let compact = window.viewport_size().width < px(1000.);
-        let row_height = if compact { 128. } else { 92. };
-        let reserved = if compact { 420. } else { 350. };
+        let row_height = if compact { 128. } else { 104. };
+        let reserved = if compact { 392. } else { 326. }
+            + if self.state.searching || self.state.results.len() >= MAX_RESULTS {
+                28.
+            } else {
+                0.
+            };
         let page_size = ((f32::from(window.viewport_size().height) - reserved) / row_height)
             .floor()
             .clamp(1., 8.) as usize;
@@ -2791,7 +2796,7 @@ impl Render for Discover {
                         ))
                         .child(
                             div()
-                                .text_size(px(ui::TEXT_BODY))
+                                .text_size(px(ui::TEXT_CAPTION))
                                 .text_color(palette.muted_foreground)
                                 .child(download_label(project.downloads)),
                         ),
@@ -2809,9 +2814,9 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == end)
                     .id(("result", index))
                     .gap(px(14.))
-                    .h(px(if compact { 128. } else { 92. }))
-                    .min_h(px(if compact { 128. } else { 92. }))
-                    .max_h(px(if compact { 128. } else { 92. }))
+                    .h(px(if compact { 128. } else { 104. }))
+                    .min_h(px(if compact { 128. } else { 104. }))
+                    .max_h(px(if compact { 128. } else { 104. }))
                     .flex_shrink_0()
                     .py(px(0.))
                     .hover(move |style| style.bg(hover))
@@ -2829,7 +2834,7 @@ impl Render for Discover {
                             .flex_1()
                             .w(px(0.))
                             .min_w(px(0.))
-                            .gap(px(3.))
+                            .gap(px(5.))
                             .child(
                                 div().flex().items_baseline().gap(px(8.)).child(
                                     gpui_kit::base::Button::new(("details", index))
@@ -2885,7 +2890,7 @@ impl Render for Discover {
                                                 .overflow_hidden()
                                                 .whitespace_nowrap()
                                                 .text_ellipsis()
-                                                .text_size(px(ui::TEXT_BODY))
+                                                .text_size(px(ui::TEXT_CAPTION))
                                                 .text_color(palette.muted_foreground)
                                                 .child(format!("by {}", project.author)),
                                         )
@@ -2906,7 +2911,7 @@ impl Render for Discover {
                                     AuroraButton::new(("install", index), "Install")
                                         .accessibility_label(format!("Install {}", project.title))
                                         .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Soft)
+                                        .variant(ButtonVariant::Primary)
                                         .icon("download")
                                         .disabled(installed || row_busy || s.target.is_none())
                                         .on_click(cx.listener(move |this, _, _, cx| {
@@ -2930,7 +2935,12 @@ impl Render for Discover {
                     .border_color(palette.border_subtle)
                     .child(ui::caption(
                         &palette,
-                        format!("{}–{} of {} loaded", start + 1, end, total),
+                        format!(
+                            "Results {}–{} of {}",
+                            start + 1,
+                            end,
+                            grouped(u64::from(s.total).max(total as u64))
+                        ),
                     ))
                     .child(
                         div()
@@ -3032,15 +3042,18 @@ impl Render for Discover {
                     .flex_col()
                     .gap(px(12.))
                     .when(has_notes, |block| block.child(notes))
-                    .when(!count.is_empty() && !s.results.is_empty(), |block| {
-                        block.child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .child(ui::caption(&palette, count.clone())),
-                        )
-                    })
+                    .when(
+                        (s.searching || s.results.len() >= MAX_RESULTS) && !s.results.is_empty(),
+                        |block| {
+                            block.child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .child(ui::caption(&palette, count.clone())),
+                            )
+                        },
+                    )
                     .child(results),
             );
         div().w_full().child(page).child(details_panel)

@@ -41,7 +41,8 @@ use tokio::runtime::Handle;
 use crate::api::{self, ApiResult};
 use crate::backend::guarded;
 use crate::controls::{
-    AuroraButton, AuroraInput, AuroraSelect, AuroraToggle, ButtonSize, ButtonVariant,
+    AuroraButton, AuroraCheckbox, AuroraInput, AuroraSelect, AuroraToggle, ButtonSize,
+    ButtonVariant,
 };
 use crate::theme::theme;
 use crate::ui;
@@ -1256,7 +1257,7 @@ impl Render for Syncing {
                     if enabled {
                         "Choose the files that stay in step across instances."
                     } else {
-                        "Edit your choices now. Saving them leaves Sync turned off."
+                        "Select files for the next time you turn Sync on. Saving keeps Sync off."
                     }
                     .into(),
                 ),
@@ -1274,8 +1275,7 @@ impl Render for Syncing {
                 )
                 .py(px(8.))
                 .child(
-                    AuroraToggle::new(choice_id)
-                        .label(*label)
+                    AuroraCheckbox::new(choice_id, format!("Include {}", label))
                         .checked(checked)
                         .disabled(editing_disabled)
                         .on_change({

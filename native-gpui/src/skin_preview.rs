@@ -414,14 +414,6 @@ impl Render for SkinPreview {
                                 "Player preview unavailable"
                             }),
                     )
-                    .when(neutral, |body| {
-                        body.child(
-                            div()
-                                .max_w(px(200.))
-                                .text_center()
-                                .child(ui::caption(&t, "Imported skins appear here.")),
-                        )
-                    })
             })
             .when(!neutral, |d| {
                 d.child(
