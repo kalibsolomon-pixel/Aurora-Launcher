@@ -1820,7 +1820,7 @@ impl Render for Skins {
                     "Current appearance",
                     Some(match signed_in {
                         Some(account) => format!("Appearance for {}.", account.name).into(),
-                        None => "No signed-in account selected.".into(),
+                        None => "Sign in to manage your skin and capes.".into(),
                     }),
                 ))
                 .child(
@@ -1924,10 +1924,7 @@ impl Render for Skins {
                 }
             }
             None => {
-                appearance = appearance.child(ui::muted(
-                    &palette,
-                    "Select a signed-in account to manage its skin and capes. Your local library works without an account.",
-                ));
+                // The header caption already says to sign in; nothing more to add.
             }
         }
         content = content.child(appearance);
@@ -1952,11 +1949,24 @@ impl Render for Skins {
                     .items_center()
                     .justify_between()
                     .gap(px(12.))
-                    .child(ui::section_header(
-                        &palette,
-                        format!("Library ({library_count})"),
-                        Some("Skins saved on this device.".into()),
-                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(10.))
+                            .child(ui::section_header(
+                                &palette,
+                                "Library",
+                                Some("Skins saved on this device.".into()),
+                            ))
+                            .when(library_count > 0, |d| {
+                                d.child(ui::badge(
+                                    &palette,
+                                    library_count.to_string(),
+                                    ui::Tone::Neutral,
+                                ))
+                            }),
+                    )
                     .child(
                         div()
                             .flex()
@@ -2085,22 +2095,25 @@ impl Render for Skins {
             let rows = self.core.filtered_library();
             if rows.is_empty() {
                 library = library.child(
-                    ui::empty_state(
-                        &palette,
-                        if list.is_empty() { "checkroom" } else { "star" },
-                        if list.is_empty() {
-                            "No saved skins yet"
-                        } else {
-                            "No favorites yet"
-                        },
-                        if list.is_empty() {
-                            "Import a PNG above to start your skin library."
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .gap(px(10.))
+                        .px(px(16.))
+                        .py(px(20.))
+                        .text_size(px(ui::TEXT_BODY))
+                        .text_color(palette.muted_foreground)
+                        .child(crate::symbols::icon(
+                            Some(if list.is_empty() { "checkroom" } else { "star" }),
+                            px(18.),
+                            palette.subtle_foreground,
+                        ))
+                        .child(if list.is_empty() {
+                            "No saved skins yet. Import a PNG above to start your library."
                         } else {
                             "No favorites yet. Star a skin to pin it here."
-                        },
-                    )
-                    .rounded(px(0.))
-                    .border_0(),
+                        }),
                 );
             }
             let count = rows.len();

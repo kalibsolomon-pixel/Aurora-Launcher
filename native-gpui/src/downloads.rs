@@ -56,7 +56,9 @@ const MAX_FINISHED: usize = 30;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DownloadsEvent {
     Changed,
-    Settled { ok: bool },
+    Settled {
+        ok: bool,
+    },
     /// The empty state's "Browse Discover" action; the parent opens Discover.
     OpenDiscover,
 }
@@ -1109,17 +1111,21 @@ impl Render for Downloads {
             ));
         if active_rows.is_empty() && finished_rows.is_empty() {
             page = page.child(
-                ui::empty_state(t, "download", summary.clone(), EMPTY_TEXT).child(
-                    div().pt(px(6.)).child(
-                        AuroraButton::new("downloads-browse-discover", "Browse Discover")
-                            .variant(ButtonVariant::Primary)
-                            .size(ButtonSize::Small)
-                            .icon("explore")
-                            .on_click(cx.listener(|_, _, _, cx| {
-                                cx.emit(DownloadsEvent::OpenDiscover);
-                            })),
+                ui::empty_state(t, "download", summary.clone(), EMPTY_TEXT)
+                    .flex_1()
+                    .min_h(px(420.))
+                    .justify_center()
+                    .child(
+                        div().pt(px(6.)).child(
+                            AuroraButton::new("downloads-browse-discover", "Browse Discover")
+                                .variant(ButtonVariant::Primary)
+                                .size(ButtonSize::Small)
+                                .icon("explore")
+                                .on_click(cx.listener(|_, _, _, cx| {
+                                    cx.emit(DownloadsEvent::OpenDiscover);
+                                })),
+                        ),
                     ),
-                ),
             );
         }
         if !active_rows.is_empty() {

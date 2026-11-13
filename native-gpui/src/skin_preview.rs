@@ -227,6 +227,8 @@ impl SkinPreview {
         self.changed(cx);
     }
 }
+const STAGE_HEIGHT: f32 = 340.;
+
 impl Render for SkinPreview {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = theme::theme(cx).clone();
@@ -258,6 +260,9 @@ impl Render for SkinPreview {
         let rear = self.rear;
         let neutral = self.state.scene.skin.is_none();
 
+        // The renderer produces a 320x440 image; the stage shows it scaled down
+        // so the whole card (stage + controls) fits a 760px window.
+        let scale = STAGE_HEIGHT / 440.;
         let stage = div()
             .id("player-preview-surface")
             .role(Role::Group)
@@ -267,7 +272,7 @@ impl Render for SkinPreview {
             .tab_stop(true)
             .relative()
             .w(px(320.))
-            .h(px(440.))
+            .h(px(STAGE_HEIGHT))
             .flex()
             .flex_col()
             .items_center()
@@ -344,7 +349,7 @@ impl Render for SkinPreview {
                     div()
                         .absolute()
                         .left(px((320. - w) / 2. - 1.))
-                        .top(px(394. - h / 2.))
+                        .top(px(394. * scale - h / 2.))
                         .w(px(w))
                         .h(px(h))
                         .rounded_full()
@@ -360,7 +365,7 @@ impl Render for SkinPreview {
                     .child(shadow(100., 11., 0.34))
             })
             .when_some(self.image.clone(), |d, image| {
-                d.child(img(image).w(px(318.)).h(px(438.)))
+                d.child(img(image).w(px(318. * scale)).h(px(438. * scale)))
             })
             .when(self.image.is_none(), |d| {
                 d.child(ui::icon_tile(&t, Some("person"), 44., false))

@@ -16,7 +16,7 @@ use crate::{
     artwork::{self, ArtworkCache, RawArtwork},
     backend::guarded,
     content_updates::{ContentUpdates, ContentUpdatesEvent},
-    controls::{AuroraButton, AuroraInput, ButtonSize, ButtonVariant},
+    controls::{AuroraButton, AuroraInput, AuroraSelect, AuroraToggle, ButtonSize, ButtonVariant},
     ui,
 };
 use aurora_launcher_lib::host::Host;
@@ -28,8 +28,10 @@ use gpui_kit::base::{
     input::{InputEvent, InputState},
 };
 use serde_json::Value;
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::rc::Rc;
 use tokio::runtime::Handle;
 
 /// Icons requested per core call (the Slint host's `ICON_BATCH`).
@@ -537,6 +539,11 @@ pub struct Content {
     removing: Option<(Target, Entry)>,
     updates: Entity<ContentUpdates>,
     _update_events: Subscription,
+    instance_open: bool,
+    instance_highlight: usize,
+    instance_trigger: gpui::FocusHandle,
+    instance_content: gpui::FocusHandle,
+    instance_bounds: Rc<Cell<Option<gpui::Bounds<gpui::Pixels>>>>,
 }
 impl Content {
     pub fn new(
@@ -634,6 +641,11 @@ impl Content {
             removing: None,
             updates,
             _update_events: update_events,
+            instance_open: false,
+            instance_highlight: 0,
+            instance_trigger: cx.focus_handle(),
+            instance_content: cx.focus_handle(),
+            instance_bounds: Rc::new(Cell::new(None)),
         };
         this.refresh(cx);
         this
@@ -1217,6 +1229,33 @@ fn list_placeholder(
         })
 }
 
+/// A quiet icon-only row action; the label is the accessible name.
+fn icon_button(
+    t: &crate::theme::AuroraTheme,
+    id: impl Into<gpui::ElementId>,
+    icon: &'static str,
+    label: String,
+) -> gpui_kit::base::Button {
+    let clear = gpui::transparent_black();
+    let (hover, ring, color) = (t.control_hover, t.ring, t.subtle_foreground);
+    gpui_kit::base::Button::new(id)
+        .aria_label(label)
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(28.))
+        .rounded(t.radius)
+        .bg(clear)
+        .border_1()
+        .border_color(clear)
+        .hover(move |style| style.bg(hover))
+        .active(|style| style.opacity(0.88))
+        .focus(move |style| style.border_color(ring))
+        .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
+        .child(crate::symbols::icon(Some(icon), px(16.), color))
+}
+
 fn kind_icon(kind: Kind) -> &'static str {
     match kind {
         Kind::Mod => "extension",
@@ -1234,6 +1273,68 @@ impl Render for Content {
         let t = &palette;
         let available = self.host.is_some();
         self.path.update(cx, |p, cx| p.set_disabled(busy, cx));
+        // Compact instance chooser: one select in the page header row.
+        let instance_picker = self
+            .state
+            .as_ref()
+            .filter(|state| !state.instances.is_empty())
+            .map(|state| {
+                let ids: Vec<String> = state.instances.iter().map(|i| i.id.clone()).collect();
+                let options: Vec<gpui::SharedString> = state
+                    .instances
+                    .iter()
+                    .map(|i| gpui::SharedString::from(i.display_name.clone()))
+                    .collect();
+                let selected = self
+                    .selected
+                    .as_deref()
+                    .and_then(|id| ids.iter().position(|candidate| candidate == id));
+                div()
+                    .flex()
+                    .flex_shrink_0()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(ui::caption(t, "Instance"))
+                    .child(
+                        AuroraSelect::new(
+                            "content-instance",
+                            "Instance",
+                            options,
+                            &self.instance_trigger,
+                            &self.instance_content,
+                            self.instance_bounds.clone(),
+                        )
+                        .width(px(260.))
+                        .selected(selected)
+                        .highlight(self.instance_highlight)
+                        .open(self.instance_open && !busy)
+                        .disabled(busy)
+                        .on_open_change(cx.processor(|this, open, _window, cx| {
+                            if this.instance_open != open {
+                                this.instance_open = open;
+                                if open {
+                                    this.instance_highlight = 0;
+                                }
+                                cx.notify();
+                            }
+                        }))
+                        .on_highlight(cx.processor(|this, index, _window, cx| {
+                            if this.instance_highlight != index {
+                                this.instance_highlight = index;
+                                cx.notify();
+                            }
+                        }))
+                        .on_confirm(cx.processor(
+                            move |this, index: usize, _window, cx| {
+                                this.instance_open = false;
+                                if let Some(id) = ids.get(index) {
+                                    this.select(id.clone(), cx);
+                                }
+                                cx.notify();
+                            },
+                        )),
+                    )
+            });
         // Files dropped from the file manager feed the local import review.
         // The outline shows whether the dragged file would be accepted.
         let (accept, reject) = (palette.accent, palette.danger);
@@ -1254,14 +1355,23 @@ impl Render for Content {
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 this.drop_files(paths.paths(), window, cx);
             }))
-            .child(ui::page_header(
-                t,
-                "Content",
-                Some(
-                    "Manage the mods, resource packs and shaders installed in each instance."
-                        .into(),
-                ),
-            ));
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_end()
+                    .justify_between()
+                    .gap(px(16.))
+                    .child(div().flex_1().min_w(px(280.)).child(ui::page_header(
+                        t,
+                        "Content",
+                        Some(
+                            "Manage the mods, resource packs and shaders installed in each instance."
+                                .into(),
+                        ),
+                    )))
+                    .when_some(instance_picker, |this, picker| this.child(picker)),
+            );
         if !self.message.is_empty() {
             root = root.child(
                 div()
@@ -1278,63 +1388,6 @@ impl Render for Content {
                     .text_color(palette.muted_foreground)
                     .child(crate::symbols::icon(Some("info"), px(16.), palette.ring))
                     .child(div().flex_1().min_w(px(0.)).child(self.message.clone())),
-            );
-        }
-        if let Some(state) = &self.state {
-            let mut chips = div().flex().flex_wrap().gap(px(8.));
-            for instance in &state.instances {
-                let id = instance.id.clone();
-                let v = view.clone();
-                let chosen = self.selected.as_deref() == Some(&id);
-                chips = chips.child(
-                    ui::tile_button(
-                        t,
-                        gpui::SharedString::from(format!("content-instance-{id}")),
-                        chosen,
-                    )
-                    .disabled(busy)
-                    .w(px(256.))
-                    .justify_start()
-                    .gap(px(10.))
-                    .py(px(8.))
-                    .pl(px(8.))
-                    .pr(px(16.))
-                    .rounded(palette.radius)
-                    .child(ui::icon_tile(
-                        t,
-                        state.icons.get(&instance.id).map(String::as_str),
-                        32.,
-                        chosen,
-                    ))
-                    .child(ui::title_block(
-                        t,
-                        instance.display_name.clone(),
-                        Some(
-                            format!(
-                                "{} · {}",
-                                instance.minecraft_version,
-                                instance.platform_label()
-                            )
-                            .into(),
-                        ),
-                    ))
-                    .on_click(move |_, _, cx| {
-                        v.update(cx, |s, cx| {
-                            s.select(id.clone(), cx);
-                            cx.notify();
-                        });
-                    }),
-                );
-            }
-            root = root.child(
-                ui::card(t)
-                    .gap(px(12.))
-                    .child(ui::section_header(
-                        t,
-                        "Instance",
-                        Some("Choose which instance to manage.".into()),
-                    ))
-                    .child(chips),
             );
         }
         if self.selected.is_some() {
@@ -1436,13 +1489,7 @@ impl Render for Content {
                     .as_ref()
                     .and_then(|icon| self.icons.cache.image(&icon.key()));
                 let (meta, status_word, notes) = describe(&entry.details);
-                let badge = match entry.enabled {
-                    Some(true) => ui::status_badge(t, "Enabled", ui::Tone::Success),
-                    Some(false) => ui::status_badge(t, "Disabled", ui::Tone::Neutral),
-                    None => {
-                        ui::status_badge(t, status_word.unwrap_or("Unknown"), ui::Tone::Neutral)
-                    }
-                };
+                let disabled_row = entry.enabled == Some(false);
                 let mut line = vec![entry.file_name.as_str()];
                 line.extend(
                     meta.iter()
@@ -1450,7 +1497,8 @@ impl Render for Content {
                         .filter(|m| *m != "No provider provenance"),
                 );
                 let mut text =
-                    ui::title_block(t, entry.name.clone(), Some(line.join(" · ").into()));
+                    ui::title_block(t, entry.name.clone(), Some(line.join(" · ").into()))
+                        .when(disabled_row, |d| d.opacity(0.55));
                 for note in notes {
                     let warn = note.starts_with("Warning:");
                     text = text.child(
@@ -1474,31 +1522,34 @@ impl Render for Content {
                             .child(note.to_owned()),
                     );
                 }
-                let toggle = AuroraButton::new(
-                    gpui::SharedString::from(format!("toggle-{}", entry.id)),
-                    if entry.enabled == Some(true) {
-                        "Disable"
-                    } else {
-                        "Enable"
-                    },
-                )
-                .size(ButtonSize::Small)
-                .disabled(busy || !entry.toggle)
-                .on_click(move |_, _, cx| {
-                    v.update(cx, |s, cx| {
-                        s.toggle(&target, e.clone(), cx);
-                        cx.notify();
-                    });
-                });
+                let toggle = match entry.enabled {
+                    Some(enabled) => {
+                        AuroraToggle::new(gpui::SharedString::from(format!("toggle-{}", entry.id)))
+                            .label(format!("Enable {}", entry.name))
+                            .checked(enabled)
+                            .disabled(busy || !entry.toggle)
+                            .on_change(move |_, _, _, cx| {
+                                v.update(cx, |s, cx| {
+                                    s.toggle(&target, e.clone(), cx);
+                                    cx.notify();
+                                });
+                            })
+                            .into_any_element()
+                    }
+                    None => {
+                        ui::status_badge(t, status_word.unwrap_or("Unknown"), ui::Tone::Neutral)
+                            .into_any_element()
+                    }
+                };
                 let e = entry.clone();
                 let v = view.clone();
                 let target = self.target().unwrap();
-                let remove = AuroraButton::new(
+                let remove = icon_button(
+                    t,
                     gpui::SharedString::from(format!("remove-{}", entry.id)),
-                    "Remove…",
+                    "delete",
+                    format!("Remove {}", entry.name),
                 )
-                .size(ButtonSize::Small)
-                .variant(ButtonVariant::Ghost)
                 .disabled(busy || !entry.remove)
                 .on_click(move |_, _, cx| {
                     v.update(cx, |s, cx| {
@@ -1523,14 +1574,13 @@ impl Render for Content {
                             &palette,
                         ))
                         .child(text.flex_1())
-                        .child(div().flex().flex_shrink_0().w(px(92.)).child(badge))
                         .child(
                             div()
                                 .flex()
                                 .flex_shrink_0()
                                 .items_center()
-                                .gap(px(6.))
-                                .child(div().flex().justify_end().w(px(64.)).child(toggle))
+                                .gap(px(4.))
+                                .child(toggle)
                                 .child(remove),
                         ),
                 );

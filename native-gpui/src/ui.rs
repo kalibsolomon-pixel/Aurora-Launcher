@@ -316,9 +316,28 @@ pub fn setting_row(
         .py(px(14.))
         .when(!last, |this| this.border_b_1().border_color(t.border_subtle))
         .child(
-            title_block(t, title, description)
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.))
                 .flex_1()
-                .min_w(px(0.)),
+                .min_w(px(0.))
+                .child(
+                    div()
+                        .text_size(px(TEXT_BODY + 1.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(t.foreground)
+                        .child(title.into()),
+                )
+                // Descriptions wrap: settings copy must never be truncated.
+                .when_some(description, |this, description| {
+                    this.child(
+                        div()
+                            .text_size(px(TEXT_CAPTION))
+                            .text_color(t.muted_foreground)
+                            .child(description),
+                    )
+                }),
         )
 }
 
@@ -334,7 +353,7 @@ pub fn list_button(t: &AuroraTheme, id: impl Into<ElementId>, selected: bool) ->
         .gap(px(10.))
         .w_full()
         .px(px(8.))
-        .py(px(7.))
+        .py(px(5.))
         .rounded(t.radius)
         .when(selected, |b| b.bg(t.accent_soft))
         .hover(move |style| style.bg(hover))

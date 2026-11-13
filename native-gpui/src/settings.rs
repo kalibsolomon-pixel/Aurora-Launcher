@@ -1817,7 +1817,7 @@ const HUE_STOPS: [(u8, u8, u8); 7] = [
 /// Width of the right-hand control column every settings row shares.
 const CONTROL_WIDTH: f32 = 220.;
 /// The readable width of the page; cards fill it.
-const PAGE_MAX_WIDTH: f32 = 840.;
+const PAGE_MAX_WIDTH: f32 = 720.;
 
 /// A right-aligned slot for one row's control, so selects, sliders, toggles
 /// and buttons all hang off the same edge.

@@ -2734,6 +2734,7 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == total)
                     .id(("result", index))
                     .gap(px(14.))
+                    .py(px(10.))
                     .hover(move |style| style.bg(hover))
                     .child(artwork::tile(
                         ("art", index),
@@ -2806,11 +2807,7 @@ impl Render for Discover {
                                 let id = id.clone();
                                 AuroraButton::new(("details", index), "Details")
                                     .size(ButtonSize::Small)
-                                    .variant(if can_quick_install {
-                                        ButtonVariant::Ghost
-                                    } else {
-                                        ButtonVariant::Default
-                                    })
+                                    .variant(ButtonVariant::Subtle)
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.open_details(id.clone(), window, cx);
                                     }))
@@ -2820,7 +2817,7 @@ impl Render for Discover {
                                     let id = id.clone();
                                     AuroraButton::new(("install", index), "Install")
                                         .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Default)
+                                        .variant(ButtonVariant::Soft)
                                         .icon("download")
                                         .disabled(installed || row_busy || s.target.is_none())
                                         .on_click(cx.listener(move |this, _, _, cx| {

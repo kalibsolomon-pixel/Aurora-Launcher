@@ -33,7 +33,7 @@ use gpui::{
     Subscription, Window, div, prelude::*, px,
 };
 use gpui_kit::base::{
-    Dialog, Switch, SwitchThumb, SwitchTrack,
+    Dialog,
     input::{InputEvent, InputState},
 };
 use tokio::runtime::Handle;
@@ -969,7 +969,7 @@ impl Syncing {
 }
 
 /// Width the page's cards fill; the page itself scrolls in the app shell.
-const PAGE_MAX_WIDTH: f32 = 840.;
+const PAGE_MAX_WIDTH: f32 = 720.;
 /// Width of the right-hand control column in settings rows.
 const CONTROL_WIDTH: f32 = 220.;
 
@@ -1034,50 +1034,31 @@ fn section_card(t: &crate::theme::AuroraTheme) -> Div {
     ui::card(t).gap(px(0.)).pb(px(6.))
 }
 
-/// An inert toggle for a locked group: same switch semantics (role, checked
-/// state, accessible name, disabled) but a muted track and thumb with no
-/// accent, so a switched-off master reads as "paused" instead of "on".
+/// The read-only stand-in for a toggle while sync is off: a neutral text
+/// badge, so a paused group never shows a thumb that looks switched on.
 fn locked_toggle(
     t: &crate::theme::AuroraTheme,
     id: impl Into<gpui::ElementId>,
     label: impl Into<SharedString>,
     checked: bool,
 ) -> impl IntoElement {
-    let id = id.into();
-    Switch::new(id.clone())
-        .checked(checked)
-        .disabled(true)
-        .accessibility_label(label.into())
-        .relative()
-        .w(px(44.))
-        .h(px(36.))
+    let (id, label) = (id.into(), label.into());
+    div()
+        .id(id)
         .flex()
+        .flex_shrink_0()
         .items_center()
-        .justify_center()
-        .child(
-            SwitchTrack::new((id, "track"))
-                .checked(checked)
-                .disabled(true)
-                .relative()
-                .w(px(36.))
-                .h(px(20.))
-                .rounded_full()
-                .bg(t.control_hover)
-                .child(
-                    SwitchThumb::new(checked)
-                        .disabled(true)
-                        .absolute()
-                        .top(px(2.))
-                        .left(px(if checked { 18. } else { 2. }))
-                        .size(px(16.))
-                        .rounded_full()
-                        .bg(if checked {
-                            t.muted_foreground
-                        } else {
-                            t.subtle_foreground
-                        }),
-                ),
-        )
+        .justify_end()
+        .h(px(36.))
+        .aria_label(format!(
+            "{label}: {}",
+            if checked { "included" } else { "not included" }
+        ))
+        .child(ui::badge(
+            t,
+            if checked { "Included" } else { "Not included" },
+            ui::Tone::Neutral,
+        ))
 }
 
 /// A right-aligned slot for one row's control.
@@ -1371,13 +1352,11 @@ impl Render for Syncing {
                             .label(row.name.clone())
                             .checked(row.checked)
                             .disabled(child_locked)
-                            .on_change(
-                                move |next: bool, _, _, cx| {
-                                    toggle_view.update(cx, |this, cx| {
-                                        this.set_participant_checked(toggle_id.clone(), next, cx)
-                                    });
-                                },
-                            )
+                            .on_change(move |next: bool, _, _, cx| {
+                                toggle_view.update(cx, |this, cx| {
+                                    this.set_participant_checked(toggle_id.clone(), next, cx)
+                                });
+                            })
                             .into_any_element()
                         }),
                 );

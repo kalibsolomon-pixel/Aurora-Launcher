@@ -2062,10 +2062,21 @@ impl HomeWidgets {
     }
 
     fn start_enrich(&mut self, cx: &mut Context<Self>, ids: Vec<String>) {
-        let Some(host) = self.host.clone().filter(|_| !crate::showcase()) else {
+        let serial = self.core.data_serial;
+        if crate::showcase() {
+            // Design-review mode has no network: settle immediately with an
+            // empty result through the normal reply path so the widget leaves
+            // its loading state.
+            self.run(
+                cx,
+                async move { Ok(Vec::<api::ServerPresentation>::new()) },
+                move |view, result, cx| view.receive(Reply::Enrich(serial, result), cx),
+            );
+            return;
+        }
+        let Some(host) = self.host.clone() else {
             return;
         };
-        let serial = self.core.data_serial;
         self.run(
             cx,
             async move { api::server_presentations(host, ids).await },
@@ -3572,6 +3583,7 @@ impl HomeWidgets {
                                 .child(
                                     AuroraButton::new(format!("server-play-{}", row.id), "Play")
                                         .size(ButtonSize::Small)
+                                        .variant(ButtonVariant::Soft)
                                         .icon("play_arrow")
                                         .disabled(!playable)
                                         .on_click(cx.listener(move |this, _, _, cx| {
@@ -3655,6 +3667,7 @@ impl HomeWidgets {
                                 .child(
                                     AuroraButton::new(format!("world-play-{}", row.id), "Play")
                                         .size(ButtonSize::Small)
+                                        .variant(ButtonVariant::Soft)
                                         .icon("play_arrow")
                                         .disabled(!playable)
                                         .on_click(cx.listener(move |this, _, _, cx| {
@@ -4147,10 +4160,10 @@ mod tests {
         assert_eq!(responsive_columns(0.), 1);
         assert_eq!(responsive_columns(163.), 1);
         assert_eq!(responsive_columns(164.), 1);
-        assert_eq!(responsive_columns(805.), 4);
-        assert_eq!(responsive_columns(806.), 5);
-        assert_eq!(responsive_columns(969.), 5);
-        assert_eq!(responsive_columns(970.), 6);
+        assert_eq!(responsive_columns(813.), 4);
+        assert_eq!(responsive_columns(814.), 5);
+        assert_eq!(responsive_columns(979.), 5);
+        assert_eq!(responsive_columns(980.), 6);
         assert_eq!(responsive_columns(10_000.), 6);
     }
 

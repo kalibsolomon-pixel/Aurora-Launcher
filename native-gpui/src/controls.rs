@@ -48,6 +48,11 @@ pub enum ButtonVariant {
     Ghost,
     /// Sidebar navigation: full width, left aligned, accent wash when selected.
     Nav,
+    /// Accent-tinted secondary action for repeated per-row actions (Install,
+    /// Play) where a solid primary per row would be too loud.
+    Soft,
+    /// Quiet tertiary text action (Details, Cancel in dense rows).
+    Subtle,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -151,6 +156,13 @@ impl RenderOnce for AuroraButton {
             // Transparent at rest so translucent Borealis surfaces show through.
             ButtonVariant::Ghost => (clear, t.foreground, t.control, clear),
             ButtonVariant::Nav => (clear, t.muted_foreground, t.control, clear),
+            ButtonVariant::Soft => (
+                t.accent_soft,
+                t.ring,
+                Hsla { a: 0.24, ..t.ring },
+                clear,
+            ),
+            ButtonVariant::Subtle => (clear, t.muted_foreground, t.control, clear),
         };
         let (height, pad, text, icon_size) = match self.size {
             ButtonSize::Small => (28., 10., 12., 14.),

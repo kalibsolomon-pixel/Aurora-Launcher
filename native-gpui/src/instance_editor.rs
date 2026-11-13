@@ -1875,7 +1875,13 @@ fn edited_config(
 /// short fields match it and long text fields get a wider column; every
 /// control is right-aligned to the same edge.
 const SHORT_W: f32 = 220.;
-const WIDE_W: f32 = 300.;
+const WIDE_W: f32 = 220.;
+/// Widest a stacked (full-width) text field grows.
+const STACK_W: f32 = 420.;
+/// The instance list column of the master-detail layout.
+const LIST_W: f32 = 272.;
+/// Sidebar plus the page gutters, subtracted from the window width.
+const PAGE_CHROME: f32 = 276.;
 /// Unwrapped text reports its full line as its minimum width, so free text is
 /// capped: it wraps here instead of widening the whole page.
 const TEXT_MAX: f32 = 420.;
@@ -1900,9 +1906,39 @@ fn card_head(
         .when_some(action, |this, action| this.child(action))
 }
 
-/// A settings row whose text wraps instead of widening the page (the shared
-/// `ui::setting_row` keeps long descriptions on one line, so a long hint would
-/// push the whole page past the window).
+/// A setting's title and description. Text wraps instead of widening the page
+/// (the shared `ui::setting_row` keeps long descriptions on one line, so a long
+/// hint would push the whole page past the window).
+fn label_block(
+    t: &AuroraTheme,
+    title: impl Into<SharedString>,
+    description: Option<SharedString>,
+) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(3.))
+        .flex_1()
+        .min_w(px(0.))
+        .child(
+            div()
+                .text_size(px(ui::TEXT_BODY + 1.))
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(t.foreground)
+                .child(title.into()),
+        )
+        .when_some(description, |this, text| {
+            this.child(
+                div()
+                    .max_w(px(TEXT_MAX))
+                    .text_size(px(ui::TEXT_CAPTION))
+                    .text_color(t.muted_foreground)
+                    .child(text),
+            )
+        })
+}
+
+/// A settings row: label left, control right.
 fn setting(
     t: &AuroraTheme,
     title: impl Into<SharedString>,
@@ -1913,35 +1949,12 @@ fn setting(
         .flex()
         .items_center()
         .justify_between()
-        .gap(px(24.))
+        .gap(px(20.))
         .py(px(14.))
         .when(!last, |this| {
             this.border_b_1().border_color(t.border_subtle)
         })
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(3.))
-                .flex_1()
-                .min_w(px(0.))
-                .child(
-                    div()
-                        .text_size(px(ui::TEXT_BODY + 1.))
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(t.foreground)
-                        .child(title.into()),
-                )
-                .when_some(description, |this, text| {
-                    this.child(
-                        div()
-                            .max_w(px(TEXT_MAX))
-                            .text_size(px(ui::TEXT_CAPTION))
-                            .text_color(t.muted_foreground)
-                            .child(text),
-                    )
-                }),
-        )
+        .child(label_block(t, title, description))
 }
 
 /// A name with its detail line, wrapping rather than widening the page.
@@ -1969,32 +1982,50 @@ fn name_block(t: &AuroraTheme, title: String, detail: String) -> Div {
 
 /// Settings rows with a fixed-width control column and correct hairlines.
 fn rows(t: &AuroraTheme, items: Vec<(&'static str, Option<String>, gpui::AnyElement)>) -> Div {
+    rows_with(
+        t,
+        items
+            .into_iter()
+            .map(|(title, description, control)| (title, description, control, false))
+            .collect(),
+    )
+}
+
+/// Like [`rows`]; a `true` flag stacks that row's control full-width beneath
+/// its label (long text fields in a narrow column).
+fn rows_with(
+    t: &AuroraTheme,
+    items: Vec<(&'static str, Option<String>, gpui::AnyElement, bool)>,
+) -> Div {
     let count = items.len();
-    div()
-        .flex()
-        .flex_col()
-        .children(
-            items
-                .into_iter()
-                .enumerate()
-                .map(|(ix, (title, description, control))| {
-                    setting(
-                        t,
-                        title,
-                        description.map(SharedString::from),
-                        ix + 1 == count,
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_shrink_0()
-                            .items_center()
-                            .justify_end()
-                            .gap(px(8.))
-                            .child(control),
-                    )
-                }),
-        )
+    div().flex().flex_col().children(items.into_iter().enumerate().map(
+        |(ix, (title, description, control, stacked))| {
+            let last = ix + 1 == count;
+            let description = description.map(SharedString::from);
+            if stacked {
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(10.))
+                    .py(px(14.))
+                    .when(!last, |this| {
+                        this.border_b_1().border_color(t.border_subtle)
+                    })
+                    .child(label_block(t, title, description))
+                    .child(div().w_full().child(control))
+            } else {
+                setting(t, title, description, last).child(
+                    div()
+                        .flex()
+                        .flex_shrink_0()
+                        .items_center()
+                        .justify_end()
+                        .gap(px(8.))
+                        .child(control),
+                )
+            }
+        },
+    ))
 }
 
 /// A form card: header on top, rows beneath.
@@ -2077,6 +2108,16 @@ fn hint_note(t: &AuroraTheme, text: String) -> Div {
                 .text_color(t.muted_foreground)
                 .child(text),
         )
+}
+
+/// Whether an instance needs the user's attention (install or recovery).
+fn needs_attention(instance: &api::InstanceSummary) -> bool {
+    needs_install(instance)
+        || instance.state != "ready"
+        || instance
+            .recovery
+            .as_ref()
+            .is_some_and(|recovery| recovery.status != "completed")
 }
 
 /// Status pills for an instance: active, loader extras and install state.
@@ -2197,9 +2238,19 @@ impl Render for InstanceEditor {
         }
         let draft_clean = self.draft_matches_base(cx);
         let t = crate::theme::theme(cx).clone();
-        let mut root = div().flex().flex_col().gap(px(ui::PAGE_GAP));
+        // The page column sizes itself to its widest content, so give the
+        // master-detail a definite width: the window minus the sidebar and the
+        // page gutters. Everything inside then wraps instead of widening it.
+        let page_width = (window.viewport_size().width - px(PAGE_CHROME)).max(px(560.));
+        let mut root = div()
+            .flex()
+            .flex_col()
+            .w(page_width)
+            .min_w(px(0.))
+            .gap(px(ui::PAGE_GAP));
 
-        // ---- The instance list -------------------------------------------
+        // ---- The instance list (master column) -----------------------------
+        let mut list_col: Option<Div> = None;
         if let Some(state) = &self.state {
             if state.instances.is_empty() {
                 root = root.child(ui::empty_state(
@@ -2210,21 +2261,22 @@ impl Render for InstanceEditor {
                 ));
             } else {
                 let count = state.instances.len();
-                let mut list = ui::list_card(&t).child(
+                let mut list = ui::card(&t).p(px(8.)).gap(px(2.)).child(
                     div()
                         .flex()
                         .items_center()
                         .justify_between()
-                        .gap(px(16.))
-                        .px(px(16.))
-                        .py(px(14.))
-                        .border_b_1()
-                        .border_color(t.border_subtle)
-                        .child(ui::section_header(
-                            &t,
-                            "Your instances",
-                            Some("Choose an instance to edit.".into()),
-                        ))
+                        .gap(px(8.))
+                        .px(px(8.))
+                        .pt(px(6.))
+                        .pb(px(8.))
+                        .child(
+                            div()
+                                .text_size(px(ui::TEXT_BODY))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(t.foreground)
+                                .child("Your instances"),
+                        )
                         .child(ui::caption(
                             &t,
                             if count == 1 {
@@ -2234,55 +2286,98 @@ impl Render for InstanceEditor {
                             },
                         )),
                 );
-                for (ix, instance) in state.instances.iter().enumerate() {
+                for instance in state.instances.iter() {
                     let id = instance.id.clone();
                     let view = this.clone();
                     let selected = self.selected.as_deref() == Some(&id);
-                    let last = ix + 1 == count;
-                    let hover = t.control_hover;
                     let active = state.config.selected_instance_id.as_deref() == Some(&id);
                     let label = format!("{} — {}", instance.display_name, instance.subtitle());
                     let detail = format!(
-                        "Minecraft {} · {}",
+                        "{} · {}",
                         instance.minecraft_version,
                         instance.platform_label()
                     );
                     list = list.child(
-                        Button::new(SharedString::from(format!("instance-{}", id)))
+                        ui::list_button(&t, SharedString::from(format!("instance-{}", id)), selected)
                             .accessibility_label(label)
                             .disabled(busy)
-                            .selected(selected)
-                            .w_full()
-                            .flex()
-                            .items_center()
-                            .gap(px(12.))
-                            .px(px(16.))
-                            .py(px(12.))
-                            .bg(if selected {
-                                t.accent_soft
-                            } else {
-                                gpui::transparent_black()
-                            })
-                            .when(!last, |row| row.border_b_1().border_color(t.border_subtle))
-                            .when(!selected, |row| row.hover(move |style| style.bg(hover)))
-                            .focus(move |style| style.bg(hover))
                             .on_click(move |_, window, cx| {
                                 view.update(cx, |v, cx| v.choose(id.clone(), window, cx));
                             })
                             .child(ui::icon_tile(
                                 &t,
                                 icon_for(&state.icons, &instance.id),
-                                38.,
+                                32.,
                                 selected,
                             ))
-                            .child(name_block(&t, instance.display_name.clone(), detail))
-                            .child(div().flex_1())
-                            .child(instance_badges(&t, instance, active, false)),
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(1.))
+                                    .flex_1()
+                                    .min_w(px(0.))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(6.))
+                                            .child(
+                                                div()
+                                                    .flex_1()
+                                                    .min_w(px(0.))
+                                                    .truncate()
+                                                    .text_size(px(ui::TEXT_BODY))
+                                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                                    .text_color(t.foreground)
+                                                    .child(instance.display_name.clone()),
+                                            )
+                                            .when(needs_attention(instance), |row| {
+                                                row.child(symbols::icon(
+                                                    Some("warning"),
+                                                    px(13.),
+                                                    t.warning,
+                                                ))
+                                            })
+                                            .when(active, |row| {
+                                                row.child(
+                                                    div()
+                                                        .flex()
+                                                        .flex_shrink_0()
+                                                        .items_center()
+                                                        .gap(px(4.))
+                                                        .text_size(px(ui::TEXT_MICRO))
+                                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                                        .text_color(t.ring)
+                                                        .child(
+                                                            div()
+                                                                .size(px(6.))
+                                                                .rounded_full()
+                                                                .bg(t.ring),
+                                                        )
+                                                        .child("Active"),
+                                                )
+                                            }),
+                                    )
+                                    .child(
+                                        div()
+                                            .truncate()
+                                            .text_size(px(ui::TEXT_CAPTION))
+                                            .text_color(t.muted_foreground)
+                                            .child(detail),
+                                    ),
+                            ),
                     );
                 }
-                root = root.child(list);
+                list_col = Some(div().flex_shrink_0().w(px(LIST_W)).child(list));
             }
         }
+        let mut detail = div()
+            .flex()
+            .flex_col()
+            .gap(px(16.))
+            .flex_1()
+            .min_w(px(0.));
 
         // ---- The selected instance ---------------------------------------
         if let Some(id) = self.selected.clone() {
@@ -2309,81 +2404,97 @@ impl Render for InstanceEditor {
                 button
             };
 
-            // Overview: who this is and whether it is in a good state.
+            // Header: who this is and whether it is in a good state. The
+            // version and loader live in the list, so they are not repeated.
             if let Some(instance) = &instance {
-                let attention = needs_install(instance)
-                    || instance.state != "ready"
-                    || instance
-                        .recovery
-                        .as_ref()
-                        .is_some_and(|recovery| recovery.status != "completed");
+                let attention = needs_attention(instance);
                 let (icon, tone) = if attention {
                     ("warning", t.warning)
                 } else {
                     ("check_circle", t.success)
                 };
-                root = root.child(
-                    ui::card(&t)
+                let note = instance_note(instance);
+                let mut head = ui::card(&t).gap(px(14.)).child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(14.))
+                        .child(ui::icon_tile(&t, stored_icon.as_deref(), 44., true))
                         .child(
                             div()
                                 .flex()
-                                .flex_wrap()
-                                .items_center()
-                                .gap(px(16.))
-                                .child(ui::icon_tile(&t, stored_icon.as_deref(), 52., true))
+                                .flex_col()
+                                .gap(px(5.))
+                                .flex_1()
+                                .min_w(px(0.))
                                 .child(
                                     div()
-                                        .flex()
-                                        .flex_col()
-                                        .gap(px(4.))
-                                        .flex_1()
-                                        .min_w(px(220.))
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .items_center()
-                                                .gap(px(10.))
-                                                .child(
-                                                    div()
-                                                        .min_w(px(0.))
-                                                        .max_w(px(TEXT_MAX))
-                                                        .text_size(px(20.))
-                                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                                        .text_color(t.foreground)
-                                                        .child(instance.display_name.clone()),
-                                                )
-                                                .child(instance_badges(&t, instance, active, true)),
-                                        )
-                                        .child(ui::muted(&t, instance.subtitle())),
+                                        .min_w(px(0.))
+                                        .max_w(px(TEXT_MAX))
+                                        .text_size(px(18.))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(t.foreground)
+                                        .child(instance.display_name.clone()),
                                 )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_shrink_0()
-                                        .gap(px(8.))
-                                        .child(action_button(
-                                            "folder",
-                                            "Open folder",
-                                            Some("folder_open"),
-                                            ButtonVariant::Default,
-                                        ))
-                                        .when(!active, |buttons| {
-                                            buttons.child(action_button(
-                                                "select",
-                                                "Make active",
-                                                None,
-                                                ButtonVariant::Default,
-                                            ))
-                                        }),
-                                ),
+                                .child(instance_badges(&t, instance, active, false))
+                                .when(!attention, |col| {
+                                    col.child(
+                                        div()
+                                            .flex()
+                                            .items_start()
+                                            .gap(px(6.))
+                                            .child(div().pt(px(1.)).child(symbols::icon(
+                                                Some(icon),
+                                                px(14.),
+                                                tone,
+                                            )))
+                                            .child(
+                                                div()
+                                                    .flex_1()
+                                                    .min_w(px(0.))
+                                                    .text_size(px(ui::TEXT_CAPTION))
+                                                    .text_color(t.muted_foreground)
+                                                    .child(note.clone()),
+                                            ),
+                                    )
+                                }),
                         )
-                        .child(callout(&t, icon, tone, attention, instance_note(instance))),
+                        .child(
+                            div()
+                                .flex()
+                                .flex_shrink_0()
+                                .gap(px(8.))
+                                .child(
+                                    action_button(
+                                        "folder",
+                                        "Open folder",
+                                        Some("folder_open"),
+                                        ButtonVariant::Default,
+                                    )
+                                    .size(ButtonSize::Small),
+                                )
+                                .when(!active, |buttons| {
+                                    buttons.child(
+                                        action_button(
+                                            "select",
+                                            "Make active",
+                                            None,
+                                            ButtonVariant::Soft,
+                                        )
+                                        .size(ButtonSize::Small),
+                                    )
+                                }),
+                        ),
                 );
+                if attention {
+                    head = head.child(callout(&t, icon, tone, true, note));
+                }
+                detail = detail.child(head);
             }
 
             // General: name and icon.
             let icon_view = this.clone();
-            root = root.child(form_card(
+            detail = detail.child(form_card(
                 &t,
                 card_head(&t, "General", None, None),
                 rows(
@@ -2626,14 +2737,14 @@ impl Render for InstanceEditor {
                         .child("No supported loader versions for this Minecraft version."),
                 );
             }
-            root = root.child(game_card);
+            detail = detail.child(game_card);
 
             // Memory and window.
-            root = root.child(
+            detail = detail.child(
                 ui::card(&t)
                     .gap(px(4.))
                     .child(card_head(&t, "Memory and window", None, None))
-                    .child(rows(
+                    .child(rows_with(
                         &t,
                         vec![
                             (
@@ -2643,17 +2754,20 @@ impl Render for InstanceEditor {
                                     .w(px(SHORT_W))
                                     .child(AuroraInput::new(&self.memory).label("Memory (MiB)"))
                                     .into_any_element(),
+                                false,
                             ),
                             (
                                 "Additional JVM arguments",
                                 Some("Extra flags passed to Java when the game starts.".into()),
                                 div()
-                                    .w(px(WIDE_W))
+                                    .w_full()
+                                    .max_w(px(STACK_W))
                                     .child(
                                         AuroraInput::new(&self.arguments)
                                             .label("Additional JVM arguments"),
                                     )
                                     .into_any_element(),
+                                true,
                             ),
                             (
                                 "Window size",
@@ -2664,7 +2778,8 @@ impl Render for InstanceEditor {
                                     .flex()
                                     .items_center()
                                     .gap(px(8.))
-                                    .w(px(WIDE_W))
+                                    .w_full()
+                                    .max_w(px(STACK_W))
                                     .child(
                                         div().flex_1().min_w(px(0.)).child(
                                             AuroraInput::new(&self.width)
@@ -2684,6 +2799,7 @@ impl Render for InstanceEditor {
                                         ),
                                     )
                                     .into_any_element(),
+                                true,
                             ),
                         ],
                     ))
@@ -2694,22 +2810,24 @@ impl Render for InstanceEditor {
             );
 
             // Java. The managed runtime is read when validating or after an install.
-            root = root.child(form_card(
+            detail = detail.child(form_card(
                 &t,
                 card_head(&t, "Java", None, None),
-                rows(
+                rows_with(
                     &t,
                     vec![
                         (
                             "Custom Java path",
                             Some("Leave blank to use the managed runtime.".into()),
                             div()
-                                .w(px(WIDE_W))
+                                .w_full()
+                                .max_w(px(STACK_W))
                                 .child(
                                     AuroraInput::new(&self.java)
                                         .label("Custom Java path (blank for managed)"),
                                 )
                                 .into_any_element(),
+                            true,
                         ),
                         (
                             "Java runtime",
@@ -2728,6 +2846,7 @@ impl Render for InstanceEditor {
                                 ButtonVariant::Default,
                             )
                             .into_any_element(),
+                            false,
                         ),
                     ],
                 ),
@@ -2736,7 +2855,7 @@ impl Render for InstanceEditor {
             // The one primary action of the configuration form.
             let revert_view = this.clone();
             let revert_id = id.clone();
-            root = root.child(
+            detail = detail.child(
                 ui::card(&t)
                     .flex_row()
                     .items_center()
@@ -2803,7 +2922,7 @@ impl Render for InstanceEditor {
                 None => String::new(),
             };
             let aurora_view = this.clone();
-            root = root.child(form_card(
+            detail = detail.child(form_card(
                 &t,
                 card_head(&t, "Aurora Client", None, None),
                 rows(
@@ -2832,7 +2951,7 @@ impl Render for InstanceEditor {
 
             // Installation and recovery.
             let recovery_view = this.clone();
-            root = root.child(form_card(
+            detail = detail.child(form_card(
                 &t,
                 card_head(&t, "Installation and recovery", None, None),
                 rows(
@@ -2887,7 +3006,7 @@ impl Render for InstanceEditor {
 
             // Danger zone, kept apart from everything else.
             let delete_view = this.clone();
-            root = root.child(
+            detail = detail.child(
                 ui::card(&t)
                     .gap(px(4.))
                     .border_color(Hsla {
@@ -2919,6 +3038,19 @@ impl Render for InstanceEditor {
             );
         } else if !self.message.is_empty() {
             root = root.child(callout(&t, "info", t.ring, false, self.message.clone()));
+        }
+
+        if let Some(list) = list_col {
+            root = root.child(
+                div()
+                    .flex()
+                    .items_start()
+                    .w_full()
+                    .min_w(px(0.))
+                    .gap(px(ui::PAGE_GAP))
+                    .child(list)
+                    .child(detail),
+            );
         }
 
         // ---- Dialogs ------------------------------------------------------

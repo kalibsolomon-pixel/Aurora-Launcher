@@ -1192,6 +1192,7 @@ impl Render for Accounts {
                                     )),
                                     "Use",
                                 )
+                                .variant(ButtonVariant::Soft)
                                 .size(ButtonSize::Small)
                                 .icon("check")
                                 .disabled(busy)
@@ -1240,7 +1241,13 @@ impl Render for Accounts {
                     list = list.child(
                         ui::row(&palette, index + 1 == count)
                             .id(gpui_kit::SharedString::from(format!("account-row-{id}")))
-                            .when(selected, |row| row.bg(palette.accent_soft))
+                            .when(selected, |row| {
+                                // Quiet wash: the Active badge carries the state.
+                                row.bg(Hsla {
+                                    a: palette.accent_soft.a * 0.5,
+                                    ..palette.accent_soft
+                                })
+                            })
                             .child(avatar)
                             .child(
                                 div()

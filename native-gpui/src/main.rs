@@ -1734,7 +1734,7 @@ impl Launcher {
                         .disabled(self.controls_blocked())
                         .child(instance_icon(
                             stored_icon(&launcher.icons, &item.id),
-                            34.,
+                            30.,
                             chosen,
                             palette,
                         ))
@@ -1964,7 +1964,7 @@ impl Render for Launcher {
             .gap(px(ui::PAGE_GAP))
             .px(px(32.))
             .pt(px(4.))
-            .pb(px(32.))
+            .pb(px(40.))
             .flex_1()
             .id("content")
             .overflow_y_scroll();
@@ -2193,7 +2193,39 @@ impl Render for Launcher {
                     .when(chrome::custom(), |column| {
                         column.child(chrome::title_bar(window, cx, &palette))
                     })
-                    .child(content)
+                    .child({
+                        // Soft edges tell the reader the page scrolls instead of
+                        // cutting rows off at the window border.
+                        let fade = |angle: f32| {
+                            gpui::linear_gradient(
+                                angle,
+                                gpui::linear_color_stop(
+                                    gpui::Hsla { a: 0.0, ..palette.background },
+                                    0.,
+                                ),
+                                gpui::linear_color_stop(
+                                    gpui::Hsla { a: 0.92, ..palette.background },
+                                    1.,
+                                ),
+                            )
+                        };
+                        div()
+                            .relative()
+                            .flex_1()
+                            .min_h(px(0.))
+                            .flex()
+                            .flex_col()
+                            .child(content)
+                            .child(
+                                div()
+                                    .absolute()
+                                    .bottom_0()
+                                    .left_0()
+                                    .right_0()
+                                    .h(px(40.))
+                                    .bg(fade(180.)),
+                            )
+                    })
                     .when_some(
                         self.load_error
                             .as_ref()
