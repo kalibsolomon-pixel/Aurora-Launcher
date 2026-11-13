@@ -26,6 +26,7 @@ mod skins;
 mod symbols;
 mod syncing;
 mod theme;
+mod ui;
 
 #[allow(dead_code)]
 #[path = "../../native/src/api.rs"]
@@ -44,7 +45,7 @@ use aurora_launcher_lib::host::{APPLICATION_IDENTIFIER, Host, platform_local_dat
 use borealis::Borealis;
 use client_updates::{ClientUpdates, ClientUpdatesEvent};
 use content::{Content, ContentEvent};
-use controls::{AuroraButton, ButtonVariant};
+use controls::{AuroraButton, ButtonSize, ButtonVariant};
 use discover::{Discover, DiscoverEvent};
 use downloads::{Downloads, DownloadsEvent};
 use gpui::{
@@ -96,6 +97,22 @@ enum Message {
 /// decision that still says running/starting is re-read a bounded number of
 /// times (same limit and delay as the Slint host).
 const READINESS_RECHECK_LIMIT: u8 = 5;
+
+/// Design-review mode: a disposable seeded data root, no update check, sync,
+/// server status or readiness network work. Set once before the window opens.
+static SHOWCASE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn showcase() -> bool {
+    SHOWCASE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// `--showcase <dir>`: the directory must carry the disposable marker so the
+/// owner's managed data can never be opened this way.
+fn showcase_root() -> Option<PathBuf> {
+    let mut args = std::env::args().skip_while(|a| a != "--showcase").skip(1);
+    let root = PathBuf::from(args.next()?);
+    root.join("AURORA_DISPOSABLE_DIAGNOSTIC").is_file().then_some(root)
+}
 const READINESS_RECHECK_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
 
 /// A readiness decision that claims a live process while the supervised
@@ -242,7 +259,7 @@ fn instance_icon(
     palette: &theme::AuroraTheme,
 ) -> impl IntoElement {
     let ink = if active {
-        palette.accent
+        palette.ring
     } else {
         palette.muted_foreground
     };
@@ -253,9 +270,22 @@ fn instance_icon(
         .justify_center()
         .w(px(size))
         .h(px(size))
-        .rounded(px(size * 0.26))
-        .bg(palette.surface_hover)
-        .child(symbols::icon(name, px(size * 0.58), ink))
+        .rounded(px((size * 0.24).min(28.)))
+        .when(active, |tile| {
+            tile.bg(gpui::linear_gradient(
+                145.,
+                gpui::linear_color_stop(gpui::Hsla { a: 0.30, ..palette.ring }, 0.),
+                gpui::linear_color_stop(gpui::Hsla { a: 0.08, ..palette.ring }, 1.),
+            ))
+        })
+        .when(!active, |tile| tile.bg(palette.control))
+        .border_1()
+        .border_color(if active {
+            gpui::Hsla { a: 0.35, ..palette.ring }
+        } else {
+            palette.border_subtle
+        })
+        .child(symbols::icon(name, px(size * 0.54), ink))
 }
 
 /// How a load request was scheduled.
@@ -493,7 +523,7 @@ impl Launcher {
     }
 
     fn initialize_sync(&self) {
-        let Some(host) = self.host.clone() else {
+        let Some(host) = self.host.clone().filter(|_| !showcase()) else {
             return;
         };
         let tx = self.tx.clone();
@@ -590,7 +620,7 @@ impl Launcher {
     /// check and no message is ever sent. The core runs this check once per
     /// process, so it is requested once here as well.
     fn start_update_check(&mut self) {
-        if self.update_check_started {
+        if self.update_check_started || showcase() {
             return;
         }
         let Some(host) = self.host.clone() else {
@@ -655,6 +685,28 @@ impl Launcher {
         let serial = self.serial;
         let process_serial = self.process_serial;
         let tx = self.tx.clone();
+        if showcase() {
+            let decision = api::PlayReadiness {
+                ready: true,
+                can_prepare: false,
+                instance_id: id,
+                account_name: self.accounts.selected_account_id.as_ref().and_then(|_| {
+                    self.accounts.accounts.first().map(|a| a.minecraft_name.clone())
+                }),
+                account_id: account,
+                instance_status: "ready".into(),
+                runtime_status: "ready".into(),
+                account_status: "ready".into(),
+                process_status: "idle".into(),
+                blockers: Vec::new(),
+            };
+            self.rt.spawn(async move {
+                let _ = tx
+                    .send(Message::Readiness(serial, process_serial, Ok(decision), None))
+                    .await;
+            });
+            return;
+        }
         self.rt.spawn(async move {
             let result = guarded(api::play_readiness(host, id.clone(), account)).await;
             let process = guarded(api::launch_state(id)).await.ok();
@@ -1464,27 +1516,74 @@ impl Launcher {
         let instance = selected
             .as_deref()
             .and_then(|id| launcher.instances.iter().find(|i| i.id == id));
-        let mut card = div()
+        let t = palette;
+        let mut details = div()
             .flex()
             .flex_col()
-            .gap_2()
-            .child(div().text_2xl().child(instance.map_or_else(
-                || "Choose an instance".to_owned(),
-                |i| i.display_name.clone(),
-            )));
+            .gap(px(12.))
+            .flex_1()
+            .min_w(px(0.))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(ui::eyebrow(t, "SELECTED INSTANCE"))
+                    .child(
+                        div()
+                            .text_size(px(ui::TEXT_DISPLAY))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(t.foreground)
+                            .text_ellipsis()
+                            .child(instance.map_or_else(
+                                || "Choose an instance".to_owned(),
+                                |i| i.display_name.clone(),
+                            )),
+                    ),
+            );
         if let Some(instance) = instance {
-            card = card.child(div().text_sm().text_color(muted).child(instance.subtitle()));
+            let mut badges = div()
+                .flex()
+                .flex_wrap()
+                .gap(px(6.))
+                .child(ui::badge(
+                    t,
+                    format!("Minecraft {}", instance.minecraft_version),
+                    ui::Tone::Neutral,
+                ))
+                .child(ui::badge(t, instance.platform_label(), ui::Tone::Neutral));
+            if let Some(aurora) = &instance.aurora {
+                badges = badges.child(ui::badge(
+                    t,
+                    format!("Aurora {}", aurora.version),
+                    ui::Tone::Accent,
+                ));
+            }
+            if let Some(pack) = &instance.pack {
+                badges = badges.child(ui::badge(
+                    t,
+                    format!("{} {}", pack.name, pack.pack_version),
+                    ui::Tone::Neutral,
+                ));
+            }
+            if let Some((label, tone)) = self.readiness_badge(&instance.id) {
+                badges = badges.child(ui::status_badge(t, label, tone));
+            }
+            details = details.child(badges);
         }
         if let Some(id) = selected.clone() {
             let play_id = id.clone();
-            card = card.child(
+            details = details.child(
                 div()
                     .flex()
                     .items_center()
-                    .gap_3()
+                    .gap(px(10.))
+                    .pt(px(4.))
                     .child(
                         self.button("play", self.play_label(&id))
                             .variant(ButtonVariant::Primary)
+                            .size(ButtonSize::Large)
+                            .icon("play_arrow")
                             .disabled(!self.can_play(&id))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.action("play", play_id.clone(), cx);
@@ -1493,7 +1592,8 @@ impl Launcher {
                     )
                     .child(
                         self.button("instance-settings", "Instance settings")
-                            .variant(ButtonVariant::Ghost)
+                            .size(ButtonSize::Large)
+                            .icon("tune")
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.open_page(3, window, cx);
                                 cx.notify();
@@ -1501,7 +1601,7 @@ impl Launcher {
                     ),
             );
         }
-        let card_icon = instance.map(|instance| {
+        let hero_icon = instance.map(|instance| {
             instance_icon(
                 stored_icon(&launcher.icons, &instance.id),
                 112.,
@@ -1513,9 +1613,18 @@ impl Launcher {
             div()
                 .flex()
                 .items_center()
-                .gap_4()
-                .children(card_icon)
-                .child(card.flex_1())
+                .gap(px(28.))
+                .p(px(28.))
+                .rounded(px(16.))
+                .bg(gpui::linear_gradient(
+                    100.,
+                    gpui::linear_color_stop(t.raised, 0.),
+                    gpui::linear_color_stop(t.card, 1.),
+                ))
+                .border_1()
+                .border_color(t.border_subtle)
+                .children(hero_icon)
+                .child(details)
                 .into_any_element(),
         );
         if let Some(id) = selected.clone() {
@@ -1540,7 +1649,7 @@ impl Launcher {
                     _ => String::new(),
                 };
                 if !label.is_empty() {
-                    out.push(div().child(label).into_any_element());
+                    out.push(ui::muted(t, label).into_any_element());
                 }
             }
             if self.readiness.is_none()
@@ -1568,12 +1677,19 @@ impl Launcher {
                     div()
                         .flex()
                         .items_center()
-                        .gap_3()
+                        .gap(px(12.))
+                        .px(px(16.))
+                        .py(px(12.))
+                        .rounded(t.radius_lg)
+                        .bg(gpui::Hsla { a: 0.08, ..t.warning })
+                        .border_1()
+                        .border_color(gpui::Hsla { a: 0.25, ..t.warning })
+                        .child(symbols::icon(Some("warning"), px(18.), t.warning))
                         .child(
                             div()
                                 .flex_1()
-                                .text_sm()
-                                .text_color(muted)
+                                .text_size(px(ui::TEXT_BODY))
+                                .text_color(t.foreground)
                                 .child(blocker.message.clone()),
                         )
                         .children(action_button)
@@ -1603,45 +1719,47 @@ impl Launcher {
             }
         }
         if launcher.instances.len() > 1 || selected.is_none() {
-            let mut tiles = div().flex().flex_wrap().gap_2();
+            let mut tiles = div().flex().flex_wrap().gap(px(12.));
             for (i, item) in launcher.instances.iter().enumerate() {
                 let id = item.id.clone();
                 let chosen = selected.as_deref() == Some(item.id.as_str());
                 tiles = tiles.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
+                    ui::tile_button(t, ("instance", i), chosen)
+                        .w(px(248.))
+                        .disabled(self.controls_blocked())
                         .child(instance_icon(
                             stored_icon(&launcher.icons, &item.id),
-                            36.,
+                            40.,
                             chosen,
                             palette,
                         ))
                         .child(
-                            self.button(
-                                ("instance", i),
-                                format!(
-                                    "{} · Minecraft {}",
-                                    item.display_name, item.minecraft_version
+                            ui::title_block(
+                                t,
+                                item.display_name.clone(),
+                                Some(
+                                    format!(
+                                        "{} · {}",
+                                        item.minecraft_version,
+                                        item.platform_label()
+                                    )
+                                    .into(),
                                 ),
                             )
-                            .selected(chosen)
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.action("select", id.clone(), cx);
-                                    cx.notify();
-                                },
-                            )),
-                        ),
+                            .flex_1(),
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.action("select", id.clone(), cx);
+                            cx.notify();
+                        })),
                 );
             }
             out.push(
                 div()
                     .flex()
                     .flex_col()
-                    .gap_2()
-                    .child(div().text_sm().text_color(muted).child("Instances"))
+                    .gap(px(12.))
+                    .child(ui::section_header(t, "Your instances", None))
                     .child(tiles)
                     .into_any_element(),
             );
@@ -1649,20 +1767,44 @@ impl Launcher {
         out
     }
 
+    fn controls_blocked(&self) -> bool {
+        self.busy
+            || self.account_busy
+            || self.skin_busy
+            || self.client_update_busy
+            || self.downloads_busy
+            || self.home_busy
+            || self.host.is_none()
+    }
+
     fn button(
         &self,
         id: impl Into<gpui::ElementId>,
         label: impl Into<gpui::SharedString>,
     ) -> AuroraButton {
-        AuroraButton::new(id, label).disabled(
-            self.busy
-                || self.account_busy
-                || self.skin_busy
-                || self.client_update_busy
-                || self.downloads_busy
-                || self.home_busy
-                || self.host.is_none(),
-        )
+        AuroraButton::new(id, label).disabled(self.controls_blocked())
+    }
+
+    /// The hero's one-word readiness summary for the selected instance.
+    fn readiness_badge(&self, id: &str) -> Option<(&'static str, ui::Tone)> {
+        match self.game_phase(id) {
+            GamePhase::Running => return Some(("Running", ui::Tone::Success)),
+            GamePhase::Starting => return Some(("Starting", ui::Tone::Accent)),
+            GamePhase::Idle => {}
+        }
+        let decision = self
+            .readiness
+            .as_ref()
+            .filter(|decision| decision.instance_id == id);
+        match decision {
+            Some(decision) if decision.ready => Some(("Ready to play", ui::Tone::Success)),
+            Some(decision) if decision.can_prepare => Some(("Needs preparation", ui::Tone::Warning)),
+            Some(_) => Some(("Action needed", ui::Tone::Warning)),
+            None if self.readiness_in_flight || self.load_in_flight => {
+                Some(("Checking", ui::Tone::Neutral))
+            }
+            None => None,
+        }
     }
 }
 impl Render for Launcher {
@@ -1674,26 +1816,27 @@ impl Render for Launcher {
             .as_ref()
             .map_or(0, |downloads| downloads.read(cx).active_count());
         let nav = [
-            ("Home", 0),
-            ("Instances", 3),
-            ("Discover", 5),
-            ("Downloads", 8),
-            ("Content", 4),
-            ("Sync", 6),
-            ("Skins", 7),
-            ("Accounts", 1),
-            ("Settings", 2),
+            ("Home", 0, "home"),
+            ("Instances", 3, "grid_view"),
+            ("Discover", 5, "explore"),
+            ("Content", 4, "extension"),
+            ("Downloads", 8, "download"),
+            ("Skins", 7, "checkroom"),
+            ("Accounts", 1, "account_circle"),
+            ("Sync", 6, "sync"),
+            ("Settings", 2, "settings"),
         ]
         .into_iter()
-        .map(|(label, page)| {
+        .map(|(label, page, icon)| {
             // The Downloads item doubles as the activity indicator (Slint's
             // downloads-nav): lit while work is queued or running, with a
             // count badge. It only reads the shared queue's count.
             let active = if page == 8 { downloads_active } else { 0 };
             let button = self
                 .button(label, label)
-                .variant(ButtonVariant::Ghost)
-                .selected(self.page == page || active > 0)
+                .variant(ButtonVariant::Nav)
+                .icon(icon)
+                .selected(self.page == page)
                 .disabled(self.client_update_running(cx) && self.page != page)
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.open_page(page, window, cx);
@@ -1714,11 +1857,11 @@ impl Render for Launcher {
                     item.child(
                         div()
                             .absolute()
-                            .top(px(-4.))
-                            .right(px(-4.))
-                            .min_w(px(16.))
-                            .h(px(16.))
-                            .px(px(4.))
+                            .top(px(8.))
+                            .right(px(10.))
+                            .min_w(px(18.))
+                            .h(px(18.))
+                            .px(px(5.))
                             .rounded_full()
                             .flex()
                             .items_center()
@@ -1732,11 +1875,64 @@ impl Render for Launcher {
                 .into_any_element()
         })
         .collect::<Vec<_>>();
+        let mut nav = nav.into_iter();
+        let mut nav_group = |title: Option<&'static str>, count: usize| {
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .when_some(title, |group, title| {
+                    group.child(ui::eyebrow(&palette, title).px(px(10.)).pt(px(16.)).pb(px(6.)))
+                })
+                .children(nav.by_ref().take(count).collect::<Vec<_>>())
+        };
+        let play_group = nav_group(Some("PLAY"), 2);
+        let library_group = nav_group(Some("LIBRARY"), 3);
+        let profile_group = nav_group(Some("PROFILE"), 2);
+        let system_group = nav_group(None, 2);
+        let brand = div()
+            .flex()
+            .items_center()
+            .gap(px(10.))
+            .h(px(52.))
+            .px(px(6.))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(30.))
+                    .rounded(px(9.))
+                    .bg(gpui::linear_gradient(
+                        135.,
+                        gpui::linear_color_stop(palette.ring, 0.),
+                        gpui::linear_color_stop(palette.accent, 1.),
+                    ))
+                    .child(symbols::icon(
+                        Some("auto_awesome"),
+                        px(17.),
+                        palette.accent_foreground,
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .text_size(px(14.))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child("Aurora"),
+                    )
+                    .child(ui::caption(&palette, "Launcher")),
+            );
         let mut content = div()
             .flex()
             .flex_col()
-            .gap_3()
-            .p_6()
+            .gap(px(ui::PAGE_GAP))
+            .px(px(32.))
+            .pt(px(4.))
+            .pb(px(32.))
             .flex_1()
             .id("content")
             .overflow_y_scroll();
@@ -1868,18 +2064,28 @@ impl Render for Launcher {
             .children(self.borealis.clone())
             .child(
                 div()
-                    .w(px(150.))
+                    .w(px(212.))
+                    .flex_shrink_0()
                     .h_full()
-                    .p_3()
+                    .px(px(12.))
+                    .pt(px(6.))
+                    .pb(px(12.))
                     .bg(palette.sidebar)
+                    .border_r_1()
+                    .border_color(palette.border_subtle)
                     .flex()
                     .flex_col()
-                    .gap_2()
                     // The header also moves the window (the Slint logo area).
-                    .child(chrome::drag_region(div().child("Aurora Launcher")))
-                    .children(nav)
+                    .child(chrome::drag_region(brand.id("brand")))
+                    .child(play_group)
+                    .child(library_group)
+                    .child(profile_group)
+                    .child(div().flex_1())
+                    .child(system_group)
                     .child(
                         self.button("refresh", "Refresh")
+                            .variant(ButtonVariant::Nav)
+                            .icon("refresh")
                             .disabled(
                                 self.busy
                                     || self.account_busy
@@ -1937,28 +2143,40 @@ impl Render for Launcher {
                         column.child(chrome::title_bar(window, cx, &palette))
                     })
                     .child(content)
-                    .child(
-                        div()
-                            .p_4()
-                            .text_sm()
-                            .text_color(palette.muted_foreground)
-                            .child(
-                                self.load_error
-                                    .as_ref()
-                                    .or(self.sync_error.as_ref())
-                                    .unwrap_or(&self.status)
-                                    .clone(),
-                            ),
+                    .when_some(
+                        self.load_error
+                            .as_ref()
+                            .or(self.sync_error.as_ref())
+                            .or(Some(&self.status))
+                            .filter(|status| !status.is_empty())
+                            .cloned(),
+                        |column, status| {
+                            column.child(
+                                div()
+                                    .px(px(32.))
+                                    .py(px(10.))
+                                    .border_t_1()
+                                    .border_color(palette.border_subtle)
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .text_color(palette.muted_foreground)
+                                    .child(status),
+                            )
+                        },
                     ),
             )
     }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostic = std::env::args().any(|a| a == "--diagnostic");
+    let showcase_root = showcase_root();
+    if std::env::args().any(|a| a == "--showcase") && showcase_root.is_none() {
+        return Err("--showcase needs a directory containing AURORA_DISPOSABLE_DIAGNOSTIC".into());
+    }
+    SHOWCASE.store(showcase_root.is_some(), std::sync::atomic::Ordering::Relaxed);
+    let diagnostic = std::env::args().any(|a| a == "--diagnostic") || showcase_root.is_some();
     if !diagnostic && aurora_launcher_lib::run_artwork_decoder_if_requested() {
         return Ok(());
     }
-    if diagnostic {
+    if diagnostic && showcase_root.is_none() {
         let root = std::env::temp_dir().join(format!(
             "aurora-gpui-diagnostic-{}-{}",
             std::process::id(),
@@ -1981,12 +2199,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx, rx) = async_channel::unbounded();
     let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let failed_window = failed.clone();
-    let host = if diagnostic {
+    let host = if diagnostic && showcase_root.is_none() {
         None
     } else {
         let events = tx.clone();
         Some(Host::native(
-            platform_local_data_dir(APPLICATION_IDENTIFIER),
+            showcase_root.map(Ok).unwrap_or_else(|| platform_local_data_dir(APPLICATION_IDENTIFIER)),
             env!("CARGO_PKG_VERSION"),
             rt.clone(),
             move |name, payload| {
@@ -2016,6 +2234,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         let window_size = display
             .as_ref()
+            .filter(|_| !showcase())
             .map(|d| size(d.bounds().size.width * 0.8, d.bounds().size.height * 0.8))
             .unwrap_or_else(chrome::default_size);
         let display_id = display.as_ref().map(|d| d.id());
@@ -2165,7 +2384,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         load_error: None,
                         sync_error: None,
                         sync_running: false,
-                        status: if diagnostic {
+                        status: if diagnostic && !showcase() {
                             "Disposable diagnostic mode · production data and integrations disabled"
                                 .into()
                         } else {
@@ -2173,6 +2392,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                     };
                     view.start_load();
+                    if let Some(page) = showcase()
+                        .then(|| std::env::var("AURORA_SHOWCASE_PAGE").ok()?.parse().ok())
+                        .flatten()
+                    {
+                        view.open_page(page, window, cx);
+                    }
                     view.sync_mutation_guards(cx);
                     view.initialize_sync();
                     cx.spawn(async move |weak, cx| {

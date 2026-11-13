@@ -46,6 +46,16 @@ pub enum ButtonVariant {
     Primary,
     Danger,
     Ghost,
+    /// Sidebar navigation: full width, left aligned, accent wash when selected.
+    Nav,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum ButtonSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
 }
 
 /// A themed button on the unstyled [`Button`] behavior root.
@@ -59,6 +69,9 @@ pub struct AuroraButton {
     id: ElementId,
     label: SharedString,
     variant: ButtonVariant,
+    size: ButtonSize,
+    icon: Option<&'static str>,
+    full_width: bool,
     disabled: bool,
     selected: bool,
     on_click: Option<ClickHandler>,
@@ -70,6 +83,9 @@ impl AuroraButton {
             id: id.into(),
             label: label.into(),
             variant: ButtonVariant::Default,
+            size: ButtonSize::Medium,
+            icon: None,
+            full_width: false,
             disabled: false,
             selected: false,
             on_click: None,
@@ -78,6 +94,22 @@ impl AuroraButton {
 
     pub fn variant(mut self, variant: ButtonVariant) -> Self {
         self.variant = variant;
+        self
+    }
+
+    pub fn size(mut self, size: ButtonSize) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// A leading Material Symbols glyph (a `crate::symbols` name).
+    pub fn icon(mut self, icon: &'static str) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+
+    pub fn full_width(mut self) -> Self {
+        self.full_width = true;
         self
     }
 
@@ -103,34 +135,79 @@ impl AuroraButton {
 impl RenderOnce for AuroraButton {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = theme(cx);
-        let ghost = self.variant == ButtonVariant::Ghost;
-        let (bg, fg, hover_bg) = match self.variant {
-            ButtonVariant::Default => (t.surface, t.foreground, t.surface_hover),
-            ButtonVariant::Primary => (t.accent, t.accent_foreground, t.accent_hover),
-            ButtonVariant::Danger => (t.surface, t.danger, t.surface_hover),
+        let clear = gpui_kit::transparent_black();
+        let nav = self.variant == ButtonVariant::Nav;
+        let primary = self.variant == ButtonVariant::Primary;
+        let (bg, fg, hover_bg, border) = match self.variant {
+            ButtonVariant::Default => (t.control, t.foreground, t.control_hover, t.border_subtle),
+            ButtonVariant::Primary => (t.accent, t.accent_foreground, t.accent_hover, t.accent),
+            ButtonVariant::Danger => (
+                Hsla { a: 0.10, ..t.danger },
+                t.danger,
+                Hsla { a: 0.18, ..t.danger },
+                Hsla { a: 0.28, ..t.danger },
+            ),
             // Transparent at rest so translucent Borealis surfaces show through.
-            ButtonVariant::Ghost => (gpui_kit::transparent_black(), t.foreground, t.surface_hover),
+            ButtonVariant::Ghost => (clear, t.foreground, t.control, clear),
+            ButtonVariant::Nav => (clear, t.muted_foreground, t.control, clear),
+        };
+        let (height, pad, text, icon_size) = match self.size {
+            ButtonSize::Small => (28., 10., 12., 14.),
+            ButtonSize::Medium => (34., 14., 13., 16.),
+            ButtonSize::Large => (44., 22., 15., 20.),
+        };
+        let (soft, ring, selected_fg) = (t.accent_soft, t.ring, t.foreground);
+        let icon_color = if nav && self.selected {
+            t.ring
+        } else if primary || nav {
+            fg
+        } else {
+            Hsla { a: 0.85, ..fg }
+        };
+        let weight = if primary || (nav && self.selected) {
+            gpui_kit::FontWeight::SEMIBOLD
+        } else {
+            gpui_kit::FontWeight::MEDIUM
         };
 
         let mut button = Button::new(self.id)
             .disabled(self.disabled)
             .selected(self.selected)
-            .min_h(px(36.))
-            .px(px(12.))
-            .py(px(6.))
-            .rounded(t.radius)
-            .text_size(px(13.))
+            .flex()
+            .flex_shrink_0()
+            .items_center()
+            .gap(px(if nav { 10. } else { 7. }))
+            .when(nav || self.full_width, |b| b.w_full())
+            .when(nav, |b| b.justify_start())
+            .when(!nav, |b| b.justify_center())
+            .h(px(height))
+            .px(px(if nav { 10. } else { pad }))
+            .rounded(if self.size == ButtonSize::Large {
+                px(10.)
+            } else {
+                t.radius
+            })
+            .text_size(px(text))
+            .font_weight(weight)
             .bg(bg)
             .text_color(fg)
             .border_1()
-            .border_color(if ghost { t.border } else { bg })
+            .border_color(border)
             .hover(|style| style.bg(hover_bg))
-            .active(|style| style.opacity(0.9))
-            .focus(|style| style.border_color(t.ring))
+            .active(|style| style.opacity(0.88))
+            .focus(|style| style.border_color(ring))
             .styles(|styles| {
                 styles
-                    .selected(|style| style.border_color(t.accent))
-                    .disabled(|style| style.opacity(0.45))
+                    .selected(|style| {
+                        style
+                            .bg(soft)
+                            .border_color(if nav { clear } else { Hsla { a: 0.55, ..ring } })
+                            .text_color(selected_fg)
+                    })
+                    .disabled(|style| style.opacity(0.42))
+            })
+            .when_some(self.icon, |b, icon| {
+                b.child(crate::symbols::icon(Some(icon), px(icon_size), icon_color))
             })
             .child(self.label);
 
@@ -229,11 +306,12 @@ impl RenderOnce for AuroraInput {
             .flex()
             .items_center()
             .w_full()
-            .h(px(30.))
-            .px(px(10.))
+            .h(px(34.))
+            .px(px(12.))
             .rounded(t.radius)
+            .bg(t.sunken)
             .border_1()
-            .border_color(t.border)
+            .border_color(t.border_subtle)
             .text_size(px(13.))
             .styles(|styles| {
                 styles
@@ -677,14 +755,15 @@ impl RenderOnce for AuroraSelect {
             .justify_between()
             .gap(px(6.))
             .w_full()
-            .h(px(30.))
-            .px(px(10.))
+            .h(px(34.))
+            .px(px(12.))
             .rounded(t.radius)
+            .bg(t.control)
             .border_1()
             .border_color(if self.open || focused {
                 t.ring
             } else {
-                t.border
+                t.border_subtle
             })
             .text_size(px(13.))
             .when(self.disabled, |style| style.opacity(0.45))
@@ -721,11 +800,12 @@ impl RenderOnce for AuroraSelect {
             .max_h(available_height.min(px(288.)))
             .overflow_y_scroll()
             .track_scroll(&scroll)
-            .py(px(4.))
+            .p(px(4.))
             .rounded(t.radius)
             .border_1()
             .border_color(t.border)
-            .bg(t.surface)
+            .bg(t.raised)
+            .shadow_lg()
             .on_mouse_down_out({
                 let close = close.clone();
                 move |_, window, cx| close(window, cx)
@@ -769,7 +849,8 @@ impl RenderOnce for AuroraSelect {
                     .aria_selected(selected)
                     .when(highlighted, |this| this.aria_active_descendant())
                     .px(px(10.))
-                    .py(px(5.))
+                    .py(px(6.))
+                    .rounded(px(6.))
                     .flex_shrink_0()
                     .text_ellipsis()
                     .text_size(px(13.))

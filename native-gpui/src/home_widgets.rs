@@ -2041,7 +2041,7 @@ impl HomeWidgets {
     }
 
     fn start_enrich(&mut self, cx: &mut Context<Self>, ids: Vec<String>) {
-        let Some(host) = self.host.clone() else {
+        let Some(host) = self.host.clone().filter(|_| !crate::showcase()) else {
             return;
         };
         let serial = self.core.data_serial;
