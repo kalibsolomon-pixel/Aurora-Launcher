@@ -1023,6 +1023,7 @@ enum Message {
 }
 
 pub struct Skins {
+    preview: Option<Entity<crate::skin_preview::SkinPreview>>,
     host: Option<Host>,
     rt: tokio::runtime::Handle,
     core: Core,
@@ -1051,6 +1052,7 @@ impl Skins {
         let import_name = cx.new(|cx| InputState::new(window, cx).placeholder("e.g. Winter coat"));
         let rename_input = cx.new(|cx| InputState::new(window, cx).placeholder("New name"));
         let mut view = Self {
+            preview: None,
             host,
             rt: runtime,
             core: Core::default(),
@@ -1067,6 +1069,11 @@ impl Skins {
         };
         view.refresh(cx);
         view
+    }
+
+    /// Compose the parent's independent renderer beside appearance controls.
+    pub fn set_preview(&mut self, preview: Entity<crate::skin_preview::SkinPreview>) {
+        self.preview = Some(preview);
     }
 
     /// Installs the acknowledged account snapshot from the root. A changed
@@ -1833,7 +1840,7 @@ impl Render for Skins {
                         .gap(px(8.))
                         .child(if signed_in.is_none() {
                             AuroraButton::new("skins-open-accounts", "Manage accounts")
-                                .variant(ButtonVariant::Primary)
+                                .variant(ButtonVariant::Default)
                                 .size(ButtonSize::Small)
                                 .icon("account_circle")
                                 .on_click(
@@ -1937,7 +1944,13 @@ impl Render for Skins {
                 // The header caption already says to sign in; nothing more to add.
             }
         }
-        content = content.child(appearance);
+        let mut appearance_stack = div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_w(px(320.))
+            .gap(px(ui::PAGE_GAP))
+            .child(appearance);
 
         // Library ----------------------------------------------------------------
         let favorites_view = view.clone();
@@ -2008,12 +2021,13 @@ impl Render for Skins {
                 .child(
                     div()
                         .flex()
-                        .flex_col()
+                        .flex_wrap()
+                        .items_end()
                         .gap(px(12.))
                         .child(
                             field(&palette, "Skin name")
-                                .w_full()
-                                .min_w(px(0.))
+                                .flex_1()
+                                .min_w(px(200.))
                                 .child(AuroraInput::new(&self.import_name).label("Skin name")),
                         )
                         .child(
@@ -2126,7 +2140,7 @@ impl Render for Skins {
                             palette.subtle_foreground,
                         ))
                         .child(if list.is_empty() {
-                            "No saved skins yet. Import a PNG above to start your library."
+                            "Your imported skins will appear here."
                         } else {
                             "No favorites yet. Star a skin to pin it here."
                         }),
@@ -2247,7 +2261,7 @@ impl Render for Skins {
                     .child(ui::muted(&palette, "Loading library…")),
             );
         }
-        content = content.child(ui::list_card(&palette).child(library_head).child(library));
+        let library_card = ui::list_card(&palette).child(library_head).child(library);
 
         // Capes -------------------------------------------------------------------
         if let Some(cosmetics) = cosmetics {
@@ -2325,7 +2339,7 @@ impl Render for Skins {
                         ),
                 );
             }
-            content = content.child(
+            appearance_stack = appearance_stack.child(
                 ui::list_card(&palette)
                     .child(
                         div()
@@ -2355,8 +2369,7 @@ impl Render for Skins {
                     .child(capes),
             );
         } else {
-            // Always present so the right column keeps its weight: a compact
-            // empty state until an account with capes is available.
+            // Keep account-dependent cape status beside current appearance.
             let (title, detail) = match signed_in {
                 Some(_) if self.core.remote_error.is_some() => (
                     "Capes unavailable",
@@ -2365,7 +2378,7 @@ impl Render for Skins {
                 Some(_) => ("Capes", "Loading your capes…"),
                 None => ("Capes", "Sign in to see and wear your capes."),
             };
-            content = content.child(
+            appearance_stack = appearance_stack.child(
                 ui::card(&palette).child(
                     div()
                         .flex()
@@ -2380,6 +2393,14 @@ impl Render for Skins {
                 ),
             );
         }
+
+        let mut appearance_row = div().flex().flex_wrap().gap(px(ui::PAGE_GAP));
+        if let Some(preview) = &self.preview {
+            appearance_row = appearance_row.child(preview.clone());
+        }
+        content = content
+            .child(appearance_row.child(appearance_stack))
+            .child(library_card);
 
         // Reviewed dialogs: the base dialog owns the focus trap; Enter never
         // confirms and Escape/backdrop close only while this page's own write

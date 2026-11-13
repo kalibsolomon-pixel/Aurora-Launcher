@@ -317,7 +317,12 @@ pub fn stat(
         .flex()
         .flex_col()
         .gap(px(2.))
-        .child(caption(t, label))
+        .child(
+            div()
+                .text_size(px(TEXT_BODY))
+                .text_color(t.muted_foreground)
+                .child(label.into()),
+        )
         .child(
             div()
                 .text_size(px(TEXT_BODY + 1.))

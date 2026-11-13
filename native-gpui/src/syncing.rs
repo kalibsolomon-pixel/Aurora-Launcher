@@ -1035,17 +1035,31 @@ fn section_card(t: &crate::theme::AuroraTheme) -> Div {
 }
 
 /// Saved choices stay visible but inert while the shared policy is paused.
-fn locked_toggle(
-    _t: &crate::theme::AuroraTheme,
+fn saved_choice(
+    t: &crate::theme::AuroraTheme,
     id: impl Into<gpui::ElementId>,
     label: impl Into<SharedString>,
     checked: bool,
 ) -> impl IntoElement {
     let label: SharedString = label.into();
-    AuroraToggle::new(id)
-        .label(format!("{label}: saved choice; syncing is off"))
-        .checked(checked)
-        .disabled(true)
+    let value = if checked { "Included" } else { "Excluded" };
+    div()
+        .id(id)
+        .role(gpui::Role::Group)
+        .aria_label(format!("{label}: {value}; syncing is off"))
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_end()
+        .gap(px(6.))
+        .text_size(px(ui::TEXT_CAPTION))
+        .text_color(t.subtle_foreground)
+        .child(crate::symbols::icon(
+            Some(if checked { "check" } else { "remove" }),
+            px(16.),
+            t.subtle_foreground,
+        ))
+        .child(value)
 }
 
 /// A right-aligned slot for one row's control.
@@ -1195,7 +1209,7 @@ impl Render for Syncing {
                         px(14.),
                         t.subtle_foreground,
                     ))
-                    .child("Paused · saved choices shown")
+                    .child("Saved choices · turn on Sync to edit")
             };
             let mut body = div().flex().flex_col().gap(px(ui::PAGE_GAP));
 
@@ -1259,7 +1273,7 @@ impl Render for Syncing {
                     )
                     .py(px(8.))
                     .child(if !enabled {
-                        locked_toggle(
+                        saved_choice(
                             t,
                             SharedString::from(format!("sync-category-{id}")),
                             *label,
@@ -1374,7 +1388,7 @@ impl Render for Syncing {
                             }),
                         )
                         .child(if !enabled {
-                            locked_toggle(
+                            saved_choice(
                                 t,
                                 SharedString::from(format!("sync-participant-{}", row.id)),
                                 row.name.clone(),
@@ -1587,23 +1601,31 @@ impl Render for Syncing {
                                         move |_, _, cx| view.update(cx, |this, cx| this.refresh(cx))
                                     }),
                             )
-                            .child(
-                                AuroraButton::new("sync-revert", "Revert draft")
-                                    .disabled(busy || !self.policy.dirty)
-                                    .on_click({
-                                        let view = view.clone();
-                                        move |_, _, cx| view.update(cx, |this, cx| this.revert(cx))
-                                    }),
-                            )
-                            .child(
-                                AuroraButton::new("sync-apply", "Apply")
-                                    .variant(ButtonVariant::Primary)
-                                    .disabled(busy || !self.policy.can_apply())
-                                    .on_click({
-                                        let view = view.clone();
-                                        move |_, _, cx| view.update(cx, |this, cx| this.apply(cx))
-                                    }),
-                            ),
+                            .when(dirty || self.write_busy, |buttons| {
+                                buttons.child(
+                                    AuroraButton::new("sync-revert", "Revert draft")
+                                        .disabled(busy || !self.policy.dirty)
+                                        .on_click({
+                                            let view = view.clone();
+                                            move |_, _, cx| {
+                                                view.update(cx, |this, cx| this.revert(cx))
+                                            }
+                                        }),
+                                )
+                            })
+                            .when(dirty || self.write_busy, |buttons| {
+                                buttons.child(
+                                    AuroraButton::new("sync-apply", "Apply")
+                                        .variant(ButtonVariant::Primary)
+                                        .disabled(busy || !self.policy.can_apply())
+                                        .on_click({
+                                            let view = view.clone();
+                                            move |_, _, cx| {
+                                                view.update(cx, |this, cx| this.apply(cx))
+                                            }
+                                        }),
+                                )
+                            }),
                     ),
             );
             if let Some(error) = &self.policy.error {

@@ -2101,10 +2101,7 @@ impl Render for Settings {
                                 .justify_center()
                                 .bg(custom_color.unwrap_or(palette.control))
                                 .border_1()
-                                .border_color(Hsla {
-                                    a: 0.35,
-                                    ..palette.border
-                                })
+                                .border_color(palette.muted_foreground)
                                 .hover(move |style| style.border_color(ring))
                                 .focus(move |style| style.border_color(ring).border_2())
                                 .styles(|styles| styles.disabled(|style| style.opacity(0.45)))
@@ -2179,15 +2176,16 @@ impl Render for Settings {
                     card = card.child(
                         ui::setting_row(
                             t,
-                            "Motion",
+                            "Motion speed",
                             Some(motion_detail(accelerated).into()),
                             false,
                         )
                         .child(
                             control_slot(
-                                div()
-                                    .w_full()
-                                    .child(AuroraSlider::new(&self.motion_slider, "Motion speed")),
+                                div().w_full().child(
+                                    AuroraSlider::new(&self.motion_slider, "Motion speed")
+                                        .show_label(false),
+                                ),
                             )
                             .w(px(CONTROL_WIDTH + 56.))
                             // The slider reports no pointer state, so the

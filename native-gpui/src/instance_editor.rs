@@ -2603,51 +2603,85 @@ impl Render for InstanceEditor {
             }
             detail = detail.child(tabs);
             if self.section == 0 {
-                // General: name and icon.
+                // General settings and the reviewed Client transition.
+                // Aurora is a reviewed transition, never a direct configuration toggle.
+                let installed = self
+                    .selected_instance()
+                    .is_some_and(|instance| instance.aurora.is_some());
+                let aurora_note = match self.selected_instance() {
+                    Some(instance) => match (&instance.aurora, instance.platform.kind.as_str()) {
+                        (Some(pin), _) => format!("Aurora Client {} installed.", pin.version),
+                        (None, "fabric") => "Aurora Client is not installed.".to_owned(),
+                        (None, _) => "Aurora Client requires Fabric.".to_owned(),
+                    },
+                    None => String::new(),
+                };
+                let aurora_view = this.clone();
                 let icon_view = this.clone();
-                detail =
-                    detail.child(form_card(
+                detail = detail.child(form_card(
+                    &t,
+                    card_head(&t, "General", None, None),
+                    rows(
                         &t,
-                        card_head(&t, "General", None, None),
-                        rows(
-                            &t,
-                            vec![
-                                (
-                                    "Instance name",
-                                    Some("Renaming applies immediately.".into()),
-                                    div()
-                                        .flex()
-                                        .gap(px(8.))
-                                        .w(px(WIDE_W))
-                                        .child(div().flex_1().min_w(px(0.)).child(
+                        vec![
+                            (
+                                "Instance name",
+                                Some("Renaming applies immediately.".into()),
+                                div()
+                                    .flex()
+                                    .gap(px(8.))
+                                    .w(px(WIDE_W))
+                                    .child(
+                                        div().flex_1().min_w(px(0.)).child(
                                             AuroraInput::new(&self.name).label("Instance name"),
-                                        ))
-                                        .child(action_button(
-                                            "rename",
-                                            "Rename",
-                                            None,
-                                            ButtonVariant::Default,
-                                        ))
-                                        .into_any_element(),
-                                ),
-                                (
-                                    "Icon",
-                                    Some(format!(
-                                        "Instance icon: {}",
-                                        symbols::caption(stored_icon.as_deref())
-                                    )),
-                                    AuroraButton::new("icon-change", "Change icon…")
-                                        .icon("image")
-                                        .disabled(busy)
-                                        .on_click(move |_, window, cx| {
-                                            icon_view
-                                                .update(cx, |v, cx| v.open_icon_picker(window, cx));
-                                        })
-                                        .into_any_element(),
-                                ),
-                            ],
-                        ),
-                    ));
+                                        ),
+                                    )
+                                    .child(action_button(
+                                        "rename",
+                                        "Rename",
+                                        None,
+                                        ButtonVariant::Default,
+                                    ))
+                                    .into_any_element(),
+                            ),
+                            (
+                                "Icon",
+                                Some(format!(
+                                    "Instance icon: {}",
+                                    symbols::caption(stored_icon.as_deref())
+                                )),
+                                AuroraButton::new("icon-change", "Change icon…")
+                                    .icon("image")
+                                    .disabled(busy)
+                                    .on_click(move |_, window, cx| {
+                                        icon_view
+                                            .update(cx, |v, cx| v.open_icon_picker(window, cx));
+                                    })
+                                    .into_any_element(),
+                            ),
+                            (
+                                "Aurora Client",
+                                Some(aurora_note),
+                                AuroraToggle::new("editor-aurora")
+                                    .label("Aurora Client enabled")
+                                    .checked(installed)
+                                    .disabled(
+                                        busy || !draft_clean
+                                            || self.selected_instance().is_some_and(needs_install)
+                                            || (!installed
+                                                && self.selected_instance().is_some_and(
+                                                    |instance| instance.platform.kind != "fabric",
+                                                )),
+                                    )
+                                    .on_change(move |enabled, _, _, cx| {
+                                        aurora_view
+                                            .update(cx, |v, cx| v.review_aurora(enabled, cx));
+                                    })
+                                    .into_any_element(),
+                            ),
+                        ],
+                    ),
+                ));
             }
             if self.section == 1 {
                 // Game version and loader; official catalogs load lazily.
@@ -2993,47 +3027,6 @@ impl Render for InstanceEditor {
                                 false,
                             ),
                         ],
-                    ),
-                ));
-            }
-            if self.section == 0 {
-                // Aurora is a reviewed transition, never a direct configuration toggle.
-                let installed = self
-                    .selected_instance()
-                    .is_some_and(|instance| instance.aurora.is_some());
-                let aurora_note = match self.selected_instance() {
-                    Some(instance) => match (&instance.aurora, instance.platform.kind.as_str()) {
-                        (Some(pin), _) => format!("Aurora Client {} installed.", pin.version),
-                        (None, "fabric") => "Aurora Client is not installed.".to_owned(),
-                        (None, _) => "Aurora Client requires Fabric.".to_owned(),
-                    },
-                    None => String::new(),
-                };
-                let aurora_view = this.clone();
-                detail = detail.child(form_card(
-                    &t,
-                    card_head(&t, "Aurora Client", None, None),
-                    rows(
-                        &t,
-                        vec![(
-                            "Aurora Client enabled",
-                            Some(aurora_note),
-                            AuroraToggle::new("editor-aurora")
-                                .label("Aurora Client enabled")
-                                .checked(installed)
-                                .disabled(
-                                    busy || !draft_clean
-                                        || self.selected_instance().is_some_and(needs_install)
-                                        || (!installed
-                                            && self.selected_instance().is_some_and(|instance| {
-                                                instance.platform.kind != "fabric"
-                                            })),
-                                )
-                                .on_change(move |enabled, _, _, cx| {
-                                    aurora_view.update(cx, |v, cx| v.review_aurora(enabled, cx));
-                                })
-                                .into_any_element(),
-                        )],
                     ),
                 ));
             }

@@ -528,14 +528,13 @@ fn initial_letter(name: &str) -> String {
         .unwrap_or_else(|| "?".into())
 }
 
-/// A quiet icon-only row action. The label is the accessible name.
+/// A quiet removal button. The label identifies the account for accessibility.
 fn icon_button(
     t: &theme::AuroraTheme,
     id: impl Into<gpui_kit::ElementId>,
     icon: &'static str,
     label: impl Into<gpui_kit::SharedString>,
 ) -> gpui_kit::base::Button {
-    let clear = gpui_kit::transparent_black();
     let ring = t.ring;
     let hover = Hsla {
         a: 0.16,
@@ -553,9 +552,9 @@ fn icon_button(
         .text_size(px(ui::TEXT_CAPTION))
         .text_color(t.muted_foreground)
         .rounded(t.radius)
-        .bg(clear)
+        .bg(t.control)
         .border_1()
-        .border_color(clear)
+        .border_color(t.border_subtle)
         .hover(move |style| style.bg(hover))
         .active(|style| style.opacity(0.88))
         .focus(move |style| style.border_color(ring))
@@ -1138,7 +1137,7 @@ impl Render for Accounts {
                 notices.push(("Finishing sign-in cancellation…".into(), ui::Tone::Neutral));
             }
             Some(
-                AuroraButton::new("sign-in", "Add account")
+                AuroraButton::new("sign-in", "Sign in with Microsoft")
                     .variant(ButtonVariant::Default)
                     .icon("person_add")
                     .disabled(busy || self.core.accounts.is_none() || self.core.cancel.is_some())
@@ -1307,6 +1306,11 @@ impl Render for Accounts {
                                 if reauth { "Restore" } else { "Refresh" },
                                 account.minecraft_name
                             ))
+                            .variant(if reauth && selected {
+                                ButtonVariant::Primary
+                            } else {
+                                ButtonVariant::Default
+                            })
                             .size(ButtonSize::Small)
                             .disabled(busy)
                             .on_click(cx.listener(
@@ -1315,15 +1319,6 @@ impl Render for Accounts {
                                 },
                             )),
                         )
-                        .when(reauth && selected, |actions| {
-                            actions.child(
-                                AuroraButton::new("selected-sign-in", "Sign in")
-                                    .variant(ButtonVariant::Primary)
-                                    .size(ButtonSize::Small)
-                                    .disabled(busy || self.core.cancel.is_some())
-                                    .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx))),
-                            )
-                        })
                         .child(
                             icon_button(
                                 &palette,
@@ -1399,7 +1394,7 @@ impl Render for Accounts {
                                 )
                                 .child(ui::caption(
                                     &palette,
-                                    "Restore session uses the saved credential. Sign in opens Microsoft in your browser; Aurora never sees your password. Credentials stay in Windows Credential Manager.",
+                                    "Restore session uses your saved credential. Use Sign in with Microsoft to add an account or recover a session that cannot be restored. Credentials stay in Windows Credential Manager.",
                                 )),
                         ),
                 );

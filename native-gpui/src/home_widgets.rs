@@ -3479,6 +3479,7 @@ impl HomeWidgets {
                                     .id("playtime-chart")
                                     .role(Role::Group)
                                     .aria_label("Playtime chart")
+                                    .aria_description(chart_note_description(period, narrow))
                                     .flex()
                                     .w_full()
                                     .flex_1()
@@ -3490,7 +3491,7 @@ impl HomeWidgets {
                                             .justify_between()
                                             .flex_shrink_0()
                                             .pb(px(AXIS_HEIGHT))
-                                            .pr(px(8.))
+                                            .pr(px(16.))
                                             .child(label(projection.peak.clone()))
                                             .child(label(projection.midpoint.clone()))
                                             .child(label("0 min".into())),
@@ -3579,17 +3580,21 @@ impl HomeWidgets {
                                             .child(axis.pt(px(4.))),
                                     ),
                             )
-                            .child(
-                                div()
-                                    .id("playtime-chart-note")
-                                    .aria_description(chart_note_description(period, narrow))
-                                    .text_size(px(ui::TEXT_CAPTION))
-                                    .text_color(palette.subtle_foreground)
-                                    .whitespace_nowrap()
-                                    .overflow_hidden()
-                                    .text_ellipsis()
-                                    .child(chart_note(period, narrow)),
-                            );
+                            .when(period != Period::Week || narrow, |card| {
+                                card.child(
+                                    div()
+                                        .id("playtime-chart-note")
+                                        .aria_description(chart_note_description(period, narrow))
+                                        .text_size(px(ui::TEXT_CAPTION))
+                                        .text_color(palette.subtle_foreground)
+                                        .whitespace_nowrap()
+                                        .overflow_hidden()
+                                        .text_ellipsis()
+                                        .child(
+                                            chart_note(period, narrow).replacen("Chart: ", "", 1),
+                                        ),
+                                )
+                            });
                     }
                 }
             }

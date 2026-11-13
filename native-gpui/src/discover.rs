@@ -1749,6 +1749,7 @@ pub struct Discover {
     /// Mirrored queue activity for the parent's conservative guards; kept in
     /// step with the queue by every submission and queue event.
     queue_busy: bool,
+    results_scroll: gpui::ScrollHandle,
 }
 
 impl EventEmitter<DiscoverEvent> for Discover {}
@@ -1811,6 +1812,7 @@ impl Discover {
             downloads,
             _downloads_events,
             queue_busy: false,
+            results_scroll: gpui::ScrollHandle::new(),
         }
     }
 
@@ -2342,6 +2344,7 @@ fn text_block(text: &str, color: Hsla, size: Pixels) -> impl IntoElement + use<>
 struct SearchField {
     state: Entity<InputState>,
     label: SharedString,
+    submit: AuroraButton,
 }
 
 impl RenderOnce for SearchField {
@@ -2402,6 +2405,7 @@ impl RenderOnce for SearchField {
                     .min_w(px(0.))
                     .child(Input::new(&state)),
             )
+            .child(self.submit)
     }
 }
 
@@ -2447,7 +2451,8 @@ fn field(t: &theme::AuroraTheme, label: &'static str, control: impl IntoElement)
         .flex()
         .flex_col()
         .flex_shrink_0()
-        .w(px(220.))
+        .flex_1()
+        .min_w(px(160.))
         .gap(px(6.))
         .child(
             div()
@@ -2586,7 +2591,7 @@ impl Render for Discover {
             .as_ref()
             .and_then(|id| s.instances.iter().position(|i| i.id == *id));
 
-        let mut filters = div().flex().flex_wrap().gap(px(12.));
+        let mut filters = div().flex().gap(px(12.));
         if s.is_pack() {
             filters = filters.child(field(
                 &palette,
@@ -2599,6 +2604,7 @@ impl Render for Discover {
                     &self.selects.loader.content,
                     self.selects.loader.bounds.clone(),
                 )
+                .full_width()
                 .selected(Some(s.loader_index))
                 .highlight(self.selects.loader.highlight)
                 .open(self.selects.loader.open)
@@ -2624,6 +2630,7 @@ impl Render for Discover {
                     &self.selects.target.content,
                     self.selects.target.bounds.clone(),
                 )
+                .full_width()
                 .selected(target_selected)
                 .highlight(self.selects.target.highlight)
                 .open(self.selects.target.open)
@@ -2653,6 +2660,7 @@ impl Render for Discover {
                 &self.selects.category.content,
                 self.selects.category.bounds.clone(),
             )
+            .full_width()
             .selected(Some(s.category_index))
             .highlight(self.selects.category.highlight)
             .open(self.selects.category.open)
@@ -2677,6 +2685,7 @@ impl Render for Discover {
                 &self.selects.sort.content,
                 self.selects.sort.bounds.clone(),
             )
+            .full_width()
             .selected(Some(s.sort_index))
             .highlight(self.selects.sort.highlight)
             .open(self.selects.sort.open)
@@ -2691,27 +2700,21 @@ impl Render for Discover {
             })),
         ));
 
-        let search_row = div()
-            .flex()
-            .gap(px(8.))
-            .items_center()
-            .child(div().flex_1().w(px(0.)).min_w(px(0.)).child(SearchField {
-                state: self.query.clone(),
-                label: "Search Modrinth projects".into(),
-            }))
-            .child(
-                AuroraButton::new("search", "Search")
-                    .variant(ButtonVariant::Default)
-                    .icon("search")
-                    .disabled(s.searching)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.search(false, cx);
-                    })),
-            );
+        let search_row = div().flex_1().min_w(px(0.)).child(SearchField {
+            state: self.query.clone(),
+            label: "Search Modrinth projects; press Enter to search".into(),
+            submit: AuroraButton::new("search", "")
+                .accessibility_label("Search Modrinth")
+                .variant(ButtonVariant::Ghost)
+                .size(ButtonSize::Small)
+                .icon("arrow_forward")
+                .disabled(s.searching)
+                .on_click(cx.listener(|this, _, _, cx| this.search(false, cx))),
+        });
 
         let toolbar = ui::card(&palette)
-            .p(px(16.))
-            .gap(px(14.))
+            .p(px(12.))
+            .gap(px(12.))
             .child(
                 div()
                     .flex()
@@ -2725,6 +2728,10 @@ impl Render for Discover {
 
         // Messages: failures are tinted callouts; progress and counts are a
         // quiet caption above the list.
+        let has_notes = s.error.is_some()
+            || s.instances_error.is_some()
+            || s.categories_error.is_some()
+            || (!s.is_pack() && s.target_busy());
         let mut notes = div().flex().flex_col().gap(px(8.));
         if let Some(error) = &s.error {
             notes = notes.child(callout(&palette, "error", error.clone(), true));
@@ -2866,8 +2873,7 @@ impl Render for Discover {
                         div()
                             .flex()
                             .flex_none()
-                            .flex_col()
-                            .w(px(100.))
+                            .w(px(178.))
                             .items_center()
                             .justify_end()
                             .gap(px(8.))
@@ -2875,7 +2881,7 @@ impl Render for Discover {
                                 let id = id.clone();
                                 AuroraButton::new(("details", index), "Details")
                                     .accessibility_label(format!("Details for {}", project.title))
-                                    .variant(ButtonVariant::Ghost)
+                                    .icon("arrow_forward")
                                     .size(ButtonSize::Small)
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.open_details(id.clone(), window, cx);
@@ -2937,7 +2943,26 @@ impl Render for Discover {
                 div().into_any_element()
             }
         } else {
-            list.into_any_element()
+            div()
+                .relative()
+                .rounded(palette.radius_lg)
+                .overflow_hidden()
+                .border_1()
+                .border_color(palette.border_subtle)
+                .child(
+                    div()
+                        .id("discover-result-scroll")
+                        .max_h(px(368.))
+                        .overflow_y_scroll()
+                        .track_scroll(&self.results_scroll)
+                        .child(list),
+                )
+                .child(ui::scrollbar(
+                    &palette,
+                    "discover-results-scrollbar",
+                    &self.results_scroll,
+                ))
+                .into_any_element()
         };
 
         div()
@@ -2976,7 +3001,7 @@ impl Render for Discover {
                     .flex()
                     .flex_col()
                     .gap(px(12.))
-                    .child(notes)
+                    .when(has_notes, |block| block.child(notes))
                     .when(!count.is_empty() && !s.results.is_empty(), |block| {
                         block.child(ui::caption(&palette, count.clone()))
                     })

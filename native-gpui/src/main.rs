@@ -1107,6 +1107,7 @@ impl Launcher {
         if page == 7 && self.skins.is_none() {
             let preview = cx.new(|cx| SkinPreview::new(self.rt.clone(), window, cx));
             let skins = cx.new(|cx| Skins::new(self.host.clone(), self.rt.clone(), window, cx));
+            skins.update(cx, |skins, _| skins.set_preview(preview.clone()));
             self._subscriptions.push(cx.subscribe_in(
                 &skins,
                 window,
@@ -1614,6 +1615,28 @@ impl Launcher {
             }
             details = details.child(badges);
         }
+        let hero_icon = instance.map(|instance| {
+            instance_icon(
+                stored_icon(&launcher.icons, &instance.id),
+                48.,
+                true,
+                palette,
+            )
+        });
+        let mut details = div()
+            .flex()
+            .flex_col()
+            .gap(px(20.))
+            .flex_1()
+            .min_w(px(0.))
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap(px(16.))
+                    .children(hero_icon)
+                    .child(details),
+            );
         if let Some(id) = selected.clone() {
             let play_id = id.clone();
             let needs_sign_in = self
@@ -1665,14 +1688,6 @@ impl Launcher {
                     ),
             );
         }
-        let hero_icon = instance.map(|instance| {
-            instance_icon(
-                stored_icon(&launcher.icons, &instance.id),
-                64.,
-                true,
-                palette,
-            )
-        });
         // Recent activity from Home's cached history fills the hero's right
         // side; nothing is shown until that history has loaded.
         let stats = match (&self.home_widgets, instance) {
@@ -1710,7 +1725,6 @@ impl Launcher {
                 ))
                 .border_1()
                 .border_color(t.border_subtle)
-                .children(hero_icon)
                 .child(details)
                 .children(stats)
                 .into_any_element(),
@@ -2169,15 +2183,9 @@ impl Render for Launcher {
                     "Skins",
                     Some("Preview, import and wear skins and capes.".into()),
                 ));
-                let mut appearance = div().flex().flex_wrap().gap_6();
-                if let Some(preview) = &self.skin_preview {
-                    appearance = appearance.child(preview.clone());
-                }
                 if let Some(skins) = &self.skins {
-                    appearance =
-                        appearance.child(div().flex_1().min_w(px(320.)).child(skins.clone()));
+                    content = content.child(skins.clone());
                 }
-                content = content.child(appearance);
             }
             3 => {
                 if let Some(import) = &self.pack_import {

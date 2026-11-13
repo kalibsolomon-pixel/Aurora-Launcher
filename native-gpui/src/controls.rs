@@ -489,6 +489,7 @@ pub struct AuroraSlider {
     state: Entity<SliderState>,
     label: SharedString,
     disabled: bool,
+    show_label: bool,
 }
 
 impl AuroraSlider {
@@ -497,11 +498,17 @@ impl AuroraSlider {
             state: state.clone(),
             label: label.into(),
             disabled: false,
+            show_label: true,
         }
     }
 
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    pub fn show_label(mut self, show: bool) -> Self {
+        self.show_label = show;
         self
     }
 }
@@ -532,12 +539,14 @@ impl RenderOnce for AuroraSlider {
                     .items_baseline()
                     .justify_between()
                     .gap(px(8.))
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .text_color(t.muted_foreground)
-                            .child(self.label.clone()),
-                    )
+                    .when(self.show_label, |row| {
+                        row.child(
+                            div()
+                                .text_size(px(13.))
+                                .text_color(t.muted_foreground)
+                                .child(self.label.clone()),
+                        )
+                    })
                     .child(
                         div()
                             .text_size(px(13.))
@@ -657,6 +666,7 @@ pub struct AuroraSelect {
     content_focus: FocusHandle,
     bounds: BoundsCell,
     width: Pixels,
+    full_width: bool,
     on_open_change: Option<OpenChangeHandler>,
     on_highlight: Option<IndexHandler>,
     on_confirm: Option<IndexHandler>,
@@ -683,6 +693,7 @@ impl AuroraSelect {
             content_focus: content_focus.clone(),
             bounds,
             width: px(220.),
+            full_width: false,
             on_open_change: None,
             on_highlight: None,
             on_confirm: None,
@@ -712,6 +723,11 @@ impl AuroraSelect {
     /// Trigger width (default 220px). Long values are truncated with an ellipsis.
     pub fn width(mut self, width: Pixels) -> Self {
         self.width = width;
+        self
+    }
+
+    pub fn full_width(mut self) -> Self {
+        self.full_width = true;
         self
     }
 
@@ -939,6 +955,7 @@ impl RenderOnce for AuroraSelect {
                 }
             })
             .w(self.width)
+            .when(self.full_width, |select| select.w_full())
             .child(
                 // Capture the trigger bounds every prepaint so the popup can be
                 // positioned under it (the pattern gpui-component's Select uses).

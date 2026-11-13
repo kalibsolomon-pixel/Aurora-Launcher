@@ -1271,7 +1271,6 @@ fn icon_button(
     icon: &'static str,
     label: String,
 ) -> gpui_kit::base::Button {
-    let clear = gpui::transparent_black();
     // Removal opens a review; reserve danger emphasis for that confirmation.
     let ring = t.ring;
     let hover = gpui::Hsla {
@@ -1289,9 +1288,9 @@ fn icon_button(
         .px(px(8.))
         .gap(px(6.))
         .rounded(t.radius)
-        .bg(clear)
+        .bg(t.control)
         .border_1()
-        .border_color(clear)
+        .border_color(t.border_subtle)
         .cursor_pointer()
         .hover(move |style| style.bg(hover))
         .active(|style| style.opacity(0.88))
