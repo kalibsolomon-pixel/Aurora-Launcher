@@ -2574,8 +2574,7 @@ impl Render for InstanceEditor {
                     );
                 }
                 list_col = Some(
-                    col.child(div().flex_1().min_h(px(12.)))
-                        .child(div().mx(px(8.)).my(px(6.)).h(px(1.)).bg(t.border_subtle))
+                    col.child(div().mx(px(8.)).my(px(6.)).h(px(1.)).bg(t.border_subtle))
                         .child(grid),
                 );
             }
@@ -2619,12 +2618,9 @@ impl Render for InstanceEditor {
                 };
                 let aurora_view = this.clone();
                 let icon_view = this.clone();
-                detail = detail.child(form_card(
+                detail = detail.child(ui::card(&t).p(px(16.)).gap(px(0.)).child(rows(
                     &t,
-                    card_head(&t, "General", None, None),
-                    rows(
-                        &t,
-                        vec![
+                    vec![
                             (
                                 "Instance name",
                                 Some("Renaming applies immediately.".into()),
@@ -2686,8 +2682,7 @@ impl Render for InstanceEditor {
                                 .into_any_element(),
                             ),
                         ],
-                    ),
-                ));
+                )));
             }
             if self.section == 1 {
                 // Game version and loader; official catalogs load lazily.
@@ -3203,7 +3198,7 @@ impl Render for InstanceEditor {
             root = root.child(
                 div()
                     .flex()
-                    .items_stretch()
+                    .items_start()
                     .w_full()
                     .min_w(px(0.))
                     .gap(px(ui::PAGE_GAP))

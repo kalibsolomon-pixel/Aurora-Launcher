@@ -546,6 +546,7 @@ pub struct Content {
     _filter_events: Subscription,
     review: Option<Review>,
     removing: Option<(Target, Entry)>,
+    import_open: bool,
     updates: Entity<ContentUpdates>,
     _update_events: Subscription,
     instance_open: bool,
@@ -655,6 +656,7 @@ impl Content {
             _filter_events: filter_events,
             review: None,
             removing: None,
+            import_open: false,
             updates,
             _update_events: update_events,
             instance_open: false,
@@ -1142,6 +1144,7 @@ impl Content {
                     "Finish the current operation, then drop the file again.".into()
                 }
                 Ok(path) => {
+                    self.import_open = true;
                     self.message.clear();
                     // Keep the field and the reviewed path in step so the
                     // preview guard accepts this review.
@@ -1533,7 +1536,7 @@ impl Render for Content {
                 .iter()
                 .filter(|entry| matches_filter(&entry.name, &entry.file_name, query.as_ref()))
                 .collect();
-            if !self.loading && !self.entries.is_empty() {
+            if !self.loading {
                 list = list.child(
                     div()
                         .flex()
@@ -1551,10 +1554,7 @@ impl Render for Content {
                                 .child(ui::caption(
                                     t,
                                     if query.trim().is_empty() {
-                                        format!(
-                                            "{} installed · Scroll for imports",
-                                            self.entries.len()
-                                        )
+                                        format!("{} installed", self.entries.len())
                                     } else {
                                         format!("{} of {} shown", visible.len(), self.entries.len())
                                     },
@@ -1564,6 +1564,17 @@ impl Render for Content {
                                         AuroraInput::new(&self.filter)
                                             .label("Filter installed content"),
                                     ),
+                                )
+                                .child(
+                                    AuroraButton::new("content-import-open", "Import local")
+                                        .size(ButtonSize::Small)
+                                        .icon("upload_file")
+                                        .selected(self.import_open)
+                                        .disabled(busy || previewing)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.import_open = !this.import_open;
+                                            cx.notify();
+                                        })),
                                 ),
                         )
                         .child(
@@ -1728,7 +1739,7 @@ impl Render for Content {
                 });
                 list = list.child(
                     ui::row(t, index == last_index)
-                        .py(px(8.))
+                        .py(px(4.))
                         .child(match icon {
                             Some(image) => art_tile(
                                 gpui::SharedString::from(format!("icon-{}", entry.id)),
@@ -1759,20 +1770,27 @@ impl Render for Content {
                         ),
                 );
             }
-            root = root.child(list);
-
             // ------------------------------------------------------ local import
             let v = view.clone();
             let mut import = ui::card(t)
                 .gap(px(14.))
-                .child(ui::section_header(
-                    t,
-                    "Import local content",
-                    Some(
-                        "Drop a .jar or .zip onto this page, or enter its path. You review it before anything installs."
-                            .into(),
-                    ),
-                ))
+                .child(
+                    div().flex().items_start().justify_between().gap(px(16.))
+                        .child(ui::section_header(
+                            t,
+                            "Import local content",
+                            Some("Drop a .jar or .zip here, or enter its path. Review it before installing.".into()),
+                        ))
+                        .child(
+                            AuroraButton::new("content-import-close", "Close import")
+                                .size(ButtonSize::Small)
+                                .disabled(busy || previewing)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.import_open = false;
+                                    cx.notify();
+                                })),
+                        ),
+                )
                 .child(
                     div()
                         .flex()
@@ -1906,7 +1924,10 @@ impl Render for Content {
                 );
                 import = import.child(block);
             }
-            root = root.child(import).child(self.updates.clone());
+            if self.import_open {
+                root = root.child(import);
+            }
+            root = root.child(list).child(self.updates.clone());
         } else if available {
             root = root.child(ui::empty_state(
                 t,

@@ -1052,8 +1052,21 @@ fn saved_choice(
         .items_center()
         .justify_end()
         .gap(px(6.))
-        .text_size(px(ui::TEXT_CAPTION))
-        .text_color(t.foreground)
+        .text_size(px(ui::TEXT_BODY))
+        .text_color(if checked {
+            t.success
+        } else {
+            t.muted_foreground
+        })
+        .child(crate::symbols::icon(
+            Some(if checked { "check" } else { "remove" }),
+            px(14.),
+            if checked {
+                t.success
+            } else {
+                t.muted_foreground
+            },
+        ))
         .child(value)
 }
 

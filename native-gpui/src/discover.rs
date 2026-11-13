@@ -2808,9 +2808,9 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == total)
                     .id(("result", index))
                     .gap(px(14.))
-                    .h(px(88.))
-                    .min_h(px(88.))
-                    .max_h(px(88.))
+                    .h(px(if compact { 128. } else { 104. }))
+                    .min_h(px(if compact { 128. } else { 104. }))
+                    .max_h(px(if compact { 128. } else { 104. }))
                     .flex_shrink_0()
                     .py(px(0.))
                     .hover(move |style| style.bg(hover))
@@ -2831,14 +2831,18 @@ impl Render for Discover {
                             .gap(px(3.))
                             .child(
                                 div().flex().items_baseline().gap(px(8.)).child(
-                                    div()
-                                        .id(("result-title", index))
+                                    gpui_kit::base::Button::new(("details", index))
+                                        .aria_label(format!("Details for {}", project.title))
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(7.))
                                         .min_w(px(0.))
-                                        .flex_shrink(1.)
-                                        .overflow_hidden()
-                                        .whitespace_nowrap()
-                                        .text_ellipsis()
-                                        .text_size(px(14.))
+                                        .h(px(28.))
+                                        .rounded(palette.radius)
+                                        .border_1()
+                                        .border_color(gpui_kit::transparent_black())
+                                        .focus(move |style| style.border_color(title_hover))
+                                        .text_size(px(ui::TEXT_BODY + 1.))
                                         .font_weight(FontWeight::SEMIBOLD)
                                         .text_color(palette.foreground)
                                         .cursor_pointer()
@@ -2849,22 +2853,23 @@ impl Render for Discover {
                                                 this.open_details(id.clone(), window, cx);
                                             })
                                         })
-                                        .child(project.title.clone()),
+                                        .child(div().truncate().child(project.title.clone()))
+                                        .child(crate::symbols::icon(
+                                            Some("arrow_forward"),
+                                            px(14.),
+                                            palette.ring,
+                                        )),
                                 ),
                             )
                             .child(
                                 div()
                                     .overflow_hidden()
-                                    .max_h(px(18.))
-                                    .line_clamp(1)
-                                    .whitespace_nowrap()
-                                    .text_ellipsis()
+                                    .h(px(if compact { 54. } else { 36. }))
+                                    .max_h(px(if compact { 54. } else { 36. }))
+                                    .line_clamp(if compact { 3 } else { 2 })
                                     .text_size(px(ui::TEXT_BODY))
                                     .line_height(px(18.))
                                     .text_color(palette.muted_foreground)
-                                    .when(compact, |summary| {
-                                        summary.whitespace_nowrap().text_ellipsis()
-                                    })
                                     .child(project.summary.clone()),
                             )
                             .child(
@@ -2891,21 +2896,9 @@ impl Render for Discover {
                         div()
                             .flex()
                             .flex_none()
-                            .w(px(if compact { 82. } else { 178. }))
-                            .when(compact, |actions| actions.flex_col())
+                            .w(px(82.))
                             .items_center()
                             .justify_end()
-                            .gap(px(if compact { 4. } else { 8. }))
-                            .child({
-                                let id = id.clone();
-                                AuroraButton::new(("details", index), "Details")
-                                    .accessibility_label(format!("Details for {}", project.title))
-                                    .icon("arrow_forward")
-                                    .size(ButtonSize::Small)
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.open_details(id.clone(), window, cx);
-                                    }))
-                            })
                             .when(can_quick_install, |actions| {
                                 actions.child({
                                     let id = id.clone();
@@ -3400,6 +3393,7 @@ impl Discover {
                 .gap(px(8.))
                 .child(DialogClose::new().trigger(move |button| {
                     button
+                        .accessibility_label("Close project details")
                         .flex()
                         .items_center()
                         .justify_center()
