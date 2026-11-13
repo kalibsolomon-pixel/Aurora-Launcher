@@ -552,12 +552,13 @@ fn icon_button(
         .h(px(32.))
         .px(px(8.))
         .gap(px(6.))
-        .text_size(px(ui::TEXT_CAPTION))
-        .text_color(Hsla { a: 0.9, ..t.danger })
+        .text_size(px(ui::TEXT_BODY))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(t.danger)
         .rounded(t.radius)
-        .bg(gpui::transparent_black())
+        .bg(Hsla { a: 0.10, ..t.danger })
         .border_1()
-        .border_color(gpui::transparent_black())
+        .border_color(Hsla { a: 0.28, ..t.danger })
         .hover(move |style| style.bg(hover))
         .active(|style| style.opacity(0.88))
         .focus(move |style| style.border_color(ring))
@@ -565,7 +566,7 @@ fn icon_button(
         .child(crate::symbols::icon(
             Some(icon),
             px(16.),
-            Hsla { a: 0.9, ..t.danger },
+            t.danger,
         ))
         .child("Remove…")
 }

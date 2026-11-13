@@ -1977,15 +1977,15 @@ impl Render for Skins {
                             .child(ui::section_header(
                                 &palette,
                                 "Library",
-                                Some("Skins saved on this device.".into()),
-                            ))
-                            .when(library_count > 0, |d| {
-                                d.child(ui::badge(
-                                    &palette,
-                                    library_count.to_string(),
-                                    ui::Tone::Neutral,
-                                ))
-                            }),
+                                Some(
+                                    match library_count {
+                                        0 => "Skins saved on this device.".to_owned(),
+                                        1 => "1 skin saved on this device.".to_owned(),
+                                        n => format!("{n} skins saved on this device."),
+                                    }
+                                    .into(),
+                                ),
+                            )),
                     )
                     .child(
                         div()

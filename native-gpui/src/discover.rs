@@ -2925,7 +2925,7 @@ impl Render for Discover {
                                         .full_width()
                                         .accessibility_label(format!("Install {}", project.title))
                                         .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Primary)
+                                        .variant(ButtonVariant::Soft)
                                         .icon("download")
                                         .disabled(installed || row_busy || s.target.is_none())
                                         .on_click(cx.listener(move |this, _, _, cx| {

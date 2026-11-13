@@ -1523,8 +1523,8 @@ impl Render for Content {
                     div().flex().items_center().gap(px(6.)).child(
                         AuroraButton::new("content-actions", "Manage content")
                             .size(ButtonSize::Small)
-                            .variant(ButtonVariant::Ghost)
-                            .icon("expand_more")
+                            .variant(ButtonVariant::Default)
+                            .icon("tune")
                             .selected(self.actions_open)
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.actions_open = !this.actions_open;
@@ -1690,7 +1690,7 @@ impl Render for Content {
                                 .flex()
                                 .flex_1()
                                 .gap(px(24.))
-                                .child(div().w(px(240.)).child("Name"))
+                                .child(div().w(px(320.)).child("Name"))
                                 .child(div().flex_1().child("File name")),
                         )
                         .when(self.actions_open, |header| {
@@ -1742,7 +1742,7 @@ impl Render for Content {
                             .items_center()
                             .gap(px(8.))
                             .min_w(px(0.))
-                            .when(inline_meta, |name| name.w(px(240.)).flex_shrink_0())
+                            .when(inline_meta, |name| name.w(px(320.)).flex_shrink_0())
                             .when_some(icon, |name, image| {
                                 name.child(art_tile(
                                     gpui::SharedString::from(format!("icon-{}", entry.id)),

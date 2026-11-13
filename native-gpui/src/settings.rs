@@ -40,7 +40,6 @@ use aurora_launcher_lib::host::Host;
 use gpui_kit::base::ElementExt as _;
 use gpui_kit::base::input::{InputEvent, InputState};
 use gpui_kit::base::slider::{SliderEvent, SliderState};
-use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AppContext as _, Bounds, Context, Div, DragMoveEvent, Entity, EventEmitter, FocusHandle, Hsla,
     InteractiveElement as _, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent,
