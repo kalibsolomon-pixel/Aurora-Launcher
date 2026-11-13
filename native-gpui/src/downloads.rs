@@ -259,6 +259,16 @@ fn settle_notice(result: &api::ApiResult<Value>) -> String {
     }
 }
 
+/// Relative finish time for a history row, read at render.
+fn finished_ago(elapsed: Duration) -> String {
+    match elapsed.as_secs() / 60 {
+        0 => "Just now".to_owned(),
+        minutes @ 1..=59 => format!("{minutes} min ago"),
+        minutes if minutes < 24 * 60 => format!("{} h ago", minutes / 60),
+        _ => "Earlier".to_owned(),
+    }
+}
+
 /// Shown instead of the rows while the queue is empty.
 /// An unframed empty state, with a bounded reading measure.
 fn empty_queue(t: &crate::theme::AuroraTheme, title: String, body: &'static str) -> gpui::Div {
@@ -364,6 +374,8 @@ struct Task {
     resume: Option<String>,
     /// Cancel was requested for the current run.
     cancelling: bool,
+    /// When the latest run settled; shown as a relative time.
+    finished_at: Option<std::time::Instant>,
 }
 
 impl Task {
@@ -499,6 +511,7 @@ impl DownloadsState {
             control: Control::default(),
             resume: None,
             cancelling: false,
+            finished_at: None,
         });
         self.trim_history();
         id
@@ -565,6 +578,7 @@ impl DownloadsState {
         task.control.cancel();
         if task.phase == Phase::Pending {
             task.phase = Phase::Cancelled;
+            task.finished_at = Some(std::time::Instant::now());
             task.message = "Cancelled before it started.".into();
         } else if !task.cancelling {
             task.cancelling = true;
@@ -659,6 +673,7 @@ impl DownloadsState {
             }
         };
         if matches!(settled, Some(Settled::Terminal { .. })) {
+            task.finished_at = Some(std::time::Instant::now());
             self.notice = Some(settle_notice(&result));
             self.trim_history();
         }
@@ -1103,7 +1118,12 @@ impl Render for Downloads {
             };
             let data = RowData {
                 title: task.title.clone(),
-                detail: task.detail.clone(),
+                detail: match task.finished_at {
+                    Some(at) if !matches!(task.phase, Phase::Pending | Phase::Running) => {
+                        format!("{} · {}", task.detail, finished_ago(at.elapsed()))
+                    }
+                    _ => task.detail.clone(),
+                },
                 phase: task.phase,
                 stage,
                 message,
@@ -1906,6 +1926,10 @@ mod tests {
         assert_eq!(state.active_count(), 0);
         assert_eq!(nav_label(state.active_count()), "Downloads");
         assert_eq!(queue_summary(0, 0), "Nothing downloading.");
+        assert_eq!(finished_ago(Duration::from_secs(20)), "Just now");
+        assert_eq!(finished_ago(Duration::from_secs(150)), "2 min ago");
+        assert_eq!(finished_ago(Duration::from_secs(7_300)), "2 h ago");
+        assert_eq!(finished_ago(Duration::from_secs(90_000)), "Earlier");
         let a = state.submit(job(Some("i1"), "A"));
         let b = state.submit(job(Some("i1"), "B"));
         let c = state.submit(job(None, "C"));

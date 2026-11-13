@@ -1836,7 +1836,7 @@ impl Render for Content {
                             )))
                             .label(format!("Enable {}", entry.name))
                             .checked(enabled)
-                            .disabled(busy || !entry.toggle)
+                            .disabled(busy || !entry.toggle || required)
                             .on_change(move |_, _, _, cx| {
                                 v.update(cx, |s, cx| {
                                     s.toggle(&target, e.clone(), cx);

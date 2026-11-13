@@ -282,6 +282,7 @@ impl Render for SkinPreview {
         // Icon-only tool button (32px) with an accessible name.
         let tool = |id: &'static str,
                     label: &'static str,
+                    short: &'static str,
                     icon: &'static str,
                     action: fn(&mut Self, &mut Context<Self>)| {
             let entity = entity.clone();
@@ -292,14 +293,19 @@ impl Render for SkinPreview {
                 .flex_shrink_0()
                 .items_center()
                 .justify_center()
-                .size(px(32.))
+                .gap(px(4.))
+                .h(px(26.))
+                .px(px(7.))
                 .rounded(t.radius)
                 .border_1()
                 .border_color(gpui::transparent_black())
                 .hover(move |style| style.bg(hover))
                 .active(|style| style.opacity(0.88))
                 .focus(move |style| style.border_color(ring))
-                .child(crate::symbols::icon(Some(icon), px(18.), color))
+                .text_size(px(ui::TEXT_CAPTION))
+                .text_color(color)
+                .child(crate::symbols::icon(Some(icon), px(14.), color))
+                .child(short)
                 .on_click(move |_, _, cx| {
                     entity.update(cx, |s, cx| action(s, cx));
                 })
@@ -432,33 +438,43 @@ impl Render for SkinPreview {
             })
             .when(!neutral, |d| {
                 d.child(
-                    // Floating view tools, top-right of the stage. Presses here must
+                    // Labeled view tools, centered atop the stage. Presses here must
                     // not start a rotate-drag on the stage underneath.
                     div()
                         .absolute()
-                        .top(px(10.))
-                        .right(px(10.))
+                        .top(px(8.))
+                        .left(px(0.))
+                        .right(px(0.))
                         .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .p(px(3.))
-                        .rounded(t.radius_lg)
-                        .bg(t.raised)
-                        .border_1()
-                        .border_color(t.border_subtle)
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .child(tool("preview-zoom-in", "Zoom in", "zoom_in", |s, cx| {
-                            s.zoom(0.08, cx)
-                        }))
-                        .child(tool("preview-zoom-out", "Zoom out", "zoom_out", |s, cx| {
-                            s.zoom(-0.08, cx)
-                        }))
-                        .child(tool(
-                            "preview-reset",
-                            "Reset view",
-                            "restart_alt",
-                            |s, cx| s.reset(cx),
-                        )),
+                        .justify_center()
+                        .child(
+                            div()
+                                .flex()
+                                .gap(px(2.))
+                                .p(px(3.))
+                                .rounded(t.radius_lg)
+                                .bg(t.raised)
+                                .border_1()
+                                .border_color(t.border_subtle)
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .child(tool("preview-zoom-in", "Zoom in", "Zoom in", "zoom_in", |s, cx| {
+                                    s.zoom(0.08, cx)
+                                }))
+                                .child(tool(
+                                    "preview-zoom-out",
+                                    "Zoom out",
+                                    "Zoom out",
+                                    "zoom_out",
+                                    |s, cx| s.zoom(-0.08, cx),
+                                ))
+                                .child(tool(
+                                    "preview-reset",
+                                    "Reset view",
+                                    "Reset",
+                                    "restart_alt",
+                                    |s, cx| s.reset(cx),
+                                )),
+                        ),
                 )
             });
 

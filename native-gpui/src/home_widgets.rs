@@ -3500,7 +3500,7 @@ impl HomeWidgets {
                                             .flex_col()
                                             .flex_shrink_0()
                                             .pb(px(AXIS_HEIGHT + 8.))
-                                            .pr(px(20.))
+                                            .pr(px(10.))
                                             .child(
                                                 div().relative().flex_1().w(px(76.)).children(
                                                     [
@@ -3511,6 +3511,9 @@ impl HomeWidgets {
                                                     .map(|(at, text)| {
                                                         label(text)
                                                             .absolute()
+                                                            .left(px(0.))
+                                                            .right(px(0.))
+                                                            .text_right()
                                                             .top(gpui_kit::relative(at))
                                                             .mt(px(-8.))
                                                             .line_height(px(16.))

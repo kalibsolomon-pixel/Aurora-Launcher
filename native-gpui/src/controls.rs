@@ -454,7 +454,11 @@ impl RenderOnce for AuroraToggle {
                     .h(px(24.))
                     .rounded_full()
                     .bg(track_off)
-                    .styles(|styles| styles.checked(|style| style.bg(track_on)))
+                    .border_1()
+                    .border_color(t.subtle_foreground.opacity(0.7))
+                    .styles(|styles| {
+                        styles.checked(|style| style.bg(track_on).border_color(track_on))
+                    })
                     .child(
                         SwitchThumb::new(self.checked)
                             .disabled(self.disabled)

@@ -1292,7 +1292,11 @@ impl Render for Syncing {
                                 }
                             }),
                     )
-                    .child(ui::title_block(t, *label, Some(category_detail(id).into())).flex_1());
+                    .child(
+                        ui::title_block(t, *label, Some(category_detail(id).into()))
+                            .flex_1()
+                            .when(!enabled, |block| block.opacity(0.72)),
+                    );
                 category_grid = category_grid.child(row);
             }
             if self.section == 0 {
