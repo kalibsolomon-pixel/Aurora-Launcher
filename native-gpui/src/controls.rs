@@ -547,11 +547,11 @@ impl RenderOnce for AuroraCheckbox {
                     .rounded(px(4.))
                     .border_1()
                     .border_color(if self.checked {
-                        t.muted_foreground
+                        t.accent
                     } else {
                         t.subtle_foreground
                     })
-                    .bg(if self.checked { t.control } else { t.sunken })
+                    .bg(if self.checked { t.accent } else { t.sunken })
                     .child(crate::symbols::icon(Some("check"), px(16.), mark)),
             );
         if let Some(on_change) = self.on_change {

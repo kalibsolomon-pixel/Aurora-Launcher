@@ -1345,7 +1345,7 @@ impl Render for Content {
         let reserved = if window.viewport_size().width < px(1000.) {
             380.
         } else {
-            315.
+            343.
         };
         let reserved = reserved
             + if self.updates_open { 130. } else { 0. }
@@ -1672,6 +1672,32 @@ impl Render for Content {
                     Some("Try a different name or file name, or clear the filter."),
                 ));
             }
+            if window.viewport_size().width >= px(1000.) && !visible.is_empty() {
+                list = list.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(12.))
+                        .h(px(28.))
+                        .px(px(16.))
+                        .border_b_1()
+                        .border_color(palette.border_subtle)
+                        .text_size(px(ui::TEXT_CAPTION))
+                        .text_color(palette.muted_foreground)
+                        .child(div().w(px(48.)).child("Enabled"))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_1()
+                                .gap(px(24.))
+                                .child(div().w(px(240.)).child("Name"))
+                                .child(div().flex_1().child("File name")),
+                        )
+                        .when(self.actions_open, |header| {
+                            header.child(div().w(px(88.)).text_center().child("Actions"))
+                        }),
+                );
+            }
             let total = visible.len();
             // The pager itself costs a row. If one more item fits without it,
             // show the whole inventory instead of creating a one-item last page.
@@ -1717,6 +1743,15 @@ impl Render for Content {
                             .gap(px(8.))
                             .min_w(px(0.))
                             .when(inline_meta, |name| name.w(px(240.)).flex_shrink_0())
+                            .when_some(icon, |name, image| {
+                                name.child(art_tile(
+                                    gpui::SharedString::from(format!("icon-{}", entry.id)),
+                                    Some(image),
+                                    &entry.letter,
+                                    32.,
+                                    &palette,
+                                ))
+                            })
                             .child(
                                 div()
                                     .min_w(px(0.))
@@ -1822,15 +1857,6 @@ impl Render for Content {
                         .min_h(px(50.))
                         .py(px(4.))
                         .child(toggle)
-                        .when_some(icon, |row, image| {
-                            row.child(art_tile(
-                                gpui::SharedString::from(format!("icon-{}", entry.id)),
-                                Some(image),
-                                &entry.letter,
-                                40.,
-                                &palette,
-                            ))
-                        })
                         .child(text.flex_1())
                         .child(
                             div()

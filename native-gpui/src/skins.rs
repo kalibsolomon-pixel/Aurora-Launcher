@@ -1862,10 +1862,7 @@ impl Render for Skins {
                         ),
                 ),
         );
-        if signed_in.is_some()
-            || matches!(self.core.choice, SkinChoice::Preset(_))
-            || self.core.cape_choice.is_some()
-        {
+        if signed_in.is_some() || self.core.cape_choice.is_some() {
             appearance = appearance.child(
                 div()
                     .flex()
@@ -2467,7 +2464,14 @@ impl Render for Skins {
                 .flex_wrap()
                 .gap(px(ui::PAGE_GAP))
                 .items_start()
-                .child(appearance.flex_1().min_w(px(320.)))
+                .child(
+                    appearance
+                        .when(signed_in.is_none(), |card| {
+                            card.bg(gpui::transparent_black()).border_0().p(px(0.))
+                        })
+                        .flex_1()
+                        .min_w(px(320.)),
+                )
                 .when(signed_in.is_some(), |row| {
                     row.child(cape_card.flex_1().min_w(px(240.)))
                 }),

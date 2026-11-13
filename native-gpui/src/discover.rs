@@ -2534,7 +2534,7 @@ impl Render for Discover {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::theme(cx).clone();
         let compact = window.viewport_size().width < px(1000.);
-        let row_height = if compact { 128. } else { 104. };
+        let row_height = if compact { 128. } else { 84. };
         let reserved = if compact { 392. } else { 326. }
             + if self.state.searching || self.state.results.len() >= MAX_RESULTS {
                 28.
@@ -2807,6 +2807,29 @@ impl Render for Discover {
             if row_busy {
                 meta = meta.child(ui::status_badge(&palette, "Installing…", ui::Tone::Accent));
             }
+            let metadata = div()
+                .flex()
+                .flex_shrink_0()
+                .items_center()
+                .gap(px(12.))
+                .when(!project.author.is_empty(), |line| {
+                    line.child(
+                        div()
+                            .min_w(px(0.))
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .text_size(px(ui::TEXT_CAPTION))
+                            .text_color(palette.muted_foreground)
+                            .child(format!("by {}", project.author)),
+                    )
+                })
+                .child(meta);
+            let (heading_meta, footer_meta) = if compact {
+                (None, Some(metadata))
+            } else {
+                (Some(metadata), None)
+            };
             let can_quick_install = !s.is_pack();
             let hover = palette.control;
             let title_hover = palette.ring;
@@ -2814,9 +2837,9 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == end)
                     .id(("result", index))
                     .gap(px(14.))
-                    .h(px(if compact { 128. } else { 104. }))
-                    .min_h(px(if compact { 128. } else { 104. }))
-                    .max_h(px(if compact { 128. } else { 104. }))
+                    .h(px(if compact { 128. } else { 84. }))
+                    .min_h(px(if compact { 128. } else { 84. }))
+                    .max_h(px(if compact { 128. } else { 84. }))
                     .flex_shrink_0()
                     .py(px(0.))
                     .hover(move |style| style.bg(hover))
@@ -2836,31 +2859,41 @@ impl Render for Discover {
                             .min_w(px(0.))
                             .gap(px(5.))
                             .child(
-                                div().flex().items_baseline().gap(px(8.)).child(
-                                    gpui_kit::base::Button::new(("details", index))
-                                        .aria_label(format!("Open project {}", project.title))
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(7.))
-                                        .min_w(px(0.))
-                                        .h(px(24.))
-                                        .rounded(palette.radius)
-                                        .border_1()
-                                        .border_color(gpui_kit::transparent_black())
-                                        .focus(move |style| style.border_color(title_hover))
-                                        .text_size(px(ui::TEXT_BODY + 1.))
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(palette.foreground)
-                                        .cursor_pointer()
-                                        .hover(|style| style.text_color(title_hover))
-                                        .on_click({
-                                            let id = id.clone();
-                                            cx.listener(move |this, _, window, cx| {
-                                                this.open_details(id.clone(), window, cx);
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(12.))
+                                    .child(
+                                        gpui_kit::base::Button::new(("details", index))
+                                            .aria_label(format!("Details for {}", project.title))
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(7.))
+                                            .min_w(px(0.))
+                                            .h(px(24.))
+                                            .rounded(palette.radius)
+                                            .border_1()
+                                            .border_color(gpui_kit::transparent_black())
+                                            .focus(move |style| style.border_color(title_hover))
+                                            .text_size(px(ui::TEXT_BODY + 1.))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(palette.ring)
+                                            .cursor_pointer()
+                                            .hover(|style| style.text_color(title_hover))
+                                            .on_click({
+                                                let id = id.clone();
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.open_details(id.clone(), window, cx);
+                                                })
                                             })
-                                        })
-                                        .child(div().truncate().child(project.title.clone())),
-                                ),
+                                            .child(div().truncate().child(project.title.clone()))
+                                            .child(crate::symbols::icon(
+                                                Some("open_in_new"),
+                                                px(14.),
+                                                palette.ring,
+                                            )),
+                                    )
+                                    .children(heading_meta),
                             )
                             .child(
                                 div()
@@ -2873,25 +2906,7 @@ impl Render for Discover {
                                     .text_color(palette.muted_foreground)
                                     .child(project.summary.clone()),
                             )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(12.))
-                                    .when(!project.author.is_empty(), |line| {
-                                        line.child(
-                                            div()
-                                                .min_w(px(0.))
-                                                .overflow_hidden()
-                                                .whitespace_nowrap()
-                                                .text_ellipsis()
-                                                .text_size(px(ui::TEXT_CAPTION))
-                                                .text_color(palette.muted_foreground)
-                                                .child(format!("by {}", project.author)),
-                                        )
-                                    })
-                                    .child(meta),
-                            ),
+                            .children(footer_meta),
                     )
                     .child(
                         div()
@@ -2916,16 +2931,6 @@ impl Render for Discover {
                                             this.quick_install(id.clone(), cx);
                                         }))
                                 })
-                            })
-                            .child({
-                                let id = id.clone();
-                                AuroraButton::new(("project-details", index), "Details")
-                                    .accessibility_label(format!("Details for {}", project.title))
-                                    .size(ButtonSize::Small)
-                                    .full_width()
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.open_details(id.clone(), window, cx);
-                                    }))
                             }),
                     ),
             );
