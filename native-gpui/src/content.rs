@@ -1693,6 +1693,7 @@ impl Render for Content {
                     .as_ref()
                     .and_then(|icon| self.icons.cache.image(&icon.key()));
                 let (meta, status_word, notes) = describe(&entry.details);
+                let inline_meta = window.viewport_size().width >= px(1000.) && notes.is_empty();
                 let disabled_row = entry.enabled == Some(false);
                 let mut line = vec![entry.file_name.as_str()];
                 line.extend(meta.iter().copied().filter(|m| {
@@ -1706,12 +1707,16 @@ impl Render for Content {
                     .gap(px(2.))
                     .line_height(px(18.))
                     .min_w(px(0.))
+                    .when(inline_meta, |row| {
+                        row.flex_row().items_center().gap(px(24.))
+                    })
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(px(8.))
                             .min_w(px(0.))
+                            .when(inline_meta, |name| name.w(px(240.)).flex_shrink_0())
                             .child(
                                 div()
                                     .min_w(px(0.))
@@ -1729,8 +1734,10 @@ impl Render for Content {
                     )
                     .child(
                         div()
+                            .flex_1()
+                            .min_w(px(0.))
                             .text_size(px(ui::TEXT_BODY))
-                            .text_color(palette.foreground)
+                            .text_color(palette.muted_foreground)
                             .text_ellipsis()
                             .child(gpui::SharedString::from(line.join(" · "))),
                     );

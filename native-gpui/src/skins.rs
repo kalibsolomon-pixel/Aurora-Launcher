@@ -2198,7 +2198,8 @@ impl Render for Skins {
                         .child(
                             div()
                                 .flex()
-                                .flex_shrink_0()
+                                .flex_wrap()
+                                .w_full()
                                 .items_center()
                                 .gap(px(8.))
                                 .child(
@@ -2216,22 +2217,18 @@ impl Render for Skins {
                                     )),
                                 )
                                 .child(
-                                    icon_button(
-                                        &palette,
+                                    AuroraButton::new(
                                         format!("skins-favorite-{}", preset.id),
-                                        "star",
                                         if preset.favorite {
-                                            "Remove favorite"
+                                            "Unfavorite"
                                         } else {
                                             "Favorite"
                                         },
-                                        if preset.favorite {
-                                            palette.warning
-                                        } else {
-                                            palette.muted_foreground
-                                        },
-                                        false,
                                     )
+                                    .icon("star")
+                                    .size(ButtonSize::Small)
+                                    .variant(ButtonVariant::Subtle)
+                                    .selected(preset.favorite)
                                     .disabled(locked)
                                     .on_click(cx.listener(
                                         move |this, _, _, cx| {
@@ -2240,14 +2237,13 @@ impl Render for Skins {
                                     )),
                                 )
                                 .child(
-                                    icon_button(
-                                        &palette,
+                                    AuroraButton::new(
                                         format!("skins-rename-{}", preset.id),
-                                        "edit",
                                         "Rename",
-                                        palette.muted_foreground,
-                                        false,
                                     )
+                                    .icon("edit")
+                                    .size(ButtonSize::Small)
+                                    .variant(ButtonVariant::Subtle)
                                     .disabled(locked)
                                     .on_click(cx.listener(
                                         move |this, _, window, cx| {
@@ -2256,14 +2252,13 @@ impl Render for Skins {
                                     )),
                                 )
                                 .child(
-                                    icon_button(
-                                        &palette,
+                                    AuroraButton::new(
                                         format!("skins-remove-{}", preset.id),
-                                        "delete",
                                         "Remove",
-                                        palette.danger,
-                                        true,
                                     )
+                                    .icon("delete")
+                                    .size(ButtonSize::Small)
+                                    .variant(ButtonVariant::Subtle)
                                     .disabled(locked)
                                     .on_click(cx.listener(
                                         move |this, _, _, cx| {

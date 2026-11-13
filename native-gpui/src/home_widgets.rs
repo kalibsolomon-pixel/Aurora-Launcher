@@ -3418,7 +3418,7 @@ impl HomeWidgets {
                     None => {
                         let label = |text: String| {
                             div()
-                                .text_size(px(ui::TEXT_BODY))
+                                .text_size(px(ui::TEXT_BODY + 1.))
                                 .text_color(palette.muted_foreground)
                                 .child(text)
                         };
@@ -3438,7 +3438,7 @@ impl HomeWidgets {
                                         .flex_1()
                                         .flex()
                                         .justify_center()
-                                        .text_size(px(ui::TEXT_CAPTION))
+                                        .text_size(px(ui::TEXT_BODY - 1.))
                                         .when(last, |this| this.font_weight(FontWeight::SEMIBOLD))
                                         .text_color(if last {
                                             palette.foreground
@@ -3479,10 +3479,10 @@ impl HomeWidgets {
                                             .flex()
                                             .flex_col()
                                             .flex_shrink_0()
-                                            .pb(px(AXIS_HEIGHT + 4.))
-                                            .pr(px(16.))
+                                            .pb(px(AXIS_HEIGHT + 8.))
+                                            .pr(px(20.))
                                             .child(
-                                                div().relative().flex_1().w(px(68.)).children(
+                                                div().relative().flex_1().w(px(76.)).children(
                                                     [
                                                         (0., projection.peak.clone()),
                                                         (0.5, projection.midpoint.clone()),
@@ -3579,7 +3579,7 @@ impl HomeWidgets {
                                                         },
                                                     )),
                                             )
-                                            .child(axis.pt(px(4.))),
+                                            .child(axis.pt(px(8.))),
                                     ),
                             )
                             .when(period != Period::Week || narrow, |card| {
@@ -3855,7 +3855,7 @@ impl HomeWidgets {
 // ---------------------------------------------------------------------------
 
 /// Height of the weekday / range axis under the chart.
-const AXIS_HEIGHT: f32 = 20.;
+const AXIS_HEIGHT: f32 = 28.;
 
 /// The plot's bar: a fraction of the plot, never under 2 px. The plot's own
 /// height is flexible, so the bar is a percentage of it.

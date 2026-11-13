@@ -2838,7 +2838,7 @@ impl Render for Discover {
                             .child(
                                 div().flex().items_baseline().gap(px(8.)).child(
                                     gpui_kit::base::Button::new(("details", index))
-                                        .aria_label(format!("Details for {}", project.title))
+                                        .aria_label(format!("Open project {}", project.title))
                                         .flex()
                                         .items_center()
                                         .gap(px(7.))
@@ -2859,14 +2859,7 @@ impl Render for Discover {
                                                 this.open_details(id.clone(), window, cx);
                                             })
                                         })
-                                        .child(div().truncate().child(project.title.clone()))
-                                        .child(
-                                            div()
-                                                .flex_shrink_0()
-                                                .text_size(px(ui::TEXT_CAPTION))
-                                                .text_color(palette.ring)
-                                                .child("Details"),
-                                        ),
+                                        .child(div().truncate().child(project.title.clone())),
                                 ),
                             )
                             .child(
@@ -2875,7 +2868,7 @@ impl Render for Discover {
                                     .h(px(if compact { 54. } else { 36. }))
                                     .max_h(px(if compact { 54. } else { 36. }))
                                     .line_clamp(if compact { 3 } else { 2 })
-                                    .text_size(px(ui::TEXT_BODY))
+                                    .text_size(px(ui::TEXT_BODY - 1.))
                                     .line_height(px(18.))
                                     .text_color(palette.muted_foreground)
                                     .child(project.summary.clone()),
@@ -2903,6 +2896,8 @@ impl Render for Discover {
                     .child(
                         div()
                             .flex()
+                            .flex_col()
+                            .gap(px(8.))
                             .flex_none()
                             .w(px(82.))
                             .items_center()
@@ -2911,6 +2906,7 @@ impl Render for Discover {
                                 actions.child({
                                     let id = id.clone();
                                     AuroraButton::new(("install", index), "Install")
+                                        .full_width()
                                         .accessibility_label(format!("Install {}", project.title))
                                         .size(ButtonSize::Small)
                                         .variant(ButtonVariant::Primary)
@@ -2920,6 +2916,16 @@ impl Render for Discover {
                                             this.quick_install(id.clone(), cx);
                                         }))
                                 })
+                            })
+                            .child({
+                                let id = id.clone();
+                                AuroraButton::new(("project-details", index), "Details")
+                                    .accessibility_label(format!("Details for {}", project.title))
+                                    .size(ButtonSize::Small)
+                                    .full_width()
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.open_details(id.clone(), window, cx);
+                                    }))
                             }),
                     ),
             );
