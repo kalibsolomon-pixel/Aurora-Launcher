@@ -2535,7 +2535,7 @@ impl Render for Discover {
         let palette = theme::theme(cx).clone();
         let compact = window.viewport_size().width < px(1000.);
         let row_height = if compact { 128. } else { 84. };
-        let reserved = if compact { 392. } else { 350. }
+        let reserved = if compact { 392. } else { 326. }
             + if self.state.searching || self.state.results.len() >= MAX_RESULTS {
                 28.
             } else {
@@ -2713,11 +2713,10 @@ impl Render for Discover {
         let search_row = div().flex_1().min_w(px(0.)).child(SearchField {
             state: self.query.clone(),
             label: "Search Modrinth projects; press Enter to search".into(),
-            submit: AuroraButton::new("search", "")
+            submit: AuroraButton::new("search", "Search")
                 .accessibility_label("Search Modrinth")
                 .variant(ButtonVariant::Default)
                 .size(ButtonSize::Small)
-                .icon("arrow_forward")
                 .disabled(s.searching)
                 .on_click(cx.listener(|this, _, _, cx| this.search(false, cx))),
         });

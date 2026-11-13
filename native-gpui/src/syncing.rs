@@ -1250,13 +1250,21 @@ impl Render for Syncing {
             root = root.child(tabs);
 
             // What to sync.
-            let categories = section_card(t).child(ui::section_header(
-                t,
-                "What to sync",
-                Some(
-                    "Choose the files that stay in step across instances.".into(),
-                ),
-            ));
+            let categories = section_card(t).child(
+                div()
+                    .flex()
+                    .items_start()
+                    .justify_between()
+                    .gap(px(12.))
+                    .child(ui::section_header(
+                        t,
+                        "What to sync",
+                        Some("Choose the files that stay in step across instances.".into()),
+                    ))
+                    .when(!enabled, |header| {
+                        header.child(ui::badge(t, "Paused while Sync is off", ui::Tone::Neutral))
+                    }),
+            );
             let mut category_grid = div().grid().grid_cols(2).gap_x(px(24.));
             for (index, (id, label)) in CATEGORIES.iter().enumerate() {
                 let checked = draft.categories.iter().any(|current| current == id);
@@ -1273,6 +1281,7 @@ impl Render for Syncing {
                     .child(
                         AuroraCheckbox::new(choice_id, format!("Include {}", label))
                             .checked(checked)
+                            .dormant(!enabled)
                             .disabled(editing_disabled)
                             .on_change({
                                 let view = view.clone();

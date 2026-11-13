@@ -1332,7 +1332,7 @@ impl Render for Accounts {
                             .variant(if selected && reauth {
                                 ButtonVariant::Soft
                             } else {
-                                ButtonVariant::Default
+                                ButtonVariant::Ghost
                             })
                             .disabled(busy)
                             .on_click(cx.listener(

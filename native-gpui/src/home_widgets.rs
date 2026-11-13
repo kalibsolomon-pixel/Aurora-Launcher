@@ -3591,8 +3591,7 @@ impl HomeWidgets {
                                                                             if point.fraction > 0. {
                                                                                 palette.accent
                                                                             } else {
-                                                                                palette
-                                                                                    .control_hover
+                                                                                gpui_kit::transparent_black()
                                                                             },
                                                                         ),
                                                                 )
@@ -3880,7 +3879,7 @@ const AXIS_HEIGHT: f32 = 28.;
 /// The plot's bar: a fraction of the plot, never under 2 px. The plot's own
 /// height is flexible, so the bar is a percentage of it.
 fn relative_bar(fraction: f32) -> gpui_kit::DefiniteLength {
-    gpui_kit::relative((fraction.clamp(0., 1.) * 0.94).max(0.02))
+    gpui_kit::relative((fraction.clamp(0., 1.) * 0.94).max(0.04))
 }
 
 fn weekday_label(day: u64) -> &'static str {

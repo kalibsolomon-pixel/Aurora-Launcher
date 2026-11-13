@@ -37,7 +37,7 @@ pub fn scrollbar(
     let active = t.muted_foreground.opacity(0.75);
     gpui_kit::base::Scrollbar::vertical(handle)
         .id(id)
-        .mode(gpui_kit::base::ScrollbarMode::Always)
+        .mode(gpui_kit::base::ScrollbarMode::Hover)
         .styles(move |styles| {
             styles
                 .thumb(|style| style.bg(thumb).width(px(3.)).radius(px(3.)))
