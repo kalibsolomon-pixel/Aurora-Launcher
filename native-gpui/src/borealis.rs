@@ -158,7 +158,7 @@ pub const RAISED_ALPHA: u8 = 0xfa;
 pub const CARD_ALPHA: u8 = 0xee;
 /// The bands are ambience, not content: drawn at this opacity over the opaque
 /// theme background so the canvas stays calm behind text.
-pub const BAND_OPACITY: f32 = 0.24;
+pub const BAND_OPACITY: f32 = 0.18;
 
 /// The saved background ids, in the order of the Settings dropdown.
 pub const BACKGROUNDS: [&str; 2] = ["simple", "borealis"];

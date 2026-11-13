@@ -1613,14 +1613,30 @@ impl Launcher {
                 palette,
             )
         });
+        // A large, faint echo of the instance glyph anchors the hero's open
+        // right side without adding information.
+        let watermark = instance.map(|instance| {
+            div()
+                .absolute()
+                .right(px(-28.))
+                .bottom(px(-44.))
+                .child(symbols::icon(
+                    stored_icon(&launcher.icons, &instance.id),
+                    px(240.),
+                    gpui::Hsla { a: 0.07, ..t.ring },
+                ))
+        });
         let hero_index = out.len();
         out.push(
             div()
+                .relative()
+                .overflow_hidden()
                 .flex()
                 .items_center()
                 .gap(px(24.))
                 .p(px(28.))
                 .h_full()
+                .children(watermark)
                 .rounded(px(16.))
                 .bg(gpui::linear_gradient(
                     100.,
@@ -2010,7 +2026,13 @@ impl Render for Launcher {
                     );
             }
             0 => {
-                content = content.children(self.home_children(&palette, cx));
+                content = content
+                    .child(ui::page_header(
+                        &palette,
+                        "Home",
+                        Some("Pick up where you left off.".into()),
+                    ))
+                    .children(self.home_children(&palette, cx));
                 if let Some(updates) = &self.client_updates {
                     content = content.child(updates.clone());
                 }

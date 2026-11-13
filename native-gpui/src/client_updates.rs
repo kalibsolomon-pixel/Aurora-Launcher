@@ -800,16 +800,45 @@ fn update_card(t: &theme::AuroraTheme) -> gpui::Div {
         .border_color(t.border_subtle)
 }
 
-/// The same card with no action, for diagnostic and no-target states.
-fn quiet_card(t: &theme::AuroraTheme, title: &str, detail: &str) -> gpui::Div {
-    update_card(t).child(
-        div()
-            .flex()
-            .items_center()
-            .gap(px(12.))
-            .child(ui::icon_tile(t, Some("system_update"), 28., false))
-            .child(ui::title_block(t, title.to_owned(), Some(detail.to_owned().into())).flex_1()),
-    )
+/// A slim single-line strip for states where nothing can be checked or
+/// applied: icon, label, a short muted explanation and an optional status
+/// badge right after the text. Hairline outline, no card fill.
+fn slim_row(t: &theme::AuroraTheme, detail: &str, badge: Option<&str>) -> gpui::Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(10.))
+        .h(px(40.))
+        .px(px(12.))
+        .rounded(t.radius)
+        .border_1()
+        .border_color(t.border_subtle)
+        .child(crate::symbols::icon(
+            Some("system_update"),
+            px(16.),
+            t.subtle_foreground,
+        ))
+        .child(
+            div()
+                .flex_shrink_0()
+                .text_size(px(ui::TEXT_BODY))
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(t.foreground)
+                .child("Aurora Client"),
+        )
+        .child(
+            div()
+                .min_w(px(0.))
+                .overflow_hidden()
+                .text_ellipsis()
+                .whitespace_nowrap()
+                .text_size(px(ui::TEXT_CAPTION))
+                .text_color(t.subtle_foreground)
+                .child(detail.to_owned()),
+        )
+        .children(
+            badge.map(|label| ui::badge(t, label.to_owned(), ui::Tone::Neutral).flex_shrink_0()),
+        )
 }
 
 impl Render for ClientUpdates {
@@ -823,10 +852,10 @@ impl Render for ClientUpdates {
         let mut root = div().flex().flex_col();
 
         if self.host.is_none() {
-            return root.child(quiet_card(
+            return root.child(slim_row(
                 &palette,
-                "Aurora Client updates",
-                "Unavailable in diagnostic mode. No provider requests are made from this view.",
+                "Unavailable in diagnostic mode. No provider requests are made.",
+                None,
             ));
         }
 
@@ -835,10 +864,10 @@ impl Render for ClientUpdates {
             && !self.state.review_open
             && self.state.completed.is_none()
         {
-            return root.child(quiet_card(
+            return root.child(slim_row(
                 &palette,
-                "Aurora Client updates",
-                "Choose an instance to check for Aurora Client updates.",
+                "Choose an instance to check for Client updates.",
+                None,
             ));
         }
 
@@ -861,6 +890,14 @@ impl Render for ClientUpdates {
         } else {
             "The last check did not finish.".to_owned()
         };
+        if !self.state.applicable
+            && !busy
+            && !self.state.review_open
+            && self.state.message.is_empty()
+            && self.state.error.is_none()
+        {
+            return root.child(slim_row(&palette, &status, Some("Not installed")));
+        }
         let mut card = update_card(&palette).child(
             div()
                 .flex()

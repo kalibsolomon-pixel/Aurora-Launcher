@@ -1237,7 +1237,7 @@ fn icon_button(
     label: String,
 ) -> gpui_kit::base::Button {
     let clear = gpui::transparent_black();
-    let (hover, ring, color) = (t.control_hover, t.ring, t.subtle_foreground);
+    let (hover, ring, color) = (t.control_hover, t.ring, t.muted_foreground);
     gpui_kit::base::Button::new(id)
         .aria_label(label)
         .flex()
@@ -1249,6 +1249,7 @@ fn icon_button(
         .bg(clear)
         .border_1()
         .border_color(clear)
+        .cursor_pointer()
         .hover(move |style| style.bg(hover))
         .active(|style| style.opacity(0.88))
         .focus(move |style| style.border_color(ring))
@@ -1566,13 +1567,19 @@ impl Render for Content {
                 });
                 list = list.child(
                     ui::row(t, index == last_index)
-                        .child(artwork::tile(
-                            gpui::SharedString::from(format!("icon-{}", entry.id)),
-                            icon,
-                            &entry.letter,
-                            px(40.),
-                            &palette,
-                        ))
+                        .py(px(10.))
+                        .child(match icon {
+                            Some(image) => artwork::tile(
+                                gpui::SharedString::from(format!("icon-{}", entry.id)),
+                                Some(image),
+                                &entry.letter,
+                                px(40.),
+                                &palette,
+                            )
+                            .into_any_element(),
+                            None => ui::icon_tile(t, Some(kind_icon(self.kind)), 40., false)
+                                .into_any_element(),
+                        })
                         .child(text.flex_1())
                         .child(
                             div()

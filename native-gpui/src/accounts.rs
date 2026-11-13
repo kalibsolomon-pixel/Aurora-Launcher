@@ -40,7 +40,8 @@ use gpui_kit::base::Dialog;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     Context, EventEmitter, FocusHandle, FontWeight, Hsla, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, Styled, Window, div, img, px, rgba,
+    ParentElement as _, Render, StatefulInteractiveElement as _, Styled, Window, div, img, px,
+    rgba,
 };
 
 use crate::api::{self, ApiResult};
@@ -512,6 +513,37 @@ fn initial_letter(name: &str) -> String {
         .unwrap_or_else(|| "?".into())
 }
 
+/// A quiet icon-only row action. The label is the accessible name.
+fn icon_button(
+    t: &theme::AuroraTheme,
+    id: impl Into<gpui_kit::ElementId>,
+    icon: &'static str,
+    label: impl Into<gpui_kit::SharedString>,
+) -> gpui_kit::base::Button {
+    let clear = gpui_kit::transparent_black();
+    let ring = t.ring;
+    let hover = Hsla {
+        a: 0.16,
+        ..t.danger
+    };
+    gpui_kit::base::Button::new(id)
+        .aria_label(label.into())
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(28.))
+        .rounded(t.radius)
+        .bg(clear)
+        .border_1()
+        .border_color(clear)
+        .hover(move |style| style.bg(hover))
+        .active(|style| style.opacity(0.88))
+        .focus(move |style| style.border_color(ring))
+        .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
+        .child(crate::symbols::icon(Some(icon), px(16.), t.muted_foreground))
+}
+
 // ---------------------------------------------------------------------------
 // Accounts view
 // ---------------------------------------------------------------------------
@@ -811,6 +843,43 @@ impl Accounts {
 
     fn load_after_settle(&mut self, cx: &mut Context<Self>) {
         self.refresh(cx);
+    }
+
+    /// A rounded avatar tile: the cached head when present, else the initial.
+    #[allow(clippy::too_many_arguments)]
+    fn avatar_tile(
+        &self,
+        t: &theme::AuroraTheme,
+        id: &str,
+        name: &str,
+        selected: bool,
+        size: f32,
+        radius: f32,
+        letter: f32,
+    ) -> gpui_kit::Div {
+        let image = self.avatars.images.get(id).cloned();
+        div()
+            .flex()
+            .flex_shrink_0()
+            .items_center()
+            .justify_center()
+            .size(px(size))
+            .rounded(px(radius))
+            .overflow_hidden()
+            .bg(if selected { t.accent_soft } else { t.control })
+            .border_1()
+            .border_color(if selected {
+                Hsla { a: 0.40, ..t.ring }
+            } else {
+                t.border_subtle
+            })
+            .text_size(px(letter))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(if selected { t.ring } else { t.muted_foreground })
+            .map(|d| match image {
+                Some(image) => d.child(img(image).size(px(size))),
+                None => d.child(initial_letter(name)),
+            })
     }
 
     // -- actions ------------------------------------------------------------
@@ -1132,111 +1201,90 @@ impl Render for Accounts {
                     selected_id.as_deref() != Some(account.account_id.as_str())
                 });
                 let count = rows.len();
-                let mut list = ui::list_card(&palette);
-                for (index, account) in rows.into_iter().enumerate() {
+                let mut list = ui::list_card(&palette).child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(12.))
+                        .px(px(16.))
+                        .py(px(14.))
+                        .border_b_1()
+                        .border_color(palette.border_subtle)
+                        .child(ui::section_header(
+                            &palette,
+                            "Your accounts",
+                            Some("Choose which account launches the game.".into()),
+                        ))
+                        .child(ui::badge(&palette, count.to_string(), ui::Tone::Neutral)),
+                );
+                for (index, account) in rows.iter().copied().enumerate() {
                     // Row identity is frozen at render time so a queued event can
                     // never act on a different account.
                     let id = account.account_id.clone();
                     let name = account.minecraft_name.clone();
                     let selected = selected_id.as_deref() == Some(id.as_str());
                     let select_id = id.clone();
-                    let refresh_id = id.clone();
                     let review_id = id.clone();
                     let (status_label, status_tone) = status_badge_parts(&account.status);
-                    let avatar = div()
+                    let avatar = self.avatar_tile(
+                        &palette,
+                        &id,
+                        &account.minecraft_name,
+                        selected,
+                        40.,
+                        10.,
+                        16.,
+                    );
+                    // One trailing set for every row: a fixed slot holding either
+                    // "Use" or the Active badge, then a quiet remove icon.
+                    let slot = div()
                         .flex()
                         .flex_shrink_0()
                         .items_center()
-                        .justify_center()
-                        .size(px(40.))
-                        .rounded(px(10.))
-                        .overflow_hidden()
-                        .bg(if selected {
-                            palette.accent_soft
+                        .justify_end()
+                        .w(px(72.))
+                        .child(if selected {
+                            ui::badge(&palette, "Active", ui::Tone::Accent).into_any_element()
                         } else {
-                            palette.control
-                        })
-                        .border_1()
-                        .border_color(if selected {
-                            Hsla {
-                                a: 0.40,
-                                ..palette.ring
-                            }
-                        } else {
-                            palette.border_subtle
-                        })
-                        .text_size(px(16.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(if selected {
-                            palette.ring
-                        } else {
-                            palette.muted_foreground
-                        })
-                        .when_some(self.avatars.images.get(&id).cloned(), |d, image| {
-                            d.child(img(image).size(px(40.)))
-                        })
-                        .when(!self.avatars.images.contains_key(&id), |d| {
-                            d.child(initial_letter(&account.minecraft_name))
+                            AuroraButton::new(
+                                gpui_kit::SharedString::from(format!(
+                                    "account-{}",
+                                    account.account_id
+                                )),
+                                "Use",
+                            )
+                            .variant(ButtonVariant::Soft)
+                            .size(ButtonSize::Small)
+                            .disabled(busy)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.select(select_id.clone(), cx);
+                            }))
+                            .into_any_element()
                         });
                     let actions = div()
                         .flex()
                         .flex_shrink_0()
                         .items_center()
                         .gap(px(6.))
-                        .when(!selected, |d| {
-                            d.child(
-                                AuroraButton::new(
-                                    gpui_kit::SharedString::from(format!(
-                                        "account-{}",
-                                        account.account_id
-                                    )),
-                                    "Use",
-                                )
-                                .variant(ButtonVariant::Soft)
-                                .size(ButtonSize::Small)
-                                .icon("check")
-                                .disabled(busy)
-                                .on_click(cx.listener(
-                                    move |this, _, _, cx| {
-                                        this.select(select_id.clone(), cx);
-                                    },
-                                )),
-                            )
-                        })
+                        .child(slot)
                         .child(
-                            AuroraButton::new(
-                                gpui_kit::SharedString::from(format!(
-                                    "refresh-session-{}",
-                                    account.account_id
-                                )),
-                                "Refresh session",
-                            )
-                            .variant(ButtonVariant::Default)
-                            .size(ButtonSize::Small)
-                            .icon("sync")
-                            .disabled(busy)
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.refresh_session(refresh_id.clone(), cx);
-                                },
-                            )),
-                        )
-                        .child(
-                            AuroraButton::new(
+                            icon_button(
+                                &palette,
                                 gpui_kit::SharedString::from(format!(
                                     "remove-account-{}",
                                     account.account_id
                                 )),
-                                "Remove",
+                                "delete",
+                                gpui_kit::SharedString::from(format!(
+                                    "Remove {}",
+                                    account.minecraft_name
+                                )),
                             )
-                            .variant(ButtonVariant::Danger)
-                            .size(ButtonSize::Small)
                             .disabled(busy)
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.open_remove_review(review_id.clone(), name.clone(), cx);
-                                },
-                            )),
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.open_remove_review(review_id.clone(), name.clone(), cx);
+                            })),
                         );
                     list = list.child(
                         ui::row(&palette, index + 1 == count)
@@ -1270,13 +1318,6 @@ impl Render for Accounts {
                                                     .text_ellipsis()
                                                     .child(account.minecraft_name.clone()),
                                             )
-                                            .when(selected, |d| {
-                                                d.child(ui::badge(
-                                                    &palette,
-                                                    "Active",
-                                                    ui::Tone::Accent,
-                                                ))
-                                            })
                                             .child(ui::status_badge(
                                                 &palette,
                                                 status_label,
@@ -1288,27 +1329,123 @@ impl Render for Accounts {
                             .child(actions),
                     );
                 }
-                content = content.child(list).child(
-                    ui::card(&palette).child(
-                        div()
-                            .flex()
+
+                // Right column: profile card for the active account, then the
+                // compact sign-in note.
+                let mut side = div()
+                    .flex()
+                    .flex_col()
+                    .flex_shrink_0()
+                    .gap(px(16.))
+                    .w(px(300.));
+                let active = selected_id
+                    .as_deref()
+                    .and_then(|id| rows.iter().copied().find(|a| a.account_id == id));
+                if let Some(account) = active {
+                    let id = account.account_id.clone();
+                    let refresh_id = id.clone();
+                    let reauth = account.status == "reauthenticationRequired";
+                    let (status_label, status_tone) = status_badge_parts(&account.status);
+                    let explanation = match account.status.as_str() {
+                        "signedIn" => "Your session is valid and ready to play.",
+                        "reauthenticationRequired" => {
+                            "Your session has expired. Sign in again to keep playing."
+                        }
+                        _ => "This account's session status is unavailable right now.",
+                    };
+                    let sign_in_blocked =
+                        busy || self.core.accounts.is_none() || self.core.cancel.is_some();
+                    let mut actions = div().flex().flex_col().gap(px(8.)).w_full();
+                    if reauth {
+                        actions = actions.child(
+                            AuroraButton::new("profile-sign-in-again", "Sign in again")
+                                .variant(ButtonVariant::Primary)
+                                .icon("login")
+                                .full_width()
+                                .disabled(sign_in_blocked)
+                                .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx))),
+                        );
+                    }
+                    actions = actions.child(
+                        AuroraButton::new(
+                            gpui_kit::SharedString::from(format!("refresh-session-{id}")),
+                            "Refresh session",
+                        )
+                        .variant(if reauth {
+                            ButtonVariant::Default
+                        } else {
+                            ButtonVariant::Primary
+                        })
+                        .icon("sync")
+                        .full_width()
+                        .disabled(busy)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.refresh_session(refresh_id.clone(), cx);
+                        })),
+                    );
+                    side = side.child(
+                        ui::card(&palette)
                             .items_center()
-                            .gap(px(16.))
-                            .child(ui::icon_tile(&palette, Some("verified_user"), 40., true))
+                            .gap(px(12.))
+                            .child(ui::eyebrow(&palette, "ACTIVE ACCOUNT"))
+                            .child(self.avatar_tile(
+                                &palette,
+                                &id,
+                                &account.minecraft_name,
+                                true,
+                                80.,
+                                20.,
+                                32.,
+                            ))
                             .child(
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .gap(px(2.))
-                                    .min_w(px(0.))
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .max_w_full()
                                     .child(
                                         div()
-                                            .text_size(px(ui::TEXT_BODY + 1.))
+                                            .text_size(px(18.))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(palette.foreground)
+                                            .text_ellipsis()
+                                            .child(account.minecraft_name.clone()),
+                                    )
+                                    .child(ui::status_badge(&palette, status_label, status_tone)),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(ui::TEXT_BODY))
+                                    .text_color(palette.muted_foreground)
+                                    .text_center()
+                                    .child(explanation),
+                            )
+                            .child(actions),
+                    );
+                }
+                side = side.child(
+                    ui::card(&palette).gap(px(10.)).child(
+                        div()
+                            .flex()
+                            .items_start()
+                            .gap(px(12.))
+                            .child(ui::icon_tile(&palette, Some("verified_user"), 32., true))
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .flex_1()
+                                    .min_w(px(0.))
+                                    .gap(px(4.))
+                                    .child(
+                                        div()
+                                            .text_size(px(ui::TEXT_BODY))
                                             .font_weight(FontWeight::SEMIBOLD)
                                             .text_color(palette.foreground)
                                             .child("Secure Microsoft sign-in"),
                                     )
-                                    .child(ui::muted(
+                                    .child(ui::caption(
                                         &palette,
                                         "Sign-in happens in your browser, and Aurora never sees your password.",
                                     ))
@@ -1318,6 +1455,14 @@ impl Render for Accounts {
                                     )),
                             ),
                     ),
+                );
+                content = content.child(
+                    div()
+                        .flex()
+                        .items_start()
+                        .gap(px(ui::PAGE_GAP))
+                        .child(div().flex_1().min_w(px(0.)).child(list))
+                        .child(side),
                 );
             }
         }

@@ -102,8 +102,8 @@ const MAX_ANCHOR_ROW: i32 = 63;
 
 /// Responsive grid geometry (matches the Slint `WidgetGrid` constants).
 const GRID_GAP: f32 = 16.0;
-const MIN_CARD_WIDTH: f32 = 150.0;
-const CARD_HEIGHT: f32 = 304.0;
+const MIN_CARD_WIDTH: f32 = 120.0;
+const CARD_HEIGHT: f32 = 336.0;
 
 /// Saved columns for a viewport width; clamping renders, it never writes.
 pub(crate) fn responsive_columns(width_px: f32) -> i32 {
@@ -210,8 +210,8 @@ pub(crate) fn effective(saved: HomeLayout) -> HomeLayout {
             .cloned()
             .collect();
         layout.widgets = native.into_iter().chain(others).collect();
-        // Fill the first row: Playtime beside a wider Servers list.
-        for (id, columns) in [("playtime", 2), ("recent-servers", 3)] {
+        // Fill the first row: Playtime and Servers split it evenly.
+        for (id, columns) in [("playtime", 3), ("recent-servers", 3)] {
             if let Some(widget) = layout.widgets.iter_mut().find(|w| w.id == id)
                 && widget.grid.is_none()
             {
@@ -3051,7 +3051,7 @@ impl HomeWidgets {
         let id = widget.id.clone();
         // Rendered width of this card, used only to pick a header layout.
         let card_px = requested_dims(widget).0.max(1) as f32 * pitch_x - GRID_GAP;
-        let wide = card_px >= 420.;
+        let wide = card_px >= 360.;
 
         // Transient work never reads as part of the title: it is a quiet
         // dot and caption beside the controls.
@@ -3187,7 +3187,7 @@ impl HomeWidgets {
                     })
                     .child(
                         div()
-                            .text_size(px(ui::TEXT_BODY + 1.))
+                            .text_size(px(ui::TEXT_SECTION))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(palette.foreground)
                             .whitespace_nowrap()
@@ -3290,11 +3290,11 @@ impl HomeWidgets {
 
         match id.as_str() {
             "playtime" => {
-                let narrow = card_px < 440.;
+                let narrow = card_px < 380.;
                 let projection = playtime_view(playtime_data, period, narrow, loading);
                 let total = div()
                     .id("playtime-total")
-                    .text_size(px(ui::TEXT_TITLE))
+                    .text_size(px(ui::TEXT_DISPLAY))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(palette.foreground)
                     .child(if loading {
@@ -3414,7 +3414,7 @@ impl HomeWidgets {
                                                             .left(px(0.))
                                                             .right(px(0.))
                                                             .h(px(1.))
-                                                            .bg(palette.border_subtle)
+                                                            .bg(palette.border.opacity(0.45))
                                                     }))
                                                     .when(projection.empty_period, |plot| {
                                                         plot.child(
@@ -3481,7 +3481,7 @@ impl HomeWidgets {
                                 div()
                                     .id("playtime-chart-note")
                                     .aria_description(chart_note_description(period, narrow))
-                                    .text_size(px(ui::TEXT_MICRO))
+                                    .text_size(px(ui::TEXT_CAPTION))
                                     .text_color(palette.subtle_foreground)
                                     .whitespace_nowrap()
                                     .overflow_hidden()
@@ -3839,7 +3839,7 @@ fn row_detail(t: &theme::AuroraTheme, text: String) -> Div {
         .text_ellipsis()
         .whitespace_nowrap()
         .text_size(px(ui::TEXT_CAPTION))
-        .text_color(t.muted_foreground)
+        .text_color(t.subtle_foreground)
         .child(text)
 }
 
@@ -4160,10 +4160,10 @@ mod tests {
         assert_eq!(responsive_columns(0.), 1);
         assert_eq!(responsive_columns(163.), 1);
         assert_eq!(responsive_columns(164.), 1);
-        assert_eq!(responsive_columns(813.), 4);
-        assert_eq!(responsive_columns(814.), 5);
-        assert_eq!(responsive_columns(979.), 5);
-        assert_eq!(responsive_columns(980.), 6);
+        assert_eq!(responsive_columns(663.), 4);
+        assert_eq!(responsive_columns(664.), 5);
+        assert_eq!(responsive_columns(799.), 5);
+        assert_eq!(responsive_columns(800.), 6);
         assert_eq!(responsive_columns(10_000.), 6);
     }
 
@@ -4223,7 +4223,7 @@ mod tests {
         // Clamped at the viewport edge.
         core.snap_gesture((10_000., 10_000.), (164., 210.));
         let gesture = core.gesture.clone().unwrap();
-        assert_eq!(gesture.preview, (4, 48, 2, 1));
+        assert_eq!(gesture.preview, (3, 48, 3, 1));
         // Escape cancels: the preview never writes.
         core.cancel_gesture();
         assert_eq!(core.commit_gesture(), EditOutcome::Ignored);
@@ -4240,7 +4240,7 @@ mod tests {
             core.commit_gesture(),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((0, 1, 2, 1)));
+        assert_eq!(core.placement("playtime"), Some((0, 1, 3, 1)));
         let submitted = core.begin_save().unwrap();
         assert_eq!(
             core.finish_save(&submitted, &Ok(submitted.clone())),
@@ -4259,12 +4259,12 @@ mod tests {
             core.commit_gesture(),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((0, 0, 4, 2)));
+        assert_eq!(core.placement("playtime"), Some((0, 0, 5, 2)));
         let layout = core.layout.clone().unwrap();
         assert_eq!(
             layout.widgets[0].grid,
             Some(WidgetGrid {
-                columns: 4,
+                columns: 5,
                 rows: 2,
                 position: Some([0, 0])
             })
@@ -4276,7 +4276,7 @@ mod tests {
             core.commit_gesture(),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((1, 0, 4, 2)));
+        assert_eq!(core.placement("playtime"), Some((1, 0, 5, 2)));
     }
 
     #[test]
@@ -4287,7 +4287,7 @@ mod tests {
             core.keyboard_arrange("playtime", "down", false),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((0, 1, 2, 1)));
+        assert_eq!(core.placement("playtime"), Some((0, 1, 3, 1)));
         let first = core.begin_save().unwrap();
         assert_eq!(
             core.finish_save(&first, &Ok(first.clone())),
@@ -4297,13 +4297,13 @@ mod tests {
             core.keyboard_arrange("playtime", "right", false),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((1, 1, 2, 1)));
+        assert_eq!(core.placement("playtime"), Some((1, 1, 3, 1)));
         // Shift on the move handle resizes instead.
         assert_eq!(
             core.keyboard_arrange("playtime", "right", true),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((1, 1, 3, 1)));
+        assert_eq!(core.placement("playtime"), Some((1, 1, 4, 1)));
         // Bounded at the viewport edge and row bound.
         for _ in 0..80 {
             core.keyboard_arrange("playtime", "down", false);

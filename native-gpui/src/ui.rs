@@ -85,8 +85,8 @@ pub fn section_header(
 pub fn eyebrow(t: &AuroraTheme, text: impl Into<SharedString>) -> Div {
     div()
         .text_size(px(TEXT_MICRO))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(t.subtle_foreground)
+        .font_weight(FontWeight::BOLD)
+        .text_color(t.subtle_foreground.opacity(0.85))
         .child(text.into())
 }
 

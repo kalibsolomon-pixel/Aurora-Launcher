@@ -1047,7 +1047,7 @@ impl Skins {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let import_name = cx.new(|cx| InputState::new(window, cx).placeholder("Skin name"));
+        let import_name = cx.new(|cx| InputState::new(window, cx).placeholder("e.g. Winter coat"));
         let rename_input = cx.new(|cx| InputState::new(window, cx).placeholder("New name"));
         let mut view = Self {
             host,
@@ -1912,7 +1912,7 @@ impl Render for Skins {
                                     "skins-save-current",
                                     "Save current skin to library",
                                 )
-                                .variant(ButtonVariant::Primary)
+                                .variant(ButtonVariant::Soft)
                                 .icon("download")
                                 .disabled(locked || !cosmetics.has_current_skin)
                                 .on_click(cx.listener(|this, _, _, cx| this.save_current(cx))),
@@ -2051,6 +2051,7 @@ impl Render for Skins {
                     )
                     .child(
                         AuroraButton::new("skins-import", "Import PNG…")
+                            .variant(ButtonVariant::Primary)
                             .icon("upload")
                             .disabled(locked)
                             .on_click(cx.listener(move |this, _, window, cx| {
@@ -2098,10 +2099,9 @@ impl Render for Skins {
                     div()
                         .flex()
                         .items_center()
-                        .justify_center()
                         .gap(px(10.))
                         .px(px(16.))
-                        .py(px(20.))
+                        .py(px(14.))
                         .text_size(px(ui::TEXT_BODY))
                         .text_color(palette.muted_foreground)
                         .child(crate::symbols::icon(

@@ -1054,11 +1054,28 @@ fn locked_toggle(
             "{label}: {}",
             if checked { "included" } else { "not included" }
         ))
-        .child(ui::badge(
-            t,
-            if checked { "Included" } else { "Not included" },
-            ui::Tone::Neutral,
-        ))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(5.))
+                .text_size(px(ui::TEXT_BODY))
+                .text_color(if checked {
+                    t.muted_foreground
+                } else {
+                    t.subtle_foreground
+                })
+                .child(crate::symbols::icon(
+                    Some(if checked { "check" } else { "remove" }),
+                    px(16.),
+                    if checked {
+                        t.muted_foreground
+                    } else {
+                        t.subtle_foreground
+                    },
+                ))
+                .child(if checked { "Included" } else { "Not included" }),
+        )
 }
 
 /// A right-aligned slot for one row's control.

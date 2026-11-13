@@ -227,7 +227,7 @@ impl SkinPreview {
         self.changed(cx);
     }
 }
-const STAGE_HEIGHT: f32 = 340.;
+const STAGE_HEIGHT: f32 = 312.;
 
 impl Render for SkinPreview {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -458,11 +458,20 @@ impl Render for SkinPreview {
                     .items_center()
                     .justify_between()
                     .gap(px(12.))
-                    .child(ui::title_block(
-                        &t,
-                        "Outer layers",
-                        Some("Hat, jacket and sleeve overlays".into()),
-                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .text_size(px(ui::TEXT_BODY))
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(t.foreground)
+                                    .child("Outer layers"),
+                            )
+                            .child(ui::caption(&t, "Hat, jacket and sleeves")),
+                    )
                     .child(
                         AuroraToggle::new("preview-layers")
                             .label("Outer layers")

@@ -561,10 +561,10 @@ impl InstanceEditor {
             cx.new(|cx| InputState::new(window, cx).placeholder(placeholder))
         };
         let name = input("Instance name");
-        let memory = input("Memory in MiB");
-        let arguments = input("Additional JVM arguments");
-        let width = input("Window width");
-        let height = input("Window height");
+        let memory = input("e.g. 4096");
+        let arguments = input("-Xmx flags, etc.");
+        let width = input("Width");
+        let height = input("Height");
         let java = input("Custom Java executable path");
         let confirm = input("Type the instance name");
         let icon_query = input("Search icons: sword, server, tools…");
@@ -1874,8 +1874,8 @@ fn edited_config(
 /// Control widths in settings rows. `AuroraSelect` is a fixed 220px wide, so
 /// short fields match it and long text fields get a wider column; every
 /// control is right-aligned to the same edge.
-const SHORT_W: f32 = 220.;
-const WIDE_W: f32 = 220.;
+const SHORT_W: f32 = 240.;
+const WIDE_W: f32 = 240.;
 /// Widest a stacked (full-width) text field grows.
 const STACK_W: f32 = 420.;
 /// The instance list column of the master-detail layout.
@@ -2369,7 +2369,15 @@ impl Render for InstanceEditor {
                             ),
                     );
                 }
-                list_col = Some(div().flex_shrink_0().w(px(LIST_W)).child(list));
+                list_col = Some(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(16.))
+                        .flex_shrink_0()
+                        .w(px(LIST_W))
+                        .child(list),
+                );
             }
         }
         let mut detail = div()
@@ -2492,6 +2500,62 @@ impl Render for InstanceEditor {
                 detail = detail.child(head);
             }
 
+            // Compact summary of the selected instance under the list.
+            if let (Some(instance), Some(col)) = (&instance, list_col.take()) {
+                let memory = self
+                    .baseline
+                    .as_ref()
+                    .map(|config| format!("{} MiB", config.memory_mib))
+                    .unwrap_or_else(|| "—".to_owned());
+                let java = self
+                    .baseline
+                    .as_ref()
+                    .and_then(|config| config.custom_java().map(str::to_owned))
+                    .map(|_| "Custom path".to_owned())
+                    .unwrap_or_else(|| "Managed runtime".to_owned());
+                let lines = [
+                    ("Minecraft", instance.minecraft_version.clone()),
+                    ("Loader", instance.platform_label()),
+                    ("Memory", memory),
+                    ("Java", java),
+                ];
+                let count = lines.len();
+                list_col = Some(
+                    col.child(
+                        ui::card(&t)
+                            .p(px(16.))
+                            .gap(px(8.))
+                            .child(
+                                div()
+                                    .text_size(px(ui::TEXT_BODY))
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(t.foreground)
+                                    .child("Instance details"),
+                            )
+                            .children(lines.into_iter().enumerate().map(|(ix, (label, value))| {
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap(px(12.))
+                                    .py(px(6.))
+                                    .when(ix + 1 != count, |row| {
+                                        row.border_b_1().border_color(t.border_subtle)
+                                    })
+                                    .child(ui::caption(&t, label))
+                                    .child(
+                                        div()
+                                            .min_w(px(0.))
+                                            .truncate()
+                                            .text_size(px(ui::TEXT_BODY))
+                                            .text_color(t.foreground)
+                                            .child(value),
+                                    )
+                            })),
+                    ),
+                );
+            }
+
             // General: name and icon.
             let icon_view = this.clone();
             detail = detail.child(form_card(
@@ -2502,7 +2566,7 @@ impl Render for InstanceEditor {
                     vec![
                         (
                             "Instance name",
-                            Some("Renaming applies immediately; it is not part of Save.".into()),
+                            Some("Renaming applies immediately.".into()),
                             div()
                                 .flex()
                                 .gap(px(8.))
@@ -2677,6 +2741,7 @@ impl Render for InstanceEditor {
                     label,
                     description,
                     AuroraSelect::new(id, label, options, &s.trigger, &s.content, s.bounds.clone())
+                        .width(px(SHORT_W))
                         .selected(selected[ix])
                         .open(s.open)
                         .disabled(busy)
@@ -2760,14 +2825,13 @@ impl Render for InstanceEditor {
                                 "Additional JVM arguments",
                                 Some("Extra flags passed to Java when the game starts.".into()),
                                 div()
-                                    .w_full()
-                                    .max_w(px(STACK_W))
+                                    .w(px(SHORT_W))
                                     .child(
                                         AuroraInput::new(&self.arguments)
                                             .label("Additional JVM arguments"),
                                     )
                                     .into_any_element(),
-                                true,
+                                false,
                             ),
                             (
                                 "Window size",
@@ -2778,8 +2842,7 @@ impl Render for InstanceEditor {
                                     .flex()
                                     .items_center()
                                     .gap(px(8.))
-                                    .w_full()
-                                    .max_w(px(STACK_W))
+                                    .w(px(SHORT_W))
                                     .child(
                                         div().flex_1().min_w(px(0.)).child(
                                             AuroraInput::new(&self.width)
@@ -2799,7 +2862,7 @@ impl Render for InstanceEditor {
                                         ),
                                     )
                                     .into_any_element(),
-                                true,
+                                false,
                             ),
                         ],
                     ))
@@ -2820,14 +2883,13 @@ impl Render for InstanceEditor {
                             "Custom Java path",
                             Some("Leave blank to use the managed runtime.".into()),
                             div()
-                                .w_full()
-                                .max_w(px(STACK_W))
+                                .w(px(SHORT_W))
                                 .child(
                                     AuroraInput::new(&self.java)
                                         .label("Custom Java path (blank for managed)"),
                                 )
                                 .into_any_element(),
-                            true,
+                            false,
                         ),
                         (
                             "Java runtime",

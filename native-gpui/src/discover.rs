@@ -2648,7 +2648,8 @@ impl Render for Discover {
             }))
             .child(
                 AuroraButton::new("search", "Search")
-                    .variant(ButtonVariant::Primary)
+                    .variant(ButtonVariant::Default)
+                    .icon("search")
                     .disabled(s.searching)
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.search(false, cx);
@@ -2704,23 +2705,28 @@ impl Render for Discover {
             let id = project.project_id.clone();
             let installed = s.installed.contains(&project.project_id);
             let row_busy = s.busy_project(&project.project_id);
-            let mut meta = div().flex().flex_wrap().items_center().gap(px(10.)).child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(5.))
-                    .child(crate::symbols::icon(
-                        Some("download"),
-                        px(14.),
-                        palette.subtle_foreground,
-                    ))
-                    .child(
-                        div()
-                            .text_size(px(ui::TEXT_CAPTION))
-                            .text_color(palette.subtle_foreground)
-                            .child(download_label(project.downloads)),
-                    ),
-            );
+            let mut meta = div()
+                .flex()
+                .flex_shrink_0()
+                .items_center()
+                .gap(px(10.))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .child(crate::symbols::icon(
+                            Some("download"),
+                            px(13.),
+                            palette.subtle_foreground,
+                        ))
+                        .child(
+                            div()
+                                .text_size(px(ui::TEXT_CAPTION))
+                                .text_color(palette.subtle_foreground)
+                                .child(download_label(project.downloads)),
+                        ),
+                );
             if installed {
                 meta = meta.child(ui::status_badge(&palette, "Installed", ui::Tone::Success));
             }
@@ -2734,7 +2740,7 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == total)
                     .id(("result", index))
                     .gap(px(14.))
-                    .py(px(10.))
+                    .py(px(12.))
                     .hover(move |style| style.bg(hover))
                     .child(artwork::tile(
                         ("art", index),
@@ -2750,7 +2756,7 @@ impl Render for Discover {
                             .flex_1()
                             .w(px(0.))
                             .min_w(px(0.))
-                            .gap(px(4.))
+                            .gap(px(3.))
                             .child(
                                 div()
                                     .flex()
@@ -2785,17 +2791,18 @@ impl Render for Discover {
                                                 .text_color(palette.subtle_foreground)
                                                 .child(format!("by {}", project.author)),
                                         )
-                                    }),
+                                    })
+                                    .child(meta),
                             )
                             .child(
                                 div()
-                                    .max_w(px(560.))
-                                    .line_clamp(2)
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
+                                    .text_ellipsis()
                                     .text_size(px(ui::TEXT_BODY))
                                     .text_color(palette.muted_foreground)
                                     .child(project.summary.clone()),
-                            )
-                            .child(meta),
+                            ),
                     )
                     .child(
                         div()
@@ -2817,7 +2824,7 @@ impl Render for Discover {
                                     let id = id.clone();
                                     AuroraButton::new(("install", index), "Install")
                                         .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Soft)
+                                        .variant(ButtonVariant::Primary)
                                         .icon("download")
                                         .disabled(installed || row_busy || s.target.is_none())
                                         .on_click(cx.listener(move |this, _, _, cx| {
