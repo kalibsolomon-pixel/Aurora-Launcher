@@ -2535,7 +2535,7 @@ impl Render for Discover {
         let palette = theme::theme(cx).clone();
         let compact = window.viewport_size().width < px(1000.);
         let row_height = if compact { 128. } else { 84. };
-        let reserved = if compact { 392. } else { 326. }
+        let reserved = if compact { 392. } else { 350. }
             + if self.state.searching || self.state.results.len() >= MAX_RESULTS {
                 28.
             } else {
@@ -2801,9 +2801,6 @@ impl Render for Discover {
                                 .child(download_label(project.downloads)),
                         ),
                 );
-            if installed {
-                meta = meta.child(ui::status_badge(&palette, "Installed", ui::Tone::Success));
-            }
             if row_busy {
                 meta = meta.child(ui::status_badge(&palette, "Installing…", ui::Tone::Accent));
             }
@@ -2918,7 +2915,29 @@ impl Render for Discover {
                             .w(px(82.))
                             .items_center()
                             .justify_end()
-                            .when(can_quick_install, |actions| {
+                            .when(can_quick_install && installed, |actions| {
+                                actions.child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .gap(px(5.))
+                                        .w_full()
+                                        .h(px(28.))
+                                        .rounded(palette.radius)
+                                        .bg(palette.success.opacity(0.10))
+                                        .text_size(px(ui::TEXT_CAPTION))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(palette.success)
+                                        .child(crate::symbols::icon(
+                                            Some("check"),
+                                            px(14.),
+                                            palette.success,
+                                        ))
+                                        .child("Installed"),
+                                )
+                            })
+                            .when(can_quick_install && !installed, |actions| {
                                 actions.child({
                                     let id = id.clone();
                                     AuroraButton::new(("install", index), "Install")
@@ -2927,7 +2946,7 @@ impl Render for Discover {
                                         .size(ButtonSize::Small)
                                         .variant(ButtonVariant::Soft)
                                         .icon("download")
-                                        .disabled(installed || row_busy || s.target.is_none())
+                                        .disabled(row_busy || s.target.is_none())
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             this.quick_install(id.clone(), cx);
                                         }))

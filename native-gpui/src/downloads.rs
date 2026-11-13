@@ -245,7 +245,7 @@ fn queue_summary(running: usize, pending: usize) -> String {
     if running + pending == 0 {
         "Nothing downloading.".to_owned()
     } else {
-        format!("{running} installing Â· {pending} queued")
+        format!("{running} installing · {pending} queued")
     }
 }
 
@@ -315,7 +315,7 @@ fn running_status(phase: JobPhase, stage: Option<&str>, message: &str) -> (&'sta
             ("Downloading", JobPhase::Verifying) => "Verifying",
             (stage, _) => stage,
         };
-        return (stage, format!("{label}â€¦"));
+        return (stage, format!("{label}…"));
     }
     let stage = match phase {
         JobPhase::Queued | JobPhase::Downloading => "Downloading",
@@ -389,9 +389,9 @@ impl Task {
 
     fn start_label(&self) -> &'static str {
         if self.resume.is_some() {
-            "Resuming the kept instanceâ€¦"
+            "Resuming the kept instance…"
         } else {
-            "Downloading and verifyingâ€¦"
+            "Downloading and verifying…"
         }
     }
 
@@ -569,7 +569,7 @@ impl DownloadsState {
         } else if !task.cancelling {
             task.cancelling = true;
             task.message =
-                "Cancellingâ€¦ Active writes and any commit in progress must finish safely.".into();
+                "Cancelling… Active writes and any commit in progress must finish safely.".into();
         }
         self.trim_history();
         true
@@ -829,7 +829,7 @@ impl Downloads {
                 let terminal = match self.state.apply_finished(id, attempt, result) {
                     Some(Settled::Backoff(delay)) => {
                         // Task-scoped one-shot backoff on the runtime, like
-                        // the native host's single shot: no pump here â€” the
+                        // the native host's single shot: no pump here — the
                         // wakeup (or an unrelated completion's pump) restarts
                         // the task. The (id, attempt) guard makes a cancelled,
                         // restarted or cleared wait stale.
@@ -969,7 +969,7 @@ fn download_row(
         // This job's own core-accounted bytes, read at this event-driven
         // render only; not a live counter.
         Some(bytes) => format!(
-            "{} Â· {:.1} MB received",
+            "{} · {:.1} MB received",
             data.message,
             bytes as f64 / (1024.0 * 1024.0)
         ),
@@ -1133,11 +1133,7 @@ impl Render for Downloads {
             .child(ui::page_header(
                 t,
                 "Downloads",
-                Some(if active_rows.is_empty() && finished_rows.is_empty() {
-                    "Track installation progress and recent results.".into()
-                } else {
-                    summary.clone().into()
-                }),
+                Some("Track installation progress and recent results.".into()),
             ));
         if active_rows.is_empty() && finished_rows.is_empty() {
             page = page.child(
@@ -1166,6 +1162,43 @@ impl Render for Downloads {
                                     )),
                                 ),
                             ),
+                    ),
+            );
+        }
+        if active_rows.is_empty() && !finished_rows.is_empty() {
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(12.))
+                    .child(ui::section_header(t, "Active", None))
+                    .child(
+                        ui::card(t).child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(14.))
+                                .child(ui::icon_tile(t, Some("download"), 40., false))
+                                .child(
+                                    ui::title_block(
+                                        t,
+                                        "Nothing downloading",
+                                        Some(
+                                            "Mods, packs and shaders you install from Discover show their progress here."
+                                                .into(),
+                                        ),
+                                    )
+                                    .flex_1()
+                                    .min_w(px(0.)),
+                                )
+                                .child(
+                                    AuroraButton::new("downloads-idle-discover", "Browse Discover")
+                                        .icon("explore")
+                                        .on_click(cx.listener(|_, _, _, cx| {
+                                            cx.emit(DownloadsEvent::OpenDiscover);
+                                        })),
+                                ),
+                        ),
                     ),
             );
         }
@@ -1514,7 +1547,7 @@ mod tests {
         let attempt = state.tasks.iter().find(|t| t.id == id).unwrap().attempt;
         let task = state.tasks.iter().find(|t| t.id == id).unwrap();
         assert_eq!(task.retry_label(), "Waiting to retry.");
-        assert_eq!(task.start_label(), "Downloading and verifyingâ€¦");
+        assert_eq!(task.start_label(), "Downloading and verifying…");
 
         assert!(matches!(
             state.apply_finished(
@@ -1528,7 +1561,7 @@ mod tests {
         assert_eq!(task.key.as_deref(), Some("abc123"));
         assert_eq!(task.resume.as_deref(), Some("abc123"));
         assert_eq!(task.retry_label(), "Waiting to resume the kept instance.");
-        assert_eq!(task.start_label(), "Resuming the kept instanceâ€¦");
+        assert_eq!(task.start_label(), "Resuming the kept instance…");
 
         assert!(state.retry(id));
         // Once requeued, the kept key serializes new work on that instance.
@@ -1763,7 +1796,7 @@ mod tests {
             let (stage, message) = running_status(JobPhase::Downloading, Some(*phase), "Queued.");
             let (expected, label) = modpack_phase(phase).unwrap();
             assert_eq!(stage, expected, "{phase}");
-            assert_eq!(message, format!("{label}â€¦"));
+            assert_eq!(message, format!("{label}…"));
         }
         // Game setup downloads are not reported as pack downloads.
         assert_eq!(
@@ -1780,22 +1813,22 @@ mod tests {
             running_status(
                 JobPhase::Installing,
                 Some("notAPhase"),
-                "Downloading and verifyingâ€¦"
+                "Downloading and verifying…"
             ),
-            ("Installing", "Downloading and verifyingâ€¦".to_owned())
+            ("Installing", "Downloading and verifying…".to_owned())
         );
         assert_eq!(
-            running_status(JobPhase::Installing, None, "Downloading and verifyingâ€¦"),
-            ("Installing", "Downloading and verifyingâ€¦".to_owned())
+            running_status(JobPhase::Installing, None, "Downloading and verifying…"),
+            ("Installing", "Downloading and verifying…".to_owned())
         );
         // Cancellation keeps its wording.
         assert_eq!(
             running_status(
                 JobPhase::Cancelling,
                 Some("installingGame"),
-                "Cancellingâ€¦"
+                "Cancelling…"
             ),
-            ("Cancelling", "Cancellingâ€¦".to_owned())
+            ("Cancelling", "Cancelling…".to_owned())
         );
     }
 
@@ -1880,7 +1913,7 @@ mod tests {
         // Two running, one waiting its turn on the same instance.
         assert_eq!(state.active_count(), 3);
         assert_eq!(nav_label(3), "Downloads (3 active)");
-        assert_eq!(queue_summary(2, 1), "2 installing Â· 1 queued");
+        assert_eq!(queue_summary(2, 1), "2 installing · 1 queued");
         // Finished work leaves the count; cancelled work does too.
         finish(&mut state, c, Ok(json!({"installed":[]})));
         assert!(state.cancel(b));

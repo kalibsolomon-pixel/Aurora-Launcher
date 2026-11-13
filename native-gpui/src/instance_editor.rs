@@ -2506,15 +2506,6 @@ impl Render for InstanceEditor {
                                 .flex()
                                 .flex_shrink_0()
                                 .gap(px(8.))
-                                .child(
-                                    action_button(
-                                        "folder",
-                                        "Open folder",
-                                        Some("folder_open"),
-                                        ButtonVariant::Default,
-                                    )
-                                    .size(ButtonSize::Small),
-                                )
                                 .when(!active, |buttons| {
                                     buttons.child(
                                         action_button(
@@ -2573,7 +2564,7 @@ impl Render for InstanceEditor {
                 };
                 let aurora_view = this.clone();
                 let icon_view = this.clone();
-                detail = detail.child(ui::card(&t).p(px(16.)).gap(px(0.)).child(rows(
+                detail = detail.child(ui::card(&t).flex_1().p(px(16.)).gap(px(0.)).child(rows(
                     &t,
                     vec![
                             (
@@ -2634,6 +2625,17 @@ impl Render for InstanceEditor {
                                 .on_click(move |_, _, cx| {
                                     aurora_view.update(cx, |v, cx| v.review_aurora(!installed, cx));
                                 })
+                                .into_any_element(),
+                            ),
+                            (
+                                "Instance folder",
+                                Some("Worlds, mods, screenshots and logs.".into()),
+                                action_button(
+                                    "folder",
+                                    "Open folder",
+                                    Some("folder_open"),
+                                    ButtonVariant::Default,
+                                )
                                 .into_any_element(),
                             ),
                         ],
@@ -3199,7 +3201,6 @@ impl Render for InstanceEditor {
             root = root.child(
                 div()
                     .flex()
-                    .items_start()
                     .w_full()
                     .min_w(px(0.))
                     .gap(px(ui::PAGE_GAP))

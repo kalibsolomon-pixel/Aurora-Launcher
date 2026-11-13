@@ -1156,7 +1156,7 @@ impl Render for Syncing {
                                 if enabled {
                                     "Selected instances automatically share the categories below."
                                 } else {
-                                    "Turned off. Your choices below are kept, but nothing is synced."
+                                    "Turned off. Checked files start syncing when you turn it on."
                                 }
                                 .into(),
                             ),
@@ -1254,12 +1254,7 @@ impl Render for Syncing {
                 t,
                 "What to sync",
                 Some(
-                    if enabled {
-                        "Choose the files that stay in step across instances."
-                    } else {
-                        "Select files for the next time you turn Sync on. Saving keeps Sync off."
-                    }
-                    .into(),
+                    "Choose the files that stay in step across instances.".into(),
                 ),
             ));
             let mut category_grid = div().grid().grid_cols(2).gap_x(px(24.));
@@ -1292,26 +1287,7 @@ impl Render for Syncing {
                 category_grid = category_grid.child(row);
             }
             if self.section == 0 {
-                let off_notice = (!enabled).then(|| {
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(10.))
-                        .px(px(12.))
-                        .py(px(9.))
-                        .rounded(t.radius)
-                        .bg(t.accent_soft)
-                        .border_1()
-                        .border_color(t.ring.opacity(0.3))
-                        .child(crate::symbols::icon(Some("info"), px(16.), t.ring))
-                        .child(
-                            div()
-                                .text_size(px(ui::TEXT_BODY))
-                                .text_color(t.foreground)
-                                .child("Sync is off. Checked files start syncing when you turn it on."),
-                        )
-                });
-                body = body.child(categories.children(off_notice).child(category_grid));
+                body = body.child(categories.child(category_grid));
             }
 
             // Instances.
@@ -1596,7 +1572,7 @@ impl Render for Syncing {
                 if enabled {
                     ("All changes saved", "Your sync preferences are up to date.")
                 } else {
-                    ("Choices saved", "Sync is off. These choices apply when you turn it on.")
+                    ("Choices saved", "No unsaved changes.")
                 }
             };
             let mut actions = ui::card(t).gap(px(12.)).child(

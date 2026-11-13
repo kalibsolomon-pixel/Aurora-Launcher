@@ -1793,7 +1793,11 @@ impl Render for Content {
                             .text_size(px(ui::TEXT_BODY))
                             .text_color(palette.foreground.opacity(0.78))
                             .text_ellipsis()
-                            .child(gpui::SharedString::from(line.join(" · "))),
+                            .child(if inline_meta {
+                                gpui::SharedString::from(entry.file_name.clone())
+                            } else {
+                                gpui::SharedString::from(line.join(" · "))
+                            }),
                     );
                 for note in notes {
                     let warn = note.starts_with("Warning:");

@@ -1222,7 +1222,20 @@ impl Launcher {
                         // user is; the status line is this host's equivalent.
                         if matches!(event, DownloadsEvent::Settled { .. }) {
                             if let Some(notice) = downloads.read(cx).notice() {
-                                this.status = notice.to_owned();
+                                let notice = notice.to_owned();
+                                this.status = notice.clone();
+                                cx.spawn(async move |this, cx| {
+                                    cx.background_executor()
+                                        .timer(std::time::Duration::from_secs(8))
+                                        .await;
+                                    let _ = this.update(cx, |this, cx| {
+                                        if this.status == notice {
+                                            this.status.clear();
+                                            cx.notify();
+                                        }
+                                    });
+                                })
+                                .detach();
                             }
                         }
                         this.downloads_busy = downloads.read(cx).is_busy();
