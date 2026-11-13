@@ -1230,6 +1230,41 @@ fn list_placeholder(
 }
 
 /// A quiet icon-only row action; the label is the accessible name.
+/// Uniform artwork tile: a rounded `control` well with a hairline border and
+/// the image filling it, so every row reads alike whatever the icon's own
+/// padding or transparency.
+fn art_tile(
+    id: impl Into<gpui::ElementId>,
+    image: Option<std::sync::Arc<gpui::RenderImage>>,
+    glyph: &str,
+    side: f32,
+    t: &crate::theme::AuroraTheme,
+) -> gpui::Stateful<gpui::Div> {
+    let base = div()
+        .id(id)
+        .size(px(side))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .overflow_hidden()
+        .rounded(px(10.))
+        .bg(t.control)
+        .border_1()
+        .border_color(t.border_subtle);
+    match image {
+        Some(image) => base.child(
+            gpui::img(image)
+                .size_full()
+                .object_fit(gpui::ObjectFit::Cover),
+        ),
+        None => base
+            .text_size(px(side * 0.45))
+            .text_color(t.ring)
+            .child(glyph.to_owned()),
+    }
+}
+
 fn icon_button(
     t: &crate::theme::AuroraTheme,
     id: impl Into<gpui::ElementId>,
@@ -1516,7 +1551,7 @@ impl Render for Content {
                                 div()
                                     .min_w(px(0.))
                                     .text_size(px(ui::TEXT_BODY + 1.))
-                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
                                     .text_color(palette.foreground)
                                     .when(disabled_row, |d| d.opacity(0.8))
                                     .text_ellipsis()
@@ -1603,11 +1638,11 @@ impl Render for Content {
                     ui::row(t, index == last_index)
                         .py(px(10.))
                         .child(match icon {
-                            Some(image) => artwork::tile(
+                            Some(image) => art_tile(
                                 gpui::SharedString::from(format!("icon-{}", entry.id)),
                                 Some(image),
                                 &entry.letter,
-                                px(40.),
+                                40.,
                                 &palette,
                             )
                             .into_any_element(),

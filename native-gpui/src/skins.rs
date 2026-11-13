@@ -2338,6 +2338,31 @@ impl Render for Skins {
                     )
                     .child(capes),
             );
+        } else {
+            // Always present so the right column keeps its weight: a compact
+            // empty state until an account with capes is available.
+            let (title, detail) = match signed_in {
+                Some(_) if self.core.remote_error.is_some() => (
+                    "Capes unavailable",
+                    "Refresh to try loading your capes again.",
+                ),
+                Some(_) => ("Capes", "Loading your capes…"),
+                None => ("Capes", "Sign in to see and wear your capes."),
+            };
+            content = content.child(
+                ui::card(&palette).child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(14.))
+                        .child(ui::icon_tile(&palette, Some("checkroom"), 36., false))
+                        .child(
+                            ui::title_block(&palette, title, Some(detail.into()))
+                                .flex_1()
+                                .min_w(px(0.)),
+                        ),
+                ),
+            );
         }
 
         // Reviewed dialogs: the base dialog owns the focus trap; Enter never

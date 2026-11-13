@@ -459,13 +459,28 @@ fn status_text(status: &str) -> &'static str {
     }
 }
 
-/// Short badge label and tone for the account's session status.
-fn status_badge_parts(status: &str) -> (&'static str, ui::Tone) {
-    match status {
-        "signedIn" => ("Signed in", ui::Tone::Success),
-        "reauthenticationRequired" => ("Sign in again", ui::Tone::Warning),
-        _ => ("Unavailable", ui::Tone::Neutral),
-    }
+/// Quiet session state: a colored dot plus caption text, never a pill.
+/// "Sign in again" is reserved for the single call to action on the page.
+fn status_line(t: &theme::AuroraTheme, status: &str, extra: Option<&'static str>) -> gpui_kit::Div {
+    let (label, color, text_color) = match status {
+        "signedIn" => ("Signed in", t.success, t.subtle_foreground),
+        "reauthenticationRequired" => ("Session expired", t.warning, t.warning),
+        _ => ("Unavailable", t.subtle_foreground, t.subtle_foreground),
+    };
+    div()
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .text_size(px(ui::TEXT_CAPTION))
+        .child(div().flex_shrink_0().size(px(6.)).rounded_full().bg(color))
+        .child(div().text_color(text_color).child(label))
+        .when_some(extra, |row, extra| {
+            row.child(
+                div()
+                    .text_color(t.subtle_foreground)
+                    .child(format!("· {extra}")),
+            )
+        })
 }
 
 /// An inline status strip for progress, notices and errors.
@@ -1229,7 +1244,6 @@ impl Render for Accounts {
                     let selected = selected_id.as_deref() == Some(id.as_str());
                     let select_id = id.clone();
                     let review_id = id.clone();
-                    let (status_label, status_tone) = status_badge_parts(&account.status);
                     let avatar = self.avatar_tile(
                         &palette,
                         &id,
@@ -1308,28 +1322,17 @@ impl Render for Accounts {
                                     .flex_col()
                                     .flex_1()
                                     .min_w(px(0.))
-                                    .gap(px(5.))
+                                    .gap(px(3.))
                                     .child(
                                         div()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(8.))
-                                            .child(
-                                                div()
-                                                    .min_w(px(0.))
-                                                    .text_size(px(ui::TEXT_BODY + 1.))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(palette.foreground)
-                                                    .text_ellipsis()
-                                                    .child(account.minecraft_name.clone()),
-                                            )
-                                            .child(ui::status_badge(
-                                                &palette,
-                                                status_label,
-                                                status_tone,
-                                            )),
+                                            .min_w(px(0.))
+                                            .text_size(px(ui::TEXT_BODY + 1.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(palette.foreground)
+                                            .text_ellipsis()
+                                            .child(account.minecraft_name.clone()),
                                     )
-                                    .child(ui::caption(&palette, "Microsoft account")),
+                                    .child(status_line(&palette, &account.status, None)),
                             )
                             .child(actions),
                     );
@@ -1350,17 +1353,14 @@ impl Render for Accounts {
                     let id = account.account_id.clone();
                     let refresh_id = id.clone();
                     let reauth = account.status == "reauthenticationRequired";
-                    let (status_label, status_tone) = status_badge_parts(&account.status);
                     let explanation = match account.status.as_str() {
                         "signedIn" => "Your session is valid and ready to play.",
-                        "reauthenticationRequired" => {
-                            "Your session has expired. Sign in again to keep playing."
-                        }
+                        "reauthenticationRequired" => "Sign in with Microsoft to keep playing.",
                         _ => "This account's session status is unavailable right now.",
                     };
                     let sign_in_blocked =
                         busy || self.core.accounts.is_none() || self.core.cancel.is_some();
-                    let mut actions = div().flex().flex_col().gap(px(8.)).w_full();
+                    let mut actions = div().flex().flex_col().gap(px(8.)).w_full().pt(px(2.));
                     if reauth {
                         actions = actions.child(
                             AuroraButton::new("profile-sign-in-again", "Sign in again")
@@ -1390,92 +1390,85 @@ impl Render for Accounts {
                     );
                     side = side.child(
                         ui::card(&palette)
-                            .items_center()
-                            .gap(px(12.))
+                            .gap(px(14.))
                             .child(ui::eyebrow(&palette, "ACTIVE ACCOUNT"))
-                            .child(self.avatar_tile(
-                                &palette,
-                                &id,
-                                &account.minecraft_name,
-                                true,
-                                80.,
-                                20.,
-                                32.,
-                            ))
                             .child(
                                 div()
                                     .flex()
-                                    .flex_col()
                                     .items_center()
-                                    .gap(px(8.))
-                                    .max_w_full()
+                                    .gap(px(14.))
+                                    .child(self.avatar_tile(
+                                        &palette,
+                                        &id,
+                                        &account.minecraft_name,
+                                        true,
+                                        56.,
+                                        14.,
+                                        24.,
+                                    ))
                                     .child(
                                         div()
-                                            .text_size(px(18.))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(palette.foreground)
-                                            .text_ellipsis()
-                                            .child(account.minecraft_name.clone()),
-                                    )
-                                    .child(ui::status_badge(&palette, status_label, status_tone)),
+                                            .flex()
+                                            .flex_col()
+                                            .flex_1()
+                                            .min_w(px(0.))
+                                            .gap(px(4.))
+                                            .child(
+                                                div()
+                                                    .text_size(px(18.))
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(palette.foreground)
+                                                    .text_ellipsis()
+                                                    .child(account.minecraft_name.clone()),
+                                            )
+                                            .child(status_line(&palette, &account.status, None)),
+                                    ),
                             )
                             .child(
                                 div()
                                     .text_size(px(ui::TEXT_BODY))
                                     .text_color(palette.muted_foreground)
-                                    .text_center()
                                     .child(explanation),
                             )
                             .child(actions),
                     );
                 }
-                let info = ui::card(&palette).gap(px(10.)).child(
-                        div()
-                            .flex()
-                            .items_start()
-                            .gap(px(12.))
-                            .child(ui::icon_tile(&palette, Some("verified_user"), 32., true))
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .flex_1()
-                                    .min_w(px(0.))
-                                    .gap(px(4.))
-                                    .child(
-                                        div()
-                                            .text_size(px(ui::TEXT_BODY))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(palette.foreground)
-                                            .child("Secure Microsoft sign-in"),
-                                    )
-                                    .child(ui::caption(
-                                        &palette,
-                                        "Sign-in happens in your browser, and Aurora never sees your password.",
-                                    ))
-                                    .child(ui::caption(
-                                        &palette,
-                                        "Sessions are stored in Windows Credential Manager.",
-                                    )),
-                            ),
-                    );
-                content = content.child(
+                let info = ui::card(&palette).child(
                     div()
                         .flex()
-                        .items_start()
-                        .gap(px(ui::PAGE_GAP))
+                        .items_center()
+                        .gap(px(14.))
+                        .child(ui::icon_tile(&palette, Some("verified_user"), 32., true))
                         .child(
                             div()
                                 .flex()
                                 .flex_col()
-                                .gap(px(16.))
                                 .flex_1()
                                 .min_w(px(0.))
-                                .child(list)
-                                .child(info),
-                        )
-                        .child(side),
+                                .gap(px(3.))
+                                .child(
+                                    div()
+                                        .text_size(px(ui::TEXT_BODY))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(palette.foreground)
+                                        .child("Secure Microsoft sign-in"),
+                                )
+                                .child(ui::caption(
+                                    &palette,
+                                    "Sign-in happens in your browser, and Aurora never sees your password. Sessions are stored in Windows Credential Manager.",
+                                )),
+                        ),
                 );
+                content = content
+                    .child(
+                        div()
+                            .flex()
+                            .items_start()
+                            .gap(px(ui::PAGE_GAP))
+                            .child(div().flex_1().min_w(px(0.)).child(list))
+                            .child(side),
+                    )
+                    .child(info);
             }
         }
 

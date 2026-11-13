@@ -293,6 +293,41 @@ fn empty_queue(t: &crate::theme::AuroraTheme, title: String, body: &'static str)
         )
 }
 
+/// A quiet row of three equal info tiles under the empty state.
+fn info_tiles(t: &crate::theme::AuroraTheme) -> gpui::Div {
+    let tile = |icon: &'static str, line: &'static str| {
+        div()
+            .flex_1()
+            .min_w(px(0.))
+            .flex()
+            .items_center()
+            .gap(px(10.))
+            .px(px(14.))
+            .py(px(12.))
+            .rounded(t.radius_lg)
+            .bg(t.card)
+            .border_1()
+            .border_color(t.border_subtle)
+            .child(crate::symbols::icon(
+                Some(icon),
+                px(18.),
+                t.subtle_foreground,
+            ))
+            .child(
+                div()
+                    .text_size(px(ui::TEXT_BODY))
+                    .text_color(t.muted_foreground)
+                    .child(line),
+            )
+    };
+    div()
+        .flex()
+        .gap(px(12.))
+        .child(tile("verified_user", "Verified before install"))
+        .child(tile("bolt", "Several installs at once"))
+        .child(tile("check_circle", "Safe activation"))
+}
+
 const EMPTY_TEXT: &str = "Installs you start from Discover appear here. Several can run at once; installs into the same instance take turns.";
 
 fn phase_label(phase: Phase) -> &'static str {
@@ -1145,7 +1180,7 @@ impl Render for Downloads {
         if active_rows.is_empty() && finished_rows.is_empty() {
             page = page.child(
                 empty_queue(t, summary.clone(), EMPTY_TEXT)
-                    .h(px(300.))
+                    .h(px(260.))
                     .justify_center()
                     .child(
                         div().pt(px(8.)).child(
@@ -1159,6 +1194,7 @@ impl Render for Downloads {
                         ),
                     ),
             );
+            page = page.child(info_tiles(t));
         }
         if !active_rows.is_empty() {
             page = page.child(

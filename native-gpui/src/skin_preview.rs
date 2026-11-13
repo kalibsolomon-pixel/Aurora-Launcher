@@ -227,7 +227,7 @@ impl SkinPreview {
         self.changed(cx);
     }
 }
-const STAGE_HEIGHT: f32 = 312.;
+const STAGE_HEIGHT: f32 = 364.;
 
 impl Render for SkinPreview {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -287,7 +287,7 @@ impl Render for SkinPreview {
 
         // The renderer produces a 320x440 image; the stage shows it scaled down
         // so the whole card (stage + controls) fits a 760px window.
-        let scale = STAGE_HEIGHT / 440.;
+        let scale = 0.8;
         let stage = div()
             .id("player-preview-surface")
             .role(Role::Group)
@@ -296,8 +296,9 @@ impl Render for SkinPreview {
             .track_focus(&self.focus)
             .tab_stop(true)
             .relative()
-            .w(px(320.))
-            .h(px(STAGE_HEIGHT))
+            .w_full()
+            .flex_1()
+            .min_h(px(STAGE_HEIGHT))
             .flex()
             .flex_col()
             .items_center()
@@ -368,12 +369,13 @@ impl Render for SkinPreview {
                 }
                 cx.stop_propagation();
             }))
-            // Soft floor shadow under the model: stacked ellipses fade outward.
-            .when(self.image.is_some(), |d| {
+            .when_some(self.image.clone(), |d, image| {
+                // The figure is a fixed-size box so the floor shadow stays
+                // glued to the model's feet however tall the stage grows.
                 let shadow = |w: f32, h: f32, a: f32| {
                     div()
                         .absolute()
-                        .left(px((320. - w) / 2. - 1.))
+                        .left(px((318. * scale - w) / 2.))
                         .top(px(394. * scale - h / 2.))
                         .w(px(w))
                         .h(px(h))
@@ -385,12 +387,17 @@ impl Render for SkinPreview {
                             a,
                         })
                 };
-                d.child(shadow(200., 28., 0.16))
-                    .child(shadow(150., 19., 0.22))
-                    .child(shadow(100., 11., 0.34))
-            })
-            .when_some(self.image.clone(), |d, image| {
-                d.child(img(image).w(px(318. * scale)).h(px(438. * scale)))
+                d.child(
+                    div()
+                        .relative()
+                        .flex_shrink_0()
+                        .w(px(318. * scale))
+                        .h(px(438. * scale))
+                        .child(shadow(200., 28., 0.16))
+                        .child(shadow(150., 19., 0.22))
+                        .child(shadow(100., 11., 0.34))
+                        .child(img(image).w(px(318. * scale)).h(px(438. * scale))),
+                )
             })
             .when(self.image.is_none(), |d| {
                 d.child(ui::icon_tile(&t, Some("person"), 44., false))
@@ -416,7 +423,7 @@ impl Render for SkinPreview {
         ui::card(&t)
             .gap(px(14.))
             .p(px(16.))
-            .w(px(354.))
+            .w(px(380.))
             .flex_shrink_0()
             .text_color(t.foreground)
             .child(stage)
@@ -472,40 +479,31 @@ impl Render for SkinPreview {
                                 "restart_alt",
                                 |s, cx| s.reset(cx),
                             )),
-                    ),
-            )
-            .child(ui::divider(&t))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(12.))
+                    )
                     .child(
                         div()
                             .flex()
-                            .flex_col()
-                            .gap(px(2.))
+                            .flex_shrink_0()
+                            .items_center()
+                            .gap(px(8.))
                             .child(
                                 div()
-                                    .text_size(px(ui::TEXT_BODY))
-                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(t.foreground)
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .text_color(t.muted_foreground)
                                     .child("Outer layers"),
                             )
-                            .child(ui::caption(&t, "Hat, jacket and sleeves")),
-                    )
-                    .child(
-                        AuroraToggle::new("preview-layers")
-                            .label("Outer layers")
-                            .checked(self.state.scene.layers)
-                            .on_change(move |value, _, _, cx| {
-                                layers_entity.update(cx, |s, cx| {
-                                    s.state.scene.layers = value;
-                                    s.image = None;
-                                    s.changed(cx);
-                                });
-                            }),
+                            .child(
+                                AuroraToggle::new("preview-layers")
+                                    .label("Outer layers")
+                                    .checked(self.state.scene.layers)
+                                    .on_change(move |value, _, _, cx| {
+                                        layers_entity.update(cx, |s, cx| {
+                                            s.state.scene.layers = value;
+                                            s.image = None;
+                                            s.changed(cx);
+                                        });
+                                    }),
+                            ),
                     ),
             )
     }

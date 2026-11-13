@@ -226,6 +226,19 @@ fn bounded_list(values: &[String], shown: usize) -> String {
     text
 }
 
+/// Digits grouped in thousands: `8928` becomes `8,928`.
+fn grouped(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
 fn size_label(bytes: u64) -> String {
     let mib = bytes as f64 / (1024.0 * 1024.0);
     if mib >= 0.1 {
@@ -793,7 +806,11 @@ impl DiscoverState {
         if self.results.len() >= MAX_RESULTS {
             format!("Showing {MAX_RESULTS} results. Refine your search for more.")
         } else if self.total > 0 {
-            format!("{} shown · {} matches", self.results.len(), self.total)
+            format!(
+                "{} shown · {} matches",
+                self.results.len(),
+                grouped(u64::from(self.total))
+            )
         } else if !self.searching && self.error.is_none() {
             "No matching projects. Try another search.".into()
         } else {
@@ -2389,6 +2406,42 @@ impl RenderOnce for SearchField {
 }
 
 /// A caption-labelled control for the toolbar's filter row.
+/// Uniform artwork tile: a rounded `control` well with a hairline border and
+/// the image filling it, so every row reads alike whatever the icon's own
+/// padding or transparency.
+fn art_tile(
+    id: impl Into<gpui_kit::ElementId>,
+    image: Option<std::sync::Arc<gpui_kit::RenderImage>>,
+    glyph: &str,
+    side: f32,
+    t: &theme::AuroraTheme,
+) -> gpui_kit::Stateful<gpui_kit::Div> {
+    use gpui_kit::StyledImage as _;
+    let base = div()
+        .id(id)
+        .size(px(side))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .overflow_hidden()
+        .rounded(px(10.))
+        .bg(t.control)
+        .border_1()
+        .border_color(t.border_subtle);
+    match image {
+        Some(image) => base.child(
+            gpui_kit::img(image)
+                .size_full()
+                .object_fit(gpui_kit::ObjectFit::Cover),
+        ),
+        None => base
+            .text_size(px(side * 0.45))
+            .text_color(t.ring)
+            .child(glyph.to_owned()),
+    }
+}
+
 fn field(t: &theme::AuroraTheme, label: &'static str, control: impl IntoElement) -> Div {
     div()
         .flex()
@@ -2746,11 +2799,11 @@ impl Render for Discover {
                     .flex_shrink_0()
                     .py(px(0.))
                     .hover(move |style| style.bg(hover))
-                    .child(artwork::tile(
+                    .child(art_tile(
                         ("art", index),
                         s.artwork.cache.image(&project.project_id),
                         &artwork::letter(&project.title),
-                        px(48.),
+                        48.,
                         &palette,
                     ))
                     .child(
@@ -2811,8 +2864,10 @@ impl Render for Discover {
                     .child(
                         div()
                             .flex()
-                            .flex_shrink_0()
+                            .flex_none()
+                            .w(px(178.))
                             .items_center()
+                            .justify_end()
                             .gap(px(8.))
                             .child({
                                 let id = id.clone();
@@ -2960,11 +3015,11 @@ impl Discover {
                     .items_center()
                     .gap(px(14.))
                     .children(details.map(|p| {
-                        artwork::tile(
+                        art_tile(
                             "details-art",
                             s.artwork.cache.image(&p.project_id),
                             &artwork::letter(&p.title),
-                            px(48.),
+                            48.,
                             &palette,
                         )
                     }))

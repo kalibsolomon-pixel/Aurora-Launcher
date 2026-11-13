@@ -811,6 +811,7 @@ fn slim_row(t: &theme::AuroraTheme, detail: &str, badge: Option<&str>) -> gpui::
         .h(px(40.))
         .px(px(12.))
         .rounded(t.radius)
+        .bg(t.card)
         .border_1()
         .border_color(t.border_subtle)
         .child(crate::symbols::icon(
