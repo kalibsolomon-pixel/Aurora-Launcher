@@ -553,7 +553,7 @@ fn icon_button(
         .px(px(8.))
         .gap(px(6.))
         .text_size(px(ui::TEXT_CAPTION))
-        .text_color(t.muted_foreground)
+        .text_color(Hsla { a: 0.9, ..t.danger })
         .rounded(t.radius)
         .bg(gpui::transparent_black())
         .border_1()
@@ -565,7 +565,7 @@ fn icon_button(
         .child(crate::symbols::icon(
             Some(icon),
             px(16.),
-            t.muted_foreground,
+            Hsla { a: 0.9, ..t.danger },
         ))
         .child("Remove…")
 }
@@ -1267,15 +1267,16 @@ impl Render for Accounts {
                         .flex()
                         .flex_shrink_0()
                         .items_center()
-                        .justify_end()
-                        .w(px(72.))
+                        .justify_center()
+                        .w(px(96.))
                         .child(if selected {
                             div()
                                 .flex()
                                 .items_center()
                                 .gap(px(5.))
                                 .text_size(px(ui::TEXT_BODY))
-                                .text_color(palette.muted_foreground)
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(palette.foreground)
                                 .child(crate::symbols::icon(Some("check"), px(14.), palette.ring))
                                 .child("Selected")
                                 .into_any_element()

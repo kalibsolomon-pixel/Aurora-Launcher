@@ -1278,6 +1278,7 @@ impl Render for Syncing {
                     .child(
                         AuroraCheckbox::new(choice_id, format!("Include {}", label))
                             .checked(checked)
+                            .dormant(!enabled)
                             .disabled(editing_disabled)
                             .on_change({
                                 let view = view.clone();

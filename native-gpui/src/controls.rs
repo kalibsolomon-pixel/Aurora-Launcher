@@ -485,6 +485,7 @@ pub struct AuroraCheckbox {
     label: SharedString,
     checked: bool,
     disabled: bool,
+    dormant: bool,
     on_change: Option<ChangeHandler>,
 }
 
@@ -495,11 +496,18 @@ impl AuroraCheckbox {
             label: label.into(),
             checked: false,
             disabled: false,
+            dormant: false,
             on_change: None,
         }
     }
     pub fn checked(mut self, checked: bool) -> Self {
         self.checked = checked;
+        self
+    }
+    /// A saved choice whose feature is currently off: still editable, but a
+    /// checked box renders neutral instead of in the accent.
+    pub fn dormant(mut self, dormant: bool) -> Self {
+        self.dormant = dormant;
         self
     }
     pub fn disabled(mut self, disabled: bool) -> Self {
@@ -546,12 +554,16 @@ impl RenderOnce for AuroraCheckbox {
                     .justify_center()
                     .rounded(px(4.))
                     .border_1()
-                    .border_color(if self.checked {
-                        t.accent
-                    } else {
-                        t.subtle_foreground
+                    .border_color(match (self.checked, self.dormant) {
+                        (true, false) => t.accent,
+                        (true, true) => t.muted_foreground,
+                        _ => t.subtle_foreground,
                     })
-                    .bg(if self.checked { t.accent } else { t.sunken })
+                    .bg(match (self.checked, self.dormant) {
+                        (true, false) => t.accent,
+                        (true, true) => t.control_hover,
+                        _ => t.sunken,
+                    })
                     .child(crate::symbols::icon(Some("check"), px(16.), mark)),
             );
         if let Some(on_change) = self.on_change {

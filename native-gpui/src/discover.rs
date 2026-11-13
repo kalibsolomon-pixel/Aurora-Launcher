@@ -2724,14 +2724,14 @@ impl Render for Discover {
 
         let toolbar = ui::card(&palette)
             .flex_shrink_0()
-            .p(px(8.))
-            .gap(px(12.))
+            .p(px(16.))
+            .gap(px(14.))
             .child(
                 div()
                     .flex()
                     .flex_wrap()
                     .items_center()
-                    .gap(px(12.))
+                    .gap(px(16.))
                     .child(kind_row)
                     .child(div().flex_1().min_w(px(280.)).child(search_row)),
             )
@@ -2870,7 +2870,8 @@ impl Render for Discover {
                                             .items_center()
                                             .gap(px(7.))
                                             .min_w(px(0.))
-                                            .h(px(24.))
+                                            .h(px(26.))
+                                            .line_height(px(20.))
                                             .rounded(palette.radius)
                                             .border_1()
                                             .border_color(gpui_kit::transparent_black())

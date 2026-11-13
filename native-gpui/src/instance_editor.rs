@@ -2362,6 +2362,7 @@ impl Render for InstanceEditor {
                                                 .min_w(px(0.))
                                                 .truncate()
                                                 .text_size(px(ui::TEXT_BODY))
+                                                .line_height(px(19.))
                                                 .font_weight(gpui::FontWeight::MEDIUM)
                                                 .text_color(t.foreground)
                                                 .child(instance.display_name.clone()),
@@ -2397,6 +2398,7 @@ impl Render for InstanceEditor {
                                     div()
                                         .truncate()
                                         .text_size(px(ui::TEXT_CAPTION))
+                                        .line_height(px(17.))
                                         .text_color(t.muted_foreground)
                                         .child(detail),
                                 ),

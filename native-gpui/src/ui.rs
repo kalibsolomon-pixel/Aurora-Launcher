@@ -162,6 +162,7 @@ pub fn title_block(
         .child(
             div()
                 .text_size(px(TEXT_BODY + 1.))
+                .line_height(px(20.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(t.foreground)
                 .text_ellipsis()
@@ -171,6 +172,7 @@ pub fn title_block(
             this.child(
                 div()
                     .text_size(px(TEXT_CAPTION))
+                    .line_height(px(17.))
                     .text_color(t.muted_foreground)
                     .text_ellipsis()
                     .child(detail),

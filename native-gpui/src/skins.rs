@@ -2467,7 +2467,7 @@ impl Render for Skins {
                 .child(
                     appearance
                         .when(signed_in.is_none(), |card| {
-                            card.bg(gpui::transparent_black()).border_0().p(px(0.))
+                            card.p(px(16.))
                         })
                         .flex_1()
                         .min_w(px(320.)),
