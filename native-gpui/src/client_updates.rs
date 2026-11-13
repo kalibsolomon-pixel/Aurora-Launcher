@@ -800,45 +800,59 @@ fn update_card(t: &theme::AuroraTheme) -> gpui::Div {
         .border_color(t.border_subtle)
 }
 
-/// A slim single-line strip for states where nothing can be checked or
-/// applied: icon, label, a short muted explanation and an optional status
-/// badge right after the text. Hairline outline, no card fill.
+/// A compact two-line card for states where nothing can be checked or
+/// applied. Line 1: icon, "Aurora Client" and its status badge right after the
+/// title. Line 2: the muted explanation.
 fn slim_row(t: &theme::AuroraTheme, detail: &str, badge: Option<&str>) -> gpui::Div {
     div()
         .flex()
         .items_center()
-        .gap(px(10.))
-        .h(px(40.))
-        .px(px(12.))
-        .rounded(t.radius)
+        .gap(px(12.))
+        .h(px(56.))
+        .px(px(14.))
+        .rounded(t.radius_lg)
         .bg(t.card)
         .border_1()
         .border_color(t.border_subtle)
         .child(crate::symbols::icon(
             Some("system_update"),
-            px(16.),
+            px(18.),
             t.subtle_foreground,
         ))
         .child(
             div()
-                .flex_shrink_0()
-                .text_size(px(ui::TEXT_BODY))
-                .font_weight(gpui::FontWeight::MEDIUM)
-                .text_color(t.foreground)
-                .child("Aurora Client"),
-        )
-        .child(
-            div()
+                .flex()
+                .flex_col()
+                .flex_1()
                 .min_w(px(0.))
-                .overflow_hidden()
-                .text_ellipsis()
-                .whitespace_nowrap()
-                .text_size(px(ui::TEXT_CAPTION))
-                .text_color(t.subtle_foreground)
-                .child(detail.to_owned()),
-        )
-        .children(
-            badge.map(|label| ui::badge(t, label.to_owned(), ui::Tone::Neutral).flex_shrink_0()),
+                .gap(px(2.))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(
+                            div()
+                                .flex_shrink_0()
+                                .text_size(px(ui::TEXT_BODY))
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(t.foreground)
+                                .child("Aurora Client"),
+                        )
+                        .children(badge.map(|label| {
+                            ui::badge(t, label.to_owned(), ui::Tone::Neutral).flex_shrink_0()
+                        })),
+                )
+                .child(
+                    div()
+                        .min_w(px(0.))
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .whitespace_nowrap()
+                        .text_size(px(ui::TEXT_CAPTION))
+                        .text_color(t.muted_foreground)
+                        .child(detail.to_owned()),
+                ),
         )
 }
 

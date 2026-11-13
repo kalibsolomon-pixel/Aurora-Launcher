@@ -148,18 +148,27 @@ impl RenderOnce for AuroraButton {
             ButtonVariant::Default => (t.control, t.foreground, t.control_hover, t.control),
             ButtonVariant::Primary => (t.accent, t.accent_foreground, t.accent_hover, t.accent),
             ButtonVariant::Danger => (
-                Hsla { a: 0.10, ..t.danger },
+                Hsla {
+                    a: 0.10,
+                    ..t.danger
+                },
                 t.danger,
-                Hsla { a: 0.18, ..t.danger },
-                Hsla { a: 0.28, ..t.danger },
+                Hsla {
+                    a: 0.18,
+                    ..t.danger
+                },
+                Hsla {
+                    a: 0.28,
+                    ..t.danger
+                },
             ),
             // Transparent at rest so translucent Borealis surfaces show through.
             ButtonVariant::Ghost => (clear, t.foreground, t.control, clear),
             ButtonVariant::Nav => (clear, t.muted_foreground, t.control, clear),
             ButtonVariant::Soft => (
-                t.accent_soft,
+                Hsla { a: 0.20, ..t.ring },
                 t.ring,
-                Hsla { a: 0.24, ..t.ring },
+                Hsla { a: 0.30, ..t.ring },
                 clear,
             ),
             ButtonVariant::Subtle => (clear, t.muted_foreground, t.control, clear),
@@ -184,6 +193,7 @@ impl RenderOnce for AuroraButton {
         };
 
         let mut button = Button::new(self.id)
+            .aria_label(self.label.clone())
             .disabled(self.disabled)
             .selected(self.selected)
             .flex()
@@ -195,11 +205,7 @@ impl RenderOnce for AuroraButton {
             .when(!nav, |b| b.justify_center())
             .h(px(height))
             .px(px(if nav { 10. } else { pad }))
-            .rounded(if self.size == ButtonSize::Large {
-                px(10.)
-            } else {
-                t.radius
-            })
+            .rounded(t.radius)
             .text_size(px(text))
             .font_weight(weight)
             .bg(bg)

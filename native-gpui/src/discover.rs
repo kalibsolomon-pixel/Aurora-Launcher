@@ -2793,9 +2793,9 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == total)
                     .id(("result", index))
                     .gap(px(14.))
-                    .h(px(76.))
-                    .min_h(px(76.))
-                    .max_h(px(76.))
+                    .h(px(88.))
+                    .min_h(px(88.))
+                    .max_h(px(88.))
                     .flex_shrink_0()
                     .py(px(0.))
                     .hover(move |style| style.bg(hover))
@@ -2854,9 +2854,10 @@ impl Render for Discover {
                             .child(
                                 div()
                                     .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .text_ellipsis()
+                                    .max_h(px(36.))
+                                    .line_clamp(2)
                                     .text_size(px(ui::TEXT_BODY))
+                                    .line_height(px(18.))
                                     .text_color(palette.muted_foreground)
                                     .child(project.summary.clone()),
                             ),
@@ -2883,7 +2884,7 @@ impl Render for Discover {
                                     let id = id.clone();
                                     AuroraButton::new(("install", index), "Install")
                                         .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Primary)
+                                        .variant(ButtonVariant::Soft)
                                         .icon("download")
                                         .disabled(installed || row_busy || s.target.is_none())
                                         .on_click(cx.listener(move |this, _, _, cx| {

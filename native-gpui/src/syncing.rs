@@ -968,8 +968,6 @@ impl Syncing {
     }
 }
 
-/// Width the page's cards fill; the page itself scrolls in the app shell.
-const PAGE_MAX_WIDTH: f32 = 720.;
 /// Width of the right-hand control column in settings rows.
 const CONTROL_WIDTH: f32 = 220.;
 
@@ -1043,6 +1041,12 @@ fn locked_toggle(
     checked: bool,
 ) -> impl IntoElement {
     let (id, label) = (id.into(), label.into());
+    // Glyph and word share one color: foreground when included, quiet when not.
+    let tone = if checked {
+        t.foreground
+    } else {
+        t.subtle_foreground
+    };
     div()
         .id(id)
         .flex()
@@ -1060,11 +1064,11 @@ fn locked_toggle(
                 .items_center()
                 .gap(px(5.))
                 .text_size(px(ui::TEXT_BODY))
-                .text_color(t.muted_foreground)
+                .text_color(tone)
                 .child(crate::symbols::icon(
                     Some(if checked { "check" } else { "remove" }),
                     px(16.),
-                    t.muted_foreground,
+                    tone,
                 ))
                 .child(if checked { "Included" } else { "Not included" }),
         )
@@ -1096,8 +1100,9 @@ impl Render for Syncing {
             .flex()
             .flex_col()
             .gap(px(ui::PAGE_GAP))
-            .w_full()
-            .max_w(px(PAGE_MAX_WIDTH))
+            // Bound intrinsic text widths to the actual content viewport.
+            .w((window.viewport_size().width - px(276.)).max(px(560.)))
+            .min_w(px(0.))
             .text_color(palette.foreground)
             .child(ui::page_header(
                 t,
@@ -1137,6 +1142,17 @@ impl Render for Syncing {
         if let Some(draft) = self.policy.draft.clone() {
             let view = cx.entity();
             let enabled = draft.enabled;
+            // The master switch is stated in words, not only by the toggle.
+            let status_label: SharedString = if enabled {
+                status_label.into()
+            } else {
+                format!("Off · {status_label}").into()
+            };
+            let status_tone = if enabled {
+                status_tone
+            } else {
+                ui::Tone::Neutral
+            };
             root = root.child(
                 section_card(t)
                     .pb(px(20.))

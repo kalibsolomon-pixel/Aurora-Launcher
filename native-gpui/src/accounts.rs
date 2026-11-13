@@ -1134,6 +1134,7 @@ impl Render for Accounts {
             }
             Some(
                 AuroraButton::new("sign-in", "Add account")
+                    .variant(ButtonVariant::Primary)
                     .icon("person_add")
                     .disabled(busy || self.core.accounts.is_none() || self.core.cancel.is_some())
                     .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx)))
@@ -1391,7 +1392,7 @@ impl Render for Accounts {
                     side = side.child(
                         ui::card(&palette)
                             .gap(px(14.))
-                            .child(ui::eyebrow(&palette, "ACTIVE ACCOUNT"))
+                            .child(ui::eyebrow(&palette, "Active account"))
                             .child(
                                 div()
                                     .flex()

@@ -9,8 +9,8 @@
 use gpui_kit::base::Button;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    Div, ElementId, FontWeight, Hsla, InteractiveElement, ParentElement, SharedString, Styled,
-    div, px,
+    Div, ElementId, FontWeight, Hsla, InteractiveElement, ParentElement, SharedString, Styled, div,
+    px,
 };
 
 use crate::theme::AuroraTheme;
@@ -124,7 +124,9 @@ pub fn row(t: &AuroraTheme, last: bool) -> Div {
         .gap(px(12.))
         .px(px(16.))
         .py(px(12.))
-        .when(!last, |this| this.border_b_1().border_color(t.border_subtle))
+        .when(!last, |this| {
+            this.border_b_1().border_color(t.border_subtle)
+        })
 }
 
 /// Primary + secondary text stacked, for list rows and tiles.
@@ -223,7 +225,9 @@ fn pill(t: &AuroraTheme, label: SharedString, tone: Tone, dot: bool) -> Div {
         } else {
             color
         })
-        .when(dot, |this| this.child(div().size(px(6.)).rounded_full().bg(color)))
+        .when(dot, |this| {
+            this.child(div().size(px(6.)).rounded_full().bg(color))
+        })
         .child(label)
 }
 
@@ -285,7 +289,11 @@ pub fn empty_state(
 }
 
 /// A labelled value (stats, metadata grids).
-pub fn stat(t: &AuroraTheme, label: impl Into<SharedString>, value: impl Into<SharedString>) -> Div {
+pub fn stat(
+    t: &AuroraTheme,
+    label: impl Into<SharedString>,
+    value: impl Into<SharedString>,
+) -> Div {
     div()
         .flex()
         .flex_col()
@@ -314,7 +322,9 @@ pub fn setting_row(
         .justify_between()
         .gap(px(24.))
         .py(px(14.))
-        .when(!last, |this| this.border_b_1().border_color(t.border_subtle))
+        .when(!last, |this| {
+            this.border_b_1().border_color(t.border_subtle)
+        })
         .child(
             div()
                 .flex()

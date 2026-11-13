@@ -111,7 +111,9 @@ pub(crate) fn showcase() -> bool {
 fn showcase_root() -> Option<PathBuf> {
     let mut args = std::env::args().skip_while(|a| a != "--showcase").skip(1);
     let root = PathBuf::from(args.next()?);
-    root.join("AURORA_DISPOSABLE_DIAGNOSTIC").is_file().then_some(root)
+    root.join("AURORA_DISPOSABLE_DIAGNOSTIC")
+        .is_file()
+        .then_some(root)
 }
 const READINESS_RECHECK_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
 
@@ -274,14 +276,29 @@ fn instance_icon(
         .when(active, |tile| {
             tile.bg(gpui::linear_gradient(
                 145.,
-                gpui::linear_color_stop(gpui::Hsla { a: 0.30, ..palette.ring }, 0.),
-                gpui::linear_color_stop(gpui::Hsla { a: 0.08, ..palette.ring }, 1.),
+                gpui::linear_color_stop(
+                    gpui::Hsla {
+                        a: 0.30,
+                        ..palette.ring
+                    },
+                    0.,
+                ),
+                gpui::linear_color_stop(
+                    gpui::Hsla {
+                        a: 0.08,
+                        ..palette.ring
+                    },
+                    1.,
+                ),
             ))
         })
         .when(!active, |tile| tile.bg(palette.control))
         .border_1()
         .border_color(if active {
-            gpui::Hsla { a: 0.35, ..palette.ring }
+            gpui::Hsla {
+                a: 0.35,
+                ..palette.ring
+            }
         } else {
             palette.border_subtle
         })
@@ -691,7 +708,10 @@ impl Launcher {
                 can_prepare: false,
                 instance_id: id,
                 account_name: self.accounts.selected_account_id.as_ref().and_then(|_| {
-                    self.accounts.accounts.first().map(|a| a.minecraft_name.clone())
+                    self.accounts
+                        .accounts
+                        .first()
+                        .map(|a| a.minecraft_name.clone())
                 }),
                 account_id: account,
                 instance_status: "ready".into(),
@@ -702,7 +722,12 @@ impl Launcher {
             };
             self.rt.spawn(async move {
                 let _ = tx
-                    .send(Message::Readiness(serial, process_serial, Ok(decision), None))
+                    .send(Message::Readiness(
+                        serial,
+                        process_serial,
+                        Ok(decision),
+                        None,
+                    ))
                     .await;
             });
             return;
@@ -1528,22 +1553,17 @@ impl Launcher {
             .flex_1()
             .min_w(px(0.))
             .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.))
-                    .child(ui::eyebrow(t, "SELECTED INSTANCE"))
-                    .child(
-                        div()
-                            .text_size(px(ui::TEXT_DISPLAY))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(t.foreground)
-                            .text_ellipsis()
-                            .child(instance.map_or_else(
-                                || "Choose an instance".to_owned(),
-                                |i| i.display_name.clone(),
-                            )),
-                    ),
+                div().flex().flex_col().gap(px(4.)).child(
+                    div()
+                        .text_size(px(ui::TEXT_DISPLAY))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(t.foreground)
+                        .text_ellipsis()
+                        .child(instance.map_or_else(
+                            || "Choose an instance".to_owned(),
+                            |i| i.display_name.clone(),
+                        )),
+                ),
             );
         if let Some(instance) = instance {
             let mut badges = div()
@@ -1709,9 +1729,15 @@ impl Launcher {
                         .px(px(16.))
                         .py(px(12.))
                         .rounded(t.radius_lg)
-                        .bg(gpui::Hsla { a: 0.08, ..t.warning })
+                        .bg(gpui::Hsla {
+                            a: 0.08,
+                            ..t.warning
+                        })
                         .border_1()
-                        .border_color(gpui::Hsla { a: 0.25, ..t.warning })
+                        .border_color(gpui::Hsla {
+                            a: 0.25,
+                            ..t.warning
+                        })
                         .child(symbols::icon(Some("warning"), px(18.), t.warning))
                         .child(
                             div()
@@ -1799,7 +1825,13 @@ impl Launcher {
                         .justify_between()
                         .px(px(8.))
                         .pt(px(6.))
-                        .child(ui::eyebrow(t, "YOUR INSTANCES"))
+                        .child(
+                            div()
+                                .text_size(px(ui::TEXT_BODY))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(t.foreground)
+                                .child("Your instances"),
+                        )
                         .child(ui::caption(t, launcher.instances.len().to_string())),
                 )
                 .child(tiles);
@@ -1852,7 +1884,9 @@ impl Launcher {
             .filter(|decision| decision.instance_id == id);
         match decision {
             Some(decision) if decision.ready => Some(("Ready to play", ui::Tone::Success)),
-            Some(decision) if decision.can_prepare => Some(("Needs preparation", ui::Tone::Warning)),
+            Some(decision) if decision.can_prepare => {
+                Some(("Needs preparation", ui::Tone::Warning))
+            }
             Some(_) => Some(("Action needed", ui::Tone::Warning)),
             None if self.readiness_in_flight || self.load_in_flight => {
                 Some(("Checking", ui::Tone::Neutral))
@@ -1936,7 +1970,12 @@ impl Render for Launcher {
                 .flex_col()
                 .gap(px(2.))
                 .when_some(title, |group, title| {
-                    group.child(ui::eyebrow(&palette, title).px(px(10.)).pt(px(16.)).pb(px(6.)))
+                    group.child(
+                        ui::eyebrow(&palette, title)
+                            .px(px(10.))
+                            .pt(px(16.))
+                            .pb(px(6.)),
+                    )
                 })
                 .children(nav.by_ref().take(count).collect::<Vec<_>>())
         };
@@ -2162,8 +2201,16 @@ impl Render for Launcher {
                     .child(div().flex_1())
                     .child(system_group)
                     .child(
+                        div()
+                            .h(px(1.))
+                            .my(px(8.))
+                            .mx(px(10.))
+                            .bg(palette.border_subtle),
+                    )
+                    .child(
                         self.button("refresh", "Refresh")
-                            .variant(ButtonVariant::Nav)
+                            .variant(ButtonVariant::Subtle)
+                            .size(ButtonSize::Small)
                             .icon("refresh")
                             .disabled(
                                 self.busy
@@ -2228,11 +2275,17 @@ impl Render for Launcher {
                             gpui::linear_gradient(
                                 angle,
                                 gpui::linear_color_stop(
-                                    gpui::Hsla { a: 0.0, ..palette.background },
+                                    gpui::Hsla {
+                                        a: 0.0,
+                                        ..palette.background
+                                    },
                                     0.,
                                 ),
                                 gpui::linear_color_stop(
-                                    gpui::Hsla { a: 0.92, ..palette.background },
+                                    gpui::Hsla {
+                                        a: 0.92,
+                                        ..palette.background
+                                    },
                                     1.,
                                 ),
                             )
@@ -2282,7 +2335,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::args().any(|a| a == "--showcase") && showcase_root.is_none() {
         return Err("--showcase needs a directory containing AURORA_DISPOSABLE_DIAGNOSTIC".into());
     }
-    SHOWCASE.store(showcase_root.is_some(), std::sync::atomic::Ordering::Relaxed);
+    SHOWCASE.store(
+        showcase_root.is_some(),
+        std::sync::atomic::Ordering::Relaxed,
+    );
     let diagnostic = std::env::args().any(|a| a == "--diagnostic") || showcase_root.is_some();
     if !diagnostic && aurora_launcher_lib::run_artwork_decoder_if_requested() {
         return Ok(());
@@ -2315,7 +2371,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         let events = tx.clone();
         Some(Host::native(
-            showcase_root.map(Ok).unwrap_or_else(|| platform_local_data_dir(APPLICATION_IDENTIFIER)),
+            showcase_root
+                .map(Ok)
+                .unwrap_or_else(|| platform_local_data_dir(APPLICATION_IDENTIFIER)),
             env!("CARGO_PKG_VERSION"),
             rt.clone(),
             move |name, payload| {

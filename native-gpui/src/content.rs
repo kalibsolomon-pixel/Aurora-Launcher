@@ -1272,11 +1272,13 @@ fn icon_button(
     label: String,
 ) -> gpui_kit::base::Button {
     let clear = gpui::transparent_black();
-    let (hover, ring) = (t.control_hover, t.ring);
-    let color = gpui::Hsla {
-        a: 0.75,
-        ..t.foreground
+    // Destructive affordance: danger tint at rest, a danger wash on hover.
+    let ring = t.ring;
+    let hover = gpui::Hsla {
+        a: 0.16,
+        ..t.danger
     };
+    let color = gpui::Hsla { a: 0.7, ..t.danger };
     gpui_kit::base::Button::new(id)
         .aria_label(label)
         .flex()
@@ -1655,8 +1657,15 @@ impl Render for Content {
                                 .flex()
                                 .flex_shrink_0()
                                 .items_center()
-                                .gap(px(4.))
+                                .gap(px(16.))
                                 .child(toggle)
+                                .child(
+                                    div()
+                                        .w(px(1.))
+                                        .h(px(20.))
+                                        .flex_shrink_0()
+                                        .bg(palette.border_subtle),
+                                )
                                 .child(remove),
                         ),
                 );

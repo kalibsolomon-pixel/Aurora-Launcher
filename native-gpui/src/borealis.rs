@@ -732,14 +732,12 @@ impl Render for Borealis {
         }
         let layer = div().absolute().top_0().left_0().size_full();
         match (&self.image, self.motion.enabled()) {
-            (Some(image), true) => {
-                layer.child(
-                    img(image.clone())
-                        .size_full()
-                        .object_fit(ObjectFit::Fill)
-                        .opacity(BAND_OPACITY),
-                )
-            }
+            (Some(image), true) => layer.child(
+                img(image.clone())
+                    .size_full()
+                    .object_fit(ObjectFit::Fill)
+                    .opacity(BAND_OPACITY),
+            ),
             _ => layer,
         }
     }

@@ -59,53 +59,67 @@ impl PreviewState {
 
 /// A built-in mannequin skin (classic, 64x64) used only to render the neutral
 /// model. Scene state keeps `skin: None`, so the UI still reports "neutral".
-fn neutral_skin() -> Arc<api::HeadAvatar> {
-    static SKIN: std::sync::OnceLock<Arc<api::HeadAvatar>> = std::sync::OnceLock::new();
-    SKIN.get_or_init(|| {
-        const SIZE: usize = 64;
-        let mut px = vec![0u8; SIZE * SIZE * 4];
-        let mut fill = |x0: usize, y0: usize, x1: usize, y1: usize, c: [u8; 3]| {
-            for y in y0..y1 {
-                for x in x0..x1 {
-                    let i = (y * SIZE + x) * 4;
-                    px[i..i + 4].copy_from_slice(&[c[0], c[1], c[2], 255]);
-                }
+///
+/// The figure is monochrome: one soft lavender hue taken from the theme accent,
+/// with tone (not colour) separating head, torso, arms and legs. Every face of
+/// every box gets its own lightness (top lit, sides and underside falling off)
+/// and a gentle vertical falloff, so the 3D form reads without cartoon colours.
+fn neutral_skin(accent: gpui::Hsla) -> Arc<api::HeadAvatar> {
+    const SIZE: usize = 64;
+    let mut px = vec![0u8; SIZE * SIZE * 4];
+    let hue = accent.h;
+    let tone = |lightness: f32, saturation: f32| gpui::Hsla {
+        h: hue,
+        s: saturation,
+        l: lightness.clamp(0., 1.),
+        a: 1.,
+    };
+    // Paints one texture rectangle with a vertical lightness falloff.
+    let mut paint = |x0: usize, y0: usize, w: usize, h: usize, base: gpui::Hsla, falloff: f32| {
+        for row in 0..h {
+            let k = if h > 1 {
+                row as f32 / (h - 1) as f32
+            } else {
+                0.
+            };
+            let c: gpui::Rgba = gpui::Hsla {
+                l: (base.l - falloff * k).clamp(0., 1.),
+                ..base
             }
-        };
-        let skin = [222, 190, 168];
-        let hair = [88, 72, 70];
-        let shirt = [118, 124, 206];
-        let pants = [66, 74, 112];
-        let shoe = [48, 52, 78];
-        let eye = [58, 62, 96];
-        // Head (8x8x8 at 0,0): skin, then hair on top, back and the upper rows.
-        fill(0, 0, 32, 16, skin);
-        fill(8, 0, 24, 8, hair);
-        fill(24, 8, 32, 16, hair);
-        fill(8, 8, 16, 10, hair);
-        fill(0, 8, 8, 10, hair);
-        fill(16, 8, 24, 10, hair);
-        fill(10, 12, 11, 13, eye);
-        fill(13, 12, 14, 13, eye);
-        // Torso (8x12x4 at 16,16) and both arms: shirt with bare forearms.
-        fill(16, 16, 40, 32, shirt);
-        for (ax, ay) in [(40, 16), (32, 48)] {
-            fill(ax, ay, ax + 16, ay + 16, shirt);
-            fill(ax, ay + 10, ax + 16, ay + 16, skin);
+            .into();
+            let rgb = [
+                (c.r * 255.).round() as u8,
+                (c.g * 255.).round() as u8,
+                (c.b * 255.).round() as u8,
+            ];
+            for x in x0..x0 + w {
+                let i = ((y0 + row) * SIZE + x) * 4;
+                px[i..i + 4].copy_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
+            }
         }
-        // Legs (4x12x4 at 0,16 and 16,48): trousers with darker shoes.
-        for (lx, ly) in [(0, 16), (16, 48)] {
-            fill(lx, ly, lx + 16, ly + 16, pants);
-            fill(lx, ly + 13, lx + 16, ly + 16, shoe);
-        }
-        Arc::new(api::HeadAvatar {
-            rgba: Vec::new(),
-            skin_rgba: px,
-            skin_height: 64,
-            model: "classic".into(),
-        })
+    };
+    // One box (width, height, depth at texture origin u, v) in a base tone.
+    let mut part = |u: usize, v: usize, w: usize, h: usize, d: usize, lightness: f32, sat: f32| {
+        let face = |delta: f32| tone(lightness + delta, sat);
+        paint(u + d, v, w, d, face(0.10), 0.0); // top
+        paint(u + d + w, v, w, d, face(-0.18), 0.0); // bottom
+        paint(u, v + d, d, h, face(-0.05), 0.07); // right
+        paint(u + d, v + d, w, h, face(0.0), 0.07); // front
+        paint(u + d + w, v + d, d, h, face(-0.09), 0.07); // left
+        paint(u + d + w + d, v + d, w, h, face(-0.06), 0.07); // back
+    };
+    part(0, 0, 8, 8, 8, 0.76, 0.30); // head
+    part(16, 16, 8, 12, 4, 0.64, 0.30); // torso
+    part(40, 16, 4, 12, 4, 0.70, 0.28); // right arm
+    part(32, 48, 4, 12, 4, 0.70, 0.28); // left arm
+    part(0, 16, 4, 12, 4, 0.50, 0.28); // right leg
+    part(16, 48, 4, 12, 4, 0.50, 0.28); // left leg
+    Arc::new(api::HeadAvatar {
+        rgba: Vec::new(),
+        skin_rgba: px,
+        skin_height: 64,
+        model: "classic".into(),
     })
-    .clone()
 }
 
 pub struct SkinPreview {
@@ -179,7 +193,7 @@ impl SkinPreview {
         let mut work = request.clone();
         if work.skin.is_none() {
             // Neutral model: a tonal mannequin texture so the form reads.
-            work.skin = Some(neutral_skin());
+            work.skin = Some(neutral_skin(theme::theme(cx).accent));
         }
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.runtime.spawn(async move {
@@ -256,27 +270,27 @@ impl Render for SkinPreview {
             }
             div().flex_1().min_w(px(0.)).child(button)
         };
-        // Icon-only Subtle tool button (28px) with an accessible name.
+        // Icon-only tool button (32px) with an accessible name.
         let tool = |id: &'static str,
                     label: &'static str,
                     icon: &'static str,
                     action: fn(&mut Self, &mut Context<Self>)| {
             let entity = entity.clone();
-            let (hover, ring, color) = (t.control, t.ring, t.muted_foreground);
+            let (hover, ring, color) = (t.control_hover, t.ring, t.muted_foreground);
             gpui::base::Button::new(id)
                 .aria_label(label)
                 .flex()
                 .flex_shrink_0()
                 .items_center()
                 .justify_center()
-                .size(px(28.))
+                .size(px(32.))
                 .rounded(t.radius)
                 .border_1()
                 .border_color(gpui::transparent_black())
                 .hover(move |style| style.bg(hover))
                 .active(|style| style.opacity(0.88))
                 .focus(move |style| style.border_color(ring))
-                .child(crate::symbols::icon(Some(icon), px(16.), color))
+                .child(crate::symbols::icon(Some(icon), px(18.), color))
                 .on_click(move |_, _, cx| {
                     entity.update(cx, |s, cx| action(s, cx));
                 })
@@ -412,6 +426,35 @@ impl Render for SkinPreview {
                             }),
                     )
             })
+            .child(
+                // Floating view tools, top-right of the stage. Presses here must
+                // not start a rotate-drag on the stage underneath.
+                div()
+                    .absolute()
+                    .top(px(10.))
+                    .right(px(10.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .p(px(3.))
+                    .rounded(t.radius_lg)
+                    .bg(t.raised)
+                    .border_1()
+                    .border_color(t.border_subtle)
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .child(tool("preview-zoom-in", "Zoom in", "zoom_in", |s, cx| {
+                        s.zoom(0.08, cx)
+                    }))
+                    .child(tool("preview-zoom-out", "Zoom out", "zoom_out", |s, cx| {
+                        s.zoom(-0.08, cx)
+                    }))
+                    .child(tool(
+                        "preview-reset",
+                        "Reset view",
+                        "restart_alt",
+                        |s, cx| s.reset(cx),
+                    )),
+            )
             .when(neutral && self.image.is_some(), |d| {
                 d.child(div().absolute().top(px(10.)).left(px(10.)).child(ui::badge(
                     &t,
@@ -427,7 +470,7 @@ impl Render for SkinPreview {
             .flex_shrink_0()
             .text_color(t.foreground)
             .child(stage)
-            // One toolbar: view segments left, icon-only tools right.
+            // View segments left, the outer-layers toggle right.
             .child(
                 div()
                     .flex()
@@ -460,24 +503,6 @@ impl Render for SkinPreview {
                                 ButtonVariant::Ghost,
                                 rear,
                                 |s, cx| s.view_back(true, cx),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(2.))
-                            .child(tool("preview-zoom-in", "Zoom in", "zoom_in", |s, cx| {
-                                s.zoom(0.08, cx)
-                            }))
-                            .child(tool("preview-zoom-out", "Zoom out", "zoom_out", |s, cx| {
-                                s.zoom(-0.08, cx)
-                            }))
-                            .child(tool(
-                                "preview-reset",
-                                "Reset view",
-                                "restart_alt",
-                                |s, cx| s.reset(cx),
                             )),
                     )
                     .child(

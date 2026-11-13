@@ -1882,6 +1882,12 @@ const STACK_W: f32 = 420.;
 const LIST_W: f32 = 272.;
 /// Sidebar plus the page gutters, subtracted from the window width.
 const PAGE_CHROME: f32 = 276.;
+/// Distance from the window top to the master-detail row (page header, import
+/// hint and gaps) plus the page's bottom padding. The row takes the rest of the
+/// viewport so each column scrolls on its own and no void opens under the list.
+const ROW_TOP_CHROME: f32 = 164. + 40.;
+/// The master-detail row never gets shorter than this.
+const ROW_MIN_H: f32 = 420.;
 /// Unwrapped text reports its full line as its minimum width, so free text is
 /// capped: it wraps here instead of widening the whole page.
 const TEXT_MAX: f32 = 420.;
@@ -2253,6 +2259,7 @@ impl Render for InstanceEditor {
         // master-detail a definite width: the window minus the sidebar and the
         // page gutters. Everything inside then wraps instead of widening it.
         let page_width = (window.viewport_size().width - px(PAGE_CHROME)).max(px(560.));
+        let row_height = (window.viewport_size().height - px(ROW_TOP_CHROME)).max(px(ROW_MIN_H));
         let mut root = div()
             .flex()
             .flex_col()
@@ -2272,7 +2279,7 @@ impl Render for InstanceEditor {
                 ));
             } else {
                 let count = state.instances.len();
-                let mut list = ui::card(&t).p(px(8.)).gap(px(2.)).child(
+                let list = ui::card(&t).p(px(8.)).gap(px(2.)).h_full().child(
                     div()
                         .flex()
                         .items_center()
@@ -2297,6 +2304,14 @@ impl Render for InstanceEditor {
                             },
                         )),
                 );
+                let mut rows = div()
+                    .id("instance-list-rows")
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .flex_1()
+                    .min_h(px(0.))
+                    .overflow_y_scroll();
                 for instance in state.instances.iter() {
                     let id = instance.id.clone();
                     let view = this.clone();
@@ -2308,7 +2323,7 @@ impl Render for InstanceEditor {
                         instance.minecraft_version,
                         instance.platform_label()
                     );
-                    list = list.child(
+                    rows = rows.child(
                         ui::list_button(
                             &t,
                             SharedString::from(format!("instance-{}", id)),
@@ -2384,11 +2399,20 @@ impl Render for InstanceEditor {
                         ),
                     );
                 }
-                // One master card: the list, then (below) a summary footer.
-                list_col = Some(list.flex_shrink_0().w(px(LIST_W)));
+                // One master card: the scrolling list, then (below) a pinned
+                // summary footer.
+                list_col = Some(list.child(rows).flex_shrink_0().w(px(LIST_W)));
             }
         }
-        let mut detail = div().flex().flex_col().gap(px(16.)).flex_1().min_w(px(0.));
+        let mut detail = div()
+            .id("instance-detail")
+            .flex()
+            .flex_col()
+            .gap(px(16.))
+            .flex_1()
+            .min_w(px(0.))
+            .h_full()
+            .overflow_y_scroll();
 
         // ---- The selected instance ---------------------------------------
         if let Some(id) = self.selected.clone() {
@@ -3105,6 +3129,7 @@ impl Render for InstanceEditor {
                     .flex()
                     .items_start()
                     .w_full()
+                    .h(row_height)
                     .min_w(px(0.))
                     .gap(px(ui::PAGE_GAP))
                     .child(list)
