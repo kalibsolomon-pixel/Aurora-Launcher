@@ -2715,7 +2715,7 @@ impl Render for Discover {
             label: "Search Modrinth projects; press Enter to search".into(),
             submit: AuroraButton::new("search", "")
                 .accessibility_label("Search Modrinth")
-                .variant(ButtonVariant::Ghost)
+                .variant(ButtonVariant::Default)
                 .size(ButtonSize::Small)
                 .icon("arrow_forward")
                 .disabled(s.searching)
@@ -2724,8 +2724,8 @@ impl Render for Discover {
 
         let toolbar = ui::card(&palette)
             .flex_shrink_0()
-            .p(px(16.))
-            .gap(px(14.))
+            .p(px(12.))
+            .gap(px(12.))
             .child(
                 div()
                     .flex()
@@ -2837,9 +2837,9 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == end)
                     .id(("result", index))
                     .gap(px(14.))
-                    .h(px(if compact { 128. } else { 84. }))
-                    .min_h(px(if compact { 128. } else { 84. }))
-                    .max_h(px(if compact { 128. } else { 84. }))
+                    .h(px(if compact { 128. } else { 80. }))
+                    .min_h(px(if compact { 128. } else { 80. }))
+                    .max_h(px(if compact { 128. } else { 80. }))
                     .flex_shrink_0()
                     .py(px(0.))
                     .hover(move |style| style.bg(hover))

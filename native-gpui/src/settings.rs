@@ -175,7 +175,7 @@ pub fn reduce_motion_speed(on: bool) -> u8 {
 /// The Motion row's description; a software renderer keeps Borealis static.
 pub fn motion_detail(accelerated: bool) -> String {
     format!(
-        "Borealis drift speed. 0: Static / reduced motion.{}",
+        "Borealis drift speed. Set to 0 for a still background.{}",
         if accelerated {
             ""
         } else {
@@ -3114,11 +3114,11 @@ mod tests {
         );
         assert_eq!(
             motion_detail(true),
-            "Borealis drift speed. 0: Static / reduced motion."
+            "Borealis drift speed. Set to 0 for a still background."
         );
         assert_eq!(
             motion_detail(false),
-            "Borealis drift speed. 0: Static / reduced motion. Software rendering keeps Borealis static."
+            "Borealis drift speed. Set to 0 for a still background. Software rendering keeps Borealis static."
         );
         assert_eq!(normalize_motion(-5.0), 0);
         assert_eq!(normalize_motion(37.5), 38);

@@ -1575,7 +1575,11 @@ impl Render for Syncing {
                     },
                 )
             } else {
-                ("All changes saved", "Your sync preferences are up to date.")
+                if enabled {
+                    ("All changes saved", "Your sync preferences are up to date.")
+                } else {
+                    ("Choices saved", "Sync is off. These choices apply when you turn it on.")
+                }
             };
             let mut actions = ui::card(t).gap(px(12.)).child(
                 div()

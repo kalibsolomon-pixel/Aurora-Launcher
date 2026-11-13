@@ -527,10 +527,10 @@ impl RenderOnce for AuroraCheckbox {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = theme(cx);
         let ring = t.ring;
-        let mark = if self.checked {
-            t.foreground
-        } else {
-            gpui_kit::transparent_black()
+        let mark = match (self.checked, self.dormant) {
+            (true, false) => t.foreground,
+            (true, true) => t.muted_foreground,
+            _ => gpui_kit::transparent_black(),
         };
         let mut checkbox = Checkbox::new(self.id)
             .accessibility_label(self.label)
@@ -556,12 +556,12 @@ impl RenderOnce for AuroraCheckbox {
                     .border_1()
                     .border_color(match (self.checked, self.dormant) {
                         (true, false) => t.accent,
-                        (true, true) => t.muted_foreground,
+                        (true, true) => t.border,
                         _ => t.subtle_foreground,
                     })
                     .bg(match (self.checked, self.dormant) {
                         (true, false) => t.accent,
-                        (true, true) => t.control_hover,
+                        (true, true) => t.control,
                         _ => t.sunken,
                     })
                     .child(crate::symbols::icon(Some("check"), px(16.), mark)),

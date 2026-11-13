@@ -484,11 +484,31 @@ fn bin_label(bin: &PlaytimeBin, today: u64) -> String {
 }
 
 fn chart_peak(bins: &[PlaytimeBin]) -> u64 {
-    bins.iter()
-        .map(|b| b.duration_ms)
-        .max()
-        .unwrap_or(0)
-        .max(60_000)
+    nice_peak(
+        bins.iter()
+            .map(|b| b.duration_ms)
+            .max()
+            .unwrap_or(0)
+            .max(60_000),
+    )
+}
+
+/// Rounds a peak up so both the peak and its midpoint read as round values
+/// (20 min steps under an hour, whole hours to 6 h, two hours above).
+fn nice_peak(ms: u64) -> u64 {
+    const MIN: u64 = 60_000;
+    let step = if ms <= 60 * MIN {
+        20 * MIN
+    } else if ms <= 120 * MIN {
+        60 * MIN
+    } else if ms <= 6 * 60 * MIN {
+        60 * MIN
+    } else if ms <= 12 * 60 * MIN {
+        2 * 60 * MIN
+    } else {
+        ms.div_ceil(10 * 60 * MIN) * 60 * MIN
+    };
+    ms.div_ceil(step) * step
 }
 
 fn axis_duration(ms: u64) -> String {
@@ -4956,6 +4976,20 @@ mod tests {
     }
 
     #[test]
+    fn chart_axis_peaks_round_to_readable_values() {
+        const MIN: u64 = 60_000;
+        assert_eq!(nice_peak(5 * MIN), 20 * MIN);
+        assert_eq!(nice_peak(45 * MIN), 60 * MIN);
+        assert_eq!(nice_peak(75 * MIN), 120 * MIN);
+        assert_eq!(nice_peak(136 * MIN), 180 * MIN);
+        assert_eq!(nice_peak(240 * MIN), 240 * MIN);
+        // Peaks never shrink, so no bar can overflow the plot.
+        for ms in [MIN, 61 * MIN, 599 * MIN, 1_000 * MIN] {
+            assert!(nice_peak(ms) >= ms);
+        }
+    }
+
+    #[test]
     fn playtime_missing_zero_and_empty_days_stay_honest() {
         let bins = playtime_bins(&[daily(99, 0), daily(100, 300_000)], 100, 7, 7);
         assert_eq!(bins.len(), 7);
@@ -4972,7 +5006,8 @@ mod tests {
         let view = playtime_view(Some(&data), Period::Week, false, false);
         assert_eq!(view.points.len(), 7);
         assert!(view.points[..6].iter().all(|p| p.fraction == 0.0));
-        assert_eq!(view.points[6].fraction, 1.0);
+        // The axis rounds 5 min up to 20 min, so the bar fills a quarter.
+        assert_eq!(view.points[6].fraction, 0.25);
         assert!(view.points[6].detail.contains("300000 ms"));
         assert!(!view.empty_period);
         // A week with only zero days reports an empty period, never fabricated.
