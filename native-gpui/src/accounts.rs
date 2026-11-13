@@ -1285,9 +1285,9 @@ impl Render for Accounts {
                                     "account-{}",
                                     account.account_id
                                 )),
-                                "Use",
+                                "Select",
                             )
-                            .variant(ButtonVariant::Soft)
+                            .variant(ButtonVariant::Ghost)
                             .size(ButtonSize::Small)
                             .disabled(busy)
                             .on_click(cx.listener(move |this, _, _, cx| {

@@ -2027,99 +2027,80 @@ impl Render for Settings {
                     .flex_wrap()
                     .items_center()
                     .justify_end()
-                    .gap(px(4.))
-                    .max_w(px(340.));
+                    .gap(px(6.))
+                    .max_w(px(420.));
                 for (ix, accent) in accents.iter().enumerate() {
                     let color = parse_hex_color(&accent.hex).unwrap_or(palette.accent);
                     let chosen = selected == Some(ix);
                     let accent_id = accent.id.clone();
-                    let accent_label = accent.label.clone();
                     swatches = swatches.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .size(px(32.))
-                        .rounded_full()
-                        .border_2()
-                        .border_color(if chosen {
-                            ring
-                        } else {
-                            gpui::transparent_black()
-                        })
-                        .child(
-                            gpui_kit::base::Button::new(("accent", ix))
-                                .aria_label(accent_label.clone())
-                                .selected(chosen)
-                                .disabled(busy)
-                                .size(px(24.))
-                                .rounded_full()
-                                .bg(color)
-                                .border_1()
-                                .border_color(Hsla {
-                                    a: 0.35,
-                                    ..palette.border
-                                })
-                                .hover(move |style| style.border_color(ring))
-                                .focus(move |style| style.border_color(ring).border_2())
-                                .styles(|styles| styles.disabled(|style| style.opacity(0.45)))
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    let accent =
-                                        serde_json::json!({ "type": "preset", "id": accent_id });
-                                    this.save_appearance(accent_edit(accent), cx);
-                                })),
-                        ),
-                );
+                        gpui_kit::base::Button::new(("accent", ix))
+                            .aria_label(accent.label.clone())
+                            .selected(chosen)
+                            .disabled(busy)
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .h(px(32.))
+                            .px(px(8.))
+                            .rounded(palette.radius)
+                            .bg(palette.control)
+                            .border_1()
+                            .border_color(if chosen { ring } else { palette.border_subtle })
+                            .text_size(px(ui::TEXT_BODY))
+                            .text_color(palette.foreground)
+                            .focus(move |style| style.border_color(ring).border_2())
+                            .hover(move |style| style.border_color(ring))
+                            .styles(|styles| styles.disabled(|style| style.opacity(0.45)))
+                            .child(div().size(px(14.)).rounded_full().bg(color))
+                            .child(accent.label.clone())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.save_appearance(
+                                    accent_edit(
+                                        serde_json::json!({"type":"preset","id":accent_id}),
+                                    ),
+                                    cx,
+                                );
+                            })),
+                    );
                 }
                 let custom_selected = custom_chosen || picker_open;
                 swatches = swatches.child(
-                    div()
+                    gpui_kit::base::Button::new("accent-custom")
+                        .aria_label("Custom accent color")
+                        .selected(custom_selected)
+                        .disabled(appearance.is_none())
                         .flex()
                         .items_center()
-                        .justify_center()
-                        .size(px(32.))
-                        .rounded_full()
-                        .border_2()
+                        .gap(px(6.))
+                        .h(px(32.))
+                        .px(px(8.))
+                        .rounded(palette.radius)
+                        .bg(palette.control)
+                        .border_1()
                         .border_color(if custom_selected {
                             ring
                         } else {
-                            gpui::transparent_black()
+                            palette.border_subtle
                         })
+                        .text_size(px(ui::TEXT_BODY))
+                        .text_color(palette.foreground)
+                        .focus(move |style| style.border_color(ring).border_2())
+                        .hover(move |style| style.border_color(ring))
                         .child(
-                            gpui_kit::base::Button::new("accent-custom")
-                                .aria_label(if custom_color.is_some() {
-                                    "Custom accent color"
-                                } else {
-                                    "Add a custom accent color"
-                                })
-                                .selected(custom_selected)
-                                .disabled(appearance.is_none())
-                                .size(px(24.))
+                            div()
+                                .size(px(14.))
                                 .rounded_full()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .bg(custom_color.unwrap_or(palette.control))
-                                .border_1()
-                                .border_color(palette.muted_foreground)
-                                .hover(move |style| style.border_color(ring))
-                                .focus(move |style| style.border_color(ring).border_2())
-                                .styles(|styles| styles.disabled(|style| style.opacity(0.45)))
-                                .when(custom_color.is_none(), |button| {
-                                    button.child(crate::symbols::icon(
-                                        Some("add"),
-                                        px(14.),
-                                        palette.muted_foreground,
-                                    ))
-                                })
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    if this.picker.is_some() {
-                                        this.picker_cancel(cx);
-                                    } else {
-                                        this.picker_open(window, cx);
-                                    }
-                                })),
-                        ),
+                                .bg(custom_color.unwrap_or(palette.muted_foreground)),
+                        )
+                        .child("Custom…")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            if this.picker.is_some() {
+                                this.picker_cancel(cx);
+                            } else {
+                                this.picker_open(window, cx);
+                            }
+                        })),
                 );
                 card = card.child(
                     ui::setting_row(

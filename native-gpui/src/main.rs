@@ -1684,6 +1684,7 @@ impl Launcher {
                     )
                     .child(
                         self.button("instance-settings", "Settings")
+                            .variant(ButtonVariant::Ghost)
                             .size(ButtonSize::Large)
                             .icon("tune")
                             .on_click(cx.listener(|this, _, window, cx| {

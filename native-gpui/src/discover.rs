@@ -1749,7 +1749,7 @@ pub struct Discover {
     /// Mirrored queue activity for the parent's conservative guards; kept in
     /// step with the queue by every submission and queue event.
     queue_busy: bool,
-    results_scroll: gpui::ScrollHandle,
+    results_page: usize,
 }
 
 impl EventEmitter<DiscoverEvent> for Discover {}
@@ -1812,7 +1812,7 @@ impl Discover {
             downloads,
             _downloads_events,
             queue_busy: false,
-            results_scroll: gpui::ScrollHandle::new(),
+            results_page: 0,
         }
     }
 
@@ -2011,7 +2011,7 @@ impl Discover {
             return;
         };
         if !append {
-            self.results_scroll.set_offset(gpui::point(px(0.), px(0.)));
+            self.results_page = 0;
         }
         let Some(host) = self.host.clone() else {
             cx.notify();
@@ -2538,7 +2538,11 @@ impl Render for Discover {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::theme(cx).clone();
         let compact = window.viewport_size().width < px(1000.);
-        let bounded = !compact && window.viewport_size().height >= px(640.);
+        let row_height = if compact { 128. } else { 104. };
+        let reserved = if compact { 420. } else { 370. };
+        let page_size = ((f32::from(window.viewport_size().height) - reserved) / row_height)
+            .floor()
+            .clamp(1., 8.) as usize;
 
         // Built before the immutable state borrow below; a dialog close that
         // slips past the veto (or an imperative close) still resets
@@ -2765,11 +2769,12 @@ impl Render for Discover {
             s.summary()
         };
 
-        let mut list = ui::list_card(&palette)
-            .id("discover-results")
-            .when(bounded, |list| list.border_0().rounded(px(0.)));
+        let mut list = ui::list_card(&palette).id("discover-results");
         let total = s.results.len();
-        for (index, project) in s.results.iter().enumerate() {
+        let current_page = self.results_page.min(total.saturating_sub(1) / page_size);
+        let start = current_page * page_size;
+        let end = (start + page_size).min(total);
+        for (index, project) in s.results.iter().enumerate().skip(start).take(page_size) {
             let id = project.project_id.clone();
             let installed = s.installed.contains(&project.project_id);
             let row_busy = s.busy_project(&project.project_id);
@@ -2805,7 +2810,7 @@ impl Render for Discover {
             let hover = palette.control;
             let title_hover = palette.ring;
             list = list.child(
-                ui::row(&palette, index + 1 == total)
+                ui::row(&palette, index + 1 == end)
                     .id(("result", index))
                     .gap(px(14.))
                     .h(px(if compact { 128. } else { 104. }))
@@ -2916,20 +2921,54 @@ impl Render for Discover {
                     ),
             );
         }
-        if s.has_more() && !s.searching {
+        if total > 0 {
             list = list.child(
                 div()
                     .flex()
-                    .justify_center()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(12.))
+                    .px(px(16.))
                     .py(px(12.))
                     .border_t_1()
                     .border_color(palette.border_subtle)
+                    .child(ui::caption(
+                        &palette,
+                        format!("{}–{} of {} loaded", start + 1, end, total),
+                    ))
                     .child(
-                        AuroraButton::new("more", "More")
-                            .icon("expand_more")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.search(true, cx);
-                            })),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(
+                                AuroraButton::new("discover-previous", "Previous")
+                                    .size(ButtonSize::Small)
+                                    .disabled(current_page == 0 || s.searching)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.results_page = current_page.saturating_sub(1);
+                                        cx.notify();
+                                    })),
+                            )
+                            .child(
+                                AuroraButton::new("discover-next", "Next")
+                                    .size(ButtonSize::Small)
+                                    .disabled(end >= total || s.searching)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.results_page = current_page + 1;
+                                        cx.notify();
+                                    })),
+                            )
+                            .when(end == total && s.has_more(), |actions| {
+                                actions.child(
+                                    AuroraButton::new("more", "Load more")
+                                        .size(ButtonSize::Small)
+                                        .disabled(s.searching)
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| this.search(true, cx)),
+                                        ),
+                                )
+                            }),
                     ),
             );
         }
@@ -2954,37 +2993,12 @@ impl Render for Discover {
             } else {
                 div().into_any_element()
             }
-        } else if bounded {
-            div()
-                .relative()
-                .flex_1()
-                .min_h(px(0.))
-                .rounded(palette.radius_lg)
-                .overflow_hidden()
-                .border_1()
-                .border_color(palette.border_subtle)
-                .child(
-                    div()
-                        .id("discover-result-scroll")
-                        .size_full()
-                        .pr(px(8.))
-                        .overflow_y_scroll()
-                        .track_scroll(&self.results_scroll)
-                        .child(list),
-                )
-                .child(ui::scrollbar(
-                    &palette,
-                    "discover-results-scrollbar",
-                    &self.results_scroll,
-                ))
-                .into_any_element()
         } else {
             list.into_any_element()
         };
 
         let page = div()
             .w_full()
-            .when(bounded, |page| page.h_full())
             .min_w(px(0.))
             .min_h(px(0.))
             .flex()
@@ -3020,7 +3034,6 @@ impl Render for Discover {
                 div()
                     .flex()
                     .flex_col()
-                    .when(bounded, |region| region.flex_1().min_h(px(0.)))
                     .gap(px(12.))
                     .when(has_notes, |block| block.child(notes))
                     .when(!count.is_empty() && !s.results.is_empty(), |block| {
@@ -3029,30 +3042,12 @@ impl Render for Discover {
                                 .flex()
                                 .items_center()
                                 .justify_between()
-                                .child(ui::caption(&palette, count.clone()))
-                                .when(bounded, |header| {
-                                    header.child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(6.))
-                                            .child(ui::caption(&palette, "Scroll to browse"))
-                                            .child(crate::symbols::icon(
-                                                Some("arrow_downward"),
-                                                px(14.),
-                                                palette.muted_foreground,
-                                            )),
-                                    )
-                                }),
+                                .child(ui::caption(&palette, count.clone())),
                         )
                     })
                     .child(results),
             );
-        div()
-            .w_full()
-            .when(bounded, |root| root.h_full())
-            .child(page)
-            .child(details_panel)
+        div().w_full().child(page).child(details_panel)
     }
 }
 

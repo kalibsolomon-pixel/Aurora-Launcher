@@ -2530,55 +2530,6 @@ impl Render for InstanceEditor {
                 detail = detail.child(head);
             }
 
-            // Compact summary of the selected instance under the list.
-            if let (Some(_), Some(col)) = (&instance, list_col.take()) {
-                let memory = self
-                    .baseline
-                    .as_ref()
-                    .map(|config| format!("{} MiB", config.memory_mib))
-                    .unwrap_or_else(|| "—".to_owned());
-                let java = self
-                    .baseline
-                    .as_ref()
-                    .and_then(|config| config.custom_java().map(str::to_owned))
-                    .map(|_| "Custom path".to_owned())
-                    .unwrap_or_else(|| "Managed runtime".to_owned());
-                let lines = [("Memory", memory), ("Java", java)];
-                // Footer of the master card: version and loader are already in
-                // the rows above, so only Memory and Java are summarised.
-                let cell = |label: &'static str, value: String| {
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .flex_1()
-                        .min_w(px(0.))
-                        .child(ui::caption(&t, label))
-                        .child(
-                            div()
-                                .truncate()
-                                .text_size(px(ui::TEXT_BODY))
-                                .text_color(t.foreground)
-                                .child(value),
-                        )
-                };
-                let mut lines = lines.into_iter();
-                let mut grid = div().flex().flex_col().gap(px(10.)).px(px(8.)).pb(px(2.));
-                while let (Some(left), right) = (lines.next(), lines.next()) {
-                    grid = grid.child(
-                        div()
-                            .flex()
-                            .gap(px(12.))
-                            .child(cell(left.0, left.1))
-                            .children(right.map(|(label, value)| cell(label, value))),
-                    );
-                }
-                list_col = Some(
-                    col.child(div().mx(px(8.)).my(px(6.)).h(px(1.)).bg(t.border_subtle))
-                        .child(grid),
-                );
-            }
-
             let mut tabs = div()
                 .flex()
                 .flex_wrap()
@@ -2684,6 +2635,53 @@ impl Render for InstanceEditor {
                         ],
                 )));
             }
+            // Saved runtime settings belong to this selected instance.
+            if instance.is_some() && self.section == 0 {
+                let memory = self
+                    .baseline
+                    .as_ref()
+                    .map(|config| format!("{} MiB", config.memory_mib))
+                    .unwrap_or_else(|| "—".to_owned());
+                let java = self
+                    .baseline
+                    .as_ref()
+                    .and_then(|config| config.custom_java().map(str::to_owned))
+                    .map(|_| "Custom path".to_owned())
+                    .unwrap_or_else(|| "Managed runtime".to_owned());
+                let lines = [("Memory", memory), ("Java", java)];
+                // Summarize saved values without exposing an editable draft here.
+                let cell = |label: &'static str, value: String| {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .flex_1()
+                        .min_w(px(0.))
+                        .child(ui::caption(&t, label))
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(ui::TEXT_BODY))
+                                .text_color(t.foreground)
+                                .child(value),
+                        )
+                };
+                let mut lines = lines.into_iter();
+                let mut grid = div().flex().flex_col().gap(px(10.)).px(px(8.)).pb(px(2.));
+                while let (Some(left), right) = (lines.next(), lines.next()) {
+                    grid = grid.child(
+                        div()
+                            .flex()
+                            .gap(px(12.))
+                            .child(cell(left.0, left.1))
+                            .children(right.map(|(label, value)| cell(label, value))),
+                    );
+                }
+                detail = detail.child(ui::card(&t).gap(px(12.))
+                    .child(ui::section_header(&t, "Saved runtime", Some("Memory and Java for this instance. Change them in Runtime or Java.".into())))
+                    .child(grid));
+            }
+
             if self.section == 1 {
                 // Game version and loader; official catalogs load lazily.
                 let snapshots_view = this.clone();

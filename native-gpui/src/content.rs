@@ -547,6 +547,8 @@ pub struct Content {
     review: Option<Review>,
     removing: Option<(Target, Entry)>,
     import_open: bool,
+    updates_open: bool,
+    inventory_page: usize,
     updates: Entity<ContentUpdates>,
     _update_events: Subscription,
     instance_open: bool,
@@ -565,7 +567,8 @@ impl Content {
         let (tx, rx) = async_channel::unbounded();
         let filter =
             cx.new(|cx| InputState::new(window, cx).placeholder("Filter installed content…"));
-        let filter_events = cx.subscribe(&filter, |_: &mut Self, _, _: &InputEvent, cx| {
+        let filter_events = cx.subscribe(&filter, |this: &mut Self, _, _: &InputEvent, cx| {
+            this.inventory_page = 0;
             cx.notify();
         });
         let path =
@@ -657,6 +660,8 @@ impl Content {
             review: None,
             removing: None,
             import_open: false,
+            updates_open: false,
+            inventory_page: 0,
             updates,
             _update_events: update_events,
             instance_open: false,
@@ -910,6 +915,7 @@ impl Content {
         self.invalidate_review();
         self.revision = self.revision.wrapping_add(1);
         self.selected = Some(id);
+        self.inventory_page = 0;
         self.removing = None;
         self.icons.reset();
         self.load();
@@ -928,6 +934,7 @@ impl Content {
         self.invalidate_review();
         self.revision = self.revision.wrapping_add(1);
         self.selected = Some(instance);
+        self.inventory_page = 0;
         self.kind = Kind::from_index(kind);
         self.removing = None;
         self.icons.reset();
@@ -950,6 +957,7 @@ impl Content {
         self.invalidate_review();
         self.revision = self.revision.wrapping_add(1);
         self.kind = kind;
+        self.inventory_page = 0;
         self.removing = None;
         self.icons.reset();
         self.load();
@@ -1330,8 +1338,19 @@ fn kind_icon(kind: Kind) -> &'static str {
 }
 
 impl Render for Content {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity();
+        let reserved = if window.viewport_size().width < px(1000.) {
+            380.
+        } else {
+            315.
+        };
+        let reserved = reserved
+            + if self.updates_open { 130. } else { 0. }
+            + if self.import_open { 210. } else { 0. };
+        let page_size = ((f32::from(window.viewport_size().height) - reserved) / 58.)
+            .floor()
+            .clamp(1., 8.) as usize;
         let busy = self.is_busy(cx);
         let previewing = self.preview_request.is_some();
         let palette = crate::theme::theme(cx).clone();
@@ -1540,6 +1559,8 @@ impl Render for Content {
                 list = list.child(
                     div()
                         .flex()
+                        .flex_wrap()
+                        .gap(px(10.))
                         .items_center()
                         .justify_between()
                         .px(px(16.))
@@ -1549,8 +1570,13 @@ impl Render for Content {
                         .child(
                             div()
                                 .flex()
+                                .flex_wrap()
                                 .items_center()
-                                .gap(px(16.))
+                                .gap(px(if window.viewport_size().width < px(1000.) {
+                                    12.
+                                } else {
+                                    16.
+                                }))
                                 .child(ui::caption(
                                     t,
                                     if query.trim().is_empty() {
@@ -1560,10 +1586,16 @@ impl Render for Content {
                                     },
                                 ))
                                 .child(
-                                    div().w(px(250.)).child(
-                                        AuroraInput::new(&self.filter)
-                                            .label("Filter installed content"),
-                                    ),
+                                    div()
+                                        .w(px(if window.viewport_size().width < px(1000.) {
+                                            180.
+                                        } else {
+                                            250.
+                                        }))
+                                        .child(
+                                            AuroraInput::new(&self.filter)
+                                                .label("Filter installed content"),
+                                        ),
                                 )
                                 .child(
                                     AuroraButton::new("content-import-open", "Import local")
@@ -1575,26 +1607,48 @@ impl Render for Content {
                                             this.import_open = !this.import_open;
                                             cx.notify();
                                         })),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(24.))
-                                .child(
-                                    div()
-                                        .w(px(48.))
-                                        .text_center()
-                                        .child(ui::caption(t, "Enabled")),
                                 )
                                 .child(
-                                    div()
-                                        .w(px(72.))
-                                        .text_center()
-                                        .child(ui::caption(t, "Actions")),
+                                    AuroraButton::new(
+                                        "content-updates-open",
+                                        if self.updates_open {
+                                            "Close updates"
+                                        } else {
+                                            "Updates"
+                                        },
+                                    )
+                                    .size(ButtonSize::Small)
+                                    .icon("update")
+                                    .selected(self.updates_open)
+                                    .disabled(busy || previewing)
+                                    .on_click(cx.listener(
+                                        |this, _, _, cx| {
+                                            this.updates_open = !this.updates_open;
+                                            cx.notify();
+                                        },
+                                    )),
                                 ),
-                        ),
+                        )
+                        .when(window.viewport_size().width >= px(1000.), |header| {
+                            header.child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(24.))
+                                    .child(
+                                        div()
+                                            .w(px(48.))
+                                            .text_center()
+                                            .child(ui::caption(t, "Enabled")),
+                                    )
+                                    .child(
+                                        div()
+                                            .w(px(72.))
+                                            .text_center()
+                                            .child(ui::caption(t, "Actions")),
+                                    ),
+                            )
+                        }),
                 );
             }
             if self.loading {
@@ -1616,8 +1670,12 @@ impl Render for Content {
                     Some("Try a different name or file name, or clear the filter."),
                 ));
             }
-            let last_index = visible.len().saturating_sub(1);
-            for (index, entry) in visible.into_iter().enumerate() {
+            let total = visible.len();
+            let current_page = self.inventory_page.min(total.saturating_sub(1) / page_size);
+            let start = current_page * page_size;
+            let end = (start + page_size).min(total);
+            let last_index = end.saturating_sub(1);
+            for (index, entry) in visible.into_iter().enumerate().skip(start).take(page_size) {
                 let e = entry.clone();
                 let v = view.clone();
                 let target = self.target().unwrap();
@@ -1661,7 +1719,7 @@ impl Render for Content {
                     .child(
                         div()
                             .text_size(px(ui::TEXT_BODY))
-                            .text_color(palette.muted_foreground)
+                            .text_color(palette.foreground)
                             .text_ellipsis()
                             .child(gpui::SharedString::from(line.join(" · "))),
                     );
@@ -1722,6 +1780,7 @@ impl Render for Content {
                     "Remove",
                 )
                 .accessibility_label(format!("Remove {}", entry.name))
+                .variant(ButtonVariant::Ghost)
                 .size(ButtonSize::Small)
                 .disabled(busy || !entry.remove)
                 .on_click(move |_, _, cx| {
@@ -1767,6 +1826,46 @@ impl Render for Content {
                                 .gap(px(24.))
                                 .child(toggle)
                                 .child(remove),
+                        ),
+                );
+            }
+            if total > 0 {
+                list = list.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(12.))
+                        .px(px(16.))
+                        .py(px(10.))
+                        .border_t_1()
+                        .border_color(palette.border_subtle)
+                        .child(ui::caption(
+                            t,
+                            format!("{}–{} of {} items", start + 1, end, total),
+                        ))
+                        .child(
+                            div()
+                                .flex()
+                                .gap(px(8.))
+                                .child(
+                                    AuroraButton::new("content-previous", "Previous")
+                                        .size(ButtonSize::Small)
+                                        .disabled(current_page == 0)
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.inventory_page = current_page.saturating_sub(1);
+                                            cx.notify();
+                                        })),
+                                )
+                                .child(
+                                    AuroraButton::new("content-next", "Next")
+                                        .size(ButtonSize::Small)
+                                        .disabled(end >= total)
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.inventory_page = current_page + 1;
+                                            cx.notify();
+                                        })),
+                                ),
                         ),
                 );
             }
@@ -1927,7 +2026,10 @@ impl Render for Content {
             if self.import_open {
                 root = root.child(import);
             }
-            root = root.child(list).child(self.updates.clone());
+            if self.updates_open {
+                root = root.child(self.updates.clone());
+            }
+            root = root.child(list);
         } else if available {
             root = root.child(ui::empty_state(
                 t,

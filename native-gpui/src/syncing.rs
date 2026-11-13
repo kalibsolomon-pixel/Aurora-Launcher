@@ -1042,7 +1042,7 @@ fn saved_choice(
     checked: bool,
 ) -> impl IntoElement {
     let label: SharedString = label.into();
-    let value = if checked { "Included" } else { "Excluded" };
+    let value = if checked { "Will include" } else { "Will skip" };
     div()
         .id(id)
         .role(gpui::Role::Group)
@@ -1212,7 +1212,7 @@ impl Render for Syncing {
                         px(14.),
                         t.muted_foreground,
                     ))
-                    .child("Saved choices · turn on Sync to edit")
+                    .child("Paused · saved choices apply only when Sync is on")
             };
             let mut body = div().flex().flex_col().gap(px(ui::PAGE_GAP));
 
