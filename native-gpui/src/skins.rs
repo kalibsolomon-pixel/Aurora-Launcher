@@ -1954,135 +1954,134 @@ impl Render for Skins {
         let highlight_view = view.clone();
         let confirm_view = view.clone();
 
-        let library_head =
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(14.))
-                .px(px(16.))
-                .py(px(14.))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(12.))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(10.))
-                                .child(ui::section_header(
+        let library_head = div()
+            .flex()
+            .flex_col()
+            .gap(px(14.))
+            .px(px(16.))
+            .py(px(14.))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(12.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(10.))
+                            .child(ui::section_header(
+                                &palette,
+                                "Library",
+                                Some("Skins saved on this device.".into()),
+                            ))
+                            .when(library_count > 0, |d| {
+                                d.child(ui::badge(
                                     &palette,
-                                    "Library",
-                                    Some("Skins saved on this device.".into()),
+                                    library_count.to_string(),
+                                    ui::Tone::Neutral,
                                 ))
-                                .when(library_count > 0, |d| {
-                                    d.child(ui::badge(
-                                        &palette,
-                                        library_count.to_string(),
-                                        ui::Tone::Neutral,
-                                    ))
-                                }),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_shrink_0()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(
-                                    div()
-                                        .text_size(px(ui::TEXT_CAPTION))
-                                        .text_color(palette.muted_foreground)
-                                        .child("Favorites only"),
+                            }),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_shrink_0()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(
+                                div()
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .text_color(palette.muted_foreground)
+                                    .child("Favorites only"),
+                            )
+                            .child(
+                                AuroraToggle::new("skins-favorites-only")
+                                    .label("Favorites only")
+                                    .checked(self.core.favorites_only)
+                                    .disabled(locked)
+                                    .on_change(move |checked, _, _, cx| {
+                                        favorites_view.update(cx, |this, cx| {
+                                            this.core.favorites_only = checked;
+                                            cx.notify();
+                                        });
+                                    }),
+                            ),
+                    ),
+            );
+
+        let import_form = div()
+            .flex()
+            .flex_wrap()
+            .items_end()
+            .gap(px(12.))
+            .child(
+                field(&palette, "Skin name")
+                    .flex_1()
+                    .min_w(px(200.))
+                    .child(AuroraInput::new(&self.import_name).label("Skin name")),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_end()
+                    .justify_between()
+                    .gap(px(12.))
+                    .child(
+                        // The select carries a fixed 220px width; a flex row lets it
+                        // shrink to this field instead of overlapping the button.
+                        field(&palette, "Model").w(px(180.)).flex_shrink_0().child(
+                            div().flex().w_full().min_w(px(0.)).child(
+                                AuroraSelect::new(
+                                    "skins-import-model",
+                                    "Model",
+                                    vec!["Classic".into(), "Slim".into()],
+                                    &import_select.trigger,
+                                    &import_select.content,
+                                    import_select.bounds.clone(),
                                 )
-                                .child(
-                                    AuroraToggle::new("skins-favorites-only")
-                                        .label("Favorites only")
-                                        .checked(self.core.favorites_only)
-                                        .disabled(locked)
-                                        .on_change(move |checked, _, _, cx| {
-                                            favorites_view.update(cx, |this, cx| {
-                                                this.core.favorites_only = checked;
-                                                cx.notify();
-                                            });
-                                        }),
+                                .selected(Some(if self.import_model_highlight_slim() {
+                                    1
+                                } else {
+                                    0
+                                }))
+                                .open(import_select.open)
+                                .highlight(import_select.highlight)
+                                .disabled(locked)
+                                .on_open_change(move |open, _, cx| {
+                                    select_view.update(cx, |this, cx| {
+                                        this.import_model.open = open;
+                                        cx.notify();
+                                    });
+                                })
+                                .on_highlight(move |highlight, _, cx| {
+                                    highlight_view.update(cx, |this, cx| {
+                                        this.import_model.highlight = highlight;
+                                        cx.notify();
+                                    });
+                                })
+                                .on_confirm(
+                                    move |selected, _, cx| {
+                                        confirm_view.update(cx, |this, cx| {
+                                            this.import_model.highlight = selected;
+                                            cx.notify();
+                                        });
+                                    },
                                 ),
+                            ),
                         ),
-                )
-                // Import form: readable name field, then model and file picker.
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_end()
-                        .gap(px(12.))
-                        .child(
-                            field(&palette, "Skin name")
-                                .flex_1()
-                                .min_w(px(200.))
-                                .child(AuroraInput::new(&self.import_name).label("Skin name")),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_end()
-                                .justify_between()
-                                .gap(px(12.))
-                                .child(
-                                    // The select carries a fixed 220px width; a flex row lets it
-                                    // shrink to this field instead of overlapping the button.
-                                    field(&palette, "Model").w(px(180.)).flex_shrink_0().child(
-                                        div().flex().w_full().min_w(px(0.)).child(
-                                            AuroraSelect::new(
-                                                "skins-import-model",
-                                                "Model",
-                                                vec!["Classic".into(), "Slim".into()],
-                                                &import_select.trigger,
-                                                &import_select.content,
-                                                import_select.bounds.clone(),
-                                            )
-                                            .selected(Some(if self.import_model_highlight_slim() {
-                                                1
-                                            } else {
-                                                0
-                                            }))
-                                            .open(import_select.open)
-                                            .highlight(import_select.highlight)
-                                            .disabled(locked)
-                                            .on_open_change(move |open, _, cx| {
-                                                select_view.update(cx, |this, cx| {
-                                                    this.import_model.open = open;
-                                                    cx.notify();
-                                                });
-                                            })
-                                            .on_highlight(move |highlight, _, cx| {
-                                                highlight_view.update(cx, |this, cx| {
-                                                    this.import_model.highlight = highlight;
-                                                    cx.notify();
-                                                });
-                                            })
-                                            .on_confirm(move |selected, _, cx| {
-                                                confirm_view.update(cx, |this, cx| {
-                                                    this.import_model.highlight = selected;
-                                                    cx.notify();
-                                                });
-                                            }),
-                                        ),
-                                    ),
-                                )
-                                .child(
-                                    AuroraButton::new("skins-import", "Import PNG…")
-                                        .variant(ButtonVariant::Primary)
-                                        .icon("upload")
-                                        .disabled(locked)
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.start_import(window, cx);
-                                        })),
-                                ),
-                        ),
-                );
+                    )
+                    .child(
+                        AuroraButton::new("skins-import", "Import PNG…")
+                            .variant(ButtonVariant::Primary)
+                            .icon("upload")
+                            .disabled(locked)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.start_import(window, cx);
+                            })),
+                    ),
+            );
 
         // Library list (bound scroll).
         let mut library = div()
@@ -2256,6 +2255,13 @@ impl Render for Skins {
             );
         }
         let library_card = ui::list_card(&palette).child(library_head).child(library);
+        let import_card = ui::card(&palette)
+            .child(ui::section_header(
+                &palette,
+                "Import a skin",
+                Some("Choose a name and model, then import a PNG.".into()),
+            ))
+            .child(import_form);
 
         // Capes -------------------------------------------------------------------
         if let Some(cosmetics) = cosmetics {
@@ -2387,7 +2393,8 @@ impl Render for Skins {
             appearance_row = appearance_row.child(preview.clone());
         }
         content = content
-            .child(appearance_row.child(library_card.flex_1().min_w(px(320.))))
+            .child(appearance_row.child(import_card.flex_1().min_w(px(320.))))
+            .child(library_card)
             .child(
                 div()
                     .flex()

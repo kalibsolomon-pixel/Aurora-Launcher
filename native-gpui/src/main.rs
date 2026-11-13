@@ -1652,32 +1652,35 @@ impl Launcher {
                     .gap(px(10.))
                     .pt(px(4.))
                     .child(
-                        self.button(
-                            "play",
-                            if needs_sign_in {
-                                "Sign in to play"
-                            } else {
-                                self.play_label(&id)
-                            },
-                        )
-                        .variant(ButtonVariant::Primary)
-                        .size(ButtonSize::Large)
-                        .icon(if needs_sign_in { "login" } else { "play_arrow" })
-                        .disabled(if needs_sign_in {
-                            self.controls_blocked()
-                        } else {
-                            !self.can_play(&id)
-                        })
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| {
+                        div().flex_1().child(
+                            self.button(
+                                "play",
                                 if needs_sign_in {
-                                    this.open_page(1, window, cx);
+                                    "Sign in to play"
                                 } else {
-                                    this.action("play", play_id.clone(), cx);
-                                }
-                                cx.notify();
-                            },
-                        )),
+                                    self.play_label(&id)
+                                },
+                            )
+                            .variant(ButtonVariant::Primary)
+                            .size(ButtonSize::Large)
+                            .full_width()
+                            .icon(if needs_sign_in { "login" } else { "play_arrow" })
+                            .disabled(if needs_sign_in {
+                                self.controls_blocked()
+                            } else {
+                                !self.can_play(&id)
+                            })
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| {
+                                    if needs_sign_in {
+                                        this.open_page(1, window, cx);
+                                    } else {
+                                        this.action("play", play_id.clone(), cx);
+                                    }
+                                    cx.notify();
+                                },
+                            )),
+                        ),
                     )
                     .child(
                         self.button("instance-settings", "Settings")
@@ -1892,7 +1895,10 @@ impl Launcher {
                                 .text_color(t.foreground)
                                 .child("Your instances"),
                         )
-                        .child(ui::caption(t, launcher.instances.len().to_string())),
+                        .child(ui::caption(
+                            t,
+                            format!("{} total", launcher.instances.len()),
+                        )),
                 )
                 .child(tiles)
                 .when(launcher.instances.len() > 3, |switcher| {

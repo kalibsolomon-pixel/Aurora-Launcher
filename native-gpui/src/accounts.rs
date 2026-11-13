@@ -1138,7 +1138,7 @@ impl Render for Accounts {
             }
             Some(
                 AuroraButton::new("sign-in", "Sign in with Microsoft")
-                    .variant(ButtonVariant::Default)
+                    .variant(ButtonVariant::Primary)
                     .icon("person_add")
                     .disabled(busy || self.core.accounts.is_none() || self.core.cancel.is_some())
                     .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx)))
@@ -1306,11 +1306,6 @@ impl Render for Accounts {
                                 if reauth { "Reconnect" } else { "Refresh" },
                                 account.minecraft_name
                             ))
-                            .variant(if reauth && selected {
-                                ButtonVariant::Primary
-                            } else {
-                                ButtonVariant::Default
-                            })
                             .size(ButtonSize::Small)
                             .disabled(busy)
                             .on_click(cx.listener(
@@ -1394,8 +1389,9 @@ impl Render for Accounts {
                                 )
                                 .child(ui::caption(
                                     &palette,
-                                    "Reconnect tries your saved Microsoft credential. If the session cannot be renewed, choose Sign in with Microsoft. Credentials stay in Windows Credential Manager.",
-                                )),
+                                    "Sign in with Microsoft to add or recover an account. Reconnect renews a saved session without opening your browser.",
+                                ).max_w(px(560.)))
+                                .child(ui::caption(&palette, "Credentials stay in Windows Credential Manager.").max_w(px(560.))),
                         ),
                 );
                 content = content.child(list).child(info);

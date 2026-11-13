@@ -1053,12 +1053,7 @@ fn saved_choice(
         .justify_end()
         .gap(px(6.))
         .text_size(px(ui::TEXT_CAPTION))
-        .text_color(t.subtle_foreground)
-        .child(crate::symbols::icon(
-            Some(if checked { "check" } else { "remove" }),
-            px(16.),
-            t.subtle_foreground,
-        ))
+        .text_color(t.foreground)
         .child(value)
 }
 
@@ -1198,11 +1193,11 @@ impl Render for Syncing {
                     .items_center()
                     .gap(px(6.))
                     .text_size(px(ui::TEXT_CAPTION))
-                    .text_color(t.subtle_foreground)
+                    .text_color(t.muted_foreground)
                     .child(crate::symbols::icon(
                         Some("lock"),
                         px(14.),
-                        t.subtle_foreground,
+                        t.muted_foreground,
                     ))
                     .child("Saved choices · turn on Sync to edit")
             };

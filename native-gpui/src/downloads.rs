@@ -1143,7 +1143,7 @@ impl Render for Downloads {
             page = page.child(
                 div()
                     .w_full()
-                    .min_h(px(360.))
+                    .min_h((_window.viewport_size().height - px(164.)).max(px(280.)))
                     .flex()
                     .items_center()
                     .justify_center()

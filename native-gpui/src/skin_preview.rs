@@ -307,158 +307,160 @@ impl Render for SkinPreview {
         // The renderer produces a 320x440 image; the stage shows it scaled down
         // so the whole card (stage + controls) fits a 760px window.
         let scale = 0.68;
-        let stage =
-            div()
-                .id("player-preview-surface")
-                .role(Role::Group)
-                .aria_label("Player preview")
-                .aria_description(if neutral {
-                    "Import a PNG in the local library to preview a skin."
-                } else {
-                    "Drag or use arrow keys to rotate. Plus and minus zoom; Home resets."
-                })
-                .track_focus(&self.focus)
-                .tab_stop(true)
-                .relative()
-                .w_full()
-                .flex_1()
-                .min_h(px(if neutral { 240. } else { STAGE_HEIGHT }))
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(px(10.))
-                .overflow_hidden()
-                .rounded(t.radius)
-                .bg(gpui::linear_gradient(
-                    180.,
-                    gpui::linear_color_stop(
-                        gpui::Hsla {
-                            l: (t.sunken.l + 0.06).min(1.),
-                            s: t.accent.s * 0.35,
-                            a: 1.0,
-                            ..t.accent
-                        },
-                        0.,
-                    ),
-                    gpui::linear_color_stop(
-                        gpui::Hsla {
-                            l: (t.sunken.l + 0.03).min(1.),
-                            a: 1.0,
-                            ..t.sunken
-                        },
-                        0.72,
-                    ),
-                ))
-                .border_1()
-                .border_color(t.border_subtle)
-                .focus(move |style| style.border_color(ring))
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(move |s, e: &gpui::MouseDownEvent, window, cx| {
-                        focus.focus(window, cx);
-                        s.drag = Some(e.position);
-                    }),
+        let stage = div()
+            .id("player-preview-surface")
+            .role(Role::Group)
+            .aria_label("Player preview")
+            .aria_description(if neutral {
+                "Import a PNG in the local library to preview a skin."
+            } else {
+                "Drag or use arrow keys to rotate. Plus and minus zoom; Home resets."
+            })
+            .track_focus(&self.focus)
+            .tab_stop(true)
+            .relative()
+            .w_full()
+            .flex_1()
+            .min_h(px(if neutral { 184. } else { STAGE_HEIGHT }))
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap(px(10.))
+            .overflow_hidden()
+            .rounded(t.radius)
+            .bg(gpui::linear_gradient(
+                180.,
+                gpui::linear_color_stop(
+                    gpui::Hsla {
+                        l: (t.sunken.l + 0.06).min(1.),
+                        s: t.accent.s * 0.35,
+                        a: 1.0,
+                        ..t.accent
+                    },
+                    0.,
+                ),
+                gpui::linear_color_stop(
+                    gpui::Hsla {
+                        l: (t.sunken.l + 0.03).min(1.),
+                        a: 1.0,
+                        ..t.sunken
+                    },
+                    0.72,
+                ),
+            ))
+            .border_1()
+            .border_color(t.border_subtle)
+            .focus(move |style| style.border_color(ring))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |s, e: &gpui::MouseDownEvent, window, cx| {
+                    focus.focus(window, cx);
+                    s.drag = Some(e.position);
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|s, _, _, _| {
+                    s.drag = None;
+                }),
+            )
+            .on_mouse_move(cx.listener(|s, e: &gpui::MouseMoveEvent, _, cx| {
+                if e.pressed_button != Some(MouseButton::Left) {
+                    s.drag = None;
+                    return;
+                }
+                if let Some(last) = s.drag {
+                    s.drag = Some(e.position);
+                    s.rotate(
+                        f32::from(e.position.x - last.x),
+                        f32::from(e.position.y - last.y),
+                        cx,
+                    );
+                }
+            }))
+            .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
+                match e.keystroke.key.as_str() {
+                    "left" => s.rotate(-12., 0., cx),
+                    "right" => s.rotate(12., 0., cx),
+                    "up" => s.rotate(0., -12., cx),
+                    "down" => s.rotate(0., 12., cx),
+                    "+" | "=" => s.zoom(0.08, cx),
+                    "-" => s.zoom(-0.08, cx),
+                    "home" => s.reset(cx),
+                    _ => return,
+                }
+                cx.stop_propagation();
+            }))
+            .when_some(self.image.clone().filter(|_| !neutral), |d, image| {
+                d.child(
+                    div()
+                        .relative()
+                        .flex_shrink_0()
+                        .w(px(318. * scale))
+                        .h(px(438. * scale))
+                        .child(img(image).w(px(318. * scale)).h(px(438. * scale))),
                 )
-                .on_mouse_up(
-                    MouseButton::Left,
-                    cx.listener(|s, _, _, _| {
-                        s.drag = None;
-                    }),
+            })
+            .when(neutral || self.image.is_none(), |d| {
+                d.child(ui::icon_tile(&t, Some("checkroom"), 48., false))
+                    .child(
+                        div()
+                            .text_size(px(ui::TEXT_BODY))
+                            .text_color(t.muted_foreground)
+                            .child(if neutral {
+                                "Preview a skin"
+                            } else {
+                                "Player preview unavailable"
+                            }),
+                    )
+                    .when(neutral, |body| {
+                        body.child(div().max_w(px(200.)).text_center().child(ui::caption(
+                            &t,
+                            "Name your skin, then choose Import PNG to preview it here.",
+                        )))
+                    })
+            })
+            .when(!neutral, |d| {
+                d.child(
+                    // Floating view tools, top-right of the stage. Presses here must
+                    // not start a rotate-drag on the stage underneath.
+                    div()
+                        .absolute()
+                        .top(px(10.))
+                        .right(px(10.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .p(px(3.))
+                        .rounded(t.radius_lg)
+                        .bg(t.raised)
+                        .border_1()
+                        .border_color(t.border_subtle)
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .child(tool("preview-zoom-in", "Zoom in", "zoom_in", |s, cx| {
+                            s.zoom(0.08, cx)
+                        }))
+                        .child(tool("preview-zoom-out", "Zoom out", "zoom_out", |s, cx| {
+                            s.zoom(-0.08, cx)
+                        }))
+                        .child(tool(
+                            "preview-reset",
+                            "Reset view",
+                            "restart_alt",
+                            |s, cx| s.reset(cx),
+                        )),
                 )
-                .on_mouse_move(cx.listener(|s, e: &gpui::MouseMoveEvent, _, cx| {
-                    if e.pressed_button != Some(MouseButton::Left) {
-                        s.drag = None;
-                        return;
-                    }
-                    if let Some(last) = s.drag {
-                        s.drag = Some(e.position);
-                        s.rotate(
-                            f32::from(e.position.x - last.x),
-                            f32::from(e.position.y - last.y),
-                            cx,
-                        );
-                    }
-                }))
-                .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
-                    match e.keystroke.key.as_str() {
-                        "left" => s.rotate(-12., 0., cx),
-                        "right" => s.rotate(12., 0., cx),
-                        "up" => s.rotate(0., -12., cx),
-                        "down" => s.rotate(0., 12., cx),
-                        "+" | "=" => s.zoom(0.08, cx),
-                        "-" => s.zoom(-0.08, cx),
-                        "home" => s.reset(cx),
-                        _ => return,
-                    }
-                    cx.stop_propagation();
-                }))
-                .when_some(self.image.clone().filter(|_| !neutral), |d, image| {
-                    d.child(
-                        div()
-                            .relative()
-                            .flex_shrink_0()
-                            .w(px(318. * scale))
-                            .h(px(438. * scale))
-                            .child(img(image).w(px(318. * scale)).h(px(438. * scale))),
-                    )
-                })
-                .when(neutral || self.image.is_none(), |d| {
-                    d.child(ui::icon_tile(&t, Some("checkroom"), 48., false))
-                        .child(
-                            div()
-                                .text_size(px(ui::TEXT_BODY))
-                                .text_color(t.muted_foreground)
-                                .child(if neutral {
-                                    "Preview a skin"
-                                } else {
-                                    "Player preview unavailable"
-                                }),
-                        )
-                        .when(neutral, |body| {
-                            body.child(div().max_w(px(200.)).text_center().child(ui::caption(
-                                &t,
-                                "Choose Import PNG to preview a skin here.",
-                            )))
-                        })
-                })
-                .when(!neutral, |d| {
-                    d.child(
-                        // Floating view tools, top-right of the stage. Presses here must
-                        // not start a rotate-drag on the stage underneath.
-                        div()
-                            .absolute()
-                            .top(px(10.))
-                            .right(px(10.))
-                            .flex()
-                            .flex_col()
-                            .gap(px(2.))
-                            .p(px(3.))
-                            .rounded(t.radius_lg)
-                            .bg(t.raised)
-                            .border_1()
-                            .border_color(t.border_subtle)
-                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .child(tool("preview-zoom-in", "Zoom in", "zoom_in", |s, cx| {
-                                s.zoom(0.08, cx)
-                            }))
-                            .child(tool("preview-zoom-out", "Zoom out", "zoom_out", |s, cx| {
-                                s.zoom(-0.08, cx)
-                            }))
-                            .child(tool(
-                                "preview-reset",
-                                "Reset view",
-                                "restart_alt",
-                                |s, cx| s.reset(cx),
-                            )),
-                    )
-                });
+            });
 
         ui::card(&t)
             .gap(px(14.))
             .p(px(16.))
             .w(px(if neutral { 280. } else { 320. }))
-            .h(px(if neutral { 280. } else { 430. }))
+            .h(px(if neutral { 216. } else { 430. }))
+            .when(neutral, |card| {
+                card.bg(gpui::transparent_black()).border_0().p(px(0.))
+            })
             .flex_shrink_0()
             .text_color(t.foreground)
             .child(stage)

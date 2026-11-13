@@ -1620,16 +1620,24 @@ impl Render for Content {
                     .gap(px(2.))
                     .min_w(px(0.))
                     .child(
-                        div().flex().items_center().gap(px(8.)).min_w(px(0.)).child(
-                            div()
-                                .min_w(px(0.))
-                                .text_size(px(ui::TEXT_BODY + 1.))
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .text_color(palette.foreground)
-                                .when(disabled_row, |d| d.opacity(0.8))
-                                .text_ellipsis()
-                                .child(entry.name.clone()),
-                        ),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .min_w(px(0.))
+                            .child(
+                                div()
+                                    .min_w(px(0.))
+                                    .text_size(px(ui::TEXT_BODY + 1.))
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(palette.foreground)
+                                    .when(disabled_row, |d| d.opacity(0.8))
+                                    .text_ellipsis()
+                                    .child(entry.name.clone()),
+                            )
+                            .when(disabled_row, |name| {
+                                name.child(ui::badge(t, "Disabled", ui::Tone::Neutral))
+                            }),
                     )
                     .child(
                         div()

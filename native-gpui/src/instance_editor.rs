@@ -2662,22 +2662,27 @@ impl Render for InstanceEditor {
                             (
                                 "Aurora Client",
                                 Some(aurora_note),
-                                AuroraToggle::new("editor-aurora")
-                                    .label("Aurora Client enabled")
-                                    .checked(installed)
-                                    .disabled(
-                                        busy || !draft_clean
-                                            || self.selected_instance().is_some_and(needs_install)
-                                            || (!installed
-                                                && self.selected_instance().is_some_and(
-                                                    |instance| instance.platform.kind != "fabric",
-                                                )),
-                                    )
-                                    .on_change(move |enabled, _, _, cx| {
-                                        aurora_view
-                                            .update(cx, |v, cx| v.review_aurora(enabled, cx));
-                                    })
-                                    .into_any_element(),
+                                AuroraButton::new(
+                                    "editor-aurora",
+                                    if installed {
+                                        "Remove Aurora Client…"
+                                    } else {
+                                        "Install Aurora Client…"
+                                    },
+                                )
+                                .icon(if installed { "remove" } else { "download" })
+                                .disabled(
+                                    busy || !draft_clean
+                                        || self.selected_instance().is_some_and(needs_install)
+                                        || (!installed
+                                            && self.selected_instance().is_some_and(|instance| {
+                                                instance.platform.kind != "fabric"
+                                            })),
+                                )
+                                .on_click(move |_, _, cx| {
+                                    aurora_view.update(cx, |v, cx| v.review_aurora(!installed, cx));
+                                })
+                                .into_any_element(),
                             ),
                         ],
                     ),

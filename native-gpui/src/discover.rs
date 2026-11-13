@@ -2719,7 +2719,7 @@ impl Render for Discover {
 
         let toolbar = ui::card(&palette)
             .flex_shrink_0()
-            .p(px(12.))
+            .p(px(8.))
             .gap(px(12.))
             .child(
                 div()
@@ -2808,9 +2808,9 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == total)
                     .id(("result", index))
                     .gap(px(14.))
-                    .h(px(80.))
-                    .min_h(px(80.))
-                    .max_h(px(80.))
+                    .h(px(72.))
+                    .min_h(px(72.))
+                    .max_h(px(72.))
                     .flex_shrink_0()
                     .py(px(0.))
                     .hover(move |style| style.bg(hover))
@@ -3039,7 +3039,27 @@ impl Render for Discover {
                     .gap(px(12.))
                     .when(has_notes, |block| block.child(notes))
                     .when(!count.is_empty() && !s.results.is_empty(), |block| {
-                        block.child(ui::caption(&palette, count.clone()))
+                        block.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .child(ui::caption(&palette, count.clone()))
+                                .when(bounded, |header| {
+                                    header.child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(6.))
+                                            .child(ui::caption(&palette, "Scroll to browse"))
+                                            .child(crate::symbols::icon(
+                                                Some("arrow_downward"),
+                                                px(14.),
+                                                palette.muted_foreground,
+                                            )),
+                                    )
+                                }),
+                        )
                     })
                     .child(results),
             );
