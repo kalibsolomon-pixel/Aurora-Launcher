@@ -2248,6 +2248,8 @@ impl Render for Skins {
                                         },
                                     )),
                                 )
+                                // Destructive removal sits apart from routine actions.
+                                .child(div().flex_1().min_w(px(12.)))
                                 .child(
                                     AuroraButton::new(
                                         format!("skins-remove-{}", preset.id),

@@ -1682,7 +1682,7 @@ impl Launcher {
                         ),
                     )
                     .child(
-                        self.button("instance-settings", "Settings")
+                        self.button("instance-settings", "Edit instance")
                             .variant(ButtonVariant::Default)
                             .size(ButtonSize::Large)
                             .icon("tune")

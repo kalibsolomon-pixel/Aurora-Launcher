@@ -1278,7 +1278,6 @@ impl Render for Syncing {
                     .child(
                         AuroraCheckbox::new(choice_id, format!("Include {}", label))
                             .checked(checked)
-                            .dormant(!enabled)
                             .disabled(editing_disabled)
                             .on_change({
                                 let view = view.clone();
@@ -1293,7 +1292,26 @@ impl Render for Syncing {
                 category_grid = category_grid.child(row);
             }
             if self.section == 0 {
-                body = body.child(categories.child(category_grid));
+                let off_notice = (!enabled).then(|| {
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(10.))
+                        .px(px(12.))
+                        .py(px(9.))
+                        .rounded(t.radius)
+                        .bg(t.accent_soft)
+                        .border_1()
+                        .border_color(t.ring.opacity(0.3))
+                        .child(crate::symbols::icon(Some("info"), px(16.), t.ring))
+                        .child(
+                            div()
+                                .text_size(px(ui::TEXT_BODY))
+                                .text_color(t.foreground)
+                                .child("Sync is off. Checked files start syncing when you turn it on."),
+                        )
+                });
+                body = body.child(categories.children(off_notice).child(category_grid));
             }
 
             // Instances.

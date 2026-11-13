@@ -2085,12 +2085,16 @@ impl Render for Settings {
                         .text_color(palette.foreground)
                         .focus(move |style| style.border_color(ring).border_2())
                         .hover(move |style| style.border_color(ring))
-                        .child(
-                            div()
+                        .child(match custom_color {
+                            Some(color) => div()
                                 .size(px(14.))
                                 .rounded_full()
-                                .bg(custom_color.unwrap_or(palette.muted_foreground)),
-                        )
+                                .bg(color)
+                                .into_any_element(),
+                            // No custom color yet: an add affordance, not a gray swatch.
+                            None => crate::symbols::icon(Some("add"), px(16.), palette.ring)
+                                .into_any_element(),
+                        })
                         .child("Custom…")
                         .on_click(cx.listener(|this, _, window, cx| {
                             if this.picker.is_some() {

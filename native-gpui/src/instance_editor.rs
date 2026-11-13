@@ -2273,6 +2273,8 @@ impl Render for InstanceEditor {
 
         // ---- The instance list (master column) -----------------------------
         let mut list_col: Option<Div> = None;
+        // The General section's runtime summary lives under the list.
+        let mut side_runtime: Option<Div> = None;
         if let Some(state) = &self.state {
             if state.instances.is_empty() {
                 root = root.child(ui::empty_state(
@@ -2652,36 +2654,35 @@ impl Render for InstanceEditor {
                     .unwrap_or_else(|| "Managed runtime".to_owned());
                 let lines = [("Memory", memory), ("Java", java)];
                 // Summarize saved values without exposing an editable draft here.
-                let cell = |label: &'static str, value: String| {
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .flex_1()
-                        .min_w(px(0.))
-                        .child(ui::caption(&t, label))
-                        .child(
-                            div()
-                                .truncate()
-                                .text_size(px(ui::TEXT_BODY))
-                                .text_color(t.foreground)
-                                .child(value),
-                        )
-                };
-                let mut lines = lines.into_iter();
-                let mut grid = div().flex().flex_col().gap(px(10.)).px(px(8.)).pb(px(2.));
-                while let (Some(left), right) = (lines.next(), lines.next()) {
-                    grid = grid.child(
+                let grid = div().flex().flex_col().children(lines.into_iter().enumerate().map(
+                    |(index, (label, value))| {
                         div()
                             .flex()
+                            .items_center()
+                            .justify_between()
                             .gap(px(12.))
-                            .child(cell(left.0, left.1))
-                            .children(right.map(|(label, value)| cell(label, value))),
-                    );
-                }
-                detail = detail.child(ui::card(&t).gap(px(12.))
-                    .child(ui::section_header(&t, "Saved runtime", Some("Memory and Java for this instance. Change them in Runtime or Java.".into())))
-                    .child(grid));
+                            .py(px(8.))
+                            .when(index > 0, |row| row.border_t_1().border_color(t.border))
+                            .child(ui::caption(&t, label))
+                            .child(
+                                div()
+                                    .text_size(px(ui::TEXT_BODY))
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(t.foreground)
+                                    .child(value),
+                            )
+                    },
+                ));
+                side_runtime = Some(
+                    ui::card(&t)
+                        .gap(px(12.))
+                        .child(ui::section_header(
+                            &t,
+                            "Saved runtime",
+                            Some("Change these in Runtime or Java.".into()),
+                        ))
+                        .child(grid),
+                );
             }
 
             if self.section == 1 {
@@ -3198,10 +3199,19 @@ impl Render for InstanceEditor {
             root = root.child(
                 div()
                     .flex()
+                    .items_start()
                     .w_full()
                     .min_w(px(0.))
                     .gap(px(ui::PAGE_GAP))
-                    .child(list)
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .flex_shrink_0()
+                            .gap(px(ui::PAGE_GAP))
+                            .child(list)
+                            .children(side_runtime),
+                    )
                     .child(detail),
             );
         }

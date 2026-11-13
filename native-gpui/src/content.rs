@@ -145,9 +145,8 @@ fn provenance(p: &Option<api::Provenance>) -> String {
     p.as_ref()
         .map(|p| {
             format!(
-                "{} · {}{}",
-                p.provider,
-                p.project_id,
+                "{}{}",
+                provider_label(&p.provider),
                 p.display_version
                     .as_ref()
                     .map(|v| format!(" · {v}"))
@@ -155,6 +154,15 @@ fn provenance(p: &Option<api::Provenance>) -> String {
             )
         })
         .unwrap_or_else(|| "No provider provenance".into())
+}
+/// Note prefix for a mod other enabled mods depend on; shown as a badge.
+const REQUIRED_NOTE: &str = "Required by other mods: ";
+fn provider_label(provider: &str) -> &str {
+    match provider {
+        "modrinth" => "Modrinth",
+        "curseforge" => "CurseForge",
+        other => other,
+    }
 }
 fn mods(inv: api::ModInventory) -> Vec<Entry> {
     inv.entries
@@ -180,7 +188,11 @@ fn mods(inv: api::ModInventory) -> Vec<Entry> {
                 provenance(&e.provenance)
             );
             for w in e.warnings {
-                details.push_str(&format!("\nWarning: {}", w.message));
+                if w.code == "required_by_other_mods" {
+                    details.push_str(&format!("\n{REQUIRED_NOTE}{}", w.message));
+                } else {
+                    details.push_str(&format!("\nWarning: {}", w.message));
+                }
             }
             for reason in [e.action_blocked_reason, e.removal_blocked_reason]
                 .into_iter()
@@ -1718,13 +1730,17 @@ impl Render for Content {
                     .icon
                     .as_ref()
                     .and_then(|icon| self.icons.cache.image(&icon.key()));
-                let (meta, status_word, notes) = describe(&entry.details);
+                let (meta, status_word, mut notes) = describe(&entry.details);
+                let required = notes.iter().any(|note| note.starts_with(REQUIRED_NOTE));
+                notes.retain(|note| !note.starts_with(REQUIRED_NOTE));
                 let inline_meta = window.viewport_size().width >= px(1000.) && notes.is_empty();
                 let disabled_row = entry.enabled == Some(false);
                 let mut line = vec![entry.file_name.as_str()];
                 line.extend(meta.iter().copied().filter(|m| {
                     *m != "No provider provenance"
                         && *m != "Added manually"
+                        && *m != "Installed by Aurora"
+                        && *m != "Not pack owned"
                         && !entry.file_name.contains(*m)
                 }));
                 let mut text = div()
@@ -1765,6 +1781,9 @@ impl Render for Content {
                             )
                             .when(disabled_row, |name| {
                                 name.child(ui::badge(t, "Disabled", ui::Tone::Neutral))
+                            })
+                            .when(required, |name| {
+                                name.child(ui::badge(t, "Required", ui::Tone::Neutral))
                             }),
                     )
                     .child(
@@ -2171,6 +2190,7 @@ fn ownership_label(ownership: &str) -> &str {
     match ownership {
         "userManaged" => "Added manually",
         "packManaged" => "From modpack",
+        "providerManaged" => "Installed by Aurora",
         other => other,
     }
 }

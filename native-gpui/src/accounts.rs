@@ -1327,6 +1327,13 @@ impl Render for Accounts {
                                 account.minecraft_name
                             ))
                             .size(ButtonSize::Small)
+                            // The selected account's expired session is the
+                            // page's next step, so its Reconnect is accented.
+                            .variant(if selected && reauth {
+                                ButtonVariant::Soft
+                            } else {
+                                ButtonVariant::Default
+                            })
                             .disabled(busy)
                             .on_click(cx.listener(
                                 move |this, _, _, cx| {
@@ -1334,6 +1341,7 @@ impl Render for Accounts {
                                 },
                             )),
                         )
+                        .child(div().w(px(1.)).h(px(20.)).mx(px(6.)).bg(palette.border_subtle))
                         .child(
                             icon_button(
                                 &palette,
