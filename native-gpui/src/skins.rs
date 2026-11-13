@@ -57,9 +57,11 @@ use gpui_kit::{
 
 use crate::api::{self, ApiResult};
 use crate::backend::guarded;
-use crate::controls::{AuroraButton, AuroraInput, AuroraSelect, AuroraToggle, ButtonVariant};
-use crate::theme;
+use crate::controls::{
+    AuroraButton, AuroraInput, AuroraSelect, AuroraToggle, ButtonSize, ButtonVariant,
+};
 use crate::{file_picker, images};
+use crate::{theme, ui};
 
 /// Events for the integrating parent view.
 #[derive(Debug)]
@@ -276,6 +278,81 @@ fn valid_model(model: &str) -> bool {
 
 fn model_label(model: &str) -> &'static str {
     if model == "slim" { "Slim" } else { "Classic" }
+}
+
+/// A form field: a small label above its control.
+fn field(t: &theme::AuroraTheme, label: &'static str) -> gpui_kit::Div {
+    div().flex().flex_col().gap(px(6.)).child(
+        div()
+            .text_size(px(ui::TEXT_CAPTION))
+            .font_weight(gpui_kit::FontWeight::MEDIUM)
+            .text_color(t.muted_foreground)
+            .child(label),
+    )
+}
+
+/// An inline status strip for notices and errors.
+fn notice_bar(
+    t: &theme::AuroraTheme,
+    text: impl Into<gpui_kit::SharedString>,
+    tone: ui::Tone,
+) -> gpui_kit::Div {
+    let (color, icon) = match tone {
+        ui::Tone::Danger => (t.danger, "error"),
+        ui::Tone::Accent => (t.ring, "info"),
+        _ => (t.muted_foreground, "info"),
+    };
+    div()
+        .flex()
+        .items_center()
+        .gap(px(10.))
+        .px(px(14.))
+        .py(px(10.))
+        .rounded(t.radius)
+        .bg(gpui_kit::Hsla { a: 0.10, ..color })
+        .border_1()
+        .border_color(gpui_kit::Hsla { a: 0.22, ..color })
+        .text_size(px(ui::TEXT_BODY))
+        .text_color(color)
+        .child(crate::symbols::icon(Some(icon), px(16.), color))
+        .child(div().flex_1().child(text.into()))
+}
+
+/// A quiet icon-only row action. The label is the accessible name.
+fn icon_button(
+    t: &theme::AuroraTheme,
+    id: impl Into<gpui_kit::ElementId>,
+    icon: &'static str,
+    label: &'static str,
+    color: gpui_kit::Hsla,
+    danger: bool,
+) -> gpui_kit::base::Button {
+    let clear = gpui_kit::transparent_black();
+    let ring = t.ring;
+    let hover = if danger {
+        gpui_kit::Hsla {
+            a: 0.16,
+            ..t.danger
+        }
+    } else {
+        t.control_hover
+    };
+    gpui_kit::base::Button::new(id)
+        .aria_label(label)
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(28.))
+        .rounded(t.radius)
+        .bg(clear)
+        .border_1()
+        .border_color(clear)
+        .hover(move |style| style.bg(hover))
+        .active(|style| style.opacity(0.88))
+        .focus(move |style| style.border_color(ring))
+        .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
+        .child(crate::symbols::icon(Some(icon), px(16.), color))
 }
 
 /// Value equality: repeated selections of the same decoded artwork must not
@@ -1677,104 +1754,50 @@ impl Render for Skins {
             .track_focus(&self.focus)
             .flex()
             .flex_col()
-            .gap(px(12.))
+            .gap(px(ui::PAGE_GAP))
+            .w_full()
             .text_color(palette.foreground)
             .child(
                 div()
                     .flex()
-                    .items_center()
+                    .items_start()
                     .justify_between()
-                    .gap(px(8.))
-                    .child(div().text_size(px(20.)).child("Skins"))
+                    .gap(px(16.))
+                    .child(ui::page_header(
+                        &palette,
+                        "Skins",
+                        Some("Preview, import and wear skins and capes.".into()),
+                    ))
                     .child(
-                        AuroraButton::new("skins-refresh", "Refresh")
-                            .disabled(locked || no_host)
-                            .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                        div().flex_shrink_0().child(
+                            AuroraButton::new("skins-refresh", "Refresh")
+                                .icon("refresh")
+                                .disabled(locked || no_host)
+                                .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                        ),
                     ),
             );
 
         if no_host {
-            return div().size_full().child(content.child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(palette.muted_foreground)
-                    .child(
-                        "Skins are unavailable: this diagnostic window has no launcher host, so no library, account or cosmetics are touched.",
-                    ),
-            ));
+            return div().size_full().child(content.child(ui::empty_state(
+                &palette,
+                "checkroom",
+                "Skins unavailable",
+                "Skins are unavailable: this diagnostic window has no launcher host, so no library, account or cosmetics are touched.",
+            )));
+        }
+
+        if let Some(notice) = &self.core.notice {
+            content = content.child(notice_bar(&palette, notice.to_string(), ui::Tone::Accent));
+        }
+        if let Some(error) = &self.core.error {
+            content = content.child(notice_bar(&palette, error.to_string(), ui::Tone::Danger));
         }
 
         // Current appearance -------------------------------------------------
         let account = self.core.account.as_ref();
         let cosmetics = self.core.cosmetics.as_ref();
-        match account {
-            Some(account) if account.status == "signedIn" => {
-                let mut appearance = div().flex().flex_col().gap(px(6.)).child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child(format!("Appearance for {}.", account.name)),
-                );
-                if let Some(error) = &self.core.remote_error {
-                    appearance = appearance
-                        .child(
-                            div()
-                                .text_size(px(13.))
-                                .text_color(palette.danger)
-                                .child(error.clone()),
-                        )
-                        .child(
-                            AuroraButton::new("appearance-retry", "Retry")
-                                .disabled(locked)
-                                .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
-                        );
-                } else if let Some(cosmetics) = cosmetics {
-                    let model = cosmetics.current_skin_model.as_deref().unwrap_or("classic");
-                    let worn = cosmetics.capes.iter().find(|cape| cape.selected);
-                    appearance = appearance
-                        .child(
-                            div()
-                                .text_size(px(13.))
-                                .child(if cosmetics.has_current_skin {
-                                    format!(
-                                        "Current skin: {} model{}.",
-                                        model_label(model),
-                                        worn.map(|cape| format!(" · wearing {}", cape.name))
-                                            .unwrap_or_default()
-                                    )
-                                } else {
-                                    "No current skin on this account.".to_string()
-                                }),
-                        )
-                        .child(
-                            AuroraButton::new("skins-save-current", "Save current skin to library")
-                                .variant(ButtonVariant::Primary)
-                                .disabled(locked || !cosmetics.has_current_skin)
-                                .on_click(cx.listener(|this, _, _, cx| this.save_current(cx))),
-                        );
-                } else {
-                    appearance = appearance.child(
-                        div()
-                            .text_size(px(13.))
-                            .text_color(palette.muted_foreground)
-                            .child("Loading current appearance…"),
-                    );
-                }
-                content = content.child(appearance);
-            }
-            _ => {
-                content = content.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child(
-                            "Select a signed-in account to manage its skin and capes. Your local library works without an account.",
-                        ),
-                );
-            }
-        }
 
-        // Preview selection ----------------------------------------------------
         let preview_label = match &self.core.choice {
             SkinChoice::Preset(id) => format!(
                 "Previewing library skin: {}",
@@ -1804,112 +1827,235 @@ impl Render for Skins {
                 .map(|cape| format!("Cape: {} (worn)", cape.name))
                 .unwrap_or_else(|| "No cape".to_string()),
         };
-        content = content.child(
-            div().flex().flex_col().gap(px(6.)).child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .text_color(palette.muted_foreground)
-                            .child(format!("{preview_label} · {cape_label}")),
-                    )
-                    .child(
-                        AuroraButton::new("skins-preview-current", "Current appearance")
+
+        let signed_in = account.filter(|account| account.status == "signedIn");
+        let mut appearance = ui::card(&palette).gap(px(14.)).child(
+            div()
+                .flex()
+                .items_start()
+                .justify_between()
+                .gap(px(12.))
+                .child(ui::section_header(
+                    &palette,
+                    "Current appearance",
+                    Some(match signed_in {
+                        Some(account) => format!("Appearance for {}.", account.name).into(),
+                        None => "No signed-in account selected.".into(),
+                    }),
+                ))
+                .child(
+                    div().flex_shrink_0().child(
+                        AuroraButton::new("skins-preview-current", "Preview")
+                            .size(ButtonSize::Small)
+                            .icon("visibility")
                             .disabled(no_host)
                             .on_click(cx.listener(|this, _, _, cx| this.preview_current(cx))),
                     ),
-            ),
+                ),
         );
-
-        // Library ----------------------------------------------------------------
-        let favorites_view = view.clone();
-        content = content.child(
+        appearance = appearance.child(
             div()
                 .flex()
                 .items_center()
-                .gap(px(8.))
+                .gap(px(10.))
+                .px(px(12.))
+                .py(px(9.))
+                .rounded(palette.radius)
+                .bg(palette.sunken)
+                .border_1()
+                .border_color(palette.border_subtle)
+                .text_size(px(ui::TEXT_CAPTION))
+                .text_color(palette.muted_foreground)
+                .child(crate::symbols::icon(
+                    Some("view_in_ar"),
+                    px(16.),
+                    palette.ring,
+                ))
                 .child(
                     div()
-                        .text_size(px(16.))
-                        .child(format!("Library ({})", self.core.filtered_library().len())),
-                )
-                .child(
-                    AuroraToggle::new("skins-favorites-only")
-                        .label("Favorites only")
-                        .checked(self.core.favorites_only)
-                        .disabled(locked)
-                        .on_change(move |checked, _, _, cx| {
-                            favorites_view.update(cx, |this, cx| {
-                                this.core.favorites_only = checked;
-                                cx.notify();
-                            });
-                        }),
+                        .flex_1()
+                        .child(format!("{preview_label} · {cape_label}")),
                 ),
         );
+        match signed_in {
+            Some(_) => {
+                if let Some(error) = &self.core.remote_error {
+                    appearance = appearance
+                        .child(
+                            div()
+                                .text_size(px(ui::TEXT_BODY))
+                                .text_color(palette.danger)
+                                .child(error.clone()),
+                        )
+                        .child(
+                            div().flex().child(
+                                AuroraButton::new("appearance-retry", "Retry")
+                                    .icon("refresh")
+                                    .disabled(locked)
+                                    .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                            ),
+                        );
+                } else if let Some(cosmetics) = cosmetics {
+                    let model = cosmetics.current_skin_model.as_deref().unwrap_or("classic");
+                    let worn = cosmetics.capes.iter().find(|cape| cape.selected);
+                    appearance = appearance
+                        .child(
+                            div()
+                                .text_size(px(ui::TEXT_BODY))
+                                .text_color(palette.foreground)
+                                .child(if cosmetics.has_current_skin {
+                                    format!(
+                                        "Current skin: {} model{}.",
+                                        model_label(model),
+                                        worn.map(|cape| format!(" · wearing {}", cape.name))
+                                            .unwrap_or_default()
+                                    )
+                                } else {
+                                    "No current skin on this account.".to_string()
+                                }),
+                        )
+                        .child(
+                            div().flex().child(
+                                AuroraButton::new(
+                                    "skins-save-current",
+                                    "Save current skin to library",
+                                )
+                                .variant(ButtonVariant::Primary)
+                                .icon("download")
+                                .disabled(locked || !cosmetics.has_current_skin)
+                                .on_click(cx.listener(|this, _, _, cx| this.save_current(cx))),
+                            ),
+                        );
+                } else {
+                    appearance =
+                        appearance.child(ui::muted(&palette, "Loading current appearance…"));
+                }
+            }
+            None => {
+                appearance = appearance.child(ui::muted(
+                    &palette,
+                    "Select a signed-in account to manage its skin and capes. Your local library works without an account.",
+                ));
+            }
+        }
+        content = content.child(appearance);
 
-        // Import row: name + classic/slim choice + owned picker.
+        // Library ----------------------------------------------------------------
+        let favorites_view = view.clone();
+        let library_count = self.core.filtered_library().len();
         let import_select = &self.import_model;
         let select_view = view.clone();
         let highlight_view = view.clone();
         let confirm_view = view.clone();
-        content = content.child(
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap(px(8.))
-                .child(
-                    div()
-                        .w(px(220.))
-                        .child(AuroraInput::new(&self.import_name).label("Skin name")),
-                )
-                .child(
-                    AuroraSelect::new(
-                        "skins-import-model",
-                        "Model",
-                        vec!["Classic".into(), "Slim".into()],
-                        &import_select.trigger,
-                        &import_select.content,
-                        import_select.bounds.clone(),
+
+        let library_head = div()
+            .flex()
+            .flex_col()
+            .gap(px(14.))
+            .px(px(16.))
+            .py(px(14.))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(12.))
+                    .child(ui::section_header(
+                        &palette,
+                        format!("Library ({library_count})"),
+                        Some("Skins saved on this device.".into()),
+                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_shrink_0()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(
+                                div()
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .text_color(palette.muted_foreground)
+                                    .child("Favorites only"),
+                            )
+                            .child(
+                                AuroraToggle::new("skins-favorites-only")
+                                    .label("Favorites only")
+                                    .checked(self.core.favorites_only)
+                                    .disabled(locked)
+                                    .on_change(move |checked, _, _, cx| {
+                                        favorites_view.update(cx, |this, cx| {
+                                            this.core.favorites_only = checked;
+                                            cx.notify();
+                                        });
+                                    }),
+                            ),
+                    ),
+            )
+            // Import row: name + classic/slim choice + owned picker.
+            .child(
+                div()
+                    .flex()
+                    .items_end()
+                    .gap(px(8.))
+                    .child(
+                        field(&palette, "Skin name")
+                            .flex_1()
+                            .min_w(px(100.))
+                            .child(AuroraInput::new(&self.import_name).label("Skin name")),
                     )
-                    .selected(Some(if self.import_model_highlight_slim() {
-                        1
-                    } else {
-                        0
-                    }))
-                    .open(import_select.open)
-                    .highlight(import_select.highlight)
-                    .disabled(locked)
-                    .on_open_change(move |open, _, cx| {
-                        select_view.update(cx, |this, cx| {
-                            this.import_model.open = open;
-                            cx.notify();
-                        });
-                    })
-                    .on_highlight(move |highlight, _, cx| {
-                        highlight_view.update(cx, |this, cx| {
-                            this.import_model.highlight = highlight;
-                            cx.notify();
-                        });
-                    })
-                    .on_confirm(move |selected, _, cx| {
-                        confirm_view.update(cx, |this, cx| {
-                            this.import_model.highlight = selected;
-                            cx.notify();
-                        });
-                    }),
-                )
-                .child(
-                    AuroraButton::new("skins-import", "Import PNG…")
-                        .disabled(locked)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.start_import(window, cx);
-                        })),
-                ),
-        );
+                    .child(
+                        // The select carries a fixed 220px width; a flex row lets it
+                        // shrink to this field instead of overlapping the button.
+                        field(&palette, "Model").w(px(128.)).flex_shrink_0().child(
+                            div().flex().w_full().min_w(px(0.)).child(
+                                AuroraSelect::new(
+                                    "skins-import-model",
+                                    "Model",
+                                    vec!["Classic".into(), "Slim".into()],
+                                    &import_select.trigger,
+                                    &import_select.content,
+                                    import_select.bounds.clone(),
+                                )
+                                .selected(Some(if self.import_model_highlight_slim() {
+                                    1
+                                } else {
+                                    0
+                                }))
+                                .open(import_select.open)
+                                .highlight(import_select.highlight)
+                                .disabled(locked)
+                                .on_open_change(move |open, _, cx| {
+                                    select_view.update(cx, |this, cx| {
+                                        this.import_model.open = open;
+                                        cx.notify();
+                                    });
+                                })
+                                .on_highlight(move |highlight, _, cx| {
+                                    highlight_view.update(cx, |this, cx| {
+                                        this.import_model.highlight = highlight;
+                                        cx.notify();
+                                    });
+                                })
+                                .on_confirm(
+                                    move |selected, _, cx| {
+                                        confirm_view.update(cx, |this, cx| {
+                                            this.import_model.highlight = selected;
+                                            cx.notify();
+                                        });
+                                    },
+                                ),
+                            ),
+                        ),
+                    )
+                    .child(
+                        AuroraButton::new("skins-import", "Import PNG…")
+                            .icon("upload")
+                            .disabled(locked)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.start_import(window, cx);
+                            })),
+                    ),
+            );
 
         // Library list (bound scroll).
         let mut library = div()
@@ -1919,35 +2065,54 @@ impl Render for Skins {
             .max_h(px(280.))
             .flex()
             .flex_col()
-            .gap(px(4.));
+            .border_t_1()
+            .border_color(palette.border_subtle);
         if let Some(error) = &self.core.library_error {
-            library = library
-                .child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.danger)
-                        .child(error.clone()),
-                )
-                .child(
-                    AuroraButton::new("library-retry", "Retry")
-                        .disabled(locked)
-                        .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
-                );
+            library = library.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_start()
+                    .gap(px(10.))
+                    .px(px(16.))
+                    .py(px(16.))
+                    .child(
+                        div()
+                            .text_size(px(ui::TEXT_BODY))
+                            .text_color(palette.danger)
+                            .child(error.clone()),
+                    )
+                    .child(
+                        AuroraButton::new("library-retry", "Retry")
+                            .icon("refresh")
+                            .disabled(locked)
+                            .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                    ),
+            );
         } else if let Some(list) = &self.core.library {
             let rows = self.core.filtered_library();
             if rows.is_empty() {
                 library = library.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child(if list.is_empty() {
-                            "No saved skins yet. Import a PNG to start."
+                    ui::empty_state(
+                        &palette,
+                        if list.is_empty() { "checkroom" } else { "star" },
+                        if list.is_empty() {
+                            "No saved skins yet"
                         } else {
-                            "No favorites yet."
-                        }),
+                            "No favorites yet"
+                        },
+                        if list.is_empty() {
+                            "Import a PNG above to start your skin library."
+                        } else {
+                            "No favorites yet. Star a skin to pin it here."
+                        },
+                    )
+                    .rounded(px(0.))
+                    .border_0(),
                 );
             }
-            for preset in rows {
+            let count = rows.len();
+            for (index, preset) in rows.into_iter().enumerate() {
                 let preview_id = preset.id.clone();
                 let favorite_id = preset.id.clone();
                 let rename_id = preset.id.clone();
@@ -1955,30 +2120,40 @@ impl Render for Skins {
                 let next_favorite = !preset.favorite;
                 let previewed = self.core.choice == SkinChoice::Preset(preset.id.clone());
                 let thumbnail = self.thumbnails.get(&preset.id).cloned();
+                let tile = div()
+                    .flex_shrink_0()
+                    .size(px(36.))
+                    .rounded(px(8.))
+                    .overflow_hidden()
+                    .bg(palette.control)
+                    .border_1()
+                    .border_color(palette.border_subtle)
+                    .when_some(thumbnail, |d, image| d.child(img(image).size(px(36.))));
                 library = library.child(
-                    div()
+                    ui::row(&palette, index + 1 == count)
                         .id(format!("skins-row-{}", preset.id))
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .p(px(4.))
-                        .rounded(palette.radius)
-                        .when(previewed, |row| row.bg(palette.surface))
-                        .child(match thumbnail {
-                            Some(image) => div().child(img(image).size(px(28.))),
-                            None => div()
-                                .size(px(28.))
-                                .rounded(palette.radius)
-                                .bg(palette.surface_hover),
-                        })
-                        .child(div().text_size(px(13.)).child(format!(
-                            "{} ({}){}",
-                            preset.name,
-                            model_label(&preset.model),
-                            if preset.favorite { " · Favorite" } else { "" }
-                        )))
+                        .gap(px(10.))
+                        .py(px(10.))
+                        .when(previewed, |row| row.bg(palette.accent_soft))
+                        .child(tile)
+                        .child(
+                            ui::title_block(
+                                &palette,
+                                preset.name.clone(),
+                                Some(
+                                    format!(
+                                        "{} model{}",
+                                        model_label(&preset.model),
+                                        if preset.favorite { " · Favorite" } else { "" }
+                                    )
+                                    .into(),
+                                ),
+                            )
+                            .flex_1(),
+                        )
                         .child(
                             AuroraButton::new(format!("skins-preview-{}", preset.id), "Preview")
+                                .size(ButtonSize::Small)
                                 .selected(previewed)
                                 .disabled(locked)
                                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -1986,13 +2161,21 @@ impl Render for Skins {
                                 })),
                         )
                         .child(
-                            AuroraButton::new(
+                            icon_button(
+                                &palette,
                                 format!("skins-favorite-{}", preset.id),
+                                "star",
                                 if preset.favorite {
                                     "Remove favorite"
                                 } else {
                                     "Favorite"
                                 },
+                                if preset.favorite {
+                                    palette.warning
+                                } else {
+                                    palette.muted_foreground
+                                },
+                                false,
                             )
                             .disabled(locked)
                             .on_click(cx.listener(
@@ -2002,34 +2185,52 @@ impl Render for Skins {
                             )),
                         )
                         .child(
-                            AuroraButton::new(format!("skins-rename-{}", preset.id), "Rename")
-                                .disabled(locked)
-                                .on_click(cx.listener(move |this, _, window, cx| {
+                            icon_button(
+                                &palette,
+                                format!("skins-rename-{}", preset.id),
+                                "edit",
+                                "Rename",
+                                palette.muted_foreground,
+                                false,
+                            )
+                            .disabled(locked)
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| {
                                     this.open_rename(rename_id.clone(), window, cx);
-                                })),
+                                },
+                            )),
                         )
                         .child(
-                            AuroraButton::new(format!("skins-remove-{}", preset.id), "Remove")
-                                .variant(ButtonVariant::Danger)
-                                .disabled(locked)
-                                .on_click(cx.listener(move |this, _, _, cx| {
+                            icon_button(
+                                &palette,
+                                format!("skins-remove-{}", preset.id),
+                                "delete",
+                                "Remove",
+                                palette.danger,
+                                true,
+                            )
+                            .disabled(locked)
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
                                     this.open_remove_review(remove_id.clone(), cx);
-                                })),
+                                },
+                            )),
                         ),
                 );
             }
         } else {
             library = library.child(
                 div()
-                    .text_size(px(13.))
-                    .text_color(palette.muted_foreground)
-                    .child("Loading library…"),
+                    .px(px(16.))
+                    .py(px(16.))
+                    .child(ui::muted(&palette, "Loading library…")),
             );
         }
-        content = content.child(library);
+        content = content.child(ui::list_card(&palette).child(library_head).child(library));
 
         // Capes -------------------------------------------------------------------
         if let Some(cosmetics) = cosmetics {
+            let any_worn = cosmetics.capes.iter().any(|cape| cape.selected);
             let mut capes = div()
                 .id("skins-capes")
                 .overflow_y_scroll()
@@ -2037,45 +2238,50 @@ impl Render for Skins {
                 .max_h(px(220.))
                 .flex()
                 .flex_col()
-                .gap(px(4.))
-                .child(div().text_size(px(16.)).child("Capes"));
+                .border_t_1()
+                .border_color(palette.border_subtle);
             if cosmetics.capes.is_empty() {
                 capes = capes.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child("No capes on this account."),
+                    ui::empty_state(
+                        &palette,
+                        "checkroom",
+                        "No capes",
+                        "No capes on this account.",
+                    )
+                    .rounded(px(0.))
+                    .border_0(),
                 );
             }
-            for cape in &cosmetics.capes {
+            let count = cosmetics.capes.len();
+            for (index, cape) in cosmetics.capes.iter().enumerate() {
                 let inspect_id = cape.id.clone();
                 let select_id = cape.id.clone();
                 let inspected = self.core.cape_choice.as_deref() == Some(cape.id.as_str());
                 let texture = self.cape_images.get(&cape.id).cloned();
                 capes = capes.child(
-                    div()
+                    ui::row(&palette, index + 1 == count)
                         .id(format!("skins-cape-row-{}", cape.id))
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .p(px(4.))
-                        .rounded(palette.radius)
-                        .when(cape.selected, |row| row.bg(palette.surface))
-                        .child(match texture {
-                            Some(image) => div().child(img(image).w(px(44.)).h(px(22.))),
-                            None => div()
+                        .gap(px(10.))
+                        .py(px(10.))
+                        .when(cape.selected, |row| row.bg(palette.accent_soft))
+                        .child(
+                            div()
+                                .flex_shrink_0()
                                 .w(px(44.))
                                 .h(px(22.))
-                                .rounded(palette.radius)
-                                .bg(palette.surface_hover),
-                        })
-                        .child(div().text_size(px(13.)).child(format!(
-                            "{}{}",
-                            cape.name,
-                            if cape.selected { " · Worn" } else { "" }
-                        )))
+                                .rounded(px(4.))
+                                .overflow_hidden()
+                                .bg(palette.control)
+                                .border_1()
+                                .border_color(palette.border_subtle)
+                                .when_some(texture, |d, image| {
+                                    d.child(img(image).w(px(44.)).h(px(22.)))
+                                }),
+                        )
+                        .child(ui::title_block(&palette, cape.name.clone(), None).flex_1())
                         .child(
                             AuroraButton::new(format!("skins-cape-view-{}", cape.id), "View")
+                                .size(ButtonSize::Small)
                                 .selected(inspected)
                                 .disabled(locked)
                                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -2087,8 +2293,8 @@ impl Render for Skins {
                                 format!("skins-cape-wear-{}", cape.id),
                                 if cape.selected { "Worn" } else { "Wear" },
                             )
-                            .variant(ButtonVariant::Primary)
-                            .selected(cape.selected)
+                            .size(ButtonSize::Small)
+                            .icon(if cape.selected { "check" } else { "checkroom" })
                             .disabled(locked || cape.selected)
                             .on_click(cx.listener(
                                 move |this, _, _, cx| {
@@ -2098,42 +2304,47 @@ impl Render for Skins {
                         ),
                 );
             }
-            if cosmetics.capes.iter().any(|cape| cape.selected) {
-                capes = capes.child(
-                    AuroraButton::new("skins-cape-disable", "Stop wearing cape")
-                        .disabled(locked)
-                        .on_click(cx.listener(|this, _, _, cx| this.disable_cape(cx))),
-                );
-            }
-            content = content.child(capes);
-        }
-
-        if let Some(notice) = &self.core.notice {
             content = content.child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(palette.muted_foreground)
-                    .child(notice.clone()),
-            );
-        }
-        if let Some(error) = &self.core.error {
-            content = content.child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(palette.danger)
-                    .child(error.clone()),
+                ui::list_card(&palette)
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.))
+                            .px(px(16.))
+                            .py(px(14.))
+                            .child(ui::section_header(
+                                &palette,
+                                "Capes",
+                                Some("Capes on your Minecraft account.".into()),
+                            ))
+                            .when(any_worn, |head| {
+                                head.child(
+                                    AuroraButton::new("skins-cape-disable", "Stop wearing cape")
+                                        .variant(ButtonVariant::Ghost)
+                                        .size(ButtonSize::Small)
+                                        .disabled(locked)
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| this.disable_cape(cx)),
+                                        ),
+                                )
+                            }),
+                    )
+                    .child(capes),
             );
         }
 
         // Reviewed dialogs: the base dialog owns the focus trap; Enter never
         // confirms and Escape/backdrop close only while this page's own write
         // is not committed. Focus returns to the page on close.
-        content = content
+        // Outside the gapped column so closed dialogs add no trailing space.
+        div()
+            .size_full()
+            .child(content)
             .child(self.rename_dialog(cx, &palette, busy))
             .child(self.apply_dialog(cx, &palette, busy))
-            .child(self.remove_dialog(cx, &palette, busy));
-
-        div().size_full().child(content)
+            .child(self.remove_dialog(cx, &palette, busy))
     }
 }
 
@@ -2143,13 +2354,20 @@ impl Skins {
             .w(px(440.))
             .max_w(px(560.))
             .p(px(24.))
-            .bg(palette.surface)
+            .bg(palette.raised)
+            .border_1()
+            .border_color(palette.border_subtle)
             .text_color(palette.foreground)
-            .rounded(palette.radius)
+            .rounded(palette.radius_lg)
             .flex()
             .flex_col()
             .gap(px(12.))
-            .child(div().text_size(px(15.)).child(title.to_owned()))
+            .child(
+                div()
+                    .text_size(px(ui::TEXT_SECTION))
+                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                    .child(title.to_owned()),
+            )
     }
 
     fn rename_dialog(
@@ -2180,6 +2398,7 @@ impl Skins {
             .child(
                 div()
                     .flex()
+                    .justify_end()
                     .gap(px(8.))
                     .child(
                         AuroraButton::new("skins-rename-cancel", "Cancel")
@@ -2252,6 +2471,7 @@ impl Skins {
             .child(
                 div()
                     .flex()
+                    .justify_end()
                     .gap(px(8.))
                     .child(
                         AuroraButton::new("skins-apply-cancel", "Cancel")
@@ -2325,6 +2545,7 @@ impl Skins {
             .child(
                 div()
                     .flex()
+                    .justify_end()
                     .gap(px(8.))
                     .child(
                         AuroraButton::new("skins-remove-cancel", "Cancel")

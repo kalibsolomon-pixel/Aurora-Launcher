@@ -16,7 +16,8 @@ use crate::{
     artwork::{self, ArtworkCache, RawArtwork},
     backend::guarded,
     content_updates::{ContentUpdates, ContentUpdatesEvent},
-    controls::{AuroraButton, AuroraInput, ButtonVariant},
+    controls::{AuroraButton, AuroraInput, ButtonSize, ButtonVariant},
+    ui,
 };
 use aurora_launcher_lib::host::Host;
 use gpui::{
@@ -1144,12 +1145,81 @@ impl Drop for Content {
 fn error(e: api::ApiError) -> String {
     format!("{}: {}", e.code, e.message)
 }
+/// The status words `details` carries; they are drawn as a badge instead.
+const STATUS_WORDS: [&str; 4] = [
+    "Enabled",
+    "Disabled",
+    "Activation managed in game",
+    "Activation unknown",
+];
+
+/// Splits an entry's `details` into its metadata segments (status removed),
+/// the status word it carried, and its note lines (warnings, blocked reasons).
+fn describe(details: &str) -> (Vec<&str>, Option<&str>, Vec<&str>) {
+    let mut lines = details.lines();
+    let first = lines.next().unwrap_or("");
+    let mut status = None;
+    let mut meta = Vec::new();
+    for segment in first.split(" · ") {
+        if STATUS_WORDS.contains(&segment) {
+            status = Some(segment);
+        } else if !segment.is_empty() {
+            meta.push(segment);
+        }
+    }
+    (meta, status, lines.filter(|l| !l.is_empty()).collect())
+}
+
+/// A quiet centered message inside a list card.
+fn list_placeholder(
+    t: &crate::theme::AuroraTheme,
+    icon: &str,
+    title: &str,
+    body: Option<&str>,
+) -> gpui::Div {
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(px(8.))
+        .py(px(36.))
+        .px(px(24.))
+        .child(ui::icon_tile(t, Some(icon), 40., false))
+        .child(
+            div()
+                .pt(px(2.))
+                .text_size(px(ui::TEXT_BODY + 1.))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(t.foreground)
+                .child(title.to_owned()),
+        )
+        .when_some(body, |this, body| {
+            this.child(
+                div()
+                    .max_w(px(420.))
+                    .text_size(px(ui::TEXT_BODY))
+                    .text_color(t.muted_foreground)
+                    .text_center()
+                    .child(body.to_owned()),
+            )
+        })
+}
+
+fn kind_icon(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Mod => "extension",
+        Kind::Resource => "image",
+        Kind::Shader => "auto_awesome",
+    }
+}
+
 impl Render for Content {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity();
         let busy = self.is_busy(cx);
         let previewing = self.preview_request.is_some();
         let palette = crate::theme::theme(cx).clone();
+        let t = &palette;
         let available = self.host.is_some();
         self.path.update(cx, |p, cx| p.set_disabled(busy, cx));
         // Files dropped from the file manager feed the local import review.
@@ -1158,7 +1228,7 @@ impl Render for Content {
         let mut root = div()
             .flex()
             .flex_col()
-            .gap(px(8.))
+            .gap(px(ui::PAGE_GAP))
             .border_1()
             .border_color(gpui::transparent_black())
             .rounded(palette.radius)
@@ -1172,20 +1242,65 @@ impl Render for Content {
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 this.drop_files(paths.paths(), window, cx);
             }))
-            .child(div().text_2xl().child("Content"))
-            .child(self.message.clone());
+            .child(ui::page_header(
+                t,
+                "Content",
+                Some(
+                    "Manage the mods, resource packs and shaders installed in each instance."
+                        .into(),
+                ),
+            ));
+        if !self.message.is_empty() {
+            root = root.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .px(px(14.))
+                    .py(px(10.))
+                    .rounded(palette.radius)
+                    .bg(palette.control)
+                    .border_1()
+                    .border_color(palette.border_subtle)
+                    .text_size(px(ui::TEXT_BODY))
+                    .text_color(palette.muted_foreground)
+                    .child(crate::symbols::icon(Some("info"), px(16.), palette.ring))
+                    .child(div().flex_1().min_w(px(0.)).child(self.message.clone())),
+            );
+        }
         if let Some(state) = &self.state {
-            let mut instances = div().flex().flex_wrap().gap(px(8.));
+            let mut chips = div().flex().flex_wrap().gap(px(8.));
             for instance in &state.instances {
                 let id = instance.id.clone();
                 let v = view.clone();
-                instances = instances.child(
-                    AuroraButton::new(
+                let chosen = self.selected.as_deref() == Some(&id);
+                chips = chips.child(
+                    ui::tile_button(
+                        t,
                         gpui::SharedString::from(format!("content-instance-{id}")),
-                        instance.display_name.clone(),
+                        chosen,
                     )
-                    .selected(self.selected.as_deref() == Some(&id))
                     .disabled(busy)
+                    .w(px(256.))
+                    .justify_start()
+                    .gap(px(10.))
+                    .py(px(8.))
+                    .pl(px(8.))
+                    .pr(px(16.))
+                    .rounded(palette.radius)
+                    .child(ui::icon_tile(t, Some("grid_view"), 32., chosen))
+                    .child(ui::title_block(
+                        t,
+                        instance.display_name.clone(),
+                        Some(
+                            format!(
+                                "{} · {}",
+                                instance.minecraft_version,
+                                instance.platform_label()
+                            )
+                            .into(),
+                        ),
+                    ))
                     .on_click(move |_, _, cx| {
                         v.update(cx, |s, cx| {
                             s.select(id.clone(), cx);
@@ -1194,14 +1309,35 @@ impl Render for Content {
                     }),
                 );
             }
-            root = root.child(instances);
+            root = root.child(
+                ui::card(t)
+                    .gap(px(12.))
+                    .child(ui::section_header(
+                        t,
+                        "Instance",
+                        Some("Choose which instance to manage.".into()),
+                    ))
+                    .child(chips),
+            );
         }
         if self.selected.is_some() {
-            let mut toolbar = div().flex().flex_wrap().gap(px(8.));
+            // Category tabs (left) and list actions (right) share one toolbar row.
+            let mut tabs = div()
+                .flex()
+                .items_center()
+                .gap(px(2.))
+                .p(px(3.))
+                .rounded(palette.radius)
+                .bg(palette.sunken)
+                .border_1()
+                .border_color(palette.border_subtle);
             for kind in [Kind::Mod, Kind::Resource, Kind::Shader] {
                 let v = view.clone();
-                toolbar = toolbar.child(
+                tabs = tabs.child(
                     AuroraButton::new(kind.api(), kind.label())
+                        .size(ButtonSize::Small)
+                        .variant(ButtonVariant::Ghost)
+                        .icon(kind_icon(kind))
                         .selected(self.kind == kind)
                         .disabled(busy)
                         .on_click(move |_, _, cx| {
@@ -1212,35 +1348,69 @@ impl Render for Content {
                         }),
                 );
             }
-            let v = view.clone();
-            toolbar = toolbar.child(
-                AuroraButton::new("content-find-more", "Find more").on_click(move |_, _, cx| {
-                    v.update(cx, |s, cx| s.find_more(cx));
-                }),
-            );
-            let v = view.clone();
-            toolbar = toolbar.child(
-                AuroraButton::new("content-folder", "Open folder")
-                    .disabled(busy)
-                    .on_click(move |_, _, cx| {
-                        v.read(cx).folder();
-                    }),
-            );
-            let v = view.clone();
-            toolbar = toolbar.child(
-                AuroraButton::new("content-retry", "Refresh content")
-                    .disabled(busy)
-                    .on_click(move |_, _, cx| {
-                        v.update(cx, |s, cx| s.refresh(cx));
-                    }),
-            );
-            root = root.child(toolbar);
+            let find = view.clone();
+            let open = view.clone();
+            let reload = view.clone();
+            let toolbar = div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap(px(12.))
+                .px(px(12.))
+                .py(px(10.))
+                .border_b_1()
+                .border_color(palette.border_subtle)
+                .child(tabs)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .child(
+                            AuroraButton::new("content-find-more", "Find more")
+                                .size(ButtonSize::Small)
+                                .icon("explore")
+                                .on_click(move |_, _, cx| {
+                                    find.update(cx, |s, cx| s.find_more(cx));
+                                }),
+                        )
+                        .child(
+                            AuroraButton::new("content-folder", "Open folder")
+                                .size(ButtonSize::Small)
+                                .variant(ButtonVariant::Ghost)
+                                .icon("folder_open")
+                                .disabled(busy)
+                                .on_click(move |_, _, cx| {
+                                    open.read(cx).folder();
+                                }),
+                        )
+                        .child(
+                            AuroraButton::new("content-retry", "Refresh content")
+                                .size(ButtonSize::Small)
+                                .variant(ButtonVariant::Ghost)
+                                .icon("refresh")
+                                .disabled(busy)
+                                .on_click(move |_, _, cx| {
+                                    reload.update(cx, |s, cx| s.refresh(cx));
+                                }),
+                        ),
+                );
+            let mut list = ui::list_card(t).child(toolbar);
             if self.loading {
-                root = root.child("Loading content…");
+                list = list.child(list_placeholder(t, "sync", "Loading content…", None));
             } else if self.entries.is_empty() {
-                root = root.child("No content found.");
+                list = list.child(list_placeholder(
+                    t,
+                    kind_icon(self.kind),
+                    "No content found.",
+                    Some(
+                        "Use Find more to browse Discover, or drop a .jar or .zip onto this page.",
+                    ),
+                ));
             }
-            for entry in &self.entries {
+            let last_index = self.entries.len().saturating_sub(1);
+            for (index, entry) in self.entries.iter().enumerate() {
                 let e = entry.clone();
                 let v = view.clone();
                 let target = self.target().unwrap();
@@ -1248,11 +1418,86 @@ impl Render for Content {
                     .icon
                     .as_ref()
                     .and_then(|icon| self.icons.cache.image(&icon.key()));
-                let mut row = div().flex().flex_col().gap(px(4.)).child(
-                    div()
-                        .flex()
-                        .items_start()
-                        .gap(px(12.))
+                let (meta, status_word, notes) = describe(&entry.details);
+                let badge = match entry.enabled {
+                    Some(true) => ui::status_badge(t, "Enabled", ui::Tone::Success),
+                    Some(false) => ui::status_badge(t, "Disabled", ui::Tone::Neutral),
+                    None => {
+                        ui::status_badge(t, status_word.unwrap_or("Unknown"), ui::Tone::Neutral)
+                    }
+                };
+                let mut line = vec![entry.file_name.as_str()];
+                line.extend(
+                    meta.iter()
+                        .copied()
+                        .filter(|m| *m != "No provider provenance"),
+                );
+                let mut text =
+                    ui::title_block(t, entry.name.clone(), Some(line.join(" · ").into()));
+                for note in notes {
+                    let warn = note.starts_with("Warning:");
+                    text = text.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(5.))
+                            .text_size(px(ui::TEXT_CAPTION))
+                            .text_color(if warn {
+                                palette.warning
+                            } else {
+                                palette.subtle_foreground
+                            })
+                            .when(warn, |d| {
+                                d.child(crate::symbols::icon(
+                                    Some("warning"),
+                                    px(13.),
+                                    palette.warning,
+                                ))
+                            })
+                            .child(note.to_owned()),
+                    );
+                }
+                let toggle = AuroraButton::new(
+                    gpui::SharedString::from(format!("toggle-{}", entry.id)),
+                    if entry.enabled == Some(true) {
+                        "Disable"
+                    } else {
+                        "Enable"
+                    },
+                )
+                .size(ButtonSize::Small)
+                .disabled(busy || !entry.toggle)
+                .on_click(move |_, _, cx| {
+                    v.update(cx, |s, cx| {
+                        s.toggle(&target, e.clone(), cx);
+                        cx.notify();
+                    });
+                });
+                let e = entry.clone();
+                let v = view.clone();
+                let target = self.target().unwrap();
+                let remove = AuroraButton::new(
+                    gpui::SharedString::from(format!("remove-{}", entry.id)),
+                    "Remove…",
+                )
+                .size(ButtonSize::Small)
+                .variant(ButtonVariant::Ghost)
+                .disabled(busy || !entry.remove)
+                .on_click(move |_, _, cx| {
+                    v.update(cx, |s, cx| {
+                        if !s.is_busy(cx)
+                            && s.target().as_ref() == Some(&target)
+                            && s.entries
+                                .iter()
+                                .any(|current| current.id == e.id && current.remove)
+                        {
+                            s.removing = Some((target.clone(), e.clone()));
+                        }
+                        cx.notify();
+                    });
+                });
+                list = list.child(
+                    ui::row(t, index == last_index)
                         .child(artwork::tile(
                             gpui::SharedString::from(format!("icon-{}", entry.id)),
                             icon,
@@ -1260,147 +1505,174 @@ impl Render for Content {
                             px(40.),
                             &palette,
                         ))
+                        .child(text.flex_1())
+                        .child(div().flex().flex_shrink_0().w(px(92.)).child(badge))
                         .child(
                             div()
                                 .flex()
-                                .flex_col()
-                                .gap(px(4.))
-                                .child(entry.name.clone())
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(palette.muted_foreground)
-                                        .child(entry.file_name.clone()),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(palette.muted_foreground)
-                                        .child(entry.details.clone()),
-                                ),
+                                .flex_shrink_0()
+                                .items_center()
+                                .gap(px(6.))
+                                .child(div().flex().justify_end().w(px(64.)).child(toggle))
+                                .child(remove),
                         ),
                 );
-                let mut actions = div().flex().gap(px(8.)).child(
-                    AuroraButton::new(
-                        gpui::SharedString::from(format!("toggle-{}", entry.id)),
-                        if entry.enabled == Some(true) {
-                            "Disable"
-                        } else {
-                            "Enable"
-                        },
-                    )
-                    .disabled(busy || !entry.toggle)
-                    .on_click(move |_, _, cx| {
-                        v.update(cx, |s, cx| {
-                            s.toggle(&target, e.clone(), cx);
-                            cx.notify();
-                        });
-                    }),
-                );
-                let e = entry.clone();
-                let v = view.clone();
-                let target = self.target().unwrap();
-                actions = actions.child(
-                    AuroraButton::new(
-                        gpui::SharedString::from(format!("remove-{}", entry.id)),
-                        "Remove…",
-                    )
-                    .disabled(busy || !entry.remove)
-                    .on_click(move |_, _, cx| {
-                        v.update(cx, |s, cx| {
-                            if !s.is_busy(cx)
-                                && s.target().as_ref() == Some(&target)
-                                && s.entries
-                                    .iter()
-                                    .any(|current| current.id == e.id && current.remove)
-                            {
-                                s.removing = Some((target.clone(), e.clone()));
-                            }
-                            cx.notify();
-                        });
-                    }),
-                );
-                row = row.child(actions);
-                root = root.child(row);
             }
-            root = root
-                .child("Import local content")
-                .child(AuroraInput::new(&self.path).label("Local file path"));
+            root = root.child(list);
+
+            // ------------------------------------------------------ local import
             let v = view.clone();
-            root = root.child(
-                AuroraButton::new(
-                    "preview-local",
-                    if previewing {
-                        "Reading file…"
-                    } else {
-                        "Preview file"
-                    },
-                )
-                .disabled(busy || previewing || self.path_value.trim().is_empty())
-                .on_click(move |_, _, cx| {
-                    v.update(cx, |s, cx| {
-                        s.preview(cx);
-                        cx.notify();
-                    });
-                }),
-            );
+            let mut import = ui::card(t)
+                .gap(px(14.))
+                .child(ui::section_header(
+                    t,
+                    "Import local content",
+                    Some(
+                        "Drop a .jar or .zip onto this page, or enter its path. You review it before anything installs."
+                            .into(),
+                    ),
+                ))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(10.))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(0.))
+                                .child(AuroraInput::new(&self.path).label("Local file path")),
+                        )
+                        .child(
+                            AuroraButton::new(
+                                "preview-local",
+                                if previewing {
+                                    "Reading file…"
+                                } else {
+                                    "Preview file"
+                                },
+                            )
+                            .icon("upload_file")
+                            .disabled(busy || previewing || self.path_value.trim().is_empty())
+                            .on_click(move |_, _, cx| {
+                                v.update(cx, |s, cx| {
+                                    s.preview(cx);
+                                    cx.notify();
+                                });
+                            }),
+                        ),
+                );
             if let Some(review) = &self.review {
                 let value = &review.value;
-                let mut description = format!(
-                    "{}\nTarget: {}\nType: {} · {} bytes\n{}",
-                    value["fileName"].as_str().unwrap_or("File"),
-                    value["instanceName"].as_str().unwrap_or("Instance"),
-                    value["contentType"].as_str().unwrap_or("Unknown"),
-                    value["sizeBytes"].as_u64().unwrap_or(0),
-                    value["note"].as_str().unwrap_or("")
-                );
-                for key in ["warnings", "blockers"] {
-                    if let Some(items) = value[key].as_array() {
-                        for item in items {
-                            description.push_str(&format!(
-                                "\n{}: {}",
-                                if key == "blockers" {
-                                    "Blocked"
-                                } else {
-                                    "Warning"
-                                },
-                                item.as_str()
-                                    .map(str::to_owned)
-                                    .unwrap_or_else(|| item.to_string())
-                            ));
-                        }
-                    }
-                }
                 let allowed = review_allowed(value)
                     && review.path == self.path_value
                     && self.target().as_ref() == Some(&review.target);
-                root = root.child(description);
-                let v = view.clone();
-                root = root.child(
-                    AuroraButton::new("install-local", "Install reviewed file")
-                        .disabled(busy || !allowed)
-                        .on_click(move |_, _, cx| {
-                            v.update(cx, |s, cx| {
-                                s.mutate(None, true, cx);
-                                cx.notify();
-                            });
-                        }),
+                let mut block = div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .p(px(14.))
+                    .rounded(palette.radius)
+                    .bg(palette.sunken)
+                    .border_1()
+                    .border_color(palette.border_subtle)
+                    .child(ui::title_block(
+                        t,
+                        value["fileName"].as_str().unwrap_or("File").to_owned(),
+                        Some(
+                            format!(
+                                "Target: {}",
+                                value["instanceName"].as_str().unwrap_or("Instance")
+                            )
+                            .into(),
+                        ),
+                    ))
+                    .child(ui::caption(
+                        t,
+                        format!(
+                            "Type: {} · {} bytes",
+                            value["contentType"].as_str().unwrap_or("Unknown"),
+                            value["sizeBytes"].as_u64().unwrap_or(0)
+                        ),
+                    ));
+                if let Some(note) = value["note"].as_str().filter(|n| !n.is_empty()) {
+                    block = block.child(ui::muted(t, note.to_owned()));
+                }
+                for key in ["warnings", "blockers"] {
+                    if let Some(items) = value[key].as_array() {
+                        for item in items {
+                            let blocked = key == "blockers";
+                            block = block.child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .text_color(if blocked {
+                                        palette.danger
+                                    } else {
+                                        palette.warning
+                                    })
+                                    .child(crate::symbols::icon(
+                                        Some(if blocked { "error" } else { "warning" }),
+                                        px(14.),
+                                        if blocked {
+                                            palette.danger
+                                        } else {
+                                            palette.warning
+                                        },
+                                    ))
+                                    .child(format!(
+                                        "{}: {}",
+                                        if blocked { "Blocked" } else { "Warning" },
+                                        item.as_str()
+                                            .map(str::to_owned)
+                                            .unwrap_or_else(|| item.to_string())
+                                    )),
+                            );
+                        }
+                    }
+                }
+                let install = view.clone();
+                let close = view.clone();
+                block = block.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .pt(px(8.))
+                        .child(
+                            AuroraButton::new("install-local", "Install reviewed file")
+                                .variant(ButtonVariant::Primary)
+                                .disabled(busy || !allowed)
+                                .on_click(move |_, _, cx| {
+                                    install.update(cx, |s, cx| {
+                                        s.mutate(None, true, cx);
+                                        cx.notify();
+                                    });
+                                }),
+                        )
+                        .child(
+                            AuroraButton::new("discard-local", "Close review")
+                                .disabled(busy)
+                                .on_click(move |_, _, cx| {
+                                    close.update(cx, |s, cx| {
+                                        s.invalidate_review();
+                                        cx.notify();
+                                    });
+                                }),
+                        ),
                 );
-                let v = view.clone();
-                root = root.child(
-                    AuroraButton::new("discard-local", "Close review")
-                        .disabled(busy)
-                        .on_click(move |_, _, cx| {
-                            v.update(cx, |s, cx| {
-                                s.invalidate_review();
-                                cx.notify();
-                            });
-                        }),
-                );
+                import = import.child(block);
             }
-            root = root.child(self.updates.clone());
+            root = root.child(import).child(self.updates.clone());
         } else if available {
-            root = root.child("Choose an instance to manage its content.");
+            root = root.child(ui::empty_state(
+                t,
+                "extension",
+                "No instance selected",
+                "Choose an instance to manage its content.",
+            ));
         }
         let cancel = view.clone();
         let confirm = view.clone();
@@ -1414,21 +1686,33 @@ impl Render for Content {
         let panel = div()
             .w(px(440.))
             .p(px(24.))
-            .bg(palette.surface)
+            .bg(palette.raised)
+            .border_1()
+            .border_color(palette.border_subtle)
             .text_color(palette.foreground)
-            .rounded(palette.radius)
+            .rounded(palette.radius_lg)
             .flex()
             .flex_col()
             .gap(px(12.))
-            .child("Remove content")
-            .child(format!(
-                "Remove {name}? This removes the selected entry from this instance."
+            .child(
+                div()
+                    .text_size(px(ui::TEXT_SECTION))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child("Remove content"),
+            )
+            .child(ui::muted(
+                t,
+                format!("Remove {name}? This removes the selected entry from this instance."),
             ))
-            .child(self.message.clone())
+            .when(!self.message.is_empty(), |d| {
+                d.child(ui::caption(t, self.message.clone()))
+            })
             .child(
                 div()
                     .flex()
+                    .justify_end()
                     .gap(px(8.))
+                    .pt(px(8.))
                     .child(
                         AuroraButton::new("remove-cancel", "Cancel")
                             .disabled(busy)
@@ -1784,5 +2068,20 @@ mod tests {
         let e = packs(inv).pop().unwrap();
         assert!(!e.toggle && !e.remove);
         assert!(e.details.contains("managed in game"));
+    }
+
+    #[test]
+    fn row_details_split_into_metadata_status_and_notes() {
+        let (meta, status, notes) = describe(
+            "1.2 · Disabled · userManaged · No provider provenance
+Warning: old
+Blocked reason",
+        );
+        assert_eq!(meta, ["1.2", "userManaged", "No provider provenance"]);
+        assert_eq!(status, Some("Disabled"));
+        assert_eq!(notes, ["Warning: old", "Blocked reason"]);
+        let (_, status, notes) = describe("Activation managed in game · Pack owned");
+        assert_eq!(status, Some("Activation managed in game"));
+        assert!(notes.is_empty());
     }
 }

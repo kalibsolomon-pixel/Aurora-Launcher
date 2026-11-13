@@ -2,10 +2,10 @@
 use crate::{
     api,
     backend::guarded,
-    controls::{AuroraButton, AuroraToggle},
+    controls::{AuroraButton, AuroraToggle, ButtonSize, ButtonVariant},
     images, player,
     preview::{RenderGate, Scene},
-    theme,
+    theme, ui,
 };
 use gpui::{
     Context, FocusHandle, KeyDownEvent, MouseButton, Pixels, Point, Render, RenderImage, Role,
@@ -177,114 +177,203 @@ impl Render for SkinPreview {
         let t = theme::theme(cx).clone();
         let focus = self.focus.clone();
         let entity = cx.entity();
-        let button = |id, label, action: fn(&mut Self, &mut Context<Self>)| {
+        let ring = t.ring;
+        // One equal-width Small control; segments and the zoom row share it.
+        let control = |id,
+                       label,
+                       icon: Option<&'static str>,
+                       variant,
+                       selected: bool,
+                       action: fn(&mut Self, &mut Context<Self>)| {
             let entity = entity.clone();
-            AuroraButton::new(id, label).on_click(move |_, _, cx| {
-                entity.update(cx, |s, cx| action(s, cx));
-            })
+            let mut button = AuroraButton::new(id, label)
+                .variant(variant)
+                .size(ButtonSize::Small)
+                .selected(selected)
+                .full_width()
+                .on_click(move |_, _, cx| {
+                    entity.update(cx, |s, cx| action(s, cx));
+                });
+            if let Some(icon) = icon {
+                button = button.icon(icon);
+            }
+            div().flex_1().min_w(px(0.)).child(button)
         };
         let layers_entity = entity.clone();
-        div()
+        let rear = self.rear;
+        let neutral = self.state.scene.skin.is_none();
+
+        let stage = div()
+            .id("player-preview-surface")
+            .role(Role::Group)
+            .aria_label("Player preview")
+            .aria_description("Drag or use arrow keys to rotate. Plus and minus zoom; Home resets.")
+            .track_focus(&self.focus)
+            .tab_stop(true)
+            .relative()
+            .w(px(320.))
+            .h(px(440.))
             .flex()
             .flex_col()
-            .gap(px(8.))
+            .items_center()
+            .justify_center()
+            .gap(px(10.))
+            .overflow_hidden()
+            .rounded(t.radius)
+            .bg(gpui::linear_gradient(
+                180.,
+                gpui::linear_color_stop(t.sunken, 0.),
+                gpui::linear_color_stop(
+                    gpui::Hsla {
+                        l: (t.sunken.l + 0.05).min(1.),
+                        a: 1.0,
+                        ..t.sunken
+                    },
+                    1.,
+                ),
+            ))
+            .border_1()
+            .border_color(t.border_subtle)
+            .focus(move |style| style.border_color(ring))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |s, e: &gpui::MouseDownEvent, window, cx| {
+                    focus.focus(window, cx);
+                    s.drag = Some(e.position);
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|s, _, _, _| {
+                    s.drag = None;
+                }),
+            )
+            .on_mouse_move(cx.listener(|s, e: &gpui::MouseMoveEvent, _, cx| {
+                if e.pressed_button != Some(MouseButton::Left) {
+                    s.drag = None;
+                    return;
+                }
+                if let Some(last) = s.drag {
+                    s.drag = Some(e.position);
+                    s.rotate(
+                        f32::from(e.position.x - last.x),
+                        f32::from(e.position.y - last.y),
+                        cx,
+                    );
+                }
+            }))
+            .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
+                match e.keystroke.key.as_str() {
+                    "left" => s.rotate(-12., 0., cx),
+                    "right" => s.rotate(12., 0., cx),
+                    "up" => s.rotate(0., -12., cx),
+                    "down" => s.rotate(0., 12., cx),
+                    "+" | "=" => s.zoom(0.08, cx),
+                    "-" => s.zoom(-0.08, cx),
+                    "home" => s.reset(cx),
+                    _ => return,
+                }
+                cx.stop_propagation();
+            }))
+            .when_some(self.image.clone(), |d, image| {
+                d.child(img(image).w(px(318.)).h(px(438.)))
+            })
+            .when(self.image.is_none(), |d| {
+                d.child(ui::icon_tile(&t, Some("person"), 44., false))
+                    .child(
+                        div()
+                            .text_size(px(ui::TEXT_BODY))
+                            .text_color(t.muted_foreground)
+                            .child(if neutral {
+                                "Neutral model"
+                            } else {
+                                "Player preview unavailable"
+                            }),
+                    )
+            })
+            .when(neutral && self.image.is_some(), |d| {
+                d.child(div().absolute().top(px(10.)).left(px(10.)).child(ui::badge(
+                    &t,
+                    "Neutral model",
+                    ui::Tone::Neutral,
+                )))
+            });
+
+        ui::card(&t)
+            .gap(px(14.))
+            .p(px(16.))
+            .w(px(354.))
+            .flex_shrink_0()
             .text_color(t.foreground)
+            .child(stage)
+            // View: front / back as one segmented control.
             .child(
                 div()
-                    .id("player-preview-surface")
-                    .role(Role::Group)
-                    .aria_label("Player preview")
-                    .aria_description(
-                        "Drag or use arrow keys to rotate. Plus and minus zoom; Home resets.",
-                    )
-                    .track_focus(&self.focus)
-                    .tab_stop(true)
-                    .w(px(320.))
-                    .h(px(440.))
                     .flex()
-                    .items_center()
-                    .justify_center()
+                    .gap(px(2.))
+                    .p(px(3.))
+                    .rounded(t.radius)
+                    .bg(t.sunken)
                     .border_1()
-                    .border_color(gpui::transparent_black())
-                    .focus(move |style| style.border_color(t.ring))
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |s, e: &gpui::MouseDownEvent, window, cx| {
-                            focus.focus(window, cx);
-                            s.drag = Some(e.position);
-                        }),
-                    )
-                    .on_mouse_up(
-                        MouseButton::Left,
-                        cx.listener(|s, _, _, _| {
-                            s.drag = None;
-                        }),
-                    )
-                    .on_mouse_move(cx.listener(|s, e: &gpui::MouseMoveEvent, _, cx| {
-                        if e.pressed_button != Some(MouseButton::Left) {
-                            s.drag = None;
-                            return;
-                        }
-                        if let Some(last) = s.drag {
-                            s.drag = Some(e.position);
-                            s.rotate(
-                                f32::from(e.position.x - last.x),
-                                f32::from(e.position.y - last.y),
-                                cx,
-                            );
-                        }
-                    }))
-                    .on_key_down(cx.listener(|s, e: &KeyDownEvent, _, cx| {
-                        match e.keystroke.key.as_str() {
-                            "left" => s.rotate(-12., 0., cx),
-                            "right" => s.rotate(12., 0., cx),
-                            "up" => s.rotate(0., -12., cx),
-                            "down" => s.rotate(0., 12., cx),
-                            "+" | "=" => s.zoom(0.08, cx),
-                            "-" => s.zoom(-0.08, cx),
-                            "home" => s.reset(cx),
-                            _ => return,
-                        }
-                        cx.stop_propagation();
-                    }))
-                    .when_some(self.image.clone(), |d, image| {
-                        d.child(img(image).w(px(320.)).h(px(440.)))
-                    })
-                    .when(self.image.is_none(), |d| {
-                        d.child(if self.state.scene.skin.is_none() {
-                            "Neutral model"
-                        } else {
-                            "Player preview unavailable"
-                        })
-                    }),
-            )
-            .when(
-                self.state.scene.skin.is_none() && self.image.is_some(),
-                |d| d.child("Neutral model"),
+                    .border_color(t.border_subtle)
+                    .child(control(
+                        "preview-front",
+                        "Front",
+                        None,
+                        ButtonVariant::Ghost,
+                        !rear,
+                        |s, cx| s.view_back(false, cx),
+                    ))
+                    .child(control(
+                        "preview-back",
+                        "Back",
+                        None,
+                        ButtonVariant::Ghost,
+                        rear,
+                        |s, cx| s.view_back(true, cx),
+                    )),
             )
             .child(
                 div()
                     .flex()
                     .gap(px(6.))
-                    .child(button("preview-zoom-out", "Zoom out", |s, cx| {
-                        s.zoom(-0.08, cx)
-                    }))
-                    .child(button("preview-zoom-in", "Zoom in", |s, cx| {
-                        s.zoom(0.08, cx)
-                    }))
-                    .child(button("preview-reset", "Reset", |s, cx| s.reset(cx))),
+                    .child(control(
+                        "preview-zoom-out",
+                        "Zoom out",
+                        Some("zoom_out"),
+                        ButtonVariant::Default,
+                        false,
+                        |s, cx| s.zoom(-0.08, cx),
+                    ))
+                    .child(control(
+                        "preview-zoom-in",
+                        "Zoom in",
+                        Some("zoom_in"),
+                        ButtonVariant::Default,
+                        false,
+                        |s, cx| s.zoom(0.08, cx),
+                    ))
+                    .child(control(
+                        "preview-reset",
+                        "Reset",
+                        Some("restart_alt"),
+                        ButtonVariant::Default,
+                        false,
+                        |s, cx| s.reset(cx),
+                    )),
             )
+            .child(ui::divider(&t))
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap(px(6.))
-                    .child(button("preview-front", "Front", |s, cx| {
-                        s.view_back(false, cx)
-                    }))
-                    .child(button("preview-back", "Back", |s, cx| {
-                        s.view_back(true, cx)
-                    }))
+                    .justify_between()
+                    .gap(px(12.))
+                    .child(ui::title_block(
+                        &t,
+                        "Outer layers",
+                        Some("Hat, jacket and sleeve overlays".into()),
+                    ))
                     .child(
                         AuroraToggle::new("preview-layers")
                             .label("Outer layers")
@@ -296,8 +385,7 @@ impl Render for SkinPreview {
                                     s.changed(cx);
                                 });
                             }),
-                    )
-                    .child("Outer layers"),
+                    ),
             )
     }
 }

@@ -38,23 +38,24 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use aurora_launcher_lib::host::Host;
-use gpui_kit::base::ElementExt;
+use gpui_kit::base::{Button, ElementExt};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, AnyWindowHandle, AppContext as _, Bounds, Context, Entity, EventEmitter,
-    FocusHandle, InteractiveElement as _, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent,
-    MouseMoveEvent, ParentElement as _, Pixels, Render, RenderImage, Role, ScrollHandle,
-    StatefulInteractiveElement as _, Styled, Window, div, img, px, rgba,
+    AnyElement, AnyWindowHandle, AppContext as _, Bounds, Context, Div, Entity, EventEmitter,
+    FocusHandle, FontWeight, InteractiveElement as _, IntoElement, KeyDownEvent, MouseButton,
+    MouseDownEvent, MouseMoveEvent, ParentElement as _, Pixels, Render, RenderImage, Role,
+    ScrollHandle, StatefulInteractiveElement as _, Styled, Window, div, img, px,
 };
 use serde_json::Value;
 use tokio::runtime::Handle;
 
 use crate::api::{self, ApiResult, HomeLayout, WidgetGrid, WidgetPlacement};
 use crate::backend::guarded;
-use crate::controls::{AuroraButton, ButtonVariant};
+use crate::controls::{AuroraButton, ButtonSize, ButtonVariant};
 use crate::images;
 use crate::media::Media;
 use crate::theme;
+use crate::ui;
 
 /// Events for the integrating parent view.
 #[derive(Debug)]
@@ -102,7 +103,7 @@ const MAX_ANCHOR_ROW: i32 = 63;
 /// Responsive grid geometry (matches the Slint `WidgetGrid` constants).
 const GRID_GAP: f32 = 14.0;
 const MIN_CARD_WIDTH: f32 = 150.0;
-const CARD_HEIGHT: f32 = 196.0;
+const CARD_HEIGHT: f32 = 288.0;
 
 /// Saved columns for a viewport width; clamping renders, it never writes.
 pub(crate) fn responsive_columns(width_px: f32) -> i32 {
@@ -209,6 +210,18 @@ pub(crate) fn effective(saved: HomeLayout) -> HomeLayout {
             .cloned()
             .collect();
         layout.widgets = native.into_iter().chain(others).collect();
+        // Fill the first row: Playtime beside a wider Servers list.
+        for (id, columns) in [("playtime", 2), ("recent-servers", 3)] {
+            if let Some(widget) = layout.widgets.iter_mut().find(|w| w.id == id)
+                && widget.grid.is_none()
+            {
+                widget.grid = Some(WidgetGrid {
+                    columns,
+                    rows: 1,
+                    position: None,
+                });
+            }
+        }
     }
     for (id, _) in NATIVE {
         if !layout.widgets.iter().any(|w| w.id == id) {
@@ -546,6 +559,14 @@ pub(crate) enum Period {
 }
 
 impl Period {
+    fn caption(self) -> &'static str {
+        match self {
+            Self::Week => "Last 7 days",
+            Self::Month => "Last 30 days",
+            Self::AllTime => "All time",
+        }
+    }
+
     fn label(self) -> &'static str {
         match self {
             Self::Week => "7 days",
@@ -2473,14 +2494,24 @@ impl Render for HomeWidgets {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .gap(px(8.))
-                    .child(div().text_size(px(20.)).child("Widgets"))
+                    .gap(px(12.))
+                    .child(ui::section_header(
+                        &palette,
+                        "Widgets",
+                        Some("Playtime, servers and more at a glance.".into()),
+                    ))
                     .child(
                         AuroraButton::new(
                             "widgets-customize",
                             if editing { "Done" } else { "Customize" },
                         )
-                        .variant(ButtonVariant::Ghost)
+                        .variant(if editing {
+                            ButtonVariant::Primary
+                        } else {
+                            ButtonVariant::Default
+                        })
+                        .size(ButtonSize::Small)
+                        .icon(if editing { "check" } else { "tune" })
                         .disabled(
                             no_host
                                 || self.core.is_busy()
@@ -2494,51 +2525,75 @@ impl Render for HomeWidgets {
             );
 
         if no_host {
-            return div().size_full().child(page.child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(palette.muted_foreground)
-                    .child(
+            return div().w_full().child(
+                page.child(
+                    ui::card(&palette).child(ui::muted(
+                        &palette,
                         "Home widgets are unavailable: this diagnostic window has no launcher host, so no layout or history is read.",
-                    ),
-            ));
+                    )),
+                ),
+            );
         }
 
         if editing {
-            page = page.child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(6.))
-                    .text_size(px(12.))
-                    .text_color(palette.muted_foreground)
-                    .child("Drag headers to move · Drag corners to resize · Arrows move, Shift and arrows resize · Escape cancels")
-                    .child(
-                        AuroraButton::new("widgets-reset", "Reset layout").on_click(cx.listener(
-                            |this, _, _, cx| {
-                                this.edit(cx, reset_layout);
-                            },
-                        )),
-                    ),
-            );
             let layout = self.core.layout.clone().unwrap_or(HomeLayout {
                 widgets: Vec::new(),
             });
+            let mut adders = div().flex().flex_wrap().items_center().gap(px(8.));
+            let mut any_adders = false;
             for (id, title) in NATIVE {
                 if layout.widgets.iter().any(|w| w.id == id && w.enabled) {
                     continue;
                 }
+                any_adders = true;
                 let target = id.to_owned();
-                page = page.child(
+                adders = adders.child(
                     AuroraButton::new(format!("widgets-add-{target}"), format!("Add {title}"))
-                        .variant(ButtonVariant::Ghost)
+                        .size(ButtonSize::Small)
+                        .icon("add")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             let target = target.clone();
                             this.edit(cx, |layout| set_enabled(layout, &target, true));
                         })),
                 );
             }
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(10.))
+                    .px(px(16.))
+                    .py(px(12.))
+                    .rounded(palette.radius_lg)
+                    .bg(palette.accent_soft)
+                    .border_1()
+                    .border_color(palette.border_subtle)
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w(px(240.))
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .text_color(palette.muted_foreground)
+                                    .child("Drag headers to move · Drag corners to resize · Arrows move, Shift and arrows resize · Escape cancels"),
+                            )
+                            .child(
+                                AuroraButton::new("widgets-reset", "Reset layout")
+                                    .size(ButtonSize::Small)
+                                    .icon("restart_alt")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.edit(cx, reset_layout);
+                                    })),
+                            ),
+                    )
+                    .when(any_adders, |this| this.child(adders)),
+            );
         }
 
         for error in [
@@ -2551,28 +2606,27 @@ impl Render for HomeWidgets {
         {
             page = page.child(
                 div()
-                    .text_size(px(12.))
+                    .text_size(px(ui::TEXT_CAPTION))
                     .text_color(palette.danger)
                     .child(error),
             );
         }
         if self.core.layout_error.is_some() || self.core.history_error.is_some() {
             page = page.child(
-                AuroraButton::new("widgets-retry", "Retry Home")
-                    .disabled(self.core.blocked || self.core.layout_loading)
-                    .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                div().flex().child(
+                    AuroraButton::new("widgets-retry", "Retry Home")
+                        .size(ButtonSize::Small)
+                        .icon("refresh")
+                        .disabled(self.core.blocked || self.core.layout_loading)
+                        .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                ),
             );
         }
 
         let Some(layout) = self.core.layout.clone() else {
-            return div().size_full().child(
-                page.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child("Loading the saved widget layout…"),
-                ),
-            );
+            return div()
+                .w_full()
+                .child(page.child(ui::muted(&palette, "Loading the saved widget layout…")));
         };
 
         let placements: Vec<(WidgetPlacement, (i32, i32, i32, i32))> = layout
@@ -2655,9 +2709,9 @@ impl Render for HomeWidgets {
                             .left(px(column as f32 * pitch_x))
                             .w(px(card_width))
                             .h(px(CARD_HEIGHT))
-                            .rounded(palette.radius)
+                            .rounded(palette.radius_lg)
                             .border_1()
-                            .border_color(rgba(0x34374359)),
+                            .border_color(palette.border_subtle),
                     );
                 }
             }
@@ -2804,12 +2858,8 @@ impl Render for HomeWidgets {
                 .track_focus(&resize_focus)
                 .tab_stop(true)
                 .absolute()
-                .top(px(row as f32 * pitch_y + height as f32 * pitch_y
-                    - GRID_GAP
-                    - 32.))
-                .left(px(column as f32 * pitch_x + width as f32 * pitch_x
-                    - GRID_GAP
-                    - 32.))
+                .top(px(height as f32 * pitch_y - GRID_GAP - 32.))
+                .left(px(width as f32 * pitch_x - GRID_GAP - 32.))
                 .w(px(32.))
                 .h(px(32.))
                 .flex()
@@ -2892,8 +2942,8 @@ impl Render for HomeWidgets {
                     .left(px(preview.0 as f32 * pitch_x))
                     .w(px(preview.2 as f32 * pitch_x - GRID_GAP))
                     .h(px(preview.3 as f32 * pitch_y - GRID_GAP))
-                    .rounded(palette.radius)
-                    .border_1()
+                    .rounded(palette.radius_lg)
+                    .border_2()
                     .border_color(palette.accent),
             );
             if preview != base {
@@ -2911,8 +2961,8 @@ impl Render for HomeWidgets {
                                 .left(px(column as f32 * pitch_x))
                                 .w(px(width as f32 * pitch_x - GRID_GAP))
                                 .h(px(height as f32 * pitch_y - GRID_GAP))
-                                .rounded(palette.radius)
-                                .border_1()
+                                .rounded(palette.radius_lg)
+                                .border_2()
                                 .border_color(palette.danger),
                         );
                     }
@@ -2920,9 +2970,7 @@ impl Render for HomeWidgets {
             }
         }
 
-        div()
-            .size_full()
-            .child(page.child(div().size_full().child(grid)))
+        div().w_full().child(page.child(div().w_full().child(grid)))
     }
 }
 
@@ -2990,108 +3038,308 @@ impl HomeWidgets {
         let palette = theme::theme(cx).clone();
         let view = cx.entity();
         let id = widget.id.clone();
+        // Rendered width of this card, used only to pick a header layout.
+        let card_px = requested_dims(widget).0.max(1) as f32 * pitch_x - GRID_GAP;
+        let wide = card_px >= 420.;
+
+        let caption: Option<String> = match id.as_str() {
+            "recent-servers" if self.core.refreshing_servers => {
+                Some("Refreshing status…".to_owned())
+            }
+            "recent-servers" if self.core.server_enriching && !loading => {
+                Some("Loading details…".to_owned())
+            }
+            "instance-details" => self
+                .core
+                .selected_instance()
+                .map(|i| i.display_name.clone()),
+            _ => None,
+        };
+        let shows_loading =
+            loading && matches!(id.as_str(), "playtime" | "recent-servers" | "recent-worlds");
+
+        // The widget's own controls: segmented tabs (and quiet actions) go in
+        // the header when the card is wide enough, on their own row otherwise.
+        let mut tabs: Option<AnyElement> = None;
+        let mut extra: Option<AnyElement> = None;
+        match id.as_str() {
+            "playtime" => {
+                tabs = Some(
+                    segmented(&palette)
+                        .children(
+                            [Period::Week, Period::Month, Period::AllTime].map(|choice| {
+                                segment(
+                                    format!("playtime-period-{}", choice.label()),
+                                    choice.label(),
+                                    period == choice,
+                                )
+                                .on_click({
+                                    let view = view.clone();
+                                    move |_, _, cx| {
+                                        view.update(cx, |this, cx| this.set_period(choice, cx));
+                                    }
+                                })
+                            }),
+                        )
+                        .into_any_element(),
+                );
+            }
+            "recent-servers" => {
+                let server_view = self.core.server_view;
+                tabs = Some(
+                    segmented(&palette)
+                        .child(
+                            segment(
+                                "servers-recent",
+                                "Recent",
+                                server_view == ServerView::Recents,
+                            )
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.set_server_view(ServerView::Recents, cx);
+                            })),
+                        )
+                        .child(
+                            segment(
+                                "servers-favorites",
+                                "Favorites",
+                                server_view == ServerView::Favorites,
+                            )
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.set_server_view(ServerView::Favorites, cx);
+                            })),
+                        )
+                        .child(
+                            segment("servers-saved", "Saved", server_view == ServerView::Saved)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.set_server_view(ServerView::Saved, cx);
+                                })),
+                        )
+                        .into_any_element(),
+                );
+                extra = Some(
+                    icon_button(
+                        &palette,
+                        "servers-refresh".to_owned(),
+                        "refresh",
+                        "Refresh status".to_owned(),
+                        self.core.refreshing_servers || busy,
+                        false,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.start_status_refresh(cx);
+                    }))
+                    .into_any_element(),
+                );
+            }
+            "recent-worlds" => {
+                let saved_worlds = self.core.saved_worlds;
+                tabs = Some(
+                    segmented(&palette)
+                        .child(segment("worlds-recent", "Recent", !saved_worlds).on_click(
+                            cx.listener(|this, _, _, cx| {
+                                this.set_saved_worlds(false, cx);
+                            }),
+                        ))
+                        .child(segment("worlds-saved", "Saved", saved_worlds).on_click(
+                            cx.listener(|this, _, _, cx| {
+                                this.set_saved_worlds(true, cx);
+                            }),
+                        ))
+                        .into_any_element(),
+                );
+            }
+            _ => {}
+        }
+        let inline_controls = wide && !editing;
+
+        let mut header = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_x(px(12.))
+            .gap_y(px(8.))
+            .min_h(px(28.))
+            .child(
+                div()
+                    .flex()
+                    .items_baseline()
+                    .gap(px(8.))
+                    .min_w(px(0.))
+                    .when(editing, |this| {
+                        this.items_center().child(crate::symbols::icon(
+                            Some("drag_indicator"),
+                            px(16.),
+                            palette.subtle_foreground,
+                        ))
+                    })
+                    .child(
+                        div()
+                            .text_size(px(ui::TEXT_BODY + 1.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(palette.foreground)
+                            .whitespace_nowrap()
+                            .child(title),
+                    )
+                    .when_some(caption, |this, caption| {
+                        this.child(
+                            div()
+                                .min_w(px(0.))
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .whitespace_nowrap()
+                                .text_size(px(ui::TEXT_CAPTION))
+                                .text_color(palette.subtle_foreground)
+                                .child(caption),
+                        )
+                    }),
+            );
+        let mut right = div().flex().items_center().gap(px(8.));
+        if shows_loading {
+            right = right.child(
+                div()
+                    .text_size(px(ui::TEXT_CAPTION))
+                    .text_color(palette.subtle_foreground)
+                    .child("Loading…"),
+            );
+        }
+        if inline_controls {
+            if let Some(tabs) = tabs.take() {
+                right = right.child(tabs);
+            }
+            if let Some(extra) = extra.take() {
+                right = right.child(extra);
+            }
+        }
+        if editing {
+            let target = id.clone();
+            right = right.child(
+                icon_button(
+                    &palette,
+                    format!("widget-remove-{id}"),
+                    "close",
+                    format!("Remove {title}"),
+                    false,
+                    false,
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    let target = target.clone();
+                    this.edit(cx, |layout| set_enabled(layout, &target, false));
+                })),
+            );
+        }
+        header = header.child(right);
+
         let mut card = div()
             .id(format!("widget-card-{id}"))
             .role(Role::Group)
             .aria_label(title)
             .flex()
             .flex_col()
-            .gap(px(6.))
-            .p(px(14.))
+            .gap(px(12.))
+            .p(px(16.))
             .size_full()
-            .rounded(palette.radius)
-            .bg(palette.surface)
+            .rounded(palette.radius_lg)
+            .bg(palette.card)
             .border_1()
-            .border_color(palette.border)
+            .border_color(if editing {
+                palette.border
+            } else {
+                palette.border_subtle
+            })
             .overflow_hidden()
-            .child(
+            .child(header);
+        if !inline_controls && (tabs.is_some() || extra.is_some()) {
+            card = card.child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .items_center()
+                    .justify_between()
                     .gap(px(8.))
-                    .child(div().text_size(px(13.)).child(title))
-                    .when(
-                        loading
-                            && matches!(
-                                id.as_str(),
-                                "playtime" | "recent-servers" | "recent-worlds"
-                            ),
-                        |this| {
-                            this.child(
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(palette.muted_foreground)
-                                    .child("Loading…"),
-                            )
-                        },
-                    )
-                    .when(editing, |this| {
-                        let target = id.clone();
-                        this.child(
-                            AuroraButton::new(format!("widget-remove-{id}"), "Remove")
-                                .variant(ButtonVariant::Ghost)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    let target = target.clone();
-                                    this.edit(cx, |layout| set_enabled(layout, &target, false));
-                                })),
-                        )
-                    }),
+                    .children(tabs.take())
+                    .children(extra.take()),
             );
+        }
 
         match id.as_str() {
             "playtime" => {
-                let narrow = (requested_dims(widget).0.max(1) as f32 * pitch_x - GRID_GAP) < 440.;
+                let narrow = card_px < 440.;
                 let projection = playtime_view(playtime_data, period, narrow, loading);
-                card = card.child(div().flex().flex_wrap().gap(px(4.)).children(
-                    [Period::Week, Period::Month, Period::AllTime].map(|choice| {
-                        AuroraButton::new(
-                            format!("playtime-period-{}", choice.label()),
-                            choice.label(),
-                        )
-                        .variant(ButtonVariant::Ghost)
-                        .selected(period == choice)
-                        .on_click({
-                            let view = view.clone();
-                            move |_, _, cx| {
-                                view.update(cx, |this, cx| this.set_period(choice, cx));
-                            }
-                        })
-                    }),
-                ));
                 let total = div()
                     .id("playtime-total")
-                    .text_size(px(13.))
+                    .text_size(px(ui::TEXT_TITLE))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(palette.foreground)
                     .child(if loading {
                         "Loading…".to_string()
                     } else {
                         projection.total.clone()
                     });
-                card = card.child(if projection.total_detail.is_empty() {
+                let total = if projection.total_detail.is_empty() {
                     total
                 } else {
                     total.aria_description(projection.total_detail.clone())
-                });
+                };
+                card = card.child(
+                    div()
+                        .flex()
+                        .items_baseline()
+                        .gap(px(8.))
+                        .child(total)
+                        .child(
+                            div()
+                                .text_size(px(ui::TEXT_CAPTION))
+                                .text_color(palette.subtle_foreground)
+                                .child(period.caption()),
+                        ),
+                );
                 match &projection.status {
                     Some(status) => {
-                        card = card.child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(palette.muted_foreground)
-                                .child(status.clone()),
-                        );
+                        card = card.child(empty_note(&palette, "bar_chart", status.clone()));
                     }
                     None => {
-                        let chart_height = 96.;
                         let label = |text: String| {
                             div()
-                                .text_size(px(11.))
-                                .text_color(palette.muted_foreground)
+                                .text_size(px(ui::TEXT_MICRO))
+                                .text_color(palette.subtle_foreground)
                                 .child(text)
                         };
-                        // Slint's plot: the peak and "0 min" in a label gutter, a
-                        // 1 px baseline under the bars, and discrete centred
-                        // columns (at most 20 px wide) so wide cells never read
-                        // edge to edge.
+                        let today = playtime_data.map_or(0, |data| data.today);
+                        let count = projection.points.len();
+                        // Weekday under each bar for the 7-day range; the two
+                        // ends of the range otherwise.
+                        let axis =
+                            if period == Period::Week && count == 7 {
+                                div().flex().h(px(AXIS_HEIGHT)).items_end().children(
+                                    (0..count).map(|index| {
+                                        let day = today.saturating_sub((count - 1 - index) as u64);
+                                        let last = index + 1 == count;
+                                        div()
+                                            .flex_1()
+                                            .flex()
+                                            .justify_center()
+                                            .text_size(px(ui::TEXT_MICRO))
+                                            .text_color(if last {
+                                                palette.foreground
+                                            } else {
+                                                palette.subtle_foreground
+                                            })
+                                            .child(if last { "Today" } else { weekday_label(day) })
+                                    }),
+                                )
+                            } else {
+                                div()
+                                    .flex()
+                                    .h(px(AXIS_HEIGHT))
+                                    .items_end()
+                                    .justify_between()
+                                    .child(label(format!(
+                                        "{} days ago",
+                                        if period == Period::Week { 7 } else { 30 }
+                                    )))
+                                    .child(label("Today".into()))
+                            };
                         card = card
                             .child(
                                 div()
@@ -3101,75 +3349,111 @@ impl HomeWidgets {
                                     .flex()
                                     .w_full()
                                     .flex_1()
-                                    .min_h(px(24.))
-                                    .h(px(chart_height))
+                                    .min_h(px(40.))
                                     .child(
                                         div()
                                             .flex()
                                             .flex_col()
                                             .justify_between()
                                             .flex_shrink_0()
+                                            .pb(px(AXIS_HEIGHT))
                                             .pr(px(8.))
                                             .child(label(projection.peak.clone()))
                                             .child(label("0 min".into())),
                                     )
                                     .child(
                                         div()
-                                            .relative()
                                             .flex()
-                                            .items_end()
+                                            .flex_col()
                                             .flex_1()
-                                            .h_full()
-                                            .border_b_1()
-                                            .border_color(palette.border)
-                                            .when(projection.empty_period, |plot| {
-                                                plot.child(
-                                                    div()
-                                                        .absolute()
-                                                        .size_full()
-                                                        .flex()
-                                                        .items_center()
-                                                        .text_size(px(12.))
-                                                        .text_color(palette.muted_foreground)
-                                                        .child("No playtime in this period."),
-                                                )
-                                            })
-                                            .children(projection.points.iter().map(|point| {
+                                            .min_w(px(0.))
+                                            .child(
                                                 div()
-                                                    .id(format!("playtime-bar-{}", point.label))
-                                                    .role(Role::Image)
-                                                    .aria_label(point.detail.clone())
-                                                    .flex_1()
-                                                    .h_full()
-                                                    .px(px(6.))
+                                                    .relative()
                                                     .flex()
                                                     .items_end()
-                                                    .justify_center()
+                                                    .flex_1()
+                                                    .border_b_1()
+                                                    .border_color(palette.border)
                                                     .child(
                                                         div()
-                                                            .w_full()
-                                                            .min_w(px(2.))
-                                                            .max_w(px(20.))
-                                                            .h(px(bar_height(
-                                                                point.fraction,
-                                                                chart_height,
-                                                            )))
-                                                            .rounded(px(2.))
-                                                            .bg(if point.fraction > 0. {
-                                                                palette.accent
-                                                            } else {
-                                                                palette.surface_hover
-                                                            }),
+                                                            .absolute()
+                                                            .top(px(0.))
+                                                            .left(px(0.))
+                                                            .right(px(0.))
+                                                            .h(px(1.))
+                                                            .bg(palette.border_subtle),
                                                     )
-                                            })),
+                                                    .when(projection.empty_period, |plot| {
+                                                        plot.child(
+                                                            div()
+                                                                .absolute()
+                                                                .size_full()
+                                                                .flex()
+                                                                .items_center()
+                                                                .justify_center()
+                                                                .text_size(px(ui::TEXT_CAPTION))
+                                                                .text_color(
+                                                                    palette.muted_foreground,
+                                                                )
+                                                                .child(
+                                                                    "No playtime in this period.",
+                                                                ),
+                                                        )
+                                                    })
+                                                    .children(projection.points.iter().map(
+                                                        |point| {
+                                                            div()
+                                                                .id(format!(
+                                                                    "playtime-bar-{}",
+                                                                    point.label
+                                                                ))
+                                                                .role(Role::Image)
+                                                                .aria_label(point.detail.clone())
+                                                                .flex_1()
+                                                                .h_full()
+                                                                .px(px(if count > 12 {
+                                                                    2.
+                                                                } else {
+                                                                    5.
+                                                                }))
+                                                                .flex()
+                                                                .items_end()
+                                                                .justify_center()
+                                                                .child(
+                                                                    div()
+                                                                        .w_full()
+                                                                        .min_w(px(2.))
+                                                                        .max_w(px(26.))
+                                                                        .h(relative_bar(
+                                                                            point.fraction,
+                                                                        ))
+                                                                        .rounded_t(px(4.))
+                                                                        .rounded_b(px(1.))
+                                                                        .bg(
+                                                                            if point.fraction > 0. {
+                                                                                palette.accent
+                                                                            } else {
+                                                                                palette
+                                                                                    .control_hover
+                                                                            },
+                                                                        ),
+                                                                )
+                                                        },
+                                                    )),
+                                            )
+                                            .child(axis.pt(px(4.))),
                                     ),
                             )
                             .child(
                                 div()
                                     .id("playtime-chart-note")
                                     .aria_description(chart_note_description(period, narrow))
-                                    .text_size(px(12.))
-                                    .text_color(palette.muted_foreground)
+                                    .text_size(px(ui::TEXT_MICRO))
+                                    .text_color(palette.subtle_foreground)
+                                    .whitespace_nowrap()
+                                    .overflow_hidden()
+                                    .text_ellipsis()
                                     .child(chart_note(period, narrow)),
                             );
                     }
@@ -3177,60 +3461,6 @@ impl HomeWidgets {
             }
             "recent-servers" => {
                 let server_view = self.core.server_view;
-                card = card.child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(4.))
-                        .child(
-                            AuroraButton::new("servers-recent", "Recent")
-                                .variant(ButtonVariant::Ghost)
-                                .selected(server_view == ServerView::Recents)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_server_view(ServerView::Recents, cx);
-                                })),
-                        )
-                        .child(
-                            AuroraButton::new("servers-favorites", "Favorites")
-                                .variant(ButtonVariant::Ghost)
-                                .selected(server_view == ServerView::Favorites)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_server_view(ServerView::Favorites, cx);
-                                })),
-                        )
-                        .child(
-                            AuroraButton::new("servers-saved", "Saved")
-                                .variant(ButtonVariant::Ghost)
-                                .selected(server_view == ServerView::Saved)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_server_view(ServerView::Saved, cx);
-                                })),
-                        )
-                        .child(
-                            AuroraButton::new("servers-refresh", "Refresh status")
-                                .variant(ButtonVariant::Ghost)
-                                .disabled(self.core.refreshing_servers || busy)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.start_status_refresh(cx);
-                                })),
-                        ),
-                );
-                if self.core.refreshing_servers {
-                    card = card.child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(palette.muted_foreground)
-                            .child("Refreshing server status…"),
-                    );
-                }
-                if self.core.server_enriching && !loading {
-                    card = card.child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(palette.muted_foreground)
-                            .child("Loading server details…"),
-                    );
-                }
                 let rows = self.server_rows(now);
                 if rows.is_empty() {
                     let empty = if loading {
@@ -3254,12 +3484,7 @@ impl HomeWidgets {
                             }
                         }
                     };
-                    card = card.child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(palette.muted_foreground)
-                            .child(empty),
-                    );
+                    card = card.child(empty_note(&palette, "dns", empty));
                 } else {
                     let scroll = self.card_scroll("recent-servers");
                     let mut list = div()
@@ -3268,9 +3493,12 @@ impl HomeWidgets {
                         .aria_label("Server list")
                         .flex()
                         .flex_col()
+                        .flex_1()
+                        .min_h(px(0.))
                         .overflow_y_scroll()
                         .track_scroll(&scroll);
-                    for row in rows {
+                    let last_index = rows.len().saturating_sub(1);
+                    for (index, row) in rows.into_iter().enumerate() {
                         let mode = if server_view == ServerView::Saved {
                             "saved-server"
                         } else {
@@ -3280,51 +3508,40 @@ impl HomeWidgets {
                         let name = row.name.clone();
                         let favorite_target = row.id.clone();
                         let play_target = row.id.clone();
+                        let motd = row.motd.replace('\n', " · ");
                         list = list.child(
-                            div()
+                            list_row(&palette, index == last_index)
                                 .id(format!("server-row-{}", row.id))
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .py(px(6.))
-                                .when_some(row.picture.clone(), |this, picture| {
-                                    this.child(img(picture).w(px(28.)).h(px(28.)))
-                                })
+                                .child(avatar(&palette, row.picture.clone(), "dns"))
                                 .child(
                                     div()
                                         .flex()
                                         .flex_col()
-                                        .gap(px(2.))
+                                        .gap(px(1.))
                                         .flex_1()
-                                        .child(div().text_size(px(13.)).child(row.name.clone()))
-                                        .child(
-                                            div()
-                                                .text_size(px(12.))
-                                                .text_color(palette.muted_foreground)
-                                                .child(row.detail.clone()),
-                                        )
-                                        .when(!row.motd.is_empty(), |this| {
+                                        .min_w(px(0.))
+                                        .child(row_title(&palette, row.name.clone()))
+                                        .child(row_detail(&palette, row.detail.clone()))
+                                        .when(!motd.is_empty(), |this| {
                                             this.child(
-                                                div()
-                                                    .text_size(px(12.))
-                                                    .text_color(palette.muted_foreground)
-                                                    .child(row.motd.clone()),
+                                                row_detail(&palette, motd.clone())
+                                                    .text_color(palette.subtle_foreground),
                                             )
                                         }),
                                 )
                                 .child(
-                                    AuroraButton::new(
+                                    star_button(
+                                        &palette,
                                         format!("server-favorite-{}", row.id),
-                                        // Self-describing text: AuroraButton exposes
-                                        // no separate accessible name.
+                                        row.favorite,
+                                        // Self-describing accessible name.
                                         if row.favorite {
-                                            format!("★ Unfavorite {name}")
+                                            format!("Unfavorite {name}")
                                         } else {
-                                            format!("☆ Favorite {name}")
+                                            format!("Favorite {name}")
                                         },
+                                        busy || editing || row.favorite_busy,
                                     )
-                                    .variant(ButtonVariant::Ghost)
-                                    .disabled(busy || editing || row.favorite_busy)
                                     .on_click(cx.listener(
                                         move |this, _, _, cx| {
                                             this.toggle_favorite(&favorite_target, cx);
@@ -3333,6 +3550,8 @@ impl HomeWidgets {
                                 )
                                 .child(
                                     AuroraButton::new(format!("server-play-{}", row.id), "Play")
+                                        .size(ButtonSize::Small)
+                                        .icon("play_arrow")
                                         .disabled(!playable)
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             this.quick_play(mode, &play_target, cx);
@@ -3345,27 +3564,6 @@ impl HomeWidgets {
             }
             "recent-worlds" => {
                 let saved_worlds = self.core.saved_worlds;
-                card = card.child(
-                    div()
-                        .flex()
-                        .gap(px(4.))
-                        .child(
-                            AuroraButton::new("worlds-recent", "Recent")
-                                .variant(ButtonVariant::Ghost)
-                                .selected(!saved_worlds)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_saved_worlds(false, cx);
-                                })),
-                        )
-                        .child(
-                            AuroraButton::new("worlds-saved", "Saved")
-                                .variant(ButtonVariant::Ghost)
-                                .selected(saved_worlds)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_saved_worlds(true, cx);
-                                })),
-                        ),
-                );
                 let rows = if saved_worlds {
                     self.core.saved_worlds_rows.clone()
                 } else {
@@ -3386,12 +3584,7 @@ impl HomeWidgets {
                         "No worlds yet. Singleplayer worlds you play in this instance appear here."
                             .to_string()
                     };
-                    card = card.child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(palette.muted_foreground)
-                            .child(empty),
-                    );
+                    card = card.child(empty_note(&palette, "landscape", empty));
                 } else {
                     let scroll = self.card_scroll("recent-worlds");
                     let mut list = div()
@@ -3400,9 +3593,12 @@ impl HomeWidgets {
                         .aria_label("World list")
                         .flex()
                         .flex_col()
+                        .flex_1()
+                        .min_h(px(0.))
                         .overflow_y_scroll()
                         .track_scroll(&scroll);
-                    for row in rows {
+                    let last_index = rows.len().saturating_sub(1);
+                    for (index, row) in rows.into_iter().enumerate() {
                         let target = row.id.clone();
                         let mode = if saved_worlds { "saved-world" } else { "world" };
                         let playable = row.playable && !busy && !blocked && !editing;
@@ -3416,40 +3612,29 @@ impl HomeWidgets {
                                 now,
                             )
                         };
+                        let detail = if row.detail.is_empty() {
+                            value
+                        } else {
+                            format!("{value} · {}", row.detail)
+                        };
                         list = list.child(
-                            div()
+                            list_row(&palette, index == last_index)
                                 .id(format!("world-row-{}", row.id))
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .py(px(6.))
-                                .when_some(row.picture.clone(), |this, picture| {
-                                    this.child(img(picture).w(px(28.)).h(px(28.)))
-                                })
+                                .child(avatar(&palette, row.picture.clone(), "landscape"))
                                 .child(
                                     div()
                                         .flex()
                                         .flex_col()
-                                        .gap(px(2.))
+                                        .gap(px(1.))
                                         .flex_1()
-                                        .child(div().text_size(px(13.)).child(row.label.clone()))
-                                        .when(!row.detail.is_empty(), |this| {
-                                            this.child(
-                                                div()
-                                                    .text_size(px(12.))
-                                                    .text_color(palette.muted_foreground)
-                                                    .child(row.detail.clone()),
-                                            )
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .text_color(palette.muted_foreground)
-                                        .child(value),
+                                        .min_w(px(0.))
+                                        .child(row_title(&palette, row.label.clone()))
+                                        .child(row_detail(&palette, detail)),
                                 )
                                 .child(
                                     AuroraButton::new(format!("world-play-{}", row.id), "Play")
+                                        .size(ButtonSize::Small)
+                                        .icon("play_arrow")
                                         .disabled(!playable)
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             let target = target.clone();
@@ -3468,28 +3653,46 @@ impl HomeWidgets {
                     .map(detail_lines)
                     .unwrap_or_default();
                 if lines.is_empty() {
-                    card = card.child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(palette.muted_foreground)
-                            .child("Choose an instance to see its details."),
-                    );
+                    card = card.child(empty_note(
+                        &palette,
+                        "info",
+                        "Choose an instance to see its details.",
+                    ));
                 } else {
-                    for (label, value) in lines {
-                        card = card.child(
+                    let last_index = lines.len() - 1;
+                    let mut list = div().flex().flex_col();
+                    for (index, (label, value)) in lines.into_iter().enumerate() {
+                        list = list.child(
                             div()
                                 .flex()
+                                .items_center()
                                 .justify_between()
-                                .gap(px(8.))
+                                .gap(px(12.))
+                                .py(px(8.))
+                                .when(index != last_index, |this| {
+                                    this.border_b_1().border_color(palette.border_subtle)
+                                })
                                 .child(
                                     div()
-                                        .text_size(px(12.))
+                                        .flex_shrink_0()
+                                        .text_size(px(ui::TEXT_BODY))
                                         .text_color(palette.muted_foreground)
                                         .child(label),
                                 )
-                                .child(div().text_size(px(13.)).child(value)),
+                                .child(
+                                    div()
+                                        .min_w(px(0.))
+                                        .overflow_hidden()
+                                        .text_ellipsis()
+                                        .whitespace_nowrap()
+                                        .text_size(px(ui::TEXT_BODY))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(palette.foreground)
+                                        .child(value),
+                                ),
                         );
                     }
+                    card = card.child(list);
                 }
             }
             // The entity appears one task after the card is first shown.
@@ -3502,6 +3705,166 @@ impl HomeWidgets {
         }
         card.into_any_element()
     }
+}
+
+// ---------------------------------------------------------------------------
+// Small presentation helpers (private to the widget cards)
+// ---------------------------------------------------------------------------
+
+/// Height of the weekday / range axis under the chart.
+const AXIS_HEIGHT: f32 = 16.;
+
+/// The plot's bar: a fraction of the plot, never under 2 px. The plot's own
+/// height is flexible, so the bar is a percentage of it.
+fn relative_bar(fraction: f32) -> gpui_kit::DefiniteLength {
+    gpui_kit::relative((fraction.clamp(0., 1.) * 0.94).max(0.02))
+}
+
+fn weekday_label(day: u64) -> &'static str {
+    // Day 0 (1970-01-01) was a Thursday.
+    ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][((day + 4) % 7) as usize]
+}
+
+/// A pill holding segmented Small buttons (range and view tabs).
+fn segmented(t: &theme::AuroraTheme) -> Div {
+    div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .gap(px(2.))
+        .p(px(2.))
+        .rounded(t.radius)
+        .bg(t.sunken)
+        .border_1()
+        .border_color(t.border_subtle)
+}
+
+fn segment(
+    id: impl Into<gpui_kit::ElementId>,
+    label: &'static str,
+    selected: bool,
+) -> AuroraButton {
+    AuroraButton::new(id, label)
+        .variant(ButtonVariant::Ghost)
+        .size(ButtonSize::Small)
+        .selected(selected)
+}
+
+/// A centred, quiet message that fills the card body.
+fn empty_note(t: &theme::AuroraTheme, icon: &str, text: impl Into<gpui_kit::SharedString>) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .items_center()
+        .justify_center()
+        .gap(px(8.))
+        .child(crate::symbols::icon(
+            Some(icon),
+            px(22.),
+            t.subtle_foreground,
+        ))
+        .child(
+            div()
+                .max_w(px(300.))
+                .text_size(px(ui::TEXT_CAPTION))
+                .text_color(t.muted_foreground)
+                .text_center()
+                .child(text.into()),
+        )
+}
+
+/// One row of a card's list: hairline between rows, none after the last.
+fn list_row(t: &theme::AuroraTheme, last: bool) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(10.))
+        .py(px(8.))
+        .when(!last, |this| {
+            this.border_b_1().border_color(t.border_subtle)
+        })
+}
+
+fn row_title(t: &theme::AuroraTheme, text: String) -> Div {
+    div()
+        .min_w(px(0.))
+        .overflow_hidden()
+        .text_ellipsis()
+        .whitespace_nowrap()
+        .text_size(px(ui::TEXT_BODY))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(t.foreground)
+        .child(text)
+}
+
+fn row_detail(t: &theme::AuroraTheme, text: String) -> Div {
+    div()
+        .min_w(px(0.))
+        .overflow_hidden()
+        .text_ellipsis()
+        .whitespace_nowrap()
+        .text_size(px(ui::TEXT_CAPTION))
+        .text_color(t.muted_foreground)
+        .child(text)
+}
+
+/// A server or world picture, or a quiet icon tile when it has none.
+fn avatar(t: &theme::AuroraTheme, picture: Option<Arc<RenderImage>>, icon: &str) -> Div {
+    match picture {
+        Some(picture) => div()
+            .flex_shrink_0()
+            .size(px(32.))
+            .rounded(px(8.))
+            .overflow_hidden()
+            .border_1()
+            .border_color(t.border_subtle)
+            .child(img(picture).size(px(30.))),
+        None => ui::icon_tile(t, Some(icon), 32., false),
+    }
+}
+
+/// An icon-only quiet action. `accent` tints the glyph (set favorites).
+fn icon_button(
+    t: &theme::AuroraTheme,
+    id: String,
+    icon: &'static str,
+    label: String,
+    disabled: bool,
+    accent: bool,
+) -> Button {
+    let hover = t.control;
+    Button::new(id)
+        .aria_label(label)
+        .disabled(disabled)
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(28.))
+        .rounded(t.radius)
+        .hover(move |style| style.bg(hover))
+        .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
+        .child(crate::symbols::icon(
+            Some(icon),
+            px(18.),
+            if accent {
+                t.warning
+            } else {
+                t.muted_foreground
+            },
+        ))
+}
+
+/// The favorite toggle: an amber star when set, a quiet one when not.
+fn star_button(
+    t: &theme::AuroraTheme,
+    id: String,
+    favorite: bool,
+    label: String,
+    disabled: bool,
+) -> Button {
+    icon_button(t, id, "star", label, disabled, favorite)
 }
 
 // ---------------------------------------------------------------------------

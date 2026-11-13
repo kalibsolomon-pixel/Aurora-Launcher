@@ -29,8 +29,8 @@ use std::rc::Rc;
 
 use aurora_launcher_lib::host::Host;
 use gpui::{
-    Bounds, Context, Entity, EventEmitter, FocusHandle, Pixels, Render, SharedString, Subscription,
-    Window, div, prelude::*, px,
+    Bounds, Context, Div, Entity, EventEmitter, FocusHandle, Pixels, Render, SharedString,
+    Subscription, Window, div, prelude::*, px,
 };
 use gpui_kit::base::{
     Dialog,
@@ -40,8 +40,11 @@ use tokio::runtime::Handle;
 
 use crate::api::{self, ApiResult};
 use crate::backend::guarded;
-use crate::controls::{AuroraButton, AuroraInput, AuroraSelect, AuroraToggle};
+use crate::controls::{
+    AuroraButton, AuroraInput, AuroraSelect, AuroraToggle, ButtonSize, ButtonVariant,
+};
 use crate::theme::theme;
+use crate::ui;
 
 pub enum SyncingEvent {
     Changed,
@@ -135,6 +138,8 @@ struct ParticipantRow {
     name: String,
     detail: String,
     checked: bool,
+    /// Whether the registry still knows this instance.
+    available: bool,
 }
 
 /// Participants keyed by stable instance id: the registry first, then saved
@@ -154,6 +159,7 @@ fn participant_rows(
                     .instances
                     .iter()
                     .any(|current| current == &instance.id),
+                available: true,
             });
         }
     }
@@ -166,6 +172,7 @@ fn participant_rows(
             name: "Unavailable instance".into(),
             detail: format!("Saved participant {id} is no longer in the registry"),
             checked: true,
+            available: false,
         });
     }
     rows
@@ -961,9 +968,87 @@ impl Syncing {
     }
 }
 
+/// Width the page's cards fill; the page itself scrolls in the app shell.
+const PAGE_MAX_WIDTH: f32 = 840.;
+/// Width of the right-hand control column in settings rows.
+const CONTROL_WIDTH: f32 = 220.;
+
+/// One line saying what a sync category covers.
+fn category_detail(id: &str) -> &'static str {
+    match id {
+        "settings" => "Video, audio and gameplay options.",
+        "controls" => "Key bindings and mouse settings.",
+        "resourcePacks" => "Installed resource packs and their order.",
+        "shaderPacks" => "Shader packs and their settings.",
+        "screenshots" => "Pictures taken in the game.",
+        "configuration" => "The configuration paths chosen below.",
+        "servers" => "Saved multiplayer servers.",
+        _ => "",
+    }
+}
+
+/// Turns an instance state such as `ready` or `needsInstall` into a badge.
+fn instance_status(state: &str) -> (SharedString, ui::Tone) {
+    let mut label = String::new();
+    for (index, ch) in state.chars().enumerate() {
+        if ch.is_uppercase() && index > 0 {
+            label.push(' ');
+            label.push(ch.to_ascii_lowercase());
+        } else if index == 0 {
+            label.extend(ch.to_uppercase());
+        } else {
+            label.push(ch);
+        }
+    }
+    let lower = state.to_ascii_lowercase();
+    let tone = if lower == "ready" {
+        ui::Tone::Success
+    } else if lower.contains("fail") || lower.contains("error") || lower.contains("broken") {
+        ui::Tone::Danger
+    } else if lower.contains("install") || lower.contains("updat") || lower.contains("running") {
+        ui::Tone::Accent
+    } else {
+        ui::Tone::Neutral
+    };
+    (label.into(), tone)
+}
+
+/// A labelled form field: title and caption above the input.
+fn field(
+    t: &crate::theme::AuroraTheme,
+    title: &'static str,
+    caption: &'static str,
+    input: impl IntoElement,
+) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(8.))
+        .child(ui::title_block(t, title, Some(caption.into())))
+        .child(input)
+}
+
+/// A card whose rows run inside it, separated by hairlines.
+fn section_card(t: &crate::theme::AuroraTheme) -> Div {
+    // Rows carry their own vertical padding, so the card's bottom is trimmed.
+    ui::card(t).gap(px(0.)).pb(px(6.))
+}
+
+/// A right-aligned slot for one row's control.
+fn control_slot(child: impl IntoElement) -> Div {
+    div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_end()
+        .w(px(CONTROL_WIDTH))
+        .child(child)
+}
+
 impl Render for Syncing {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme(cx).clone();
+        let t = &palette;
         let busy = self.busy();
         let editing_disabled = busy || !self.policy.writable();
         for field in [&self.exclusions, &self.paths, &self.override_exclusions] {
@@ -974,74 +1059,125 @@ impl Render for Syncing {
         let mut root = div()
             .flex()
             .flex_col()
-            .gap(px(12.))
-            .text_color(palette.foreground);
+            .gap(px(ui::PAGE_GAP))
+            .w_full()
+            .max_w(px(PAGE_MAX_WIDTH))
+            .text_color(palette.foreground)
+            .child(ui::page_header(
+                t,
+                "Sync",
+                Some(
+                    "Keep game settings, packs and controls identical across the instances you choose."
+                        .into(),
+                ),
+            ));
 
         if self.host.is_none() {
-            root = root.child(div().text_size(px(20.)).child("Sync")).child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(palette.muted_foreground)
-                    .child(self.message.clone()),
-            );
-            return root;
+            return root.child(ui::empty_state(
+                t,
+                "sync",
+                "Sync is unavailable",
+                self.message.clone(),
+            ));
         }
 
-        root = root.child(div().text_size(px(20.)).child("Sync"));
-
-        // --- Status --------------------------------------------------------
-        root = root.child(
+        // --- Status ---------------------------------------------------------
+        let status_strip = {
+            let (badge, text) = match &self.status.value {
+                Some(status) if status.running => (
+                    ui::status_badge(t, "Syncing", ui::Tone::Accent),
+                    "Syncing selected instances…".to_owned(),
+                ),
+                Some(status) => (
+                    ui::status_badge(t, "Idle", ui::Tone::Neutral),
+                    status.message.clone(),
+                ),
+                None => (
+                    ui::status_badge(t, "Unknown", ui::Tone::Neutral),
+                    "Sync status not loaded yet.".to_owned(),
+                ),
+            };
             div()
                 .flex()
-                .flex_col()
-                .gap(px(4.))
-                .children(match &self.status.value {
-                    Some(status) => {
-                        let text = if status.running {
-                            "Syncing selected instances…".to_owned()
-                        } else {
-                            status.message.clone()
-                        };
-                        vec![div().text_size(px(13.)).child(text)]
-                    }
-                    None => vec![
-                        div()
-                            .text_size(px(13.))
-                            .text_color(palette.muted_foreground)
-                            .child("Sync status not loaded yet."),
-                    ],
-                }),
-        );
+                .items_center()
+                .gap(px(10.))
+                .pt(px(14.))
+                .child(badge)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .text_size(px(ui::TEXT_BODY))
+                        .text_color(palette.muted_foreground)
+                        .child(text),
+                )
+        };
 
         // --- Preferences ----------------------------------------------------
         if let Some(draft) = self.policy.draft.clone() {
             let view = cx.entity();
+            let enabled = draft.enabled;
             root = root.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(8.))
+                section_card(t)
+                    .pb(px(20.))
                     .child(
-                        AuroraToggle::new("sync-enabled")
-                            .label("Sync selected instances automatically")
-                            .checked(draft.enabled)
-                            .disabled(editing_disabled)
-                            .on_change({
-                                let view = view.clone();
-                                move |next: bool, _, _, cx| {
-                                    view.update(cx, |this, cx| this.set_enabled(next, cx));
+                        ui::setting_row(
+                            t,
+                            "Sync shared files between instances",
+                            Some(
+                                if enabled {
+                                    "Selected instances automatically share the categories below."
+                                } else {
+                                    "Turned off. Your choices below are kept, but nothing is synced."
                                 }
-                            }),
+                                .into(),
+                            ),
+                            true,
+                        )
+                        .py(px(0.))
+                        .child(
+                            AuroraToggle::new("sync-enabled")
+                                .label("Sync selected instances automatically")
+                                .checked(enabled)
+                                .disabled(editing_disabled)
+                                .on_change({
+                                    let view = view.clone();
+                                    move |next: bool, _, _, cx| {
+                                        view.update(cx, |this, cx| this.set_enabled(next, cx));
+                                    }
+                                }),
+                        ),
+                    )
+                    .child(status_strip),
+            );
+
+            // Everything the master switch governs is dimmed while it is off.
+            let mut body = div()
+                .flex()
+                .flex_col()
+                .gap(px(ui::PAGE_GAP))
+                .when(!enabled, |this| this.opacity(0.55));
+
+            // What to sync.
+            let mut categories = section_card(t).child(
+                ui::section_header(
+                    t,
+                    "What to sync",
+                    Some("The kinds of files that stay in step across instances.".into()),
+                )
+                .pb(px(6.)),
+            );
+            for (index, (id, label)) in CATEGORIES.iter().enumerate() {
+                let checked = draft.categories.iter().any(|current| current == id);
+                let id = *id;
+                categories = categories.child(
+                    ui::setting_row(
+                        t,
+                        *label,
+                        Some(category_detail(id).into()),
+                        index + 1 == CATEGORIES.len(),
                     )
                     .child(
-                        div()
-                            .text_size(px(15.))
-                            .text_color(palette.foreground)
-                            .child("Categories"),
-                    )
-                    .children(CATEGORIES.iter().map(|(id, label)| {
-                        let checked = draft.categories.iter().any(|current| current == id);
-                        let id = *id;
                         AuroraToggle::new(SharedString::from(format!("sync-category-{id}")))
                             .label(*label)
                             .checked(checked)
@@ -1053,77 +1189,112 @@ impl Render for Syncing {
                                         this.set_category_checked(id, next, cx)
                                     });
                                 }
-                            })
-                    })),
-            );
+                            }),
+                    ),
+                );
+            }
+            body = body.child(categories);
 
+            // Instances.
             let rows = participant_rows(&draft, self.instances.as_ref());
-            root = root.child(
+            let total = rows.len();
+            let syncing = rows.iter().filter(|row| row.checked).count();
+            let mut list = ui::list_card(t).child(
                 div()
                     .flex()
-                    .flex_col()
-                    .gap(px(6.))
-                    .child(
-                        div()
-                            .text_size(px(15.))
-                            .text_color(palette.foreground)
-                            .child("Instances"),
-                    )
-                    .children(rows.into_iter().map(|row| {
-                        let toggle_view = view.clone();
-                        let select_view = view.clone();
-                        let toggle_id = row.id.clone();
-                        let select_id = row.id.clone();
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(
-                                AuroraToggle::new(SharedString::from(format!(
-                                    "sync-participant-{}",
-                                    row.id
-                                )))
-                                .label(row.name.clone())
-                                .checked(row.checked)
-                                .disabled(editing_disabled)
-                                .on_change(
-                                    move |next: bool, _, _, cx| {
-                                        toggle_view.update(cx, |this, cx| {
-                                            this.set_participant_checked(
-                                                toggle_id.clone(),
-                                                next,
-                                                cx,
-                                            )
-                                        });
-                                    },
-                                ),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(palette.muted_foreground)
-                                    .child(row.detail),
-                            )
-                            .child(
-                                AuroraButton::new(
-                                    SharedString::from(format!("sync-overrides-{}", row.id)),
-                                    "Overrides…",
-                                )
-                                .disabled(busy || !row.checked)
-                                .selected(self.selected.as_deref() == Some(&row.id))
-                                .on_click(move |_, _, cx| {
-                                    select_view.update(cx, |this, cx| {
-                                        if this.busy() {
-                                            return;
-                                        }
-                                        this.category_open = [false; 7];
-                                        this.selected = Some(select_id.clone());
-                                        cx.notify();
-                                    });
-                                }),
-                            )
-                    })),
+                    .items_center()
+                    .justify_between()
+                    .gap(px(12.))
+                    .px(px(20.))
+                    .py(px(16.))
+                    .border_b_1()
+                    .border_color(palette.border_subtle)
+                    .child(ui::section_header(
+                        t,
+                        "Instances",
+                        Some("Choose which instances take part in syncing.".into()),
+                    ))
+                    .child(ui::badge(
+                        t,
+                        format!("{syncing} of {total} syncing"),
+                        ui::Tone::Neutral,
+                    )),
             );
+            if total == 0 {
+                list = list.child(
+                    div()
+                        .px(px(16.))
+                        .py(px(20.))
+                        .child(ui::muted(t, "No instances yet.")),
+                );
+            }
+            for (index, row) in rows.into_iter().enumerate() {
+                let toggle_view = view.clone();
+                let select_view = view.clone();
+                let toggle_id = row.id.clone();
+                let select_id = row.id.clone();
+                let (status_label, tone) = if row.available {
+                    instance_status(&row.detail)
+                } else {
+                    ("Unavailable".into(), ui::Tone::Warning)
+                };
+                let detail: SharedString = if !row.available {
+                    row.detail.clone().into()
+                } else if !row.checked {
+                    "Not syncing".into()
+                } else if draft.overrides.contains_key(&row.id) {
+                    "Syncing with custom overrides".into()
+                } else {
+                    "Syncing with the shared settings".into()
+                };
+                list = list.child(
+                    ui::row(t, index + 1 == total)
+                        .px(px(20.))
+                        .child(ui::icon_tile(t, Some("deployed_code"), 36., row.checked))
+                        .child(
+                            ui::title_block(t, row.name.clone(), Some(detail))
+                                .flex_1()
+                                .min_w(px(0.)),
+                        )
+                        .child(ui::status_badge(t, status_label, tone))
+                        .child(
+                            AuroraButton::new(
+                                SharedString::from(format!("sync-overrides-{}", row.id)),
+                                "Overrides…",
+                            )
+                            .size(ButtonSize::Small)
+                            .disabled(busy || !row.checked)
+                            .selected(self.selected.as_deref() == Some(&row.id))
+                            .on_click(move |_, _, cx| {
+                                select_view.update(cx, |this, cx| {
+                                    if this.busy() {
+                                        return;
+                                    }
+                                    this.category_open = [false; 7];
+                                    this.selected = Some(select_id.clone());
+                                    cx.notify();
+                                });
+                            }),
+                        )
+                        .child(
+                            AuroraToggle::new(SharedString::from(format!(
+                                "sync-participant-{}",
+                                row.id
+                            )))
+                            .label(row.name.clone())
+                            .checked(row.checked)
+                            .disabled(editing_disabled)
+                            .on_change(
+                                move |next: bool, _, _, cx| {
+                                    toggle_view.update(cx, |this, cx| {
+                                        this.set_participant_checked(toggle_id.clone(), next, cx)
+                                    });
+                                },
+                            ),
+                        ),
+                );
+            }
+            body = body.child(list);
 
             // Per-participant overrides.
             let selected = self.selected.clone();
@@ -1133,16 +1304,21 @@ impl Render for Syncing {
             if let Some(id) = selected.filter(|_| participating) {
                 let value = draft.overrides.get(&id);
                 let name = instance_name(self.instances.as_ref(), &id);
-                root = root.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(8.))
-                        .child(
-                            div()
-                                .text_size(px(15.))
-                                .text_color(palette.foreground)
-                                .child(format!("Overrides for {name}")),
+                let mut overrides = section_card(t)
+                    .child(
+                        ui::section_header(
+                            t,
+                            format!("Overrides for {name}"),
+                            Some("How this instance differs from the shared settings.".into()),
+                        )
+                        .pb(px(6.)),
+                    )
+                    .child(
+                        ui::setting_row(
+                            t,
+                            "Exclude this instance from syncing",
+                            Some("It keeps its own files and shares nothing.".into()),
+                            false,
                         )
                         .child(
                             AuroraToggle::new("override-disabled")
@@ -1158,186 +1334,272 @@ impl Render for Syncing {
                                         });
                                     }
                                 }),
+                        ),
+                    )
+                    .child(
+                        div()
+                            .py(px(14.))
+                            .border_b_1()
+                            .border_color(palette.border_subtle)
+                            .child(field(
+                                t,
+                                "Exclusions",
+                                "Paths this instance never syncs, separated by ;",
+                                AuroraInput::new(&self.override_exclusions)
+                                    .label("Exclusions for this instance, separated by ;"),
+                            )),
+                    );
+                for (index, (category, label)) in CATEGORIES.iter().enumerate() {
+                    let mode = override_mode(value, category);
+                    let (trigger, content) = self.category_focus[index].clone();
+                    let bounds = self.category_bounds[index].clone();
+                    let options = OVERRIDE_MODES
+                        .iter()
+                        .map(|mode| SharedString::from(*mode))
+                        .collect();
+                    let select = AuroraSelect::new(
+                        SharedString::from(format!("sync-override-mode-{category}")),
+                        *label,
+                        options,
+                        &trigger,
+                        &content,
+                        bounds,
+                    )
+                    .selected(Some(mode))
+                    .disabled(editing_disabled)
+                    .highlight(self.category_highlight[index])
+                    .open(self.category_open[index] && !busy)
+                    .on_open_change({
+                        let view = view.clone();
+                        move |open, _, cx| {
+                            view.update(cx, |this, cx| {
+                                this.category_open[index] =
+                                    open && !this.busy() && this.policy.writable();
+                                cx.notify();
+                            });
+                        }
+                    })
+                    .on_highlight({
+                        let view = view.clone();
+                        move |index_choice, _, cx| {
+                            view.update(cx, |this, cx| {
+                                this.category_highlight[index] = index_choice;
+                                cx.notify();
+                            });
+                        }
+                    })
+                    .on_confirm({
+                        let view = view.clone();
+                        let id = id.clone();
+                        let category = *category;
+                        move |mode, _, cx| {
+                            view.update(cx, |this, cx| {
+                                this.category_open[index] = false;
+                                this.choose_override_mode(id.clone(), category, mode, cx);
+                            });
+                        }
+                    });
+                    overrides = overrides.child(
+                        ui::setting_row(
+                            t,
+                            *label,
+                            Some(category_detail(category).into()),
+                            index + 1 == CATEGORIES.len(),
                         )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(4.))
-                                .child("Exclusions")
-                                .child(
-                                    AuroraInput::new(&self.override_exclusions)
-                                        .label("Exclusions for this instance, separated by ;"),
-                                ),
-                        )
-                        .children(CATEGORIES.iter().enumerate().map(
-                            |(index, (category, label))| {
-                                let mode = override_mode(value, category);
-                                let (trigger, content) = self.category_focus[index].clone();
-                                let bounds = self.category_bounds[index].clone();
-                                let options = OVERRIDE_MODES
-                                    .iter()
-                                    .map(|mode| SharedString::from(*mode))
-                                    .collect();
-                                AuroraSelect::new(
-                                    SharedString::from(format!("sync-override-mode-{category}")),
-                                    *label,
-                                    options,
-                                    &trigger,
-                                    &content,
-                                    bounds,
-                                )
-                                .selected(Some(mode))
-                                .disabled(editing_disabled)
-                                .highlight(self.category_highlight[index])
-                                .open(self.category_open[index] && !busy)
-                                .on_open_change({
-                                    let view = view.clone();
-                                    move |open, _, cx| {
-                                        view.update(cx, |this, cx| {
-                                            this.category_open[index] =
-                                                open && !this.busy() && this.policy.writable();
-                                            cx.notify();
-                                        });
-                                    }
-                                })
-                                .on_highlight({
-                                    let view = view.clone();
-                                    move |index_choice, _, cx| {
-                                        view.update(cx, |this, cx| {
-                                            this.category_highlight[index] = index_choice;
-                                            cx.notify();
-                                        });
-                                    }
-                                })
-                                .on_confirm({
-                                    let view = view.clone();
-                                    let id = id.clone();
-                                    move |mode, _, cx| {
-                                        view.update(cx, |this, cx| {
-                                            this.category_open[index] = false;
-                                            this.choose_override_mode(
-                                                id.clone(),
-                                                category,
-                                                mode,
-                                                cx,
-                                            );
-                                        });
-                                    }
-                                })
-                            },
-                        )),
-                );
+                        .child(control_slot(select)),
+                    );
+                }
+                body = body.child(overrides);
             }
 
             // Global paths and exclusions.
-            root = root.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.))
-                    .child("Selected configuration paths")
+            body = body.child(
+                ui::card(t)
+                    .gap(px(0.))
                     .child(
-                        AuroraInput::new(&self.paths)
-                            .label("Selected configuration paths, separated by ;"),
+                        ui::section_header(
+                            t,
+                            "Paths",
+                            Some("Applied to every participating instance.".into()),
+                        )
+                        .pb(px(14.)),
                     )
-                    .child("Exclusions")
-                    .child(AuroraInput::new(&self.exclusions).label("Exclusions, separated by ;")),
+                    .child(
+                        div().flex().flex_col().gap(px(16.))
+                            .child(field(
+                                t,
+                                "Selected configuration paths",
+                                "Files and folders the Selected configuration category syncs, separated by ;",
+                                AuroraInput::new(&self.paths)
+                                    .label("Selected configuration paths, separated by ;"),
+                            ))
+                            .child(field(
+                                t,
+                                "Exclusions",
+                                "Paths that are never synced, separated by ;",
+                                AuroraInput::new(&self.exclusions)
+                                    .label("Exclusions, separated by ;"),
+                            )),
+                    ),
             );
+            root = root.child(body);
 
             // Apply / Revert.
-            root = root.child(
+            let dirty = self.policy.dirty;
+            let (save_title, save_detail) = if self.write_busy {
+                ("Saving…", "Applying your sync preferences.")
+            } else if dirty {
+                ("Unsaved changes", "Apply to save them and start syncing.")
+            } else {
+                ("All changes saved", "Your sync preferences are up to date.")
+            };
+            let mut actions = ui::card(t).gap(px(12.)).child(
                 div()
                     .flex()
-                    .gap(px(8.))
+                    .items_center()
+                    .justify_between()
+                    .gap(px(16.))
                     .child(
-                        AuroraButton::new("sync-apply", "Apply")
-                            .variant(crate::controls::ButtonVariant::Primary)
-                            .disabled(busy || !self.policy.can_apply())
-                            .on_click({
-                                let view = view.clone();
-                                move |_, _, cx| view.update(cx, |this, cx| this.apply(cx))
-                            }),
+                        ui::title_block(t, save_title, Some(save_detail.into()))
+                            .flex_1()
+                            .min_w(px(0.)),
                     )
                     .child(
-                        AuroraButton::new("sync-revert", "Revert draft")
-                            .disabled(busy || !self.policy.dirty)
-                            .on_click({
-                                let view = view.clone();
-                                move |_, _, cx| view.update(cx, |this, cx| this.revert(cx))
-                            }),
-                    )
-                    .child(
-                        AuroraButton::new("sync-refresh", "Refresh")
-                            .disabled(busy)
-                            .on_click({
-                                let view = view.clone();
-                                move |_, _, cx| view.update(cx, |this, cx| this.refresh(cx))
-                            }),
+                        div()
+                            .flex()
+                            .flex_shrink_0()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(
+                                AuroraButton::new("sync-refresh", "Refresh")
+                                    .variant(ButtonVariant::Ghost)
+                                    .disabled(busy)
+                                    .on_click({
+                                        let view = view.clone();
+                                        move |_, _, cx| view.update(cx, |this, cx| this.refresh(cx))
+                                    }),
+                            )
+                            .child(
+                                AuroraButton::new("sync-revert", "Revert draft")
+                                    .disabled(busy || !self.policy.dirty)
+                                    .on_click({
+                                        let view = view.clone();
+                                        move |_, _, cx| view.update(cx, |this, cx| this.revert(cx))
+                                    }),
+                            )
+                            .child(
+                                AuroraButton::new("sync-apply", "Apply")
+                                    .variant(ButtonVariant::Primary)
+                                    .disabled(busy || !self.policy.can_apply())
+                                    .on_click({
+                                        let view = view.clone();
+                                        move |_, _, cx| view.update(cx, |this, cx| this.apply(cx))
+                                    }),
+                            ),
                     ),
             );
             if let Some(error) = &self.policy.error {
-                root = root.child(
+                actions = actions.child(
                     div()
-                        .text_size(px(13.))
+                        .text_size(px(ui::TEXT_BODY))
                         .text_color(palette.danger)
                         .child(error.clone()),
                 );
             }
+            root = root.child(actions);
         } else {
-            root = root.child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(palette.danger)
-                    .child(self.policy.error.clone().unwrap_or_else(|| {
-                        "The saved sync policy could not be read; nothing can be saved until it loads.".into()
-                    })),
-            );
-        }
-
-        if self.policy.draft.is_none() {
             let view = cx.entity();
-            root = root.child(
-                AuroraButton::new("sync-retry", "Retry loading sync")
-                    .disabled(busy)
-                    .on_click(move |_, _, cx| view.update(cx, |this, cx| this.refresh(cx))),
+            root = root.child(status_strip_card(t, status_strip)).child(
+                ui::card(t)
+                    .child(
+                        div()
+                            .text_size(px(ui::TEXT_BODY))
+                            .text_color(palette.danger)
+                            .child(self.policy.error.clone().unwrap_or_else(|| {
+                                "The saved sync policy could not be read; nothing can be saved until it loads.".into()
+                            })),
+                    )
+                    .child(
+                        div().flex().child(
+                            AuroraButton::new("sync-retry", "Retry loading sync")
+                                .disabled(busy)
+                                .on_click(move |_, _, cx| {
+                                    view.update(cx, |this, cx| this.refresh(cx))
+                                }),
+                        ),
+                    ),
             );
         }
 
         if !self.message.is_empty() {
+            let resolved = self.message.starts_with("Conflict resolved");
+            let tone = if resolved {
+                palette.success
+            } else {
+                palette.danger
+            };
             root = root.child(
                 div()
-                    .text_size(px(13.))
-                    .text_color(palette.danger)
+                    .px(px(16.))
+                    .py(px(12.))
+                    .rounded(palette.radius)
+                    .bg(gpui::Hsla { a: 0.12, ..tone })
+                    .text_size(px(ui::TEXT_BODY))
+                    .text_color(tone)
                     .child(self.message.clone()),
             );
         }
 
         // --- Conflicts ------------------------------------------------------
-        let mut conflicts = div()
-            .flex()
-            .flex_col()
-            .gap(px(6.))
-            .child(
-                div()
-                    .text_size(px(15.))
-                    .text_color(palette.foreground)
-                    .child("Conflicts"),
-            )
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(palette.muted_foreground)
-                    .child(
-                        "Resolving keeps one version and replaces the other; the replaced version is backed up. Server-list conflicts stay pending and are resolved in the game.",
-                    ),
-            );
+        let mut conflicts = ui::list_card(t).child(
+            div()
+                .flex()
+                .items_start()
+                .justify_between()
+                .gap(px(16.))
+                .px(px(20.))
+                .py(px(16.))
+                .border_b_1()
+                .border_color(palette.border_subtle)
+                .child(
+                    ui::section_header(
+                        t,
+                        "Conflicts",
+                        Some(
+                            "Resolving keeps one version and replaces the other; the replaced version is backed up. Server-list conflicts stay pending and are resolved in the game."
+                                .into(),
+                        ),
+                    )
+                    .flex_1()
+                    .min_w(px(0.)),
+                )
+                .child(if self.conflicts.is_empty() {
+                    ui::badge(t, "None pending", ui::Tone::Neutral)
+                } else {
+                    ui::badge(
+                        t,
+                        format!("{} pending", self.conflicts.len()),
+                        ui::Tone::Warning,
+                    )
+                }),
+        );
         if self.conflicts_loading && self.conflicts.is_empty() {
-            conflicts = conflicts.child("Loading conflicts…");
+            conflicts = conflicts.child(
+                div()
+                    .px(px(16.))
+                    .py(px(16.))
+                    .child(ui::muted(t, "Loading conflicts…")),
+            );
         } else if self.conflicts.is_empty() {
-            conflicts = conflicts.child("No pending conflicts.");
+            conflicts = conflicts.child(
+                ui::row(t, true)
+                    .px(px(20.))
+                    .child(ui::icon_tile(t, Some("check_circle"), 36., false))
+                    .child(ui::muted(t, "No pending conflicts.")),
+            );
         }
-        for conflict in self.conflicts.clone() {
+        let total_conflicts = self.conflicts.len();
+        for (index, conflict) in self.conflicts.clone().into_iter().enumerate() {
             let view = cx.entity();
             let resolvable = conflict_resolvable(&conflict);
             let label = conflict_label(&conflict);
@@ -1346,23 +1608,28 @@ impl Render for Syncing {
                 instance_name(self.instances.as_ref(), &conflict.source_id),
                 instance_name(self.instances.as_ref(), &conflict.destination_id)
             );
-            let mut row = div().flex().flex_col().gap(px(2.)).child(label).child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(palette.muted_foreground)
-                    .child(peers),
-            );
+            let mut row = ui::row(t, index + 1 == total_conflicts)
+                .px(px(20.))
+                .child(ui::icon_tile(t, Some("warning"), 36., false))
+                .child(
+                    ui::title_block(t, label, Some(peers.into()))
+                        .flex_1()
+                        .min_w(px(0.)),
+                );
             if resolvable {
                 row = row.child(
                     AuroraButton::new(
                         SharedString::from(format!("sync-review-{}", conflict.id)),
                         "Review…",
                     )
+                    .size(ButtonSize::Small)
                     .disabled(busy)
                     .on_click(move |_, _, cx| {
                         view.update(cx, |this, cx| this.open_review(conflict.clone(), cx));
                     }),
                 );
+            } else {
+                row = row.child(ui::badge(t, "Resolve in game", ui::Tone::Neutral));
             }
             conflicts = conflicts.child(row);
         }
@@ -1373,12 +1640,14 @@ impl Render for Syncing {
             .w(px(480.))
             .max_w_full()
             .p(px(24.))
-            .bg(palette.surface)
+            .bg(palette.raised)
+            .border_1()
+            .border_color(palette.border_subtle)
             .text_color(palette.foreground)
-            .rounded(palette.radius)
+            .rounded(palette.radius_lg)
             .flex()
             .flex_col()
-            .gap(px(12.));
+            .gap(px(16.));
         if let Some(review) = self.review.clone() {
             let source_view = cx.entity();
             let destination_view = cx.entity();
@@ -1387,28 +1656,89 @@ impl Render for Syncing {
             let destination_identity = review.conflict.clone();
             let cancel_identity = review.conflict.clone();
             panel = panel
-                .child(div().text_size(px(18.)).child("Resolve conflict"))
-                .child(format!("{} ? {}", conflict_label(&review.conflict), review.conflict.category))
-                .child(format!("First version: {} ({})", review.source, review.conflict.source_id))
-                .child(format!("Second version: {} ({})", review.destination, review.conflict.destination_id))
-                .child("The chosen version replaces the other. The core backs up the replaced version.")
-                .child(self.message.clone())
-                .child(div().flex().flex_wrap().gap(px(8.))
-                    .child(AuroraButton::new("sync-resolve-source", "Keep first version")
-                        .disabled(busy)
-                        .on_click(move |_, _, cx| source_view.update(cx, |this, cx| {
-                            this.resolve(&source_identity, true, cx);
-                        })))
-                    .child(AuroraButton::new("sync-resolve-destination", "Keep second version")
-                        .disabled(busy)
-                        .on_click(move |_, _, cx| destination_view.update(cx, |this, cx| {
-                            this.resolve(&destination_identity, false, cx);
-                        })))
-                    .child(AuroraButton::new("sync-review-cancel", "Leave pending")
-                        .disabled(busy)
-                        .on_click(move |_, _, cx| cancel_view.update(cx, |this, cx| {
-                            this.close_review(&cancel_identity, cx);
-                        }))));
+                .child(ui::section_header(
+                    t,
+                    "Resolve conflict",
+                    Some(
+                        format!(
+                            "{} · {}",
+                            conflict_label(&review.conflict),
+                            review.conflict.category
+                        )
+                        .into(),
+                    ),
+                ))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(12.))
+                        .p(px(14.))
+                        .rounded(palette.radius)
+                        .bg(palette.sunken)
+                        .border_1()
+                        .border_color(palette.border_subtle)
+                        .child(ui::stat(
+                            t,
+                            "First version",
+                            format!("{} ({})", review.source, review.conflict.source_id),
+                        ))
+                        .child(ui::stat(
+                            t,
+                            "Second version",
+                            format!(
+                                "{} ({})",
+                                review.destination, review.conflict.destination_id
+                            ),
+                        )),
+                )
+                .child(ui::muted(
+                    t,
+                    "The chosen version replaces the other. The core backs up the replaced version.",
+                ))
+                .when(!self.message.is_empty(), |this| {
+                    this.child(
+                        div()
+                            .text_size(px(ui::TEXT_BODY))
+                            .text_color(palette.danger)
+                            .child(self.message.clone()),
+                    )
+                })
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .justify_end()
+                        .gap(px(8.))
+                        .child(
+                            AuroraButton::new("sync-review-cancel", "Leave pending")
+                                .variant(ButtonVariant::Ghost)
+                                .disabled(busy)
+                                .on_click(move |_, _, cx| {
+                                    cancel_view.update(cx, |this, cx| {
+                                        this.close_review(&cancel_identity, cx);
+                                    })
+                                }),
+                        )
+                        .child(
+                            AuroraButton::new("sync-resolve-destination", "Keep second version")
+                                .disabled(busy)
+                                .on_click(move |_, _, cx| {
+                                    destination_view.update(cx, |this, cx| {
+                                        this.resolve(&destination_identity, false, cx);
+                                    })
+                                }),
+                        )
+                        .child(
+                            AuroraButton::new("sync-resolve-source", "Keep first version")
+                                .disabled(busy)
+                                .on_click(move |_, _, cx| {
+                                    source_view.update(cx, |this, cx| {
+                                        this.resolve(&source_identity, true, cx);
+                                    })
+                                }),
+                        ),
+                );
         }
         let veto = cx.entity();
         let changed = cx.entity();
@@ -1433,6 +1763,11 @@ impl Render for Syncing {
 
         root
     }
+}
+
+/// The status line alone in a card, for when no policy is loaded.
+fn status_strip_card(t: &crate::theme::AuroraTheme, strip: Div) -> Div {
+    section_card(t).child(strip.pt(px(0.)))
 }
 
 #[cfg(test)]

@@ -39,8 +39,9 @@ use tokio::runtime::Handle;
 
 use crate::api;
 use crate::backend::guarded;
-use crate::controls::{AuroraButton, ButtonVariant};
+use crate::controls::{AuroraButton, ButtonSize, ButtonVariant};
 use crate::theme;
+use crate::ui;
 
 /// Emitted exactly when the single-operation busy state transitions (so the
 /// parent can gate its own controls), and after an apply settles either way
@@ -785,6 +786,32 @@ fn text_block(text: &str, color: Hsla, size: Pixels) -> impl IntoElement + use<>
         .fold(block, |block, line| block.child(line.to_owned()))
 }
 
+/// The compact card the embedded view lives in: one row, tidy and quiet.
+fn update_card(t: &theme::AuroraTheme) -> gpui::Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(8.))
+        .px(px(16.))
+        .py(px(12.))
+        .rounded(t.radius_lg)
+        .bg(t.card)
+        .border_1()
+        .border_color(t.border_subtle)
+}
+
+/// The same card with no action, for diagnostic and no-target states.
+fn quiet_card(t: &theme::AuroraTheme, title: &str, detail: &str) -> gpui::Div {
+    update_card(t).child(
+        div()
+            .flex()
+            .items_center()
+            .gap(px(12.))
+            .child(ui::icon_tile(t, Some("system_update"), 36., false))
+            .child(ui::title_block(t, title.to_owned(), Some(detail.to_owned().into())).flex_1()),
+    )
+}
+
 impl Render for ClientUpdates {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::theme(cx).clone();
@@ -793,11 +820,13 @@ impl Render for ClientUpdates {
 
         // Embedded view: no selector and no page heading — the parent names
         // the page and the instance context.
-        let mut root = div().flex().flex_col().gap(px(8.));
+        let mut root = div().flex().flex_col();
 
         if self.host.is_none() {
-            return root.child(div().text_color(palette.muted_foreground).child(
-                "Client update controls are unavailable in diagnostic mode. No provider requests are made from this view.",
+            return root.child(quiet_card(
+                &palette,
+                "Aurora Client updates",
+                "Unavailable in diagnostic mode. No provider requests are made from this view.",
             ));
         }
 
@@ -806,11 +835,11 @@ impl Render for ClientUpdates {
             && !self.state.review_open
             && self.state.completed.is_none()
         {
-            return root.child(
-                div()
-                    .text_color(palette.muted_foreground)
-                    .child("Choose an instance to check for Aurora Client updates."),
-            );
+            return root.child(quiet_card(
+                &palette,
+                "Aurora Client updates",
+                "Choose an instance to check for Aurora Client updates.",
+            ));
         }
 
         let checking = matches!(
@@ -818,72 +847,70 @@ impl Render for ClientUpdates {
             Some(OpKind::Preview { .. })
         );
         let v = view.clone();
-        root = root.child(
-            div().flex().flex_wrap().gap(px(8.)).items_center().child(
-                AuroraButton::new(
-                    "client-updates-check",
-                    if checking {
-                        "Checking…"
-                    } else {
-                        "Check for Client updates"
-                    },
-                )
-                .disabled(busy || self.blocked || !self.state.applicable)
-                .on_click(move |_, _, cx| {
-                    v.update(cx, |s, cx| s.start_check(cx));
-                }),
-            ),
-        );
 
-        if let Some(label) = self.state.progress_label() {
-            root = root.child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(8.))
-                    .items_center()
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(palette.muted_foreground)
-                            .child(label),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(palette.muted_foreground)
-                            .child("One update at a time."),
-                    ),
-            );
+        // One short status line: progress, then the applicability reason, then
+        // the last check summary, then the idle hint.
+        let status = if let Some(label) = self.state.progress_label() {
+            label
         } else if !self.state.applicable {
-            root = root.child(
-                div().text_sm().text_color(palette.muted_foreground).child(
-                    "Aurora Client updates apply once the Client is installed and the instance is ready.",
-                ),
-            );
+            "Available once the Client is installed and the instance is ready.".to_owned()
         } else if let Some(summary) = self.state.summary.clone() {
-            root = root.child(
-                div()
-                    .text_sm()
-                    .text_color(palette.muted_foreground)
-                    .child(summary),
-            );
+            summary
         } else if self.state.error.is_none() {
-            root =
-                root.child(div().text_sm().text_color(palette.muted_foreground).child(
-                    "Check to see if a newer Aurora Client is published for this instance.",
-                ));
-        }
+            "Check whether a newer Aurora Client is published for this instance.".to_owned()
+        } else {
+            "The last check did not finish.".to_owned()
+        };
+        let mut card = update_card(&palette).child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .child(ui::icon_tile(&palette, Some("system_update"), 36., false))
+                .child(
+                    ui::title_block(&palette, "Aurora Client updates", Some(status.into()))
+                        .flex_1(),
+                )
+                .child(
+                    AuroraButton::new(
+                        "client-updates-check",
+                        if checking {
+                            "Checking…"
+                        } else {
+                            "Check for updates"
+                        },
+                    )
+                    .size(ButtonSize::Small)
+                    .icon("refresh")
+                    .disabled(busy || self.blocked || !self.state.applicable)
+                    .on_click(move |_, _, cx| {
+                        v.update(cx, |s, cx| s.start_check(cx));
+                    }),
+                ),
+        );
         if !self.state.message.is_empty() {
             let message = self.state.completed.as_ref().map_or_else(
                 || self.state.message.clone(),
                 |completed| format!("{}: {}", completed.name, self.state.message),
             );
-            root = root.child(message);
+            card = card.child(
+                div()
+                    .pl(px(48.))
+                    .text_size(px(ui::TEXT_CAPTION))
+                    .text_color(palette.foreground)
+                    .child(message),
+            );
         }
         if let Some(error) = &self.state.error {
-            root = root.child(div().text_color(palette.danger).child(error.clone()));
+            card = card.child(
+                div()
+                    .pl(px(48.))
+                    .text_size(px(ui::TEXT_CAPTION))
+                    .text_color(palette.danger)
+                    .child(error.clone()),
+            );
         }
+        root = root.child(card);
 
         // --------------------------------------------------------- the dialog
         let panel = self.review_panel(cx, &palette, busy);
@@ -931,14 +958,14 @@ impl ClientUpdates {
             .w(px(640.))
             .max_h(px(560.))
             .overflow_y_scroll()
-            .p(px(16.))
+            .p(px(20.))
             .flex()
             .flex_col()
-            .gap(px(10.))
-            .rounded(palette.radius)
-            .bg(palette.surface)
+            .gap(px(12.))
+            .rounded(palette.radius_lg)
+            .bg(palette.raised)
             .border_1()
-            .border_color(palette.border)
+            .border_color(palette.border_subtle)
             .text_color(palette.foreground);
 
         if let Some(op) = self.state.in_flight.clone() {
@@ -947,7 +974,8 @@ impl ClientUpdates {
                     panel = panel
                         .child(
                             div()
-                                .text_size(px(16.))
+                                .text_size(px(ui::TEXT_SECTION + 1.))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .child(format!("Update Aurora Client in {}", op.instance_name)),
                         )
                         .child(
@@ -965,7 +993,8 @@ impl ClientUpdates {
                     panel = panel
                         .child(
                             div()
-                                .text_size(px(16.))
+                                .text_size(px(ui::TEXT_SECTION + 1.))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .child(format!("Updating Aurora Client in {}", op.instance_name)),
                         )
                         .child(
@@ -986,7 +1015,12 @@ impl ClientUpdates {
             }
         } else if let Some(review) = self.state.review.clone() {
             let title = format!("Update Aurora Client in {}", review.instance_name);
-            panel = panel.child(div().text_size(px(16.)).child(title));
+            panel = panel.child(
+                div()
+                    .text_size(px(ui::TEXT_SECTION + 1.))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child(title),
+            );
             let close = view.clone();
             match &review.kind {
                 ReviewKind::Candidate {
@@ -1030,7 +1064,7 @@ impl ClientUpdates {
                     }
                     let v = view.clone();
                     panel = panel
-                        .child(text_block(&text, palette.foreground, px(12.)))
+                        .child(text_block(&text, palette.foreground, px(13.)))
                         .child(
                             div()
                                 .flex()
@@ -1061,7 +1095,7 @@ impl ClientUpdates {
                 }
                 ReviewKind::Outcome { text } => {
                     panel = panel
-                        .child(text_block(text, palette.foreground, px(12.)))
+                        .child(text_block(text, palette.foreground, px(13.)))
                         .child(
                             div().flex().flex_wrap().gap(px(8.)).pt(px(6.)).child(
                                 AuroraButton::new("client-updates-close", "Close")
@@ -1076,24 +1110,26 @@ impl ClientUpdates {
         } else if let Some(error) = self.state.error.clone() {
             // A failed check or apply stays acknowledged until dismissed.
             let close = view.clone();
-            panel =
-                panel
-                    .child(div().text_size(px(16.)).child(
-                        self.state.completed.as_ref().map_or_else(
+            panel = panel
+                .child(
+                    div()
+                        .text_size(px(ui::TEXT_SECTION + 1.))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .child(self.state.completed.as_ref().map_or_else(
                             || "Aurora Client update".to_owned(),
                             |completed| format!("Aurora Client update in {}", completed.name),
-                        ),
-                    ))
-                    .child(div().text_color(palette.danger).child(error))
-                    .child(
-                        div().flex().flex_wrap().gap(px(8.)).pt(px(6.)).child(
-                            AuroraButton::new("client-updates-close", "Close")
-                                .disabled(operation_busy)
-                                .on_click(move |_, _, cx| {
-                                    close.update(cx, |s, cx| s.dismiss_review(cx));
-                                }),
-                        ),
-                    );
+                        )),
+                )
+                .child(div().text_color(palette.danger).child(error))
+                .child(
+                    div().flex().flex_wrap().gap(px(8.)).pt(px(6.)).child(
+                        AuroraButton::new("client-updates-close", "Close")
+                            .disabled(operation_busy)
+                            .on_click(move |_, _, cx| {
+                                close.update(cx, |s, cx| s.dismiss_review(cx));
+                            }),
+                    ),
+                );
         } else {
             panel = panel.child("Check for Aurora Client updates");
         }

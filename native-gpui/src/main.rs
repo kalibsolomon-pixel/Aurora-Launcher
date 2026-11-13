@@ -1936,6 +1936,20 @@ impl Render for Launcher {
             .flex_1()
             .id("content")
             .overflow_y_scroll();
+        if showcase() {
+            // Design screenshots can start part-way down a long page.
+            if let Some(y) = std::env::var("AURORA_SHOWCASE_SCROLL")
+                .ok()
+                .and_then(|y| y.parse::<f32>().ok())
+            {
+                let scroll = window
+                    .use_keyed_state("showcase-scroll", cx, |_, _| gpui::ScrollHandle::new())
+                    .read(cx)
+                    .clone();
+                scroll.set_offset(gpui::point(px(0.), px(-y)));
+                content = content.track_scroll(&scroll);
+            }
+        }
         match self.page {
             // The startup load failed: nothing else is trustworthy until it succeeds.
             _ if self.fatal_error.is_some() => {

@@ -39,14 +39,14 @@ use aurora_launcher_lib::host::Host;
 use gpui_kit::base::Dialog;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    Context, EventEmitter, FocusHandle, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, Styled, Window, div, img, px, rgba,
+    Context, EventEmitter, FocusHandle, FontWeight, Hsla, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, Styled, Window, div, img, px, rgba,
 };
 
 use crate::api::{self, ApiResult};
 use crate::backend::guarded;
-use crate::controls::{AuroraButton, ButtonVariant};
-use crate::theme;
+use crate::controls::{AuroraButton, ButtonSize, ButtonVariant};
+use crate::{theme, ui};
 
 /// Emitted for the integrating parent view.
 #[derive(Debug)]
@@ -456,6 +456,53 @@ fn status_text(status: &str) -> &'static str {
         "reauthenticationRequired" => "Sign in again to play",
         _ => "Unavailable",
     }
+}
+
+/// Short badge label and tone for the account's session status.
+fn status_badge_parts(status: &str) -> (&'static str, ui::Tone) {
+    match status {
+        "signedIn" => ("Signed in", ui::Tone::Success),
+        "reauthenticationRequired" => ("Sign in again", ui::Tone::Warning),
+        _ => ("Unavailable", ui::Tone::Neutral),
+    }
+}
+
+/// An inline status strip for progress, notices and errors.
+fn notice_bar(
+    t: &theme::AuroraTheme,
+    text: impl Into<gpui_kit::SharedString>,
+    tone: ui::Tone,
+) -> gpui_kit::Div {
+    let (color, icon) = match tone {
+        ui::Tone::Danger => (t.danger, "error"),
+        ui::Tone::Accent => (t.ring, "info"),
+        _ => (t.muted_foreground, "info"),
+    };
+    div()
+        .flex()
+        .items_center()
+        .gap(px(10.))
+        .px(px(14.))
+        .py(px(10.))
+        .rounded(t.radius)
+        .bg(Hsla {
+            a: 0.10,
+            ..if tone == ui::Tone::Neutral {
+                t.foreground
+            } else {
+                color
+            }
+        })
+        .border_1()
+        .border_color(Hsla { a: 0.22, ..color })
+        .text_size(px(ui::TEXT_BODY))
+        .text_color(if tone == ui::Tone::Neutral {
+            t.foreground
+        } else {
+            color
+        })
+        .child(crate::symbols::icon(Some(icon), px(16.), color))
+        .child(div().flex_1().child(text.into()))
 }
 
 fn initial_letter(name: &str) -> String {
@@ -957,48 +1004,115 @@ impl Render for Accounts {
             .track_focus(&self.page_focus)
             .flex()
             .flex_col()
-            .gap(px(16.))
+            .gap(px(ui::PAGE_GAP))
             .text_color(palette.foreground);
 
-        content = content.child(div().text_size(px(20.)).child("Accounts"));
+        let heading = ui::page_header(
+            &palette,
+            "Accounts",
+            Some("The Microsoft accounts you play Minecraft with.".into()),
+        );
 
         if no_host {
-            content = content.child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(palette.muted_foreground)
-                    .child(
-                        "Accounts are unavailable: this diagnostic window has no launcher host, so no sign-in, credentials or account state are touched.",
-                    ),
-            );
+            content = content.child(heading).child(ui::empty_state(
+                &palette,
+                "person_off",
+                "Accounts unavailable",
+                "Accounts are unavailable: this diagnostic window has no launcher host, so no sign-in, credentials or account state are touched.",
+            ));
             return div().size_full().child(content);
+        }
+
+        // Header action: one primary action, or the cancel affordance while a
+        // browser sign-in is running.
+        let mut notices: Vec<(String, ui::Tone)> = Vec::new();
+        let action: Option<gpui_kit::AnyElement> = if self.core.login.is_some() {
+            if self.core.cancel_unavailable {
+                notices.push(("Finishing sign-in…".into(), ui::Tone::Neutral));
+                None
+            } else if self.core.cancel_requested {
+                notices.push(("Cancelling sign-in…".into(), ui::Tone::Neutral));
+                None
+            } else {
+                Some(
+                    AuroraButton::new("cancel-sign-in", "Cancel sign-in")
+                        .on_click(cx.listener(|this, _, _, cx| this.cancel_sign_in(cx)))
+                        .into_any_element(),
+                )
+            }
+        } else {
+            if self.core.cancel.is_some() {
+                notices.push(("Finishing sign-in cancellation…".into(), ui::Tone::Neutral));
+            }
+            Some(
+                AuroraButton::new("sign-in", "Sign in with Microsoft")
+                    .variant(ButtonVariant::Primary)
+                    .icon("login")
+                    .disabled(busy || self.core.accounts.is_none() || self.core.cancel.is_some())
+                    .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx)))
+                    .into_any_element(),
+            )
+        };
+        content = content.child(
+            div()
+                .flex()
+                .items_start()
+                .justify_between()
+                .gap(px(16.))
+                .child(heading)
+                .when_some(action, |row, action| {
+                    row.child(div().flex_shrink_0().child(action))
+                }),
+        );
+
+        if auth_busy {
+            if let Some(phase) = &self.core.phase {
+                notices.push((phase.to_string(), ui::Tone::Neutral));
+            }
+        }
+        if let Some(notice) = &self.core.notice {
+            notices.push((notice.to_string(), ui::Tone::Accent));
+        }
+        if let Some(error) = &self.core.error {
+            notices.push((error.to_string(), ui::Tone::Danger));
+        }
+        for (text, tone) in notices {
+            content = content.child(notice_bar(&palette, text, tone));
         }
 
         if self.core.accounts.is_none() {
             if let Some(error) = &self.core.load_error {
-                content = content
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .text_color(palette.danger)
-                            .child(error.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .text_color(palette.muted_foreground)
-                            .child("Accounts could not be loaded."),
-                    )
-                    .child(
-                        AuroraButton::new("accounts-retry", "Retry")
-                            .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
-                    );
+                content = content.child(
+                    ui::card(&palette)
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(px(4.))
+                                .child(
+                                    div()
+                                        .text_size(px(ui::TEXT_BODY))
+                                        .text_color(palette.danger)
+                                        .child(error.clone()),
+                                )
+                                .child(ui::muted(&palette, "Accounts could not be loaded.")),
+                        )
+                        .child(
+                            div().flex().child(
+                                AuroraButton::new("accounts-retry", "Retry")
+                                    .icon("refresh")
+                                    .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                            ),
+                        ),
+                );
             } else {
                 content = content.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child("Loading accounts…"),
+                    ui::list_card(&palette).child(
+                        div()
+                            .px(px(16.))
+                            .py(px(20.))
+                            .child(ui::muted(&palette, "Loading accounts…")),
+                    ),
                 );
             }
         }
@@ -1006,18 +1120,20 @@ impl Render for Accounts {
         if let Some(state) = self.core.accounts.as_ref() {
             let selected_id = state.selected_account_id.clone();
             if state.accounts.is_empty() {
-                content = content.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child("No accounts yet. Sign in to add one."),
-                );
+                content = content.child(ui::empty_state(
+                    &palette,
+                    "account_circle",
+                    "No accounts yet",
+                    "No accounts yet. Sign in with Microsoft to add one.",
+                ));
             } else {
                 let mut rows: Vec<&api::AccountSummary> = state.accounts.iter().collect();
                 rows.sort_by_key(|account| {
                     selected_id.as_deref() != Some(account.account_id.as_str())
                 });
-                for account in rows {
+                let count = rows.len();
+                let mut list = ui::list_card(&palette);
+                for (index, account) in rows.into_iter().enumerate() {
                     // Row identity is frozen at render time so a queued event can
                     // never act on a different account.
                     let id = account.account_id.clone();
@@ -1026,41 +1142,58 @@ impl Render for Accounts {
                     let select_id = id.clone();
                     let refresh_id = id.clone();
                     let review_id = id.clone();
-                    content = content.child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(
-                                div()
-                                    .size(px(32.))
-                                    .bg(palette.surface_hover)
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .text_size(px(14.))
-                                    .when_some(self.avatars.images.get(&id).cloned(), |d, image| {
-                                        d.child(img(image).size(px(32.)))
-                                    })
-                                    .when(!self.avatars.images.contains_key(&id), |d| {
-                                        d.rounded_full()
-                                            .child(initial_letter(&account.minecraft_name))
-                                    }),
-                            )
-                            .child(
+                    let (status_label, status_tone) = status_badge_parts(&account.status);
+                    let avatar = div()
+                        .flex()
+                        .flex_shrink_0()
+                        .items_center()
+                        .justify_center()
+                        .size(px(40.))
+                        .rounded(px(10.))
+                        .overflow_hidden()
+                        .bg(if selected {
+                            palette.accent_soft
+                        } else {
+                            palette.control
+                        })
+                        .border_1()
+                        .border_color(if selected {
+                            Hsla {
+                                a: 0.40,
+                                ..palette.ring
+                            }
+                        } else {
+                            palette.border_subtle
+                        })
+                        .text_size(px(16.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(if selected {
+                            palette.ring
+                        } else {
+                            palette.muted_foreground
+                        })
+                        .when_some(self.avatars.images.get(&id).cloned(), |d, image| {
+                            d.child(img(image).size(px(40.)))
+                        })
+                        .when(!self.avatars.images.contains_key(&id), |d| {
+                            d.child(initial_letter(&account.minecraft_name))
+                        });
+                    let actions = div()
+                        .flex()
+                        .flex_shrink_0()
+                        .items_center()
+                        .gap(px(6.))
+                        .when(!selected, |d| {
+                            d.child(
                                 AuroraButton::new(
                                     gpui_kit::SharedString::from(format!(
                                         "account-{}",
                                         account.account_id
                                     )),
-                                    format!(
-                                        "{} · {}{}",
-                                        account.minecraft_name,
-                                        status_text(&account.status),
-                                        if selected { " · Selected" } else { "" }
-                                    ),
+                                    "Use",
                                 )
-                                .selected(selected)
+                                .size(ButtonSize::Small)
+                                .icon("check")
                                 .disabled(busy)
                                 .on_click(cx.listener(
                                     move |this, _, _, cx| {
@@ -1068,110 +1201,91 @@ impl Render for Accounts {
                                     },
                                 )),
                             )
-                            .child(
-                                AuroraButton::new(
-                                    gpui_kit::SharedString::from(format!(
-                                        "refresh-session-{}",
-                                        account.account_id
-                                    )),
-                                    "Refresh session",
-                                )
-                                .disabled(busy)
-                                .on_click(cx.listener(
-                                    move |this, _, _, cx| {
-                                        this.refresh_session(refresh_id.clone(), cx);
-                                    },
+                        })
+                        .child(
+                            AuroraButton::new(
+                                gpui_kit::SharedString::from(format!(
+                                    "refresh-session-{}",
+                                    account.account_id
                                 )),
+                                "Refresh session",
                             )
-                            .child(
-                                AuroraButton::new(
-                                    gpui_kit::SharedString::from(format!(
-                                        "remove-account-{}",
-                                        account.account_id
-                                    )),
-                                    "Remove",
-                                )
-                                .variant(ButtonVariant::Danger)
-                                .disabled(busy)
-                                .on_click(cx.listener(
-                                    move |this, _, _, cx| {
-                                        this.open_remove_review(
-                                            review_id.clone(),
-                                            name.clone(),
-                                            cx,
-                                        );
-                                    },
+                            .variant(ButtonVariant::Ghost)
+                            .size(ButtonSize::Small)
+                            .icon("sync")
+                            .disabled(busy)
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    this.refresh_session(refresh_id.clone(), cx);
+                                },
+                            )),
+                        )
+                        .child(
+                            AuroraButton::new(
+                                gpui_kit::SharedString::from(format!(
+                                    "remove-account-{}",
+                                    account.account_id
                                 )),
-                            ),
+                                "Remove",
+                            )
+                            .variant(ButtonVariant::Danger)
+                            .size(ButtonSize::Small)
+                            .disabled(busy)
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    this.open_remove_review(review_id.clone(), name.clone(), cx);
+                                },
+                            )),
+                        );
+                    list = list.child(
+                        ui::row(&palette, index + 1 == count)
+                            .id(gpui_kit::SharedString::from(format!("account-row-{id}")))
+                            .when(selected, |row| row.bg(palette.accent_soft))
+                            .child(avatar)
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .flex_1()
+                                    .min_w(px(0.))
+                                    .gap(px(5.))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(8.))
+                                            .child(
+                                                div()
+                                                    .min_w(px(0.))
+                                                    .text_size(px(ui::TEXT_BODY + 1.))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_color(palette.foreground)
+                                                    .text_ellipsis()
+                                                    .child(account.minecraft_name.clone()),
+                                            )
+                                            .when(selected, |d| {
+                                                d.child(ui::badge(
+                                                    &palette,
+                                                    "Active",
+                                                    ui::Tone::Accent,
+                                                ))
+                                            })
+                                            .child(ui::status_badge(
+                                                &palette,
+                                                status_label,
+                                                status_tone,
+                                            )),
+                                    )
+                                    .child(ui::caption(&palette, "Microsoft account")),
+                            )
+                            .child(actions),
                     );
                 }
+                content = content.child(list).child(ui::caption(
+                    &palette,
+                    "Sign-in opens in your system browser. Aurora never sees your password.",
+                ));
             }
-        }
-
-        if auth_busy {
-            if let Some(phase) = &self.core.phase {
-                content = content.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child(phase.clone()),
-                );
-            }
-        }
-
-        if self.core.login.is_some() {
-            if self.core.cancel_unavailable {
-                content = content.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child("Finishing sign-in…"),
-                );
-            } else if self.core.cancel_requested {
-                content = content.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child("Cancelling sign-in…"),
-                );
-            } else {
-                content = content.child(
-                    AuroraButton::new("cancel-sign-in", "Cancel sign-in")
-                        .on_click(cx.listener(|this, _, _, cx| this.cancel_sign_in(cx))),
-                );
-            }
-        } else {
-            if self.core.cancel.is_some() {
-                content = content.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child("Finishing sign-in cancellation…"),
-                );
-            }
-            content = content.child(
-                AuroraButton::new("sign-in", "Sign in with Microsoft")
-                    .variant(ButtonVariant::Primary)
-                    .disabled(busy || self.core.accounts.is_none() || self.core.cancel.is_some())
-                    .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx))),
-            );
-        }
-
-        if let Some(notice) = &self.core.notice {
-            content = content.child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(palette.muted_foreground)
-                    .child(notice.clone()),
-            );
-        }
-        if let Some(error) = &self.core.error {
-            content = content.child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(palette.danger)
-                    .child(error.clone()),
-            );
         }
 
         // Removal review: the base dialog owns Escape (vetoed while busy) and
@@ -1188,16 +1302,23 @@ impl Render for Accounts {
                 .w(px(440.))
                 .max_w(px(560.))
                 .p(px(24.))
-                .bg(palette.surface)
+                .bg(palette.raised)
+                .border_1()
+                .border_color(palette.border_subtle)
                 .text_color(palette.foreground)
-                .rounded(palette.radius)
+                .rounded(palette.radius_lg)
                 .flex()
                 .flex_col()
                 .gap(px(12.))
-                .child(div().text_size(px(15.)).child("Remove account"))
                 .child(
                     div()
-                        .text_size(px(13.))
+                        .text_size(px(ui::TEXT_SECTION))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child("Remove account"),
+                )
+                .child(
+                    div()
+                        .text_size(px(ui::TEXT_BODY))
                         .text_color(palette.muted_foreground)
                         .child(format!(
                             "Remove {} (account {}) from Aurora Launcher? Its saved sign-in credential will be deleted. All instances are preserved.",
@@ -1208,7 +1329,9 @@ impl Render for Accounts {
                 .child(
                     div()
                         .flex()
+                        .justify_end()
                         .gap(px(8.))
+                        .pt(px(4.))
                         .child(
                             AuroraButton::new("remove-cancel", "Cancel").disabled(busy).on_click(
                                 cx.listener(move |this, _, _, cx| this.dismiss_remove(cancel_review.as_ref(), cx)),
@@ -1223,31 +1346,29 @@ impl Render for Accounts {
                                 })),
                         ),
                 );
-            content = content.child(
-                Dialog::new(cx)
-                    .open(self.core.review_open && self.core.review.is_some())
-                    .accessibility_label("Remove account")
-                    .close_on_backdrop_press(false)
-                    // Enter must never bypass the explicit removal button.
-                    .on_ok(|_, _, _| false)
-                    .on_cancel(move |_, _, app| !view.read(app).core.busy)
-                    .on_open_change(move |open, _reason, window, app| {
+            // Outside the gapped column so the closed dialog adds no space.
+            let dialog = Dialog::new(cx)
+                .open(self.core.review_open && self.core.review.is_some())
+                .accessibility_label("Remove account")
+                .close_on_backdrop_press(false)
+                // Enter must never bypass the explicit removal button.
+                .on_ok(|_, _, _| false)
+                .on_cancel(move |_, _, app| !view.read(app).core.busy)
+                .on_open_change(move |open, _reason, window, app| {
+                    if !open {
+                        page_focus.focus(window, app);
+                    }
+                    let _ = weak.update(app, |this, cx| {
                         if !open {
-                            page_focus.focus(window, app);
+                            this.core.dismiss_review(change_review.as_ref());
                         }
-                        let _ = weak.update(app, |this, cx| {
-                            if !open {
-                                this.core.dismiss_review(change_review.as_ref());
-                            }
-                            cx.notify();
-                        });
-                    })
-                    .backdrop(div().absolute().size_full().bg(rgba(0x000000a6)))
-                    .popup(panel),
-            );
+                        cx.notify();
+                    });
+                })
+                .backdrop(div().absolute().size_full().bg(rgba(0x000000a6)))
+                .popup(panel);
+            return div().size_full().child(content).child(dialog);
         }
-
-        div().size_full().child(content)
     }
 }
 
