@@ -1134,7 +1134,7 @@ impl Render for Accounts {
             }
             Some(
                 AuroraButton::new("sign-in", "Add account")
-                    .variant(ButtonVariant::Primary)
+                    .variant(ButtonVariant::Default)
                     .icon("person_add")
                     .disabled(busy || self.core.accounts.is_none() || self.core.cancel.is_some())
                     .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx)))
@@ -1339,14 +1339,8 @@ impl Render for Accounts {
                     );
                 }
 
-                // Right column: profile card for the active account. The sign-in
-                // note sits under the list so both columns end together.
-                let mut side = div()
-                    .flex()
-                    .flex_col()
-                    .flex_shrink_0()
-                    .gap(px(16.))
-                    .w(px(300.));
+                // One contextual session action below the account list.
+                let mut side = div().flex().flex_col().gap(px(12.)).w_full();
                 let active = selected_id
                     .as_deref()
                     .and_then(|id| rows.iter().copied().find(|a| a.account_id == id));
@@ -1361,13 +1355,12 @@ impl Render for Accounts {
                     };
                     let sign_in_blocked =
                         busy || self.core.accounts.is_none() || self.core.cancel.is_some();
-                    let mut actions = div().flex().flex_col().gap(px(8.)).w_full().pt(px(2.));
+                    let mut actions = div().flex().gap(px(8.));
                     if reauth {
                         actions = actions.child(
                             AuroraButton::new("profile-sign-in-again", "Sign in again")
                                 .variant(ButtonVariant::Primary)
                                 .icon("login")
-                                .full_width()
                                 .disabled(sign_in_blocked)
                                 .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx))),
                         );
@@ -1375,7 +1368,11 @@ impl Render for Accounts {
                     actions = actions.child(
                         AuroraButton::new(
                             gpui_kit::SharedString::from(format!("refresh-session-{id}")),
-                            "Refresh session",
+                            if reauth {
+                                "Try saved session"
+                            } else {
+                                "Refresh session"
+                            },
                         )
                         .variant(if reauth {
                             ButtonVariant::Default
@@ -1383,55 +1380,29 @@ impl Render for Accounts {
                             ButtonVariant::Primary
                         })
                         .icon("sync")
-                        .full_width()
                         .disabled(busy)
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.refresh_session(refresh_id.clone(), cx);
                         })),
                     );
                     side = side.child(
-                        ui::card(&palette)
-                            .gap(px(14.))
-                            .child(ui::eyebrow(&palette, "Active account"))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(14.))
-                                    .child(self.avatar_tile(
+                        ui::card(&palette).child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap(px(20.))
+                                .child(
+                                    ui::section_header(
                                         &palette,
-                                        &id,
-                                        &account.minecraft_name,
-                                        true,
-                                        56.,
-                                        14.,
-                                        24.,
-                                    ))
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .flex_1()
-                                            .min_w(px(0.))
-                                            .gap(px(4.))
-                                            .child(
-                                                div()
-                                                    .text_size(px(18.))
-                                                    .font_weight(FontWeight::SEMIBOLD)
-                                                    .text_color(palette.foreground)
-                                                    .text_ellipsis()
-                                                    .child(account.minecraft_name.clone()),
-                                            )
-                                            .child(status_line(&palette, &account.status, None)),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(ui::TEXT_BODY))
-                                    .text_color(palette.muted_foreground)
-                                    .child(explanation),
-                            )
-                            .child(actions),
+                                        "Session",
+                                        Some(explanation.into()),
+                                    )
+                                    .flex_1()
+                                    .min_w(px(0.)),
+                                )
+                                .child(actions.flex_shrink_0()),
+                        ),
                     );
                 }
                 let info = ui::card(&palette).child(
@@ -1461,14 +1432,7 @@ impl Render for Accounts {
                         ),
                 );
                 content = content
-                    .child(
-                        div()
-                            .flex()
-                            .items_start()
-                            .gap(px(ui::PAGE_GAP))
-                            .child(div().flex_1().min_w(px(0.)).child(list))
-                            .child(side),
-                    )
+                    .child(div().flex().flex_col().gap(px(16.)).child(list).child(side))
                     .child(info);
             }
         }

@@ -2279,7 +2279,7 @@ impl Render for InstanceEditor {
                 ));
             } else {
                 let count = state.instances.len();
-                let list = ui::card(&t).p(px(8.)).gap(px(2.)).h_full().child(
+                let list = ui::card(&t).p(px(8.)).gap(px(2.)).child(
                     div()
                         .flex()
                         .items_center()
@@ -2309,7 +2309,7 @@ impl Render for InstanceEditor {
                     .flex()
                     .flex_col()
                     .gap(px(2.))
-                    .flex_1()
+                    .max_h(row_height - px(110.))
                     .min_h(px(0.))
                     .overflow_y_scroll();
                 for instance in state.instances.iter() {
@@ -2410,9 +2410,7 @@ impl Render for InstanceEditor {
             .flex_col()
             .gap(px(16.))
             .flex_1()
-            .min_w(px(0.))
-            .h_full()
-            .overflow_y_scroll();
+            .min_w(px(0.));
 
         // ---- The selected instance ---------------------------------------
         if let Some(id) = self.selected.clone() {
@@ -3129,7 +3127,6 @@ impl Render for InstanceEditor {
                     .flex()
                     .items_start()
                     .w_full()
-                    .h(row_height)
                     .min_w(px(0.))
                     .gap(px(ui::PAGE_GAP))
                     .child(list)

@@ -241,7 +241,7 @@ impl SkinPreview {
         self.changed(cx);
     }
 }
-const STAGE_HEIGHT: f32 = 364.;
+const STAGE_HEIGHT: f32 = 300.;
 
 impl Render for SkinPreview {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -301,7 +301,7 @@ impl Render for SkinPreview {
 
         // The renderer produces a 320x440 image; the stage shows it scaled down
         // so the whole card (stage + controls) fits a 760px window.
-        let scale = 0.8;
+        let scale = 0.68;
         let stage = div()
             .id("player-preview-surface")
             .role(Role::Group)
@@ -384,32 +384,12 @@ impl Render for SkinPreview {
                 cx.stop_propagation();
             }))
             .when_some(self.image.clone(), |d, image| {
-                // The figure is a fixed-size box so the floor shadow stays
-                // glued to the model's feet however tall the stage grows.
-                let shadow = |w: f32, h: f32, a: f32| {
-                    div()
-                        .absolute()
-                        .left(px((318. * scale - w) / 2.))
-                        .top(px(394. * scale - h / 2.))
-                        .w(px(w))
-                        .h(px(h))
-                        .rounded_full()
-                        .bg(gpui::Hsla {
-                            h: 0.,
-                            s: 0.,
-                            l: 0.,
-                            a,
-                        })
-                };
                 d.child(
                     div()
                         .relative()
                         .flex_shrink_0()
                         .w(px(318. * scale))
                         .h(px(438. * scale))
-                        .child(shadow(200., 28., 0.16))
-                        .child(shadow(150., 19., 0.22))
-                        .child(shadow(100., 11., 0.34))
                         .child(img(image).w(px(318. * scale)).h(px(438. * scale))),
                 )
             })
@@ -466,7 +446,7 @@ impl Render for SkinPreview {
         ui::card(&t)
             .gap(px(14.))
             .p(px(16.))
-            .w(px(380.))
+            .w(px(320.))
             .flex_shrink_0()
             .text_color(t.foreground)
             .child(stage)

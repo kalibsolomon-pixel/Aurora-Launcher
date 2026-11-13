@@ -1278,14 +1278,16 @@ fn icon_button(
         a: 0.16,
         ..t.danger
     };
-    let color = gpui::Hsla { a: 0.7, ..t.danger };
+    let color = t.danger;
     gpui_kit::base::Button::new(id)
         .aria_label(label)
         .flex()
         .flex_shrink_0()
         .items_center()
         .justify_center()
-        .size(px(28.))
+        .h(px(32.))
+        .px(px(8.))
+        .gap(px(6.))
         .rounded(t.radius)
         .bg(clear)
         .border_1()
@@ -1295,7 +1297,10 @@ fn icon_button(
         .active(|style| style.opacity(0.88))
         .focus(move |style| style.border_color(ring))
         .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
+        .text_size(px(ui::TEXT_CAPTION))
+        .text_color(t.muted_foreground)
         .child(crate::symbols::icon(Some(icon), px(16.), color))
+        .child("Remove…")
 }
 
 fn kind_icon(kind: Kind) -> &'static str {
@@ -1490,7 +1495,6 @@ impl Render for Content {
                         .child(
                             AuroraButton::new("content-folder", "Open folder")
                                 .size(ButtonSize::Small)
-                                .variant(ButtonVariant::Ghost)
                                 .icon("folder_open")
                                 .disabled(busy)
                                 .on_click(move |_, _, cx| {
@@ -1500,7 +1504,6 @@ impl Render for Content {
                         .child(
                             AuroraButton::new("content-retry", "Refresh content")
                                 .size(ButtonSize::Small)
-                                .variant(ButtonVariant::Ghost)
                                 .icon("refresh")
                                 .disabled(busy)
                                 .on_click(move |_, _, cx| {

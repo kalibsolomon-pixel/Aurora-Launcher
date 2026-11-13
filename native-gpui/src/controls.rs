@@ -167,15 +167,15 @@ impl RenderOnce for AuroraButton {
             ButtonVariant::Nav => (clear, t.muted_foreground, t.control, clear),
             ButtonVariant::Soft => (
                 Hsla { a: 0.20, ..t.ring },
-                t.ring,
+                t.foreground,
                 Hsla { a: 0.30, ..t.ring },
                 clear,
             ),
             ButtonVariant::Subtle => (clear, t.muted_foreground, t.control, clear),
         };
         let (height, pad, text, icon_size) = match self.size {
-            ButtonSize::Small => (28., 10., 12., 14.),
-            ButtonSize::Medium => (34., 14., 13., 16.),
+            ButtonSize::Small => (30., 10., 13., 15.),
+            ButtonSize::Medium => (34., 14., 14., 16.),
             ButtonSize::Large => (44., 22., 15., 20.),
         };
         let (soft, ring, selected_fg) = (t.accent_soft, t.ring, t.foreground);
@@ -212,9 +212,9 @@ impl RenderOnce for AuroraButton {
             .text_color(fg)
             .border_1()
             .border_color(border)
-            .hover(|style| style.bg(hover_bg))
+            .hover(|style| style.bg(if nav && self.selected { soft } else { hover_bg }))
             .active(|style| style.opacity(0.88))
-            .focus(|style| style.border_color(ring))
+            .focus_visible(|style| style.border_color(ring))
             .styles(|styles| {
                 styles
                     .selected(|style| {

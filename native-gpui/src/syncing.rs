@@ -1041,12 +1041,8 @@ fn locked_toggle(
     checked: bool,
 ) -> impl IntoElement {
     let (id, label) = (id.into(), label.into());
-    // Glyph and word share one color: foreground when included, quiet when not.
-    let tone = if checked {
-        t.foreground
-    } else {
-        t.subtle_foreground
-    };
+    // These are saved preferences, not an active sync state.
+    let tone = t.muted_foreground;
     div()
         .id(id)
         .flex()
@@ -1065,12 +1061,12 @@ fn locked_toggle(
                 .gap(px(5.))
                 .text_size(px(ui::TEXT_BODY))
                 .text_color(tone)
-                .child(crate::symbols::icon(
-                    Some(if checked { "check" } else { "remove" }),
-                    px(16.),
-                    tone,
-                ))
-                .child(if checked { "Included" } else { "Not included" }),
+                .child(crate::symbols::icon(Some("lock"), px(16.), tone))
+                .child(if checked {
+                    "Saved: include"
+                } else {
+                    "Saved: exclude"
+                }),
         )
 }
 

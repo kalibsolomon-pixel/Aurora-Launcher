@@ -1779,6 +1779,7 @@ impl Launcher {
                 let chosen = selected.as_deref() == Some(item.id.as_str());
                 tiles = tiles.child(
                     ui::list_button(t, ("instance", i), chosen)
+                        .aria_label(item.display_name.clone())
                         .disabled(self.controls_blocked())
                         .child(instance_icon(
                             stored_icon(&launcher.icons, &item.id),
@@ -2019,6 +2020,12 @@ impl Render for Launcher {
                     )
                     .child(ui::caption(&palette, "Launcher")),
             );
+        let page_scroll = window
+            .use_keyed_state(("page-scroll", self.page as usize), cx, |_, _| {
+                gpui::ScrollHandle::new()
+            })
+            .read(cx)
+            .clone();
         let mut content = div()
             .flex()
             .flex_col()
@@ -2028,6 +2035,9 @@ impl Render for Launcher {
             .pb(px(40.))
             .flex_1()
             .id("content")
+            .min_w(px(0.))
+            .min_h(px(0.))
+            .track_scroll(&page_scroll)
             .overflow_y_scroll();
         if showcase() {
             // Design screenshots can start part-way down a long page.
@@ -2035,12 +2045,7 @@ impl Render for Launcher {
                 .ok()
                 .and_then(|y| y.parse::<f32>().ok())
             {
-                let scroll = window
-                    .use_keyed_state("showcase-scroll", cx, |_, _| gpui::ScrollHandle::new())
-                    .read(cx)
-                    .clone();
-                scroll.set_offset(gpui::point(px(0.), px(-y)));
-                content = content.track_scroll(&scroll);
+                page_scroll.set_offset(gpui::point(px(0.), px(-y)));
             }
         }
         match self.page {
@@ -2079,7 +2084,9 @@ impl Render for Launcher {
                     ))
                     .children(self.home_children(&palette, cx));
                 if let Some(updates) = &self.client_updates {
-                    content = content.child(updates.clone());
+                    if updates.read(cx).is_visible() {
+                        content = content.child(updates.clone());
+                    }
                 }
                 if let Some(home) = &self.home_widgets {
                     content = content.child(home.clone());
@@ -2263,50 +2270,23 @@ impl Render for Launcher {
             .child(
                 div()
                     .flex_1()
+                    .min_w(px(0.))
                     .flex()
                     .flex_col()
                     .when(chrome::custom(), |column| {
                         column.child(chrome::title_bar(window, cx, &palette))
                     })
-                    .child({
-                        // Soft edges tell the reader the page scrolls instead of
-                        // cutting rows off at the window border.
-                        let fade = |angle: f32| {
-                            gpui::linear_gradient(
-                                angle,
-                                gpui::linear_color_stop(
-                                    gpui::Hsla {
-                                        a: 0.0,
-                                        ..palette.background
-                                    },
-                                    0.,
-                                ),
-                                gpui::linear_color_stop(
-                                    gpui::Hsla {
-                                        a: 0.92,
-                                        ..palette.background
-                                    },
-                                    1.,
-                                ),
-                            )
-                        };
+                    .child(
                         div()
                             .relative()
                             .flex_1()
+                            .min_w(px(0.))
                             .min_h(px(0.))
                             .flex()
                             .flex_col()
                             .child(content)
-                            .child(
-                                div()
-                                    .absolute()
-                                    .bottom_0()
-                                    .left_0()
-                                    .right_0()
-                                    .h(px(40.))
-                                    .bg(fade(180.)),
-                            )
-                    })
+                            .child(ui::scrollbar(&palette, "page-scrollbar", &page_scroll)),
+                    )
                     .when_some(
                         self.load_error
                             .as_ref()

@@ -592,6 +592,16 @@ pub struct ClientUpdates {
 impl EventEmitter<ClientUpdatesEvent> for ClientUpdates {}
 
 impl ClientUpdates {
+    pub fn is_visible(&self) -> bool {
+        self.host.is_none()
+            || self.state.target.is_none()
+            || self.state.applicable
+            || self.state.busy()
+            || self.state.review_open
+            || self.state.completed.is_some()
+            || !self.state.message.is_empty()
+            || self.state.error.is_some()
+    }
     /// Builds the view. `host: None` constructs the diagnostic view that
     /// makes no provider, credential or integration calls. Constructing the
     /// view never checks for updates; the explicit Check button does.
@@ -905,13 +915,8 @@ impl Render for ClientUpdates {
         } else {
             "The last check did not finish.".to_owned()
         };
-        if !self.state.applicable
-            && !busy
-            && !self.state.review_open
-            && self.state.message.is_empty()
-            && self.state.error.is_none()
-        {
-            return root.child(slim_row(&palette, &status, Some("Not installed")));
+        if !self.is_visible() {
+            return root;
         }
         let mut card = update_card(&palette).child(
             div()

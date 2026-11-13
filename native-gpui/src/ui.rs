@@ -17,15 +17,34 @@ use crate::theme::AuroraTheme;
 
 /// Type scale (logical px).
 pub const TEXT_DISPLAY: f32 = 28.;
-pub const TEXT_TITLE: f32 = 22.;
-pub const TEXT_SECTION: f32 = 15.;
-pub const TEXT_BODY: f32 = 13.;
-pub const TEXT_CAPTION: f32 = 12.;
-pub const TEXT_MICRO: f32 = 11.;
+pub const TEXT_TITLE: f32 = 24.;
+pub const TEXT_SECTION: f32 = 16.;
+pub const TEXT_BODY: f32 = 14.;
+pub const TEXT_CAPTION: f32 = 13.;
+pub const TEXT_MICRO: f32 = 12.;
 
 /// Vertical rhythm between page blocks and inside cards.
 pub const PAGE_GAP: f32 = 24.;
 pub const CARD_PADDING: f32 = 20.;
+
+/// A persistent native scroll affordance, painted only when content overflows.
+pub fn scrollbar(
+    t: &AuroraTheme,
+    id: impl Into<ElementId>,
+    handle: &gpui_kit::ScrollHandle,
+) -> gpui_kit::base::Scrollbar {
+    let thumb = t.subtle_foreground.opacity(0.65);
+    let active = t.muted_foreground;
+    gpui_kit::base::Scrollbar::vertical(handle)
+        .id(id)
+        .mode(gpui_kit::base::ScrollbarMode::Always)
+        .styles(move |styles| {
+            styles
+                .thumb(|style| style.bg(thumb).width(px(5.)).radius(px(3.)))
+                .thumb_hover(|style| style.bg(active))
+                .thumb_active(|style| style.bg(active))
+        })
+}
 
 /// A page title with an optional one-line description.
 pub fn page_header(
