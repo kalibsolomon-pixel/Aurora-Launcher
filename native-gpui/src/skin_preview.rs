@@ -447,6 +447,7 @@ impl Render for SkinPreview {
             .gap(px(14.))
             .p(px(16.))
             .w(px(320.))
+            .h(px(430.))
             .flex_shrink_0()
             .text_color(t.foreground)
             .child(stage)

@@ -494,6 +494,8 @@ impl Observed {
 }
 
 pub struct InstanceEditor {
+    section: usize,
+    memory_details: bool,
     host: Option<Host>,
     runtime: tokio::runtime::Handle,
     tx: async_channel::Sender<Reply>,
@@ -589,6 +591,8 @@ impl InstanceEditor {
         })
         .detach();
         let mut this = Self {
+            section: 0,
+            memory_details: false,
             host,
             runtime,
             tx,
@@ -1956,7 +1960,7 @@ fn setting(
         .items_center()
         .justify_between()
         .gap(px(20.))
-        .py(px(14.))
+        .py(px(10.))
         .when(!last, |this| {
             this.border_b_1().border_color(t.border_subtle)
         })
@@ -2016,7 +2020,7 @@ fn rows_with(
                         .flex()
                         .flex_col()
                         .gap(px(10.))
-                        .py(px(14.))
+                        .py(px(10.))
                         .when(!last, |this| {
                             this.border_b_1().border_color(t.border_subtle)
                         })
@@ -2039,7 +2043,7 @@ fn rows_with(
 
 /// A form card: header on top, rows beneath.
 fn form_card(t: &AuroraTheme, head: Div, body: Div) -> Div {
-    ui::card(t).gap(px(4.)).child(head).child(body)
+    ui::card(t).p(px(16.)).gap(px(4.)).child(head).child(body)
 }
 
 /// A control-shaped, non-interactive box (loading and locked values).
@@ -2575,191 +2579,223 @@ impl Render for InstanceEditor {
                 );
             }
 
-            // General: name and icon.
-            let icon_view = this.clone();
-            detail = detail.child(form_card(
-                &t,
-                card_head(&t, "General", None, None),
-                rows(
-                    &t,
-                    vec![
-                        (
-                            "Instance name",
-                            Some("Renaming applies immediately.".into()),
-                            div()
-                                .flex()
-                                .gap(px(8.))
-                                .w(px(WIDE_W))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w(px(0.))
-                                        .child(AuroraInput::new(&self.name).label("Instance name")),
-                                )
-                                .child(action_button(
-                                    "rename",
-                                    "Rename",
-                                    None,
-                                    ButtonVariant::Default,
-                                ))
-                                .into_any_element(),
-                        ),
-                        (
-                            "Icon",
-                            Some(format!(
-                                "Instance icon: {}",
-                                symbols::caption(stored_icon.as_deref())
-                            )),
-                            AuroraButton::new("icon-change", "Change icon…")
-                                .icon("image")
-                                .disabled(busy)
-                                .on_click(move |_, window, cx| {
-                                    icon_view.update(cx, |v, cx| v.open_icon_picker(window, cx));
-                                })
-                                .into_any_element(),
-                        ),
-                    ],
-                ),
-            ));
-
-            // Game version and loader; official catalogs load lazily.
-            let snapshots_view = this.clone();
-            let game = self
-                .game
-                .clone()
-                .or_else(|| self.baseline.as_ref().map(game_choice));
-            let version_values = self.version_values();
-            let version_options: Vec<SharedString> = version_values
-                .iter()
-                .map(|value| {
-                    if let Some(found) = self.versions.iter().find(|v| &v.id == value) {
-                        if found.version_type == "snapshot" {
-                            format!("{} (snapshot)", found.id).into()
-                        } else {
-                            found.id.clone().into()
-                        }
-                    } else {
-                        format!("{value} (saved)").into()
-                    }
-                })
-                .collect();
-            let kind_options: Vec<SharedString> = self
-                .kinds
-                .iter()
-                .map(|kind| platform_label(kind).into())
-                .collect();
-            let loader_values = self.loader_values();
-            let loader_options: Vec<SharedString> = loader_values
-                .iter()
-                .map(|value| {
-                    if value.is_empty() {
-                        return SharedString::from("Automatic compatible version");
-                    }
-                    match self.current_loaders().iter().find(|v| &v.version == value) {
-                        Some(found) if !found.stable => {
-                            format!("{} (unstable)", found.version).into()
-                        }
-                        Some(found) => found.version.clone().into(),
-                        None => format!("{value} (saved)").into(),
-                    }
-                })
-                .collect();
-            let selected = [
-                game.as_ref().and_then(|g| {
-                    version_values
-                        .iter()
-                        .position(|value| value == &g.minecraft)
-                }),
-                game.as_ref()
-                    .and_then(|g| self.kinds.iter().position(|kind| kind == &g.kind)),
-                game.as_ref().map(|g| {
-                    g.pin
-                        .as_ref()
-                        .and_then(|pin| loader_values.iter().position(|value| value == pin))
-                        .unwrap_or(0)
-                }),
-            ];
-            let loader_locked = self
-                .baseline
-                .as_ref()
-                .is_some_and(|base| base.aurora_enabled);
-            let mut game_items: Vec<(&'static str, Option<String>, gpui::AnyElement)> = vec![(
-                "Include snapshots",
-                Some("Also list snapshot builds of Minecraft.".into()),
-                AuroraToggle::new("editor-snapshots")
-                    .label("Include snapshots")
-                    .checked(self.snapshots)
-                    .disabled(busy)
-                    .on_change(move |checked, _, _, cx| {
-                        snapshots_view.update(cx, |v, cx| {
-                            if v.snapshots != checked {
-                                v.snapshots = checked;
-                                v.load_versions();
-                                cx.notify();
-                            }
-                        });
-                    })
-                    .into_any_element(),
-            )];
-            for (ix, label, id) in [
-                (0usize, "Minecraft version", "editor-minecraft"),
-                (1, "Platform", "editor-platform"),
-                (2, "Loader policy", "editor-loader"),
-            ] {
-                if ix == 2 && game.as_ref().is_some_and(|g| g.kind == "vanilla") {
-                    continue;
-                }
-                let description = match ix {
-                    1 if loader_locked => Some(
-                        "Aurora Client requires Fabric; disable Aurora before changing it.".into(),
-                    ),
-                    2 => Some("Automatic follows the newest compatible loader.".into()),
-                    _ => None,
-                };
-                if ix == 0 && self.catalog_loading {
-                    game_items.push((
-                        label,
-                        description,
-                        value_box(&t, "Loading versions…", None).into_any_element(),
-                    ));
-                    continue;
-                }
-                if ix == 1 && loader_locked {
-                    game_items.push((
-                        label,
-                        description,
-                        value_box(
+            let mut tabs = div()
+                .flex()
+                .flex_wrap()
+                .gap(px(4.))
+                .pb(px(8.))
+                .border_b_1()
+                .border_color(t.border_subtle);
+            for (index, label) in ["General", "Game version", "Runtime", "Java", "Maintenance"]
+                .into_iter()
+                .enumerate()
+            {
+                tabs = tabs.child(
+                    AuroraButton::new(("instance-section", index), label)
+                        .variant(ButtonVariant::Ghost)
+                        .size(ButtonSize::Small)
+                        .selected(self.section == index)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.section = index;
+                            cx.notify();
+                        })),
+                );
+            }
+            detail = detail.child(tabs);
+            if self.section == 0 {
+                // General: name and icon.
+                let icon_view = this.clone();
+                detail =
+                    detail.child(form_card(
+                        &t,
+                        card_head(&t, "General", None, None),
+                        rows(
                             &t,
-                            game.as_ref()
-                                .map(|g| platform_label(&g.kind))
-                                .unwrap_or("—"),
-                            Some("lock"),
-                        )
-                        .into_any_element(),
+                            vec![
+                                (
+                                    "Instance name",
+                                    Some("Renaming applies immediately.".into()),
+                                    div()
+                                        .flex()
+                                        .gap(px(8.))
+                                        .w(px(WIDE_W))
+                                        .child(div().flex_1().min_w(px(0.)).child(
+                                            AuroraInput::new(&self.name).label("Instance name"),
+                                        ))
+                                        .child(action_button(
+                                            "rename",
+                                            "Rename",
+                                            None,
+                                            ButtonVariant::Default,
+                                        ))
+                                        .into_any_element(),
+                                ),
+                                (
+                                    "Icon",
+                                    Some(format!(
+                                        "Instance icon: {}",
+                                        symbols::caption(stored_icon.as_deref())
+                                    )),
+                                    AuroraButton::new("icon-change", "Change icon…")
+                                        .icon("image")
+                                        .disabled(busy)
+                                        .on_click(move |_, window, cx| {
+                                            icon_view
+                                                .update(cx, |v, cx| v.open_icon_picker(window, cx));
+                                        })
+                                        .into_any_element(),
+                                ),
+                            ],
+                        ),
                     ));
-                    continue;
-                }
-                if ix == 2 && self.loader_loading {
+            }
+            if self.section == 1 {
+                // Game version and loader; official catalogs load lazily.
+                let snapshots_view = this.clone();
+                let game = self
+                    .game
+                    .clone()
+                    .or_else(|| self.baseline.as_ref().map(game_choice));
+                let version_values = self.version_values();
+                let version_options: Vec<SharedString> = version_values
+                    .iter()
+                    .map(|value| {
+                        if let Some(found) = self.versions.iter().find(|v| &v.id == value) {
+                            if found.version_type == "snapshot" {
+                                format!("{} (snapshot)", found.id).into()
+                            } else {
+                                found.id.clone().into()
+                            }
+                        } else {
+                            format!("{value} (saved)").into()
+                        }
+                    })
+                    .collect();
+                let kind_options: Vec<SharedString> = self
+                    .kinds
+                    .iter()
+                    .map(|kind| platform_label(kind).into())
+                    .collect();
+                let loader_values = self.loader_values();
+                let loader_options: Vec<SharedString> = loader_values
+                    .iter()
+                    .map(|value| {
+                        if value.is_empty() {
+                            return SharedString::from("Automatic compatible version");
+                        }
+                        match self.current_loaders().iter().find(|v| &v.version == value) {
+                            Some(found) if !found.stable => {
+                                format!("{} (unstable)", found.version).into()
+                            }
+                            Some(found) => found.version.clone().into(),
+                            None => format!("{value} (saved)").into(),
+                        }
+                    })
+                    .collect();
+                let selected = [
+                    game.as_ref().and_then(|g| {
+                        version_values
+                            .iter()
+                            .position(|value| value == &g.minecraft)
+                    }),
+                    game.as_ref()
+                        .and_then(|g| self.kinds.iter().position(|kind| kind == &g.kind)),
+                    game.as_ref().map(|g| {
+                        g.pin
+                            .as_ref()
+                            .and_then(|pin| loader_values.iter().position(|value| value == pin))
+                            .unwrap_or(0)
+                    }),
+                ];
+                let loader_locked = self
+                    .baseline
+                    .as_ref()
+                    .is_some_and(|base| base.aurora_enabled);
+                let mut game_items: Vec<(&'static str, Option<String>, gpui::AnyElement)> = vec![(
+                    "Include snapshots",
+                    Some("Also list snapshot builds of Minecraft.".into()),
+                    AuroraToggle::new("editor-snapshots")
+                        .label("Include snapshots")
+                        .checked(self.snapshots)
+                        .disabled(busy)
+                        .on_change(move |checked, _, _, cx| {
+                            snapshots_view.update(cx, |v, cx| {
+                                if v.snapshots != checked {
+                                    v.snapshots = checked;
+                                    v.load_versions();
+                                    cx.notify();
+                                }
+                            });
+                        })
+                        .into_any_element(),
+                )];
+                for (ix, label, id) in [
+                    (0usize, "Minecraft version", "editor-minecraft"),
+                    (1, "Platform", "editor-platform"),
+                    (2, "Loader policy", "editor-loader"),
+                ] {
+                    if ix == 2 && game.as_ref().is_some_and(|g| g.kind == "vanilla") {
+                        continue;
+                    }
+                    let description = match ix {
+                        1 if loader_locked => Some(
+                            "Aurora Client requires Fabric; disable Aurora before changing it."
+                                .into(),
+                        ),
+                        2 => Some("Automatic follows the newest compatible loader.".into()),
+                        _ => None,
+                    };
+                    if ix == 0 && self.catalog_loading {
+                        game_items.push((
+                            label,
+                            description,
+                            value_box(&t, "Loading versions…", None).into_any_element(),
+                        ));
+                        continue;
+                    }
+                    if ix == 1 && loader_locked {
+                        game_items.push((
+                            label,
+                            description,
+                            value_box(
+                                &t,
+                                game.as_ref()
+                                    .map(|g| platform_label(&g.kind))
+                                    .unwrap_or("—"),
+                                Some("lock"),
+                            )
+                            .into_any_element(),
+                        ));
+                        continue;
+                    }
+                    if ix == 2 && self.loader_loading {
+                        game_items.push((
+                            label,
+                            description,
+                            value_box(&t, "Loading loader versions…", None).into_any_element(),
+                        ));
+                        continue;
+                    }
+                    let s = &self.selects[ix];
+                    let open_view = this.clone();
+                    let highlight_view = this.clone();
+                    let confirm_view = this.clone();
+                    let options = match ix {
+                        0 => version_options.clone(),
+                        1 => kind_options.clone(),
+                        _ => loader_options.clone(),
+                    };
                     game_items.push((
                         label,
                         description,
-                        value_box(&t, "Loading loader versions…", None).into_any_element(),
-                    ));
-                    continue;
-                }
-                let s = &self.selects[ix];
-                let open_view = this.clone();
-                let highlight_view = this.clone();
-                let confirm_view = this.clone();
-                let options = match ix {
-                    0 => version_options.clone(),
-                    1 => kind_options.clone(),
-                    _ => loader_options.clone(),
-                };
-                game_items.push((
-                    label,
-                    description,
-                    AuroraSelect::new(id, label, options, &s.trigger, &s.content, s.bounds.clone())
+                        AuroraSelect::new(
+                            id,
+                            label,
+                            options,
+                            &s.trigger,
+                            &s.content,
+                            s.bounds.clone(),
+                        )
                         .width(px(SHORT_W))
                         .selected(selected[ix])
                         .open(s.open)
@@ -2781,342 +2817,385 @@ impl Render for InstanceEditor {
                             confirm_view.update(cx, |v, cx| v.select_game(ix, chosen, cx));
                         })
                         .into_any_element(),
-                ));
-            }
-            let catalog_view = this.clone();
-            let mut game_card = form_card(
-                &t,
-                card_head(
+                    ));
+                }
+                let catalog_view = this.clone();
+                let mut game_card = form_card(
                     &t,
-                    "Game version and loader",
-                    Some("Version and loader changes apply after you save and install."),
-                    Some(
-                        AuroraButton::new("editor-catalogs", "Refresh catalogs")
-                            .size(ButtonSize::Small)
-                            .icon("refresh")
-                            .disabled(busy)
-                            .on_click(move |_, _, cx| {
-                                catalog_view.update(cx, |v, cx| {
-                                    v.load_versions();
-                                    v.load_loaders();
-                                    cx.notify();
-                                });
-                            })
-                            .into_any_element(),
-                    ),
-                ),
-                rows(&t, game_items),
-            );
-            if game.as_ref().is_some_and(|g| g.kind != "vanilla")
-                && self
-                    .loaders
-                    .as_ref()
-                    .is_some_and(|catalog| catalog.for_game(self.game.as_ref()).is_empty())
-            {
-                game_card = game_card.child(
-                    div()
-                        .pt(px(8.))
-                        .text_size(px(ui::TEXT_CAPTION))
-                        .text_color(t.warning)
-                        .child("No supported loader versions for this Minecraft version."),
-                );
-            }
-            detail = detail.child(game_card);
-
-            // Memory and window.
-            detail = detail.child(
-                ui::card(&t)
-                    .gap(px(4.))
-                    .child(card_head(&t, "Memory and window", None, None))
-                    .child(rows_with(
+                    card_head(
                         &t,
-                        vec![
-                            (
-                                "Memory (MiB)",
-                                Some("How much memory the game may use.".into()),
-                                div()
-                                    .w(px(SHORT_W))
-                                    .child(AuroraInput::new(&self.memory).label("Memory (MiB)"))
-                                    .into_any_element(),
-                                false,
-                            ),
-                            (
-                                "Additional JVM arguments",
-                                Some("Extra flags passed to Java when the game starts.".into()),
-                                div()
-                                    .w(px(SHORT_W))
-                                    .child(
-                                        AuroraInput::new(&self.arguments)
-                                            .label("Additional JVM arguments"),
-                                    )
-                                    .into_any_element(),
-                                false,
-                            ),
-                            (
-                                "Window size",
-                                Some(
-                                    "Width × height in pixels. Leave blank for the default.".into(),
-                                ),
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(8.))
-                                    .w(px(SHORT_W))
-                                    .child(
-                                        div().flex_1().min_w(px(0.)).child(
-                                            AuroraInput::new(&self.width)
-                                                .label("Window width (blank for default)"),
-                                        ),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(ui::TEXT_BODY))
-                                            .text_color(t.subtle_foreground)
-                                            .child("×"),
-                                    )
-                                    .child(
-                                        div().flex_1().min_w(px(0.)).child(
-                                            AuroraInput::new(&self.height)
-                                                .label("Window height (blank for default)"),
-                                        ),
-                                    )
-                                    .into_any_element(),
-                                false,
-                            ),
-                        ],
-                    ))
-                    // The advice for this instance, read once when it was opened.
-                    .when_some(self.memory_hint.clone(), |card, hint| {
-                        card.child(div().pt(px(8.)).child(hint_note(&t, hint)))
-                    }),
-            );
-
-            // Java. The managed runtime is read when validating or after an install.
-            detail = detail.child(form_card(
-                &t,
-                card_head(&t, "Java", None, None),
-                rows_with(
-                    &t,
-                    vec![
-                        (
-                            "Custom Java path",
-                            Some("Leave blank to use the managed runtime.".into()),
-                            div()
-                                .w(px(SHORT_W))
-                                .child(
-                                    AuroraInput::new(&self.java)
-                                        .label("Custom Java path (blank for managed)"),
-                                )
-                                .into_any_element(),
-                            false,
-                        ),
-                        (
-                            "Java runtime",
-                            Some(
-                                self.runtime_text
-                                    .clone()
-                                    .filter(|text| !text.is_empty())
-                                    .unwrap_or_else(|| {
-                                        "Check the path above before launching.".into()
-                                    }),
-                            ),
-                            action_button(
-                                "java",
-                                "Validate custom Java",
-                                None,
-                                ButtonVariant::Default,
-                            )
-                            .into_any_element(),
-                            false,
-                        ),
-                    ],
-                ),
-            ));
-
-            // The one primary action of the configuration form.
-            let revert_view = this.clone();
-            let revert_id = id.clone();
-            detail = detail.child(
-                ui::card(&t)
-                    .flex_row()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(16.))
-                    .py(px(14.))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_start()
-                            .gap(px(6.))
-                            .flex_1()
-                            .min_w(px(0.))
-                            .child(if draft_clean {
-                                ui::caption(&t, "No unsaved changes")
-                            } else {
-                                ui::badge(&t, "Unsaved changes", ui::Tone::Warning)
-                            })
-                            .when(!self.message.is_empty(), |this| {
-                                this.child(
-                                    div()
-                                        .max_w(px(560.))
-                                        .text_size(px(ui::TEXT_BODY))
-                                        .text_color(t.foreground)
-                                        .child(self.message.clone()),
-                                )
-                            }),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_shrink_0()
-                            .gap(px(8.))
-                            .child(
-                                AuroraButton::new("revert", "Revert draft")
-                                    .icon("history")
-                                    .disabled(busy)
-                                    .on_click(move |_, window, cx| {
-                                        revert_view.update(cx, |v, cx| {
-                                            v.choose(revert_id.clone(), window, cx)
-                                        });
-                                    }),
-                            )
-                            .child(action_button(
-                                "save",
-                                "Save configuration",
-                                None,
-                                ButtonVariant::Primary,
-                            )),
-                    ),
-            );
-
-            // Aurora is a reviewed transition, never a direct configuration toggle.
-            let installed = self
-                .selected_instance()
-                .is_some_and(|instance| instance.aurora.is_some());
-            let aurora_note = match self.selected_instance() {
-                Some(instance) => match (&instance.aurora, instance.platform.kind.as_str()) {
-                    (Some(pin), _) => format!("Aurora Client {} installed.", pin.version),
-                    (None, "fabric") => "Aurora Client is not installed.".to_owned(),
-                    (None, _) => "Aurora Client requires Fabric.".to_owned(),
-                },
-                None => String::new(),
-            };
-            let aurora_view = this.clone();
-            detail = detail.child(form_card(
-                &t,
-                card_head(&t, "Aurora Client", None, None),
-                rows(
-                    &t,
-                    vec![(
-                        "Aurora Client enabled",
-                        Some(aurora_note),
-                        AuroraToggle::new("editor-aurora")
-                            .label("Aurora Client enabled")
-                            .checked(installed)
-                            .disabled(
-                                busy || !draft_clean
-                                    || self.selected_instance().is_some_and(needs_install)
-                                    || (!installed
-                                        && self.selected_instance().is_some_and(|instance| {
-                                            instance.platform.kind != "fabric"
-                                        })),
-                            )
-                            .on_change(move |enabled, _, _, cx| {
-                                aurora_view.update(cx, |v, cx| v.review_aurora(enabled, cx));
-                            })
-                            .into_any_element(),
-                    )],
-                ),
-            ));
-
-            // Installation and recovery.
-            let recovery_view = this.clone();
-            detail = detail.child(form_card(
-                &t,
-                card_head(&t, "Installation and recovery", None, None),
-                rows(
-                    &t,
-                    vec![
-                        (
-                            "Check files",
-                            Some("Check the installed files and the game runtime.".into()),
-                            action_button(
-                                "validate",
-                                "Validate instance",
-                                None,
-                                ButtonVariant::Default,
-                            )
-                            .into_any_element(),
-                        ),
-                        (
-                            "Apply saved settings",
-                            Some("Install the saved version, loader and Aurora choice.".into()),
-                            action_button(
-                                "install",
-                                "Install saved configuration",
-                                None,
-                                ButtonVariant::Default,
-                            )
-                            .into_any_element(),
-                        ),
-                        (
-                            "Repair installation",
-                            Some("Finish an installation that was interrupted or failed.".into()),
-                            action_button(
-                                "repair",
-                                "Retry installation",
-                                None,
-                                ButtonVariant::Default,
-                            )
-                            .into_any_element(),
-                        ),
-                        (
-                            "Recovery",
-                            Some("Review what can be restored before applying anything.".into()),
-                            AuroraButton::new("recovery", "Inspect recovery")
+                        "Game version and loader",
+                        Some("Version and loader changes apply after you save and install."),
+                        Some(
+                            AuroraButton::new("editor-catalogs", "Refresh catalogs")
+                                .size(ButtonSize::Small)
+                                .icon("refresh")
                                 .disabled(busy)
                                 .on_click(move |_, _, cx| {
-                                    recovery_view.update(cx, |v, cx| v.inspect_recovery(cx));
-                                })
-                                .into_any_element(),
-                        ),
-                    ],
-                ),
-            ));
-
-            // Danger zone, kept apart from everything else.
-            let delete_view = this.clone();
-            detail = detail.child(
-                ui::card(&t)
-                    .gap(px(4.))
-                    .border_color(Hsla {
-                        a: 0.30,
-                        ..t.danger
-                    })
-                    .child(card_head(&t, "Danger zone", None, None))
-                    .child(rows(
-                        &t,
-                        vec![(
-                            "Delete this instance",
-                            Some("Permanently removes the instance and all of its data.".into()),
-                            AuroraButton::new("delete", "Delete…")
-                                .variant(ButtonVariant::Danger)
-                                .icon("delete")
-                                .disabled(busy)
-                                .on_click(move |_, window, cx| {
-                                    delete_view.update(cx, |v, cx| {
-                                        v.confirm.update(cx, |field, cx| {
-                                            field.set_value("", window, cx)
-                                        });
-                                        v.deleting = true;
+                                    catalog_view.update(cx, |v, cx| {
+                                        v.load_versions();
+                                        v.load_loaders();
                                         cx.notify();
                                     });
                                 })
                                 .into_any_element(),
+                        ),
+                    ),
+                    rows(&t, game_items),
+                );
+                if game.as_ref().is_some_and(|g| g.kind != "vanilla")
+                    && self
+                        .loaders
+                        .as_ref()
+                        .is_some_and(|catalog| catalog.for_game(self.game.as_ref()).is_empty())
+                {
+                    game_card = game_card.child(
+                        div()
+                            .pt(px(8.))
+                            .text_size(px(ui::TEXT_CAPTION))
+                            .text_color(t.warning)
+                            .child("No supported loader versions for this Minecraft version."),
+                    );
+                }
+                detail = detail.child(game_card);
+            }
+            if self.section == 2 {
+                // Memory and window.
+                detail = detail.child(
+                    ui::card(&t)
+                        .gap(px(4.))
+                        .child(card_head(&t, "Memory and window", None, None))
+                        .child(rows_with(
+                            &t,
+                            vec![
+                                (
+                                    "Memory (MiB)",
+                                    Some("How much memory the game may use.".into()),
+                                    div()
+                                        .w(px(SHORT_W))
+                                        .child(AuroraInput::new(&self.memory).label("Memory (MiB)"))
+                                        .into_any_element(),
+                                    false,
+                                ),
+                                (
+                                    "Additional JVM arguments",
+                                    Some("Extra flags passed to Java when the game starts.".into()),
+                                    div()
+                                        .w(px(SHORT_W))
+                                        .child(
+                                            AuroraInput::new(&self.arguments)
+                                                .label("Additional JVM arguments"),
+                                        )
+                                        .into_any_element(),
+                                    false,
+                                ),
+                                (
+                                    "Window size",
+                                    Some(
+                                        "Width × height in pixels. Leave blank for the default."
+                                            .into(),
+                                    ),
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(8.))
+                                        .w(px(SHORT_W))
+                                        .child(
+                                            div().flex_1().min_w(px(0.)).child(
+                                                AuroraInput::new(&self.width)
+                                                    .label("Window width (blank for default)"),
+                                            ),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(ui::TEXT_BODY))
+                                                .text_color(t.subtle_foreground)
+                                                .child("×"),
+                                        )
+                                        .child(
+                                            div().flex_1().min_w(px(0.)).child(
+                                                AuroraInput::new(&self.height)
+                                                    .label("Window height (blank for default)"),
+                                            ),
+                                        )
+                                        .into_any_element(),
+                                    false,
+                                ),
+                            ],
+                        ))
+                        // The advice for this instance, read once when it was opened.
+                        .when_some(self.memory_hint.clone(), |card, hint| {
+                            card.child(
+                                div()
+                                    .pt(px(4.))
+                                    .child(
+                                        AuroraButton::new(
+                                            "memory-advice",
+                                            if self.memory_details {
+                                                "Hide memory recommendation"
+                                            } else {
+                                                "Memory recommendation"
+                                            },
+                                        )
+                                        .variant(ButtonVariant::Ghost)
+                                        .size(ButtonSize::Small)
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| {
+                                                this.memory_details = !this.memory_details;
+                                                cx.notify();
+                                            }),
+                                        ),
+                                    )
+                                    .when(self.memory_details, |body| {
+                                        body.child(hint_note(&t, hint))
+                                    }),
+                            )
+                        }),
+                );
+            }
+            if self.section == 3 {
+                // Java. The managed runtime is read when validating or after an install.
+                detail = detail.child(form_card(
+                    &t,
+                    card_head(&t, "Java", None, None),
+                    rows_with(
+                        &t,
+                        vec![
+                            (
+                                "Custom Java path",
+                                Some("Leave blank to use the managed runtime.".into()),
+                                div()
+                                    .w(px(SHORT_W))
+                                    .child(
+                                        AuroraInput::new(&self.java)
+                                            .label("Custom Java path (blank for managed)"),
+                                    )
+                                    .into_any_element(),
+                                false,
+                            ),
+                            (
+                                "Java runtime",
+                                Some(
+                                    self.runtime_text
+                                        .clone()
+                                        .filter(|text| !text.is_empty())
+                                        .unwrap_or_else(|| {
+                                            "Check the path above before launching.".into()
+                                        }),
+                                ),
+                                action_button(
+                                    "java",
+                                    "Validate custom Java",
+                                    None,
+                                    ButtonVariant::Default,
+                                )
+                                .into_any_element(),
+                                false,
+                            ),
+                        ],
+                    ),
+                ));
+            }
+            if self.section == 0 {
+                // Aurora is a reviewed transition, never a direct configuration toggle.
+                let installed = self
+                    .selected_instance()
+                    .is_some_and(|instance| instance.aurora.is_some());
+                let aurora_note = match self.selected_instance() {
+                    Some(instance) => match (&instance.aurora, instance.platform.kind.as_str()) {
+                        (Some(pin), _) => format!("Aurora Client {} installed.", pin.version),
+                        (None, "fabric") => "Aurora Client is not installed.".to_owned(),
+                        (None, _) => "Aurora Client requires Fabric.".to_owned(),
+                    },
+                    None => String::new(),
+                };
+                let aurora_view = this.clone();
+                detail = detail.child(form_card(
+                    &t,
+                    card_head(&t, "Aurora Client", None, None),
+                    rows(
+                        &t,
+                        vec![(
+                            "Aurora Client enabled",
+                            Some(aurora_note),
+                            AuroraToggle::new("editor-aurora")
+                                .label("Aurora Client enabled")
+                                .checked(installed)
+                                .disabled(
+                                    busy || !draft_clean
+                                        || self.selected_instance().is_some_and(needs_install)
+                                        || (!installed
+                                            && self.selected_instance().is_some_and(|instance| {
+                                                instance.platform.kind != "fabric"
+                                            })),
+                                )
+                                .on_change(move |enabled, _, _, cx| {
+                                    aurora_view.update(cx, |v, cx| v.review_aurora(enabled, cx));
+                                })
+                                .into_any_element(),
                         )],
-                    )),
-            );
+                    ),
+                ));
+            }
+            if self.section == 4 {
+                // Installation and recovery.
+                let recovery_view = this.clone();
+                detail = detail.child(form_card(
+                    &t,
+                    card_head(&t, "Installation and recovery", None, None),
+                    div().grid().grid_cols(2).gap(px(16.)).children(
+                        [
+                            (
+                                "Check installed files and the game runtime.",
+                                action_button(
+                                    "validate",
+                                    "Validate instance",
+                                    None,
+                                    ButtonVariant::Default,
+                                )
+                                .into_any_element(),
+                            ),
+                            (
+                                "Install the saved version, loader and Aurora choice.",
+                                action_button(
+                                    "install",
+                                    "Install saved configuration",
+                                    None,
+                                    ButtonVariant::Default,
+                                )
+                                .into_any_element(),
+                            ),
+                            (
+                                "Finish an interrupted or failed installation.",
+                                action_button(
+                                    "repair",
+                                    "Retry installation",
+                                    None,
+                                    ButtonVariant::Default,
+                                )
+                                .into_any_element(),
+                            ),
+                            (
+                                "Review what can be restored before applying changes.",
+                                AuroraButton::new("recovery", "Inspect recovery")
+                                    .disabled(busy)
+                                    .on_click(move |_, _, cx| {
+                                        recovery_view.update(cx, |v, cx| v.inspect_recovery(cx));
+                                    })
+                                    .into_any_element(),
+                            ),
+                        ]
+                        .into_iter()
+                        .map(|(description, action)| {
+                            div()
+                                .flex()
+                                .flex_col()
+                                .items_start()
+                                .min_w(px(0.))
+                                .gap(px(8.))
+                                .child(action)
+                                .child(ui::caption(&t, description))
+                        }),
+                    ),
+                ));
+            }
+            if self.section == 4 {
+                // Danger zone, kept apart from everything else.
+                let delete_view = this.clone();
+                detail = detail.child(
+                    ui::card(&t)
+                        .gap(px(4.))
+                        .border_color(Hsla {
+                            a: 0.30,
+                            ..t.danger
+                        })
+                        .child(card_head(&t, "Danger zone", None, None))
+                        .child(rows(
+                            &t,
+                            vec![(
+                                "Delete this instance",
+                                Some(
+                                    "Permanently removes the instance and all of its data.".into(),
+                                ),
+                                AuroraButton::new("delete", "Delete…")
+                                    .variant(ButtonVariant::Danger)
+                                    .icon("delete")
+                                    .disabled(busy)
+                                    .on_click(move |_, window, cx| {
+                                        delete_view.update(cx, |v, cx| {
+                                            v.confirm.update(cx, |field, cx| {
+                                                field.set_value("", window, cx)
+                                            });
+                                            v.deleting = true;
+                                            cx.notify();
+                                        });
+                                    })
+                                    .into_any_element(),
+                            )],
+                        )),
+                );
+            }
+            // The one primary action of the configuration form.
+            let revert_view = this.clone();
+            let revert_id = id.clone();
+            if self.section != 4 || !draft_clean || !self.message.is_empty() {
+                detail = detail.child(
+                    ui::card(&t)
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(16.))
+                        .py(px(10.))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .items_start()
+                                .gap(px(6.))
+                                .flex_1()
+                                .min_w(px(0.))
+                                .child(if draft_clean {
+                                    ui::caption(&t, "No unsaved changes")
+                                } else {
+                                    ui::badge(&t, "Unsaved changes", ui::Tone::Warning)
+                                })
+                                .when(!self.message.is_empty(), |this| {
+                                    this.child(
+                                        div()
+                                            .max_w(px(560.))
+                                            .text_size(px(ui::TEXT_BODY))
+                                            .text_color(t.foreground)
+                                            .child(self.message.clone()),
+                                    )
+                                }),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_shrink_0()
+                                .gap(px(8.))
+                                .child(
+                                    AuroraButton::new("revert", "Revert draft")
+                                        .icon("history")
+                                        .disabled(busy || draft_clean)
+                                        .on_click(move |_, window, cx| {
+                                            revert_view.update(cx, |v, cx| {
+                                                v.choose(revert_id.clone(), window, cx)
+                                            });
+                                        }),
+                                )
+                                .child(
+                                    action_button(
+                                        "save",
+                                        "Save configuration",
+                                        None,
+                                        ButtonVariant::Primary,
+                                    )
+                                    .disabled(busy || draft_clean),
+                                ),
+                        ),
+                );
+            }
         } else if !self.message.is_empty() {
             root = root.child(callout(&t, "info", t.ring, false, self.message.clone()));
         }

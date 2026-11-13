@@ -462,11 +462,13 @@ impl Render for PackImport {
                     .child(ui::page_header(
                         &palette,
                         "Instances",
-                        Some("Create, configure and manage your Minecraft instances.".into()),
+                        Some(
+                            "Create and manage instances. Import or drop a .mrpack modpack.".into(),
+                        ),
                     ))
                     .child(actions),
             )
-            .child(hint);
+            .children(busy.then_some(hint));
 
         if let Some(error) = &self.error {
             root = root.child(

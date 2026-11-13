@@ -117,11 +117,11 @@ fn resolved(appearance: Option<&crate::api::Appearance>) -> AuroraTheme {
     let surfaces = match appearance.theme.as_str() {
         "midnight" => Some((
             0x0d1017, 0x070910, 0x121621, 0x191e2b, 0x202636, 0x0a0d14, 0x2c3444, 0xe9edf9,
-            0x919db5,
+            0xc4cbda,
         )),
         "oled" => Some((
             0x000000, 0x000000, 0x0b0b0e, 0x141419, 0x1b1b22, 0x000000, 0x2b2d35, 0xf0f3fc,
-            0x939db4,
+            0xc4cbda,
         )),
         _ => None,
     };

@@ -66,6 +66,7 @@ use crate::{theme, ui};
 /// Events for the integrating parent view.
 #[derive(Debug)]
 pub enum SkinsEvent {
+    OpenAccounts,
     /// A mutation settled and may have changed persisted state (the local
     /// library or account cosmetics). Never a read, preview selection or
     /// cancelled picker alone.
@@ -1830,13 +1831,21 @@ impl Render for Skins {
                         .flex_shrink_0()
                         .items_center()
                         .gap(px(8.))
-                        .child(
+                        .child(if signed_in.is_none() {
+                            AuroraButton::new("skins-open-accounts", "Manage accounts")
+                                .variant(ButtonVariant::Primary)
+                                .size(ButtonSize::Small)
+                                .icon("account_circle")
+                                .on_click(
+                                    cx.listener(|_, _, _, cx| cx.emit(SkinsEvent::OpenAccounts)),
+                                )
+                        } else {
                             AuroraButton::new("skins-preview-current", "Preview")
                                 .size(ButtonSize::Small)
                                 .icon("visibility")
                                 .disabled(no_host)
-                                .on_click(cx.listener(|this, _, _, cx| this.preview_current(cx))),
-                        )
+                                .on_click(cx.listener(|this, _, _, cx| this.preview_current(cx)))
+                        })
                         .child(
                             AuroraButton::new("skins-refresh", "Refresh")
                                 .size(ButtonSize::Small)

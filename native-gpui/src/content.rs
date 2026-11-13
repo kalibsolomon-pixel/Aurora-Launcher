@@ -1537,9 +1537,9 @@ impl Render for Content {
                 let disabled_row = entry.enabled == Some(false);
                 let mut line = vec![entry.file_name.as_str()];
                 line.extend(
-                    meta.iter()
-                        .copied()
-                        .filter(|m| *m != "No provider provenance"),
+                    meta.iter().copied().filter(|m| {
+                        *m != "No provider provenance" && !entry.file_name.contains(*m)
+                    }),
                 );
                 let mut text = div()
                     .flex()
@@ -1547,24 +1547,16 @@ impl Render for Content {
                     .gap(px(2.))
                     .min_w(px(0.))
                     .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .min_w(px(0.))
-                            .child(
-                                div()
-                                    .min_w(px(0.))
-                                    .text_size(px(ui::TEXT_BODY + 1.))
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(palette.foreground)
-                                    .when(disabled_row, |d| d.opacity(0.8))
-                                    .text_ellipsis()
-                                    .child(entry.name.clone()),
-                            )
-                            .when(disabled_row, |d| {
-                                d.child(ui::badge(t, "Disabled", ui::Tone::Neutral))
-                            }),
+                        div().flex().items_center().gap(px(8.)).min_w(px(0.)).child(
+                            div()
+                                .min_w(px(0.))
+                                .text_size(px(ui::TEXT_BODY + 1.))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(palette.foreground)
+                                .when(disabled_row, |d| d.opacity(0.8))
+                                .text_ellipsis()
+                                .child(entry.name.clone()),
+                        ),
                     )
                     .child(
                         div()
@@ -1598,8 +1590,16 @@ impl Render for Content {
                     );
                 }
                 let toggle = match entry.enabled {
-                    Some(enabled) => {
-                        AuroraToggle::new(gpui::SharedString::from(format!("toggle-{}", entry.id)))
+                    Some(enabled) => div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(ui::caption(t, if enabled { "Enabled" } else { "Disabled" }))
+                        .child(
+                            AuroraToggle::new(gpui::SharedString::from(format!(
+                                "toggle-{}",
+                                entry.id
+                            )))
                             .label(format!("Enable {}", entry.name))
                             .checked(enabled)
                             .disabled(busy || !entry.toggle)
@@ -1608,9 +1608,9 @@ impl Render for Content {
                                     s.toggle(&target, e.clone(), cx);
                                     cx.notify();
                                 });
-                            })
-                            .into_any_element()
-                    }
+                            }),
+                        )
+                        .into_any_element(),
                     None => {
                         ui::status_badge(t, status_word.unwrap_or("Unknown"), ui::Tone::Neutral)
                             .into_any_element()
@@ -1651,8 +1651,14 @@ impl Render for Content {
                                 &palette,
                             )
                             .into_any_element(),
-                            None => ui::icon_tile(t, Some(kind_icon(self.kind)), 40., false)
-                                .into_any_element(),
+                            None => art_tile(
+                                gpui::SharedString::from(format!("icon-{}", entry.id)),
+                                None,
+                                &entry.letter,
+                                40.,
+                                &palette,
+                            )
+                            .into_any_element(),
                         })
                         .child(text.flex_1())
                         .child(

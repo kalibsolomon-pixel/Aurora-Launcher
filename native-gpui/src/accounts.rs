@@ -1263,7 +1263,7 @@ impl Render for Accounts {
                         .justify_end()
                         .w(px(72.))
                         .child(if selected {
-                            ui::badge(&palette, "Active", ui::Tone::Accent).into_any_element()
+                            ui::badge(&palette, "Selected", ui::Tone::Accent).into_any_element()
                         } else {
                             AuroraButton::new(
                                 gpui_kit::SharedString::from(format!(
@@ -1350,7 +1350,9 @@ impl Render for Accounts {
                     let reauth = account.status == "reauthenticationRequired";
                     let explanation = match account.status.as_str() {
                         "signedIn" => "Your session is valid and ready to play.",
-                        "reauthenticationRequired" => "Sign in with Microsoft to keep playing.",
+                        "reauthenticationRequired" => {
+                            "Restore the saved session, or sign in with Microsoft."
+                        }
                         _ => "This account's session status is unavailable right now.",
                     };
                     let sign_in_blocked =
@@ -1358,7 +1360,7 @@ impl Render for Accounts {
                     let mut actions = div().flex().gap(px(8.));
                     if reauth {
                         actions = actions.child(
-                            AuroraButton::new("profile-sign-in-again", "Sign in again")
+                            AuroraButton::new("profile-sign-in-again", "Sign in with Microsoft")
                                 .variant(ButtonVariant::Primary)
                                 .icon("login")
                                 .disabled(sign_in_blocked)
@@ -1369,7 +1371,7 @@ impl Render for Accounts {
                         AuroraButton::new(
                             gpui_kit::SharedString::from(format!("refresh-session-{id}")),
                             if reauth {
-                                "Try saved session"
+                                "Restore session"
                             } else {
                                 "Refresh session"
                             },
@@ -1395,7 +1397,7 @@ impl Render for Accounts {
                                 .child(
                                     ui::section_header(
                                         &palette,
-                                        "Session",
+                                        format!("Session for {}", account.minecraft_name),
                                         Some(explanation.into()),
                                     )
                                     .flex_1()

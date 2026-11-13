@@ -1092,9 +1092,12 @@ impl Launcher {
         if page == 7 && self.skins.is_none() {
             let preview = cx.new(|cx| SkinPreview::new(self.rt.clone(), window, cx));
             let skins = cx.new(|cx| Skins::new(self.host.clone(), self.rt.clone(), window, cx));
-            self._subscriptions
-                .push(cx.subscribe(&skins, |this, _, event: &SkinsEvent, cx| {
+            self._subscriptions.push(cx.subscribe_in(
+                &skins,
+                window,
+                |this, _, event: &SkinsEvent, window, cx| {
                     match event {
+                        SkinsEvent::OpenAccounts => this.open_page(1, window, cx),
                         SkinsEvent::Changed => {
                             this.reload_guarded(cx);
                             if let Some(accounts) = &this.accounts_page {
@@ -1106,7 +1109,8 @@ impl Launcher {
                     }
                     this.sync_mutation_guards(cx);
                     cx.notify();
-                }));
+                },
+            ));
             self.skin_preview = Some(preview);
             self.skins = Some(skins);
             if !self.load_in_flight && !self.account_busy {
@@ -1628,7 +1632,7 @@ impl Launcher {
         let hero_icon = instance.map(|instance| {
             instance_icon(
                 stored_icon(&launcher.icons, &instance.id),
-                80.,
+                64.,
                 true,
                 palette,
             )
@@ -1660,7 +1664,7 @@ impl Launcher {
                 .flex()
                 .items_center()
                 .gap(px(24.))
-                .p(px(28.))
+                .p(px(24.))
                 .h_full()
                 .rounded(px(16.))
                 .bg(gpui::linear_gradient(
@@ -1774,7 +1778,7 @@ impl Launcher {
         }
         if launcher.instances.len() > 1 || selected.is_none() {
             let mut tiles = div().flex().flex_col().gap(px(2.));
-            for (i, item) in launcher.instances.iter().enumerate() {
+            for (i, item) in launcher.instances.iter().take(3).enumerate() {
                 let id = item.id.clone();
                 let chosen = selected.as_deref() == Some(item.id.as_str());
                 tiles = tiles.child(
@@ -1835,7 +1839,20 @@ impl Launcher {
                         )
                         .child(ui::caption(t, launcher.instances.len().to_string())),
                 )
-                .child(tiles);
+                .child(tiles)
+                .when(launcher.instances.len() > 3, |switcher| {
+                    switcher.child(
+                        AuroraButton::new("home-all-instances", "View all instances")
+                            .variant(ButtonVariant::Ghost)
+                            .size(ButtonSize::Small)
+                            .full_width()
+                            .icon("arrow_forward")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_page(3, window, cx);
+                                cx.notify();
+                            })),
+                    )
+                });
             if hero_index < out.len() {
                 let hero = out.remove(hero_index);
                 out.insert(

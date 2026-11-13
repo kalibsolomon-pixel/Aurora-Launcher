@@ -458,6 +458,7 @@ fn load_input(
 // ---------------------------------------------------------------------------
 
 pub struct Syncing {
+    section: usize,
     host: Option<Host>,
     runtime: Handle,
     tx: async_channel::Sender<Reply>,
@@ -580,6 +581,7 @@ impl Syncing {
         })
         .detach();
         let mut this = Self {
+            section: 0,
             host,
             runtime,
             tx,
@@ -979,7 +981,7 @@ fn category_detail(id: &str) -> &'static str {
         "resourcePacks" => "Installed resource packs and their order.",
         "shaderPacks" => "Shader packs and their settings.",
         "screenshots" => "Pictures taken in the game.",
-        "configuration" => "The configuration paths chosen below.",
+        "configuration" => "Paths chosen in Paths & overrides.",
         "servers" => "Saved multiplayer servers.",
         _ => "",
     }
@@ -1032,42 +1034,18 @@ fn section_card(t: &crate::theme::AuroraTheme) -> Div {
     ui::card(t).gap(px(0.)).pb(px(6.))
 }
 
-/// The read-only stand-in for a toggle while sync is off: a neutral text
-/// badge, so a paused group never shows a thumb that looks switched on.
+/// Saved choices stay visible but inert while the shared policy is paused.
 fn locked_toggle(
-    t: &crate::theme::AuroraTheme,
+    _t: &crate::theme::AuroraTheme,
     id: impl Into<gpui::ElementId>,
     label: impl Into<SharedString>,
     checked: bool,
 ) -> impl IntoElement {
-    let (id, label) = (id.into(), label.into());
-    // These are saved preferences, not an active sync state.
-    let tone = t.muted_foreground;
-    div()
-        .id(id)
-        .flex()
-        .flex_shrink_0()
-        .items_center()
-        .justify_end()
-        .h(px(36.))
-        .aria_label(format!(
-            "{label}: {}",
-            if checked { "included" } else { "not included" }
-        ))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(5.))
-                .text_size(px(ui::TEXT_BODY))
-                .text_color(tone)
-                .child(crate::symbols::icon(Some("lock"), px(16.), tone))
-                .child(if checked {
-                    "Saved: include"
-                } else {
-                    "Saved: exclude"
-                }),
-        )
+    let label: SharedString = label.into();
+    AuroraToggle::new(id)
+        .label(format!("{label}: saved choice; syncing is off"))
+        .checked(checked)
+        .disabled(true)
 }
 
 /// A right-aligned slot for one row's control.
@@ -1095,7 +1073,7 @@ impl Render for Syncing {
         let mut root = div()
             .flex()
             .flex_col()
-            .gap(px(ui::PAGE_GAP))
+            .gap(px(16.))
             // Bound intrinsic text widths to the actual content viewport.
             .w((window.viewport_size().width - px(276.)).max(px(560.)))
             .min_w(px(0.))
@@ -1217,12 +1195,44 @@ impl Render for Syncing {
                         px(14.),
                         t.subtle_foreground,
                     ))
-                    .child("Turn on sync to change these")
+                    .child("Paused · saved choices shown")
             };
             let mut body = div().flex().flex_col().gap(px(ui::PAGE_GAP));
 
+            let mut tabs = div()
+                .flex()
+                .flex_wrap()
+                .gap(px(4.))
+                .pb(px(8.))
+                .border_b_1()
+                .border_color(t.border_subtle);
+            for (index, label) in [
+                "Shared files".to_owned(),
+                "Participating instances".to_owned(),
+                "Paths & overrides".to_owned(),
+                format!("Conflicts ({})", self.conflicts.len()),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let view = view.clone();
+                tabs = tabs.child(
+                    AuroraButton::new(("sync-section", index), label)
+                        .variant(ButtonVariant::Ghost)
+                        .size(ButtonSize::Small)
+                        .selected(self.section == index)
+                        .on_click(move |_, _, cx| {
+                            view.update(cx, |this, cx| {
+                                this.section = index;
+                                cx.notify();
+                            });
+                        }),
+                );
+            }
+            root = root.child(tabs);
+
             // What to sync.
-            let mut categories = section_card(t).child(
+            let categories = section_card(t).child(
                 div()
                     .flex()
                     .items_start()
@@ -1236,17 +1246,18 @@ impl Render for Syncing {
                     ))
                     .when(!enabled, |this| this.child(off_notice(t))),
             );
+            let mut category_grid = div().grid().grid_cols(2).gap_x(px(24.));
             for (index, (id, label)) in CATEGORIES.iter().enumerate() {
                 let checked = draft.categories.iter().any(|current| current == id);
                 let id = *id;
-                categories = categories.child(
+                category_grid = category_grid.child(
                     ui::setting_row(
                         t,
                         *label,
                         Some(category_detail(id).into()),
                         index + 1 == CATEGORIES.len(),
                     )
-                    .py(px(11.))
+                    .py(px(8.))
                     .child(if !enabled {
                         locked_toggle(
                             t,
@@ -1272,7 +1283,9 @@ impl Render for Syncing {
                     }),
                 );
             }
-            body = body.child(categories);
+            if self.section == 0 {
+                body = body.child(categories.child(category_grid));
+            }
 
             // Instances.
             let rows = participant_rows(&draft, self.instances.as_ref());
@@ -1385,14 +1398,16 @@ impl Render for Syncing {
                         }),
                 );
             }
-            body = body.child(list);
+            if self.section == 1 {
+                body = body.child(list);
+            }
 
             // Per-participant overrides.
             let selected = self.selected.clone();
             let participating = selected
                 .as_deref()
                 .is_some_and(|id| draft.instances.iter().any(|current| current == id));
-            if let Some(id) = selected.filter(|_| participating) {
+            if let Some(id) = selected.filter(|_| participating && self.section == 2) {
                 let value = draft.overrides.get(&id);
                 let name = instance_name(self.instances.as_ref(), &id);
                 let mut overrides = section_card(t)
@@ -1504,7 +1519,8 @@ impl Render for Syncing {
             }
 
             // Global paths and exclusions.
-            body = body.child(
+            if self.section == 2 {
+                body = body.child(
                 ui::card(t)
                     .gap(px(0.))
                     .child(
@@ -1533,6 +1549,7 @@ impl Render for Syncing {
                             )),
                     ),
             );
+            }
             root = root.child(body);
 
             // Apply / Revert.
@@ -1737,7 +1754,9 @@ impl Render for Syncing {
             }
             conflicts = conflicts.child(row);
         }
-        root = root.child(conflicts);
+        if self.section == 3 || self.policy.draft.is_none() {
+            root = root.child(conflicts);
+        }
 
         // Keep the dialog mounted so base focus restoration observes closing.
         let mut panel = div()

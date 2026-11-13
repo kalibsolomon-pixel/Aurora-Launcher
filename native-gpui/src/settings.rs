@@ -671,6 +671,7 @@ enum ShortcutOperation {
 // ---------------------------------------------------------------------------
 
 pub struct Settings {
+    section: usize,
     host: Option<Host>,
     rt: tokio::runtime::Handle,
     appearance: AppearanceState,
@@ -762,6 +763,7 @@ impl Settings {
             }),
         ];
         let mut view = Self {
+            section: 0,
             host: host.clone(),
             rt: runtime,
             appearance: AppearanceState::default(),
@@ -1952,63 +1954,87 @@ impl Render for Settings {
             ));
         }
 
-        // --- Appearance ----------------------------------------------------
+        let mut tabs = div()
+            .flex()
+            .flex_wrap()
+            .gap(px(4.))
+            .pb(px(8.))
+            .border_b_1()
+            .border_color(t.border_subtle);
+        for (index, label) in ["Appearance", "Discord", "Desktop", "Updates & about"]
+            .into_iter()
+            .enumerate()
         {
-            let appearance = self.appearance.appearance();
-            let has_motion = self.appearance.motion_speed().is_some();
-            let mut card = section_card(t).child(card_header(
-                t,
-                "Appearance",
-                Some("How the launcher looks and moves.".into()),
-                div(),
-            ));
-
-            let theme_options = appearance
-                .map(|a| {
-                    a.themes
-                        .iter()
-                        .map(|t| SharedString::from(t.label.clone()))
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-            let theme_selected =
-                appearance.and_then(|a| a.themes.iter().position(|t| t.id == a.theme));
-            card = card.child(
-                ui::setting_row(
-                    t,
-                    "Theme",
-                    Some("The color scheme of every surface.".into()),
-                    false,
-                )
-                .child(control_slot(self.select(
-                    Choice::Theme,
-                    "Theme",
-                    theme_options,
-                    theme_selected,
-                    busy,
-                    weak.clone(),
-                ))),
+            tabs = tabs.child(
+                AuroraButton::new(("settings-section", index), label)
+                    .variant(ButtonVariant::Ghost)
+                    .selected(self.section == index)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.cancel_previews(cx);
+                        this.section = index;
+                        cx.notify();
+                    })),
             );
+        }
+        page = page.child(tabs);
+        if self.section == 0 {
+            // --- Appearance ----------------------------------------------------
+            {
+                let appearance = self.appearance.appearance();
+                let has_motion = self.appearance.motion_speed().is_some();
+                let mut card = section_card(t).child(card_header(
+                    t,
+                    "Appearance",
+                    Some("How the launcher looks and moves.".into()),
+                    div(),
+                ));
 
-            // Accent: the presets, then the custom swatch that opens the picker.
-            let accents = appearance.map(|a| a.accents.clone()).unwrap_or_default();
-            let selected = self.accent_selected();
-            let (custom_color, custom_chosen) = self.custom_accent();
-            let picker_open = self.picker.is_some();
-            let ring = palette.foreground;
-            let mut swatches = div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .justify_end()
-                .gap(px(4.))
-                .max_w(px(340.));
-            for (ix, accent) in accents.iter().enumerate() {
-                let color = parse_hex_color(&accent.hex).unwrap_or(palette.accent);
-                let chosen = selected == Some(ix);
-                let accent_id = accent.id.clone();
-                let accent_label = accent.label.clone();
-                swatches = swatches.child(
+                let theme_options = appearance
+                    .map(|a| {
+                        a.themes
+                            .iter()
+                            .map(|t| SharedString::from(t.label.clone()))
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                let theme_selected =
+                    appearance.and_then(|a| a.themes.iter().position(|t| t.id == a.theme));
+                card = card.child(
+                    ui::setting_row(
+                        t,
+                        "Theme",
+                        Some("The color scheme of every surface.".into()),
+                        false,
+                    )
+                    .child(control_slot(self.select(
+                        Choice::Theme,
+                        "Theme",
+                        theme_options,
+                        theme_selected,
+                        busy,
+                        weak.clone(),
+                    ))),
+                );
+
+                // Accent: the presets, then the custom swatch that opens the picker.
+                let accents = appearance.map(|a| a.accents.clone()).unwrap_or_default();
+                let selected = self.accent_selected();
+                let (custom_color, custom_chosen) = self.custom_accent();
+                let picker_open = self.picker.is_some();
+                let ring = palette.foreground;
+                let mut swatches = div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_end()
+                    .gap(px(4.))
+                    .max_w(px(340.));
+                for (ix, accent) in accents.iter().enumerate() {
+                    let color = parse_hex_color(&accent.hex).unwrap_or(palette.accent);
+                    let chosen = selected == Some(ix);
+                    let accent_id = accent.id.clone();
+                    let accent_label = accent.label.clone();
+                    swatches = swatches.child(
                     div()
                         .flex()
                         .items_center()
@@ -2044,114 +2070,119 @@ impl Render for Settings {
                                 })),
                         ),
                 );
-            }
-            let custom_selected = custom_chosen || picker_open;
-            swatches = swatches.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .size(px(32.))
-                    .rounded_full()
-                    .border_2()
-                    .border_color(if custom_selected {
-                        ring
-                    } else {
-                        gpui::transparent_black()
-                    })
-                    .child(
-                        gpui_kit::base::Button::new("accent-custom")
-                            .aria_label(if custom_color.is_some() {
-                                "Custom accent color"
-                            } else {
-                                "Add a custom accent color"
-                            })
-                            .selected(custom_selected)
-                            .disabled(appearance.is_none())
-                            .size(px(24.))
-                            .rounded_full()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .bg(custom_color.unwrap_or(palette.control))
-                            .border_1()
-                            .border_color(Hsla {
-                                a: 0.35,
-                                ..palette.border
-                            })
-                            .hover(move |style| style.border_color(ring))
-                            .focus(move |style| style.border_color(ring).border_2())
-                            .styles(|styles| styles.disabled(|style| style.opacity(0.45)))
-                            .when(custom_color.is_none(), |button| {
-                                button.child(crate::symbols::icon(
-                                    Some("add"),
-                                    px(14.),
-                                    palette.muted_foreground,
-                                ))
-                            })
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                if this.picker.is_some() {
-                                    this.picker_cancel(cx);
-                                } else {
-                                    this.picker_open(window, cx);
-                                }
-                            })),
-                    ),
-            );
-            card = card.child(
-                ui::setting_row(
-                    t,
-                    "Accent",
-                    Some("Used for selection, focus and primary actions.".into()),
-                    false,
-                )
-                .child(div().flex().flex_shrink_0().justify_end().child(swatches)),
-            );
-            if let Some(picker) = &self.picker {
-                card = card.child(
+                }
+                let custom_selected = custom_chosen || picker_open;
+                swatches = swatches.child(
                     div()
                         .flex()
-                        .justify_end()
-                        .py(px(14.))
-                        .border_b_1()
-                        .border_color(palette.border_subtle)
-                        .child(self.accent_picker(picker, &palette, cx)),
+                        .items_center()
+                        .justify_center()
+                        .size(px(32.))
+                        .rounded_full()
+                        .border_2()
+                        .border_color(if custom_selected {
+                            ring
+                        } else {
+                            gpui::transparent_black()
+                        })
+                        .child(
+                            gpui_kit::base::Button::new("accent-custom")
+                                .aria_label(if custom_color.is_some() {
+                                    "Custom accent color"
+                                } else {
+                                    "Add a custom accent color"
+                                })
+                                .selected(custom_selected)
+                                .disabled(appearance.is_none())
+                                .size(px(24.))
+                                .rounded_full()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .bg(custom_color.unwrap_or(palette.control))
+                                .border_1()
+                                .border_color(Hsla {
+                                    a: 0.35,
+                                    ..palette.border
+                                })
+                                .hover(move |style| style.border_color(ring))
+                                .focus(move |style| style.border_color(ring).border_2())
+                                .styles(|styles| styles.disabled(|style| style.opacity(0.45)))
+                                .when(custom_color.is_none(), |button| {
+                                    button.child(crate::symbols::icon(
+                                        Some("add"),
+                                        px(14.),
+                                        palette.muted_foreground,
+                                    ))
+                                })
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    if this.picker.is_some() {
+                                        this.picker_cancel(cx);
+                                    } else {
+                                        this.picker_open(window, cx);
+                                    }
+                                })),
+                        ),
                 );
-            }
-
-            // Background: Simple or the Borealis layer.
-            let background_selected = appearance.map(|a| {
-                borealis::BACKGROUNDS
-                    .iter()
-                    .position(|background| *background == a.background)
-                    .unwrap_or(0)
-            });
-            card = card.child(
-                ui::setting_row(
-                    t,
-                    "Background",
-                    background_selected.map(|index| BACKGROUND_DESCRIPTIONS[index].into()),
-                    !has_motion,
-                )
-                .child(control_slot(self.select(
-                    Choice::Background,
-                    "Background",
-                    BACKGROUND_LABELS.map(SharedString::from).to_vec(),
-                    background_selected,
-                    busy || appearance.is_none(),
-                    weak.clone(),
-                ))),
-            );
-
-            // Motion speed: a live preview while dragging, one write on
-            // release. Only offered with a valid snapshot, never fabricated
-            // from malformed or unavailable state.
-            if has_motion {
-                let accelerated = *self
-                    .accelerated
-                    .get_or_insert_with(|| borealis::host_accelerated(window));
                 card = card.child(
-                    ui::setting_row(t, "Motion", Some(motion_detail(accelerated).into()), false)
+                    ui::setting_row(
+                        t,
+                        "Accent",
+                        Some("Used for selection, focus and primary actions.".into()),
+                        false,
+                    )
+                    .child(div().flex().flex_shrink_0().justify_end().child(swatches)),
+                );
+                if let Some(picker) = &self.picker {
+                    card = card.child(
+                        div()
+                            .flex()
+                            .justify_end()
+                            .py(px(14.))
+                            .border_b_1()
+                            .border_color(palette.border_subtle)
+                            .child(self.accent_picker(picker, &palette, cx)),
+                    );
+                }
+
+                // Background: Simple or the Borealis layer.
+                let background_selected = appearance.map(|a| {
+                    borealis::BACKGROUNDS
+                        .iter()
+                        .position(|background| *background == a.background)
+                        .unwrap_or(0)
+                });
+                card = card.child(
+                    ui::setting_row(
+                        t,
+                        "Background",
+                        background_selected.map(|index| BACKGROUND_DESCRIPTIONS[index].into()),
+                        !has_motion,
+                    )
+                    .child(control_slot(self.select(
+                        Choice::Background,
+                        "Background",
+                        BACKGROUND_LABELS.map(SharedString::from).to_vec(),
+                        background_selected,
+                        busy || appearance.is_none(),
+                        weak.clone(),
+                    ))),
+                );
+
+                // Motion speed: a live preview while dragging, one write on
+                // release. Only offered with a valid snapshot, never fabricated
+                // from malformed or unavailable state.
+                if has_motion {
+                    let accelerated = *self
+                        .accelerated
+                        .get_or_insert_with(|| borealis::host_accelerated(window));
+                    card = card.child(
+                        ui::setting_row(
+                            t,
+                            "Motion",
+                            Some(motion_detail(accelerated).into()),
+                            false,
+                        )
                         .child(
                             control_slot(
                                 div()
@@ -2178,73 +2209,74 @@ impl Render for Settings {
                                 }
                             }),
                         ),
-                );
-            }
+                    );
+                }
 
-            // Reduce motion writes 0 (on) or 50 (off) with the Slint host's
-            // parity and follows the same effective value as the slider.
-            if let Some(reduced) = self.appearance.reduce_motion() {
-                card = card.child(
-                    ui::setting_row(
-                        t,
-                        "Reduce motion",
-                        Some("Stops transitions and Borealis motion.".into()),
-                        true,
-                    )
-                    .child(control_slot(
-                        AuroraToggle::new("reduce-motion")
-                            .label("Reduce motion")
-                            .checked(reduced)
-                            .on_change({
-                                let weak = weak.clone();
-                                move |next: bool, _event, _window, app| {
-                                    let _ = weak.update(app, |this, cx| {
-                                        this.release_motion(reduce_motion_speed(next), cx);
-                                    });
-                                }
-                            }),
-                    )),
-                );
+                // Reduce motion writes 0 (on) or 50 (off) with the Slint host's
+                // parity and follows the same effective value as the slider.
+                if let Some(reduced) = self.appearance.reduce_motion() {
+                    card = card.child(
+                        ui::setting_row(
+                            t,
+                            "Reduce motion",
+                            Some("Stops transitions and Borealis motion.".into()),
+                            true,
+                        )
+                        .child(control_slot(
+                            AuroraToggle::new("reduce-motion")
+                                .label("Reduce motion")
+                                .checked(reduced)
+                                .on_change({
+                                    let weak = weak.clone();
+                                    move |next: bool, _event, _window, app| {
+                                        let _ = weak.update(app, |this, cx| {
+                                            this.release_motion(reduce_motion_speed(next), cx);
+                                        });
+                                    }
+                                }),
+                        )),
+                    );
+                }
+                if let Some(error) = self.appearance.error() {
+                    card = card.child(card_error(t, error.to_string()));
+                }
+                page = page.child(card);
             }
-            if let Some(error) = self.appearance.error() {
-                card = card.child(card_error(t, error.to_string()));
-            }
-            page = page.child(card);
         }
-
-        // --- Discord -------------------------------------------------------
-        {
-            let state = self.discord.clone();
-            let configured = state.as_ref().map(|s| s.configured).unwrap_or(false);
-            let preferences = state
-                .as_ref()
-                .map(|s| s.preferences.clone())
-                .unwrap_or_default();
-            let discord_disabled = self.discord_busy || no_host;
-            let header_actions = div()
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .children((preferences.enabled && configured).then(|| {
-                    AuroraButton::new("discord-reconnect", "Reconnect")
-                        .size(ButtonSize::Small)
-                        .disabled(discord_disabled)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.connect_discord(cx);
-                        }))
-                }))
-                .children(
-                    discord_badge(state.as_ref())
-                        .map(|(label, tone)| ui::status_badge(t, label, tone)),
-                );
-            let mut card = section_card(t).child(card_header(
-                t,
-                "Discord",
-                state.as_ref().map(|s| discord_status(s).into()),
-                header_actions,
-            ));
-            let weak_toggle = weak.clone();
-            card = card.child(
+        if self.section == 1 {
+            // --- Discord -------------------------------------------------------
+            {
+                let state = self.discord.clone();
+                let configured = state.as_ref().map(|s| s.configured).unwrap_or(false);
+                let preferences = state
+                    .as_ref()
+                    .map(|s| s.preferences.clone())
+                    .unwrap_or_default();
+                let discord_disabled = self.discord_busy || no_host;
+                let header_actions = div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .children((preferences.enabled && configured).then(|| {
+                        AuroraButton::new("discord-reconnect", "Reconnect")
+                            .size(ButtonSize::Small)
+                            .disabled(discord_disabled)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.connect_discord(cx);
+                            }))
+                    }))
+                    .children(
+                        discord_badge(state.as_ref())
+                            .map(|(label, tone)| ui::status_badge(t, label, tone)),
+                    );
+                let mut card = section_card(t).child(card_header(
+                    t,
+                    "Discord",
+                    state.as_ref().map(|s| discord_status(s).into()),
+                    header_actions,
+                ));
+                let weak_toggle = weak.clone();
+                card = card.child(
                 ui::setting_row(
                     t,
                     "Rich Presence",
@@ -2272,287 +2304,289 @@ impl Render for Settings {
                         }),
                 )),
             );
-            if preferences.enabled {
-                let rows = [
-                    ("discord-instance-name", "Instance name", "instance_name"),
-                    (
-                        "discord-minecraft-version",
-                        "Minecraft version",
-                        "minecraft_version",
-                    ),
-                    ("discord-platform", "Mod loader", "platform"),
-                    (
-                        "discord-aurora-active",
-                        "Aurora Client status",
-                        "aurora_active",
-                    ),
-                    ("discord-elapsed-time", "Elapsed time", "elapsed_time"),
-                    ("discord-world", "World name", "world"),
-                    ("discord-server", "Server name", "server"),
-                    ("discord-server-address", "Server address", "server_address"),
-                ];
-                let rows: Vec<_> = rows
-                    .into_iter()
-                    .filter(|(_, _, field)| *field != "server_address" || preferences.server)
-                    .collect();
-                let split = rows.len().div_ceil(2);
-                let mut columns = [
-                    div().flex().flex_col().flex_1().min_w(px(0.)),
-                    div().flex().flex_col().flex_1().min_w(px(0.)),
-                ];
-                for (ix, (id, label, field)) in rows.into_iter().enumerate() {
-                    let checked = match field {
-                        "instance_name" => preferences.instance_name,
-                        "minecraft_version" => preferences.minecraft_version,
-                        "platform" => preferences.platform,
-                        "aurora_active" => preferences.aurora_active,
-                        "elapsed_time" => preferences.elapsed_time,
-                        "world" => preferences.world,
-                        "server" => preferences.server,
-                        _ => preferences.server_address,
-                    };
-                    let cell = div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(12.))
-                        .h(px(40.))
-                        .child(
-                            div()
-                                .text_size(px(ui::TEXT_BODY))
-                                .text_color(palette.foreground)
-                                .child(label),
-                        )
-                        .child(
-                            AuroraToggle::new(id)
-                                .label(format!("Share the {label}"))
-                                .checked(checked)
-                                .disabled(discord_disabled)
-                                .on_change({
-                                    let weak = weak_toggle.clone();
-                                    move |next: bool, _event, _window, app| {
-                                        let _ = weak.update(app, |this, cx| {
-                                            this.save_discord(
-                                                move |preferences| match field {
-                                                    "instance_name" => {
-                                                        preferences.instance_name = next
-                                                    }
-                                                    "minecraft_version" => {
-                                                        preferences.minecraft_version = next
-                                                    }
-                                                    "platform" => preferences.platform = next,
-                                                    "aurora_active" => {
-                                                        preferences.aurora_active = next
-                                                    }
-                                                    "elapsed_time" => {
-                                                        preferences.elapsed_time = next
-                                                    }
-                                                    "world" => preferences.world = next,
-                                                    "server" => preferences.server = next,
-                                                    _ => preferences.server_address = next,
-                                                },
-                                                cx,
-                                            );
-                                        });
-                                    }
-                                }),
-                        );
-                    let [left, right] = &mut columns;
-                    if ix < split {
-                        *left = std::mem::replace(left, div()).child(cell);
-                    } else {
-                        *right = std::mem::replace(right, div()).child(cell);
-                    }
-                }
-                let [left, right] = columns;
-                card = card.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(8.))
-                        .pt(px(14.))
-                        .child(ui::eyebrow(t, "SHARED DETAILS"))
-                        .child(
-                            div()
-                                .flex()
-                                .gap(px(32.))
-                                .px(px(16.))
-                                .py(px(6.))
-                                .rounded(palette.radius)
-                                .bg(palette.sunken)
-                                .border_1()
-                                .border_color(palette.border_subtle)
-                                .child(left)
-                                .child(right),
+                if preferences.enabled {
+                    let rows = [
+                        ("discord-instance-name", "Instance name", "instance_name"),
+                        (
+                            "discord-minecraft-version",
+                            "Minecraft version",
+                            "minecraft_version",
                         ),
-                );
-            }
-            if let Some(error) = &self.discord_error {
-                card = card.child(card_error(t, error.clone()));
-            }
-            page = page.child(card);
-        }
-
-        // --- Desktop -------------------------------------------------------
-        {
-            let integration = self.desktop.clone();
-            let supported = integration
-                .as_ref()
-                .map(|i| i.supported && i.manageable)
-                .unwrap_or(false);
-            let disabled = self.shortcuts_busy || no_host;
-            let mut card = section_card(t).child(card_header(
-                t,
-                "Desktop",
-                Some("Shortcuts and where Aurora keeps its files.".into()),
-                div(),
-            ));
-            if let Some(integration) = &integration {
-                if supported {
-                    let desktop_present = integration.desktop_shortcut.state == "present";
-                    card = card.child(
-                        ui::setting_row(
-                            t,
-                            "Desktop shortcut",
-                            Some(
-                                shortcut_text(
-                                    &integration.desktop_shortcut.state,
-                                    &integration.desktop_shortcut.managed_by,
-                                )
-                                .into(),
-                            ),
-                            false,
-                        )
-                        .child(control_slot(
-                            AuroraButton::new(
-                                "toggle-desktop-shortcut",
-                                if desktop_present { "Remove" } else { "Create" },
+                        ("discord-platform", "Mod loader", "platform"),
+                        (
+                            "discord-aurora-active",
+                            "Aurora Client status",
+                            "aurora_active",
+                        ),
+                        ("discord-elapsed-time", "Elapsed time", "elapsed_time"),
+                        ("discord-world", "World name", "world"),
+                        ("discord-server", "Server name", "server"),
+                        ("discord-server-address", "Server address", "server_address"),
+                    ];
+                    let rows: Vec<_> = rows
+                        .into_iter()
+                        .filter(|(_, _, field)| *field != "server_address" || preferences.server)
+                        .collect();
+                    let split = rows.len().div_ceil(2);
+                    let mut columns = [
+                        div().flex().flex_col().flex_1().min_w(px(0.)),
+                        div().flex().flex_col().flex_1().min_w(px(0.)),
+                    ];
+                    for (ix, (id, label, field)) in rows.into_iter().enumerate() {
+                        let checked = match field {
+                            "instance_name" => preferences.instance_name,
+                            "minecraft_version" => preferences.minecraft_version,
+                            "platform" => preferences.platform,
+                            "aurora_active" => preferences.aurora_active,
+                            "elapsed_time" => preferences.elapsed_time,
+                            "world" => preferences.world,
+                            "server" => preferences.server,
+                            _ => preferences.server_address,
+                        };
+                        let cell = div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.))
+                            .h(px(40.))
+                            .child(
+                                div()
+                                    .text_size(px(ui::TEXT_BODY))
+                                    .text_color(palette.foreground)
+                                    .child(label),
                             )
-                            .size(ButtonSize::Small)
-                            .disabled(disabled)
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.shortcut_operation(
-                                        if desktop_present {
-                                            ShortcutOperation::RemoveDesktop
-                                        } else {
-                                            ShortcutOperation::CreateDesktop
-                                        },
-                                        cx,
-                                    );
-                                },
-                            )),
-                        )),
+                            .child(
+                                AuroraToggle::new(id)
+                                    .label(format!("Share the {label}"))
+                                    .checked(checked)
+                                    .disabled(discord_disabled)
+                                    .on_change({
+                                        let weak = weak_toggle.clone();
+                                        move |next: bool, _event, _window, app| {
+                                            let _ = weak.update(app, |this, cx| {
+                                                this.save_discord(
+                                                    move |preferences| match field {
+                                                        "instance_name" => {
+                                                            preferences.instance_name = next
+                                                        }
+                                                        "minecraft_version" => {
+                                                            preferences.minecraft_version = next
+                                                        }
+                                                        "platform" => preferences.platform = next,
+                                                        "aurora_active" => {
+                                                            preferences.aurora_active = next
+                                                        }
+                                                        "elapsed_time" => {
+                                                            preferences.elapsed_time = next
+                                                        }
+                                                        "world" => preferences.world = next,
+                                                        "server" => preferences.server = next,
+                                                        _ => preferences.server_address = next,
+                                                    },
+                                                    cx,
+                                                );
+                                            });
+                                        }
+                                    }),
+                            );
+                        let [left, right] = &mut columns;
+                        if ix < split {
+                            *left = std::mem::replace(left, div()).child(cell);
+                        } else {
+                            *right = std::mem::replace(right, div()).child(cell);
+                        }
+                    }
+                    let [left, right] = columns;
+                    card = card.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(8.))
+                            .pt(px(14.))
+                            .child(ui::eyebrow(t, "SHARED DETAILS"))
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap(px(32.))
+                                    .px(px(16.))
+                                    .py(px(6.))
+                                    .rounded(palette.radius)
+                                    .bg(palette.sunken)
+                                    .border_1()
+                                    .border_color(palette.border_subtle)
+                                    .child(left)
+                                    .child(right),
+                            ),
                     );
-                    if integration.start_menu_shortcut.state != "present" {
+                }
+                if let Some(error) = &self.discord_error {
+                    card = card.child(card_error(t, error.clone()));
+                }
+                page = page.child(card);
+            }
+        }
+        if self.section == 2 {
+            // --- Desktop -------------------------------------------------------
+            {
+                let integration = self.desktop.clone();
+                let supported = integration
+                    .as_ref()
+                    .map(|i| i.supported && i.manageable)
+                    .unwrap_or(false);
+                let disabled = self.shortcuts_busy || no_host;
+                let mut card = section_card(t).child(card_header(
+                    t,
+                    "Desktop",
+                    Some("Shortcuts and where Aurora keeps its files.".into()),
+                    div(),
+                ));
+                if let Some(integration) = &integration {
+                    if supported {
+                        let desktop_present = integration.desktop_shortcut.state == "present";
                         card = card.child(
                             ui::setting_row(
                                 t,
-                                "Start menu shortcut",
+                                "Desktop shortcut",
                                 Some(
                                     shortcut_text(
-                                        &integration.start_menu_shortcut.state,
-                                        &integration.start_menu_shortcut.managed_by,
+                                        &integration.desktop_shortcut.state,
+                                        &integration.desktop_shortcut.managed_by,
                                     )
                                     .into(),
                                 ),
                                 false,
                             )
                             .child(control_slot(
-                                AuroraButton::new("create-start-menu-shortcut", "Create")
-                                    .size(ButtonSize::Small)
-                                    .disabled(disabled)
-                                    .on_click(cx.listener(|this, _, _, cx| {
+                                AuroraButton::new(
+                                    "toggle-desktop-shortcut",
+                                    if desktop_present { "Remove" } else { "Create" },
+                                )
+                                .size(ButtonSize::Small)
+                                .disabled(disabled)
+                                .on_click(cx.listener(
+                                    move |this, _, _, cx| {
                                         this.shortcut_operation(
-                                            ShortcutOperation::CreateStartMenu,
+                                            if desktop_present {
+                                                ShortcutOperation::RemoveDesktop
+                                            } else {
+                                                ShortcutOperation::CreateDesktop
+                                            },
                                             cx,
                                         );
-                                    })),
+                                    },
+                                )),
                             )),
                         );
+                        if integration.start_menu_shortcut.state != "present" {
+                            card = card.child(
+                                ui::setting_row(
+                                    t,
+                                    "Start menu shortcut",
+                                    Some(
+                                        shortcut_text(
+                                            &integration.start_menu_shortcut.state,
+                                            &integration.start_menu_shortcut.managed_by,
+                                        )
+                                        .into(),
+                                    ),
+                                    false,
+                                )
+                                .child(control_slot(
+                                    AuroraButton::new("create-start-menu-shortcut", "Create")
+                                        .size(ButtonSize::Small)
+                                        .disabled(disabled)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.shortcut_operation(
+                                                ShortcutOperation::CreateStartMenu,
+                                                cx,
+                                            );
+                                        })),
+                                )),
+                            );
+                        }
                     }
                 }
-            }
-            card = card.child(
-                ui::setting_row(
-                    t,
-                    "Launcher folder",
-                    self.data_root.clone().map(SharedString::from),
-                    true,
-                )
-                .child(control_slot(
-                    AuroraButton::new("open-launcher-folder", "Open")
-                        .size(ButtonSize::Small)
-                        .icon("folder_open")
-                        .disabled(no_host)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.open_launcher_folder(cx);
-                        })),
-                )),
-            );
-            if let Some(error) = &self.desktop_error {
-                card = card.child(card_error(t, error.clone()));
-            }
-            page = page.child(card);
-        }
-
-        // --- Updates -------------------------------------------------------
-        {
-            let mut card = section_card(t).child(card_header(
-                t,
-                "Updates",
-                Some("Whether the launcher and Aurora Client are current.".into()),
-                div(),
-            ));
-            if let Some(overview) = &self.updates {
-                let (launcher_label, launcher_tone) =
-                    availability_badge(&overview.launcher.availability);
-                let launcher_detail = [
-                    Some(format!(
-                        "Installed version {}",
-                        overview.launcher.installed_version
+                card = card.child(
+                    ui::setting_row(
+                        t,
+                        "Launcher folder",
+                        self.data_root.clone().map(SharedString::from),
+                        true,
+                    )
+                    .child(control_slot(
+                        AuroraButton::new("open-launcher-folder", "Open")
+                            .size(ButtonSize::Small)
+                            .icon("folder_open")
+                            .disabled(no_host)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.open_launcher_folder(cx);
+                            })),
                     )),
-                    availability_detail(&overview.launcher.availability),
-                ]
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>()
-                .join(" · ");
-                card = card.child(
-                    ui::setting_row(t, "Launcher", Some(launcher_detail.into()), false).child(
-                        control_slot(ui::status_badge(t, launcher_label, launcher_tone)),
-                    ),
                 );
-                let (client_label, client_tone) = availability_badge(&overview.client);
-                card = card.child(
-                    ui::setting_row(
-                        t,
-                        "Aurora Client",
-                        availability_detail(&overview.client).map(SharedString::from),
-                        false,
-                    )
-                    .child(control_slot(ui::status_badge(
-                        t,
-                        client_label,
-                        client_tone,
-                    ))),
-                );
-            } else {
-                card = card.child(
-                    ui::setting_row(
-                        t,
-                        "Update status",
-                        Some("Update status is not checked yet.".into()),
-                        false,
-                    )
-                    .child(control_slot(ui::status_badge(
-                        t,
-                        "Not checked",
-                        ui::Tone::Neutral,
-                    ))),
-                );
+                if let Some(error) = &self.desktop_error {
+                    card = card.child(card_error(t, error.clone()));
+                }
+                page = page.child(card);
             }
-            card = card.child(
+        }
+        if self.section == 3 {
+            // --- Updates -------------------------------------------------------
+            {
+                let mut card = section_card(t).child(card_header(
+                    t,
+                    "Updates",
+                    Some("Whether the launcher and Aurora Client are current.".into()),
+                    div(),
+                ));
+                if let Some(overview) = &self.updates {
+                    let (launcher_label, launcher_tone) =
+                        availability_badge(&overview.launcher.availability);
+                    let launcher_detail = [
+                        Some(format!(
+                            "Installed version {}",
+                            overview.launcher.installed_version
+                        )),
+                        availability_detail(&overview.launcher.availability),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(" · ");
+                    card = card.child(
+                        ui::setting_row(t, "Launcher", Some(launcher_detail.into()), false).child(
+                            control_slot(ui::status_badge(t, launcher_label, launcher_tone)),
+                        ),
+                    );
+                    let (client_label, client_tone) = availability_badge(&overview.client);
+                    card = card.child(
+                        ui::setting_row(
+                            t,
+                            "Aurora Client",
+                            availability_detail(&overview.client).map(SharedString::from),
+                            false,
+                        )
+                        .child(control_slot(ui::status_badge(
+                            t,
+                            client_label,
+                            client_tone,
+                        ))),
+                    );
+                } else {
+                    card = card.child(
+                        ui::setting_row(
+                            t,
+                            "Update status",
+                            Some("Update status is not checked yet.".into()),
+                            false,
+                        )
+                        .child(control_slot(ui::status_badge(
+                            t,
+                            "Not checked",
+                            ui::Tone::Neutral,
+                        ))),
+                    );
+                }
+                card = card.child(
                 ui::setting_row(
                     t,
                     "Check for updates",
@@ -2572,36 +2606,41 @@ impl Render for Settings {
                         })),
                 )),
             );
-            if let Some(detail) = &self.update_detail {
-                card = card.child(div().pt(px(12.)).child(ui::caption(t, detail.clone())));
+                if let Some(detail) = &self.update_detail {
+                    card = card.child(div().pt(px(12.)).child(ui::caption(t, detail.clone())));
+                }
+                if let Some(error) = &self.updates_error {
+                    card = card.child(card_error(t, error.clone()));
+                }
+                page = page.child(card);
             }
-            if let Some(error) = &self.updates_error {
-                card = card.child(card_error(t, error.clone()));
-            }
-            page = page.child(card);
         }
-
-        // --- About ---------------------------------------------------------
-        page = page.child(
-            ui::card(t).child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(14.))
-                    .child(ui::icon_tile(t, Some("rocket_launch"), 40., true))
-                    .child(ui::title_block(
-                        t,
-                        format!(
-                            "Aurora Launcher {} (experimental GPUI renderer)",
-                            env!("CARGO_PKG_VERSION")
-                        ),
-                        Some(
-                            format!("Released under the {} license.", env!("CARGO_PKG_LICENSE"))
+        if self.section == 3 {
+            // --- About ---------------------------------------------------------
+            page = page.child(
+                ui::card(t).child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(14.))
+                        .child(ui::icon_tile(t, Some("rocket_launch"), 40., true))
+                        .child(ui::title_block(
+                            t,
+                            format!(
+                                "Aurora Launcher {} (experimental GPUI renderer)",
+                                env!("CARGO_PKG_VERSION")
+                            ),
+                            Some(
+                                format!(
+                                    "Released under the {} license.",
+                                    env!("CARGO_PKG_LICENSE")
+                                )
                                 .into(),
-                        ),
-                    )),
-            ),
-        );
+                            ),
+                        )),
+                ),
+            );
+        }
 
         page
     }

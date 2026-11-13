@@ -268,7 +268,7 @@ fn empty_queue(t: &crate::theme::AuroraTheme, title: String, body: &'static str)
         .flex_col()
         .items_start()
         .gap(px(10.))
-        .py(px(40.))
+        .py(px(28.))
         .px(px(24.))
         .rounded(t.radius_lg)
         .bg(t.card)
@@ -1144,7 +1144,6 @@ impl Render for Downloads {
         if active_rows.is_empty() && finished_rows.is_empty() {
             page = page.child(
                 empty_queue(t, summary.clone(), EMPTY_TEXT)
-                    .h(px(340.))
                     .justify_center()
                     .child(
                         div().pt(px(8.)).child(
